@@ -40,12 +40,13 @@ set -e
 
 if [ "$status" -eq 0 ]; then
   restic tag --tag pending --set daily
-  restic forget --tag daily --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+  restic forget --tag daily --group-by host --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
 else
   restic tag --tag pending --set incomplete || true
   echo "restic backup exited $status; this run is excluded from restores" >&2
 fi
 
-# Keep only the five newest incomplete snapshots for diagnosis.
-restic forget --tag incomplete --keep-last 5 --prune
+# Keep only the five newest incomplete snapshots for diagnosis. Group by host, not
+# by path set, so the policy still applies after the carrier path is added.
+restic forget --tag incomplete --group-by host --keep-last 5 --prune
 exit "$status"
