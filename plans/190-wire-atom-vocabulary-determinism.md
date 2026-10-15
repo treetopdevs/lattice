@@ -150,7 +150,7 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 ## Scope
 
 **In scope**:
-- `apps/lattice_core/lib/lattice/browser_log_store.ex` (lines 13 and 49, the checked-encode propagation only) and `apps/lattice_web_socket/lib/lattice/carrier/web_socket.ex` (lines 170 and 256)
+- `apps/lattice_core/lib/lattice/browser_log_store.ex` (the `dump_payload/1` contract: its spec, its return shape and the checked encode at lines 13 and 49, Design item 5) and `apps/lattice_web_socket/lib/lattice/carrier/web_socket.ex` (lines 170 and 256)
 - `apps/lattice_core/lib/lattice/carrier/wire_vocabulary.ex` (new) and `apps/lattice_core/lib/lattice/carrier/wire.ex` (op-path decode and the checked encode, and report reason validation against `reasons/0`)
 - `apps/lattice_core/lib/lattice/op.ex` (new `Op.authored/6`). `sim.ex` is the oracle and stays unchanged.
 - The production callers and encoders from Design item 5: `live.ex`, `registry.ex`, `treehouse/space.ex`, `treehouse/member_continuity_authoring.ex`, `treehouse/catalog_cutoff.ex`, the node-spike `township_scenario.ex` and `ws_handler.ex`, `carrier_server/holder.ex`, and the browser `durable.ex` and `realm.ex`, plus the encode callers in `browser_log_store.ex` and `web_socket.ex`.
@@ -171,7 +171,7 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 **Out of scope** (do NOT touch):
 - `canonical.ex`: the `Canonical.Atom` struct and its encoding stay as they are.
 - `authority.ex`, `reduce.ex`, and the replica declarations in any replica module. The authoring call sites listed in Design item 5 are the only changes allowed in `treehouse/space.ex`. If the judge raises on an atom it did not expect, that is a STOP.
-- `decode_value/1` and the op-kind check. These stay strict. In `browser_log_store.ex` only lines 13 and 49 change, to the checked encode (Design item 5); its reason decoding stays as it is. `decode_reason_pairs/1` changes as Design item 3 describes.
+- `decode_value/1` and the op-kind check. These stay strict. In `browser_log_store.ex` the `dump_payload/1` contract changes, its spec and return shape along with the checked encode at lines 13 and 49 (Design item 5); its reason decoding stays as it is. `decode_reason_pairs/1` changes as Design item 3 describes.
 
 **Branch and review**: PR #114 (`claude/190-wire-atom-determinism`, head `abfd76a9a`) merged to main as `b8878dd64` with the superseded `Canonical.Atom` design. The rework is a new PR from current main that replaces that decode path with this design. Do not reopen PR #114. Policy rule 3 applies: the diff is under `apps/lattice_core/lib/lattice/carrier/` and touches `clients/lattice-client/src/carrier.ts`, so it needs a second independent review.
 
