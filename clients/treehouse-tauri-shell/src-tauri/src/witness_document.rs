@@ -73,7 +73,7 @@ impl<N: FnMut() -> Bytes32> WitnessDocumentSession<N> {
             (Phase::AwaitingFirstStart { document }, PageLoadEvent::Started)
                 if document == *event_url =>
             {
-                if webview.url().map_err(|_| SESSION_REFUSED)? != *event_url {
+                if crate::witness_session::page_load_document(webview, event_url)? != *event_url {
                     return Err(SESSION_REFUSED);
                 }
                 match self.session.page_load_started(webview, event_url) {

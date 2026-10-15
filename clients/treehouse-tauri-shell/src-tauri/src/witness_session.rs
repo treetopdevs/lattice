@@ -61,12 +61,53 @@ struct NativeFacts {
     document: Url,
 }
 
+/// wry runs page-load hooks on the Android UI thread, and `Webview::url` answers from that
+/// same thread's main pipe: querying it there blocks for wry's 10 s timeout, after which the
+/// late reply panics on its dropped receiver (row 192). On Android the page-load document
+/// is therefore the URL the native WebViewClient callback reported.
+pub(crate) const PAGE_LOAD_QUERIES_URL: bool = !cfg!(target_os = "android");
+
+/// The document a page-load hook may rely on: re-queried where that is safe, else the
+/// native event URL.
+pub(crate) fn page_load_document<R: Runtime>(
+    webview: &Webview<R>,
+    event_url: &Url,
+) -> Result<Url, &'static str> {
+    page_load_document_with(webview, event_url, PAGE_LOAD_QUERIES_URL)
+}
+
+/// On Android the Finished-time comparison with the ticket is therefore against the
+/// native event URL; `snapshot` still re-queries the live document, off the UI thread,
+/// before any operation runs.
+fn page_load_document_with<R: Runtime>(
+    webview: &Webview<R>,
+    event_url: &Url,
+    query: bool,
+) -> Result<Url, &'static str> {
+    if query {
+        webview.url().map_err(|_| SESSION_REFUSED)
+    } else {
+        Ok(event_url.clone())
+    }
+}
+
 impl NativeFacts {
     fn query<R: Runtime>(webview: &Webview<R>) -> Result<Self, &'static str> {
         Ok(Self {
             window: webview.window().label().to_owned(),
             webview: webview.label().to_owned(),
             document: webview.url().map_err(|_| SESSION_REFUSED)?,
+        })
+    }
+
+    fn at_page_load<R: Runtime>(
+        webview: &Webview<R>,
+        event_url: &Url,
+    ) -> Result<Self, &'static str> {
+        Ok(Self {
+            window: webview.window().label().to_owned(),
+            webview: webview.label().to_owned(),
+            document: page_load_document(webview, event_url)?,
         })
     }
     fn owner(&self) -> bool {
@@ -128,7 +169,7 @@ impl WitnessSession {
         webview: &Webview<R>,
         event_url: &Url,
     ) -> Result<NativeLoadTicket, &'static str> {
-        let facts = NativeFacts::query(webview);
+        let facts = NativeFacts::at_page_load(webview, event_url);
         self.start(facts, event_url)
     }
 
@@ -161,7 +202,7 @@ impl WitnessSession {
         navigation_nonce: Bytes32,
     ) -> Result<(), &'static str> {
         self.finish(
-            NativeFacts::query(webview),
+            NativeFacts::at_page_load(webview, event_url),
             ticket,
             event_url,
             navigation_nonce,
@@ -266,4 +307,13 @@ pub mod test_adapter {
     ) -> Result<SessionSnapshot, &'static str> {
         session.capture(facts.facts())
     }
+    /// Both arms of the page-load document source; the host build re-queries.
+    pub fn page_load_document<R: Runtime>(
+        webview: &Webview<R>,
+        event_url: &str,
+        query: bool,
+    ) -> Result<Url, &'static str> {
+        page_load_document_with(webview, &event_url.parse().unwrap(), query)
+    }
+    pub const PAGE_LOAD_QUERIES_URL: bool = super::PAGE_LOAD_QUERIES_URL;
 }

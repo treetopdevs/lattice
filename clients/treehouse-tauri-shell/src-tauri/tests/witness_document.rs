@@ -251,3 +251,21 @@ fn request_while_first_load_is_pending_refuses_late_finished() {
     );
     assert!(adapter.snapshot(&webview).is_err());
 }
+
+#[test]
+fn page_load_document_requeries_on_host_and_trusts_the_event_url_on_android() {
+    // Row 192: wry runs page-load hooks on the Android UI thread, where Webview::url waits
+    // on that same thread; the Android arm (query = false) must not ask the webview.
+    use witness_session::test_adapter::{page_load_document, PAGE_LOAD_QUERIES_URL};
+    let (_app, webview) = view();
+    let other = "http://tauri.localhost/other.html";
+    assert_eq!(PAGE_LOAD_QUERIES_URL, !cfg!(target_os = "android"));
+    assert_eq!(
+        page_load_document(&webview, other, true).unwrap().as_str(),
+        LOCAL
+    );
+    assert_eq!(
+        page_load_document(&webview, other, false).unwrap().as_str(),
+        other
+    );
+}
