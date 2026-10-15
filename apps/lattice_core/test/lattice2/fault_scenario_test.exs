@@ -317,4 +317,77 @@ defmodule Lattice.FaultScenarioTest do
       assert html =~ "malformed: <code>1</code>"
     end
   end
+
+  describe "carrier table entries (plan 204)" do
+    # The server log a carrier scenario writes: a seeded Thread replica created by `owner`.
+    defp carrier_logs(name, seed) do
+      %{sim_realms: realms, root: root} = FaultScenario.spec(name)
+
+      {sim, _} =
+        Treehouse.Thread
+        |> Lattice.Sim.new(FaultScenario.replica_name(name, "thread"), realms, seed: seed)
+        |> Lattice.Sim.create_replica(root)
+
+      %{"thread.server" => Lattice.Sim.log(sim, root)}
+    end
+
+    test "both entries bind the seeded replica and copy only recorded checks and timings",
+         %{tmp_dir: tmp} do
+      for name <- FaultScenario.carrier_scenarios() do
+        spec = FaultScenario.spec(name)
+        refute spec.rerun
+        assert Enum.all?(spec.checks, &match?({_, :process}, &1))
+        logs = carrier_logs(name, "s")
+        assert logs["thread.server"].replica == spec.replicas.("s")["thread"]
+
+        checks = Enum.map(spec.checks, fn {check, _} -> {check, true} end)
+        dir = Path.join(tmp, name)
+        opts = [checks: checks, observed_ms: %{"b" => 7, "a" => 0}]
+        assert {:ok, "held"} = Evidence.write(dir, name, "s", logs, opts)
+        json = File.read!(Path.join(dir, "evidence.json"))
+        assert json =~ ~s("observed_ms": {\n    "a": 0,\n    "b": 7\n  },\n  "verdict")
+        assert {:ok, %{verdict: "held"}} = Evidence.verify(dir)
+
+        # Timings are recorded, outside byte identity; a malformed timing is not.
+        File.write!(
+          Path.join(dir, "evidence.json"),
+          String.replace(json, ~s("b": 7), ~s("b": 99))
+        )
+
+        assert {:ok, _} = Evidence.verify(dir)
+
+        File.write!(
+          Path.join(dir, "evidence.json"),
+          String.replace(json, ~s("b": 7), ~s("b": -1))
+        )
+
+        assert {:error, [reason]} = Evidence.verify(dir)
+        assert reason =~ "evidence.json differs"
+
+        # A log from another seed's replica is refused before any replay.
+        :ok =
+          Log.dump(
+            carrier_logs(name, "t")["thread.server"],
+            Path.join([dir, "logs", "thread.server.log"])
+          )
+
+        assert {:error, [reason]} = Evidence.verify(dir)
+        assert reason =~ "unexpected replica"
+      end
+    end
+
+    test "a re-runnable scenario refuses an added observed_ms", %{tmp_dir: tmp} do
+      {dir, _logs, _} = write!(tmp, "partition_converge")
+      path = Path.join(dir, "evidence.json")
+      json = File.read!(path)
+
+      File.write!(
+        path,
+        String.replace(json, ~s(  "verdict"), ~s(  "observed_ms": {},\n  "verdict"))
+      )
+
+      assert {:error, [reason]} = Evidence.verify(dir)
+      assert reason =~ "evidence.json differs"
+    end
+  end
 end
