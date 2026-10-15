@@ -56,8 +56,9 @@ copy unless the env file is lost.
 ## Schedule and retention
 
 - Twice a day, at 00:00 and 12:00 UTC, with `Persistent=true`, so a missed start runs
-  once the host is back. A failed run is replaced within 12 hours, so the newest
-  complete snapshot stays well inside the 24-hour disaster RPO.
+  once the host is back. The twice-daily schedule provides another backup opportunity
+  within 12 hours. The 24-hour RPO depends on a verified backup completing within that
+  window.
 - Scheduled runs keep the `daily` tag. Retention keeps the newest snapshot per day.
 - Keep 7 daily, 4 weekly and 6 monthly snapshots; older ones are pruned.
 - A run that restic ends with exit 3 is tagged `incomplete` and never selected by a
