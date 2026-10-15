@@ -13,23 +13,26 @@ the live host's `/etc` or `/var/lib` paths.
 1. Install restic: `brew install restic`.
 2. Put the contents of `restic.env` from 1Password in a local file, with mode 600.
    Do not commit it.
-3. List the snapshots:
+3. List the scheduled snapshots. Manual recovery snapshots carry no `daily` tag and
+   are not selected by this runbook:
 
    ```bash
    set -a; . ./restic.env; set +a
-   restic snapshots --compact
+   restic snapshots --tag daily --compact
    ```
 
-4. Restore the latest snapshot into an empty directory:
+4. Restore the latest daily snapshot into a new temporary directory. `mktemp -d`
+   makes a fresh directory on every run, so files from an earlier attempt cannot mix in:
 
    ```bash
-   mkdir -p ./restore-check && restic restore latest --target ./restore-check
+   RESTORE_DIR=$(mktemp -d)
+   restic restore latest --tag daily --target "$RESTORE_DIR"
    ```
 
 5. Check the restored Caddy config against the config the host was built with:
 
    ```bash
-   diff ./restore-check/etc/caddy/Caddyfile <(printf '%s\n' \
+   diff "$RESTORE_DIR/etc/caddy/Caddyfile" <(printf '%s\n' \
      'treehouse-relay.rootaccess.to {' \
      '  respond "Treehouse relay host: no service is deployed yet" 503' \
      '}')
@@ -38,7 +41,11 @@ the live host's `/etc` or `/var/lib` paths.
    The diff is empty if the Caddyfile is intact. The `printf` text is the
    cloud-init content, so the check also flags any later hand edit.
 
-6. Remove the restored copy and the local env file once the check passes.
+6. Remove the restored copy and the local env file once the check passes:
+
+   ```bash
+   rm -rf "$RESTORE_DIR" ./restic.env
+   ```
 
 ## Restore on the host
 
