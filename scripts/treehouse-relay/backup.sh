@@ -36,19 +36,26 @@ attempts=4
 attempt=1
 status=1
 while [ "$attempt" -le "$attempts" ]; do
-  restic tag --tag pending --set incomplete
-
+  # Quarantine first. A failed quarantine counts as a failed attempt, and no backup
+  # starts until one succeeds, so a leftover cannot be promoted.
   set +e
-  # shellcheck disable=SC2086
-  timeout --signal=INT --kill-after=10m 1h restic backup --tag pending $paths
+  restic tag --tag pending --set incomplete
   status=$?
   set -e
 
   if [ "$status" -eq 0 ]; then
-    break
+    set +e
+    # shellcheck disable=SC2086
+    timeout --signal=INT --kill-after=10m 1h restic backup --tag pending $paths
+    status=$?
+    set -e
+
+    if [ "$status" -eq 0 ]; then
+      break
+    fi
+    restic tag --tag pending --set incomplete || true
   fi
-  restic tag --tag pending --set incomplete || true
-  echo "attempt $attempt exited $status; this attempt is excluded from restores" >&2
+  echo "attempt $attempt ended with status $status; it is excluded from restores" >&2
   if [ "$attempt" -lt "$attempts" ]; then
     sleep 1800
   fi

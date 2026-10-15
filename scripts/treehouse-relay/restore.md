@@ -33,10 +33,13 @@ the live host's `/etc` or `/var/lib` paths.
 
    ```bash
    (
+     # The trap is installed before anything can fail, so it runs even if the env file
+     # is malformed or mktemp fails. RESTORE_DIR is empty until mktemp succeeds.
+     RESTORE_DIR=""
+     trap 'if [ -n "$RESTORE_DIR" ]; then rm -rf "$RESTORE_DIR"; fi; rm -f ./restic.env' EXIT
      set -e
      set -a; . ./restic.env; set +a
      RESTORE_DIR=$(mktemp -d)
-     trap 'rm -rf "$RESTORE_DIR" ./restic.env' EXIT
      # A nonzero exit (for example, a missing pack) stops the check before the diff.
      restic restore latest --tag daily --target "$RESTORE_DIR"
      diff "$RESTORE_DIR/etc/caddy/Caddyfile" <(printf '%s\n' \
@@ -79,7 +82,7 @@ copy unless the env file is lost.
   ```bash
   (
     set -a; . ./restic.env; set +a
-    restic snapshots --tag daily --latest 1 --compact
+    restic snapshots --tag daily --latest 1 --group-by host --compact
   )
   ```
 
