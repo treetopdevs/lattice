@@ -220,11 +220,12 @@ defmodule Lattice.FaultScenario.Evidence do
     expected_checks =
       Enum.map(spec.checks, fn {name, source} -> {name, Atom.to_string(source)} end)
 
-    # A malformed row is kept as a mismatch, never filtered out.
+    # A malformed row is kept as a mismatch, never filtered out (no new atom: row 190
+    # requires the plan 185 vector atoms, `malformed` among them, stay absent from lib).
     given_checks =
       Enum.map(List.wrap(evidence["checks"]), fn
         %{"name" => name, "source" => source, "ok" => ok} when is_boolean(ok) -> {name, source}
-        malformed -> {:malformed, malformed}
+        malformed -> {nil, malformed}
       end)
 
     errors =
