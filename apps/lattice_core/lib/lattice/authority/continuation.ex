@@ -46,7 +46,7 @@ defmodule Lattice.Authority.Continuation do
 
     pins =
       for %Op{kind: :authority, body: {:genesis, %Delegation{} = d, policies}} = op <- ordered,
-          is_map(policies),
+          is_map(policies) and not is_struct(policies),
           valid[d.id] == :ok,
           op.author == root and d.issuer == root and d.audience == root,
           is_nil(d.parent_id) and is_nil(d.expires_epoch) and d.live == false,

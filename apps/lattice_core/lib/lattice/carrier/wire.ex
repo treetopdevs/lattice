@@ -7,10 +7,16 @@ defmodule Lattice.Carrier.Wire do
 
   Body and capability terms may contain at most 64 nested generic composites.
   Scalars and flat delegation records do not recurse through that budget.
+
+  An atom name inside a signed term or a delegation decodes to the existing atom when
+  this VM holds one and otherwise to `Lattice.Canonical.Atom`, which encodes to the
+  same bytes; no atom is ever created from input. Admission is therefore a function
+  of the frame bytes alone (row 190). The op kind and report reasons stay closed sets.
   """
 
   alias Lattice.Authority.Delegation
   alias Lattice.Canonical
+  alias Lattice.Canonical.Atom, as: CanonicalAtom
   alias Lattice.Op
 
   @version 1
@@ -35,11 +41,14 @@ defmodule Lattice.Carrier.Wire do
 
   Like op decoding, this preserves generic map/mapset normalization. A closed
   artifact protocol must reject duplicate raw fields before calling this seam.
-  It is not a strict canonical-envelope or signature verifier.
+  It is not a strict canonical-envelope or signature verifier. Unlike op frames, a
+  standalone value still refuses an atom name this VM does not hold, because the
+  closed artifact protocols built on it match their vocabulary as atoms.
   """
   @spec decode_value(term()) :: {:ok, term()} | {:error, :malformed_term}
   def decode_value(value) do
     with {:ok, decoded} <- decode_term(value),
+         true <- existing_atoms_only?(decoded),
          true <- Canonical.signable?(decoded) do
       {:ok, decoded}
     else
@@ -63,24 +72,28 @@ defmodule Lattice.Carrier.Wire do
   end
 
   @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
-  def decode_op(%{
-        "v" => @version,
-        "id" => id,
-        "replica" => replica,
-        "author" => author_b64,
-        "deps" => deps,
-        "kind" => kind,
-        "body" => body,
-        "cap" => cap,
-        "sig" => sig_b64
-      })
-      when is_binary(id) and is_binary(replica) and is_binary(author_b64) and is_list(deps) and
-             is_binary(kind) and is_binary(sig_b64) do
+  def decode_op(frame) do
+    ensure_vocabulary()
+    decode_op_frame(frame)
+  end
+
+  defp decode_op_frame(%{
+         "v" => @version,
+         "id" => id,
+         "replica" => replica,
+         "author" => author_b64,
+         "deps" => deps,
+         "kind" => kind,
+         "body" => body,
+         "cap" => cap,
+         "sig" => sig_b64
+       })
+       when is_binary(id) and is_binary(replica) and is_binary(author_b64) and is_list(deps) and
+              is_binary(kind) and is_binary(sig_b64) do
     with true <- Enum.all?(deps, &is_binary/1),
          {:ok, author} <- Base.decode64(author_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
-         {:ok, kind} <- existing_atom(kind),
-         true <- kind in @op_kinds,
+         {:ok, kind} <- op_kind(kind),
          {:ok, body} <- decode_term(body),
          {:ok, cap} <- decode_term(cap),
          true <- Canonical.signable?(body),
@@ -101,7 +114,29 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  def decode_op(_), do: {:error, :malformed_op}
+  defp decode_op_frame(_), do: {:error, :malformed_op}
+
+  # A name decodes to an atom only if this VM holds one, so a protocol tag decoded before the
+  # module that spells it was loaded would stay `Lattice.Canonical.Atom` for good (a
+  # `{:revoke, id}` the judge then ignores). Load lattice_core's own `Lattice.*` modules once,
+  # before the first decode. Application atoms (schema roles and commands) remain the
+  # responsibility of the schema modules the host loads, as for `Lattice.Log.restore/1`.
+  defp ensure_vocabulary do
+    unless :persistent_term.get({__MODULE__, :vocabulary}, false) do
+      _ = Application.load(:lattice_core)
+
+      results =
+        for module <- Application.spec(:lattice_core, :modules) || [],
+            String.starts_with?(Atom.to_string(module), "Elixir.Lattice."),
+            do: Code.ensure_loaded(module)
+
+      # A module that failed to load leaves the scan uncached, so the next decode retries it.
+      if results != [] and Enum.all?(results, &match?({:module, _}, &1)),
+        do: :persistent_term.put({__MODULE__, :vocabulary}, true)
+    end
+
+    :ok
+  end
 
   @spec encode_ops([Op.t()]) :: [map()]
   def encode_ops(ops), do: Enum.map(ops, &encode_op/1)
@@ -206,6 +241,7 @@ defmodule Lattice.Carrier.Wire do
 
   defp encode_term(value) when is_binary(value), do: ["bin", Base.encode64(value)]
   defp encode_term(value) when is_atom(value), do: ["atom", Atom.to_string(value)]
+  defp encode_term(%CanonicalAtom{name: name}) when is_binary(name), do: ["atom", name]
   defp encode_term(value) when is_list(value), do: ["list", Enum.map(value, &encode_term/1)]
 
   defp encode_term(value) when is_tuple(value) do
@@ -259,7 +295,7 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  defp decode_term(["atom", value], _depth) when is_binary(value), do: existing_atom(value)
+  defp decode_term(["atom", value], _depth) when is_binary(value), do: {:ok, atom_value(value)}
 
   defp decode_term(["list", values], depth) when is_list(values) and depth > 0,
     do: decode_list(values, depth - 1)
@@ -308,8 +344,8 @@ defmodule Lattice.Carrier.Wire do
       "issuer" => Base.encode64(delegation.issuer),
       "audience" => Base.encode64(delegation.audience),
       "parent_id" => delegation.parent_id,
-      "ops" => delegation.ops |> Enum.sort() |> Enum.map(&Atom.to_string/1),
-      "roles" => delegation.roles |> Enum.sort() |> Enum.map(&Atom.to_string/1),
+      "ops" => delegation.ops |> Enum.map(&Canonical.atom_name/1) |> Enum.sort(),
+      "roles" => delegation.roles |> Enum.map(&Canonical.atom_name/1) |> Enum.sort(),
       "live" => delegation.live,
       "sig" => Base.encode64(delegation.sig)
     }
@@ -343,8 +379,9 @@ defmodule Lattice.Carrier.Wire do
          {:ok, issuer} <- Base.decode64(issuer_b64),
          {:ok, audience} <- Base.decode64(audience_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
-         {:ok, ops} <- existing_atoms(ops),
-         {:ok, roles} <- existing_atoms(roles),
+         true <- Enum.all?(ops, &is_binary/1) and Enum.all?(roles, &is_binary/1),
+         ops = Enum.map(ops, &atom_value/1),
+         roles = Enum.map(roles, &atom_value/1),
          {:ok, expires_epoch} <- decode_expires_epoch(Map.get(frame, "expires_epoch")) do
       {:ok,
        %Delegation{
@@ -374,12 +411,32 @@ defmodule Lattice.Carrier.Wire do
 
   defp decode_expires_epoch(_), do: {:error, :malformed_term}
 
-  defp existing_atoms(values), do: reduce_atoms(values, [])
+  defp existing_atoms_only?(%CanonicalAtom{}), do: false
 
-  defp reduce_atoms([], acc), do: {:ok, Enum.reverse(acc)}
+  defp existing_atoms_only?(%Delegation{ops: ops, roles: roles}),
+    do: Enum.all?(ops, &is_atom/1) and Enum.all?(roles, &is_atom/1)
 
-  defp reduce_atoms([value | rest], acc) do
-    with {:ok, atom} <- existing_atom(value), do: reduce_atoms(rest, [atom | acc])
+  defp existing_atoms_only?(%MapSet{} = set), do: Enum.all?(set, &existing_atoms_only?/1)
+
+  defp existing_atoms_only?(value) when is_map(value),
+    do: Enum.all?(value, fn {k, v} -> existing_atoms_only?(k) and existing_atoms_only?(v) end)
+
+  defp existing_atoms_only?(value) when is_list(value),
+    do: Enum.all?(value, &existing_atoms_only?/1)
+
+  defp existing_atoms_only?(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> existing_atoms_only?()
+
+  defp existing_atoms_only?(_value), do: true
+
+  @op_kind_names Map.new(@op_kinds, &{Atom.to_string(&1), &1})
+
+  defp op_kind(name), do: Map.fetch(@op_kind_names, name)
+
+  defp atom_value(name) do
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> %CanonicalAtom{name: name}
   end
 
   defp existing_atom(value) when is_binary(value) do

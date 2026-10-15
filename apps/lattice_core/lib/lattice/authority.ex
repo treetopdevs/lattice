@@ -750,7 +750,7 @@ defmodule Lattice.Authority do
     Enum.reduce(ordered, %{}, fn op, acc ->
       case op.body do
         {:genesis, %Delegation{id: id, audience: audience} = d, policies}
-        when is_map(policies) ->
+        when is_map(policies) and not is_struct(policies) ->
           if Map.get(deleg_valid, id) == :ok and
                is_nil(d.parent_id) and valid_delegation_intro?(delegations, d, op.id) and
                op.author == audience,
@@ -977,7 +977,7 @@ defmodule Lattice.Authority do
   defp collect_beacon_policy_sources(ordered, delegations, deleg_valid, root) do
     for %Op{body: {:genesis, %Delegation{id: id, audience: audience} = d, policies}} = op <-
           ordered,
-        is_map(policies),
+        is_map(policies) and not is_struct(policies),
         Map.get(deleg_valid, id) == :ok,
         is_nil(d.parent_id),
         valid_delegation_intro?(delegations, d, op.id),

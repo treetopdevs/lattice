@@ -135,9 +135,13 @@ defmodule Lattice.Authority.SuccessionCertificate do
 
   defp certificate_parts(_certificate), do: {:error, :malformed_recovery_certificate}
 
+  # A role name the decoding VM lacks arrives as Lattice.Canonical.Atom (row 190); it is
+  # still a well-shaped role and fails only the expected-claim comparison.
+  defp atom_name?(role), do: is_atom(role) or match?(%Lattice.Canonical.Atom{}, role)
+
   defp valid_claim_shape?(claim) do
     map_size(claim) == 7 and is_integer(claim[:version]) and claim[:version] >= 0 and
-      is_binary(claim[:replica]) and is_atom(claim[:role]) and
+      is_binary(claim[:replica]) and atom_name?(claim[:role]) and
       is_binary(claim[:holder]) and byte_size(claim[:holder]) == 32 and
       is_binary(claim[:holder_epoch]) and is_binary(claim[:successor]) and
       byte_size(claim[:successor]) == 32 and is_binary(claim[:policy_id])

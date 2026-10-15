@@ -17,6 +17,16 @@ defmodule Lattice.Canonical.Atom do
   def new(_name), do: {:error, :invalid_atom_name}
 end
 
+# Renders and serializes as the atom it names, so projections over a frame whose names
+# the decoding VM lacks (row 190) produce the same text and JSON as a VM that holds them.
+defimpl String.Chars, for: Lattice.Canonical.Atom do
+  def to_string(%Lattice.Canonical.Atom{name: name}), do: name
+end
+
+defimpl Jason.Encoder, for: Lattice.Canonical.Atom do
+  def encode(%Lattice.Canonical.Atom{name: name}, opts), do: Jason.Encode.string(name, opts)
+end
+
 defmodule Lattice.Canonical do
   @moduledoc """
   Deterministic canonical bytes for signed Lattice values.
@@ -92,8 +102,8 @@ defmodule Lattice.Canonical do
       issuer,
       audience,
       parent_id,
-      Enum.sort(ops),
-      Enum.sort(roles),
+      sort_names(ops),
+      sort_names(roles),
       live
     ])
   end
@@ -126,8 +136,8 @@ defmodule Lattice.Canonical do
       issuer,
       audience,
       parent_id,
-      Enum.sort(ops),
-      Enum.sort(roles),
+      sort_names(ops),
+      sort_names(roles),
       live,
       expires_epoch
     ])
@@ -135,6 +145,21 @@ defmodule Lattice.Canonical do
 
   @spec term(term()) :: binary()
   def term(value), do: encode(value)
+
+  @doc "The name an atom or `Lattice.Canonical.Atom` encodes as."
+  @spec atom_name(atom() | Lattice.Canonical.Atom.t()) :: String.t()
+  def atom_name(atom) when is_atom(atom), do: Atom.to_string(atom)
+  def atom_name(%Lattice.Canonical.Atom{name: name}) when is_binary(name), do: name
+
+  # Delegation ops and roles keep Erlang term order, except that a `Lattice.Canonical.Atom`
+  # ranks as the atom it names, so a VM lacking that atom produces the same bytes (row 190).
+  # Atoms compare by name in term order, so the key changes nothing for atom-only sets.
+  defp sort_names(names), do: Enum.sort_by(names, &term_order_key/1)
+
+  defp term_order_key(value) when is_number(value), do: {0, value}
+  defp term_order_key(value) when is_atom(value), do: {1, Atom.to_string(value)}
+  defp term_order_key(%Lattice.Canonical.Atom{name: name}) when is_binary(name), do: {1, name}
+  defp term_order_key(value), do: {2, value}
 
   @spec signable?(term()) :: boolean()
   def signable?(value) do
@@ -236,8 +261,8 @@ defmodule Lattice.Canonical do
       delegation.issuer,
       delegation.audience,
       delegation.parent_id,
-      Enum.sort(delegation.ops),
-      Enum.sort(delegation.roles),
+      sort_names(delegation.ops),
+      sort_names(delegation.roles),
       delegation.live,
       delegation.sig
     ]

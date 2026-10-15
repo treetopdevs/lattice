@@ -309,6 +309,7 @@ defmodule Township.AuditBundle do
   end
 
   defp ordered_json(%MapSet{} = set), do: set |> MapSet.to_list() |> Enum.sort() |> ordered_json()
+  defp ordered_json(%Lattice.Canonical.Atom{name: name}), do: name
   defp ordered_json(%_module{} = struct), do: struct |> Map.from_struct() |> ordered_json()
 
   defp ordered_json(map) when is_map(map) do
