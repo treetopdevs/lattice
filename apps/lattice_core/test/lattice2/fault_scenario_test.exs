@@ -97,7 +97,9 @@ defmodule Lattice.FaultScenarioTest do
         fn ev ->
           update_in(ev["checks"], fn [c | rest] -> [%{c | "name" => "invented"} | rest] end)
         end,
-        fn ev -> update_in(ev["checks"], &tl/1) end
+        fn ev -> update_in(ev["checks"], &tl/1) end,
+        fn ev -> update_in(ev["checks"], &(&1 ++ [1])) end,
+        fn ev -> update_in(ev["checks"], fn [c | rest] -> [Map.delete(c, "ok") | rest] end) end
       ]
 
       for {tamper, n} <- Enum.with_index(tampers) do
@@ -297,6 +299,11 @@ defmodule Lattice.FaultScenarioTest do
       {:ok, _} = write.(Path.join(tmp, "swapped"), %{"thread.a" => other["thread.a"]})
       assert {:error, [reason]} = verify.(Path.join(tmp, "swapped"), spec)
       assert reason =~ "unexpected replica"
+
+      # A malformed check row is a mismatch, not a crash in the recorded-check copy.
+      update_evidence!(Path.join(tmp, "claimed"), &update_in(&1["checks"], fn c -> c ++ [1] end))
+      assert {:error, [reason]} = verify.(Path.join(tmp, "claimed"), spec)
+      assert reason =~ "check names or sources differ"
     end
 
     test "a malformed quarantine row renders an unverified card", %{tmp_dir: tmp} do
