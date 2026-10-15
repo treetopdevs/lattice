@@ -87,7 +87,18 @@ defmodule Lattice.ContinuationVectors do
           end
         )
 
-      vectors ++ [race_vector] ++ shape_vectors
+      # Row 193: the founder revokes the nominee's (content-addressed) delegation before
+      # the claim, so the claim's own chain is revoked as of it.
+      {_probe, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+      {:succeed, _, revoked_delegation, _} = candidate.body
+      {revoked, _} = Sim.revoke(sim, "founder", revoked_delegation.id)
+
+      {revoked, _} =
+        F.continue(Sim.sync_all(revoked), "nominee", pin, profile, epoch_basis: [epoch.id])
+
+      revoked_vector = vector("#{kind}:revoked-delegation", revoked, "nominee")
+
+      vectors ++ [race_vector, revoked_vector] ++ shape_vectors
     end)
   end
 

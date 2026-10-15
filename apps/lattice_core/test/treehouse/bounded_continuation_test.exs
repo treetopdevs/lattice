@@ -292,6 +292,84 @@ defmodule Treehouse.BoundedContinuationTest do
     assert Sim.quarantined(sim, "member1", command.id) != false
   end
 
+  test "V12 a continuation whose own delegation is revoked as of the claim refuses (row 193)" do
+    for kind <- [:space, :thread] do
+      {sim, _genesis, pin, profile, epoch} = ready(kind: kind)
+
+      # Delegation ids are content hashes, so a probe branch learns the claim's id.
+      {_probe, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+      {:succeed, _role, delegation, _proof} = candidate.body
+
+      before_revoke = Log.frontier(Sim.log(sim, "nominee"))
+      {sim, revoke} = Sim.revoke(sim, "founder", delegation.id)
+      sim = Sim.sync_all(sim)
+      after_revoke = Log.frontier(Sim.log(sim, "nominee"))
+      {sim, claim} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+      {:succeed, _role, ^delegation, _proof} = claim.body
+      assert revoke.id in claim.deps
+
+      assert Sim.quarantined(sim, "nominee", claim.id) == {true, :revoked_capability}
+
+      log = Sim.log(sim, "nominee")
+      analysis = Authority.analyze(sim.module, log)
+      assert Authority.holder_epoch(sim.module, log, F.role(sim)).op_id != claim.id
+
+      # The seeded compaction judge mirrors the live arm at every cut. (A cut that covers
+      # the revoke before its target delegation is introduced judges the revoke itself
+      # differently; that forward-reference limit of the spike is outside this arm.)
+      for at <- [before_revoke, after_revoke, Log.frontier(log)] do
+        assert {:ok, snapshot, retained} = CompactionSpike.compact(sim.module, log, at)
+        result = CompactionSpike.reduce_compacted(sim.module, snapshot, retained)
+        assert result.reasons[claim.id] == analysis.reasons[claim.id]
+        assert result.holders == analysis.holders
+      end
+    end
+  end
+
+  # The `space:revoked-delegation` corpus delegation re-signed with Ed25519 nonce r = 7 by
+  # clients/lattice-client/test/bounded_continuation.ts (twinSignedRevokedDelegation).
+  @twin_sig "uGJAn7XExBI98qv3RiuI8EGtNt1oZM6HL9VHK+NjxbFTiJ9P46qh2j3lsr68p4PLpTCOkTmNvr9VhsEOWBFvDQ=="
+
+  test "V12 a twin-signed reintroduction of the revoked delegation does not void the revoke" do
+    {sim, genesis} = F.new(kind: :space, label: "vectors-space")
+    {sim, pin, profile} = F.pin(sim)
+    {sim, epoch} = Sim.beacon(sim, "founder", 0)
+    sim = Sim.sync_all(sim)
+    {_probe, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+    {:succeed, _role, delegation, _proof} = candidate.body
+    twin = %{delegation | sig: Base.decode64!(@twin_sig)}
+    assert twin.sig != delegation.sig and Delegation.valid_sig?(twin)
+
+    {parallel, intro} = Sim.append(sim, "nominee", :authority, {:grant, twin}, deps: [genesis.id])
+    {sim, _revoke} = Sim.revoke(sim, "founder", delegation.id)
+    {sim, claim} = F.continue(Sim.sync_all(sim), "nominee", pin, profile, epoch_basis: [epoch.id])
+
+    ops =
+      Map.put(
+        Log.ops(Sim.log(sim, "nominee")),
+        intro.id,
+        Log.ops(Sim.log(parallel, "nominee"))[intro.id]
+      )
+
+    log = Log.from_ops(sim.replica, ops)
+    analysis = Authority.analyze(sim.module, log)
+    assert analysis.reasons == %{claim.id => :revoked_capability}
+  end
+
+  test "V12 a revoke that follows an honored continuation does not void it retroactively" do
+    {sim, _genesis, pin, profile, epoch} = ready()
+    {sim, claim} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+    {:succeed, _role, delegation, _proof} = claim.body
+    sim = Sim.sync_all(sim)
+    {sim, _revoke} = Sim.revoke(sim, "founder", delegation.id)
+    sim = Sim.sync_all(sim)
+
+    assert Sim.quarantined(sim, "nominee", claim.id) == false
+
+    assert Authority.holder_epoch(sim.module, Sim.log(sim, "nominee"), F.role(sim)).op_id ==
+             claim.id
+  end
+
   test "V04 equal maximal causal beacons and clipped portable horizon bind exact basis" do
     {sim, _genesis, pin, profile, _epoch} = ready()
     {left, a} = Sim.beacon(sim, "w1", 1, witnesses: ["w1", "w2"])

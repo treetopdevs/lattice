@@ -8814,6 +8814,709 @@
         "id": "a3c1SKBTqAbgIzFF030PH3_YXdyxg6H1Uboi1akRurI"
       },
       {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMpgVgrYTNjMVNLQlRxQWJnSXpGRjAzMFBIM19ZWGR5eGc2SDFVYm9pMWFrUnVySdnqYElhdXRob3JpdHnZ6mGC2epgRnJldm9rZVgraXBXbUFoeHgxZ0MzWXY2Ym1zR1hjRVY0WkhhR29ycm9zR3FpUHIycTFDSfY=",
+        "id": "VVJdaGwBxw1JVfxB5VEH7iPZyPR8n0RCQf0HbT7ujnk"
+      },
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7PgVgrVlZKZGFHd0J4dzFKVmZ4QjVWRUg3aVBaeVBSOG4wUkNRZjBIYlQ3dWpua9nqYElhdXRob3JpdHnZ6mGE2epgR3N1Y2NlZWTZ6mBFYWRtaW7Z6mOKWCtpcFdtQWh4eDFnQzNZdjZibXNHWGNFVjRaSGFHb3Jyb3NHcWlQcjJxMUNJWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7PWCDe+tsiOM7MO/crZsKMjP3TO+oW52+LW0nlo7MtBm1Oz/aC2epgRm1hbmFnZdnqYERwb3N0gdnqYEVhZG1pbvRYQFJ6SVs8s1NuSUrcP+NBP2bQdEFx+syoM1TQP8EZ7UFUhjB97+PyrThJ1JMaPK5iGEwNqBuCVc6KZfKSGaBWkwcG2ephgtnqYE9jb250aW51YXRpb25fdjGi2epgRWNsYWltr9nqYERkZXBzgVgrVlZKZGFHd0J4dzFKVmZ4QjVWRUg3aVBaeVBSOG4wUkNRZjBIYlQ3dWpua9nqYERraW5k2epgRXNwYWNl2epgRHJvbGXZ6mBFYWRtaW7Z6mBFZXBvY2gA2epgRmF1dGhvclgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBGaG9sZGVyWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKdnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEdyZXBsaWNhWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVXZ6mBHdmVyc2lvbgHZ6mBJc3VjY2Vzc29yWCDe+tsiOM7MO/crZsKMjP3TO+oW52+LW0nlo7MtBm1Oz9nqYEpwcm9maWxlX2lkWCtLakF3LUpRUDJ5VDVESWd3djVSanJnaS1TR3Z6eDdmYUgwTm1PUlJuNWJF2epgS2Vwb2NoX2Jhc2lzgVgrYTNjMVNLQlRxQWJnSXpGRjAzMFBIM19ZWGR5eGc2SDFVYm9pMWFrUnVySdnqYExob2xkZXJfZXBvY2hYK2ZILVBQRUZ2WU0yYWJLTXRPX3lfNWZOOUtEZU11MGc0M09abFRzZlN6dlnZ6mBNZGVsZWdhdGlvbl9pZFgraXBXbUFoeHgxZ0MzWXY2Ym1zR1hjRVY0WkhhR29ycm9zR3FpUHIycTFDSdnqYE9wcm9maWxlX2dlbmVzaXNYK0Y1SFVieGpOc0J4UE9oaWRHY19MNmJIcXN1MkVZY25HNTlqanRSLXYzQ2/Z6mBKc2lnbmF0dXJlc4Ki2epgR3dpdG5lc3NYIFStZV6swmC6uy2PGvi3/z661RuKomjvie3BZvYpsvu72epgSXNpZ25hdHVyZVhA+C+a/5JwxCDw3xxpcAr4jy/35gy2wX86dub1Mf8jAdgGvRahwPst/EsXeSXWQNu1bcMnTHOMmx7NoniWdxiSBaLZ6mBHd2l0bmVzc1gg7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsbZ6mBJc2lnbmF0dXJlWECgb0g6nipeOcMzXeUYOmewfuHg/qS37FZmtXlyiQ/5T/1b9ctKsQtr3eidhHg3fixsHZoCBGLqNe1p2aWfs4cA9g==",
+        "id": "5EmqVaePKT87tc1OIPiXlsEbbbVEITNA_CyDaAdoimE"
+      }
+    ],
+    "certificates": [
+      {
+        "claimBytes": "glgfbGF0dGljZS1jb250aW51YXRpb24td2l0bmVzcy12Ma/Z6mBEZGVwc4FYK1ZWSmRhR3dCeHcxSlZmeEI1VkVIN2lQWnlQUjhuMFJDUWYwSGJUN3VqbmvZ6mBEa2luZNnqYEVzcGFjZdnqYERyb2xl2epgRWFkbWlu2epgRWVwb2NoANnqYEZhdXRob3JYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7P2epgRmhvbGRlclggISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/FkynZ6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHcmVwbGljYViWcmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ODViYnlPcVdpQjhIWW4tSWV0UFNnYURGaGVYb01IZ3p5dGxuREl3ZVBZdyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVV2epgR3ZlcnNpb24B2epgSXN1Y2Nlc3Nvclgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBKcHJvZmlsZV9pZFgrS2pBdy1KUVAyeVQ1RElnd3Y1UmpyZ2ktU0d2eng3ZmFIME5tT1JSbjViRdnqYEtlcG9jaF9iYXNpc4FYK2EzYzFTS0JUcUFiZ0l6RkYwMzBQSDNfWVhkeXhnNkgxVWJvaTFha1J1cknZ6mBMaG9sZGVyX2Vwb2NoWCtmSC1QUEVGdllNMmFiS010T195XzVmTjlLRGVNdTBnNDNPWmxUc2ZTenZZ2epgTWRlbGVnYXRpb25faWRYK2lwV21BaHh4MWdDM1l2NmJtc0dYY0VWNFpIYUdvcnJvc0dxaVByMnExQ0nZ6mBPcHJvZmlsZV9nZW5lc2lzWCtGNUhVYnhqTnNCeFBPaGlkR2NfTDZiSHFzdTJFWWNuRzU5amp0Ui12M0Nv",
+        "opId": "5EmqVaePKT87tc1OIPiXlsEbbbVEITNA_CyDaAdoimE"
+      }
+    ],
+    "frames": [
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "genesis"
+            ],
+            [
+              "delegation",
+              {
+                "audience": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "id": "53EqyG3mcJYN7cISWRQb8Vcm7iNamgN2nyIa3H9PQUg",
+                "issuer": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "live": true,
+                "ops": [
+                  "admit",
+                  "manage",
+                  "post",
+                  "remove_member"
+                ],
+                "parent_id": null,
+                "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+                "roles": [
+                  "admin"
+                ],
+                "sig": "SwWDQuU3wunuNzaSKTNrqI3gPqT7K+TZ7irS+/it6t1cFnr3TsyMd5WZ2BeKMzCTyL6mw5uza/YiKJ6+OfJLCw=="
+              }
+            ],
+            [
+              "map",
+              []
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [],
+        "id": "fH-PPEFvYM2abKMtO_y_5fN9KDeMu0g43OZlTsfSzvY",
+        "kind": "authority",
+        "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "vkjpf0hGqy2FkJUra2+9dAoSOXjbKMOOEhHGuWXZ0VO58LUN6S+ZsmdhFcjzU93zfgFN7YCW7SqRbAOtF156BQ==",
+        "v": 1
+      },
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "genesis"
+            ],
+            [
+              "delegation",
+              {
+                "audience": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "id": "TAVdPAxmhSobyZ7cvOLAXzfBUP-JFFbWhR2jo3VTmDI",
+                "issuer": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "live": false,
+                "ops": [],
+                "parent_id": null,
+                "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+                "roles": [],
+                "sig": "FeRUdxkWma+k3SN9HZMQXpF562+p2qmah0R69VuCCNX0P8uTHnQpciWufwqxYzyuKu2M52SUkTC+ZUe3EP0aAQ=="
+              }
+            ],
+            [
+              "map",
+              [
+                [
+                  [
+                    "atom",
+                    "__beacon__"
+                  ],
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "mode"
+                        ],
+                        [
+                          "atom",
+                          "witnessed"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "version"
+                        ],
+                        [
+                          "int",
+                          1
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "threshold"
+                        ],
+                        [
+                          "int",
+                          2
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "witnesses"
+                        ],
+                        [
+                          "list",
+                          [
+                            [
+                              "bin",
+                              "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s="
+                            ],
+                            [
+                              "bin",
+                              "ydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVQ="
+                            ],
+                            [
+                              "bin",
+                              "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY="
+                            ]
+                          ]
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "max_epoch_step"
+                        ],
+                        [
+                          "int",
+                          1
+                        ]
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    "atom",
+                    "__continuation__"
+                  ],
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "kind"
+                        ],
+                        [
+                          "atom",
+                          "space"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "mode"
+                        ],
+                        [
+                          "atom",
+                          "bounded_continuation"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "role"
+                        ],
+                        [
+                          "atom",
+                          "admin"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "nominee"
+                        ],
+                        [
+                          "bin",
+                          "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "product"
+                        ],
+                        [
+                          "atom",
+                          "treehouse"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "version"
+                        ],
+                        [
+                          "int",
+                          1
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "threshold"
+                        ],
+                        [
+                          "int",
+                          2
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "witnesses"
+                        ],
+                        [
+                          "list",
+                          [
+                            [
+                              "bin",
+                              "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s="
+                            ],
+                            [
+                              "bin",
+                              "ydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVQ="
+                            ],
+                            [
+                              "bin",
+                              "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY="
+                            ]
+                          ]
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "max_lease_epochs"
+                        ],
+                        [
+                          "int",
+                          7
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "fH-PPEFvYM2abKMtO_y_5fN9KDeMu0g43OZlTsfSzvY"
+        ],
+        "id": "F5HUbxjNsBxPOhidGc_L6bHqsu2EYcnG59jjtR-v3Co",
+        "kind": "authority",
+        "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "+Hm3P9c4P2zgxuztaUL3z2nQkcd6w3ag+w9k+fdrTXoATv5KQciLyy1k0xivzNefe/NO2LcsPl83fpEVIG26BA==",
+        "v": 1
+      },
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "beacon"
+            ],
+            [
+              "int",
+              0
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "F5HUbxjNsBxPOhidGc_L6bHqsu2EYcnG59jjtR-v3Co"
+        ],
+        "id": "a3c1SKBTqAbgIzFF030PH3_YXdyxg6H1Uboi1akRurI",
+        "kind": "authority",
+        "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "D22MKCeNpNO7WnOlZijyzO4qzR+9tNlNK/vODrVh2zc5QfeC2Xgngyn0xuKbKIwh7CnpJqoYAfYp6kWgda/TCQ==",
+        "v": 1
+      },
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "revoke"
+            ],
+            [
+              "bin",
+              "aXBXbUFoeHgxZ0MzWXY2Ym1zR1hjRVY0WkhhR29ycm9zR3FpUHIycTFDSQ=="
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "a3c1SKBTqAbgIzFF030PH3_YXdyxg6H1Uboi1akRurI"
+        ],
+        "id": "VVJdaGwBxw1JVfxB5VEH7iPZyPR8n0RCQf0HbT7ujnk",
+        "kind": "authority",
+        "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "D8eHOORGMM49K9KI5tYilBg6HP4pS+kggReRWGLqYg0nVICkURPY236zi/K7yDxb4Mc9+dvWTW27t3GIfOKFCA==",
+        "v": 1
+      },
+      {
+        "author": "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "succeed"
+            ],
+            [
+              "atom",
+              "admin"
+            ],
+            [
+              "delegation",
+              {
+                "audience": "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=",
+                "expires_epoch": 6,
+                "id": "ipWmAhxx1gC3Yv6bmsGXcEV4ZHaGorrosGqiPr2q1CI",
+                "issuer": "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=",
+                "live": false,
+                "ops": [
+                  "manage",
+                  "post"
+                ],
+                "parent_id": null,
+                "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+                "roles": [
+                  "admin"
+                ],
+                "sig": "UnpJWzyzU25JStw/40E/ZtB0QXH6zKgzVNA/wRntQVSGMH3v4/KtOEnUkxo8rmIYTA2oG4JVzopl8pIZoFaTBw=="
+              }
+            ],
+            [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "continuation_v1"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "claim"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "deps"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "VlZKZGFHd0J4dzFKVmZ4QjVWRUg3aVBaeVBSOG4wUkNRZjBIYlQ3dWpuaw=="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "kind"
+                            ],
+                            [
+                              "atom",
+                              "space"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "role"
+                            ],
+                            [
+                              "atom",
+                              "admin"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "epoch"
+                            ],
+                            [
+                              "int",
+                              0
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "author"
+                            ],
+                            [
+                              "bin",
+                              "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "holder"
+                            ],
+                            [
+                              "bin",
+                              "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "product"
+                            ],
+                            [
+                              "atom",
+                              "treehouse"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "replica"
+                            ],
+                            [
+                              "bin",
+                              "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ODViYnlPcVdpQjhIWW4tSWV0UFNnYURGaGVYb01IZ3p5dGxuREl3ZVBZdyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVV"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "successor"
+                            ],
+                            [
+                              "bin",
+                              "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "profile_id"
+                            ],
+                            [
+                              "bin",
+                              "S2pBdy1KUVAyeVQ1RElnd3Y1UmpyZ2ktU0d2eng3ZmFIME5tT1JSbjViRQ=="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "epoch_basis"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "YTNjMVNLQlRxQWJnSXpGRjAzMFBIM19ZWGR5eGc2SDFVYm9pMWFrUnVySQ=="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "holder_epoch"
+                            ],
+                            [
+                              "bin",
+                              "ZkgtUFBFRnZZTTJhYktNdE9feV81Zk45S0RlTXUwZzQzT1psVHNmU3p2WQ=="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "delegation_id"
+                            ],
+                            [
+                              "bin",
+                              "aXBXbUFoeHgxZ0MzWXY2Ym1zR1hjRVY0WkhhR29ycm9zR3FpUHIycTFDSQ=="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "profile_genesis"
+                            ],
+                            [
+                              "bin",
+                              "RjVIVWJ4ak5zQnhQT2hpZEdjX0w2Ykhxc3UyRVljbkc1OWpqdFItdjNDbw=="
+                            ]
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "signatures"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "map",
+                            [
+                              [
+                                [
+                                  "atom",
+                                  "witness"
+                                ],
+                                [
+                                  "bin",
+                                  "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s="
+                                ]
+                              ],
+                              [
+                                [
+                                  "atom",
+                                  "signature"
+                                ],
+                                [
+                                  "bin",
+                                  "+C+a/5JwxCDw3xxpcAr4jy/35gy2wX86dub1Mf8jAdgGvRahwPst/EsXeSXWQNu1bcMnTHOMmx7NoniWdxiSBQ=="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            "map",
+                            [
+                              [
+                                [
+                                  "atom",
+                                  "witness"
+                                ],
+                                [
+                                  "bin",
+                                  "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY="
+                                ]
+                              ],
+                              [
+                                [
+                                  "atom",
+                                  "signature"
+                                ],
+                                [
+                                  "bin",
+                                  "oG9IOp4qXjnDM13lGDpnsH7h4P6kt+xWZrV5cokP+U/9W/XLSrELa93onYR4N34sbB2aAgRi6jXtadmln7OHAA=="
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "VVJdaGwBxw1JVfxB5VEH7iPZyPR8n0RCQf0HbT7ujnk"
+        ],
+        "id": "5EmqVaePKT87tc1OIPiXlsEbbbVEITNA_CyDaAdoimE",
+        "kind": "authority",
+        "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "RwReAR509Sn2L4lyzSSZ2nV5b4AxYOZNShfTMA/P+fiTYB58COfuFI1nALVzhzyiPrZcl7FlCdmtHfTNv+OJCg==",
+        "v": 1
+      }
+    ],
+    "holderEpoch": "fH-PPEFvYM2abKMtO_y_5fN9KDeMu0g43OZlTsfSzvY",
+    "name": "space:revoked-delegation",
+    "posts": [],
+    "profiles": [
+      {
+        "bytes": "glgfbGF0dGljZS1jb250aW51YXRpb24tcHJvZmlsZS12ManZ6mBEa2luZNnqYEVzcGFjZdnqYERtb2Rl2epgVGJvdW5kZWRfY29udGludWF0aW9u2epgRHJvbGXZ6mBFYWRtaW7Z6mBHbm9taW5lZVgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHdmVyc2lvbgHZ6mBJdGhyZXNob2xkAtnqYEl3aXRuZXNzZXODWCBUrWVerMJgurstjxr4t/8+utUbiqJo74ntwWb2KbL7u1ggydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVRYIO8JL9zHa/FWQk77T6rBYXt7s0ZkxW6+KsJkhsDMQDrG2epgUG1heF9sZWFzZV9lcG9jaHMH",
+        "opId": "F5HUbxjNsBxPOhidGc_L6bHqsu2EYcnG59jjtR-v3Co",
+        "profileId": "KjAw-JQP2yT5DIgwv5Rjrgi-SGvzx7faH0NmORRn5bE"
+      }
+    ],
+    "realmByPubkey": {
+      "3BXQf1uwXt+3GJ9OtiJg+ixcAAts01Ye9DUW7pY86Jk=": "holder",
+      "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=": "nominee",
+      "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY=": "w2",
+      "9Tn/WM2kVnaYAL4QxrpFXDZA5F/6X5ANjJnX0r+w5Lc=": "member2",
+      "AmPe4gGDoE5rHCQdJgx7RyFZc+9UhI2aIUkUm+vpiNA=": "member9",
+      "BfyYBdDZxcOxI3o8RbYHxc0Sjc0Y+I8LkklRgrNKbI8=": "member5",
+      "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=": "founder",
+      "KoyXGoVvsssU4RDcL8oP0EauQ80aQ9MdtBDzwydnWf8=": "member6",
+      "R5UEJ+JXZYS8GYBYsN6nUM+V8XFyp/6iL3G5D5hOVLM=": "member11",
+      "RDPApNOg1VKftqwNpCTg2tLL0n/PF1hKaw3+YHB2v1Q=": "member3",
+      "UkCEtqWtelAj9w3idK8ZfQ/XeLdR6kiDGO43JxvaDU8=": "member12",
+      "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s=": "w1",
+      "ey4IoPVFuS6MNnOFvT3GuhFNWDg6chWNOrNq5E7Qc3A=": "member8",
+      "g/co9ZKrQaC2zbhii6khkwbZ/j/GZEYTvAsDEzaJnkA=": "member10",
+      "iP19tQ86JIqFqTsejMlB1hCtfjV6ApqEBylyEXzBoVc=": "observer",
+      "pMHS3MZqf50qlwG1OzajjOKp0lftvbdOD1alKqRtSCE=": "member7",
+      "ux2Wg96KPB3eeCYD5P3i/TVJ8JmvVknHF+HlEHIf4tc=": "member4",
+      "vPLrbHLuOvSfMlX+YTVwOiwgjOj9IgczP3bHWzBY8DE=": "member1",
+      "yV6k6hyIUe2cCAsOIrq//vI28Wp1Cb1MyTEMzau+wGE=": "copy",
+      "ydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVQ=": "w3"
+    },
+    "reasons": {
+      "5EmqVaePKT87tc1OIPiXlsEbbbVEITNA_CyDaAdoimE": "revoked_capability"
+    },
+    "replica": "replica:treehouse:space:85bbyOqWiB8HYn-IetPSgaDFheXoMHgzytlnDIwePYw#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+    "role": "admin",
+    "schema": {
+      "fields": {
+        "admin": {
+          "authority": "admin"
+        },
+        "posts": {
+          "merge": "causal_list"
+        }
+      },
+      "name": "R04.admin"
+    }
+  },
+  {
+    "canonical": [
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMpgNnqYElhdXRob3JpdHnZ6mGD2epgR2dlbmVzaXPZ6mOJWCs1M0VxeUczbWNKWU43Y0lTV1JRYjhWY203aU5hbWdOMm55SWEzSDlQUVVnWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMpWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKfaE2epgRWFkbWl02epgRm1hbmFnZdnqYERwb3N02epgTXJlbW92ZV9tZW1iZXKB2epgRWFkbWlu9VhASwWDQuU3wunuNzaSKTNrqI3gPqT7K+TZ7irS+/it6t1cFnr3TsyMd5WZ2BeKMzCTyL6mw5uza/YiKJ6+OfJLC6D2",
+        "id": "fH-PPEFvYM2abKMtO_y_5fN9KDeMu0g43OZlTsfSzvY"
+      },
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMpgVgrZkgtUFBFRnZZTTJhYktNdE9feV81Zk45S0RlTXUwZzQzT1psVHNmU3p2WdnqYElhdXRob3JpdHnZ6mGD2epgR2dlbmVzaXPZ6mOJWCtUQVZkUEF4bWhTb2J5Wjdjdk9MQVh6ZkJVUC1KRkZiV2hSMmpvM1ZUbURJWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMpWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKfaAgPRYQBXkVHcZFpmvpN0jfR2TEF6ReetvqdqpmodEevVbggjV9D/Lkx50KXIlrn8KsWM8rirtjOdklJEwvmVHtxD9GgGi2epgSl9fYmVhY29uX1+l2epgRG1vZGXZ6mBJd2l0bmVzc2Vk2epgR3ZlcnNpb24B2epgSXRocmVzaG9sZALZ6mBJd2l0bmVzc2Vzg1ggVK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7tYIMnXN265jJ83qUd+LhfD+GG9QxERjstVtQV0TqZ6Gk1UWCDvCS/cx2vxVkJO+0+qwWF7e7NGZMVuvirCZIbAzEA6xtnqYE5tYXhfZXBvY2hfc3RlcAHZ6mBQX19jb250aW51YXRpb25fX6nZ6mBEa2luZNnqYEVzcGFjZdnqYERtb2Rl2epgVGJvdW5kZWRfY29udGludWF0aW9u2epgRHJvbGXZ6mBFYWRtaW7Z6mBHbm9taW5lZVgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHdmVyc2lvbgHZ6mBJdGhyZXNob2xkAtnqYEl3aXRuZXNzZXODWCBUrWVerMJgurstjxr4t/8+utUbiqJo74ntwWb2KbL7u1ggydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVRYIO8JL9zHa/FWQk77T6rBYXt7s0ZkxW6+KsJkhsDMQDrG2epgUG1heF9sZWFzZV9lcG9jaHMH9g==",
+        "id": "F5HUbxjNsBxPOhidGc_L6bHqsu2EYcnG59jjtR-v3Co"
+      },
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMpgVgrRjVIVWJ4ak5zQnhQT2hpZEdjX0w2Ykhxc3UyRVljbkc1OWpqdFItdjNDb9nqYElhdXRob3JpdHnZ6mGC2epgRmJlYWNvbgD2",
+        "id": "a3c1SKBTqAbgIzFF030PH3_YXdyxg6H1Uboi1akRurI"
+      },
+      {
         "bytes": "h01sYXR0aWNlLW9wLXYyWJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7PgVgrYTNjMVNLQlRxQWJnSXpGRjAzMFBIM19ZWGR5eGc2SDFVYm9pMWFrUnVySdnqYElhdXRob3JpdHnZ6mGF2epgR3N1Y2NlZWTZ6mBFYWRtaW7Z6mOKWCtGZmx0UjlkcER1Q09IREV1cVNkNWdVRVBXV0FkT2lVVUNSMURjcEJQV0F3WJZyZXBsaWNhOnRyZWVob3VzZTpzcGFjZTo4NWJieU9xV2lCOEhZbi1JZXRQU2dhREZoZVhvTUhnenl0bG5ESXdlUFl3I2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7PWCDe+tsiOM7MO/crZsKMjP3TO+oW52+LW0nlo7MtBm1Oz/aB2epgRm1hbmFnZYHZ6mBFYWRtaW70WEAGuWOtIRFdXm4uOcBMjaI67KF9cyvlF9u+H/6Cg5p01Cm6Rzl5L1I16J3zVacy9yNN0A0aPHUqr+p2wtR3KBcBBtnqYYLZ6mBPY29udGludWF0aW9uX3YxotnqYEVjbGFpba/Z6mBEZGVwc4FYK2EzYzFTS0JUcUFiZ0l6RkYwMzBQSDNfWVhkeXhnNkgxVWJvaTFha1J1cknZ6mBEa2luZNnqYEVzcGFjZdnqYERyb2xl2epgRWFkbWlu2epgRWVwb2NoANnqYEZhdXRob3JYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7P2epgRmhvbGRlclggISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/FkynZ6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHcmVwbGljYViWcmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ODViYnlPcVdpQjhIWW4tSWV0UFNnYURGaGVYb01IZ3p5dGxuREl3ZVBZdyNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVV2epgR3ZlcnNpb24B2epgSXN1Y2Nlc3Nvclgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBKcHJvZmlsZV9pZFgrS2pBdy1KUVAyeVQ1RElnd3Y1UmpyZ2ktU0d2eng3ZmFIME5tT1JSbjViRdnqYEtlcG9jaF9iYXNpc4FYK2EzYzFTS0JUcUFiZ0l6RkYwMzBQSDNfWVhkeXhnNkgxVWJvaTFha1J1cknZ6mBMaG9sZGVyX2Vwb2NoWCtmSC1QUEVGdllNMmFiS010T195XzVmTjlLRGVNdTBnNDNPWmxUc2ZTenZZ2epgTWRlbGVnYXRpb25faWRYK0ZmbHRSOWRwRHVDT0hERXVxU2Q1Z1VFUFdXQWRPaVVVQ1IxRGNwQlBXQXfZ6mBPcHJvZmlsZV9nZW5lc2lzWCtGNUhVYnhqTnNCeFBPaGlkR2NfTDZiSHFzdTJFWWNuRzU5amp0Ui12M0Nv2epgSnNpZ25hdHVyZXOCotnqYEd3aXRuZXNzWCBUrWVerMJgurstjxr4t/8+utUbiqJo74ntwWb2KbL7u9nqYElzaWduYXR1cmVYQNkKNoNXRpiK9DEW9F4Jaz3widYXt7CAE9g6wQjyKG6ZGL23r4It7El8KWXpNBnkjEy4cgxJnXoAfbWQpGSKNAui2epgR3dpdG5lc3NYIO8JL9zHa/FWQk77T6rBYXt7s0ZkxW6+KsJkhsDMQDrG2epgSXNpZ25hdHVyZVhA4oMqepRT6kE/0nzscIPa+HOldABkZ+XJ0zV9EGwWb9aaYREoUqWmB6zfSGqFEQ9JEZXXgqd6fVjQmuW4ufaSB9nqYEVleHRyYfY=",
         "id": "VIgXE71MSKCHO9JdX5KcVV9ZE5SAQeQRuc4bee0VSMk"
       }
@@ -19989,6 +20692,707 @@
     },
     "reasons": {
       "lMK7csQyonkV1iv9YcTWWsFfAI-cfDp4Ppb56w4vOt8": "stale_continuation"
+    },
+    "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+    "role": "moderator",
+    "schema": {
+      "fields": {
+        "moderator": {
+          "authority": "moderator"
+        },
+        "posts": {
+          "merge": "causal_list"
+        }
+      },
+      "name": "R04.moderator"
+    }
+  },
+  {
+    "canonical": [
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6VDEtek8zVFNFY05MS0g0SHdaUWw3RUppRkhqYXhSTVBOQ3NmaUhVSkVoRSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVVWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKYDZ6mBJYXV0aG9yaXR52ephg9nqYEdnZW5lc2lz2epjiVgrWDFKMTJaYXRRWnVZbTBoWmptT19NVGFKZlc5OTI3TXRXYlk3ZjJJUmtBNFiXcmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlQxLXpPM1RTRWNOTEtINEh3WlFsN0VKaUZIamF4Uk1QTkNzZmlIVUpFaEUjYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6dGdianRwSkQxSmprTEtWc1Z5T1hadUlRS0t1ZEc3cVlWdmgwckFiWjRVVVggISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/FkylYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMp9oLZ6mBGbWFuYWdl2epgRHBvc3SB2epgSW1vZGVyYXRvcvVYQFy32l24Z/dTQkTwqP3GgJKe3RmKeGDv6QQi8p8yk5vkUZKTPMBRHwLDB3xmkKQPAniPfJQtdRegu7KvlFRj4g+g9g==",
+        "id": "z2ABuSPAaZ2Ft4NZ60LrHjMkEymfG8sJIDLFxVSo6Zw"
+      },
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6VDEtek8zVFNFY05MS0g0SHdaUWw3RUppRkhqYXhSTVBOQ3NmaUhVSkVoRSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVVWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKYFYK3oyQUJ1U1BBYVoyRnQ0Tlo2MExySGpNa0V5bWZHOHNKSURMRnhWU282WnfZ6mBJYXV0aG9yaXR52ephg9nqYEdnZW5lc2lz2epjiVgrMnZDRk9zLXc1QVVNdktNRTY4aGJjY21QX2M0dzRyR1RwejU2emNheFlQd1iXcmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlQxLXpPM1RTRWNOTEtINEh3WlFsN0VKaUZIamF4Uk1QTkNzZmlIVUpFaEUjYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6dGdianRwSkQxSmprTEtWc1Z5T1hadUlRS0t1ZEc3cVlWdmgwckFiWjRVVVggISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/FkylYICEgCgJRcbiAN3Z2D0KXMVSPoW/lQmmJeXRyxS2fxZMp9oCA9FhAacrJB1bUDI45tbtOMktqesFcSw63VrWNQ1rWav9SJTeorswgNViAMeqTxNGngwnJdc5sWv6lgiMuveq1+MaaBqLZ6mBKX19iZWFjb25fX6XZ6mBEbW9kZdnqYEl3aXRuZXNzZWTZ6mBHdmVyc2lvbgHZ6mBJdGhyZXNob2xkAtnqYEl3aXRuZXNzZXODWCBUrWVerMJgurstjxr4t/8+utUbiqJo74ntwWb2KbL7u1ggydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVRYIO8JL9zHa/FWQk77T6rBYXt7s0ZkxW6+KsJkhsDMQDrG2epgTm1heF9lcG9jaF9zdGVwAdnqYFBfX2NvbnRpbnVhdGlvbl9fqdnqYERraW5k2epgRnRocmVhZNnqYERtb2Rl2epgVGJvdW5kZWRfY29udGludWF0aW9u2epgRHJvbGXZ6mBJbW9kZXJhdG9y2epgR25vbWluZWVYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7P2epgR3Byb2R1Y3TZ6mBJdHJlZWhvdXNl2epgR3ZlcnNpb24B2epgSXRocmVzaG9sZALZ6mBJd2l0bmVzc2Vzg1ggVK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7tYIMnXN265jJ83qUd+LhfD+GG9QxERjstVtQV0TqZ6Gk1UWCDvCS/cx2vxVkJO+0+qwWF7e7NGZMVuvirCZIbAzEA6xtnqYFBtYXhfbGVhc2VfZXBvY2hzB/Y=",
+        "id": "kMFGOGqdU8arjj2BbGVtsnMCTX3mi9LftlUvDP6WxIo"
+      },
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6VDEtek8zVFNFY05MS0g0SHdaUWw3RUppRkhqYXhSTVBOQ3NmaUhVSkVoRSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVVWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKYFYK2tNRkdPR3FkVThhcmpqMkJiR1Z0c25NQ1RYM21pOUxmdGxVdkRQNld4SW/Z6mBJYXV0aG9yaXR52ephgtnqYEZiZWFjb24A9g==",
+        "id": "o27XxDlgiWrgH9IwDDs-_ey-S6IlvroALr-wxM4Pcjo"
+      },
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6VDEtek8zVFNFY05MS0g0SHdaUWw3RUppRkhqYXhSTVBOQ3NmaUhVSkVoRSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVVWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKYFYK28yN1h4RGxnaVdyZ0g5SXdERHMtX2V5LVM2SWx2cm9BTHItd3hNNFBjam/Z6mBJYXV0aG9yaXR52ephgtnqYEZyZXZva2VYK2duZUJzV0EwZlVkNzhjMWRzWG9JellGRjNGeFd0ZWczS1JBSXEwc2gxd1X2",
+        "id": "Fgl6fsmsO5DQpodt1soGCvL4mwU88QfcliErZkM36Zw"
+      },
+      {
+        "bytes": "h01sYXR0aWNlLW9wLXYyWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6VDEtek8zVFNFY05MS0g0SHdaUWw3RUppRkhqYXhSTVBOQ3NmaUhVSkVoRSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVVWCDe+tsiOM7MO/crZsKMjP3TO+oW52+LW0nlo7MtBm1Oz4FYK0ZnbDZmc21zTzVEUXBvZHQxc29HQ3ZMNG13VTg4UWZjbGlFclprTTM2WnfZ6mBJYXV0aG9yaXR52ephhNnqYEdzdWNjZWVk2epgSW1vZGVyYXRvctnqY4pYK2duZUJzV0EwZlVkNzhjMWRzWG9JellGRjNGeFd0ZWczS1JBSXEwc2gxd1VYl3JlcGxpY2E6dHJlZWhvdXNlOnRocmVhZDpUMS16TzNUU0VjTkxLSDRId1pRbDdFSmlGSGpheFJNUE5Dc2ZpSFVKRWhFI2F1dGhvcml0eTpib3VuZGVkLWNvbnRpbnVhdGlvbi12MSNyb290OnRnYmp0cEpEMUpqa0xLVnNWeU9YWnVJUUtLdWRHN3FZVnZoMHJBYlo0VVVYIN762yI4zsw79ytmwoyM/dM76hbnb4tbSeWjsy0GbU7PWCDe+tsiOM7MO/crZsKMjP3TO+oW52+LW0nlo7MtBm1Oz/aC2epgRm1hbmFnZdnqYERwb3N0gdnqYEltb2RlcmF0b3L0WEA0OusppoRHSuJ9f/oshLzdff2pnbGv2Bprc4yWTHUBRsILsEZF3v46RGJRjIMbTJnBDS2qSePx3eqYMJsLZFsHBtnqYYLZ6mBPY29udGludWF0aW9uX3YxotnqYEVjbGFpba/Z6mBEZGVwc4FYK0ZnbDZmc21zTzVEUXBvZHQxc29HQ3ZMNG13VTg4UWZjbGlFclprTTM2WnfZ6mBEa2luZNnqYEZ0aHJlYWTZ6mBEcm9sZdnqYEltb2RlcmF0b3LZ6mBFZXBvY2gA2epgRmF1dGhvclgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBGaG9sZGVyWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKdnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEdyZXBsaWNhWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6VDEtek8zVFNFY05MS0g0SHdaUWw3RUppRkhqYXhSTVBOQ3NmaUhVSkVoRSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVV2epgR3ZlcnNpb24B2epgSXN1Y2Nlc3Nvclgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBKcHJvZmlsZV9pZFgrdUtYMjhqSUp6TnZ6WjRJQ3ZfdmZHX014MHFfa0JFelhNOTFNU1YyX29UMNnqYEtlcG9jaF9iYXNpc4FYK28yN1h4RGxnaVdyZ0g5SXdERHMtX2V5LVM2SWx2cm9BTHItd3hNNFBjam/Z6mBMaG9sZGVyX2Vwb2NoWCt6MkFCdVNQQWFaMkZ0NE5aNjBMckhqTWtFeW1mRzhzSklETEZ4VlNvNlp32epgTWRlbGVnYXRpb25faWRYK2duZUJzV0EwZlVkNzhjMWRzWG9JellGRjNGeFd0ZWczS1JBSXEwc2gxd1XZ6mBPcHJvZmlsZV9nZW5lc2lzWCtrTUZHT0dxZFU4YXJqajJCYkdWdHNuTUNUWDNtaTlMZnRsVXZEUDZXeElv2epgSnNpZ25hdHVyZXOCotnqYEd3aXRuZXNzWCBUrWVerMJgurstjxr4t/8+utUbiqJo74ntwWb2KbL7u9nqYElzaWduYXR1cmVYQOxEso9KcxmLpOaxjSQacObOntwRRzWvhl/lmJcA9grHYBXv1q/tEJzUB80oL56lf6gRD1jKBYkPT+H2wYsynQmi2epgR3dpdG5lc3NYIO8JL9zHa/FWQk77T6rBYXt7s0ZkxW6+KsJkhsDMQDrG2epgSXNpZ25hdHVyZVhAG9rtJ5v1OOJmxBGxdapY9s17cWaWH4sT3zq7mI7v8VHNYF3RibYsdrWvIXr1AUcf2PiV1ZnLYEPuALRnbZCZBvY=",
+        "id": "6rOtN2TEOhb-jJUDFP8i3vgcnLQN5aSHz0yV8fEJ4So"
+      }
+    ],
+    "certificates": [
+      {
+        "claimBytes": "glgfbGF0dGljZS1jb250aW51YXRpb24td2l0bmVzcy12Ma/Z6mBEZGVwc4FYK0ZnbDZmc21zTzVEUXBvZHQxc29HQ3ZMNG13VTg4UWZjbGlFclprTTM2WnfZ6mBEa2luZNnqYEZ0aHJlYWTZ6mBEcm9sZdnqYEltb2RlcmF0b3LZ6mBFZXBvY2gA2epgRmF1dGhvclgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBGaG9sZGVyWCAhIAoCUXG4gDd2dg9ClzFUj6Fv5UJpiXl0csUtn8WTKdnqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEdyZXBsaWNhWJdyZXBsaWNhOnRyZWVob3VzZTp0aHJlYWQ6VDEtek8zVFNFY05MS0g0SHdaUWw3RUppRkhqYXhSTVBOQ3NmaUhVSkVoRSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDp0Z2JqdHBKRDFKamtMS1ZzVnlPWFp1SVFLS3VkRzdxWVZ2aDByQWJaNFVV2epgR3ZlcnNpb24B2epgSXN1Y2Nlc3Nvclgg3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs/Z6mBKcHJvZmlsZV9pZFgrdUtYMjhqSUp6TnZ6WjRJQ3ZfdmZHX014MHFfa0JFelhNOTFNU1YyX29UMNnqYEtlcG9jaF9iYXNpc4FYK28yN1h4RGxnaVdyZ0g5SXdERHMtX2V5LVM2SWx2cm9BTHItd3hNNFBjam/Z6mBMaG9sZGVyX2Vwb2NoWCt6MkFCdVNQQWFaMkZ0NE5aNjBMckhqTWtFeW1mRzhzSklETEZ4VlNvNlp32epgTWRlbGVnYXRpb25faWRYK2duZUJzV0EwZlVkNzhjMWRzWG9JellGRjNGeFd0ZWczS1JBSXEwc2gxd1XZ6mBPcHJvZmlsZV9nZW5lc2lzWCtrTUZHT0dxZFU4YXJqajJCYkdWdHNuTUNUWDNtaTlMZnRsVXZEUDZXeElv",
+        "opId": "6rOtN2TEOhb-jJUDFP8i3vgcnLQN5aSHz0yV8fEJ4So"
+      }
+    ],
+    "frames": [
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "genesis"
+            ],
+            [
+              "delegation",
+              {
+                "audience": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "id": "X1J12ZatQZuYm0hZjmO_MTaJfW9927MtWbY7f2IRkA4",
+                "issuer": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "live": true,
+                "ops": [
+                  "manage",
+                  "post"
+                ],
+                "parent_id": null,
+                "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+                "roles": [
+                  "moderator"
+                ],
+                "sig": "XLfaXbhn91NCRPCo/caAkp7dGYp4YO/pBCLynzKTm+RRkpM8wFEfAsMHfGaQpA8CeI98lC11F6C7sq+UVGPiDw=="
+              }
+            ],
+            [
+              "map",
+              []
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [],
+        "id": "z2ABuSPAaZ2Ft4NZ60LrHjMkEymfG8sJIDLFxVSo6Zw",
+        "kind": "authority",
+        "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "Th/beNhwTDvMqj3gaynK2OqvJhwTUQnOQLsCY/pemERL+mcwzMs8y/m/PlVMOSYaiHVcP/aAttgHKOo/2LNuBA==",
+        "v": 1
+      },
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "genesis"
+            ],
+            [
+              "delegation",
+              {
+                "audience": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "id": "2vCFOs-w5AUMvKME68hbccmP_c4w4rGTpz56zcaxYPw",
+                "issuer": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+                "live": false,
+                "ops": [],
+                "parent_id": null,
+                "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+                "roles": [],
+                "sig": "acrJB1bUDI45tbtOMktqesFcSw63VrWNQ1rWav9SJTeorswgNViAMeqTxNGngwnJdc5sWv6lgiMuveq1+MaaBg=="
+              }
+            ],
+            [
+              "map",
+              [
+                [
+                  [
+                    "atom",
+                    "__beacon__"
+                  ],
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "mode"
+                        ],
+                        [
+                          "atom",
+                          "witnessed"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "version"
+                        ],
+                        [
+                          "int",
+                          1
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "threshold"
+                        ],
+                        [
+                          "int",
+                          2
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "witnesses"
+                        ],
+                        [
+                          "list",
+                          [
+                            [
+                              "bin",
+                              "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s="
+                            ],
+                            [
+                              "bin",
+                              "ydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVQ="
+                            ],
+                            [
+                              "bin",
+                              "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY="
+                            ]
+                          ]
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "max_epoch_step"
+                        ],
+                        [
+                          "int",
+                          1
+                        ]
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    "atom",
+                    "__continuation__"
+                  ],
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "kind"
+                        ],
+                        [
+                          "atom",
+                          "thread"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "mode"
+                        ],
+                        [
+                          "atom",
+                          "bounded_continuation"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "role"
+                        ],
+                        [
+                          "atom",
+                          "moderator"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "nominee"
+                        ],
+                        [
+                          "bin",
+                          "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "product"
+                        ],
+                        [
+                          "atom",
+                          "treehouse"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "version"
+                        ],
+                        [
+                          "int",
+                          1
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "threshold"
+                        ],
+                        [
+                          "int",
+                          2
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "witnesses"
+                        ],
+                        [
+                          "list",
+                          [
+                            [
+                              "bin",
+                              "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s="
+                            ],
+                            [
+                              "bin",
+                              "ydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVQ="
+                            ],
+                            [
+                              "bin",
+                              "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY="
+                            ]
+                          ]
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "max_lease_epochs"
+                        ],
+                        [
+                          "int",
+                          7
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "z2ABuSPAaZ2Ft4NZ60LrHjMkEymfG8sJIDLFxVSo6Zw"
+        ],
+        "id": "kMFGOGqdU8arjj2BbGVtsnMCTX3mi9LftlUvDP6WxIo",
+        "kind": "authority",
+        "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "itKdlKhVZqMiZIBV0eoflNbVg7b9nMoPL95tFObHwuctA2/iPEcXOzlNGnJW0FpEmafqASF/eWO/I8HHSimJCw==",
+        "v": 1
+      },
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "beacon"
+            ],
+            [
+              "int",
+              0
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "kMFGOGqdU8arjj2BbGVtsnMCTX3mi9LftlUvDP6WxIo"
+        ],
+        "id": "o27XxDlgiWrgH9IwDDs-_ey-S6IlvroALr-wxM4Pcjo",
+        "kind": "authority",
+        "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "kAkfRHEufv92jqNm9dIOTBRBWqd8Nf/S6CMeEaxHWkFOZibsN0O/xg21Uc7RGU+bPpkl/2kH4fsx/tW+H2+cDA==",
+        "v": 1
+      },
+      {
+        "author": "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "revoke"
+            ],
+            [
+              "bin",
+              "Z25lQnNXQTBmVWQ3OGMxZHNYb0l6WUZGM0Z4V3RlZzNLUkFJcTBzaDF3VQ=="
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "o27XxDlgiWrgH9IwDDs-_ey-S6IlvroALr-wxM4Pcjo"
+        ],
+        "id": "Fgl6fsmsO5DQpodt1soGCvL4mwU88QfcliErZkM36Zw",
+        "kind": "authority",
+        "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "PgVZsuq4OIvN69uR/bHjb3fcZH9q+cGYNH3Uh9CNwZ87s3STLWW73zNNUgVLoPE3cj/P5dicF5MiE6M09eFiCg==",
+        "v": 1
+      },
+      {
+        "author": "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "succeed"
+            ],
+            [
+              "atom",
+              "moderator"
+            ],
+            [
+              "delegation",
+              {
+                "audience": "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=",
+                "expires_epoch": 6,
+                "id": "gneBsWA0fUd78c1dsXoIzYFF3FxWteg3KRAIq0sh1wU",
+                "issuer": "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=",
+                "live": false,
+                "ops": [
+                  "manage",
+                  "post"
+                ],
+                "parent_id": null,
+                "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+                "roles": [
+                  "moderator"
+                ],
+                "sig": "NDrrKaaER0rifX/6LIS83X39qZ2xr9gaa3OMlkx1AUbCC7BGRd7+OkRiUYyDG0yZwQ0tqknj8d3qmDCbC2RbBw=="
+              }
+            ],
+            [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "continuation_v1"
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "claim"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "deps"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "RmdsNmZzbXNPNURRcG9kdDFzb0dDdkw0bXdVODhRZmNsaUVyWmtNMzZadw=="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "kind"
+                            ],
+                            [
+                              "atom",
+                              "thread"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "role"
+                            ],
+                            [
+                              "atom",
+                              "moderator"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "epoch"
+                            ],
+                            [
+                              "int",
+                              0
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "author"
+                            ],
+                            [
+                              "bin",
+                              "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "holder"
+                            ],
+                            [
+                              "bin",
+                              "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "product"
+                            ],
+                            [
+                              "atom",
+                              "treehouse"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "replica"
+                            ],
+                            [
+                              "bin",
+                              "cmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlQxLXpPM1RTRWNOTEtINEh3WlFsN0VKaUZIamF4Uk1QTkNzZmlIVUpFaEUjYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6dGdianRwSkQxSmprTEtWc1Z5T1hadUlRS0t1ZEc3cVlWdmgwckFiWjRVVQ=="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "successor"
+                            ],
+                            [
+                              "bin",
+                              "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "profile_id"
+                            ],
+                            [
+                              "bin",
+                              "dUtYMjhqSUp6TnZ6WjRJQ3ZfdmZHX014MHFfa0JFelhNOTFNU1YyX29UMA=="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "epoch_basis"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "bzI3WHhEbGdpV3JnSDlJd0REcy1fZXktUzZJbHZyb0FMci13eE00UGNqbw=="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "holder_epoch"
+                            ],
+                            [
+                              "bin",
+                              "ejJBQnVTUEFhWjJGdDROWjYwTHJIak1rRXltZkc4c0pJRExGeFZTbzZadw=="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "delegation_id"
+                            ],
+                            [
+                              "bin",
+                              "Z25lQnNXQTBmVWQ3OGMxZHNYb0l6WUZGM0Z4V3RlZzNLUkFJcTBzaDF3VQ=="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "profile_genesis"
+                            ],
+                            [
+                              "bin",
+                              "a01GR09HcWRVOGFyamoyQmJHVnRzbk1DVFgzbWk5TGZ0bFV2RFA2V3hJbw=="
+                            ]
+                          ]
+                        ]
+                      ]
+                    ],
+                    [
+                      [
+                        "atom",
+                        "signatures"
+                      ],
+                      [
+                        "list",
+                        [
+                          [
+                            "map",
+                            [
+                              [
+                                [
+                                  "atom",
+                                  "witness"
+                                ],
+                                [
+                                  "bin",
+                                  "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s="
+                                ]
+                              ],
+                              [
+                                [
+                                  "atom",
+                                  "signature"
+                                ],
+                                [
+                                  "bin",
+                                  "7ESyj0pzGYuk5rGNJBpw5s6e3BFHNa+GX+WYlwD2CsdgFe/Wr+0QnNQHzSgvnqV/qBEPWMoFiQ9P4fbBizKdCQ=="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            "map",
+                            [
+                              [
+                                [
+                                  "atom",
+                                  "witness"
+                                ],
+                                [
+                                  "bin",
+                                  "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY="
+                                ]
+                              ],
+                              [
+                                [
+                                  "atom",
+                                  "signature"
+                                ],
+                                [
+                                  "bin",
+                                  "G9rtJ5v1OOJmxBGxdapY9s17cWaWH4sT3zq7mI7v8VHNYF3RibYsdrWvIXr1AUcf2PiV1ZnLYEPuALRnbZCZBg=="
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ],
+        "cap": [
+          "nil"
+        ],
+        "deps": [
+          "Fgl6fsmsO5DQpodt1soGCvL4mwU88QfcliErZkM36Zw"
+        ],
+        "id": "6rOtN2TEOhb-jJUDFP8i3vgcnLQN5aSHz0yV8fEJ4So",
+        "kind": "authority",
+        "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
+        "sig": "Xia6KlTYB1n2NV6pnoD9IPZ8m6X7HIvFAoU/Gg/aJsY+472gMHjnJSIOyu5NMELYr9lual69I2EeydH/+TGGCQ==",
+        "v": 1
+      }
+    ],
+    "holderEpoch": "z2ABuSPAaZ2Ft4NZ60LrHjMkEymfG8sJIDLFxVSo6Zw",
+    "name": "thread:revoked-delegation",
+    "posts": [],
+    "profiles": [
+      {
+        "bytes": "glgfbGF0dGljZS1jb250aW51YXRpb24tcHJvZmlsZS12ManZ6mBEa2luZNnqYEZ0aHJlYWTZ6mBEbW9kZdnqYFRib3VuZGVkX2NvbnRpbnVhdGlvbtnqYERyb2xl2epgSW1vZGVyYXRvctnqYEdub21pbmVlWCDe+tsiOM7MO/crZsKMjP3TO+oW52+LW0nlo7MtBm1Oz9nqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEd2ZXJzaW9uAdnqYEl0aHJlc2hvbGQC2epgSXdpdG5lc3Nlc4NYIFStZV6swmC6uy2PGvi3/z661RuKomjvie3BZvYpsvu7WCDJ1zduuYyfN6lHfi4Xw/hhvUMREY7LVbUFdE6mehpNVFgg7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsbZ6mBQbWF4X2xlYXNlX2Vwb2Nocwc=",
+        "opId": "kMFGOGqdU8arjj2BbGVtsnMCTX3mi9LftlUvDP6WxIo",
+        "profileId": "uKX28jIJzNvzZ4ICv_vfG_Mx0q_kBEzXM91MSV2_oT0"
+      }
+    ],
+    "realmByPubkey": {
+      "3BXQf1uwXt+3GJ9OtiJg+ixcAAts01Ye9DUW7pY86Jk=": "holder",
+      "3vrbIjjOzDv3K2bCjIz90zvqFudvi1tJ5aOzLQZtTs8=": "nominee",
+      "7wkv3Mdr8VZCTvtPqsFhe3uzRmTFbr4qwmSGwMxAOsY=": "w2",
+      "9Tn/WM2kVnaYAL4QxrpFXDZA5F/6X5ANjJnX0r+w5Lc=": "member2",
+      "AmPe4gGDoE5rHCQdJgx7RyFZc+9UhI2aIUkUm+vpiNA=": "member9",
+      "BfyYBdDZxcOxI3o8RbYHxc0Sjc0Y+I8LkklRgrNKbI8=": "member5",
+      "ISAKAlFxuIA3dnYPQpcxVI+hb+VCaYl5dHLFLZ/Fkyk=": "founder",
+      "KoyXGoVvsssU4RDcL8oP0EauQ80aQ9MdtBDzwydnWf8=": "member6",
+      "R5UEJ+JXZYS8GYBYsN6nUM+V8XFyp/6iL3G5D5hOVLM=": "member11",
+      "RDPApNOg1VKftqwNpCTg2tLL0n/PF1hKaw3+YHB2v1Q=": "member3",
+      "UkCEtqWtelAj9w3idK8ZfQ/XeLdR6kiDGO43JxvaDU8=": "member12",
+      "VK1lXqzCYLq7LY8a+Lf/PrrVG4qiaO+J7cFm9imy+7s=": "w1",
+      "ey4IoPVFuS6MNnOFvT3GuhFNWDg6chWNOrNq5E7Qc3A=": "member8",
+      "g/co9ZKrQaC2zbhii6khkwbZ/j/GZEYTvAsDEzaJnkA=": "member10",
+      "iP19tQ86JIqFqTsejMlB1hCtfjV6ApqEBylyEXzBoVc=": "observer",
+      "pMHS3MZqf50qlwG1OzajjOKp0lftvbdOD1alKqRtSCE=": "member7",
+      "ux2Wg96KPB3eeCYD5P3i/TVJ8JmvVknHF+HlEHIf4tc=": "member4",
+      "vPLrbHLuOvSfMlX+YTVwOiwgjOj9IgczP3bHWzBY8DE=": "member1",
+      "yV6k6hyIUe2cCAsOIrq//vI28Wp1Cb1MyTEMzau+wGE=": "copy",
+      "ydc3brmMnzepR34uF8P4Yb1DERGOy1W1BXROpnoaTVQ=": "w3"
+    },
+    "reasons": {
+      "6rOtN2TEOhb-jJUDFP8i3vgcnLQN5aSHz0yV8fEJ4So": "revoked_capability"
     },
     "replica": "replica:treehouse:thread:T1-zO3TSEcNLKH4HwZQl7EJiFHjaxRMPNCsfiHUJEhE#authority:bounded-continuation-v1#root:tgbjtpJD1JjkLKVsVyOXZuIQKKudG7qYVvh0rAbZ4UU",
     "role": "moderator",

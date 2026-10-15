@@ -148,7 +148,10 @@ export function analyzeAuthority(schema, ops, included, order, byId, expectedRep
     const roleDecision = (op, evidence, state) => {
         if (evidence.type === "succeed" &&
             (continuation.family !== "legacy" || evidence.proof.mode === "continuation")) {
-            const reason = continuationRejectionReason(op, evidence, state, continuation, byId);
+            const reason = continuationRejectionReason(op, evidence, state, continuation, byId) ??
+                // Row 193 (Elixir decide_continuation/8): an otherwise valid claim under its own
+                // revoked delegation confers nothing; a revoked predecessor stays a historical ceiling.
+                (revokedAsOf(op, evidence.delegation.id, byId, revocation, revocationAncestors) ? "revoked_capability" : undefined);
             return { honored: reason === undefined, reason };
         }
         const honored = authorityWriteHonored(op, evidence, state, delegations, policies, honoredSuccessionIntroductions, byId, revocation, revocationAncestors);
@@ -981,11 +984,11 @@ function collectDelegations(ops) {
             existing.delegation = delegation;
             existing.introductionOpIds.push(op.id);
         }
-        else if (delegationKey(existing.delegation) === delegationKey(delegation)) {
-            existing.introductionOpIds.push(op.id);
-        }
         else {
-            existing.delegation = null;
+            // Elixir collect_valid_delegation_intro/3: self-consistency binds the id to the
+            // payload, so a second valid introduction can differ only in its signature. Keep the
+            // first; nulling it let the issuer void a root revoke with a twin signature.
+            existing.introductionOpIds.push(op.id);
         }
     }
     return delegations;
@@ -1092,6 +1095,7 @@ function validDelegation(delegation, delegations) {
     const record = delegations.get(delegation.id);
     return (record !== undefined &&
         record.delegation !== null &&
+        introducedWithValidSignature(delegation) &&
         delegationKey(record.delegation) === delegationKey(delegation) &&
         record.validation.valid);
 }
@@ -1099,6 +1103,7 @@ function successionCandidate(delegation, delegations) {
     const record = delegations.get(delegation.id);
     return (record !== undefined &&
         record.delegation !== null &&
+        introducedWithValidSignature(delegation) &&
         delegationKey(record.delegation) === delegationKey(delegation) &&
         !record.validation.valid &&
         record.validation.reason === "succession_candidate" &&
@@ -1108,6 +1113,7 @@ function candidateDelegationActivated(delegation, delegations, honoredSuccession
     const record = delegations.get(delegation.id);
     if (record === undefined ||
         record.delegation === null ||
+        !introducedWithValidSignature(delegation) ||
         delegationKey(record.delegation) !== delegationKey(delegation) ||
         record.validation.valid ||
         record.validation.reason !== "succession_candidate" ||
@@ -1334,6 +1340,7 @@ function collectInvalidGenesisReasons(ops, delegations, reasons) {
         const record = delegations.get(evidence.delegation.id);
         if (record === undefined ||
             record.delegation === null ||
+            !introducedWithValidSignature(evidence.delegation) ||
             delegationKey(record.delegation) !== delegationKey(evidence.delegation) ||
             record.invalidIntroductionReasons.has(op.id)) {
             continue;
@@ -1434,10 +1441,39 @@ function browserBase64(value) {
         throw new Error("base64 encoding unavailable");
     return btoaFn(String.fromCharCode(...value));
 }
+/**
+ * Identity of a delegation's content. The signature is excluded: a content-addressed
+ * delegation can be introduced under a second valid signature, and Elixir keys downstream
+ * checks by id and the first valid introduction. Identity alone is not enough to honor
+ * evidence, so every match also requires `introducedWithValidSignature`.
+ */
 function delegationKey(delegation) {
     return JSON.stringify({
         ...delegation,
+        sig: undefined,
         ops: [...delegation.ops].sort(),
         roles: [...delegation.roles].sort(),
     });
+}
+// Bounded: evidence is peer-supplied, so an unbounded cache is a memory-exhaustion path.
+const SELF_CONSISTENT_CACHE_LIMIT = 4096;
+const selfConsistentDelegations = new Map();
+/**
+ * True when the cited delegation evidence carries a valid signature for its own content.
+ * This is the introduction bar Elixir's `collect_valid_delegation_intro` applies: an
+ * invalid-signature introduction must not match a verified delegation by content alone.
+ */
+function introducedWithValidSignature(delegation) {
+    // Keyed by the whole evidence, sig included: a re-signed or mutated object must never
+    // reuse another object's verdict.
+    const cacheKey = JSON.stringify(delegation);
+    let verdict = selfConsistentDelegations.get(cacheKey);
+    if (verdict === undefined) {
+        verdict = delegationSelfConsistent(delegation);
+        if (selfConsistentDelegations.size >= SELF_CONSISTENT_CACHE_LIMIT) {
+            selfConsistentDelegations.clear();
+        }
+        selfConsistentDelegations.set(cacheKey, verdict);
+    }
+    return verdict;
 }
