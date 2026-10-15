@@ -225,7 +225,9 @@ defmodule Lattice.FaultScenarioTest do
         root: "a",
         modules: %{"thread" => Treehouse.Thread},
         checks: [{"replayed_check", :replay}, {hostile, :process}],
-        rerun: false
+        rerun: false,
+        replicas: fn "s" -> %{"thread" => base["thread.a"].replica} end,
+        replay_checks: fn "s", _logs -> [{"replayed_check", true}] end
       }
 
       logs = %{"thread.a" => base["thread.a"], "thread.#{hostile}" => base["thread.b"]}
@@ -247,6 +249,65 @@ defmodule Lattice.FaultScenarioTest do
       refute html =~ "<script>"
       refute html =~ "<img"
       assert html =~ "&lt;script&gt;alert(&#39;x&#39;)&quot;&lt;img&gt;"
+    end
+
+    test "a non-re-runnable entry fails closed and never copies replay checks",
+         %{tmp_dir: tmp} do
+      {:ok, base} = FaultScenario.run("partition_converge", "demo")
+      {:ok, other} = FaultScenario.run("partition_converge", "other-seed")
+      logs = %{"thread.a" => base["thread.a"]}
+
+      spec = %{
+        scenario: "synthetic",
+        fault: "f",
+        invariant: "i",
+        realms: ["a"],
+        root: "a",
+        modules: %{"thread" => Treehouse.Thread},
+        checks: [{"replayed_check", :replay}, {"process_check", :process}],
+        rerun: false,
+        replicas: fn _ -> %{"thread" => base["thread.a"].replica} end,
+        replay_checks: fn _, _ -> [{"replayed_check", false}] end
+      }
+
+      verify = fn dir, spec -> Evidence.verify(dir, spec_fun: fn "synthetic" -> spec end) end
+
+      write = fn dir, logs ->
+        Evidence.write(dir, "synthetic", "s", logs,
+          spec: spec,
+          checks: [{"replayed_check", true}, {"process_check", true}]
+        )
+      end
+
+      # A replay check recorded as true but re-derived false is a mismatch, not a copy.
+      {:ok, _} = write.(Path.join(tmp, "claimed"), logs)
+      assert {:error, [reason]} = verify.(Path.join(tmp, "claimed"), spec)
+      assert reason =~ "evidence.json differs"
+
+      # Without the table's functions the entry fails closed.
+      assert {:error, [reason]} = verify.(Path.join(tmp, "claimed"), Map.delete(spec, :replicas))
+      assert reason =~ "names no expected replicas"
+
+      assert {:error, [reason]} =
+               verify.(Path.join(tmp, "claimed"), Map.delete(spec, :replay_checks))
+
+      assert reason =~ "cannot re-derive the replay checks"
+
+      # An authentic log for another replica is refused.
+      {:ok, _} = write.(Path.join(tmp, "swapped"), %{"thread.a" => other["thread.a"]})
+      assert {:error, [reason]} = verify.(Path.join(tmp, "swapped"), spec)
+      assert reason =~ "unexpected replica"
+    end
+
+    test "a malformed quarantine row renders an unverified card", %{tmp_dir: tmp} do
+      {dir, _logs, _} = write!(tmp, "revoke_offline")
+      update_evidence!(dir, &Map.put(&1, "quarantine", [1 | &1["quarantine"]]))
+
+      [entry] = Report.write(tmp) |> elem(2)
+      assert {:error, _} = entry.result
+      html = Report.render([entry])
+      assert html =~ ~s(<span class="status bad">unverified</span>)
+      assert html =~ "malformed: <code>1</code>"
     end
   end
 end

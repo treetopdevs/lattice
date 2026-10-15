@@ -22,15 +22,22 @@ defmodule Lattice.FaultScenario do
   @type log_name :: String.t()
   @type logs :: %{log_name() => Log.t()}
   @type source :: :replay | :process
+  @typedoc """
+  A verifier table entry. A `rerun: false` entry must also supply `:replicas`
+  (seed -> expected replica id per prefix) and, when it has replay checks,
+  `:replay_checks` (seed, logs -> re-derived replay check results).
+  """
   @type spec :: %{
-          scenario: String.t(),
-          fault: String.t(),
-          invariant: String.t(),
-          realms: [String.t()],
-          root: String.t(),
-          modules: %{String.t() => module()},
-          checks: [{String.t(), source()}],
-          rerun: boolean()
+          required(:scenario) => String.t(),
+          required(:fault) => String.t(),
+          required(:invariant) => String.t(),
+          required(:realms) => [String.t()],
+          required(:root) => String.t(),
+          required(:modules) => %{String.t() => module()},
+          required(:checks) => [{String.t(), source()}],
+          required(:rerun) => boolean(),
+          optional(:replicas) => (String.t() -> %{String.t() => String.t()}),
+          optional(:replay_checks) => (String.t(), logs() -> [{String.t(), boolean()}])
         }
 
   @specs %{

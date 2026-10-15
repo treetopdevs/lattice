@@ -168,10 +168,14 @@ defmodule Lattice.FaultScenario.Report do
     head = Enum.map_join(logs, "", &"<th><code>#{esc(&1)}</code></th>")
 
     rows =
-      Enum.map_join(entries, "", fn entry ->
-        reasons = if is_map(entry["reasons"]), do: entry["reasons"], else: %{}
-        cells = Enum.map_join(logs, "", &"<td>#{esc(Map.get(reasons, &1, ""))}</td>")
-        "<tr><td><code>#{esc(short(entry["op"]))}</code></td>#{cells}</tr>"
+      Enum.map_join(entries, "", fn
+        %{} = entry ->
+          reasons = if is_map(entry["reasons"]), do: entry["reasons"], else: %{}
+          cells = Enum.map_join(logs, "", &"<td>#{esc(Map.get(reasons, &1, ""))}</td>")
+          "<tr><td><code>#{esc(short(entry["op"]))}</code></td>#{cells}</tr>"
+
+        malformed ->
+          ~s(<tr><td colspan="#{length(logs) + 1}">malformed: <code>#{esc(malformed)}</code></td></tr>)
       end)
 
     ~s(<div class="scroll"><table><thead><tr><th>Op</th>#{head}</tr></thead><tbody>#{rows}</tbody></table></div>)

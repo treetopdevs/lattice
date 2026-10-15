@@ -110,7 +110,7 @@ defmodule Lattice.FaultScenario.Evidence do
          {:ok, names} <- log_names(dir, spec),
          :ok <- load_modules(spec),
          {:ok, logs} <- restore(dir, names),
-         :ok <- bound(spec, name, seed, logs, opts),
+         :ok <- bound(spec, name, seed, logs),
          :ok <- recomputed(dir, bytes, name, seed, logs, spec),
          :ok <- rerun(dir, spec, name, seed, names) do
       {:ok,
@@ -282,33 +282,64 @@ defmodule Lattice.FaultScenario.Evidence do
     end)
   end
 
-  defp bound(spec, name, seed, logs, opts) do
+  # Every log must be bound to a replica the table derives from the seed, re-runnable or
+  # not; an entry that cannot name its replicas fails closed.
+  defp bound(spec, name, seed, logs) do
     expected =
-      Keyword.get_lazy(opts, :expected_replicas, fn ->
-        if spec.rerun, do: FaultScenario.expected_replicas(name, seed), else: nil
-      end)
+      cond do
+        spec.rerun -> FaultScenario.expected_replicas(name, seed)
+        is_function(spec[:replicas], 1) -> spec.replicas.(seed)
+        true -> nil
+      end
 
-    mismatched =
-      for {log_name, log} <- logs,
-          is_map(expected),
-          {prefix, _} = FaultScenario.split_log_name(log_name),
-          log.replica != expected[prefix],
-          do: log_name
+    if is_map(expected) do
+      mismatched =
+        for {log_name, log} <- logs,
+            {prefix, _} = FaultScenario.split_log_name(log_name),
+            log.replica != Map.get(expected, prefix),
+            do: log_name
 
-    if mismatched == [],
-      do: :ok,
-      else:
-        {:error, "logs bound to an unexpected replica: #{Enum.join(Enum.sort(mismatched), ", ")}"}
+      if mismatched == [],
+        do: :ok,
+        else:
+          {:error,
+           "logs bound to an unexpected replica: #{Enum.join(Enum.sort(mismatched), ", ")}"}
+    else
+      {:error, "the verifier table names no expected replicas for #{name}"}
+    end
   end
 
   defp recomputed(dir, bytes, name, seed, logs, spec) do
-    encode_opts =
-      if spec.rerun,
-        do: [spec: spec],
-        else: [spec: spec, checks: recorded_checks(dir, spec)]
+    with {:ok, encode_opts} <- encode_opts(dir, spec, seed, logs) do
+      {:ok, encoded} = encode(name, seed, logs, encode_opts)
+      compare(dir, bytes, encoded)
+    end
+  end
 
-    {:ok, encoded} = encode(name, seed, logs, encode_opts)
+  defp encode_opts(_dir, %{rerun: true} = spec, _seed, _logs), do: {:ok, [spec: spec]}
 
+  # A non-re-runnable entry re-derives its replay checks through the table's own function
+  # and copies only its process checks from the evidence.
+  defp encode_opts(dir, spec, seed, logs) do
+    replay? = Enum.any?(spec.checks, &match?({_, :replay}, &1))
+
+    if replay? and not is_function(spec[:replay_checks], 2) do
+      {:error, "the verifier table cannot re-derive the replay checks of #{spec.scenario}"}
+    else
+      derived = if replay?, do: Map.new(spec.replay_checks.(seed, logs)), else: %{}
+      recorded = recorded_checks(dir)
+
+      checks =
+        Enum.map(spec.checks, fn
+          {check, :replay} -> {check, Map.get(derived, check, false)}
+          {check, :process} -> {check, Map.get(recorded, check, false)}
+        end)
+
+      {:ok, [spec: spec, checks: checks]}
+    end
+  end
+
+  defp compare(dir, bytes, encoded) do
     expected_files =
       MapSet.new(["evidence.json", "logs" | Map.keys(encoded.dot)])
 
@@ -333,10 +364,9 @@ defmodule Lattice.FaultScenario.Evidence do
   end
 
   # Process-sourced checks cannot be re-derived offline; they are copied as recorded.
-  defp recorded_checks(dir, spec) do
+  defp recorded_checks(dir) do
     {:ok, evidence} = dir |> Path.join("evidence.json") |> File.read!() |> Jason.decode()
-    recorded = Map.new(evidence["checks"], &{&1["name"], &1["ok"] == true})
-    Enum.map(spec.checks, fn {name, _} -> {name, Map.get(recorded, name, false)} end)
+    Map.new(evidence["checks"], &{&1["name"], &1["ok"] == true})
   end
 
   defp rerun(_dir, %{rerun: false}, _name, _seed, _names), do: :ok
@@ -344,12 +374,12 @@ defmodule Lattice.FaultScenario.Evidence do
   defp rerun(dir, _spec, name, seed, names) do
     {:ok, logs} = FaultScenario.run(name, seed)
 
-    tmp =
-      Path.join(System.tmp_dir!(), "lattice-fault-rerun-#{System.unique_integer([:positive])}")
+    # Unique across OS processes; `mkdir` (not `mkdir_p`) refuses a pre-existing path.
+    suffix = Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
+    tmp = Path.join(System.tmp_dir!(), "lattice-fault-rerun-#{System.pid()}-#{suffix}")
+    :ok = File.mkdir(tmp)
 
     try do
-      File.mkdir_p!(tmp)
-
       mismatched =
         Enum.reject(names, fn log_name ->
           path = Path.join(tmp, log_name <> ".log")
