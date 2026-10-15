@@ -94,7 +94,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R19b | AF-3 semantics / identity + parity | L | High | R19a, R04, R10 | Core founder-present/absent re-admission with negative controls | DONE (core semantics) |
 | R20 | New-phone re-admission / product | M | High | R14, R19b | Packaged AF-3, old-key return, visible unresolved grants | PLANNED |
 | R21a | WSS/restore artifacts / operations | M | Medium | R05, R06, R08, R09, R11c | Reproducible deployment/runbook and local restore checks | PLANNED |
-| R21b | WSS field restore / operations | M | High | R21a | Public WSS, restart and clean-host backup restore; operator inputs | PLANNED |
+| R21b | WSS field restore / operations | M | High | R21a | Public WSS, restart and clean-host backup restore; operator inputs | PLANNED. I1 host up: DO droplet treehouse-relay-nyc3-1 (609343483, nyc3) at treehouse-relay.rootaccess.to, TLS by Caddy with Let's Encrypt auto-renew; daily restic backup to Spaces installed (first snapshot d9aada66), clean-machine restore verified; timer check pending; carrier not deployed |
 | R22a | Signed Android artifact / release | M | High | R15, R16, R18, R20, R21a | Immutable internally distributed candidate and manifest | PLANNED |
 | R22b | Physical candidate / device QA | M | High | R22a, R21b | Exact candidate passes all group, loss, network and upgrade gates | PLANNED |
 | R23 | Community pilot / pilot lead | 14+ days | High | R22b | Participant evidence, incident disposition, continue/fix/stop | PLANNED |
