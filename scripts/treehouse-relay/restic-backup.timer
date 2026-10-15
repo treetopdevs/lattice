@@ -2,9 +2,10 @@
 Description=Daily treehouse relay backup
 
 [Timer]
+# A fixed start time keeps consecutive runs 24 hours apart, within the 24-hour RPO.
+# Persistent=true runs a missed start as soon as the host is back up.
 OnCalendar=daily
 Persistent=true
-RandomizedDelaySec=30min
 
 [Install]
 WantedBy=timers.target

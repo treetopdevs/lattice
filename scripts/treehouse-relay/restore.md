@@ -30,9 +30,11 @@ the live host's `/etc` or `/var/lib` paths.
 
    ```bash
    (
+     set -e
      set -a; . ./restic.env; set +a
      RESTORE_DIR=$(mktemp -d)
      trap 'rm -rf "$RESTORE_DIR" ./restic.env' EXIT
+     # A nonzero exit (for example, a missing pack) stops the check before the diff.
      restic restore latest --tag daily --target "$RESTORE_DIR"
      diff "$RESTORE_DIR/etc/caddy/Caddyfile" <(printf '%s\n' \
        'treehouse-relay.rootaccess.to {' \
@@ -50,7 +52,8 @@ copy unless the env file is lost.
 
 ## Schedule and retention
 
-- Daily at a randomized time within 30 minutes of midnight UTC, `Persistent=true`.
+- Daily at midnight UTC, `Persistent=true`, so a missed start runs once the host is back.
+  Consecutive runs are 24 hours apart, which matches the 24-hour disaster RPO.
 - Keep 7 daily, 4 weekly and 6 monthly snapshots; older ones are pruned.
 - A run that restic ends with exit 3 is tagged `incomplete` and never selected by a
   restore. Only the five newest incomplete snapshots are kept, for diagnosis.
