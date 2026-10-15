@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 442da5f07..HEAD -- apps/lattice_core/lib/lattice/carrier/wire.ex apps/lattice_core/lib/lattice/canonical.ex apps/lattice_core/test/lattice2/carrier_wire_test.exs apps/lattice_core/lib/lattice/browser_log_store.ex`
+> **Drift check (run first)**: `git diff --stat 8a822e4a8..HEAD -- apps/lattice_core/lib/lattice/carrier/wire.ex apps/lattice_core/lib/lattice/canonical.ex apps/lattice_core/test/lattice2/carrier_wire_test.exs apps/lattice_core/lib/lattice/browser_log_store.ex clients/lattice-client/src/carrier.ts clients/lattice-client/test/carrier.ts apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex apps/lattice_popcorn_spike/scripts/shared.mjs`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -84,8 +84,7 @@ encode_tagged(@atom_tag, Atom.to_string(atom))` (line 158) and
 succeeds for the struct. `Township.Election.OfflineBundle` already decodes with it.
 
 `apps/lattice_core/test/lattice2/carrier_wire_test.exs`: line 86 asserts that a delegation frame whose
-`"ops"` is `["definitely_not_an_existing_atom"]` decodes to `{:error, :malformed_op}` (this plan changes
-that expectation on purpose); line 206 asserts an unknown *reason* in a report is `:malformed_term`
+`"ops"` is `["definitely_not_an_existing_atom"]` decodes to `{:error, :malformed_op}` (unchanged by this plan); line 206 asserts an unknown *reason* in a report is `:malformed_term`
 (unchanged).
 
 `apps/lattice_core/lib/lattice/browser_log_store.ex:99-104` has a private copy of `existing_atom/1`
@@ -103,29 +102,32 @@ Five vectors demonstrate the defect (`clients/lattice-client/test/vectors/<name>
 
 ## Amendment (2026-10-15): closed vocabulary (operator ruling D2)
 
-The operator ruled on 2026-10-14 that atom names are admitted on the wire only from one checked-in vocabulary, and that both runtimes refuse any name outside it. This replaces the earlier approach of decoding unknown names as `Lattice.Canonical.Atom`, which is withdrawn. Under that approach the admission decision still depended on which atoms the VM had loaded: the same bytes became a struct in one VM and an atom in another, and the ordering and map-key code had to handle both shapes. A closed vocabulary makes admission a pure function of the bytes and one list, and it bounds the atom table, because the decoder only creates atoms whose names are on the list.
+The operator ruled on 2026-10-14 that atom names are admitted on the wire only from one checked-in vocabulary, and that both runtimes refuse any name outside it. This replaces the earlier approach of decoding unknown names as `Lattice.Canonical.Atom`, which is withdrawn. Under that approach the admission decision still depended on which atoms the VM had loaded: the same bytes became a struct in one VM and an atom in another. A closed vocabulary makes op admission a pure function of the bytes and one list, and it bounds the atom table, because op decoding only creates atoms whose names are on the list.
 
 ### Design
 
-1. **Vocabulary.** `Lattice.Carrier.WireVocabulary` (`apps/lattice_core/lib/lattice/carrier/wire_vocabulary.ex`) holds a sorted, checked-in list of names, exposed as `names/0` and `known?/1`. The list must contain every atom name a carrier term may legitimately use: op kinds, body and authority tags, replica command, field and role names, and every atom name in the committed vectors and the exporter source.
-2. **One source, two runtimes.** `mix lattice.export_vectors` writes the same list to `clients/lattice-client/test/vectors/wire_vocabulary.json` and to `clients/lattice-client/src/wire_vocabulary.ts` (generated, committed). The existing vector-regeneration check diffs both files, so the TypeScript list cannot drift from the Elixir list.
-3. **BEAM decode.** In `wire.ex`, a name on the list decodes with `String.to_atom/1`. A name off the list returns `{:error, :unknown_atom}`, which the op decoder already maps to `:malformed_op`. This replaces `String.to_existing_atom/1` for names on the list only. `decode_reason_pairs/1`, `browser_log_store.ex` and the judge stay strict and unchanged.
-4. **TypeScript decode.** `clients/lattice-client/src/carrier.ts` refuses an atom name that is not in `wire_vocabulary.ts`, with the same malformed-op outcome as the BEAM.
-5. **Encoding is unchanged.** Canonical bytes, ids and signatures do not change, so the committed vectors do not change. The existing refusal test at `carrier_wire_test.exs:86` (`definitely_not_an_existing_atom` gives `:malformed_op`) stays valid unchanged, because that name is not on the list.
+1. **Vocabulary.** `Lattice.Carrier.WireVocabulary` (`apps/lattice_core/lib/lattice/carrier/wire_vocabulary.ex`) holds a sorted, checked-in list of names, exposed as `names/0` and `known?/1`. It must contain every atom name a legitimate carrier op can carry: op kinds; body, authority and cap tags; the command, field and role names declared by every `use Lattice.Replica` module under `apps/*/lib` (for example `Lattice.Demo.Thread`, whose `:join`, `:leave` and `:lock` the node-spike scenario sends over the carrier); the atom names the exporter emits; and the atom names in committed vectors. The Step 1 test enforces the last two.
+2. **One source, two runtimes.** `mix lattice.export_vectors` writes the same list to `clients/lattice-client/test/vectors/wire_vocabulary.json` and to `clients/lattice-client/src/wire_vocabulary.ts` (generated, committed). The regeneration check in Step 6 diffs both.
+3. **BEAM op decode only.** Op-frame decode uses a new vocabulary helper, separate from `existing_atom/1` (`wire.ex:442-448`). For a listed name it returns `String.to_atom/1`; for any other name it returns `{:error, :unknown_atom}`, which maps to `:malformed_op`. The helper applies to atom terms inside op bodies and caps, and to delegation `ops` and `roles` in `reduce_atoms/2`. `decode_term/2` takes the mode from its caller, so the op path and the value path can differ.
+   - These stay strict and unchanged: `decode_value/1`, a standalone value API that closed artifact protocols use, and whose doc says it still refuses names this VM does not hold; `decode_reason_pairs/1` (`wire.ex:212`); the op-kind check (`existing_atom(kind)`); and `browser_log_store.ex`.
+   - The `existing_atoms_only?` guard (`wire.ex:51` and `414-430`) sees only atoms that decoding has already created, so it accepts them. Leave it, and do not rely on it for admission.
+4. **TypeScript op admission.** The vocabulary check must refuse an off-list name before an op is built, not after. Today `carrierOpToSemanticOp` (`carrier.ts:1347`) calls `assertCarrierOpFrame(frame, false)`, and its catch-all turns a term-decoding error into a `malformed_term` op that stays in the log (`carrier.ts:1370-1372`). BEAM never admits such a frame, so an off-list name must leave the frame absent from `carrierOpsToSemanticOps` output. Put the check on the admission path (`assertCarrierOpFrame`, `carrier.ts:1797`, or a gate `carrierOpsToSemanticOps` applies before `carrierOpToSemanticOp`), and make sure the catch-all cannot retain a refused name.
+   - Delegations: `isCarrierDelegation` (`carrier.ts:206-220`) checks `ops` and `roles` only with `isStringArray`. Each name must also be on the list. An op whose delegation carries an off-list name is refused the same way as an op with an off-list atom.
+5. **Encoding is unchanged.** Canonical bytes, ids and signatures do not change, so committed vectors do not change. The existing refusal test (`carrier_wire_test.exs:86`, where `definitely_not_an_existing_atom` gives `:malformed_op`) stays valid unchanged, because that name is not on the list.
 
 ### Steps
 
-**Step 1 (RED): the list covers the committed vectors.** Add `apps/lattice_core/test/lattice2/wire_vocabulary_test.exs`. It fails if any atom name in a committed vector (`clients/lattice-client/test/vectors/**/*.json`, `oracleCarrierOps` and `frames` bodies) is not in `WireVocabulary.names/0`. It also fails if the TypeScript list differs from the Elixir list. Expected result before the list exists: fails.
+**Step 1 (RED): the list covers what it must.** Add `apps/lattice_core/test/lattice2/wire_vocabulary_test.exs`. It fails if an atom name in a committed vector (`clients/lattice-client/test/vectors/**/*.json`, the `oracleCarrierOps` bodies) is not in `WireVocabulary.names/0`, or if the TypeScript list differs from the Elixir list. Expected before the list exists: fails.
 
-**Step 2 (GREEN): build the list.** Create `wire_vocabulary.ex` from the vectors, the exporter source and the replica DSL declarations (command, field and role names in `Township.Matter`, `Treehouse.*` and `Toolshed.*`). Make the exporter emit the two generated files. Expected result: Step 1 passes, and `git diff --exit-code -- clients/lattice-client/test/vectors` shows only the two new files.
+**Step 2 (GREEN): build the list.** Create `wire_vocabulary.ex` from the sources in Design item 1, and make the exporter emit the two generated files. Expected: Step 1 passes, and the Step 6 diff shows only the two new files.
 
-**Step 3 (RED then GREEN): BEAM admission.** In `carrier_wire_test.exs`, add a test that a name on the list decodes even when the decoding VM has never seen that atom, and that a name off the list refuses the op as `:malformed_op`. Then change `wire.ex` as described in Design item 3.
+**Step 3 (RED then GREEN): BEAM op admission.** In `carrier_wire_test.exs`, add tests that: a listed name in an op body decodes in a VM that has never seen that atom; an off-list name refuses the op as `:malformed_op`; and a delegation whose `ops` or `roles` includes an off-list name refuses the op. Then make the Design item 3 change. Expected: the new tests pass, and the `decode_value` and reason tests are unchanged.
 
-**Step 4: peer-node determinism (the V-01 proof).** Create `apps/lattice_core/test/lattice2/wire_atom_vocabulary_test.exs`. For each of the five plan 185 vectors (`township_authority_unattenuated_transfer`, `township_authority_undeclared_role_tick`, `township_beacon_witnessed_certificate_metadata`, `township_beacon_witnessed_policy_metadata`, `township_policy_target_reason_taxonomy`), start one isolated node with `:peer.start_link/1` in `setup_all`, with `args` taken from `:code.get_path/0`. In the peer, assert via `:erpc.call/4` that `String.to_existing_atom/1` raises for each of `"seize_records"`, `"ghost"`, `"nested"` and `"malformed"`. Then decode `oracleCarrierOps`, run `Lattice.Authority.analyze/2` and `Lattice.Reduce.reduce/3`, and return the sorted `[op_id, reason]` pairs and the canonical state. Compute the same in the parent VM. Assert the two agree, and that the pairs equal the vector's `authorityQuarantine`.
+**Step 4: peer-node determinism (the V-01 proof).** Create `apps/lattice_core/test/lattice2/wire_atom_vocabulary_test.exs`. For each of the five plan 185 vectors (`township_authority_unattenuated_transfer`, `township_authority_undeclared_role_tick`, `township_beacon_witnessed_certificate_metadata`, `township_beacon_witnessed_policy_metadata`, `township_policy_target_reason_taxonomy`), start one isolated node in `setup_all` with `:peer.start_link(%{name: ..., args: [~c"-pa" | :code.get_path()]})`. The `-pa` prefix is required: `args` are passed to `erl` as-is, so bare paths are not code paths. In the peer, assert via `:erpc.call/4` that `String.to_existing_atom/1` raises for `"seize_records"`, `"ghost"`, `"nested"` and `"malformed"`. Then decode `oracleCarrierOps` with `Wire.decode_ops/1`, run `Lattice.Authority.analyze/2` and `Lattice.Reduce.reduce/3`, and return the sorted `[op_id, reason]` pairs and the canonical state. Compute the same in the parent VM. Assert that the two agree, and that the pairs equal the vector's `expectAtFullFrontier.authorityQuarantine`. That field is nested under `expectAtFullFrontier`; there is no top-level `authorityQuarantine`.
 
-**Step 5: TypeScript.** Make the `carrier.ts` change in Design item 4. Run `npm run conformance` with no vector change. Add one refusal test in the client: a frame with an off-list name is refused as malformed, the same outcome as the BEAM.
+**Step 5: TypeScript.** Make the Design item 4 changes. Put the refusal tests in `clients/lattice-client/test/carrier.ts`, which `npm run carrier:township` runs (`npm run conformance` does not). They must call `carrierOpsToSemanticOps` and assert that the off-list op is absent from the output, both for an off-list body atom and for an off-list delegation name. Run `npm run conformance` as well, which must pass with no vector change.
 
-**Step 6: full gate.** `mix check`; `npm run conformance`; the vector and list regeneration diff. Optional: the plan 185 browser re-check, if its harness is present on the branch.
+**Step 6: full gate.** Run the commands in the table below. If the optional Popcorn browser re-check runs, first add `carrier/wire_vocabulary.ex` to the `sources` array in `apps/lattice_popcorn_spike/scripts/shared.mjs`, because `wire.ex` now calls it.
 
 ## Commands you will need
 
@@ -134,47 +136,49 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 | Toolchain | `export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"` then `~/.asdf/shims/mix …` | (bare `mix` is a broken shim) |
 | List and wire tests | `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/wire_vocabulary_test.exs apps/lattice_core/test/lattice2/carrier_wire_test.exs` | 0 failures |
 | Peer determinism | `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/wire_atom_vocabulary_test.exs` | 0 failures |
-| Vectors and list unchanged after regeneration | `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors && git diff --exit-code -- clients/lattice-client/test/vectors` | exit 0 |
-| TS conformance | `cd clients/lattice-client && npm ci && npm run build && npm run typecheck && npm run conformance` | pass |
+| Vectors and TS list unchanged after regeneration | `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors && git diff --exit-code -- clients/lattice-client/test/vectors clients/lattice-client/src/wire_vocabulary.ts` | exit 0 |
+| TS refusal tests | `cd clients/lattice-client && npm ci && npm run build && npm run typecheck && npm run carrier:township` | pass |
+| TS conformance | `cd clients/lattice-client && npm run conformance` | pass, no vector change |
 | Full gate | `ERL_FLAGS='+S 4:4' ~/.asdf/shims/mix check` | 0 failures, Credo clean |
 
 ## Scope
 
 **In scope**:
-- `apps/lattice_core/lib/lattice/carrier/wire_vocabulary.ex` (new) and `apps/lattice_core/lib/lattice/carrier/wire.ex` (atom decode)
-- `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` (emit the two generated list files)
-- `clients/lattice-client/src/carrier.ts` (atom refusal) and `clients/lattice-client/src/wire_vocabulary.ts` (generated)
-- `apps/lattice_core/test/lattice2/carrier_wire_test.exs`, `wire_vocabulary_test.exs` (new), `wire_atom_vocabulary_test.exs` (new), and the client test for the refusal
+- `apps/lattice_core/lib/lattice/carrier/wire_vocabulary.ex` (new) and `apps/lattice_core/lib/lattice/carrier/wire.ex` (op-path decode only)
+- `apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex` (emit the two generated files)
+- `clients/lattice-client/src/carrier.ts` (admission and delegation check) and `clients/lattice-client/src/wire_vocabulary.ts` (generated)
+- `apps/lattice_popcorn_spike/scripts/shared.mjs` (add `carrier/wire_vocabulary.ex` to `sources`, if the browser re-check runs)
+- Tests: `carrier_wire_test.exs`, `wire_vocabulary_test.exs` (new), `wire_atom_vocabulary_test.exs` (new), and `clients/lattice-client/test/carrier.ts`
 - `plans/README.md` row 190
 
 **Out of scope** (do NOT touch):
-- `apps/lattice_core/lib/lattice/canonical.ex`: the `Canonical.Atom` struct and its encoding stay as they are.
+- `canonical.ex`: the `Canonical.Atom` struct and its encoding stay as they are.
 - `authority.ex`, `reduce.ex`, and any replica module. If the judge raises on an atom it did not expect, that is a STOP.
-- `decode_reason_pairs/1` and `browser_log_store.ex`: reasons stay strict.
+- `decode_value/1`, `decode_reason_pairs/1`, the op-kind check, and `browser_log_store.ex`. These stay strict.
 
 **Branch and review**: rework the existing PR #114 (`claude/190-wire-atom-determinism`) to this design, replacing its `Canonical.Atom` commits. Do not open a second PR. Policy rule 3 applies: the diff is under `apps/lattice_core/lib/lattice/carrier/` and touches `clients/lattice-client/src/carrier.ts`, so it needs a second independent review.
 
 ## Test plan
 
-- `wire_vocabulary_test.exs`: committed vectors use only listed names; the Elixir and TypeScript lists are equal.
-- `carrier_wire_test.exs`: a listed name decodes in a VM that has not loaded it; an off-list name is `:malformed_op`.
+- `wire_vocabulary_test.exs`: committed vector names are listed; the Elixir and TypeScript lists are equal.
+- `carrier_wire_test.exs`: op-path admission and refusal per Step 3; `decode_value` unchanged.
 - `wire_atom_vocabulary_test.exs`: the five vectors are judged identically by a peer VM that lacks the atoms and by the parent VM, and both match the oracle.
-- Client: an off-list name is refused; conformance is unchanged.
+- `test/carrier.ts` (run by `npm run carrier:township`): off-list names are absent from semantic ingest, both in bodies and in delegations.
 - Existing property suites (convergence, identical quarantine, byte-identical replay) stay green.
 
 ## Done criteria
 
 - [ ] `wire_vocabulary.ex` and the generated `wire_vocabulary.ts` exist, and their lists are equal
-- [ ] `wire_vocabulary_test.exs`, `carrier_wire_test.exs` and `wire_atom_vocabulary_test.exs` pass
-- [ ] `git diff --exit-code -- clients/lattice-client/test/vectors` exits 0 after regeneration
-- [ ] `npm run conformance` passes, with the client refusal test added
+- [ ] `wire_vocabulary_test.exs`, `carrier_wire_test.exs` and `wire_atom_vocabulary_test.exs` pass; core suite 0 failures
+- [ ] `git diff --exit-code -- clients/lattice-client/test/vectors clients/lattice-client/src/wire_vocabulary.ts` exits 0 after regeneration
+- [ ] `npm run carrier:township` (refusal tests) and `npm run conformance` pass
 - [ ] `mix check` passes
 - [ ] PR #114 is reworked to this design, and `plans/README.md` row 190 is one line
 
 ## STOP conditions
 
 - A committed vector changes after regeneration. Encoding changed, which this plan forbids.
-- A name a committed vector needs is absent from the list, and adding it would make a name an attacker can choose admissible. Stop and report; do not add it.
+- A name a committed vector needs is not declared in the exporter source or in any `use Lattice.Replica` module. A legitimate Lattice writer never produces such a name, so this plan does not say how the judge should interpret it. Stop and report; do not add it to the list.
 - The judge, reducer or a replica module raises (not quarantines) on a decoded atom. Report the module and clause; that fix belongs to plan 188's pipeline.
 - The peer-node test shows different verdicts in the two VMs. Report the vector and both verdicts.
 - `:peer` cannot start with the full code path after one hour of trying. Report it, and cite the plan 185 browser harness as the alternative evidence.
@@ -183,5 +187,5 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 
 - Adding a new replica command, field, role or op kind means adding its name to the vocabulary. The Step 1 test fails until it is listed.
 - Any decoder that calls `String.to_existing_atom/1` on wire bytes reintroduces the defect. Review for it under policy rule 3.
-- `browser_log_store.ex` and `decode_reason_pairs/1` keep strict reason decoding on purpose.
+- `browser_log_store.ex`, `decode_reason_pairs/1` and `decode_value/1` keep strict decoding on purpose.
 - If plan 185 is re-decided GO after this lands, the Worker's `judge.ex` needs no change, because it decodes through `Wire`.
