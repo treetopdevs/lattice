@@ -136,7 +136,8 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 | Toolchain | `export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"` then `~/.asdf/shims/mix …` | (bare `mix` is a broken shim) |
 | List and wire tests | `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/wire_vocabulary_test.exs apps/lattice_core/test/lattice2/carrier_wire_test.exs` | 0 failures |
 | Peer determinism | `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/wire_atom_vocabulary_test.exs` | 0 failures |
-| Vectors and TS list unchanged after regeneration | `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors && git diff --exit-code -- clients/lattice-client/test/vectors clients/lattice-client/src/wire_vocabulary.ts` | exit 0 |
+| Existing vectors unchanged after regeneration | `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors && git diff --exit-code -- clients/lattice-client/test/vectors` | exit 0 |
+| Both generated vocabulary files exist, and nothing untracked or modified under them | `test -f clients/lattice-client/test/vectors/wire_vocabulary.json && test -f clients/lattice-client/src/wire_vocabulary.ts && git diff --exit-code -- clients/lattice-client/src/wire_vocabulary.ts && test -z "$(git status --porcelain -- clients/lattice-client/test/vectors clients/lattice-client/src/wire_vocabulary.ts)"` | exit 0 |
 | TS refusal tests | `cd clients/lattice-client && npm ci && npm run build && npm run typecheck && npm run carrier:township` | pass |
 | TS conformance | `cd clients/lattice-client && npm run conformance` | pass, no vector change |
 | Full gate | `ERL_FLAGS='+S 4:4' ~/.asdf/shims/mix check` | 0 failures, Credo clean |
@@ -170,7 +171,7 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 
 - [ ] `wire_vocabulary.ex` and the generated `wire_vocabulary.ts` exist, and their lists are equal
 - [ ] `wire_vocabulary_test.exs`, `carrier_wire_test.exs` and `wire_atom_vocabulary_test.exs` pass; core suite 0 failures
-- [ ] `git diff --exit-code -- clients/lattice-client/test/vectors clients/lattice-client/src/wire_vocabulary.ts` exits 0 after regeneration
+- [ ] After regeneration, both the existing-vector diff and the generated-file check in the Commands table pass
 - [ ] `npm run carrier:township` (refusal tests) and `npm run conformance` pass
 - [ ] `mix check` passes
 - [ ] PR #114 is reworked to this design, and `plans/README.md` row 190 is one line
@@ -178,7 +179,7 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 ## STOP conditions
 
 - A committed vector changes after regeneration. Encoding changed, which this plan forbids.
-- A name a committed vector needs is not declared in the exporter source or in any `use Lattice.Replica` module. A legitimate Lattice writer never produces such a name, so this plan does not say how the judge should interpret it. Stop and report; do not add it to the list.
+- A name a committed vector needs is not declared in the exporter source or in any `use Lattice.Replica` module. The unsafe property is that no Lattice writer declares the name, so no spec says what the judge should do with it. Attacker-selectability alone is not the test: every peer-chosen name is selectable, and vector names that are declared stay on the list. Stop and report; do not add an undeclared name to the list.
 - The judge, reducer or a replica module raises (not quarantines) on a decoded atom. Report the module and clause; that fix belongs to plan 188's pipeline.
 - The peer-node test shows different verdicts in the two VMs. Report the vector and both verdicts.
 - `:peer` cannot start with the full code path after one hour of trying. Report it, and cite the plan 185 browser harness as the alternative evidence.
@@ -186,6 +187,6 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 ## Maintenance notes
 
 - Adding a new replica command, field, role or op kind means adding its name to the vocabulary. The Step 1 test fails until it is listed.
-- Any decoder that calls `String.to_existing_atom/1` on wire bytes reintroduces the defect. Review for it under policy rule 3.
+- Any op-frame decoder that calls `String.to_existing_atom/1` on wire bytes reintroduces the defect. Review for it under policy rule 3. Reason decoding (`decode_reason_pairs/1`) and `decode_value/1` are deliberately strict and are not covered by this rule.
 - `browser_log_store.ex`, `decode_reason_pairs/1` and `decode_value/1` keep strict decoding on purpose.
 - If plan 185 is re-decided GO after this lands, the Worker's `judge.ex` needs no change, because it decodes through `Wire`.
