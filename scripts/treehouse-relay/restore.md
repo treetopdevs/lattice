@@ -64,5 +64,21 @@ copy unless the env file is lost.
   restore. Only the five newest incomplete snapshots are kept, for diagnosis.
 - A failed run retries up to three more times, 30 minutes apart, then stops until a
   person resets the unit.
+- The 24-hour RPO holds only while a verified backup completes within the window. If
+  retries are exhausted, the newest complete snapshot ages past 24 hours until a run
+  succeeds.
 - Check the last run with `systemctl status restic-backup.service` and
-  `journalctl -u restic-backup.service`.
+  `journalctl -u restic-backup.service`. A `failed` state means retries are exhausted.
+- Check the newest daily snapshot's age with the repository credentials in a subshell,
+  as in step 3. If it is more than 24 hours old, the backup is stale:
+
+  ```bash
+  (
+    set -a; . ./restic.env; set +a
+    restic snapshots --tag daily --latest 1 --compact
+  )
+  ```
+
+- To resume a stopped backup on the host, clear the failed state and start the
+  service: `systemctl reset-failed restic-backup.service && systemctl start restic-backup.service`.
+  Then confirm the new snapshot appears.

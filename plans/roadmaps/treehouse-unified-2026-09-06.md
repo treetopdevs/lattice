@@ -94,7 +94,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R19b | AF-3 semantics / identity + parity | L | High | R19a, R04, R10 | Core founder-present/absent re-admission with negative controls | DONE (core semantics) |
 | R20 | New-phone re-admission / product | M | High | R14, R19b | Packaged AF-3, old-key return, visible unresolved grants | PLANNED |
 | R21a | WSS/restore artifacts / operations | M | Medium | R05, R06, R08, R09, R11c | Reproducible deployment/runbook and local restore checks | PLANNED |
-| R21b | WSS field restore / operations | M | High | R21a | Public WSS, restart and clean-host backup restore; operator inputs | PLANNED. I1 host, daily backup and clean-machine restore done; carrier not deployed. See R21 operations. |
+| R21b | WSS field restore / operations | M | High | R21a | Public WSS, restart and clean-host backup restore; operator inputs | PLANNED. I1 host, daily backup and clean-machine restore done; carrier not deployed. Evidence in treetopdevs/lattice#124. |
 | R22a | Signed Android artifact / release | M | High | R15, R16, R18, R20, R21a | Immutable internally distributed candidate and manifest | PLANNED |
 | R22b | Physical candidate / device QA | M | High | R22a, R21b | Exact candidate passes all group, loss, network and upgrade gates | PLANNED |
 | R23 | Community pilot / pilot lead | 14+ days | High | R22b | Participant evidence, incident disposition, continue/fix/stop | PLANNED |
@@ -299,8 +299,6 @@ Only then may R33 test proposed 12/50/150 workloads and an adopted 149/150/151 a
 Use the existing pilot release behind a TLS edge on a supported Linux host, loopback listeners, mounted secrets, health/readiness, durable volumes and redacted diagnostics. Name host/DNS/TCP 443, certificate renewal, encrypted off-host daily backup, signed cutoff manifest, separately held recovery key, clean restore host and on-call operator. Verify acknowledged-op durability through process/host restart, corrupt-restore readiness refusal, Wi-Fi/cellular WSS, certificate renewal and backup-age alert. The operator accepts a 24-hour disaster RPO; later data requires a surviving client copy.
 
 Local artifacts can be built before access exists. Missing hosting, backup or hardware inputs leave field gates open. Use the pilot carrier boundary, not an implicitly promoted legacy `lattice_server` endpoint. Content-bearing exports remain member controlled and out of central telemetry.
-
-**I1 status, 2026-10-15.** Host `treehouse-relay-nyc3-1` (DigitalOcean droplet 609343483, nyc3, 1 GB, about $6/month) serves `treehouse-relay.rootaccess.to`. Caddy holds a Let's Encrypt certificate that renews automatically, and answers 503 until the carrier is deployed. Restic backs up `/etc/caddy`, `/var/lib/caddy` and `/etc/restic` daily to a DigitalOcean Spaces bucket in nyc3. Retention is 7 daily, 4 weekly and 6 monthly snapshots. Before the schedule change, the daily timer was active on the box, with its next run at 2026-10-16 00:17 UTC. The twice-daily UTC unit in this branch is not deployed yet, so its activation is unconfirmed until it is installed and `systemctl list-timers restic-backup.timer` shows its next run. The first snapshot is `d9aada66`, and a restore to a separate machine matched the Caddyfile. Still open under R21b: deploying the carrier release.
 
 ### R22 exact physical candidate
 
