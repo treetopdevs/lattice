@@ -2,17 +2,11 @@
 Description=Treehouse relay encrypted backup to Spaces
 Wants=network-online.target
 After=network-online.target
-# At most four starts in three hours, so a persistent failure stops retrying.
-StartLimitIntervalSec=3h
-StartLimitBurst=4
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/treehouse-backup
-# A stalled restic run (Spaces, filesystem or prune) is stopped after two hours and
-# counts as a failure. Oneshot units have no start timeout by default, so without
-# this a hang would block both the retries and the next scheduled run.
-TimeoutStartSec=2h
-# A transient outage retries half an hour later instead of waiting for the next run.
-Restart=on-failure
-RestartSec=30min
+# backup.sh makes up to four attempts, 30 minutes apart, each limited to one hour. This
+# outer limit only stops a run that exceeds that plan. It must stay under the 12-hour
+# interval between scheduled starts.
+TimeoutStartSec=8h

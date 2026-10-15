@@ -25,25 +25,39 @@ if [ -e /var/lib/treehouse-relay ]; then
   paths="$paths /var/lib/treehouse-relay"
 fi
 
-# A snapshot becomes daily only after restic exits 0. Exit 3 means restic wrote a
-# snapshot but could not read some source data, so that snapshot is tagged incomplete
+# A run makes up to four attempts, 30 minutes apart. Each attempt is limited to one
+# hour. timeout sends SIGINT, which restic handles by releasing its repository lock.
+# A snapshot becomes daily only after an attempt exits 0. Exit 3 means restic wrote a
+# snapshot but could not read some source data, so that attempt is tagged incomplete
 # and restores never select it. Snapshots still pending from an interrupted run are
-# quarantined first, because their completeness is unknown. If that fails, the run
-# stops: promoting an unverified leftover to daily would be worse than a late backup.
-restic tag --tag pending --set incomplete
+# quarantined before each attempt. If that fails, the run stops: promoting an
+# unverified leftover to daily would be worse than a late backup.
+attempts=4
+attempt=1
+status=1
+while [ "$attempt" -le "$attempts" ]; do
+  restic tag --tag pending --set incomplete
 
-set +e
-# shellcheck disable=SC2086
-restic backup --tag pending $paths
-status=$?
-set -e
+  set +e
+  # shellcheck disable=SC2086
+  timeout --signal=INT --kill-after=10m 1h restic backup --tag pending $paths
+  status=$?
+  set -e
+
+  if [ "$status" -eq 0 ]; then
+    break
+  fi
+  restic tag --tag pending --set incomplete || true
+  echo "attempt $attempt exited $status; this attempt is excluded from restores" >&2
+  if [ "$attempt" -lt "$attempts" ]; then
+    sleep 1800
+  fi
+  attempt=$((attempt + 1))
+done
 
 if [ "$status" -eq 0 ]; then
   restic tag --tag pending --set daily
   restic forget --tag daily --group-by host --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
-else
-  restic tag --tag pending --set incomplete || true
-  echo "restic backup exited $status; this run is excluded from restores" >&2
 fi
 
 # Keep only the five newest incomplete snapshots for diagnosis. Group by host, not

@@ -63,9 +63,11 @@ copy unless the env file is lost.
 - Keep 7 daily, 4 weekly and 6 monthly snapshots; older ones are pruned.
 - A run that restic ends with exit 3 is tagged `incomplete` and never selected by a
   restore. Only the five newest incomplete snapshots are kept, for diagnosis.
-- A run that stalls for more than two hours is stopped and counts as a failure. A
-  failed run retries up to three more times, 30 minutes apart, then stops until a
-  person resets the unit.
+- A run makes up to four attempts, 30 minutes apart. Each attempt is stopped after one
+  hour and counts as a failure. The whole run is also capped at eight hours.
+- If every attempt fails, the service stays in the `failed` state until the next
+  scheduled start, which makes a fresh set of attempts. Nothing retries after that
+  without a person or a scheduled start.
 - The 24-hour RPO holds only while a verified backup completes within the window. If
   retries are exhausted, the newest complete snapshot ages past 24 hours until a run
   succeeds.
@@ -81,6 +83,6 @@ copy unless the env file is lost.
   )
   ```
 
-- To resume a stopped backup on the host, clear the failed state and start the
-  service: `systemctl reset-failed restic-backup.service && systemctl start restic-backup.service`.
+- To resume a stopped backup on the host now, start the service:
+  `systemctl start restic-backup.service`. A failed oneshot unit can be started again.
   Then confirm the new snapshot appears.
