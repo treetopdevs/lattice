@@ -222,7 +222,9 @@ defmodule LatticeCarrierServer.FaultScenario do
       {"bytes_unchanged_while_stalled", unchanged?},
       {"admission_closed",
        second_reply == {:error, :release_closed} and File.read!(f.path) == bytes_1},
-      {"acked_subset_of_persisted", log != nil and Enum.all?(acked, &(&1 in persisted))}
+      # The stalled relay itself must have been acknowledged, or the subset is vacuous.
+      {"acked_subset_of_persisted",
+       log != nil and first.id in acked and Enum.all?(acked, &(&1 in persisted))}
     ]
 
     %{logs: logs(log), checks: checks, observed_ms: %{"drain" => drain_ms}}
@@ -247,13 +249,8 @@ defmodule LatticeCarrierServer.FaultScenario do
     peer = spawn_server(path, observer, writer)
     {:ok, conn} = WebSocket.connect(connect_opts(peer, writer, server, base.replica))
 
-    {acked, conn} =
-      Enum.flat_map_reduce(posts, conn, fn op, conn ->
-        case WebSocket.relay(conn, op) do
-          {:ok, %{accepted: ids}, conn} -> {ids, conn}
-          {:error, _} -> {[], conn}
-        end
-      end)
+    {replies, conn} = relay_all(conn, posts)
+    acked = Enum.flat_map(replies, &accepted_ids/1)
 
     _ = WebSocket.close(conn)
     started = now()
@@ -273,18 +270,15 @@ defmodule LatticeCarrierServer.FaultScenario do
 
     # Before any resend: a resend would repopulate a lost log and hide the loss.
     {advertised, served} = served(peer, observer, server, base.replica)
-    survived? = acked != [] and MapSet.subset?(MapSet.new(acked), served)
+    # Every post must have been acknowledged, so an errored relay cannot shrink the set.
+    survived? =
+      acked == Enum.map(posts, & &1.id) and MapSet.subset?(MapSet.new(acked), served)
+
     bytes_before = File.read!(restart_path)
 
     {:ok, conn} = WebSocket.connect(connect_opts(peer, writer, server, base.replica))
 
-    {resent, conn} =
-      Enum.flat_map_reduce(posts, conn, fn op, conn ->
-        case WebSocket.relay(conn, op) do
-          {:ok, %{accepted: ids}, conn} -> {ids, conn}
-          {:error, _} -> {[], conn}
-        end
-      end)
+    {resent, conn} = relay_all(conn, posts)
 
     _ = WebSocket.close(conn)
     {advertised_after, served_after} = served(peer, observer, server, base.replica)
@@ -296,7 +290,8 @@ defmodule LatticeCarrierServer.FaultScenario do
     checks = [
       {"acked_survive_restart", survived?},
       {"duplicates_silent",
-       resent == [] and served_after == served and advertised_after == advertised and
+       Enum.all?(resent, &match?({:ok, %{accepted: []}}, &1)) and served_after == served and
+         advertised_after == advertised and
          File.read!(restart_path) == bytes_before},
       {"frontier_after_equals_sim",
        log != nil and served_after == MapSet.new(Log.op_ids(oracle)) and
@@ -307,6 +302,19 @@ defmodule LatticeCarrierServer.FaultScenario do
 
     %{logs: logs(log), checks: checks, observed_ms: %{"halt_to_ready" => restart_ms}}
   end
+
+  # Relay each op in order, keeping every reply, errors included.
+  defp relay_all(conn, ops) do
+    Enum.map_reduce(ops, conn, fn op, conn ->
+      case WebSocket.relay(conn, op) do
+        {:ok, report, conn} -> {{:ok, report}, conn}
+        {:error, _} = error -> {error, conn}
+      end
+    end)
+  end
+
+  defp accepted_ids({:ok, %{accepted: ids}}), do: ids
+  defp accepted_ids(_error), do: []
 
   # The carrier's "frontier" exchange advertises every op id the server holds; the
   # pull serves the ops themselves. Both are read as the distinct observer realm.
