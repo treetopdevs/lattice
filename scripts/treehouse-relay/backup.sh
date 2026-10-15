@@ -28,8 +28,9 @@ fi
 # A snapshot becomes daily only after restic exits 0. Exit 3 means restic wrote a
 # snapshot but could not read some source data, so that snapshot is tagged incomplete
 # and restores never select it. Snapshots still pending from an interrupted run are
-# quarantined first, because their completeness is unknown.
-restic tag --tag pending --set incomplete || true
+# quarantined first, because their completeness is unknown. If that fails, the run
+# stops: promoting an unverified leftover to daily would be worse than a late backup.
+restic tag --tag pending --set incomplete
 
 set +e
 # shellcheck disable=SC2086

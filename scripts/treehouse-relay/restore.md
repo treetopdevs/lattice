@@ -14,11 +14,14 @@ the live host's `/etc` or `/var/lib` paths.
 2. Put the contents of `restic.env` from 1Password in a local file, with mode 600.
    Do not commit it.
 3. List the scheduled snapshots. Manual recovery snapshots carry no `daily` tag and
-   are not selected by this runbook:
+   are not selected by this runbook. Run it as one block, so the repository password
+   and Spaces credentials never reach your interactive shell:
 
    ```bash
-   set -a; . ./restic.env; set +a
-   restic snapshots --tag daily --compact
+   (
+     set -a; . ./restic.env; set +a
+     restic snapshots --tag daily --compact
+   )
    ```
 
 4. Restore the latest daily snapshot into a new temporary directory, and check the
@@ -52,8 +55,10 @@ copy unless the env file is lost.
 
 ## Schedule and retention
 
-- Daily at midnight UTC, `Persistent=true`, so a missed start runs once the host is back.
-  Consecutive runs are 24 hours apart, which matches the 24-hour disaster RPO.
+- Twice a day, at 00:00 and 12:00 UTC, with `Persistent=true`, so a missed start runs
+  once the host is back. A failed run is replaced within 12 hours, so the newest
+  complete snapshot stays well inside the 24-hour disaster RPO.
+- Scheduled runs keep the `daily` tag. Retention keeps the newest snapshot per day.
 - Keep 7 daily, 4 weekly and 6 monthly snapshots; older ones are pruned.
 - A run that restic ends with exit 3 is tagged `incomplete` and never selected by a
   restore. Only the five newest incomplete snapshots are kept, for diagnosis.

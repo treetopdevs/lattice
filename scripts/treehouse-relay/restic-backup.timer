@@ -2,9 +2,11 @@
 Description=Daily treehouse relay backup
 
 [Timer]
-# A fixed start time keeps consecutive runs 24 hours apart, within the 24-hour RPO.
+# Two starts a day, so a failed run is replaced within 12 hours. With the service's
+# retries, the newest complete snapshot stays well inside the 24-hour RPO.
 # Persistent=true runs a missed start as soon as the host is back up.
-OnCalendar=daily
+# Snapshots from these runs keep the daily tag. keep-daily keeps the newest per day.
+OnCalendar=*-*-* 00,12:00:00
 Persistent=true
 
 [Install]
