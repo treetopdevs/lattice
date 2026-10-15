@@ -9,7 +9,10 @@ StartLimitBurst=4
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/treehouse-backup
-# A transient outage (Spaces, DNS, network) retries half an hour later instead of
-# waiting for the next daily run.
+# A stalled restic run (Spaces, filesystem or prune) is stopped after two hours and
+# counts as a failure. Oneshot units have no start timeout by default, so without
+# this a hang would block both the retries and the next scheduled run.
+TimeoutStartSec=2h
+# A transient outage retries half an hour later instead of waiting for the next run.
 Restart=on-failure
 RestartSec=30min

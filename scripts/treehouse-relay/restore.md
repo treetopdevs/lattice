@@ -63,7 +63,8 @@ copy unless the env file is lost.
 - Keep 7 daily, 4 weekly and 6 monthly snapshots; older ones are pruned.
 - A run that restic ends with exit 3 is tagged `incomplete` and never selected by a
   restore. Only the five newest incomplete snapshots are kept, for diagnosis.
-- A failed run retries up to three more times, 30 minutes apart, then stops until a
+- A run that stalls for more than two hours is stopped and counts as a failure. A
+  failed run retries up to three more times, 30 minutes apart, then stops until a
   person resets the unit.
 - The 24-hour RPO holds only while a verified backup completes within the window. If
   retries are exhausted, the newest complete snapshot ages past 24 hours until a run
