@@ -8,7 +8,7 @@
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 8a822e4a8..HEAD -- apps/lattice_core/lib/lattice/carrier/wire.ex apps/lattice_core/lib/lattice/canonical.ex apps/lattice_core/test/lattice2/carrier_wire_test.exs apps/lattice_core/lib/lattice/browser_log_store.ex clients/lattice-client/src/carrier.ts clients/lattice-client/test/carrier.ts apps/lattice_core/lib/mix/tasks/lattice.export_vectors.ex apps/lattice_popcorn_spike/scripts/shared.mjs`
-> On PR #114's branch the drift command reports its own old-design commits, which the rework replaces. There, compare against the pre-rework tip recorded in that PR's description instead of `8a822e4a8`, and stop only on a mismatch those commits do not explain.
+> PR #114 (head `abfd76a9a`, merged to main as `b8878dd64` on 2026-10-15) changed the files this plan lists, with the superseded `Canonical.Atom` design. The Current-state excerpts describe `8a822e4a8`, the commit this plan was amended on, so the drift command reports PR #114's changes against that baseline. The rework must replace those changes first, and stop only on a mismatch they do not explain.
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -137,7 +137,7 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 | Toolchain | `export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"` then `~/.asdf/shims/mix …` | (bare `mix` is a broken shim) |
 | List and wire tests | `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/wire_vocabulary_test.exs apps/lattice_core/test/lattice2/carrier_wire_test.exs` | 0 failures |
 | Peer determinism | `~/.asdf/shims/mix test apps/lattice_core/test/lattice2/wire_atom_vocabulary_test.exs` | 0 failures |
-| Browser replica declarations, with the Popcorn job's OTP 29.0.6 and Elixir 1.20.4 prepended to PATH for the whole row, so the `mix` that `compile.mjs` spawns uses them too (the Popcorn workflow runs this) | `export PATH="$HOME/.asdf/installs/erlang/29.0.6/bin:$HOME/.asdf/installs/elixir/1.20.4-otp-29/bin:$PATH" && cd apps/lattice_popcorn_spike && npm ci && npm run prepare:shared && cd browser && ~/.asdf/shims/mix deps.get && ~/.asdf/shims/mix format --check-formatted && ~/.asdf/shims/mix test && cd .. && npm test && npm run build` | 0 failures |
+| CI-only: the Popcorn workflow's browser job, with its pinned OTP 29.0.6 and Elixir 1.20.4 prepended to PATH, so the `mix` that `compile.mjs` spawns uses them too. Local runs need that toolchain installed | `export PATH="$HOME/.asdf/installs/erlang/29.0.6/bin:$HOME/.asdf/installs/elixir/1.20.4-otp-29/bin:$PATH" && cd apps/lattice_popcorn_spike && npm ci && npm run prepare:shared && cd browser && ~/.asdf/shims/mix deps.get && ~/.asdf/shims/mix format --check-formatted && ~/.asdf/shims/mix test && cd .. && npm test && npm run build` | 0 failures |
 | Existing vectors unchanged after regeneration | `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors && git diff --exit-code -- clients/lattice-client/test/vectors` | exit 0 |
 | Generated outputs fresh: the list, the built `dist`, and the vectors | `MIX_ENV=test ~/.asdf/shims/mix lattice.export_vectors --out clients/lattice-client/test/vectors && npm --prefix clients/lattice-client ci && scratch=$(mktemp -d) && (cd clients/lattice-client && npx tsx test/support/export_continuation_authoring.ts && npx tsx test/support/export_member_continuity.ts && npx tsx test/support/export_member_continuity_semantics.ts && npx tsx test/support/export_treehouse_catalog_trust.ts && npx tsx test/support/export_treehouse_catalog_cutoff.ts --out "$scratch/cutoff.json" && npx tsx test/support/export_treehouse_catalog_cutoff.ts --with-member-continuity --out "$scratch/cutoff-mc.json" && npx tsx test/support/export_member_continuity_catalog.ts --out "$scratch/catalog.json") && npm --prefix clients/lattice-client run build && git diff --exit-code -- clients/lattice-client/test/vectors clients/lattice-client/src/wire_vocabulary.ts clients/lattice-client/dist && test -z "$(git status --porcelain -- clients/lattice-client/test/vectors clients/lattice-client/src/wire_vocabulary.ts clients/lattice-client/dist)"` | exit 0 |
 | TS refusal and carrier tests, as the flagship job runs them (the live suite spawns a BEAM peer, so run it with the server toolchain from the Toolchain row on PATH) | `cd clients/lattice-client && npm ci && npm run build && npm run typecheck && npm run carrier:township && npm run carrier:relay && npm run carrier:relay-sync && npm run carrier:township:live` | pass |
@@ -161,7 +161,7 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 - `authority.ex`, `reduce.ex`, and any replica module. If the judge raises on an atom it did not expect, that is a STOP.
 - `decode_value/1`, the op-kind check, and `browser_log_store.ex`. These stay strict. `decode_reason_pairs/1` changes as Design item 3 describes.
 
-**Branch and review**: rework the existing PR #114 (`claude/190-wire-atom-determinism`) to this design, replacing its `Canonical.Atom` commits. Do not open a second PR. Policy rule 3 applies: the diff is under `apps/lattice_core/lib/lattice/carrier/` and touches `clients/lattice-client/src/carrier.ts`, so it needs a second independent review.
+**Branch and review**: PR #114 (`claude/190-wire-atom-determinism`, head `abfd76a9a`) merged to main as `b8878dd64` with the superseded `Canonical.Atom` design. The rework is a new PR from current main that replaces that decode path with this design. Do not reopen PR #114. Policy rule 3 applies: the diff is under `apps/lattice_core/lib/lattice/carrier/` and touches `clients/lattice-client/src/carrier.ts`, so it needs a second independent review.
 
 ## Test plan
 
@@ -177,12 +177,12 @@ The operator ruled on 2026-10-14 that atom names are admitted on the wire only f
 - [ ] `wire_vocabulary.ex` and the generated `wire_vocabulary.ts` exist, and the regeneration check shows the TypeScript file is fresh
 - [ ] `wire_vocabulary_test.exs`, `carrier_wire_test.exs` and `wire_atom_vocabulary_test.exs` pass; core suite 0 failures
 - [ ] A cold-VM test shows a report reason is refused unless it is on `reasons/0`, even when an op decode created the same atom
-- [ ] The browser `vocabulary_test.exs` passes, and the exporter raises on no emitted name
+- [ ] The Popcorn workflow's browser job passes (its CI command is the browser row), and the exporter raises on no emitted name
 - [ ] After regeneration, both the existing-vector diff and the generated-file check in the Commands table pass
 - [ ] `npm run carrier:township`, `carrier:relay`, `carrier:relay-sync` and `carrier:township:live` (refusal tests included) and `npm run conformance` pass
 - [ ] `mix check` passes
 - [ ] `shared.mjs` lists `carrier/wire_vocabulary.ex`, and the Popcorn prepare step copies it
-- [ ] PR #114 is reworked to this design, and `plans/README.md` row 190 is one line
+- [ ] the rework PR replaces the `Canonical.Atom` decode path that PR #114 merged, and `plans/README.md` row 190 is one line
 
 ## STOP conditions
 
