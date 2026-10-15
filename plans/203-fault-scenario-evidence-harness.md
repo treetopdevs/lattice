@@ -125,7 +125,7 @@ Define `Lattice.FaultScenario.Evidence`. One scenario writes one directory:
 ```
 <out>/<scenario>/
   evidence.json        # schema below, canonical key order, no timestamps
-  logs/<realm>.log     # Lattice.Log.dump/2 per replica, final state
+  logs/<prefix>.<realm>.log  # Lattice.Log.dump/2 per replica, final state
   trust_graph.<prefix>.dot  # one per log prefix, from the first realm's final log of that prefix
 ```
 
@@ -136,7 +136,7 @@ Define `Lattice.FaultScenario.Evidence`. One scenario writes one directory:
   "schema": "lattice-fault-evidence-v1",
   "scenario": "revoke_offline",
   "seed": "demo",
-  "module": "Elixir.Treehouse.Thread",
+  "module": { "space": "Treehouse.Space", "thread": "Treehouse.Thread" },
   "fault": "partition writer; revoke writer cap; writer posts and transfers; heal",
   "invariant": "identical_quarantine",
   "replicas": { "<log>": { "frontier": "<hex sha256>", "state": "<hex sha256>" } },
@@ -146,13 +146,14 @@ Define `Lattice.FaultScenario.Evidence`. One scenario writes one directory:
 }
 ```
 
-Every `<log>` key is the basename of a file under `logs/` without `.log` (`a`, or
-`thread.writer`), so each log file maps to exactly one `replicas` entry and one quarantine column.
+Every `<log>` key is the basename of a file under `logs/` without `.log`, always
+`<prefix>.<realm>` (`thread.a`, `thread.writer`), and `module` is always a map from log prefix to
+replica module, even for a single-module scenario, so each log file maps to exactly one `replicas` entry and one quarantine column.
 `verify` rejects a directory whose `logs/` file set and `replicas` key set differ.
 
 Build each graph with `Lattice.Graph.ReplicaSnapshot.build(module, log)` and write it with
-`ReplicaSnapshot.export(snapshot, :dot)`; `Graph.Export` takes a snapshot, never a `Log`. A
-single-module scenario has the prefix-free name `trust_graph.dot`. `verify` regenerates every
+`ReplicaSnapshot.export(snapshot, :dot)`; `Graph.Export` takes a snapshot, never a `Log`. Every
+scenario writes one `trust_graph.<prefix>.dot` per prefix. `verify` regenerates every
 expected DOT file from the verified logs and requires byte equality; a missing, extra or altered
 DOT file is a mismatch.
 
@@ -188,8 +189,8 @@ after the grants so each holder's log contains its delegation; then partition; `
 posts 3, `b` posts 3; heal; `sync_all`.
 
 - **Invariant `convergence`** — checks: `frontiers_equal`, `states_equal`, `op_ids_equal`,
-  `matches_oracle` (each realm's state equals a single-log reference built by appending every op
-  to one log in topological order), `nothing_quarantined`.
+  `matches_oracle` (each realm's state equals that of one reference log holding every op any
+  realm saw, built with `Log.from_ops/2` so a tampered input is judged rather than raised), `nothing_quarantined`.
 - **Negative control** (in the test, not the scenario): remove one current frontier op (a leaf
   no other op depends on) from `b`'s final log, rebuild it with `Log.from_ops/2` so the cached
   `referenced` set stays consistent, and dump it. Dropping a non-leaf, or deleting from `log.ops`
@@ -228,8 +229,8 @@ The scenario asserts `pre_revoke_honored` precisely to catch a missing sync. The
   `:revoked_capability`), `reasons_identical_across_realms`, `admin_holder_identical` (every realm
   reports the same `:admin` holder) and `peer_never_admin` (no realm reports `peer` as holder).
 - One evidence directory covers both sims: `logs/space.<realm>.log` and `logs/thread.<realm>.log`,
-  so `replicas` holds keys such as `space.root` and `thread.root`. `module` becomes a map
-  `{"space": ..., "thread": ...}` keyed by the log-name prefix. Cross-realm checks compare only
+  so `replicas` holds keys such as `space.root` and `thread.root`, and `module` has both
+  prefixes. Cross-realm checks compare only
   logs with the same prefix.
 - Add the check `writer_admin_before_revoke` (every realm reports `writer` as `:admin` holder
   after the initial sync), so an invalid setup transfer fails loudly instead of masquerading as
