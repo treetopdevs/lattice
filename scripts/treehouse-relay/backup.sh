@@ -1,5 +1,5 @@
 #!/bin/sh
-# Daily encrypted off-host backup for treehouse-relay. Run by restic-backup.timer
+# Daily encrypted off-host backup for treehouse-relay. Run by restic-backup.service
 # as root. Credentials come from /etc/restic/env; nothing secret lives in this file.
 set -eu
 
@@ -25,7 +25,26 @@ if [ -e /var/lib/treehouse-relay ]; then
   paths="$paths /var/lib/treehouse-relay"
 fi
 
+# A snapshot becomes daily only after restic exits 0. Exit 3 means restic wrote a
+# snapshot but could not read some source data, so that snapshot is tagged incomplete
+# and restores never select it. Snapshots still pending from an interrupted run are
+# quarantined first, because their completeness is unknown.
+restic tag --tag pending --set incomplete || true
+
+set +e
 # shellcheck disable=SC2086
-restic backup --tag daily $paths
-# Retention applies only to scheduled daily snapshots, so manual recovery snapshots survive.
-restic forget --tag daily --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+restic backup --tag pending $paths
+status=$?
+set -e
+
+if [ "$status" -eq 0 ]; then
+  restic tag --tag pending --set daily
+  restic forget --tag daily --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+else
+  restic tag --tag pending --set incomplete || true
+  echo "restic backup exited $status; this run is excluded from restores" >&2
+fi
+
+# Keep only the five newest incomplete snapshots for diagnosis.
+restic forget --tag incomplete --keep-last 5 --prune
+exit "$status"

@@ -2,7 +2,14 @@
 Description=Treehouse relay encrypted backup to Spaces
 Wants=network-online.target
 After=network-online.target
+# At most four starts in three hours, so a persistent failure stops retrying.
+StartLimitIntervalSec=3h
+StartLimitBurst=4
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/treehouse-backup
+# A transient outage (Spaces, DNS, network) retries half an hour later instead of
+# waiting for the next daily run.
+Restart=on-failure
+RestartSec=30min

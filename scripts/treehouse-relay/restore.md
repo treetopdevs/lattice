@@ -21,30 +21,24 @@ the live host's `/etc` or `/var/lib` paths.
    restic snapshots --tag daily --compact
    ```
 
-4. Restore the latest daily snapshot into a new temporary directory. `mktemp -d`
-   makes a fresh directory on every run, so files from an earlier attempt cannot mix in:
+4. Restore the latest daily snapshot into a new temporary directory, and check the
+   restored Caddy config against the config the host was built with. Run it as one
+   block. `mktemp -d` makes a fresh directory on every run, and the `trap` removes the
+   restored copy and the local env file however the check ends, including a failed
+   diff or an interrupted restore. The diff is empty if the Caddyfile is intact. The
+   `printf` text is the cloud-init content, so the check also flags any later hand edit.
 
    ```bash
-   RESTORE_DIR=$(mktemp -d)
-   restic restore latest --tag daily --target "$RESTORE_DIR"
-   ```
-
-5. Check the restored Caddy config against the config the host was built with:
-
-   ```bash
-   diff "$RESTORE_DIR/etc/caddy/Caddyfile" <(printf '%s\n' \
-     'treehouse-relay.rootaccess.to {' \
-     '  respond "Treehouse relay host: no service is deployed yet" 503' \
-     '}')
-   ```
-
-   The diff is empty if the Caddyfile is intact. The `printf` text is the
-   cloud-init content, so the check also flags any later hand edit.
-
-6. Remove the restored copy and the local env file once the check passes:
-
-   ```bash
-   rm -rf "$RESTORE_DIR" ./restic.env
+   (
+     set -a; . ./restic.env; set +a
+     RESTORE_DIR=$(mktemp -d)
+     trap 'rm -rf "$RESTORE_DIR" ./restic.env' EXIT
+     restic restore latest --tag daily --target "$RESTORE_DIR"
+     diff "$RESTORE_DIR/etc/caddy/Caddyfile" <(printf '%s\n' \
+       'treehouse-relay.rootaccess.to {' \
+       '  respond "Treehouse relay host: no service is deployed yet" 503' \
+       '}')
+   )
    ```
 
 ## Restore on the host
@@ -58,5 +52,9 @@ copy unless the env file is lost.
 
 - Daily at a randomized time within 30 minutes of midnight UTC, `Persistent=true`.
 - Keep 7 daily, 4 weekly and 6 monthly snapshots; older ones are pruned.
+- A run that restic ends with exit 3 is tagged `incomplete` and never selected by a
+  restore. Only the five newest incomplete snapshots are kept, for diagnosis.
+- A failed run retries up to three more times, 30 minutes apart, then stops until a
+  person resets the unit.
 - Check the last run with `systemctl status restic-backup.service` and
   `journalctl -u restic-backup.service`.
