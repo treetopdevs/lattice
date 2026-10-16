@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily treehouse relay backup
+
+[Timer]
+# Two starts a day in UTC, so the schedule gives another backup opportunity within
+# 12 hours. The 24-hour RPO depends on a verified backup completing within that window.
+# Persistent=true runs a missed start as soon as the host is back up.
+# Snapshots from these runs keep the daily tag. keep-daily keeps the newest per day.
+OnCalendar=*-*-* 00,12:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
