@@ -118,6 +118,8 @@ function describe(error: unknown): string {
       "The signing key does not match this history. Nothing has been replaced.",
     missing_local_history:
       "A signing identity exists but its local history is missing. Nothing has been replaced.",
+    invalid_relay:
+      "A saved relay route no longer meets the route rules. Nothing has been replaced or rewritten, but the saved record cannot be opened until an operator repairs its routes.",
     key_store_unavailable:
       "The device key store is unavailable. Try again when it is accessible.",
     draft_too_large:

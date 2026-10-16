@@ -253,6 +253,12 @@ for (const acked of [[token("z")], [token("c"), token("c")], ["bad"]]) {
   });
   const four = [1, 2, 3, 4].map(route);
   assert.equal(parseState(JSON.stringify(relay(four))).relay!.routes.length, 4);
+  // A zero-width space is not edge whitespace in either runtime, so an interior one is kept.
+  assert.equal(
+    parseState(JSON.stringify({ ...relay(four), relay: { localRealm: "x\u200By", routes: four } })).relay!
+      .localRealm,
+    "x\u200By",
+  );
   assert.throws(
     () =>
       parseState(
@@ -276,6 +282,11 @@ for (const acked of [[token("z")], [token("c"), token("c")], ["bad"]]) {
     relay([{ ...four[0], url: "ws://example.com:8080" }]),
     relay([{ ...four[0], url: " wss://example.com" }]),
     relay([{ ...four[0], expectedPeerRealm: "server " }]),
+    // Edge whitespace is the table's set in both runtimes: U+FEFF (JS-only) and U+0085 (Rust-only).
+    relay([{ ...four[0], expectedPeerRealm: "\uFEFFx" }]),
+    relay([{ ...four[0], expectedPeerRealm: "x\u0085" }]),
+    { ...relay(four), relay: { localRealm: "\uFEFFx", routes: four } },
+    { ...relay(four), relay: { localRealm: "x\u0085", routes: four } },
     // Exactly one Space route.
     relay([route(2), route(3)]),
     relay([four[0], { ...route(2), replica: four[0]!.replica.replace("bbbb", "zzzz") }]),
@@ -289,14 +300,12 @@ for (const url of [
   "wss://relay.example.com:443/carrier",
   "ws://localhost:1",
   "ws://LocalHost:1",
-  "ws://[::1]:9",
   "wss://[::A]",
   "wss://service.0xcorp",
   "wss://x:443",
   "wss://[2001:db8::1]:443",
   "wss://10.0.0.1",
   "wss://x:",
-  "ws://[::1]:",
   "WSS://x",
 ])
   assert.equal(validRouteUrl(url), true, url);
@@ -327,6 +336,9 @@ for (const url of [
   "wss://foo+bar;x",
   "wss://example.com/\u00e9",
   "wss://example.com/\u0001",
+  // A bracketed host is never loopback (plan 198): a CSP host-source cannot name [::1].
+  "ws://[::1]:9",
+  "ws://[::1]:",
 ])
   assert.equal(validRouteUrl(url), false, url);
 

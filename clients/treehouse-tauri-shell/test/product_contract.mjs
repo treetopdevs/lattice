@@ -6,10 +6,14 @@ const manifest = JSON.parse(
 const config = JSON.parse(await readFile("src-tauri/tauri.conf.json", "utf8"));
 assert.equal(config.identifier, manifest.appId);
 assert.equal(config.productName, "Treehouse");
+// Plan 198: the route alphabet table is the one statement of which relay origins a route may name,
+// so the overlay's connect-src is derived from it and cannot drift from the validators.
+const table = JSON.parse(await readFile("route_alphabet.json", "utf8"));
 assert.equal(
   config.app.security.csp["connect-src"],
   "'self' ipc: http://ipc.localhost",
 );
+assert.equal(config.app.security.csp["connect-src"], table.csp.ordinaryConnectSrc);
 // Plan 181 5a: the dev-trace overlay is the only place a relay socket origin may be named. The
 // ordinary connect-src above stays offline-only, and the overlay is a merge patch of connect-src alone.
 const overlay = JSON.parse(
@@ -18,7 +22,9 @@ const overlay = JSON.parse(
 assert.deepEqual(Object.keys(overlay.app.security.csp), ["connect-src"]);
 assert.equal(
   overlay.app.security.csp["connect-src"],
-  "'self' ipc: http://ipc.localhost ws://127.0.0.1:*",
+  table.csp.ordinaryConnectSrc +
+    table.routeUrl.loopbackHosts.map((host) => ` ws://${host}:*`).join("") +
+    (table.routeUrl.schemes.wss === "any-host" ? " wss:" : ""),
 );
 assert.deepEqual(Object.keys(overlay.app.security), ["csp"]);
 assert.deepEqual(Object.keys(overlay.app), ["security"]);

@@ -11,10 +11,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs::{File, OpenOptions},
     path::Path,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 pub const HISTORY_KEY: &str = "treehouse:preview:history";
 pub const HISTORY_BYTES: usize = 1_048_576;
@@ -113,9 +113,101 @@ fn public_key_text(value: &str) -> bool {
         .decode(value)
         .is_ok_and(|bytes| bytes.len() == 32 && BASE64.encode(bytes) == value)
 }
-/// A realm is pinned for good, so it must already be trimmed (treehouse_routes.ts `realmText`).
+/// The route and realm alphabet (plan 198), shared with the shell's `treehouse_routes.ts`. A malformed
+/// table is a build defect, so it fails loudly on first use rather than loosening a rule.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(dead_code)]
+struct AlphabetFile {
+    #[serde(rename = "$comment")]
+    comment: String,
+    version: u32,
+    realm: AlphabetRealm,
+    route_url: AlphabetRoute,
+    csp: AlphabetCsp,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(dead_code)]
+struct AlphabetRealm {
+    #[serde(rename = "$comment")]
+    comment: String,
+    max_utf8_bytes: usize,
+    edge_whitespace: Vec<String>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(dead_code)]
+struct AlphabetRoute {
+    #[serde(rename = "$comment")]
+    comment: String,
+    max_length: usize,
+    text_byte_min: u8,
+    text_byte_max: u8,
+    /// scheme -> `any-host` or `loopback-only`; a scheme the table does not list is refused.
+    schemes: HashMap<String, String>,
+    loopback_hosts: Vec<String>,
+    host_alphabet: String,
+    port_min: u32,
+    port_max: u32,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[allow(dead_code)]
+struct AlphabetCsp {
+    #[serde(rename = "$comment")]
+    comment: String,
+    ordinary_connect_src: String,
+}
+struct Alphabet {
+    realm_max_bytes: usize,
+    edge: HashSet<char>,
+    route: AlphabetRoute,
+}
+static ALPHABET: LazyLock<Alphabet> = LazyLock::new(|| {
+    let file: AlphabetFile = serde_json::from_str(include_str!("../../route_alphabet.json"))
+        .expect("route_alphabet.json is a build input and must parse");
+    assert_eq!(
+        file.version, 1,
+        "route_alphabet.json version is unsupported"
+    );
+    let edge = file
+        .realm
+        .edge_whitespace
+        .iter()
+        .map(|entry| {
+            entry
+                .strip_prefix("U+")
+                .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+                .and_then(char::from_u32)
+                .unwrap_or_else(|| panic!("route_alphabet.json edge entry {entry} is not U+XXXX"))
+        })
+        .collect();
+    Alphabet {
+        realm_max_bytes: file.realm.max_utf8_bytes,
+        edge,
+        route: file.route_url,
+    }
+});
+/// A realm is pinned for good, so neither end may be an edge code point from the table (treehouse_routes.ts
+/// `realmText`). No `trim()`: each runtime's Unicode tables would otherwise decide.
 fn realm_text(value: &str) -> bool {
-    !value.is_empty() && value.trim() == value && value.len() <= 256
+    let table = &*ALPHABET;
+    match (value.chars().next(), value.chars().next_back()) {
+        (Some(first), Some(last)) => {
+            !table.edge.contains(&first)
+                && !table.edge.contains(&last)
+                && value.len() <= table.realm_max_bytes
+        }
+        _ => false,
+    }
+}
+/// Pure verdicts for the differential test against the shell's validators (tests/route_alphabet.rs).
+pub fn valid_realm_text(value: &str) -> bool {
+    realm_text(value)
+}
+pub fn valid_route_url(value: &str) -> bool {
+    route_url(value)
 }
 fn token43(value: &str) -> bool {
     value.len() == 43
@@ -137,18 +229,25 @@ fn route_replica(value: &str) -> bool {
 /// wss to any host, or ws to a loopback host only; no credentials and no fragment (`validRouteUrl`).
 fn route_url(value: &str) -> bool {
     // Printable ASCII only, as the shell's `validRouteUrl` requires, so a persisted route always reloads.
-    if value.len() > 2048
+    let table = &ALPHABET.route;
+    if value.len() > table.max_length
         || value.contains('#')
-        || value.bytes().any(|b| !(0x21..=0x7e).contains(&b))
+        || value
+            .bytes()
+            .any(|b| !(table.text_byte_min..=table.text_byte_max).contains(&b))
     {
         return false;
     }
     // The shell parses with WHATWG URL, which lowercases the scheme and host.
     let scheme_end = value.find("://").unwrap_or(0);
     let rest = &value[(scheme_end + 3).min(value.len())..];
-    let secure = match value[..scheme_end].to_ascii_lowercase().as_str() {
-        "wss" => true,
-        "ws" => false,
+    let any_host = match table
+        .schemes
+        .get(&value[..scheme_end].to_ascii_lowercase())
+        .map(String::as_str)
+    {
+        Some("any-host") => true,
+        Some("loopback-only") => false,
         _ => return false,
     };
     let authority = rest.split(['/', '?']).next().unwrap_or("");
@@ -162,12 +261,8 @@ fn route_url(value: &str) -> bool {
             Some((inner, port)) if port.is_empty() || valid_port(port) => {
                 // Only the canonical text WHATWG serializes to, so both sides accept the same hosts.
                 match inner.parse::<std::net::Ipv6Addr>() {
-                    Ok(address)
-                        if !inner.contains('.')
-                            && address.to_string() == inner.to_ascii_lowercase() =>
-                    {
-                        address.is_loopback()
-                    }
+                    // Never loopback: a CSP host-source cannot name an IPv6 literal (plan 198).
+                    Ok(address) if whatwg_ipv6(address) == inner.to_ascii_lowercase() => false,
                     _ => return false,
                 }
             }
@@ -185,11 +280,47 @@ fn route_url(value: &str) -> bool {
             }
         }
     };
-    secure || loopback
+    any_host || loopback
+}
+/// The WHATWG URL serializer for an IPv6 address: lowercase hex without leading zeros, the first longest run
+/// of two or more zero pieces compressed to `::`, and never a dotted tail. `Ipv6Addr`'s own Display renders
+/// `::ffff:x:y` as dotted, which would refuse hosts the shell's URL parser keeps as written.
+fn whatwg_ipv6(address: std::net::Ipv6Addr) -> String {
+    let pieces = address.segments();
+    let (mut best, mut best_len, mut at) = (usize::MAX, 1, 0);
+    while at < 8 {
+        if pieces[at] != 0 {
+            at += 1;
+            continue;
+        }
+        let start = at;
+        while at < 8 && pieces[at] == 0 {
+            at += 1;
+        }
+        if at - start > best_len {
+            (best, best_len) = (start, at - start);
+        }
+    }
+    let mut out = String::new();
+    let mut index = 0;
+    while index < 8 {
+        if index == best {
+            out.push_str(if index == 0 { "::" } else { ":" });
+            index += best_len;
+            continue;
+        }
+        out.push_str(&format!("{:x}", pieces[index]));
+        if index != 7 {
+            out.push(':');
+        }
+        index += 1;
+    }
+    out
 }
 /// A name of ASCII letters, digits, `.`, `-` and `_`, or a dotted IPv4 address when the last label is
 /// numeric (WHATWG parses such a host as IPv4). Returns whether it is the loopback name or address.
 fn route_host(host: &str) -> Option<bool> {
+    let loopback_hosts = &ALPHABET.route.loopback_hosts;
     if host.is_empty()
         || !host
             .bytes()
@@ -197,7 +328,22 @@ fn route_host(host: &str) -> Option<bool> {
     {
         return None;
     }
-    let last = host.trim_end_matches('.').rsplit('.').next().unwrap_or("");
+    // The shell's URL parser (IDNA) throws on a malformed `xn--` label and the native store has no IDNA
+    // implementation to judge the same way, so an `xn--` label is refused outright (as in `validRouteUrl`).
+    if host.split('.').any(|label| {
+        label
+            .get(..4)
+            .is_some_and(|p| p.eq_ignore_ascii_case("xn--"))
+    }) {
+        return None;
+    }
+    // WHATWG drops a single trailing empty label before its "ends in a number" test, never more than one.
+    let last = host
+        .strip_suffix('.')
+        .unwrap_or(host)
+        .rsplit('.')
+        .next()
+        .unwrap_or("");
     // WHATWG's "ends in a number": all decimal digits, or 0x followed only by hex digits. A DNS label
     // that merely starts with 0x (service.0xcorp) is a name.
     let lower = last.to_ascii_lowercase();
@@ -207,23 +353,32 @@ fn route_host(host: &str) -> Option<bool> {
                 .strip_prefix("0x")
                 .is_some_and(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit())));
     if numeric {
-        return host
-            .parse::<std::net::Ipv4Addr>()
-            .ok()
-            .map(|address| address == std::net::Ipv4Addr::LOCALHOST);
+        return host.parse::<std::net::Ipv4Addr>().ok().map(|address| {
+            loopback_hosts
+                .iter()
+                .filter_map(|entry| entry.parse::<std::net::Ipv4Addr>().ok())
+                .any(|entry| entry == address)
+        });
     }
-    Some(host.eq_ignore_ascii_case("localhost"))
+    Some(
+        loopback_hosts
+            .iter()
+            .any(|entry| host.eq_ignore_ascii_case(entry)),
+    )
 }
-/// `:` followed by an optional canonical decimal port (no leading zeros, never 0, which names no
-/// listening endpoint); WHATWG treats an empty port as the scheme default. The shell applies the same
-/// rule, so both accept the same text.
+/// `:` followed by an optional canonical decimal port (no leading zeros, in the table's range, which
+/// excludes 0 since it names no listening endpoint); WHATWG treats an empty port as the scheme
+/// default. The shell applies the same rule, so both accept the same text.
 fn valid_port(suffix: &str) -> bool {
+    let table = &ALPHABET.route;
     suffix.strip_prefix(':').is_some_and(|port| {
         port.is_empty()
             || (!port.starts_with('0')
-                && port.len() <= 5
+                && port.len() <= table.port_max.to_string().len()
                 && port.bytes().all(|b| b.is_ascii_digit())
-                && port.parse::<u32>().is_ok_and(|n| n <= 65_535))
+                && port
+                    .parse::<u32>()
+                    .is_ok_and(|n| (table.port_min..=table.port_max).contains(&n)))
     })
 }
 fn valid_relay(relay: &Relay) -> bool {

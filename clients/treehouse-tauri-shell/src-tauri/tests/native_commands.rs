@@ -502,6 +502,9 @@ fn relay_routes_are_capped_closed_and_pinned() {
         relay(vec![with(1, "url", "wss://ex\u{e4}mple.com")]),
         relay(vec![with(1, "url", "ws://[::2]:9")]),
         relay(vec![with(1, "url", "ws://[0:0:0:0:0:0:0:1]:9")]),
+        // Plan 198: a bracketed host is never loopback (a CSP host-source cannot name one).
+        relay(vec![with(1, "url", "ws://[::1]:9")]),
+        relay(vec![with(1, "url", "ws://[::1]:")]),
         relay(vec![with(1, "url", "ws://127.1")]),
         relay(vec![with(1, "url", "wss://[::ffff:1.2.3.4]")]),
         relay(vec![with(1, "url", "wss://010.0.0.1")]),
@@ -521,6 +524,10 @@ fn relay_routes_are_capped_closed_and_pinned() {
         ]),
         relay(vec![with(1, "url", "wss://example.com/\u{1}")]),
         relay(vec![with(1, "expectedPeerRealm", "server ")]),
+        // Plan 198: the edge set is the table's, not either runtime's trim.
+        relay(vec![with(1, "expectedPeerRealm", "\u{FEFF}x")]),
+        relay(vec![with(1, "expectedPeerRealm", "x\u{0085}")]),
+        json!({"localRealm":"\u{FEFF}local","routes":[route(1)]}),
     ] {
         next["relay"] = bad;
         assert_eq!(
@@ -532,14 +539,12 @@ fn relay_routes_are_capped_closed_and_pinned() {
         "wss://relay.example.com:443/carrier",
         "ws://localhost:1",
         "ws://LocalHost:1",
-        "ws://[::1]:9",
         "wss://[::A]",
         "wss://service.0xcorp",
         "wss://x:443",
         "wss://[2001:db8::1]:443",
         "wss://10.0.0.1",
         "wss://x:",
-        "ws://[::1]:",
         "WSS://x",
     ] {
         let dir = tempfile::tempdir().unwrap();
