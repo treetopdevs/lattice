@@ -13,6 +13,7 @@ import {authorTownshipGenesis, townshipCapTerm} from "../../src/township";
 import {authorTreehouseCommand, treehouseCommandDecoders, treehouseInvitationAcceptanceBytes, treehouseSpaceSchema} from "../../src/treehouse";
 import * as codec from "../../src/treehouse_member_continuity_codec";
 import {assembleMemberContinuityFromFrames, observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames} from "../../src/treehouse_member_continuity";
+import {assertVectorFrames} from "./assert_vector_frames";
 
 const b64 = (value: Uint8Array) => Buffer.from(value).toString("base64");
 const digest = (label: string) => createHash("sha256").update(`ts-semantic-independent:${label}`).digest();
@@ -199,7 +200,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } else {
     const path = resolve(process.argv[2] ?? "test/vectors/member_continuity_semantics/ts_semantics.json");
     await mkdir(dirname(path), {recursive: true});
-    await writeFile(path, JSON.stringify(await semanticCorpus(), null, 2) + "\n");
+    const corpus = await semanticCorpus();
+    assertVectorFrames(corpus);
+    await writeFile(path, JSON.stringify(corpus, null, 2) + "\n");
     process.stdout.write("TS_MEMBER_CONTINUITY_SEMANTICS_EXPORTED\n");
   }
 }

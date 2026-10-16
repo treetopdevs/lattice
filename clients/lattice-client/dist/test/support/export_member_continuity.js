@@ -11,6 +11,7 @@ import { treehouseCommandDecoders, treehouseSpaceSchema } from "../../src/treeho
 import { materialize } from "../../src/materialize";
 import { deriveTreehouseCatalogCutoff } from "../../src/treehouse_catalog_cutoff";
 import * as codec from "../../src/treehouse_member_continuity_codec";
+import { assertVectorFrames } from "./assert_vector_frames";
 const b64 = (value) => Buffer.from(value).toString("base64");
 const hash = (label) => createHash("sha256").update(`r19b-ts-export:${label}`).digest();
 const id = (label) => hash(label).toString("base64url");
@@ -101,6 +102,7 @@ async function main() {
         return_bytes: b64(codec.canonicalBytesForMemberContinuityReturn(f.challenge)),
         unknown_command: { replica: f.replica, frames: f.frames, op_id: f.command.id, expected_reason: "unknown_command" } };
     await verifyMemberContinuityVector(vector);
+    assertVectorFrames(vector);
     const output = args[1] === undefined ? fileURLToPath(new URL("../vectors/member_continuity/ts_codec.json", import.meta.url)) : resolve(args[1]);
     await mkdir(dirname(output), { recursive: true });
     await writeFile(output, `${JSON.stringify(vector, null, 2)}\n`);

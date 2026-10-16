@@ -107,6 +107,27 @@ defmodule Treehouse.DomainTest do
     assert Sim.state(thread, "root").posts == ["before actual revocation"]
   end
 
+  test "authoring helpers refuse a parent capability naming an atom off the wire vocabulary" do
+    {sim, genesis} =
+      Thread
+      |> Sim.new("treehouse:thread:off-list", ["root", "member"], seed: "thread-off-list")
+      |> Sim.create_replica("root")
+
+    {:genesis, _parent, _} = genesis.body
+    root = Sim.identity(sim, "root")
+    member = Sim.identity(sim, "member")
+
+    off_list =
+      Authority.Delegation.new(root, Sim.replica(sim), root.pub,
+        ops: [:definitely_not_listed],
+        roles: [:admin]
+      )
+
+    assert_raise ArgumentError, ~r/wire vocabulary/, fn ->
+      Space.change_moderator(root, Sim.log(sim, "root"), member.pub, off_list)
+    end
+  end
+
   test "a transferred Thread moderator can archive while the previous holder cannot" do
     {sim, genesis} =
       Thread

@@ -72,14 +72,22 @@ defmodule LatticeNodeSpike.TownshipScenario do
         parent_id: parent.id
       )
 
+    # The body is fixed (`:grant`, a post-only delegation), so the vocabulary check cannot
+    # refuse it today; like the rest of this fixture module it raises if that ever changes.
     op =
-      Op.new(
-        issuer,
-        Sim.replica(sim),
-        sim |> Sim.log("clerk") |> Log.frontier(),
-        :authority,
-        {:grant, delegation}
-      )
+      case Op.authored(
+             issuer,
+             Sim.replica(sim),
+             sim |> Sim.log("clerk") |> Log.frontier(),
+             :authority,
+             {:grant, delegation}
+           ) do
+        {:ok, op} ->
+          op
+
+        {:error, :unknown_atom} ->
+          raise ArgumentError, "bootstrap grant names an atom outside the wire vocabulary"
+      end
 
     %{sim | logs: Map.update!(sim.logs, "clerk", &Log.append!(&1, op))}
   end

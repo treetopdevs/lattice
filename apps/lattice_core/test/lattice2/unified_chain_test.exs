@@ -93,7 +93,7 @@ defmodule Lattice2.UnifiedChainTest do
     # works until the linked v1 cap is revoked; `Live.revoke/4` does both, so after
     # it the direct path is blocked too.
     assert {:ok, {:echo, _}} = Gateway.call("tab", cap.id, %{direct: true})
-    _log = Live.revoke(log, server, d.id, cap.id)
+    {:ok, _log} = Live.revoke(log, server, d.id, cap.id)
     assert {:error, :revoked} = Gateway.call("tab", cap.id, %{direct: true})
   end
 end

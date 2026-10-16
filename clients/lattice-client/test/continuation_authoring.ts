@@ -128,7 +128,7 @@ test("authenticated but malformed authority stays in the reviewed frontier", asy
   const f = await fixture();
   const malformed = await authorCarrierOp({ replica: f.replica, deps: [f.beacon.id],
     kind: "authority", signer: f.holder, cap: nil,
-    body: tuple(atom("succeed"), atom("admin"), atom("missing_delegation"),
+    body: tuple(atom("succeed"), atom("admin"), atom("author"),
       tuple(atom("continuation_v1"), ["map", []])) });
   const frames = [...f.input.frames, malformed];
   const ops = carrierOpsToSemanticOps(frames);

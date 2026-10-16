@@ -10,11 +10,15 @@ import { treehouseCommandDecoders, treehouseSpaceSchema } from "../../src/treeho
 import { deriveTreehouseCatalogCutoff } from "../../src/treehouse_catalog_cutoff";
 import { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust } from "../../src/treehouse_catalog_trust";
 import { transportCatalogId } from "../../src/treehouse_catalog_codec";
+import { isWireVocabularyName } from "../../src/wire_vocabulary";
+import { assertVectorFrames } from "./assert_vector_frames";
 const serialize = (value) => JSON.stringify(value, (_key, item) => item instanceof Uint8Array ? Buffer.from(item).toString("base64") : item, 2);
 /** Additive public data only. Original catalog producers and fixtures stay unchanged. */
 export async function continuityCatalogFixture() {
     const f = await trustFixture();
     const names = JSON.parse(await readFile(new URL("../vectors/catalog/cutoff_atoms_with_member_continuity_v1.json", import.meta.url), "utf8"));
+    const offList = names.filter((name) => !isWireVocabularyName(name));
+    assert.deepEqual(offList, [], "continuity corpus names are outside the wire vocabulary");
     const command = await authorCarrierOp({ replica: f.space.replica, signer: f.root, deps: [f.space.frames.at(-1).id], kind: "command", cap: ["nil"],
         body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name) => ["atom", name])]]]]] });
     const history = { ...f.histories[0], frames: [...f.space.frames, command], rejected: [{ frame: { ...command, sig: "" }, reason: "bad_signature" }] };
@@ -75,6 +79,7 @@ async function main() {
     else {
         const vector = JSON.parse(serialize(await continuityCatalogFixture()));
         await verifyContinuityCatalogVector(vector);
+        assertVectorFrames(vector);
         await writeFile(path, `${serialize(vector)}\n`);
         console.log("Exported independently TS-signed continuity catalog evidence");
     }

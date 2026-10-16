@@ -63,8 +63,9 @@ defmodule Treehouse.MemberContinuityAuthoring do
          :ok <- envelope_status(signed),
          {:ok, accepted} <- Log.accept(log, signed),
          {:ok, observed} <- MemberContinuity.observe(accepted),
-         :ok <- honored(observed, signed.id) do
-      {:ok, %{frame: Wire.encode_op(signed), op: signed, claim_id: current.claim_id}}
+         :ok <- honored(observed, signed.id),
+         {:ok, frame} <- Wire.encode_op_checked(signed) do
+      {:ok, %{frame: frame, op: signed, claim_id: current.claim_id}}
     else
       false -> {:error, :stale_verified_state}
       {:error, reason} -> {:error, reason}
@@ -72,12 +73,20 @@ defmodule Treehouse.MemberContinuityAuthoring do
     end
   end
 
-  @doc "Measure the exact ordinary one-push envelope, including its actual signature bytes."
-  @spec envelope_status(Op.t()) :: :ok | {:error, :capacity_stop}
+  @doc """
+  Measure the exact ordinary one-push envelope, including its actual signature bytes.
+
+  The measurement uses the checked frame encode, so an atom name outside the closed wire
+  vocabulary refuses with `{:error, :unknown_atom}`. Review and assembly both run it on the
+  unsigned candidate, so the refusal comes before a signature is ever requested.
+  """
+  @spec envelope_status(Op.t()) :: :ok | {:error, :capacity_stop | :unknown_atom}
   def envelope_status(%Op{} = op) do
-    if byte_size(Jason.encode!(%{"type" => "push", "ops" => [Wire.encode_op(op)]})) <= 64_000,
-      do: :ok,
-      else: {:error, :capacity_stop}
+    with {:ok, frame} <- Wire.encode_op_checked(op) do
+      if byte_size(Jason.encode!(%{"type" => "push", "ops" => [frame]})) <= 64_000,
+        do: :ok,
+        else: {:error, :capacity_stop}
+    end
   end
 
   defp request_shape(request) when is_map(request) do
@@ -228,6 +237,7 @@ defmodule Treehouse.MemberContinuityAuthoring do
       {:ok, review} -> {:ok, review}
       {:error, :invalid_verified_history} = error -> error
       {:error, :capacity_stop} = error -> error
+      {:error, :unknown_atom} = error -> error
       _ -> {:error, :stale_verified_state}
     end
   end

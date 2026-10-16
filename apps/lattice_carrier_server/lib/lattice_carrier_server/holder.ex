@@ -246,7 +246,7 @@ defmodule LatticeCarrierServer.Holder do
       entries = if kind == :pull, do: Sync.missing(log, MapSet.new(have)), else: ids
 
       with {:ok, offset} <- page_offset(cursor, token, entries, kind) do
-        {:ok, fill_read_page(Enum.drop(entries, offset), kind, token, offset, [], 0)}
+        fill_read_page(Enum.drop(entries, offset), kind, token, offset, [], 0)
       end
     else
       {:error, :malformed}
@@ -285,34 +285,41 @@ defmodule LatticeCarrierServer.Holder do
   defp sized_binary?(value, size), do: is_binary(value) and byte_size(value) == size
 
   defp fill_read_page([], kind, _token, _offset, encoded, _bytes) do
-    page_reply(kind, Enum.reverse(encoded), nil)
+    {:ok, page_reply(kind, Enum.reverse(encoded), nil)}
   end
 
   defp fill_read_page([entry | remaining], kind, token, offset, encoded, bytes) do
-    value = if kind == :pull, do: Wire.encode_op(entry), else: entry
-    count = length(encoded) + 1
-    candidate_bytes = bytes + byte_size(Jason.encode!(value))
-    cursor = page_cursor(token, offset + count, page_entry_id(entry, kind))
-    next_cursor = if remaining == [], do: nil, else: cursor
+    # A persisted op naming an atom outside the closed wire vocabulary is not served: no
+    # peer would admit its frame. The whole read is refused rather than omitting the op,
+    # which would silently strand its descendants as pending on the client.
+    with {:ok, value} <- page_value(kind, entry) do
+      count = length(encoded) + 1
+      candidate_bytes = bytes + byte_size(Jason.encode!(value))
+      cursor = page_cursor(token, offset + count, page_entry_id(entry, kind))
+      next_cursor = if remaining == [], do: nil, else: cursor
 
-    size =
-      byte_size(Jason.encode!(page_reply(kind, [], next_cursor))) + candidate_bytes + count - 1
+      size =
+        byte_size(Jason.encode!(page_reply(kind, [], next_cursor))) + candidate_bytes + count - 1
 
-    cond do
-      size <= @read_frame_budget ->
-        fill_read_page(remaining, kind, token, offset, [value | encoded], candidate_bytes)
+      cond do
+        size <= @read_frame_budget ->
+          fill_read_page(remaining, kind, token, offset, [value | encoded], candidate_bytes)
 
-      encoded == [] ->
-        # A single oversized op cannot fit any page. Emit it once rather than loop
-        # on an empty continuation; clients retain their explicit frame refusal.
-        page_reply(kind, [value], next_cursor)
+        encoded == [] ->
+          # A single oversized op cannot fit any page. Emit it once rather than loop
+          # on an empty continuation; clients retain their explicit frame refusal.
+          {:ok, page_reply(kind, [value], next_cursor)}
 
-      true ->
-        previous_id = if kind == :pull, do: hd(encoded)["id"], else: hd(encoded)
-        cursor = page_cursor(token, offset + count - 1, previous_id)
-        page_reply(kind, Enum.reverse(encoded), cursor)
+        true ->
+          previous_id = if kind == :pull, do: hd(encoded)["id"], else: hd(encoded)
+          cursor = page_cursor(token, offset + count - 1, previous_id)
+          {:ok, page_reply(kind, Enum.reverse(encoded), cursor)}
+      end
     end
   end
+
+  defp page_value(:pull, %Op{} = op), do: Wire.encode_op_checked(op)
+  defp page_value(:frontier, id), do: {:ok, id}
 
   defp page_reply(kind, entries, cursor) do
     reply =

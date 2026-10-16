@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { trustFixture, fixtureId, fixtureSigner, signedCatalog, signedRotation } from "./support/export_treehouse_catalog_trust";
+import { authorCarrierOpUnchecked } from "./support/unchecked_author";
 import { authorTreehouseCommand, authorTreehouseRoleTransfer, treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema, treehouseThreadSchema } from "../src/treehouse";
 import { authorCarrierDelegation, authorCarrierOp, canonicalBytesForCarrierTerm } from "../src/codec";
 import { continuationProfileToCarrierTerm } from "../src/continuation";
@@ -402,7 +403,7 @@ test("all supplied histories authenticate before any missing-page or unsupported
     const forged = { ...extra.histories[2], frames: extra.threads[1].frames.map((frame) => ({ ...frame, sig: Buffer.alloc(64).toString("base64") })) };
     for (const histories of [[missing, forged], [forged, missing]])
         refused(await evaluate(state, { histories }), "invalid_verified_history");
-    const unknown = await authorCarrierOp({ replica: extra.threads[0].replica, signer: extra.threads[0].signer, deps: [extra.threads[0].pin.id],
+    const unknown = await authorCarrierOpUnchecked({ replica: extra.threads[0].replica, signer: extra.threads[0].signer, deps: [extra.threads[0].pin.id],
         kind: "authority", cap: ["nil"], body: ["atom", "unsupported_trust_evidence"] });
     const unsupported = { ...extra.histories[1], frames: [...extra.threads[0].frames, unknown] };
     refused(await evaluate(state, { histories: [unsupported] }), "unsupported_cutoff");
@@ -620,7 +621,7 @@ for (const corruption of ["catalog signature", "rotation signature", "cutoff pro
 }
 test("saved unsupported raw evidence and missing accepted rotation proofs cannot be repaired from incoming evidence", async () => {
     const f = await trustFixture(), original = await blockedRotation(f);
-    const unknown = await authorCarrierOp({ replica: f.threads[0].replica, signer: f.threads[0].signer, deps: [f.threads[0].pin.id],
+    const unknown = await authorCarrierOpUnchecked({ replica: f.threads[0].replica, signer: f.threads[0].signer, deps: [f.threads[0].pin.id],
         kind: "authority", cap: ["nil"], body: ["atom", "unsupported_trust_evidence"] });
     const broken = structuredClone(original);
     broken.histories.find((h) => h.replica === unknown.replica).frames = [...f.threads[0].frames, unknown];
@@ -754,7 +755,7 @@ test("continuity vocabulary remains authenticated raw evidence across catalog in
         }
         assert.deepEqual(states[0], states[1]);
         for (const atom of ["cutoff_unknown_evidence_v99", "claim_id"]) {
-            const unknown = await authorCarrierOp({ replica: f.space.replica, signer: f.root, deps: [frame.id], kind: "command", cap: ["nil"], body: ["atom", atom] });
+            const unknown = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [frame.id], kind: "command", cap: ["nil"], body: ["atom", atom] });
             refused(await prepareTreehouseCatalogInstallation({ review: f.review, history: { ...history, frames: [...history.frames, unknown] },
                 store: { kind: "verified_fresh", expected } }), "unsupported_cutoff");
         }

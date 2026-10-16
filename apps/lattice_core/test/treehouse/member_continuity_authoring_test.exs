@@ -227,6 +227,17 @@ defmodule Treehouse.MemberContinuityAuthoringTest do
     end
   end
 
+  test "the envelope measure refuses an atom name off the wire vocabulary before any signature" do
+    {sim, _claim, _request} = fixture()
+    root = Sim.identity(sim, "root")
+
+    listed = Op.new(root, sim.replica, [], :inbox, {:request, "ref", {:create_space, ["x"]}})
+    off_list = Op.new(root, sim.replica, [], :inbox, {:request, "ref", :definitely_not_listed})
+
+    assert MemberContinuityAuthoring.envelope_status(listed) == :ok
+    assert MemberContinuityAuthoring.envelope_status(off_list) == {:error, :unknown_atom}
+  end
+
   test "oversized genuine retained frontier stops review and assembly before signer invocation" do
     {sim, _claim, request} = fixture()
     base = Sim.log(sim, "root")

@@ -6,6 +6,7 @@ import { authorCarrierOp, canonicalBytesForCarrierOp, canonicalBytesForCarrierTe
 import { decodeCarrierOpFrame } from "../src/carrier";
 import type { CarrierOpFrame, CarrierTerm } from "../src/carrier";
 import { cutoffFixture } from "./support/export_treehouse_catalog_cutoff";
+import { authorCarrierOpUnchecked } from "./support/unchecked_author";
 
 // Integrator-adopted cutoff-only scope, 2026-09-06: raw authenticated history,
 // separately validated bad_signature evidence, 64 generic composites, exact
@@ -109,7 +110,7 @@ test("all fixed vocabulary names are shared with the durable fixture and accepte
 
 test("unknown authentic vocabulary is unsupported, while verifiable forgery keeps invalid-history precedence", async () => {
   const f = await cutoffFixture();
-  const frame = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["atom", "cutoff_unknown_evidence_v99"] });
+  const frame = await authorCarrierOpUnchecked({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["atom", "cutoff_unknown_evidence_v99"] });
   assert.deepEqual(await derive({ replica: f.replica, frames: [frame], rejected: [] }), unsupported);
   assert.deepEqual(await derive({ replica: f.replica, frames: [{ ...frame, sig: "" }], rejected: [] }), invalid);
   assert.deepEqual(await derive({ replica: f.replica, frames: [], rejected: [{ frame, reason: "bad_signature" }] }), invalid);

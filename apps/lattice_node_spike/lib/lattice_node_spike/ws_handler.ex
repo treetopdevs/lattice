@@ -123,7 +123,20 @@ defmodule LatticeNodeSpike.WsHandler do
 
   defp handle_msg("pull", %{"have" => have}, %{peer: peer}) when is_list(have) do
     ops = Peer.missing_for(peer, have)
-    %{type: "ops", ops: Enum.map(ops, &CarrierWire.encode_op/1)}
+
+    # An op naming an atom outside the closed wire vocabulary is not served (no peer would
+    # admit it); the whole pull is refused rather than silently omitting it.
+    ops
+    |> Enum.reduce_while({:ok, []}, fn op, {:ok, acc} ->
+      case CarrierWire.encode_op_checked(op) do
+        {:ok, frame} -> {:cont, {:ok, [frame | acc]}}
+        {:error, :unknown_atom} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, frames} -> %{type: "ops", ops: Enum.reverse(frames)}
+      {:error, :unknown_atom} -> %{type: "error", reason: "unknown_atom"}
+    end
   end
 
   defp handle_msg("push", %{"ops" => encoded}, %{peer: peer}) when is_list(encoded) do

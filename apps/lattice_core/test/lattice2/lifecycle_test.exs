@@ -41,18 +41,39 @@ defmodule Lattice2.LifecycleTest do
     :ok = Registry.monitor("server", replica, self())
 
     # server is dormant; tab durably sends two messages.
-    :ok = Registry.deliver("tab", "server", replica, {:ping, 1})
-    :ok = Registry.deliver("tab", "server", replica, {:ping, 2})
+    :ok = Registry.deliver("tab", "server", replica, {:post, 1})
+    :ok = Registry.deliver("tab", "server", replica, {:post, 2})
 
     {:ok, _state} = Registry.materialize("server", replica)
 
-    assert_receive {:lattice_message, {"server", ^replica}, {:ping, 1}}
-    assert_receive {:lattice_message, {"server", ^replica}, {:ping, 2}}
+    assert_receive {:lattice_message, {"server", ^replica}, {:post, 1}}
+    assert_receive {:lattice_message, {"server", ^replica}, {:post, 2}}
 
     # Dormant then live again: no re-delivery (exactly once across materializations).
     :ok = Registry.go_dormant("server", replica)
     {:ok, _} = Registry.materialize("server", replica)
-    refute_receive {:lattice_message, {"server", ^replica}, {:ping, _}}, 50
+    refute_receive {:lattice_message, {"server", ^replica}, {:post, _}}, 50
+  end
+
+  test "durable send and call refuse an atom off the wire vocabulary without appending" do
+    sim = hosted()
+    replica = Sim.replica(sim)
+    before = Lattice.Log.op_ids(Registry.log("tab", replica))
+
+    assert {:error, :unknown_atom} =
+             Registry.deliver("tab", "server", replica, {:definitely_not_listed, 1})
+
+    assert {:error, :unknown_atom} =
+             Registry.call("tab", "server", replica, {:get, :definitely_not_listed})
+
+    assert Lattice.Log.op_ids(Registry.log("tab", replica)) == before
+    assert Lattice.Log.op_ids(Registry.log("server", replica)) == before
+
+    # A listed payload still goes through.
+    assert :ok = Registry.deliver("tab", "server", replica, {:post, 1})
+
+    assert MapSet.size(Lattice.Log.op_ids(Registry.log("tab", replica))) ==
+             MapSet.size(before) + 1
   end
 
   test "behavior 12: a promise resolves from the log after the target materializes, even across caller dormancy" do

@@ -1,3 +1,4 @@
+import { isWireVocabularyName } from "./wire_vocabulary";
 export const canonicalSuite = "lattice-cbor-v1";
 const textEncoder = new TextEncoder();
 const uint64Max = 18446744073709551615n;
@@ -44,7 +45,52 @@ export async function verifyCarrierOp(frame, verifier) {
     const signature = await verifier.verify(frame.author, canonicalBytes, requireCanonicalBase64Bytes(frame.sig, 64));
     return { hash, signature, valid: hash && signature };
 }
+/**
+ * Plan 190: refuse any atom name or delegation op/role name outside the closed wire
+ * vocabulary. Walks the raw carrier term grammar, so it never needs a decoded term and
+ * ignores malformed shapes (the decoders own those).
+ */
+export function assertWireVocabularyTerm(term) {
+    if (!Array.isArray(term))
+        return;
+    const [tag, value] = term;
+    switch (tag) {
+        case "atom":
+            assertWireVocabularyName(value);
+            return;
+        case "list":
+        case "tuple":
+        case "mapset":
+            if (Array.isArray(value))
+                value.forEach(assertWireVocabularyTerm);
+            return;
+        case "map":
+            if (Array.isArray(value)) {
+                for (const pair of value)
+                    if (Array.isArray(pair))
+                        pair.forEach(assertWireVocabularyTerm);
+            }
+            return;
+        case "delegation":
+            if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+                for (const key of ["ops", "roles"]) {
+                    const names = Reflect.get(value, key);
+                    if (Array.isArray(names))
+                        names.forEach(assertWireVocabularyName);
+                }
+            }
+            return;
+    }
+}
+function assertWireVocabularyName(name) {
+    if (typeof name === "string" && !isWireVocabularyName(name)) {
+        throw new Error(`atom name outside the wire vocabulary: ${name}`);
+    }
+}
 export async function authorCarrierOp(input) {
+    // Refuse before anything is hashed or signed: every peer would refuse an off-list name.
+    assertWireVocabularyTerm(input.body);
+    assertWireVocabularyTerm(input.cap);
     const unsignedFrame = {
         v: 1,
         id: "",

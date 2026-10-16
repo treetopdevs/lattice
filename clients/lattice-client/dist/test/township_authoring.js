@@ -606,7 +606,7 @@ const unnormalizedBeacon = await authorCarrierOp({ replica: beaconVector.replica
 check("received unsorted certificate claim still refuses", materialize(beaconVector.schema, carrierOpsToSemanticOps([...claimFrames, unnormalizedBeacon], beaconVector.realmByPubkey))
     .quarantineReasons.get(unnormalizedBeacon.id), "unauthorized_beacon");
 const unrelatedIntegerBody = ["tuple", [["atom", "genesis"], ["delegation", beaconGenesisDelegation],
-        ["map", [[["atom", "unrelated"], ["int", "9007199254740992"]]]]]];
+        ["map", [[["atom", "admin"], ["int", "9007199254740992"]]]]]];
 for (const body of [unrelatedIntegerBody]) {
     const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
         kind: "authority", cap: ["nil"], body, signer: beaconFounder });

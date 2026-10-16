@@ -29,6 +29,11 @@ defmodule Lattice.Registry do
 
   Persistence: `dump/3` / `restore/4` move a log to/from disk for the realm
   death-and-resurrection test (behavior 14).
+
+  Every op this module authors goes through `Lattice.Op.authored/6`, so a payload, query or
+  result naming an atom outside the closed wire vocabulary is refused with
+  `{:error, :unknown_atom}` before anything is signed (a peer would refuse the frame and
+  strand its descendants).
   """
 
   use GenServer
@@ -52,7 +57,10 @@ defmodule Lattice.Registry do
   @doc "Send `{realm, replica}` dormant (stops the live process; log persists)."
   def go_dormant(realm, replica), do: GenServer.call(@name, {:go_dormant, {realm, replica}})
 
-  @doc "Permanently tombstone `{realm, replica}` (an op; blocks rematerialization)."
+  @doc """
+  Permanently tombstone `{realm, replica}` (an op; blocks rematerialization). Returns
+  `{:error, :unknown_atom}` if the op would name an atom outside the wire vocabulary.
+  """
   def tombstone(realm, replica), do: GenServer.call(@name, {:tombstone, {realm, replica}})
 
   @doc "Current lifecycle of `{realm, replica}`."
@@ -70,7 +78,11 @@ defmodule Lattice.Registry do
   @doc "Subscribe `pid` to lifecycle + message notifications for `{realm, replica}`."
   def monitor(realm, replica, pid), do: GenServer.call(@name, {:monitor, {realm, replica}, pid})
 
-  @doc "Durably send `payload` from one realm to another (delivered on materialize)."
+  @doc """
+  Durably send `payload` from one realm to another (delivered on materialize). Returns
+  `{:error, :unknown_atom}`, appending nothing, if `payload` names an atom outside the wire
+  vocabulary.
+  """
   def deliver(from_realm, to_realm, replica, payload) do
     GenServer.call(@name, {:deliver, from_realm, to_realm, replica, payload})
   end
@@ -80,7 +92,10 @@ defmodule Lattice.Registry do
     GenServer.call(@name, {:sync, realm_a, realm_b, replica})
   end
 
-  @doc "Issue a durable call; returns a `Lattice.Promise`."
+  @doc """
+  Issue a durable call; returns a `Lattice.Promise`, or `{:error, :unknown_atom}` (nothing
+  appended) if `query` names an atom outside the wire vocabulary.
+  """
   def call(from_realm, to_realm, replica, query) do
     GenServer.call(@name, {:call, from_realm, to_realm, replica, query})
   end
@@ -165,12 +180,17 @@ defmodule Lattice.Registry do
         # bound root may author one. A non-root request is refused, and even if an
         # attacker forged the op directly, `Authority.tombstoned?/1` would ignore it.
         if Authority.root(entry.log) == entry.identity.pub do
-          op = author(entry, :tombstone, {:tombstone, key})
-          log = Log.append!(entry.log, op)
-          st = stop_materializer(st, entry)
-          entry = %{entry | lifecycle: :tombstoned, mat_pid: nil, mat_ref: nil, log: log}
-          notify(entry, {:lattice_lifecycle, key, :tombstoned})
-          {:reply, :ok, put_entry(st, key, entry)}
+          case author(entry, :tombstone, {:tombstone, key}) do
+            {:ok, op} ->
+              log = Log.append!(entry.log, op)
+              st = stop_materializer(st, entry)
+              entry = %{entry | lifecycle: :tombstoned, mat_pid: nil, mat_ref: nil, log: log}
+              notify(entry, {:lattice_lifecycle, key, :tombstoned})
+              {:reply, :ok, put_entry(st, key, entry)}
+
+            {:error, :unknown_atom} = refused ->
+              {:reply, refused, st}
+          end
         else
           {:reply, {:error, :unauthorized}, st}
         end
@@ -215,10 +235,15 @@ defmodule Lattice.Registry do
     with {:ok, from_entry} <- fetch(st, from_key) do
       # Scope the message to its destination realm so only that realm's
       # materialization delivers it (not every realm hosting the replica).
-      op = author(from_entry, :inbox, {:message, to_realm, payload})
-      st = put_entry(st, from_key, %{from_entry | log: Log.append!(from_entry.log, op)})
-      st = do_sync(st, from_key, to_key)
-      {:reply, :ok, st}
+      case author(from_entry, :inbox, {:message, to_realm, payload}) do
+        {:ok, op} ->
+          st = put_entry(st, from_key, %{from_entry | log: Log.append!(from_entry.log, op)})
+          st = do_sync(st, from_key, to_key)
+          {:reply, :ok, st}
+
+        {:error, :unknown_atom} = refused ->
+          {:reply, refused, st}
+      end
     else
       :error -> {:reply, {:error, :unknown}, st}
     end
@@ -236,11 +261,16 @@ defmodule Lattice.Registry do
       ref = "ref:" <> Lattice.Cap.random_token()
       # Scope the request to its destination realm so only that realm answers it
       # (the caller must not answer its own outbound request).
-      req = author(from_entry, :inbox, {:request, ref, to_realm, query})
-      st = put_entry(st, from_key, %{from_entry | log: Log.append!(from_entry.log, req)})
-      st = do_sync(st, from_key, to_key)
-      promise = %Promise{ref: ref, replica: replica, target: to_realm, from: from_realm}
-      {:reply, {:ok, promise}, st}
+      case author(from_entry, :inbox, {:request, ref, to_realm, query}) do
+        {:ok, req} ->
+          st = put_entry(st, from_key, %{from_entry | log: Log.append!(from_entry.log, req)})
+          st = do_sync(st, from_key, to_key)
+          promise = %Promise{ref: ref, replica: replica, target: to_realm, from: from_realm}
+          {:reply, {:ok, promise}, st}
+
+        {:error, :unknown_atom} = refused ->
+          {:reply, refused, st}
+      end
     else
       :error -> {:reply, {:error, :unknown}, st}
     end
@@ -334,7 +364,7 @@ defmodule Lattice.Registry do
   defp put_ref(st, ref, key), do: %{st | refs: Map.put(st.refs, ref, key)}
 
   defp author(entry, kind, body, opts \\ []) do
-    Op.new(entry.identity, entry.replica, Log.frontier(entry.log), kind, body, opts)
+    Op.authored(entry.identity, entry.replica, Log.frontier(entry.log), kind, body, opts)
   end
 
   defp current_state(entry) do
@@ -376,38 +406,18 @@ defmodule Lattice.Registry do
         case op.body do
           # Only the destination realm delivers/answers; others ignore the op.
           {:message, ^realm, payload} when op.kind == :inbox ->
-            if MapSet.member?(acked, op.id) do
-              {log, delivered}
-            else
-              ack =
-                Op.new(
-                  entry.identity,
-                  entry.replica,
-                  Log.frontier(log),
-                  :inbox,
-                  {:delivered, op.id}
-                )
-
-              {Log.append!(log, ack), [{op.id, payload} | delivered]}
-            end
+            ack_message(entry, log, delivered, MapSet.member?(acked, op.id), op.id, payload)
 
           {:request, ref, ^realm, query} when op.kind == :inbox ->
-            if MapSet.member?(responded, ref) do
-              {log, delivered}
-            else
-              result = answer_query(query, state)
-
-              resp =
-                Op.new(
-                  entry.identity,
-                  entry.replica,
-                  Log.frontier(log),
-                  :inbox,
-                  {:response, ref, result}
-                )
-
-              {Log.append!(log, resp), delivered}
-            end
+            answer_request(
+              entry,
+              log,
+              delivered,
+              state,
+              MapSet.member?(responded, ref),
+              ref,
+              query
+            )
 
           _ ->
             {log, delivered}
@@ -415,6 +425,43 @@ defmodule Lattice.Registry do
       end)
 
     {%{entry | log: log}, Enum.reverse(delivered)}
+  end
+
+  defp ack_message(_entry, log, delivered, true, _id, _payload), do: {log, delivered}
+
+  defp ack_message(entry, log, delivered, false, id, payload) do
+    ack =
+      Op.authored(entry.identity, entry.replica, Log.frontier(log), :inbox, {:delivered, id})
+
+    # A refused ack (never, for the fixed `:delivered` tag) leaves the message undelivered, so
+    # the next materialization retries it.
+    case ack do
+      {:ok, ack} -> {Log.append!(log, ack), [{id, payload} | delivered]}
+      {:error, :unknown_atom} -> {log, delivered}
+    end
+  end
+
+  defp answer_request(_entry, log, delivered, _state, true, _ref, _query), do: {log, delivered}
+
+  defp answer_request(entry, log, delivered, state, false, ref, query) do
+    result = answer_query(query, state)
+
+    # The result is materialized state, which may hold an atom outside the wire vocabulary.
+    # Such a response is refused and the request stays unanswered (`await/3` keeps returning
+    # `:pending`) rather than signing an op no peer would admit.
+    resp =
+      Op.authored(
+        entry.identity,
+        entry.replica,
+        Log.frontier(log),
+        :inbox,
+        {:response, ref, result}
+      )
+
+    case resp do
+      {:ok, resp} -> {Log.append!(log, resp), delivered}
+      {:error, :unknown_atom} -> {log, delivered}
+    end
   end
 
   defp inbox_set(ordered, :delivered) do

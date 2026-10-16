@@ -3,7 +3,7 @@ defmodule Lattice.CarrierWireTest do
   use ExUnitProperties
 
   alias Lattice.Authority.Delegation
-  alias Lattice.{Canonical, Carrier.Wire, Identity, Op}
+  alias Lattice.{Canonical, Carrier.Wire, Carrier.WireVocabulary, Identity, Log, Op}
 
   @atoms [:admit, :clerk, :join, :leave, :moderator, :post, :set_summary, :set_title]
   @roles [:admin, :clerk, :member, :moderator]
@@ -22,12 +22,12 @@ defmodule Lattice.CarrierWireTest do
 
   test "op frames reject terms outside the canonical signable domain" do
     id = Identity.from_seed("alice", "carrier-wire-negative")
-    op = Op.new(id, "replica:wire", [], :command, {:count, 1})
+    op = Op.new(id, "replica:wire", [], :command, {:post, 1})
 
     frame =
       op
       |> Wire.encode_op()
-      |> put_in(["body"], ["tuple", [["atom", "count"], ["int", -1]]])
+      |> put_in(["body"], ["tuple", [["atom", "post"], ["int", -1]]])
 
     assert {:error, :malformed_op} = Wire.decode_op(frame)
   end
@@ -83,7 +83,6 @@ defmodule Lattice.CarrierWireTest do
           {"issuer", "not base64"},
           {"audience", "not base64"},
           {"sig", "not base64"},
-          # Row 190: an unknown op name now decodes as Lattice.Canonical.Atom.
           {"ops", [123]},
           {"roles", [123]}
         ] do
@@ -172,20 +171,20 @@ defmodule Lattice.CarrierWireTest do
 
   test "map wire frames sort pairs by canonical key bytes" do
     id = Identity.from_seed("alice", "carrier-wire-map-order")
-    op = Op.new(id, "replica:wire", [], :command, %{z: 1, a: 2, m: 3, b: 4})
+    op = Op.new(id, "replica:wire", [], :command, %{grant: 1, admin: 2, clerk: 3, claim: 4})
 
-    assert op |> Wire.encode_op() |> encoded_map_keys() == ["a", "b", "m", "z"]
+    assert op |> Wire.encode_op() |> encoded_map_keys() == ["admin", "claim", "clerk", "grant"]
   end
 
   test "large integers are encoded as decimal strings so JSON peers preserve precision" do
     id = Identity.from_seed("alice", "carrier-wire-large-int")
     large = Integer.pow(2, 53) + 1
-    op = Op.new(id, "replica:wire", [], :command, {:count, large})
+    op = Op.new(id, "replica:wire", [], :command, {:post, large})
 
     frame = Wire.encode_op(op)
     large_string = Integer.to_string(large)
 
-    assert ["tuple", [["atom", "count"], ["int", ^large_string]]] = frame["body"]
+    assert ["tuple", [["atom", "post"], ["int", ^large_string]]] = frame["body"]
     assert {:ok, ^op} = frame |> Jason.encode!() |> Jason.decode!() |> Wire.decode_op()
   end
 
@@ -236,6 +235,186 @@ defmodule Lattice.CarrierWireTest do
     assert frame["type"] == "push_result"
     assert frame["accepted"] == []
     assert frame["quarantined"] == []
+  end
+
+  describe "closed vocabulary op admission (plan 190)" do
+    test "a listed name in an op body decodes in a VM that has never seen the atom" do
+      peer = cold_peer()
+      assert WireVocabulary.known?("seize_records")
+      assert_cold(peer, "seize_records")
+
+      identity = Identity.from_seed("alice", "wire-vocabulary-cold")
+      op = Op.new(identity, "replica:wire", [], :command, {:post, :seize_records})
+      frame = Wire.encode_op(op)
+
+      assert {:ok, ^op} = :peer.call(peer, Wire, :decode_op, [frame], 30_000)
+      assert :seize_records == :peer.call(peer, String, :to_existing_atom, ["seize_records"])
+    end
+
+    test "an off-list name in the body refuses the op even when this VM holds the atom" do
+      identity = Identity.from_seed("alice", "wire-vocabulary-body")
+      op = Op.new(identity, "replica:wire", [], :command, {:post, :definitely_not_listed})
+
+      refute WireVocabulary.known?("definitely_not_listed")
+      assert {:error, :malformed_op} = op |> Wire.encode_op() |> Wire.decode_op()
+      assert {:error, :malformed_op} = Wire.decode_ops([Wire.encode_op(op)])
+    end
+
+    test "an off-list name in the cap refuses the op" do
+      identity = Identity.from_seed("alice", "wire-vocabulary-cap")
+
+      op =
+        Op.new(identity, "replica:wire", [], :command, {:post, "hi"},
+          cap: [:definitely_not_listed]
+        )
+
+      assert {:error, :malformed_op} = op |> Wire.encode_op() |> Wire.decode_op()
+    end
+
+    test "a delegation whose ops names an off-list name refuses the op" do
+      frame = delegation_frame()
+      assert {:ok, _op} = Wire.decode_op(frame)
+
+      assert {:error, :malformed_op} =
+               frame
+               |> put_delegation_field("ops", ["post", "definitely_not_listed"])
+               |> Wire.decode_op()
+    end
+
+    test "a delegation whose roles names an off-list name refuses the op" do
+      frame = delegation_frame()
+
+      assert {:error, :malformed_op} =
+               frame
+               |> put_delegation_field("roles", ["clerk", "definitely_not_listed"])
+               |> Wire.decode_op()
+    end
+
+    test "decode_value stays strict about names this VM does not hold" do
+      peer = cold_peer()
+      assert_cold(peer, "seize_records")
+      term = ["atom", "seize_records"]
+
+      assert {:error, :malformed_term} = :peer.call(peer, Wire, :decode_value, [term])
+      assert {:ok, :post} = Wire.decode_value(["atom", "post"])
+    end
+
+    test "a report reason is refused unless it is on reasons/0, even after an op decode created the atom" do
+      peer = cold_peer()
+      assert WireVocabulary.known?("ghost")
+      assert_cold(peer, "ghost")
+
+      identity = Identity.from_seed("alice", "wire-vocabulary-reason")
+      op = Op.new(identity, "replica:wire", [], :command, {:post, :ghost})
+      assert {:ok, ^op} = :peer.call(peer, Wire, :decode_op, [Wire.encode_op(op)], 30_000)
+      assert :ghost == :peer.call(peer, String, :to_existing_atom, ["ghost"])
+
+      for field <- ["quarantined", "rejected"], reason <- ["ghost", "invalid_transfer"] do
+        report = Map.put(empty_report(), field, [["id", reason]])
+        assert {:error, :malformed_term} = :peer.call(peer, Wire, :decode_report, [report])
+        assert {:error, :malformed_term} = Wire.decode_report(report)
+      end
+    end
+
+    test "every reason on reasons/0 decodes in a cold VM" do
+      peer = cold_peer()
+
+      for reason <- WireVocabulary.reasons() do
+        report = Map.put(empty_report(), "rejected", [["id", Atom.to_string(reason)]])
+
+        assert {:ok, %{rejected: [{"id", ^reason}]}} =
+                 :peer.call(peer, Wire, :decode_report, [report])
+      end
+    end
+
+    test "the checked encode refuses an off-list atom in a command argument" do
+      identity = Identity.from_seed("alice", "wire-vocabulary-checked")
+
+      for body <- [
+            {:post, :definitely_not_listed},
+            {:post, [1, {:nested, %{definitely_not_listed: 1}}]},
+            {:post, %{"k" => MapSet.new([:definitely_not_listed])}}
+          ] do
+        op = Op.new(identity, "replica:wire", [], :command, body)
+        assert {:error, :unknown_atom} = Wire.encode_op_checked(op)
+      end
+
+      cap_op = Op.new(identity, "replica:wire", [], :command, nil, cap: {:definitely_not_listed})
+      assert {:error, :unknown_atom} = Wire.encode_op_checked(cap_op)
+    end
+
+    test "the checked encode refuses an off-list delegation name" do
+      issuer = Identity.from_seed("issuer", "wire-vocabulary-checked-delegation")
+
+      for opts <- [
+            [ops: [:post, :definitely_not_listed]],
+            [ops: [:post], roles: [:definitely_not_listed]]
+          ] do
+        delegation = Delegation.new(issuer, "replica:wire", issuer.pub, opts)
+        op = Op.new(issuer, "replica:wire", [], :authority, {:grant, delegation})
+        assert {:error, :unknown_atom} = Wire.encode_op_checked(op)
+      end
+    end
+
+    test "a listed name encodes to the unchecked bytes and round-trips in a cold VM" do
+      peer = cold_peer()
+      assert_cold(peer, "seize_records")
+      identity = Identity.from_seed("alice", "wire-vocabulary-checked-listed")
+      op = Op.new(identity, "replica:wire", [], :command, {:post, :seize_records})
+
+      assert {:ok, frame} = Wire.encode_op_checked(op)
+      assert frame == Wire.encode_op(op)
+      assert {:ok, ^op} = :peer.call(peer, Wire, :decode_op, [frame], 30_000)
+    end
+
+    test "Op.authored/6 refuses an off-list name before signing and leaves the log unchanged" do
+      identity = Identity.from_seed("alice", "wire-vocabulary-authored")
+      log = Log.new("replica:wire")
+
+      assert {:error, :unknown_atom} =
+               Op.authored(
+                 identity,
+                 "replica:wire",
+                 [],
+                 :command,
+                 {:post, :definitely_not_listed}
+               )
+
+      assert {:error, :unknown_atom} =
+               Op.authored(identity, "replica:wire", [], :command, nil,
+                 cap: {:definitely_not_listed}
+               )
+
+      assert {:ok, %Op{} = op} =
+               Op.authored(identity, "replica:wire", [], :command, {:post, "hello"})
+
+      assert op == Op.new(identity, "replica:wire", [], :command, {:post, "hello"})
+      assert Log.size(log) == 0
+      assert Log.size(Log.append!(log, op)) == 1
+    end
+  end
+
+  defp empty_report,
+    do: %{"accepted" => [], "quarantined" => [], "rejected" => [], "pending" => []}
+
+  defp delegation_frame do
+    issuer = Identity.from_seed("issuer", "wire-vocabulary-delegation")
+    delegation = Delegation.new(issuer, "replica:wire", issuer.pub, ops: [:post], roles: [:clerk])
+    Wire.encode_op(Op.new(issuer, "replica:wire", [], :authority, {:grant, delegation}))
+  end
+
+  # A VM that has loaded nothing but the code path: it holds no atom a frame names unless
+  # the decode under test created it.
+  defp cold_peer do
+    {:ok, peer, _node} =
+      :peer.start_link(%{connection: :standard_io, args: [~c"-pa" | :code.get_path()]})
+
+    peer
+  end
+
+  defp assert_cold(peer, name) do
+    catch_error(:peer.call(peer, String, :to_existing_atom, [name]))
+    :ok
   end
 
   property "op wire round-trip preserves body, cap, validity, and canonical payload" do

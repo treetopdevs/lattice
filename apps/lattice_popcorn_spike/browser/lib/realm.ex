@@ -61,7 +61,9 @@ defmodule LatticeBrowser.Realm do
     case Durable.post(durable, text) do
       {:ok, next, op} ->
         {reply, state} = durable_reply(next, state)
-        {Map.put(reply, "op_id", op.id), state}
+        # A refused capsule is an error reply: only a successful one carries the op id.
+        reply = if reply["ok"], do: Map.put(reply, "op_id", op.id), else: reply
+        {reply, state}
 
       {:error, reason} ->
         {%{"ok" => false, "error" => Atom.to_string(reason)}, state}
@@ -70,7 +72,10 @@ defmodule LatticeBrowser.Realm do
 
   defp command(%{"command" => "replica_upload"} = cmd, %{durable: durable} = state)
        when map_size(cmd) == 1 and not is_nil(durable) do
-    {%{"ok" => true, "ops" => Durable.upload(durable)}, state}
+    case Durable.upload(durable) do
+      {:ok, ops} -> {%{"ok" => true, "ops" => ops}, state}
+      {:error, reason} -> {%{"ok" => false, "error" => Atom.to_string(reason)}, state}
+    end
   end
 
   # Plan 185: judge one signed vector with the shared Authority/Reduce. Read-only:
@@ -183,20 +188,25 @@ defmodule LatticeBrowser.Realm do
               is_binary(message) and byte_size(message) <= 1024 do
     seq = state.seq + 1
     body = %{"message" => message, "tab_id" => state.tab, "sequence" => seq}
-    op = Op.new(state.identity, "popcorn-spike", [], :command, body, cap: cap)
 
-    proof = %{
-      "body" => body,
-      "cap" => cap,
-      "author" => Base.encode64(op.author),
-      "sig" => Base.encode64(op.sig),
-      "id" => op.id,
-      "canonical" => Base.encode64(Canonical.op_payload(op))
-    }
+    case Op.authored(state.identity, "popcorn-spike", [], :command, body, cap: cap) do
+      {:ok, op} ->
+        proof = %{
+          "body" => body,
+          "cap" => cap,
+          "author" => Base.encode64(op.author),
+          "sig" => Base.encode64(op.sig),
+          "id" => op.id,
+          "canonical" => Base.encode64(Canonical.op_payload(op))
+        }
 
-    envelope = %{"type" => "call", "payload" => proof}
-    envelope = if is_nil(cap), do: envelope, else: Map.put(envelope, "cap_id", cap)
-    {out(envelope), %{state | seq: seq}}
+        envelope = %{"type" => "call", "payload" => proof}
+        envelope = if is_nil(cap), do: envelope, else: Map.put(envelope, "cap_id", cap)
+        {out(envelope), %{state | seq: seq}}
+
+      {:error, reason} ->
+        {%{"ok" => false, "error" => Atom.to_string(reason)}, state}
+    end
   end
 
   defp command(%{"command" => "disconnect"} = cmd, state) when map_size(cmd) == 1 do
@@ -205,9 +215,17 @@ defmodule LatticeBrowser.Realm do
 
   defp command(_, state), do: invalid(state)
 
+  # A refused capsule (a legacy log naming an atom off the wire vocabulary) is an error
+  # reply and the new replica is not adopted: nothing durable can be written for it.
   defp durable_reply(durable, state) do
-    {%{"ok" => true, "view" => Durable.view(durable), "capsule" => Durable.capsule(durable)},
-     %{state | durable: durable}}
+    case Durable.capsule(durable) do
+      {:ok, capsule} ->
+        {%{"ok" => true, "view" => Durable.view(durable), "capsule" => capsule},
+         %{state | durable: durable}}
+
+      {:error, reason} ->
+        {%{"ok" => false, "error" => Atom.to_string(reason)}, state}
+    end
   end
 
   defp out(envelope), do: %{"ok" => true, "envelope" => envelope}

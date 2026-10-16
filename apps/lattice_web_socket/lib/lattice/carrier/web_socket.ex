@@ -163,11 +163,16 @@ defmodule Lattice.Carrier.WebSocket do
   @spec last_push_batches(t()) :: [%{count: non_neg_integer(), bytes: non_neg_integer()}]
   def last_push_batches(%__MODULE__{last_push_batches: batches}), do: batches
 
-  @doc "Submit one already-signed op to an explicitly relay-enabled peer."
+  @doc """
+  Submit one already-signed op to an explicitly relay-enabled peer. An op naming an atom
+  outside the closed wire vocabulary is refused locally with `{:error, :unknown_atom}`;
+  nothing is sent.
+  """
   @spec relay(t(), Op.t()) :: {:ok, Lattice.Sync.report(), t()} | {:error, term()}
   def relay(%__MODULE__{} = conn, %Op{} = op) do
-    with {:ok, %{"type" => "relay_result"} = result} <-
-           request(conn, %{type: "relay", op: Wire.encode_op(op)}),
+    with {:ok, frame} <- Wire.encode_op_checked(op),
+         {:ok, %{"type" => "relay_result"} = result} <-
+           request(conn, %{type: "relay", op: frame}),
          {:ok, report} <- Wire.decode_report(result) do
       {:ok, report, conn}
     else
@@ -202,24 +207,26 @@ defmodule Lattice.Carrier.WebSocket do
 
   @impl Lattice.Carrier
   def push(%__MODULE__{} = conn, ops) when is_list(ops) do
-    entries = Enum.map(ops, &encode_entry/1)
+    # Every op is encoded (and checked against the closed wire vocabulary) before the first
+    # batch leaves, so one off-list op refuses the whole push with nothing sent.
+    with {:ok, entries} <- encode_entries(ops) do
+      case Batch.chunk(entries,
+             max_ops: @max_push_ops,
+             max_bytes: push_payload_budget(),
+             size_fun: &push_entry_budget_bytes/1
+           ) do
+        {:ok, batches} ->
+          case push_batches(conn, batches, [], []) do
+            {:ok, reports, batch_meta} ->
+              {:ok, Batch.merge_reports(reports), %{conn | last_push_batches: batch_meta}}
 
-    case Batch.chunk(entries,
-           max_ops: @max_push_ops,
-           max_bytes: push_payload_budget(),
-           size_fun: &push_entry_budget_bytes/1
-         ) do
-      {:ok, batches} ->
-        case push_batches(conn, batches, [], []) do
-          {:ok, reports, batch_meta} ->
-            {:ok, Batch.merge_reports(reports), %{conn | last_push_batches: batch_meta}}
+            {:error, _reason} = error ->
+              error
+          end
 
-          {:error, _reason} = error ->
-            error
-        end
-
-      {:error, reason} ->
-        {:error, push_chunk_error(reason)}
+        {:error, reason} ->
+          {:error, push_chunk_error(reason)}
+      end
     end
   end
 
@@ -252,9 +259,24 @@ defmodule Lattice.Carrier.WebSocket do
     end
   end
 
+  defp encode_entries(ops) do
+    ops
+    |> Enum.reduce_while({:ok, []}, fn op, {:ok, acc} ->
+      case encode_entry(op) do
+        {:ok, entry} -> {:cont, {:ok, [entry | acc]}}
+        {:error, :unknown_atom} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, entries} -> {:ok, Enum.reverse(entries)}
+      {:error, :unknown_atom} = error -> error
+    end
+  end
+
   defp encode_entry(op) do
-    encoded = Wire.encode_op(op)
-    {encoded, encoded |> Jason.encode!() |> byte_size()}
+    with {:ok, encoded} <- Wire.encode_op_checked(op) do
+      {:ok, {encoded, encoded |> Jason.encode!() |> byte_size()}}
+    end
   end
 
   defp push_payload_budget, do: @max_push_bytes - push_frame_overhead()

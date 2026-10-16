@@ -394,8 +394,14 @@ defmodule Lattice2.ApplicationPolicyBeaconContextTest do
 
     for op <- Log.topo_ops(log) do
       assert Op.valid?(op)
+      # This test's replica declares names outside the closed wire vocabulary; those frames
+      # must be refused on decode, and every other frame must round-trip.
       encoded = op |> Wire.encode_op() |> Jason.encode!() |> Jason.decode!()
-      assert {:ok, ^op} = Wire.decode_op(encoded)
+
+      case Wire.encode_op_checked(op) do
+        {:ok, _frame} -> assert {:ok, ^op} = Wire.decode_op(encoded)
+        {:error, :unknown_atom} -> assert {:error, :malformed_op} = Wire.decode_op(encoded)
+      end
     end
   end
 end

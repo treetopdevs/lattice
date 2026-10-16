@@ -15,6 +15,7 @@ import { assembleContinuationFromFrames, reviewContinuationFromFrames } from "..
 import { canonicalOrder, index } from "../../src/dag";
 import type { ReplicaSchema } from "../../src/schema";
 import { bindTownshipReplica } from "../../src/township";
+import { assertVectorFrames } from "./assert_vector_frames";
 
 // The same deterministic, synthetic actors and lifecycle as continuation_authoring.ts.
 // Space exercises holder renewal; Thread exercises the pinned nominee. No keys
@@ -91,6 +92,7 @@ if (args.length !== 0 && (args.length !== 2 || args[0] !== "--out" || !args[1]))
 const defaultPath = fileURLToPath(new URL("../vectors/continuation/ts_authoring.json", import.meta.url));
 const output = args.length === 0 ? defaultPath : resolve(args[1]!);
 const vectors = { version: 1, vectors: [await authorVector("space"), await authorVector("thread")] };
+assertVectorFrames(vectors);
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, `${JSON.stringify(vectors, null, 2)}\n`);
 console.log(`Exported ${vectors.vectors.length} TS-authored continuation histories to ${output}`);
