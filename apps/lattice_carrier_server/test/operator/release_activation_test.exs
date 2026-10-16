@@ -5,6 +5,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
   alias LatticeCarrierServer.{Manifest, Runtime}
 
   alias LatticeCarrierServer.Operator.{
+    Fixture,
     Journal,
     ReleaseActivation,
     ReleaseGate,
@@ -27,7 +28,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
       Application.ensure_all_started(:lattice_carrier_server)
     end)
 
-    {:ok, data} = LatticeCarrierServer.Operator.Fixture.new()
+    {:ok, data} = Fixture.new()
     f = Map.new(data)
     {:ok, record} = Staging.prepare(f.root, nil, f.request, f.artifacts)
     {:ok, journal} = Journal.read(f.root)
@@ -128,6 +129,34 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert File.read!(f.manifest) == changed
     assert {:ok, journal} = Journal.read(f.root)
     assert journal == f.journal
+  end
+
+  test "a symlinked active manifest is refused, not followed", f do
+    {owner, observation} = sealed(f)
+    real = Path.join(f.root, "real-active.json")
+    File.rename!(f.manifest, real)
+    File.ln_s!(real, f.manifest)
+
+    assert {:error, {:operator_refused, "unsafe_operator_file"}} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert {:ok, %{type: :symlink}} = File.lstat(f.manifest)
+    assert File.read!(real) == f.active_manifest
+    assert {:ok, journal} = Journal.read(f.root)
+    assert journal == f.journal
+  end
+
+  test "an active manifest directory the service cannot write refuses before any write", f do
+    {owner, observation} = sealed(f)
+    File.chmod!(f.root, 0o500)
+    on_exit(fn -> File.chmod(f.root, 0o700) end)
+
+    assert {:error, {:operator_refused, "unsafe_operator_directory"}} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    File.chmod!(f.root, 0o700)
+    unchanged!(f)
+    assert Path.wildcard(Path.join(f.root, ".active.json.activate.*"), match_dot: true) == []
   end
 
   test "a tampered staged candidate manifest refuses", f do

@@ -13,8 +13,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   application restart. It signs nothing, generates no identity, resets no log,
   and is neither readiness, catalog publication nor catalog replacement.
   """
-  alias LatticeCarrierServer.Runtime
   alias LatticeCarrierServer.Operator.{Journal, Lock, ReleaseGate}
+  alias LatticeCarrierServer.Runtime
 
   @spec activate(Path.t(), binary() | nil, ReleaseGate.owner(), map()) ::
           {:ok, map()} | {:error, term()}

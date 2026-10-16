@@ -338,9 +338,16 @@ def active(path):
     # directory chain; a root-provisioned deployment file is refused, not
     # rewritten.
     try:
-        return file_bytes(path)
+        raw = file_bytes(path)
     except FileNotFoundError:
         refuse("stale_operator_intent")
+    except OSError:
+        # A symlinked target (ELOOP) or any other open failure is a closed
+        # refusal, exactly as for the identity file.
+        refuse("unsafe_operator_file")
+    if not os.access(os.path.dirname(path), os.W_OK | os.X_OK):
+        refuse("unsafe_operator_directory")
+    return raw
 
 
 def execute(root, plan):
