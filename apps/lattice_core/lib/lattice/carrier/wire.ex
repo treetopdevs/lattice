@@ -81,14 +81,14 @@ defmodule Lattice.Carrier.Wire do
   @doc """
   Encode an op for a peer that will admit it, or refuse it.
 
-  Returns `{:error, :unknown_atom}` when an atom name in the body, the cap, or a delegation
-  is off the closed vocabulary (a legacy `Lattice.Canonical.Atom` struct counts as the name
+  Returns `{:error, :unknown_atom}` when the op kind is not one `decode_op/1` admits, or when
+  an atom name in the body, the cap, or a delegation is off the closed vocabulary (a legacy `Lattice.Canonical.Atom` struct counts as the name
   it carries), before anything is emitted. A listed name encodes to the same bytes as
   `encode_op/1`, which stays the unchecked encoder for the simulator and adversarial tests.
   """
   @spec encode_op_checked(Op.t()) :: {:ok, map()} | {:error, :unknown_atom}
   def encode_op_checked(%Op{} = op) do
-    if listed_term?(op.body) and listed_term?(op.cap),
+    if op.kind in @op_kinds and listed_term?(op.body) and listed_term?(op.cap),
       do: {:ok, encode_op(op)},
       else: {:error, :unknown_atom}
   end

@@ -356,6 +356,13 @@ defmodule Lattice.CarrierWireTest do
       end
     end
 
+    test "the checked encode refuses an op kind decode does not admit" do
+      identity = Identity.from_seed("alice", "wire-vocabulary-checked-kind")
+      op = %{Op.new(identity, "replica:wire", [], :command, {:post, :admin}) | kind: :state}
+      assert {:error, :unknown_atom} = Wire.encode_op_checked(op)
+      assert {:error, :malformed_op} = op |> Wire.encode_op() |> Wire.decode_op()
+    end
+
     test "the checked encode agrees with decode on nil and boolean delegation names" do
       issuer = Identity.from_seed("issuer", "wire-vocabulary-checked-scalar-names")
 
