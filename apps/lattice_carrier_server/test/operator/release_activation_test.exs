@@ -118,6 +118,17 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     unchanged!(f)
   end
 
+  test "an existing route's identity rewritten after the seal refuses", f do
+    {owner, observation} = sealed(f)
+    identity = Path.join(f.root, "service.identity")
+    File.write!(identity, Base.encode16(:crypto.hash(:sha256, "rotated"), case: :lower))
+
+    assert {:error, :release_identity_changed} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    unchanged!(f)
+  end
+
   test "an active manifest changed after the seal refuses", f do
     {owner, observation} = sealed(f)
     changed = f.active_manifest <> "\n"

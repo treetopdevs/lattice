@@ -19,7 +19,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   and is neither readiness, catalog publication nor catalog replacement.
   """
   alias LatticeCarrierServer.Operator.{Journal, Lock, ReleaseGate}
-  alias LatticeCarrierServer.Runtime
+  alias LatticeCarrierServer.{Manifest, Runtime}
 
   @spec activate(Path.t(), binary() | nil, ReleaseGate.owner(), map()) ::
           {:ok, map()} | {:error, term()}
@@ -32,6 +32,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
          digest = Base.encode16(manifest.manifest_digest, case: :lower),
          :ok <- same(digest == record["manifest_digest"], :release_manifest_mismatch),
          :ok <- same(Journal.service_identity_current?(record["service"]), :stale_operator_intent),
+         :ok <- identities_current(record, manifest.instances),
          next = Map.put(record, "phase", "activated"),
          :ok <-
            Lock.activate(
@@ -62,6 +63,23 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
       :ok
     else
       _ -> {:error, :release_not_sealed}
+    end
+  end
+
+  # The journal binds only the admitted instance's identity. Every route the
+  # seal captured must still derive its sealed key from the candidate's
+  # identity files, or the restarted release would serve a different key.
+  defp identities_current(record, sealed) do
+    [candidate] = Enum.filter(record["artifacts"], &(&1["kind"] == "manifest"))
+    inventory = &Map.take(&1, [:name, :realm, :pub, :log_file])
+
+    with {:ok, manifest} <- Manifest.load(candidate["path"]),
+         served = Enum.map(manifest.instances, inventory),
+         [admitted] <- served -- Enum.map(sealed, inventory),
+         true <- Base.encode64(admitted.pub) == record["service"]["pub"] do
+      :ok
+    else
+      _ -> {:error, :release_identity_changed}
     end
   end
 

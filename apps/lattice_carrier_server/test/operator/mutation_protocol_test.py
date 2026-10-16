@@ -81,6 +81,22 @@ class Protocol(unittest.TestCase):
                 owner.activate("/nonexistent-root", plan)
             self.assertEqual(str(caught.exception), reason)
 
+    def test_candidate_paths_must_be_absolute(self):
+        def manifest(**paths):
+            entry = dict({"identity_file": "/srv/a.identity", "log_file": "/srv/a.log"}, **paths)
+            return json.dumps({"version": 1, "instances": [entry]}).encode()
+        owner.absolute_paths(manifest())
+        for bad in [manifest(identity_file="a.identity"), manifest(log_file="../a.log"),
+                    manifest(log_file="/srv/../a.log"), manifest(log_file=None),
+                    b'{"version":1}', b"not json", b"\xff"]:
+            with self.assertRaises(owner.Refusal, msg=repr(bad)) as caught:
+                owner.absolute_paths(bad)
+            self.assertEqual(str(caught.exception), "unsafe_candidate_manifest")
+
+    def test_activation_never_replaces_its_lock_journal_or_artifacts(self):
+        names = owner.reserved("/op", self.sample())
+        self.assertEqual(names, {"/op/operator.lock", "/op/operator-journal.json", "/public/candidate"})
+
     def test_service_identity_binding_is_closed_and_canonical(self):
         good = self.sample()["service"]
         for bad in [None, dict(good, extra="x"), {k: v for k, v in good.items() if k != "pub"},

@@ -300,11 +300,14 @@ def activate(root, plan):
     if len(manifests) != 1:
         refuse("corrupt_operator_journal")
     candidate = staged(manifests[0])
+    target = checks[0]["path"]
+    absolute_paths(candidate)
+    if target in reserved(root, old):
+        refuse("unsafe_operator_file")
     # Every staged artifact still holds its reviewed bytes, on the first
     # attempt and on a retry alike.
     for a in old["artifacts"]:
         staged(a)
-    target = checks[0]["path"]
     expected(root, plan["expected"])
     current_service(old["service"])
     present = digest(active(target))
@@ -330,6 +333,31 @@ def activate(root, plan):
         refuse("stale_operator_intent")
     commit(root, plan["expected"], plan["record"], activation=True)
     reply({"ok": True})
+
+
+def absolute_paths(raw):
+    """The candidate is installed beside the active manifest, not in its
+    attempt directory, so a relative path in it would name a different,
+    unreviewed file after activation."""
+    try:
+        manifest = decode(raw.decode("utf-8"))
+    except (Refusal, UnicodeError):
+        refuse("unsafe_candidate_manifest")
+    instances = manifest.get("instances") if type(manifest) is dict else None
+    if type(instances) is not list:
+        refuse("unsafe_candidate_manifest")
+    for instance in instances:
+        for key in ("identity_file", "log_file"):
+            path = instance.get(key) if type(instance) is dict else None
+            if type(path) is not str or not os.path.isabs(path) or os.path.normpath(path) != path:
+                refuse("unsafe_candidate_manifest")
+
+
+def reserved(root, r):
+    """Paths activation must never replace: the lock it holds, the journal it
+    commits and the staged artifacts it rechecks."""
+    return ({os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json")}
+            | {a["path"] for a in r["artifacts"]})
 
 
 def durable(path):
