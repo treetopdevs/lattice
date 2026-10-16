@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Private Linux operator mutation owner. Requires Python3; no service activation.
+"""Private Linux operator mutation owner. Requires Python3.
 The same process owns flock and every write/fsync. Killing it stops mutation;
-there is no separately running BEAM writer after lock loss.
+there is no separately running BEAM writer after lock loss. Its one activation
+step replaces the active manifest file with a staged candidate; it never starts,
+stops or restarts a service, and never signs anything.
 """
 import base64
 import fcntl
@@ -16,6 +18,7 @@ MAX_LINE = 64 * 1024 * 1024
 MAX_FILE = 32 * 1024 * 1024
 MAX_JOURNAL = 1024 * 1024
 SAFE = 9007199254740991
+PHASES = ("carrier_pending", "activated")
 
 
 class Refusal(Exception):
@@ -190,7 +193,7 @@ def record(raw):
     r = decode(raw)
     if (not closed(r, ["version", "phase", "attempt", "generation", "catalog_head", "manifest_digest", "artifacts",
                        "service"])
-            or type(r["version"]) is not int or r["version"] != 1 or r["phase"] != "carrier_pending"
+            or type(r["version"]) is not int or r["version"] != 1 or r["phase"] not in PHASES
             or not op_id(r["attempt"]) or type(r["generation"]) is not int or not 0 <= r["generation"] < SAFE
             or not (r["catalog_head"] is None or op_id(r["catalog_head"])) or not hex_id(r["manifest_digest"])
             or type(r["artifacts"]) is not list or not 1 <= len(r["artifacts"]) <= 128
@@ -253,9 +256,13 @@ def retain(path, raw):
         refuse("immutable_artifact_conflict")
 
 
-def commit(root, old, raw):
+def commit(root, old, raw, activation=False):
     next_record = record(raw)
-    if old is not None:
+    # Only activate() may write an activated record, after its own checks;
+    # an ordinary plan can neither create one nor move an attempt's phase.
+    if not activation and next_record["phase"] != "carrier_pending":
+        refuse("stale_operator_intent")
+    if old is not None and not activation:
         old_record = record(old)
         if old_record["attempt"] == next_record["attempt"] and old_record != next_record:
             refuse("stale_operator_intent")
@@ -272,6 +279,133 @@ def commit(root, old, raw):
         refuse("corrupt_operator_journal")
 
 
+def activate(root, plan):
+    """Replace the active manifest with the staged candidate, then record it.
+    checks[0] is the active manifest; the rest are the sealed route logs, which
+    must still hold the exact bytes the seal captured.
+    The manifest replace is the activation point. A retry after a replace whose
+    journal commit was lost finds the candidate bytes already active and only
+    commits the journal; any other active content is stale intent."""
+    checks = plan["checks"]
+    if (plan["artifacts"] is not None or type(plan["expected"]) is not str
+            or not op_id(plan["attempt"]) or type(checks) is not list or not 2 <= len(checks) <= 129
+            or not all(closed(c, ["path", "sha256"]) and hex_id(c["sha256"])
+                       and type(c["path"]) is str and os.path.isabs(c["path"])
+                       and os.path.normpath(c["path"]) == c["path"] for c in checks)
+            or len({c["path"] for c in checks}) != len(checks)):
+        refuse("malformed_operator_plan")
+    old = record(plan["expected"])
+    if (old["phase"] != "carrier_pending" or old["attempt"] != plan["attempt"]
+            or record(plan["record"]) != dict(old, phase="activated")
+            or checks[0]["sha256"] != old["manifest_digest"]):
+        refuse("stale_operator_intent")
+    manifests = [a for a in old["artifacts"] if a["kind"] == "manifest"]
+    if len(manifests) != 1:
+        refuse("corrupt_operator_journal")
+    candidate = staged(manifests[0])
+    target = checks[0]["path"]
+    absolute_paths(candidate)
+    if target in reserved(root, old):
+        refuse("unsafe_operator_file")
+    # Every staged artifact still holds its reviewed bytes, on the first
+    # attempt and on a retry alike.
+    for a in old["artifacts"]:
+        staged(a)
+    expected(root, plan["expected"])
+    current_service(old["service"])
+    snapshots(checks[1:])
+    present = digest(active(target))
+    if present == old["manifest_digest"]:
+        # Beside the target, so the replace never crosses a filesystem. An
+        # exclusive temp is preserved on failure, exactly like the journal's.
+        temporary = os.path.join(os.path.dirname(target),
+                                 "." + os.path.basename(target) + ".activate." + os.urandom(16).hex())
+        retain(temporary, candidate)
+        expected(root, plan["expected"])
+        current_service(old["service"])
+        snapshots(checks[1:])
+        if digest(active(target)) != old["manifest_digest"]:
+            refuse("stale_operator_intent")
+        os.replace(temporary, target)
+        sync_dir(os.path.dirname(target))
+        if active(target) != candidate:
+            refuse("immutable_artifact_conflict")
+    elif present == manifests[0]["sha256"]:
+        # A lost commit may also have lost the directory sync after its
+        # replace; make the active candidate durable before recording it.
+        durable(target)
+    else:
+        refuse("stale_operator_intent")
+    commit(root, plan["expected"], plan["record"], activation=True)
+    reply({"ok": True})
+
+
+def absolute_paths(raw):
+    """The candidate is installed beside the active manifest, not in its
+    attempt directory, so a relative path in it would name a different,
+    unreviewed file after activation."""
+    try:
+        manifest = decode(raw.decode("utf-8"))
+    except (Refusal, UnicodeError):
+        refuse("unsafe_candidate_manifest")
+    instances = manifest.get("instances") if type(manifest) is dict else None
+    if type(instances) is not list:
+        refuse("unsafe_candidate_manifest")
+    for instance in instances:
+        for key in ("identity_file", "log_file"):
+            path = instance.get(key) if type(instance) is dict else None
+            if type(path) is not str or not os.path.isabs(path) or os.path.normpath(path) != path:
+                refuse("unsafe_candidate_manifest")
+
+
+def reserved(root, r):
+    """Paths activation must never replace: the lock it holds, the journal it
+    commits and the staged artifacts it rechecks."""
+    return ({os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json")}
+            | {a["path"] for a in r["artifacts"]})
+
+
+def durable(path):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        refuse("unsafe_operator_file")
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            refuse("unsafe_operator_file")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    sync_dir(os.path.dirname(path))
+
+
+def staged(artifact):
+    try:
+        raw = file_bytes(artifact["path"], private=True)
+    except FileNotFoundError:
+        refuse("immutable_artifact_conflict")
+    if digest(raw) != artifact["sha256"]:
+        refuse("immutable_artifact_conflict")
+    return raw
+
+
+def active(path):
+    # The replaced manifest must belong to this service user under a secure
+    # directory chain; a root-provisioned deployment file is refused, not
+    # rewritten.
+    try:
+        raw = file_bytes(path)
+    except FileNotFoundError:
+        refuse("stale_operator_intent")
+    except OSError:
+        # A symlinked target (ELOOP) or any other open failure is a closed
+        # refusal, exactly as for the identity file.
+        refuse("unsafe_operator_file")
+    if not os.access(os.path.dirname(path), os.W_OK | os.X_OK):
+        refuse("unsafe_operator_directory")
+    return raw
+
+
 def execute(root, plan):
     if not closed(plan, ["version", "kind", "expected", "record", "attempt", "checks", "artifacts"]):
         refuse("malformed_operator_plan")
@@ -282,6 +416,11 @@ def execute(root, plan):
             refuse("malformed_operator_plan")
         commit(root, plan["expected"], plan["record"])
         reply({"ok": True})
+        return
+    if plan["kind"] == "activate":
+        if plan["record"] is None:
+            refuse("malformed_operator_plan")
+        activate(root, plan)
         return
     if plan["kind"] != "stage" or plan["record"] is not None or not op_id(plan["attempt"]):
         refuse("malformed_operator_plan")

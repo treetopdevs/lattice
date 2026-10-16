@@ -54,6 +54,53 @@ class Protocol(unittest.TestCase):
             with self.assertRaises(owner.Refusal):
                 owner.record(json.dumps(record))
 
+    def test_only_pending_and_activated_phases_parse(self):
+        for phase in ["carrier_pending", "activated"]:
+            self.assertEqual(owner.record(json.dumps(dict(self.sample(), phase=phase)))["phase"], phase)
+        for phase in ["ready", "Activated", None, 1]:
+            with self.assertRaises(owner.Refusal, msg=repr(phase)):
+                owner.record(json.dumps(dict(self.sample(), phase=phase)))
+
+    def test_activation_plan_shape_is_closed(self):
+        pending = json.dumps(self.sample())
+        activated = json.dumps(dict(self.sample(), phase="activated"))
+        good = {"version": 1, "kind": "activate", "expected": pending, "record": activated,
+                "attempt": self.sample()["attempt"], "artifacts": None,
+                "checks": [{"path": "/srv/active.json", "sha256": "0" * 64},
+                           {"path": "/srv/space.log", "sha256": "4" * 64}]}
+        log = good["checks"][1]
+        malformed = [dict(good, artifacts=[]), dict(good, checks=[]),
+                     dict(good, checks=good["checks"][:1]),
+                     dict(good, checks=[log, log]), dict(good, attempt="short"),
+                     dict(good, checks=[{"path": "relative.json", "sha256": "0" * 64}, log]),
+                     dict(good, checks=[{"path": "/srv/../active.json", "sha256": "0" * 64}, log]),
+                     dict(good, checks=[good["checks"][0], dict(log, path="space.log")])]
+        stale = [dict(good, checks=[{"path": "/srv/active.json", "sha256": "3" * 64}, log]),
+                 dict(good, expected=activated),
+                 dict(good, record=json.dumps(dict(self.sample(), phase="activated", generation=1))),
+                 dict(good, record=pending)]
+        for plan, reason in [(p, "malformed_operator_plan") for p in malformed] + \
+                [(p, "stale_operator_intent") for p in stale]:
+            with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+                owner.activate("/nonexistent-root", plan)
+            self.assertEqual(str(caught.exception), reason)
+
+    def test_candidate_paths_must_be_absolute(self):
+        def manifest(**paths):
+            entry = dict({"identity_file": "/srv/a.identity", "log_file": "/srv/a.log"}, **paths)
+            return json.dumps({"version": 1, "instances": [entry]}).encode()
+        owner.absolute_paths(manifest())
+        for bad in [manifest(identity_file="a.identity"), manifest(log_file="../a.log"),
+                    manifest(log_file="/srv/../a.log"), manifest(log_file=None),
+                    b'{"version":1}', b"not json", b"\xff"]:
+            with self.assertRaises(owner.Refusal, msg=repr(bad)) as caught:
+                owner.absolute_paths(bad)
+            self.assertEqual(str(caught.exception), "unsafe_candidate_manifest")
+
+    def test_activation_never_replaces_its_lock_journal_or_artifacts(self):
+        names = owner.reserved("/op", self.sample())
+        self.assertEqual(names, {"/op/operator.lock", "/op/operator-journal.json", "/public/candidate"})
+
     def test_service_identity_binding_is_closed_and_canonical(self):
         good = self.sample()["service"]
         for bad in [None, dict(good, extra="x"), {k: v for k, v in good.items() if k != "pub"},

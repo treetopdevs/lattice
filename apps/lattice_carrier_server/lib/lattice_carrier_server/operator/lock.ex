@@ -23,6 +23,16 @@ defmodule LatticeCarrierServer.Operator.Lock do
     run(root, plan("stage", expected, nil, attempt, checks, artifacts), inspect_staged)
   end
 
+  @doc """
+  Replace the checked active manifest with the pending record's staged
+  candidate, while every sealed log still holds its checked bytes.
+  """
+  @spec activate(Path.t(), binary(), binary(), map(), [map()], binary()) ::
+          :ok | {:error, term()}
+  def activate(root, expected, attempt, active_manifest, logs, record) do
+    run(root, plan("activate", expected, record, attempt, [active_manifest | logs], nil), nil)
+  end
+
   defp plan(kind, expected, record, attempt, checks, artifacts) do
     %{
       version: 1,
