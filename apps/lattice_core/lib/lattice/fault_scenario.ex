@@ -26,6 +26,10 @@ defmodule Lattice.FaultScenario do
   A verifier table entry. A `rerun: false` entry must also supply `:replicas`
   (seed -> expected replica id per prefix) and, when it has replay checks,
   `:replay_checks` (seed, logs -> re-derived replay check results).
+
+  `:realms` names the evidence logs. `:sim_realms`, when present, are the realms the
+  seed's `Sim` derives keys for (a carrier scenario's logs are the server's, not a
+  Sim realm's); `:root` is the realm among them that creates each replica.
   """
   @type spec :: %{
           required(:scenario) => String.t(),
@@ -36,6 +40,7 @@ defmodule Lattice.FaultScenario do
           required(:modules) => %{String.t() => module()},
           required(:checks) => [{String.t(), source()}],
           required(:rerun) => boolean(),
+          optional(:sim_realms) => [String.t()],
           optional(:replicas) => (String.t() -> %{String.t() => String.t()}),
           optional(:replay_checks) => (String.t(), logs() -> [{String.t(), boolean()}])
         }
@@ -77,16 +82,75 @@ defmodule Lattice.FaultScenario do
         {"peer_never_admin", :replay}
       ],
       rerun: true
+    },
+    # Plan 204: process-level scenarios run by the lattice_carrier_server test suite.
+    # Their checks are recorded, never re-derived; the log hashes, quarantine table
+    # and DOT are still recomputed from the verified server log.
+    "stall_shutdown" => %{
+      scenario: "stall_shutdown",
+      fault:
+        "hold the carrier holder inside the fsync of one accepted relay; " <>
+          "drain the release with a short deadline",
+      invariant: "fail_closed",
+      realms: ["server"],
+      sim_realms: ["owner", "writer"],
+      root: "owner",
+      modules: %{"thread" => Thread},
+      checks: [
+        {"drain_returned_error", :process},
+        {"drain_call_reached_holder", :process},
+        {"bytes_unchanged_while_stalled", :process},
+        {"admission_closed", :process},
+        {"acked_subset_of_persisted", :process}
+      ],
+      rerun: false
+    },
+    "crash_relay" => %{
+      scenario: "crash_relay",
+      fault:
+        "relay signed posts to a second-BEAM carrier; halt that BEAM; " <>
+          "restart it from the same log path",
+      invariant: "durable_ack",
+      realms: ["server"],
+      sim_realms: ["owner", "writer"],
+      root: "owner",
+      modules: %{"thread" => Thread},
+      checks: [
+        {"acked_survive_restart", :process},
+        {"duplicates_silent", :process},
+        {"frontier_after_equals_sim", :process},
+        {"state_after_equals_sim", :process}
+      ],
+      rerun: false
     }
   }
+
+  @carrier_scenarios ["stall_shutdown", "crash_relay"]
 
   @doc "Names of the scenarios this module can run, in report order."
   @spec scenarios() :: [String.t()]
   def scenarios, do: ["partition_converge", "revoke_offline"]
 
+  @doc """
+  Names of the plan 204 carrier scenarios. Their evidence is written by the
+  `lattice_carrier_server` test suite; this module only verifies it.
+  """
+  @spec carrier_scenarios() :: [String.t()]
+  def carrier_scenarios, do: @carrier_scenarios
+
   @doc "The verifier-owned table entry for `name`, or `nil` for an unknown scenario."
   @spec spec(String.t()) :: spec() | nil
+  def spec(name) when name in @carrier_scenarios,
+    do: Map.put(@specs[name], :replicas, &expected_replicas(name, &1))
+
   def spec(name), do: Map.get(@specs, name)
+
+  @doc """
+  The replica name of `name`'s log `prefix`, `fault:<name>:<prefix>`; its replica id
+  binds it to the seed's root realm key (`expected_replicas/2`).
+  """
+  @spec replica_name(String.t(), String.t()) :: String.t()
+  def replica_name(name, prefix), do: "fault:#{name}:#{prefix}"
 
   @doc """
   Run scenario `name` with `seed` and return its final logs.
@@ -106,7 +170,8 @@ defmodule Lattice.FaultScenario do
   @doc "The replica id each log prefix of `name` must carry for `seed`."
   @spec expected_replicas(String.t(), String.t()) :: %{String.t() => String.t()}
   def expected_replicas(name, seed) do
-    %{realms: realms, root: root, modules: modules} = spec(name)
+    %{realms: realms, root: root, modules: modules} = entry = spec(name)
+    realms = Map.get(entry, :sim_realms, realms)
 
     Map.new(modules, fn {prefix, module} ->
       sim = Sim.new(module, replica_name(name, prefix), realms, seed: seed)
@@ -207,8 +272,6 @@ defmodule Lattice.FaultScenario do
 
   defp named_logs(prefix, sim),
     do: Map.new(sim.logs, fn {realm, log} -> {"#{prefix}.#{realm}", log} end)
-
-  defp replica_name(name, prefix), do: "fault:#{name}:#{prefix}"
 
   # --- Checks ----------------------------------------------------------------
 

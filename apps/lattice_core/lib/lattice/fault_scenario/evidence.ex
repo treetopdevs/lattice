@@ -40,7 +40,11 @@ defmodule Lattice.FaultScenario.Evidence do
   Encode the evidence for `logs` without touching disk.
 
   Returns the `evidence.json` bytes and a map of DOT file name to bytes. `opts`
-  may carry `:spec` to supply a table entry other than `FaultScenario.spec/1`.
+  may carry `:spec` to supply a table entry other than `FaultScenario.spec/1`,
+  `:checks` to supply check results the logs cannot derive (plan 204's process
+  checks), and `:observed_ms`, a map of timing name to non-negative milliseconds
+  written under `"observed_ms"`. Timings are the run's own observation: `verify`
+  copies them as recorded, so they never take part in byte identity.
   """
   @spec encode(String.t(), String.t(), FaultScenario.logs(), keyword()) ::
           {:ok, %{json: binary(), dot: %{String.t() => binary()}, verdict: String.t()}}
@@ -51,25 +55,26 @@ defmodule Lattice.FaultScenario.Evidence do
     verdict = if Enum.all?(checks, fn {_, ok} -> ok end), do: "held", else: "violated"
 
     json =
-      OrderedObject.new([
-        {"schema", @schema},
-        {"scenario", name},
-        {"seed", seed},
-        {"module", sorted(spec.modules, &inspect/1)},
-        {"fault", spec.fault},
-        {"invariant", spec.invariant},
-        {"replicas", replicas(spec, logs)},
-        {"quarantine", quarantine(spec, logs)},
-        {"checks",
-         Enum.map(checks, fn {check, ok} ->
-           OrderedObject.new([
-             {"name", check},
-             {"source", Atom.to_string(Map.fetch!(sources, check))},
-             {"ok", ok}
-           ])
-         end)},
-        {"verdict", verdict}
-      ])
+      OrderedObject.new(
+        [
+          {"schema", @schema},
+          {"scenario", name},
+          {"seed", seed},
+          {"module", sorted(spec.modules, &inspect/1)},
+          {"fault", spec.fault},
+          {"invariant", spec.invariant},
+          {"replicas", replicas(spec, logs)},
+          {"quarantine", quarantine(spec, logs)},
+          {"checks",
+           Enum.map(checks, fn {check, ok} ->
+             OrderedObject.new([
+               {"name", check},
+               {"source", Atom.to_string(Map.fetch!(sources, check))},
+               {"ok", ok}
+             ])
+           end)}
+        ] ++ observed(Keyword.get(opts, :observed_ms)) ++ [{"verdict", verdict}]
+      )
 
     {:ok,
      %{json: Jason.encode!(json, pretty: true) <> "\n", dot: dots(spec, logs), verdict: verdict}}
@@ -179,6 +184,9 @@ defmodule Lattice.FaultScenario.Evidence do
       {"trust_graph.#{prefix}.dot", dot <> "\n"}
     end)
   end
+
+  defp observed(nil), do: []
+  defp observed(timings), do: [{"observed_ms", sorted(timings, & &1)}]
 
   defp sorted(map, fun),
     do: map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, fun.(v)} end) |> OrderedObject.new()
@@ -331,7 +339,7 @@ defmodule Lattice.FaultScenario.Evidence do
       {:error, "the verifier table cannot re-derive the replay checks of #{spec.scenario}"}
     else
       derived = if replay?, do: Map.new(spec.replay_checks.(seed, logs)), else: %{}
-      recorded = recorded_checks(dir)
+      {recorded, observed_ms} = recorded(dir)
 
       checks =
         Enum.map(spec.checks, fn
@@ -339,7 +347,7 @@ defmodule Lattice.FaultScenario.Evidence do
           {check, :process} -> {check, Map.get(recorded, check, false)}
         end)
 
-      {:ok, [spec: spec, checks: checks]}
+      {:ok, [spec: spec, checks: checks, observed_ms: observed_ms]}
     end
   end
 
@@ -367,10 +375,24 @@ defmodule Lattice.FaultScenario.Evidence do
     if errors ++ dot_errors == [], do: :ok, else: {:error, errors ++ dot_errors}
   end
 
-  # Process-sourced checks cannot be re-derived offline; they are copied as recorded.
-  defp recorded_checks(dir) do
+  # Process-sourced checks and timings cannot be re-derived offline; they are copied as
+  # recorded. Timings that are not a flat object of non-negative integers are dropped,
+  # so the re-encoded evidence differs and verification fails.
+  defp recorded(dir) do
     {:ok, evidence} = dir |> Path.join("evidence.json") |> File.read!() |> Jason.decode()
-    Map.new(evidence["checks"], &{&1["name"], &1["ok"] == true})
+
+    observed_ms =
+      case evidence["observed_ms"] do
+        %{} = timings ->
+          if Enum.all?(timings, fn {_, ms} -> is_integer(ms) and ms >= 0 end),
+            do: timings,
+            else: nil
+
+        _absent_or_malformed ->
+          nil
+      end
+
+    {Map.new(evidence["checks"], &{&1["name"], &1["ok"] == true}), observed_ms}
   end
 
   defp rerun(_dir, %{rerun: false}, _name, _seed, _names), do: :ok

@@ -157,6 +157,24 @@ recorded".
 
 Set row 204's status cell to DONE with one line (rule 5): date, both verdicts, PR number.
 
+## Implementation notes
+
+- The table entries carry `sim_realms: ["owner", "writer"]` and `root: "owner"` beside
+  `realms: ["server"]`: the evidence log is the server's (`thread.server`), while the replica id
+  is derived from the seed's `owner` key with `FaultScenario.replica_name/2`, now public.
+  `spec/1` attaches `:replicas` (`expected_replicas/2`) to both entries; every named check is
+  `process`, so no `:replay_checks` are needed and the log hashes, quarantine table and DOT are
+  what replay verifies.
+- `Evidence.encode/4` takes `:observed_ms` and writes it, key-sorted, before `"verdict"`. For a
+  non-re-runnable entry `verify` copies it as recorded; a value that is not a non-negative
+  integer is dropped, so the re-encoded evidence differs and verification fails. A re-runnable
+  entry never carries timings.
+- The carrier's `frontier` exchange advertises every op id the server holds, not the heads, so
+  `frontier_after_equals_sim` compares the pulled op ids with Sim's and the restored log's
+  frontier with Sim's frontier.
+- The peer BEAM is halted through `server_node.exs`'s stdin line, which runs `System.halt(0)`,
+  that is `:erlang.halt/1`, so no application stop runs.
+
 ## Done criteria
 
 - Both scenarios hold, and both negative controls report `violated`, three runs in a row.
