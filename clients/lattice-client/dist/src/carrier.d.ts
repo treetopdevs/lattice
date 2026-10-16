@@ -39,7 +39,31 @@ export interface ConnectCarrierWebSocketOptions {
     webSocket?: WebSocketConstructor;
     /** Aborting closes the socket and rejects a handshake still waiting on the server. */
     signal?: AbortSignal;
+    /**
+     * Bound on the whole dial (socket open, server nonce, challenge signing, hello). Expiry closes the
+     * socket and rejects with `carrier connect timeout`. Defaults to `carrierDialTimeoutMs`.
+     */
+    dialTimeoutMs?: number;
+    /**
+     * Bound on every later request over the connected client; see `CarrierWebSocketClientOptions`.
+     * Defaults to `carrierRequestTimeoutMs`.
+     */
+    requestTimeoutMs?: number;
 }
+export interface CarrierWebSocketClientOptions {
+    /**
+     * Bound on one request/response round trip. The protocol allows one request in flight, so a reply
+     * that never arrives would otherwise pin the client forever; expiry fails the socket closed and
+     * rejects the request with `carrier request timeout`. Defaults to `carrierRequestTimeoutMs`.
+     */
+    requestTimeoutMs?: number;
+}
+/**
+ * Row 196 (D3, 2026-10-14): every carrier-client await is bounded at this one boundary. A dial gets
+ * 10 s and each request 30 s; neither can be disabled, only shortened or lengthened.
+ */
+export declare const carrierDialTimeoutMs = 10000;
+export declare const carrierRequestTimeoutMs = 30000;
 export interface CarrierPushReport {
     accepted: string[];
     quarantined: [string, string][];
@@ -214,7 +238,8 @@ export declare class CarrierWebSocketClient {
     private pendingRequest;
     private availabilityRoute;
     private closed;
-    constructor(socket: WebSocketLike);
+    private readonly requestTimeoutMs;
+    constructor(socket: WebSocketLike, options?: CarrierWebSocketClientOptions);
     advertise(): Promise<string[]>;
     pull(have: string[]): Promise<unknown[]>;
     private readPages;
