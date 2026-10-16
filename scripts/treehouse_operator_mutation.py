@@ -333,8 +333,13 @@ def activate(root, plan):
 
 
 def durable(path):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        refuse("unsafe_operator_file")
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            refuse("unsafe_operator_file")
         os.fsync(fd)
     finally:
         os.close(fd)
