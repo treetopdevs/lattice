@@ -542,9 +542,10 @@ assert.equal(carrierRequestTimeoutMs, 30_000, "D3 pins the request bound at 30 s
     const advertised = client.advertise();
     socket.receive({ type: "frontier_result", ids: ["op-1"] });
     assert.deepEqual(await advertised, ["op-1"]);
+    // Checked before the bound could have fired on its own: an uncleared timer is still armed here.
+    assert.equal(activeTimeouts(), 0, "an answered request leaves no timer running");
     await sleep(40);
     assert.equal(socket.closed, false, "an answered request must not close a healthy socket later");
-    assert.equal(activeTimeouts(), 0, "an answered request leaves no timer running");
     const again = client.advertise();
     socket.receive({ type: "frontier_result", ids: ["op-2"] });
     assert.deepEqual(await again, ["op-2"]);
@@ -590,9 +591,9 @@ assert.equal(carrierRequestTimeoutMs, 30_000, "D3 pins the request bound at 30 s
         requestTimeoutMs: 30,
     });
     const socket = instance;
+    assert.equal(activeTimeouts(), 0, "a completed dial leaves no timer running");
     await sleep(40);
     assert.equal(socket.closed, false, "a completed dial must not be closed by its own expired bound");
-    assert.equal(activeTimeouts(), 0, "a completed dial leaves no timer running");
     await assert.rejects(client.advertise(), /carrier request timeout/);
     assert.equal(socket.closed, true);
 }
