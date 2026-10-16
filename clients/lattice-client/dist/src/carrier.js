@@ -10,10 +10,13 @@ import { integrate } from "./sync";
  */
 export const carrierDialTimeoutMs = 10_000;
 export const carrierRequestTimeoutMs = 30_000;
+// Native timers take a signed 32-bit delay; a larger one fires at once in Node and browsers, which
+// would turn a "longer" bound into no bound.
+const maxCarrierTimeoutMs = 2_147_483_647;
 function carrierTimeoutMs(value, fallback, label) {
     const ms = value ?? fallback;
-    if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) {
-        throw new Error(`carrier ${label} timeout must be a positive finite number of milliseconds`);
+    if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0 || ms > maxCarrierTimeoutMs) {
+        throw new Error(`carrier ${label} timeout must be a positive number of milliseconds at most ${maxCarrierTimeoutMs}`);
     }
     return ms;
 }

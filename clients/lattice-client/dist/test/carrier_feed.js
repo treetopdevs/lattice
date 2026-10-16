@@ -592,11 +592,12 @@ assert.equal(carrierRequestTimeoutMs, 30_000, "D3 pins the request bound at 30 s
     await assert.rejects(client.advertise(), /carrier request timeout/);
     assert.equal(socket.closed, true);
 }
-for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-    // D3 bounds every await: the bound can be shortened or lengthened, never removed.
-    assert.throws(() => new CarrierWebSocketClient(new ManualCarrierWebSocket(), { requestTimeoutMs: bad }), /carrier request timeout must be a positive finite number/);
-    await assert.rejects(() => connectCarrierWebSocket({ ...connectArgs, webSocket: ManualCarrierWebSocket, dialTimeoutMs: bad }), /carrier dial timeout must be a positive finite number/);
-    await assert.rejects(() => connectCarrierWebSocket({ ...connectArgs, webSocket: ManualCarrierWebSocket, requestTimeoutMs: bad }), /carrier request timeout must be a positive finite number/);
+for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
+    // D3 bounds every await: the bound can be shortened or lengthened, never removed. A delay past the
+    // signed 32-bit native timer limit would fire at once, so it is refused too.
+    assert.throws(() => new CarrierWebSocketClient(new ManualCarrierWebSocket(), { requestTimeoutMs: bad }), /carrier request timeout must be a positive number of milliseconds at most/);
+    await assert.rejects(() => connectCarrierWebSocket({ ...connectArgs, webSocket: ManualCarrierWebSocket, dialTimeoutMs: bad }), /carrier dial timeout must be a positive number of milliseconds at most/);
+    await assert.rejects(() => connectCarrierWebSocket({ ...connectArgs, webSocket: ManualCarrierWebSocket, requestTimeoutMs: bad }), /carrier request timeout must be a positive number of milliseconds at most/);
 }
 console.log("\x1b[32m✓ TypeScript carrier deadline checks passed\x1b[0m");
 async function establishSubscription(client, socket, generation) {
