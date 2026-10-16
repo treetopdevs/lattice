@@ -474,7 +474,7 @@ async function founderWorld(threadCount, archive = []) {
     const findDelegationTerm = (term) => term?.[0] === "delegation" ? term
         : Array.isArray(term?.[1]) ? term[1].map(findDelegationTerm).find(Boolean) : undefined;
     const inert = await authorCarrierOp({ replica: inertThread, deps: frontier(opsOf("Treehouse.Thread", inertBase)), kind: "authority",
-        body: ["tuple", [["atom", "note"], findDelegationTerm(unpublished.body)]], cap: ["nil"], signer: founderSigner });
+        body: ["tuple", [["atom", "admin"], findDelegationTerm(unpublished.body)]], cap: ["nil"], signer: founderSigner });
     const inertFrames = [...inertBase, inert];
     assert.equal(carrierDelegationsFromFrames([inert]).length, 1, "the nested term is delegation-shaped");
     assert.equal(memberCapability(inertFrames, joinerPub, inertThread, { command: "post", product: "Treehouse.Thread" }), null);

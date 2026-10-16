@@ -8,15 +8,18 @@ defmodule Lattice.Carrier.Wire do
   Body and capability terms may contain at most 64 nested generic composites.
   Scalars and flat delegation records do not recurse through that budget.
 
-  An atom name inside a signed term or a delegation decodes to the existing atom when
-  this VM holds one and otherwise to `Lattice.Canonical.Atom`, which encodes to the
-  same bytes; no atom is ever created from input. Admission is therefore a function
-  of the frame bytes alone (row 190). The op kind and report reasons stay closed sets.
+  An atom name inside an op's signed terms or a delegation is admitted only if it is on
+  the closed `Lattice.Carrier.WireVocabulary`: a listed name decodes to its atom (created on
+  demand, so the atom table stays bounded by the list) and any other name refuses the frame.
+  Admission is therefore a function of the frame bytes and that one list, never of which
+  atoms this VM happens to hold (row 190). The op kind and report reasons stay closed sets.
+  `encode_op_checked/1` and `Lattice.Op.authored/6` apply the same list on the authoring side.
   """
 
   alias Lattice.Authority.Delegation
   alias Lattice.Canonical
   alias Lattice.Canonical.Atom, as: CanonicalAtom
+  alias Lattice.Carrier.WireVocabulary
   alias Lattice.Op
 
   @version 1
@@ -27,6 +30,10 @@ defmodule Lattice.Carrier.Wire do
 
   @spec version() :: pos_integer()
   def version, do: @version
+
+  @doc "The op kinds a carrier frame may name."
+  @spec op_kinds() :: [Op.kind()]
+  def op_kinds, do: @op_kinds
 
   @doc "Encode one signable value using the unchanged carrier term grammar."
   @spec encode_value(term()) :: list()
@@ -47,7 +54,7 @@ defmodule Lattice.Carrier.Wire do
   """
   @spec decode_value(term()) :: {:ok, term()} | {:error, :malformed_term}
   def decode_value(value) do
-    with {:ok, decoded} <- decode_term(value),
+    with {:ok, decoded} <- decode_term(value, @max_decode_depth, :value),
          true <- existing_atoms_only?(decoded),
          true <- Canonical.signable?(decoded) do
       {:ok, decoded}
@@ -71,31 +78,67 @@ defmodule Lattice.Carrier.Wire do
     }
   end
 
-  @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
-  def decode_op(frame) do
-    ensure_vocabulary()
-    decode_op_frame(frame)
+  @doc """
+  Encode an op for a peer that will admit it, or refuse it.
+
+  Returns `{:error, :unknown_atom}` when the op kind is not one `decode_op/1` admits, or when
+  an atom name in the body, the cap, or a delegation is off the closed vocabulary (a legacy `Lattice.Canonical.Atom` struct counts as the name
+  it carries), before anything is emitted. A listed name encodes to the same bytes as
+  `encode_op/1`, which stays the unchecked encoder for the simulator and adversarial tests.
+  """
+  @spec encode_op_checked(Op.t()) :: {:ok, map()} | {:error, :unknown_atom}
+  def encode_op_checked(%Op{} = op) do
+    if op.kind in @op_kinds and listed_term?(op.body) and listed_term?(op.cap),
+      do: {:ok, encode_op(op)},
+      else: {:error, :unknown_atom}
   end
 
-  defp decode_op_frame(%{
-         "v" => @version,
-         "id" => id,
-         "replica" => replica,
-         "author" => author_b64,
-         "deps" => deps,
-         "kind" => kind,
-         "body" => body,
-         "cap" => cap,
-         "sig" => sig_b64
-       })
-       when is_binary(id) and is_binary(replica) and is_binary(author_b64) and is_list(deps) and
-              is_binary(kind) and is_binary(sig_b64) do
+  @doc """
+  Whether every atom name in a signable term, delegation names included, is on
+  `Lattice.Carrier.WireVocabulary.names/0`.
+  """
+  @spec listed_term?(term()) :: boolean()
+  def listed_term?(value) when is_nil(value) or is_boolean(value), do: true
+  def listed_term?(value) when is_atom(value), do: WireVocabulary.known?(Atom.to_string(value))
+  def listed_term?(%CanonicalAtom{name: name}), do: WireVocabulary.known?(name)
+
+  # Delegation ops and roles ride the wire as bare names, so `nil` and booleans are names here.
+  def listed_term?(%Delegation{ops: ops, roles: roles}),
+    do: Enum.all?(ops, &listed_name?/1) and Enum.all?(roles, &listed_name?/1)
+
+  def listed_term?(%MapSet{} = value), do: value |> MapSet.to_list() |> listed_term?()
+  def listed_term?(value) when is_list(value), do: Enum.all?(value, &listed_term?/1)
+  def listed_term?(value) when is_tuple(value), do: value |> Tuple.to_list() |> listed_term?()
+
+  def listed_term?(value) when is_map(value) and not is_struct(value),
+    do: Enum.all?(value, fn {k, v} -> listed_term?(k) and listed_term?(v) end)
+
+  def listed_term?(_value), do: true
+
+  defp listed_name?(value) when is_atom(value), do: WireVocabulary.known?(Atom.to_string(value))
+  defp listed_name?(%CanonicalAtom{name: name}), do: WireVocabulary.known?(name)
+  defp listed_name?(_value), do: false
+
+  @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
+  def decode_op(%{
+        "v" => @version,
+        "id" => id,
+        "replica" => replica,
+        "author" => author_b64,
+        "deps" => deps,
+        "kind" => kind,
+        "body" => body,
+        "cap" => cap,
+        "sig" => sig_b64
+      })
+      when is_binary(id) and is_binary(replica) and is_binary(author_b64) and is_list(deps) and
+             is_binary(kind) and is_binary(sig_b64) do
     with true <- Enum.all?(deps, &is_binary/1),
          {:ok, author} <- Base.decode64(author_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
          {:ok, kind} <- op_kind(kind),
-         {:ok, body} <- decode_term(body),
-         {:ok, cap} <- decode_term(cap),
+         {:ok, body} <- decode_term(body, @max_decode_depth, :op),
+         {:ok, cap} <- decode_term(cap, @max_decode_depth, :op),
          true <- Canonical.signable?(body),
          true <- Canonical.signable?(cap) do
       {:ok,
@@ -114,29 +157,7 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  defp decode_op_frame(_), do: {:error, :malformed_op}
-
-  # A name decodes to an atom only if this VM holds one, so a protocol tag decoded before the
-  # module that spells it was loaded would stay `Lattice.Canonical.Atom` for good (a
-  # `{:revoke, id}` the judge then ignores). Load lattice_core's own `Lattice.*` modules once,
-  # before the first decode. Application atoms (schema roles and commands) remain the
-  # responsibility of the schema modules the host loads, as for `Lattice.Log.restore/1`.
-  defp ensure_vocabulary do
-    unless :persistent_term.get({__MODULE__, :vocabulary}, false) do
-      _ = Application.load(:lattice_core)
-
-      results =
-        for module <- Application.spec(:lattice_core, :modules) || [],
-            String.starts_with?(Atom.to_string(module), "Elixir.Lattice."),
-            do: Code.ensure_loaded(module)
-
-      # A module that failed to load leaves the scan uncached, so the next decode retries it.
-      if results != [] and Enum.all?(results, &match?({:module, _}, &1)),
-        do: :persistent_term.put({__MODULE__, :vocabulary}, true)
-    end
-
-    :ok
-  end
+  def decode_op(_), do: {:error, :malformed_op}
 
   @spec encode_ops([Op.t()]) :: [map()]
   def encode_ops(ops), do: Enum.map(ops, &encode_op/1)
@@ -209,9 +230,9 @@ defmodule Lattice.Carrier.Wire do
   defp decode_reason_pairs(pairs) when is_list(pairs) do
     Enum.reduce_while(pairs, {:ok, []}, fn
       [id, reason], {:ok, acc} when is_binary(id) and is_binary(reason) ->
-        case existing_atom(reason) do
+        case report_reason(reason) do
           {:ok, reason} -> {:cont, {:ok, [{id, reason} | acc]}}
-          {:error, _reason} -> {:halt, {:error, :malformed_term}}
+          :error -> {:halt, {:error, :malformed_term}}
         end
 
       _other, _acc ->
@@ -224,6 +245,15 @@ defmodule Lattice.Carrier.Wire do
   end
 
   defp decode_reason_pairs(_pairs), do: {:error, :malformed_term}
+
+  # A report reason is admitted by the closed list, not by whether this VM holds the atom: op
+  # admission creates atoms for listed names, so existence would depend on decode history.
+  defp report_reason(name) do
+    case Enum.find(WireVocabulary.reasons(), &(Atom.to_string(&1) == name)) do
+      nil -> :error
+      reason -> {:ok, reason}
+    end
+  end
 
   defp string_list?(values), do: is_list(values) and Enum.all?(values, &is_binary/1)
 
@@ -274,59 +304,64 @@ defmodule Lattice.Carrier.Wire do
     raise ArgumentError, "unsupported wire term: #{inspect(value)}"
   end
 
-  defp decode_term(term, depth \\ @max_decode_depth)
-  defp decode_term(["nil"], _depth), do: {:ok, nil}
-  defp decode_term(["bool", value], _depth) when is_boolean(value), do: {:ok, value}
+  # `mode` picks how an atom name is admitted: `:op` (op frames) by the closed vocabulary,
+  # `:value` (standalone values) by atoms this VM already holds.
+  defp decode_term(["nil"], _depth, _mode), do: {:ok, nil}
+  defp decode_term(["bool", value], _depth, _mode) when is_boolean(value), do: {:ok, value}
 
-  defp decode_term(["int", value], _depth)
-       when is_integer(value) and value >= 0 and value <= @max_json_safe_integer, do: {:ok, value}
+  defp decode_term(["int", value], _depth, _mode)
+       when is_integer(value) and value >= 0 and value <= @max_json_safe_integer,
+       do: {:ok, value}
 
-  defp decode_term(["int", value], _depth) when is_binary(value) do
+  defp decode_term(["int", value], _depth, _mode) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int >= 0 and int <= @max_canonical_integer -> {:ok, int}
       _other -> {:error, :malformed_term}
     end
   end
 
-  defp decode_term(["bin", value], _depth) when is_binary(value) do
+  defp decode_term(["bin", value], _depth, _mode) when is_binary(value) do
     case Base.decode64(value) do
       {:ok, bin} -> {:ok, bin}
       :error -> {:error, :malformed_term}
     end
   end
 
-  defp decode_term(["atom", value], _depth) when is_binary(value), do: {:ok, atom_value(value)}
+  defp decode_term(["atom", value], _depth, mode) when is_binary(value),
+    do: decode_atom(value, mode)
 
-  defp decode_term(["list", values], depth) when is_list(values) and depth > 0,
-    do: decode_list(values, depth - 1)
+  defp decode_term(["list", values], depth, mode) when is_list(values) and depth > 0,
+    do: decode_list(values, depth - 1, mode)
 
-  defp decode_term(["tuple", values], depth) when is_list(values) and depth > 0 do
-    with {:ok, values} <- decode_list(values, depth - 1), do: {:ok, List.to_tuple(values)}
+  defp decode_term(["tuple", values], depth, mode) when is_list(values) and depth > 0 do
+    with {:ok, values} <- decode_list(values, depth - 1, mode), do: {:ok, List.to_tuple(values)}
   end
 
-  defp decode_term(["mapset", values], depth) when is_list(values) and depth > 0 do
-    with {:ok, values} <- decode_list(values, depth - 1), do: {:ok, MapSet.new(values)}
+  defp decode_term(["mapset", values], depth, mode) when is_list(values) and depth > 0 do
+    with {:ok, values} <- decode_list(values, depth - 1, mode), do: {:ok, MapSet.new(values)}
   end
 
-  defp decode_term(["delegation", value], _depth) when is_map(value), do: decode_delegation(value)
+  defp decode_term(["delegation", value], _depth, mode) when is_map(value),
+    do: decode_delegation(value, mode)
 
-  defp decode_term(["map", pairs], depth) when is_list(pairs) and depth > 0,
-    do: decode_map(pairs, depth - 1)
+  defp decode_term(["map", pairs], depth, mode) when is_list(pairs) and depth > 0,
+    do: decode_map(pairs, depth - 1, mode)
 
-  defp decode_term(_, _depth), do: {:error, :malformed_term}
+  defp decode_term(_, _depth, _mode), do: {:error, :malformed_term}
 
-  defp decode_list(values, depth), do: reduce_decode(values, [], depth)
+  defp decode_list(values, depth, mode), do: reduce_decode(values, [], depth, mode)
 
-  defp reduce_decode([], acc, _depth), do: {:ok, Enum.reverse(acc)}
+  defp reduce_decode([], acc, _depth, _mode), do: {:ok, Enum.reverse(acc)}
 
-  defp reduce_decode([value | rest], acc, depth) do
-    with {:ok, value} <- decode_term(value, depth), do: reduce_decode(rest, [value | acc], depth)
+  defp reduce_decode([value | rest], acc, depth, mode) do
+    with {:ok, value} <- decode_term(value, depth, mode),
+         do: reduce_decode(rest, [value | acc], depth, mode)
   end
 
-  defp decode_map(pairs, depth) do
+  defp decode_map(pairs, depth, mode) do
     Enum.reduce_while(pairs, {:ok, %{}}, fn
       [k, v], {:ok, acc} ->
-        with {:ok, k} <- decode_term(k, depth), {:ok, v} <- decode_term(v, depth) do
+        with {:ok, k} <- decode_term(k, depth, mode), {:ok, v} <- decode_term(v, depth, mode) do
           {:cont, {:ok, Map.put(acc, k, v)}}
         else
           _ -> {:halt, {:error, :malformed_term}}
@@ -368,7 +403,8 @@ defmodule Lattice.Carrier.Wire do
            "roles" => roles,
            "live" => live,
            "sig" => sig_b64
-         } = frame
+         } = frame,
+         mode
        )
        when is_binary(id) and is_binary(replica) and is_binary(issuer_b64) and
               is_binary(audience_b64) and is_list(ops) and is_list(roles) and is_boolean(live) and
@@ -379,9 +415,8 @@ defmodule Lattice.Carrier.Wire do
          {:ok, issuer} <- Base.decode64(issuer_b64),
          {:ok, audience} <- Base.decode64(audience_b64),
          {:ok, sig} <- Base.decode64(sig_b64),
-         true <- Enum.all?(ops, &is_binary/1) and Enum.all?(roles, &is_binary/1),
-         ops = Enum.map(ops, &atom_value/1),
-         roles = Enum.map(roles, &atom_value/1),
+         {:ok, ops} <- decode_atoms(ops, mode),
+         {:ok, roles} <- decode_atoms(roles, mode),
          {:ok, expires_epoch} <- decode_expires_epoch(Map.get(frame, "expires_epoch")) do
       {:ok,
        %Delegation{
@@ -401,7 +436,7 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  defp decode_delegation(_), do: {:error, :malformed_term}
+  defp decode_delegation(_, _mode), do: {:error, :malformed_term}
 
   defp decode_expires_epoch(nil), do: {:ok, nil}
 
@@ -433,11 +468,24 @@ defmodule Lattice.Carrier.Wire do
 
   defp op_kind(name), do: Map.fetch(@op_kind_names, name)
 
-  defp atom_value(name) do
-    String.to_existing_atom(name)
-  rescue
-    ArgumentError -> %CanonicalAtom{name: name}
+  defp decode_atoms(names, mode) when is_list(names), do: reduce_atoms(names, [], mode)
+
+  defp reduce_atoms([], acc, _mode), do: {:ok, Enum.reverse(acc)}
+
+  defp reduce_atoms([name | rest], acc, mode) do
+    with {:ok, atom} <- decode_atom(name, mode), do: reduce_atoms(rest, [atom | acc], mode)
   end
+
+  # Op frames: only a listed name becomes an atom, so the VM's atom table never decides
+  # admission and input can create at most the listed atoms.
+  defp decode_atom(name, :op) when is_binary(name) do
+    if WireVocabulary.known?(name),
+      do: {:ok, String.to_atom(name)},
+      else: {:error, :unknown_atom}
+  end
+
+  defp decode_atom(name, :value), do: existing_atom(name)
+  defp decode_atom(_name, _mode), do: {:error, :unknown_atom}
 
   defp existing_atom(value) when is_binary(value) do
     {:ok, String.to_existing_atom(value)}

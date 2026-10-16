@@ -86,6 +86,51 @@ defmodule LatticeCarrierServer.HolderTest do
   end
 
   @tag :tmp_dir
+  test "a pull serves a persisted op whose atoms are on the wire vocabulary", %{tmp_dir: tmp_dir} do
+    author = Identity.from_seed("author", "carrier-holder-listed-author")
+    server_identity = Identity.from_seed("town-node", "carrier-holder-listed-server")
+    listed = Op.new(author, @replica, [], :command, {:post, ["listed"]})
+    path = Path.join(tmp_dir, "matter.log")
+    assert :ok = @replica |> Log.new() |> Log.append!(listed) |> Log.dump(path)
+    holder = start_holder(server_identity, path)
+
+    assert {:ok, %{"type" => "ops", "ops" => [%{"id" => listed_id}]}} =
+             Holder.read_page(holder, :pull, [], nil)
+
+    assert listed_id == listed.id
+  end
+
+  @tag :tmp_dir
+  test "a pull never serves a persisted op naming an atom off the wire vocabulary", %{
+    tmp_dir: tmp_dir
+  } do
+    author = Identity.from_seed("author", "carrier-holder-off-list-author")
+    server_identity = Identity.from_seed("town-node", "carrier-holder-off-list-server")
+    listed = Op.new(author, @replica, [], :command, {:post, ["listed"]})
+
+    # Persisted before the vocabulary closed: no peer would admit this frame.
+    off_list = Op.new(author, @replica, [listed.id], :command, {:post, [:definitely_not_listed]})
+    path = Path.join(tmp_dir, "legacy.log")
+
+    assert :ok =
+             @replica
+             |> Log.new()
+             |> Log.append!(listed)
+             |> Log.append!(off_list)
+             |> Log.dump(path)
+
+    holder = start_holder(server_identity, path)
+
+    assert {:error, :unknown_atom} = Holder.read_page(holder, :pull, [], nil)
+    assert {:error, :unknown_atom} = Holder.read_page(holder, :pull, [listed.id], nil)
+
+    assert {:ok, %{"type" => "frontier_result", "ids" => ids}} =
+             Holder.read_page(holder, :frontier, [], nil)
+
+    assert Enum.sort(ids) == Enum.sort([listed.id, off_list.id])
+  end
+
+  @tag :tmp_dir
   test "subscription returns a bounded baseline from the durable log", %{tmp_dir: tmp_dir} do
     author = Identity.from_seed("author", "carrier-holder-baseline")
     server_identity = Identity.from_seed("town-node", "carrier-holder-server")

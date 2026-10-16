@@ -244,5 +244,10 @@ export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Re
  * encode as CBOR major-2, exactly like Elixir binaries.
  */
 export declare function canonicalTerm(value: unknown): Uint8Array;
+/**
+ * Throw if a carrier frame's body, cap or any nested delegation names an atom outside
+ * `WIRE_VOCABULARY`. Admission depends only on the frame bytes and that list, as on BEAM.
+ */
+export declare function assertWireVocabulary(frame: unknown): void;
 export declare function base64ToBytes(value: string): Uint8Array;
 export {};

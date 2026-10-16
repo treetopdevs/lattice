@@ -66,6 +66,12 @@ export declare function canonicalBytesForCarrierOp(frame: CarrierOpFrame): Uint8
 export declare function canonicalHash(bytes: Uint8Array): Promise<string>;
 export declare function verifyCarrierOpHash(frame: CarrierOpFrame): Promise<boolean>;
 export declare function verifyCarrierOp(frame: CarrierOpFrame, verifier: Verifier): Promise<CarrierOpVerification>;
+/**
+ * Plan 190: refuse any atom name or delegation op/role name outside the closed wire
+ * vocabulary. Walks the raw carrier term grammar, so it never needs a decoded term and
+ * ignores malformed shapes (the decoders own those).
+ */
+export declare function assertWireVocabularyTerm(term: unknown): void;
 export declare function authorCarrierOp(input: AuthorCarrierOpInput): Promise<CarrierOpFrame>;
 export declare function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array;
 /** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */

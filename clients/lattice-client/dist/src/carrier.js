@@ -1,5 +1,6 @@
 import { cmpHash } from "./op";
-import { verifyCarrierOp } from "./codec";
+import { assertWireVocabularyTerm, verifyCarrierOp } from "./codec";
+import { WIRE_REPORT_REASONS, isWireVocabularyName } from "./wire_vocabulary";
 import { continuationFamily } from "./authority";
 import { continuationProfileFromCarrierTerm, continuationCertificateFromCarrierTerm } from "./continuation";
 import { integrate } from "./sync";
@@ -46,14 +47,18 @@ function isCarrierDelegation(value) {
         typeof field("audience") === "string" &&
         (field("parent_id") === null ||
             typeof field("parent_id") === "string") &&
-        isStringArray(field("ops")) &&
-        isStringArray(field("roles")) &&
+        isWireNameArray(field("ops")) &&
+        isWireNameArray(field("roles")) &&
         typeof field("live") === "boolean" &&
         typeof field("sig") === "string" &&
         (expiresEpoch === undefined ||
             (typeof expiresEpoch === "number" &&
                 Number.isSafeInteger(expiresEpoch) &&
                 expiresEpoch >= 0)));
+}
+/** Plan 190: delegation ops and roles are atom names, so each must be on the closed list. */
+function isWireNameArray(value) {
+    return isStringArray(value) && value.every(isWireVocabularyName);
 }
 function isStringArray(value) {
     return (Array.isArray(value) &&
@@ -1356,6 +1361,10 @@ function assertCarrierOpFrame(frame, validateTerms) {
         throw new Error("malformed carrier op");
     }
     const carrierFrame = op;
+    // Plan 190: an off-list name refuses the frame here, outside the term-decoding catch
+    // below and the semantic catch-all, so no refused name is retained as an op. BEAM
+    // refuses the same bytes, and a batch that holds one such frame yields no ops.
+    assertWireVocabulary(carrierFrame);
     try {
         base64ToBytes(carrierFrame.author);
         base64ToBytes(carrierFrame.sig);
@@ -1368,6 +1377,16 @@ function assertCarrierOpFrame(frame, validateTerms) {
         throw new Error("malformed carrier op");
     }
     return carrierFrame;
+}
+/**
+ * Throw if a carrier frame's body, cap or any nested delegation names an atom outside
+ * `WIRE_VOCABULARY`. Admission depends only on the frame bytes and that list, as on BEAM.
+ */
+export function assertWireVocabulary(frame) {
+    if (typeof frame !== "object" || frame === null || Array.isArray(frame))
+        return;
+    assertWireVocabularyTerm(Reflect.get(frame, "body"));
+    assertWireVocabularyTerm(Reflect.get(frame, "cap"));
 }
 function isOpKind(value) {
     return value === "command" || value === "authority" || value === "inbox" || value === "tombstone";
@@ -1819,8 +1838,8 @@ function decodeAvailability(value, type) {
 function decodePushReport(value) {
     return {
         accepted: stringList(value.accepted, "accepted"),
-        quarantined: reasonPairs(value.quarantined, "quarantined"),
-        rejected: reasonPairs(value.rejected, "rejected"),
+        quarantined: reasonPairs(value.quarantined, "quarantined", WIRE_REPORT_REASONS),
+        rejected: reasonPairs(value.rejected, "rejected", WIRE_REPORT_REASONS),
         pending: stringList(value.pending, "pending"),
     };
 }
@@ -1857,12 +1876,14 @@ function stringList(value, field) {
     }
     return value;
 }
-function reasonPairs(value, field) {
+/** `reasons` restricts push reports to `WIRE_REPORT_REASONS`; state reports keep their own domain. */
+function reasonPairs(value, field, reasons) {
     if (!Array.isArray(value) ||
         !value.every((item) => Array.isArray(item) &&
             item.length === 2 &&
             typeof item[0] === "string" &&
-            typeof item[1] === "string")) {
+            typeof item[1] === "string" &&
+            (reasons === undefined || reasons.includes(item[1])))) {
         throw new Error(`malformed carrier ${field} pairs`);
     }
     return value;

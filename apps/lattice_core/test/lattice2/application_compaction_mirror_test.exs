@@ -289,8 +289,14 @@ defmodule Lattice2.ApplicationCompactionMirrorTest do
     assert :ok == Log.verify_authenticity(log)
 
     for op <- Log.topo_ops(log) do
+      # The beacon replica declares names outside the closed wire vocabulary; those frames
+      # must be refused on decode, and every other frame must round-trip.
       wire = op |> Wire.encode_op() |> Jason.encode!() |> Jason.decode!()
-      assert {:ok, ^op} = Wire.decode_op(wire)
+
+      case Wire.encode_op_checked(op) do
+        {:ok, _frame} -> assert {:ok, ^op} = Wire.decode_op(wire)
+        {:error, :unknown_atom} -> assert {:error, :malformed_op} = Wire.decode_op(wire)
+      end
     end
 
     assert MapSet.subset?(

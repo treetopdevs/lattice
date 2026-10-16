@@ -23,13 +23,13 @@ defmodule LatticePopcornSpike.ReplicaServer do
     {:ok, %{root: root, genesis: g, log: Log.append!(Log.new(replica), op), grants: %{}}}
   end
 
-  def handle_call(:state, _, state), do: {:reply, snapshot(state), state}
+  def handle_call(:state, _, state), do: {:reply, snapshot_reply(snapshot(state)), state}
 
   def handle_call({:revoke, pub}, _, state) do
     case Map.fetch(state.grants, pub) do
       {:ok, grant} ->
         if Authority.revoked?(state.log, grant.id) do
-          {:reply, snapshot(state), state}
+          {:reply, snapshot_reply(snapshot(state)), state}
         else
           if Log.size(state.log) >= 32 do
             {:reply, %{error: "log_full"}, state}
@@ -44,7 +44,7 @@ defmodule LatticePopcornSpike.ReplicaServer do
               )
 
             state = %{state | log: Log.append!(state.log, op)}
-            {:reply, snapshot(state), state}
+            {:reply, snapshot_reply(snapshot(state)), state}
           end
         end
 
@@ -62,7 +62,7 @@ defmodule LatticePopcornSpike.ReplicaServer do
     with {:ok, pub} <- Base.decode64(encoded), true <- byte_size(pub) == 32 do
       cond do
         Map.has_key?(state.grants, encoded) ->
-          {{:ok, snapshot(state)}, state}
+          {snapshot(state), state}
 
         map_size(state.grants) >= 2 or Log.size(state.log) >= 32 ->
           {{:error, :demo_full}, state}
@@ -89,7 +89,7 @@ defmodule LatticePopcornSpike.ReplicaServer do
               grants: Map.put(state.grants, encoded, grant)
           }
 
-          {{:ok, snapshot(state)}, state}
+          {snapshot(state), state}
       end
     else
       _ -> {{:error, :invalid_identity}, state}
@@ -108,7 +108,11 @@ defmodule LatticePopcornSpike.ReplicaServer do
       analysis = Authority.analyze(Notes, log)
       # Structural receipt is explicitly distinct from semantic acceptance.
       accepted = Enum.reject(report.accepted, &MapSet.member?(analysis.quarantine, &1))
-      {{:ok, Map.put(snapshot(next), "accepted", accepted)}, next}
+
+      case snapshot(next) do
+        {:ok, snap} -> {{:ok, Map.put(snap, "accepted", accepted)}, next}
+        {:error, :unknown_atom} = refused -> {refused, state}
+      end
     else
       _ -> {{:error, :invalid_sync}, state}
     end
@@ -121,10 +125,14 @@ defmodule LatticePopcornSpike.ReplicaServer do
 
   defp note_op?(_), do: false
 
+  # A log naming an atom off the wire vocabulary has no snapshot (`dump_payload/1` refuses),
+  # so the snapshot is refused rather than embedding an error in the payload.
   defp snapshot(state) do
-    %{
-      "log" => BrowserLogStore.dump_payload(state.log),
-      "view" => Durable.view(%{identity: state.root, log: state.log})
-    }
+    with {:ok, log} <- BrowserLogStore.dump_payload(state.log) do
+      {:ok, %{"log" => log, "view" => Durable.view(%{identity: state.root, log: state.log})}}
+    end
   end
+
+  defp snapshot_reply({:ok, snapshot}), do: snapshot
+  defp snapshot_reply({:error, reason}), do: %{error: Atom.to_string(reason)}
 end

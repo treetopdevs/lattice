@@ -34,6 +34,10 @@ defmodule Treehouse.CatalogCutoff do
   )a)
   @max_safe_integer 9_007_199_254_740_991
 
+  @doc "The closed cutoff atom vocabulary; every name must also be on `Lattice.Carrier.WireVocabulary`."
+  @spec cutoff_atoms() :: [atom()]
+  def cutoff_atoms, do: @cutoff_atoms |> MapSet.to_list() |> Enum.sort()
+
   @spec derive(term()) ::
           {:ok, map()} | {:error, :invalid_verified_history | :unsupported_cutoff}
   def derive(log) do
@@ -77,7 +81,8 @@ defmodule Treehouse.CatalogCutoff do
   defp portable?(%Op{} = op) do
     # Round-trip the ordinary JSON/header/term representation without interpreting
     # a rejected op's supplied ID or signature as authenticated identity slots.
-    with {:ok, encoded} <- Jason.encode(%{"type" => "push", "ops" => [Wire.encode_op(op)]}),
+    with {:ok, frame} <- Wire.encode_op_checked(op),
+         {:ok, encoded} <- Jason.encode(%{"type" => "push", "ops" => [frame]}),
          true <- byte_size(encoded) <= 64_000,
          {:ok, %{"ops" => [frame]}} <- Jason.decode(encoded),
          {:ok, ^op} <- Wire.decode_op(frame) do

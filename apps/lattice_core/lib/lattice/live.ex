@@ -75,13 +75,24 @@ defmodule Lattice.Live do
   Revoke a unified delegation. The in-log `:revoke` op is what kills both the append
   path (reduction quarantine) and the live `Live.call/3` path (`authorize/2`). The
   additional `Lattice.CapStore` revocation is defense-in-depth that also blocks a
-  *direct* `Lattice.Gateway.call` bypassing `authorize/2`. Returns the updated log.
+  *direct* `Lattice.Gateway.call` bypassing `authorize/2`. Returns the updated log, or
+  `{:error, :unknown_atom}` (nothing signed, nothing revoked) if the revoke op would name an
+  atom outside the closed wire vocabulary.
   """
-  @spec revoke(Log.t(), Identity.t(), String.t(), String.t()) :: Log.t()
+  @spec revoke(Log.t(), Identity.t(), String.t(), String.t()) ::
+          {:ok, Log.t()} | {:error, :unknown_atom}
   def revoke(%Log{} = log, %Identity{} = issuer, delegation_id, v1_cap_id) do
-    op = Op.new(issuer, log.replica, Log.frontier(log), :authority, {:revoke, delegation_id})
-    log = Log.append!(log, op)
-    _ = CapStore.revoke(v1_cap_id)
-    log
+    with {:ok, op} <-
+           Op.authored(
+             issuer,
+             log.replica,
+             Log.frontier(log),
+             :authority,
+             {:revoke, delegation_id}
+           ) do
+      log = Log.append!(log, op)
+      _ = CapStore.revoke(v1_cap_id)
+      {:ok, log}
+    end
   end
 end

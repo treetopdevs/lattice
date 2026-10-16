@@ -116,8 +116,8 @@ assert.deepEqual(anonymousMalformedSynced.unverifiableFrameIds, []);
 const relayFrames = [post, grant, genesis, summary];
 const relayReports = new Map([
     [genesis.id, { ...emptyReport(), accepted: [genesis.id] }],
-    [grant.id, { ...emptyReport(), quarantined: [[grant.id, "authority"]] }],
-    [summary.id, { ...emptyReport(), rejected: [[summary.id, "invalid"]] }],
+    [grant.id, { ...emptyReport(), quarantined: [[grant.id, "bad_signature"]] }],
+    [summary.id, { ...emptyReport(), rejected: [[summary.id, "wrong_replica"]] }],
     [post.id, { ...emptyReport(), pending: [post.id] }],
 ]);
 const relayClient = new ScriptedRelaySyncClient([[]], relayReports);
@@ -132,8 +132,8 @@ assert.equal(relayClient.pushCalls, 0);
 assert.deepEqual(relaySynced.pushedFrames.map(frameId), causalOrder);
 assert.deepEqual(relaySynced.pushReport, {
     accepted: [genesis.id],
-    quarantined: [[grant.id, "authority"]],
-    rejected: [[summary.id, "invalid"]],
+    quarantined: [[grant.id, "bad_signature"]],
+    rejected: [[summary.id, "wrong_replica"]],
     pending: [post.id],
 });
 assert.deepEqual(relaySynced.peerReportedFrameIds, [genesis.id]);

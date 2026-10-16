@@ -22,7 +22,8 @@ defmodule LatticePopcornSpike.ReplicaGatewayTest do
     assert Durable.view(a)["notes"] == Durable.view(b)["notes"]
     assert Enum.sort(Durable.view(a)["notes"]) == ["alice", "bob"]
     assert Durable.view(a)["op_ids"] == Durable.view(b)["op_ids"]
-    {:ok, restored} = Durable.restore(Durable.capsule(a))
+    {:ok, capsule} = Durable.capsule(a)
+    {:ok, restored} = Durable.restore(capsule)
     assert restored.identity == a.identity
     {:ok, stale, op} = Durable.post(a, "offline revoked")
     GenServer.call(LatticePopcornSpike.ReplicaServer, {:revoke, Durable.view(a)["public_key"]})
@@ -36,13 +37,13 @@ defmodule LatticePopcornSpike.ReplicaGatewayTest do
     assert Durable.view(a)["notes"] == Durable.view(b)["notes"]
     {_, replay} = sync(ca, capa, a)
     assert replay["accepted"] == []
-    [first | rest] = Durable.upload(a)
+    {:ok, [first | rest] = frames} = Durable.upload(a)
 
     response =
       request(ca, capa, %{"action" => "sync", "ops" => [Map.put(first, "sig", "AAAA") | rest]})
 
     assert response["ok"] == false
-    response = request(ca, "forged", %{"action" => "sync", "ops" => Durable.upload(a)})
+    response = request(ca, "forged", %{"action" => "sync", "ops" => frames})
     assert response["ok"] == false
     Client.close(ca)
     Client.close(cb)
@@ -68,7 +69,8 @@ defmodule LatticePopcornSpike.ReplicaGatewayTest do
   end
 
   defp sync(client, cap, state) do
-    response = request(client, cap, %{"action" => "sync", "ops" => Durable.upload(state)})
+    {:ok, frames} = Durable.upload(state)
+    response = request(client, cap, %{"action" => "sync", "ops" => frames})
     assert response["ok"]
     {:ok, state} = Durable.receive_log(state, response["result"]["log"])
     {state, response["result"]}

@@ -14,7 +14,7 @@ defmodule Lattice.BrowserLogStoreTest do
     {sim, _} = Sim.command(sim, "tab", :post, ["offline"])
     log = Sim.log(sim, "tab")
 
-    payload = BrowserLogStore.dump_payload(log)
+    assert {:ok, payload} = BrowserLogStore.dump_payload(log)
 
     assert payload["schema"] == "lattice-browser-log-v1"
     assert is_list(payload["ops"])
@@ -37,7 +37,7 @@ defmodule Lattice.BrowserLogStoreTest do
 
     assert [{forged.id, :bad_signature}] == report.quarantined
 
-    payload = BrowserLogStore.dump_payload(log)
+    assert {:ok, payload} = BrowserLogStore.dump_payload(log)
 
     assert [%{"reason" => "bad_signature"}] = payload["quarantine"]
     assert {:ok, restored} = BrowserLogStore.restore_payload(payload)
@@ -49,7 +49,7 @@ defmodule Lattice.BrowserLogStoreTest do
     identity = Identity.from_seed("tab", "browser-store-corrupt")
     replica = "replica:browser-store-corrupt"
     op = Op.new(identity, replica, [], :command, {:post, "real"})
-    payload = BrowserLogStore.dump_payload(Log.append!(Log.new(replica), op))
+    assert {:ok, payload} = BrowserLogStore.dump_payload(Log.append!(Log.new(replica), op))
 
     corrupted =
       put_in(payload, ["ops", Access.at(0), "body"], [
@@ -61,5 +61,14 @@ defmodule Lattice.BrowserLogStoreTest do
 
     assert {:error, {:restore_report, %{quarantined: [{^op_id, :bad_signature}]}}} =
              BrowserLogStore.restore_payload(corrupted)
+  end
+
+  test "a log holding an off-list atom refuses the snapshot instead of embedding it" do
+    identity = Identity.from_seed("tab", "browser-store-off-list")
+    replica = "replica:browser-store-off-list"
+    op = Op.new(identity, replica, [], :command, {:post, :definitely_not_listed})
+
+    assert {:error, :unknown_atom} =
+             BrowserLogStore.dump_payload(Log.append!(Log.new(replica), op))
   end
 end

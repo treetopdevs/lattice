@@ -1,291 +1,120 @@
 defmodule Lattice.CarrierWireAtomVocabularyTest do
-  # Row 190: frame admission must be a pure function of the frame bytes, not of which
-  # atoms the decoding VM happens to hold.
+  # Row 190 (rework, ruling D2): frame admission is a pure function of the frame bytes and the
+  # closed `Lattice.Carrier.WireVocabulary`, never of which atoms the decoding VM holds.
+  # PR #114 decoded an unlisted name as `Lattice.Canonical.Atom`; a log persisted under it can
+  # still hold that struct, so the checked encode and the snapshot refuse it when off-list.
   use ExUnit.Case, async: true
 
-  alias Lattice.Authority.{Delegation, SuccessionCertificate}
-  alias Lattice.{Authority, Canonical, Carrier.Wire, Identity, Op, Sim}
-  alias Township.Matter
-  alias Lattice.Canonical.Atom, as: CanonicalAtom
+  alias Lattice.Authority.Delegation
+  alias Lattice.{BrowserLogStore, Canonical, Identity, Log, Op}
+  alias Lattice.Carrier.{Wire, WireVocabulary}
 
-  @vectors Path.expand("../../../../clients/lattice-client/test/vectors", __DIR__)
+  @replica "replica:wire-atom-vocabulary"
+  @off_list "row190_not_listed"
+  @listed "post"
 
-  # Each named scenario carries a signed frame with an atom that only the vector
-  # exporter's source spells as a literal (the plan 185 decision record).
-  @cold_vectors %{
-    "township_authority_unattenuated_transfer" => "seize_records",
-    "township_authority_undeclared_role_tick" => "ghost",
-    "township_beacon_witnessed_certificate_metadata" => "nested",
-    "township_beacon_witnessed_policy_metadata" => "nested",
-    "township_policy_target_reason_taxonomy" => "malformed"
+  # Each position a name can occupy in a signed op, as a builder from a name to an op.
+  @positions %{
+    "body" => :body,
+    "cap" => :cap,
+    "delegation ops" => :ops,
+    "delegation roles" => :roles
   }
 
-  defp absent_name(prefix) do
-    name = "#{prefix}_row190_absent_#{System.unique_integer([:positive])}"
-    assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
-    name
+  defp identity, do: Identity.from_seed("alice", "wire-atom-vocabulary")
+
+  defp op_with(:body, name),
+    do: Op.new(identity(), @replica, [], :command, {:post, %Canonical.Atom{name: name}})
+
+  defp op_with(:cap, name),
+    do: Op.new(identity(), @replica, [], :command, nil, cap: [%Canonical.Atom{name: name}])
+
+  defp op_with(:ops, name), do: grant_op(ops: [%Canonical.Atom{name: name}], roles: [])
+  defp op_with(:roles, name), do: grant_op(ops: [], roles: [%Canonical.Atom{name: name}])
+
+  defp grant_op(opts) do
+    delegation = Delegation.new(identity(), @replica, identity().pub, opts)
+    Op.new(identity(), @replica, [], :authority, {:grant, delegation})
   end
 
-  test "a signed term naming an atom this VM lacks is admitted with its exact bytes" do
-    identity = Identity.from_seed("alice", "wire-atom-vocabulary")
-    name = absent_name("zz")
-    op = Op.new(identity, "replica:wire", [], :command, {:post, %CanonicalAtom{name: name}})
-    frame = Wire.encode_op(op)
+  defp atom_twin(:body), do: Op.new(identity(), @replica, [], :command, {:post, :post})
+  defp atom_twin(:cap), do: Op.new(identity(), @replica, [], :command, nil, cap: [:post])
+  defp atom_twin(:ops), do: grant_op(ops: [:post], roles: [])
+  defp atom_twin(:roles), do: grant_op(ops: [], roles: [:post])
 
-    assert frame["body"] == ["tuple", [["atom", "post"], ["atom", name]]]
-    assert {:ok, decoded} = frame |> Jason.encode!() |> Jason.decode!() |> Wire.decode_op()
-    assert decoded == op
-    assert Op.valid?(decoded)
-    assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
-  end
+  for {label, position} <- @positions do
+    describe "a persisted #{label} struct" do
+      test "off-list is refused by the checked encode and by the snapshot" do
+        op = op_with(unquote(position), @off_list)
+        refute WireVocabulary.known?(@off_list)
 
-  test "delegation bytes order unknown and known names by name, as a VM holding both would" do
-    issuer = Identity.from_seed("issuer", "wire-atom-vocabulary")
-    unknown = %CanonicalAtom{name: absent_name("aa")}
+        assert {:error, :unknown_atom} = Wire.encode_op_checked(op)
 
-    d =
-      Delegation.new(issuer, "replica:wire", issuer.pub,
-        ops: [:post, unknown],
-        roles: [:clerk],
-        live: false
-      )
+        log = Log.append!(Log.new(@replica), op)
+        assert {:error, :unknown_atom} = BrowserLogStore.dump_payload(log)
+      end
 
-    # A VM that holds the atom sorts by name, so "aa_..." precedes :post.
-    expected =
-      Canonical.term([
-        "lattice-delegation-v2",
-        "replica:wire",
-        issuer.pub,
-        issuer.pub,
-        nil,
-        [unknown, :post],
-        [:clerk],
-        false
-      ])
+      test "listed encodes to the bytes of the atom it names" do
+        op = op_with(unquote(position), @listed)
+        assert WireVocabulary.known?(@listed)
 
-    assert Canonical.delegation_payload(d) == expected
-    assert Delegation.valid_sig?(d)
+        assert {:ok, frame} = Wire.encode_op_checked(op)
+        assert frame["body"] == Wire.encode_op(atom_twin(unquote(position)))["body"]
+        assert frame["cap"] == Wire.encode_op(atom_twin(unquote(position)))["cap"]
 
-    op = Op.new(issuer, "replica:wire", [], :authority, {:genesis, d, %{}})
-
-    assert {:ok, decoded} =
-             op |> Wire.encode_op() |> Jason.encode!() |> Jason.decode!() |> Wire.decode_op()
-
-    assert decoded == op
-    assert Op.valid?(decoded)
-  end
-
-  test "an unknown name renders and serializes as the atom it names" do
-    unknown = %CanonicalAtom{name: "post"}
-    assert to_string(unknown) == to_string(:post)
-    assert Enum.join([unknown, :clerk], ",") == "post,clerk"
-    assert Jason.encode!(%{"ops" => [unknown]}) == Jason.encode!(%{"ops" => [:post]})
-  end
-
-  test "an audit bundle renders an unknown name as the atom it names" do
-    name = absent_name("bundle")
-    dir = Path.join(System.tmp_dir!(), "row190-bundle-#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf(dir) end)
-    sim = Sim.new(Matter, "replica:matter:row190-bundle", ["clerk"], seed: "row190-bundle")
-    {sim, _} = Sim.create_replica(sim, "clerk")
-    {sim, _} = Sim.command(sim, "clerk", :set_title, [%CanonicalAtom{name: name}])
-    assert {:ok, _} = Township.AuditBundle.write(dir, Sim.log(sim, "clerk"))
-    state = dir |> Path.join("state.json") |> File.read!()
-    assert state =~ ~s("#{name}")
-    refute state =~ ~s("name":)
-  end
-
-  test "a genesis whose policy term is an unknown name is inert, as a warm non-map atom is" do
-    for policies <- [:ok, %CanonicalAtom{name: absent_name("policy")}] do
-      sim = Sim.new(Matter, "replica:matter:row190-policy-term", ["clerk"], seed: "row190")
-      {sim, genesis} = Sim.create_replica(sim, "clerk")
-      clerk = Sim.identity(sim, "clerk")
-
-      # An empty, non-live root genesis is the shape the continuation pin scan reads.
-      pin = Delegation.genesis(clerk, Sim.replica(sim), ops: [], roles: [], live: false)
-      {sim, _} = Sim.append(sim, "clerk", :authority, {:genesis, pin, policies})
-      analysis = Authority.analyze(Matter, Sim.log(sim, "clerk"))
-      assert analysis.reasons == %{}, inspect(policies)
-      assert analysis.holder_epochs[:clerk].op_id == genesis.id
+        assert {:ok, payload} = BrowserLogStore.dump_payload(Log.append!(Log.new(@replica), op))
+        assert [^frame] = payload["ops"]
+      end
     end
   end
 
-  test "a certificate naming an unknown role fails the claim comparison, not its shape" do
-    [w1, w2] = Enum.map(["w1", "w2"], &Identity.from_seed(&1, "row190-certificate-" <> &1))
-    holder = Identity.from_seed("holder", "row190-certificate-holder")
-    successor = Identity.from_seed("successor", "row190-certificate-successor")
-    policy = %{mode: :witnessed, version: 1, witnesses: [w1.pub, w2.pub], threshold: 2}
+  test "a persisted off-list struct in a quarantined op refuses the snapshot too" do
+    genesis = Op.new(identity(), @replica, [], :command, {:post, "genesis"})
+    genuine = Op.new(identity(), @replica, [genesis.id], :command, {:post, "real"})
+    forged = %{genuine | body: {:post, %Canonical.Atom{name: @off_list}}}
 
-    {:ok, expected} =
-      SuccessionCertificate.claim(
-        "replica:row190",
-        :clerk,
-        holder.pub,
-        "epoch",
-        successor.pub,
-        policy
-      )
+    {log, report} =
+      @replica |> Log.new() |> Log.append!(genesis) |> Lattice.Sync.deliver([forged])
 
-    verdict = fn role ->
-      %{expected | role: role}
-      |> SuccessionCertificate.new([w1, w2])
-      |> SuccessionCertificate.verify(expected, policy)
-    end
-
-    warm = verdict.(:post)
-    assert {:error, reason} = warm
-    refute reason == :malformed_recovery_certificate
-    assert verdict.(%CanonicalAtom{name: absent_name("role")}) == warm
+    assert [{forged_id, :bad_signature}] = report.quarantined
+    assert forged_id == forged.id
+    assert {:error, :unknown_atom} = BrowserLogStore.dump_payload(log)
   end
 
-  test "a protocol tag decodes as its atom in a VM that has loaded nothing but Wire" do
-    vector = Path.join(@vectors, "township_capability_revoked_chain.json")
+  test "unlisted names are refused on decode and listed names are admitted" do
+    for position <- Map.values(@positions) do
+      off_list = position |> op_with(@off_list) |> Wire.encode_op()
+      listed = position |> op_with(@listed) |> Wire.encode_op()
 
-    script = """
-    false = :code.is_loaded(Lattice.Authority)
-    {:module, _} = Code.ensure_loaded(Lattice.Carrier.Wire)
-    frames = #{inspect(vector)} |> File.read!() |> Jason.decode!() |> Map.fetch!("oracleCarrierOps")
-    {:ok, ops} = Lattice.Carrier.Wire.decode_ops(frames)
-    tags = for %{body: body} <- ops, is_tuple(body), do: elem(body, 0)
-    true = :revoke in tags and Enum.all?(tags, &is_atom/1)
-    # Application modules stay the host's to load (member continuity's cold contract).
-    false = :code.is_loaded(Treehouse.MemberContinuity)
-    IO.puts("ROW190_PROTOCOL_TAGS_OK")
-    """
-
-    direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
-    executable = if File.exists?(direct), do: direct, else: "elixir"
-
-    {output, status} =
-      System.cmd(
-        executable,
-        [
-          "-pa",
-          Application.app_dir(:lattice_core, "ebin"),
-          "-pa",
-          Application.app_dir(:jason, "ebin"),
-          "-e",
-          script
-        ],
-        stderr_to_stdout: true
-      )
-
-    assert status == 0, output
-    assert output =~ "ROW190_PROTOCOL_TAGS_OK"
-  end
-
-  for mode <- ["preloaded", "unloaded"] do
-    # "preloaded" loads every lattice_core module except the exporter task before
-    # decoding; "unloaded" decodes first, so Wire must load the schema vocabulary itself.
-    test "the five plan 185 vectors decode and judge equally in a #{mode} VM without the exporter's atoms" do
-      run_cold_vm(unquote(mode))
+      assert {:error, :malformed_op} = Wire.decode_op(off_list)
+      assert {:error, :malformed_op} = Wire.decode_ops([listed, off_list])
+      assert {:ok, %Op{}} = Wire.decode_op(listed)
     end
   end
 
-  defp run_cold_vm(mode) do
-    script = Path.join(System.tmp_dir!(), "row190-cold-#{System.unique_integer([:positive])}.exs")
-    on_exit(fn -> File.rm(script) end)
-    File.write!(script, cold_script())
+  test "admission is the same in a VM that holds none of the atoms" do
+    peer = cold_peer()
+    catch_error(:peer.call(peer, String, :to_existing_atom, ["seize_records"]))
 
-    paths =
-      :code.get_path()
-      |> Enum.map(&List.to_string/1)
-      |> Enum.filter(&String.contains?(&1, "/_build/"))
-      |> Enum.flat_map(&["-pa", &1])
+    listed = Op.new(identity(), @replica, [], :command, {:post, :seize_records})
+    off_list = Op.new(identity(), @replica, [], :command, {:post, :row190_not_listed})
 
-    direct = Path.expand("~/.asdf/installs/elixir/1.19.5-otp-28/bin/elixir")
-    executable = if File.exists?(direct), do: direct, else: "elixir"
-    pairs = Enum.flat_map(@cold_vectors, fn {v, a} -> [v, a] end)
-    args = paths ++ [script, mode, @vectors | pairs]
-    {output, status} = System.cmd(executable, args, stderr_to_stdout: true)
-
-    assert status == 0, output
-    results = output |> String.split("\n") |> Enum.filter(&String.starts_with?(&1, "ROW190 "))
-    assert length(results) == map_size(@cold_vectors), output
-
-    for line <- results do
-      assert line =~ ~r/ :ok$/, output
+    for op <- [listed, off_list] do
+      frame = Wire.encode_op(op)
+      assert :peer.call(peer, Wire, :decode_op, [frame], 30_000) == Wire.decode_op(frame)
     end
+
+    assert {:ok, ^listed} =
+             :peer.call(peer, Wire, :decode_op, [Wire.encode_op(listed)], 30_000)
+
+    assert {:error, :malformed_op} =
+             :peer.call(peer, Wire, :decode_op, [Wire.encode_op(off_list)], 30_000)
   end
 
-  defp cold_script do
-    ~S'''
-    [mode, dir | pairs] = System.argv()
-    schemas = %{
-      "Township.Matter" => Township.Matter,
-      "PolicyFixture" => Mix.Tasks.Lattice.ExportVectors.PolicyFixture
-    }
+  defp cold_peer do
+    {:ok, peer, _node} =
+      :peer.start_link(%{connection: :standard_io, args: [~c"-pa" | :code.get_path()]})
 
-    # "unloaded" loads only the vectors' schema modules, the host's documented duty, and
-    # leaves even the lattice_core application metadata unloaded: Wire must load the
-    # protocol vocabulary itself before the first decode.
-    for module <- Map.values(schemas), do: Code.ensure_loaded!(module)
-
-    if mode == "preloaded" do
-      :ok = Application.load(:lattice_core)
-      {:ok, modules} = :application.get_key(:lattice_core, :modules)
-      for m <- modules, m != Mix.Tasks.Lattice.ExportVectors, do: Code.ensure_loaded(m)
-    end
-
-    pairs
-    |> Enum.chunk_every(2)
-    |> Enum.each(fn [name, atom_name] ->
-      cold? =
-        try do
-          String.to_existing_atom(atom_name)
-          false
-        rescue
-          ArgumentError -> true
-        end
-
-      vector = Path.join(dir, name <> ".json") |> File.read!() |> Jason.decode!()
-      module = Map.fetch!(schemas, vector["schema"]["name"] || vector["schema"])
-      expected = vector["expectAtFullFrontier"]
-
-      verdict =
-        with true <- cold? || :not_cold,
-             {:ok, [first | _] = ops} <- Lattice.Carrier.Wire.decode_ops(vector["oracleCarrierOps"]),
-             true <- Enum.all?(ops, &Lattice.Op.valid?/1) || :invalid_op do
-          {log, _report} = Lattice.Sync.deliver(Lattice.Log.new(first.replica), ops)
-          analysis = Lattice.Authority.analyze(module, log)
-
-          reasons =
-            analysis.reasons
-            |> Enum.map(fn {id, r} -> [id, Atom.to_string(r)] end)
-            |> Enum.sort()
-
-          state = Lattice.Reduce.reduce(module, log, quarantine: analysis.quarantine)
-
-          state =
-            case vector["schema"]["name"] do
-              "PolicyFixture" ->
-                %{"events" => state.events}
-
-              _ ->
-                clerk = analysis.holders[:clerk]
-
-                %{
-                  "title" => state.title,
-                  "summary" => state.summary,
-                  "posts" => state.posts,
-                  "members" => state.members,
-                  "clerk" => clerk && vector["realmByPubkey"][Base.encode64(clerk)],
-                  "clerk_locked" => state.clerk_locked?
-                }
-            end
-
-          state = state |> Jason.encode!() |> Jason.decode!()
-
-          cond do
-            Lattice.Log.size(log) != length(ops) -> {:op_count, Lattice.Log.size(log)}
-            reasons != Enum.sort(expected["authorityQuarantine"]) -> {:reasons, reasons}
-            state != expected["state"] -> {:state, state}
-            true -> :ok
-          end
-        end
-
-      IO.puts("ROW190 #{name} #{inspect(verdict)}")
-    end)
-    '''
+    peer
   end
 end

@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createPrivateKey, createPublicKey, createHash, sign as edSign } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  authorCarrierOp,
   carrierChallenge,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
@@ -17,6 +18,8 @@ import {
   toSend,
   verifyCarrierOpHash,
 } from "../src/index";
+import { WIRE_REPORT_REASONS, WIRE_VOCABULARY, isWireVocabularyName } from "../src/wire_vocabulary";
+import { authorCarrierOpUnchecked } from "./support/unchecked_author";
 import type {
   CarrierChallenge,
   CarrierDelegation,
@@ -217,8 +220,9 @@ function commandFrameWithBody(
   };
 }
 
+// A listed name that Township does not decode: off-list names are refused outright (below).
 const unknownCommandFrame = commandFrameNamed(
-  "future_unmapped_command",
+  "lock",
   [],
   "unknown",
 );
@@ -265,6 +269,8 @@ if (unknownCommandOp !== undefined) {
   );
 }
 
+// Prototype property names are off the closed vocabulary, so the whole frame is refused
+// before any decoder lookup, exactly as BEAM refuses them.
 const prototypeCommandOps: Op[] = [];
 const prototypeCommandFailures: string[] = [];
 for (const name of ["constructor", "toString", "__proto__", "valueOf"]) {
@@ -281,19 +287,19 @@ for (const name of ["constructor", "toString", "__proto__", "valueOf"]) {
   }
 }
 check(
-  "prototype command names cannot bypass fail-closed decode",
+  "prototype command names are refused by the wire vocabulary",
   {
     failures: prototypeCommandFailures,
     reasons: prototypeCommandOps.map(commandError),
   },
   {
-    failures: [],
-    reasons: [
-      "unknown_command",
-      "unknown_command",
-      "unknown_command",
-      "unknown_command",
+    failures: [
+      "atom name outside the wire vocabulary: constructor",
+      "atom name outside the wire vocabulary: toString",
+      "atom name outside the wire vocabulary: __proto__",
+      "atom name outside the wire vocabulary: valueOf",
     ],
+    reasons: [],
   },
 );
 
@@ -312,7 +318,7 @@ check(
 const malformedCommandFrames = [
   commandFrameWithBody(["bin", Buffer.from("post").toString("base64")], "body-not-tuple"),
   commandFrameWithBody(
-    ["tuple", [["atom", "post"], ["atom", "not_a_list"]]],
+    ["tuple", [["atom", "post"], ["atom", "admin"]]],
     "args-not-list",
   ),
 ];
@@ -1066,6 +1072,157 @@ check(
   foreignOp[0]?.replica === foreignReplicaVector.replica,
   false,
 );
+
+console.log("\n▸ closed wire vocabulary (plan 190)");
+
+const offList = "zzz_off_list_name";
+const vocabularyRefusal = /atom name outside the wire vocabulary/;
+
+function refused(name: string, frames: unknown[]) {
+  let produced: Op[] = [];
+  let failure = "";
+  try {
+    produced = carrierOpsToSemanticOps(frames, vector.realmByPubkey);
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error);
+  }
+  check(name, { refused: vocabularyRefusal.test(failure), ops: produced.length }, { refused: true, ops: 0 });
+}
+
+function withDelegation(frame: CarrierOpFrame, change: (delegation: CarrierDelegation) => void): CarrierOpFrame {
+  const clone = structuredClone(frame);
+  let changed = false;
+  const visit = (term: unknown): void => {
+    if (!Array.isArray(term)) return;
+    if (term[0] === "delegation") {
+      change(term[1] as CarrierDelegation);
+      changed = true;
+      return;
+    }
+    for (const child of term.slice(1)) visit(child);
+  };
+  visit(clone.body);
+  if (!changed) throw new Error("fixture frame carries no delegation");
+  return clone;
+}
+
+const listedCommandFrame = commandFrameNamed("post", [["bin", Buffer.from("hi").toString("base64")]], "listed");
+check(
+  "listed names are admitted",
+  carrierOpsToSemanticOps([listedCommandFrame], vector.realmByPubkey).length,
+  1,
+);
+
+const offListBodyFrame = commandFrameNamed("post", [["atom", offList]], "off-list-body");
+refused("off-list body atom refuses the whole batch", [offListBodyFrame]);
+
+const offListCapFrame: CarrierOpFrame = { ...structuredClone(commandFrameFixture), cap: ["atom", offList] };
+refused("off-list cap atom refuses instead of retaining a malformed_term op", [offListCapFrame]);
+
+const delegationFrameFixture = vector.clientBaseCarrierOps.find((frame) =>
+  frame.kind === "authority" && carrierDelegationsFromFrames([frame]).length > 0);
+if (delegationFrameFixture === undefined) throw new Error("missing delegation frame fixture");
+const offListOpsFrame = withDelegation(delegationFrameFixture, (d) => { d.ops = [...d.ops, offList]; });
+const offListRolesFrame = withDelegation(delegationFrameFixture, (d) => { d.roles = [...d.roles, offList]; });
+refused("off-list delegation ops name refuses the whole batch", [offListOpsFrame]);
+refused("off-list delegation roles name refuses the whole batch", [offListRolesFrame]);
+check(
+  "off-list delegations are not delegations",
+  [offListOpsFrame, offListRolesFrame].map((frame) => carrierDelegationsFromFrames([frame]).length),
+  [0, 0],
+);
+
+refused("mixed batch refuses the valid sibling too (off-list last)", [listedCommandFrame, offListBodyFrame]);
+refused("mixed batch refuses the valid sibling too (off-list first)", [offListOpsFrame, listedCommandFrame]);
+
+let decodeFailure = "";
+try {
+  decodeCarrierOpFrame(offListBodyFrame);
+} catch (error) {
+  decodeFailure = error instanceof Error ? error.message : String(error);
+}
+check("decodeCarrierOpFrame refuses an off-list name", vocabularyRefusal.test(decodeFailure), true);
+
+function committedFrameNames(path: string, names: Set<string>): void {
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value !== "object" || value === null) return;
+    if (Array.isArray(Reflect.get(value, "body")) && Array.isArray(Reflect.get(value, "cap"))) {
+      const term = (node: unknown): void => {
+        if (!Array.isArray(node)) return;
+        if (node[0] === "atom" && typeof node[1] === "string") names.add(node[1]);
+        else if (node[0] === "delegation") {
+          for (const key of ["ops", "roles"]) {
+            for (const name of (Reflect.get(node[1] as object, key) as string[] | undefined) ?? []) names.add(name);
+          }
+        } else node.slice(1).forEach(term);
+      };
+      term(Reflect.get(value, "body"));
+      term(Reflect.get(value, "cap"));
+    }
+    Object.values(value).forEach(visit);
+  };
+  for (const entry of readdirSync(path)) {
+    const full = join(path, entry);
+    if (statSync(full).isDirectory()) committedFrameNames(full, names);
+    else if (entry.endsWith(".json")) visit(JSON.parse(readFileSync(full, "utf8")));
+  }
+}
+const committedNames = new Set<string>();
+committedFrameNames(vecDir, committedNames);
+check(
+  "generated vocabulary lists every name in the committed frames",
+  { count: committedNames.size > 0, missing: [...committedNames].filter((name) => !isWireVocabularyName(name)) },
+  { count: true, missing: [] },
+);
+check(
+  "generated vocabulary is sorted and unique",
+  [...WIRE_VOCABULARY],
+  [...new Set(WIRE_VOCABULARY)].sort(),
+);
+check("generated report reasons", [...WIRE_REPORT_REASONS], ["already_quarantined", "bad_signature", "wrong_replica"]);
+
+const authoringIdentity = seededEd25519Identity("carrier-vocabulary-authoring");
+const authoringInput = (name: string) => ({
+  replica: vector.replica,
+  deps: [],
+  kind: "command" as const,
+  cap: ["nil"] as CarrierTerm,
+  signer: authoringIdentity,
+  body: ["tuple", [["atom", "post"], ["list", [["atom", name]]]]] as CarrierTerm,
+});
+const authoringRefusals: string[] = [];
+for (const input of [
+  authoringInput(offList),
+  { ...authoringInput("admin"), cap: ["atom", offList] as CarrierTerm },
+  { ...authoringInput("admin"), body: ["map", [[["atom", offList], ["nil"]]]] as CarrierTerm },
+  { ...authoringInput("admin"), body: ["list", [offListRolesFrame.body]] as CarrierTerm },
+]) {
+  try {
+    await authorCarrierOp(input);
+    authoringRefusals.push("signed");
+  } catch (error) {
+    authoringRefusals.push(error instanceof Error ? error.message : String(error));
+  }
+}
+check(
+  "authorCarrierOp refuses an off-list name in a body, cap, map key or delegation before signing",
+  authoringRefusals.map((message) => vocabularyRefusal.test(message)),
+  [true, true, true, true],
+);
+const listedAuthored = await authorCarrierOp(authoringInput("admin"));
+check("a listed name authors a hash-valid frame", await verifyCarrierOpHash(listedAuthored), true);
+check(
+  "a listed authored frame round-trips through semantic decode",
+  carrierOpsToSemanticOps([listedAuthored], {}).map((op) => op.id),
+  [listedAuthored.id],
+);
+const uncheckedAuthored = await authorCarrierOpUnchecked(authoringInput(offList));
+check("the test-only unchecked author still signs a hash-valid frame", await verifyCarrierOpHash(uncheckedAuthored), true);
+refused("a signed frame with an off-list name is still refused at ingest", [uncheckedAuthored]);
 
 console.log(`\n${failures === 0 ? "\x1b[32m✓ carrier checks passed\x1b[0m" : `\x1b[31m✗ ${failures} check(s) failed\x1b[0m`}`);
 process.exit(failures === 0 ? 0 : 1);

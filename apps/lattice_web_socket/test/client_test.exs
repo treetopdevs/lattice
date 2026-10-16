@@ -21,6 +21,21 @@ defmodule LatticeWebSocket.ClientTest do
     assert :ok = Task.await(server)
   end
 
+  test "relay and push refuse an op naming an atom off the wire vocabulary before sending" do
+    author = Lattice.Identity.from_seed("author", "client-test-off-list")
+    listed = Lattice.Op.new(author, "replica:off-list", [], :command, {:post, ["listed"]})
+
+    off_list =
+      Lattice.Op.new(author, "replica:off-list", [], :command, {:post, [:definitely_not_listed]})
+
+    # `client: self()` would receive any request, so a send shows up in the mailbox.
+    conn = %CarrierClient{client: self()}
+
+    assert {:error, :unknown_atom} = CarrierClient.relay(conn, off_list)
+    assert {:error, :unknown_atom} = CarrierClient.push(conn, [listed, off_list])
+    refute_received _
+  end
+
   test "frontier pagination fails at its page cap instead of returning partial IDs" do
     {port, server} =
       start_server(fn socket ->

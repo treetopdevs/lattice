@@ -95,7 +95,7 @@ test("closed bootstrap shape failures remain signed application refusals", async
     const change = (field, value) => ["map", raw[1].map(([key, old]) => [key, key[0] === "atom" && key[1] === field ? value : old])];
     const invalid = [nil, ["list", []], ["map", raw[1].slice(1)], ["map", [...raw[1], [atom("extra"), nil]]],
         change("product", ["bin", b64(new TextEncoder().encode("treehouse"))]), change("version", ["int", 2]),
-        change("space_root", atom("root")), change("space_root", ["bin", b64(new Uint8Array(31))]),
+        change("space_root", atom("admin")), change("space_root", ["bin", b64(new Uint8Array(31))]),
         change("nonce", ["list", []]), change("service_key", ["bin", b64(f.catalog.publicKey)])];
     for (const record of invalid) {
         const bad = await bootstrap(f, record);

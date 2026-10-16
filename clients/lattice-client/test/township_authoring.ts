@@ -826,7 +826,7 @@ check("received unsorted certificate claim still refuses", materialize(beaconVec
   .quarantineReasons.get(unnormalizedBeacon.id), "unauthorized_beacon");
 
 const unrelatedIntegerBody: CarrierTerm = ["tuple", [["atom", "genesis"], ["delegation", beaconGenesisDelegation],
-  ["map", [[["atom", "unrelated"], ["int", "9007199254740992"]]]]]];
+  ["map", [[["atom", "admin"], ["int", "9007199254740992"]]]]]];
 for (const body of [unrelatedIntegerBody]) {
   const frame = await authorCarrierOp({ replica: beaconVector.replica, deps: [beaconGenesis.id],
     kind: "authority", cap: ["nil"], body, signer: beaconFounder });

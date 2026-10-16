@@ -48,15 +48,26 @@ defmodule LatticeBrowser.Durable do
 
   def restore(_), do: {:error, :invalid_store}
 
-  @spec capsule(map()) :: map()
+  @doc """
+  The storage capsule for the trusted host, or `{:error, :unknown_atom}` when the log holds
+  an op naming an atom outside the closed wire vocabulary (a legacy log): the snapshot would
+  not restore, so it is refused rather than embedded.
+  """
+  @spec capsule(map()) :: {:ok, map()} | {:error, :unknown_atom}
   def capsule(state) do
-    %{
-      "schema" => "popcorn-replica-v1",
-      "seed" => state.seed,
-      "public_key" => Base.encode64(state.identity.pub),
-      "log" => if(state.log, do: BrowserLogStore.dump_payload(state.log), else: nil)
-    }
+    with {:ok, log} <- dump_log(state.log) do
+      {:ok,
+       %{
+         "schema" => "popcorn-replica-v1",
+         "seed" => state.seed,
+         "public_key" => Base.encode64(state.identity.pub),
+         "log" => log
+       }}
+    end
   end
+
+  defp dump_log(nil), do: {:ok, nil}
+  defp dump_log(log), do: BrowserLogStore.dump_payload(log)
 
   @spec receive_log(map(), map()) :: {:ok, map()} | {:error, atom()}
   def receive_log(state, payload) do
@@ -77,16 +88,21 @@ defmodule LatticeBrowser.Durable do
 
     if Log.size(log) < @max_ops and not is_nil(cap) do
       # Offline writes are provisional: concurrent revocation can quarantine them.
-      op =
-        Op.new(state.identity, log.replica, Log.frontier(log), :command, {:post, [text]},
-          cap: cap
-        )
+      with {:ok, op} <-
+             Op.authored(
+               state.identity,
+               log.replica,
+               Log.frontier(log),
+               :command,
+               {:post, [text]},
+               cap: cap
+             ) do
+        next = Log.append!(log, op)
 
-      next = Log.append!(log, op)
-
-      case Map.get(Authority.analyze(Notes, next).reasons, op.id) do
-        nil -> {:ok, %{state | log: next}, op}
-        reason -> {:error, reason}
+        case Map.get(Authority.analyze(Notes, next).reasons, op.id) do
+          nil -> {:ok, %{state | log: next}, op}
+          reason -> {:error, reason}
+        end
       end
     else
       {:error, :no_capability_or_log_full}
@@ -118,17 +134,35 @@ defmodule LatticeBrowser.Durable do
     }
   end
 
-  @spec upload(map()) :: [map()]
-  def upload(%{log: nil}), do: []
-  def upload(%{log: log}), do: Wire.encode_ops(Log.topo_ops(log))
+  @doc """
+  The log's op frames for upload, or `{:error, :unknown_atom}` when any op names an atom
+  outside the closed wire vocabulary (the server would refuse the frame).
+  """
+  @spec upload(map()) :: {:ok, [map()]} | {:error, :unknown_atom}
+  def upload(%{log: nil}), do: {:ok, []}
+
+  def upload(%{log: log}) do
+    log
+    |> Log.topo_ops()
+    |> Enum.reduce_while({:ok, []}, fn op, {:ok, acc} ->
+      case Wire.encode_op_checked(op) do
+        {:ok, frame} -> {:cont, {:ok, [frame | acc]}}
+        {:error, :unknown_atom} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, frames} -> {:ok, Enum.reverse(frames)}
+      {:error, :unknown_atom} = error -> error
+    end
+  end
 
   @spec restore_log(nil | map()) :: {:ok, Log.t() | nil} | {:error, atom()}
   def restore_log(nil), do: {:ok, nil}
 
   def restore_log(%{"ops" => ops} = payload) when is_list(ops) and length(ops) <= @max_ops do
-    # Wire intentionally uses existing atoms only. A cold browser VM has not
-    # loaded the authority/replica vocabulary yet; load fixed trusted modules,
-    # never create atoms from incoming strings.
+    # Wire admits an atom name only from the closed vocabulary (it creates the atom on
+    # demand), so a cold browser VM needs no atom warm-up. The fixed trusted modules are
+    # still loaded up front; no atom is ever created from an unlisted incoming string.
     Code.ensure_loaded!(Authority)
     Code.ensure_loaded!(Notes)
 

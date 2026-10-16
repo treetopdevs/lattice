@@ -1,5 +1,6 @@
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
+import { isWireVocabularyName } from "./wire_vocabulary";
 import type {
   Op,
   WitnessedBeaconClaimEvidence,
@@ -142,7 +143,49 @@ export async function verifyCarrierOp(
   return { hash, signature, valid: hash && signature };
 }
 
+/**
+ * Plan 190: refuse any atom name or delegation op/role name outside the closed wire
+ * vocabulary. Walks the raw carrier term grammar, so it never needs a decoded term and
+ * ignores malformed shapes (the decoders own those).
+ */
+export function assertWireVocabularyTerm(term: unknown): void {
+  if (!Array.isArray(term)) return;
+  const [tag, value] = term as [unknown, unknown];
+  switch (tag) {
+    case "atom":
+      assertWireVocabularyName(value);
+      return;
+    case "list":
+    case "tuple":
+    case "mapset":
+      if (Array.isArray(value)) value.forEach(assertWireVocabularyTerm);
+      return;
+    case "map":
+      if (Array.isArray(value)) {
+        for (const pair of value) if (Array.isArray(pair)) pair.forEach(assertWireVocabularyTerm);
+      }
+      return;
+    case "delegation":
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+        for (const key of ["ops", "roles"]) {
+          const names: unknown = Reflect.get(value, key);
+          if (Array.isArray(names)) names.forEach(assertWireVocabularyName);
+        }
+      }
+      return;
+  }
+}
+
+function assertWireVocabularyName(name: unknown): void {
+  if (typeof name === "string" && !isWireVocabularyName(name)) {
+    throw new Error(`atom name outside the wire vocabulary: ${name}`);
+  }
+}
+
 export async function authorCarrierOp(input: AuthorCarrierOpInput): Promise<CarrierOpFrame> {
+  // Refuse before anything is hashed or signed: every peer would refuse an off-list name.
+  assertWireVocabularyTerm(input.body);
+  assertWireVocabularyTerm(input.cap);
   const unsignedFrame: CarrierOpFrame = {
     v: 1,
     id: "",

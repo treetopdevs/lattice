@@ -27,6 +27,7 @@ defmodule Lattice.Op do
   `docs/adr/0001-canonical-encoding.md` for the caveats of this choice.
   """
 
+  alias Lattice.Carrier.Wire
   alias Lattice.Identity
 
   @enforce_keys [:id, :replica, :author, :deps, :kind, :body, :sig]
@@ -70,6 +71,24 @@ defmodule Lattice.Op do
       cap: cap,
       sig: Identity.sign(identity, encoding)
     }
+  end
+
+  @doc """
+  `new/6` for an op a peer must admit: refuses an atom name outside the closed carrier
+  vocabulary (`Lattice.Carrier.WireVocabulary`) in the body or cap before anything is signed.
+
+  Every peer would refuse a frame naming such an atom, which would strand its descendants as
+  pending, so every production path that authors a locally signed op uses this instead of
+  `new/6`. `Lattice.Sim` stays on `new/6`: adversarial tests author off-list names through it.
+  """
+  @spec authored(Identity.t(), String.t(), [id()], kind(), term(), keyword()) ::
+          {:ok, t()} | {:error, :unknown_atom}
+  def authored(%Identity{} = identity, replica, deps, kind, body, opts \\ [])
+      when is_binary(replica) and is_list(deps) and
+             kind in [:command, :authority, :inbox, :tombstone] do
+    if Wire.listed_term?(body) and Wire.listed_term?(Keyword.get(opts, :cap)),
+      do: {:ok, new(identity, replica, deps, kind, body, opts)},
+      else: {:error, :unknown_atom}
   end
 
   @doc "Recompute the canonical encoding (the signed/hashed bytes) of an op."

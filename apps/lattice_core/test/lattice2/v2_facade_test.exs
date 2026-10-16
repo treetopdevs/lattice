@@ -73,14 +73,14 @@ defmodule Lattice2.V2FacadeTest do
     _sim = hosted()
     :ok = V2.monitor("server", @replica)
 
-    assert :ok = V2.send("tab", {"server", @replica}, {:ping, 1})
+    assert :ok = V2.send("tab", {"server", @replica}, {:post, 1})
     {:ok, _} = V2.materialize("server", @replica)
-    assert_receive {:lattice_message, {"server", @replica}, {:ping, 1}}
+    assert_receive {:lattice_message, {"server", @replica}, {:post, 1}}
 
     # Exactly once across materializations, same as the Registry path.
     :ok = V2.dormant("server", @replica)
     {:ok, _} = V2.materialize("server", @replica)
-    refute_receive {:lattice_message, {"server", @replica}, {:ping, _}}, 50
+    refute_receive {:lattice_message, {"server", @replica}, {:post, _}}, 50
   end
 
   test "call/4 + await/2 route to Registry.call/4 + Registry.await/3" do

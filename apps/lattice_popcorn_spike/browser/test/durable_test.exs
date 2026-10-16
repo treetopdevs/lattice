@@ -20,21 +20,55 @@ defmodule LatticeBrowser.DurableTest do
         {Log.append!(log, op), grants ++ [d]}
       end)
 
-    {:ok, a} = Durable.receive_log(a, BrowserLogStore.dump_payload(log))
-    {:ok, b} = Durable.receive_log(b, BrowserLogStore.dump_payload(log))
+    {:ok, a} = Durable.receive_log(a, dump!(log))
+    {:ok, b} = Durable.receive_log(b, dump!(log))
     {root, a, b, grants}
+  end
+
+  defp dump!(log) do
+    {:ok, payload} = BrowserLogStore.dump_payload(log)
+    payload
+  end
+
+  defp capsule!(state) do
+    {:ok, capsule} = Durable.capsule(state)
+    capsule
+  end
+
+  test "a legacy log holding an off-list atom refuses the snapshot and upload instead of embedding it" do
+    {_, a, _, [grant | _]} = fixture()
+    {:ok, a, _} = Durable.post(a, "listed")
+    assert {:ok, %{"log" => %{"ops" => [_ | _]}}} = Durable.capsule(a)
+    assert {:ok, [_ | _]} = Durable.upload(a)
+
+    # A log persisted before the closed vocabulary could hold any atom a client signed.
+    legacy_op =
+      Op.new(
+        a.identity,
+        a.log.replica,
+        Log.frontier(a.log),
+        :command,
+        {:post, [:definitely_not_listed]},
+        cap: grant.id
+      )
+
+    legacy = %{a | log: Log.append!(a.log, legacy_op)}
+
+    assert {:error, :unknown_atom} = BrowserLogStore.dump_payload(legacy.log)
+    assert {:error, :unknown_atom} = Durable.capsule(legacy)
+    assert {:error, :unknown_atom} = Durable.upload(legacy)
   end
 
   test "independent signed offline writes survive restore and converge despite reordered duplicates" do
     {_, a, b, _} = fixture()
     {:ok, a, _} = Durable.post(a, "alpha")
     {:ok, b, _} = Durable.post(b, "beta")
-    {:ok, restored} = Durable.restore(Durable.capsule(a))
+    {:ok, restored} = Durable.restore(capsule!(a))
     assert restored.identity == a.identity
-    payload = BrowserLogStore.dump_payload(b.log)
+    payload = dump!(b.log)
     payload = Map.update!(payload, "ops", &(Enum.reverse(&1) ++ &1))
     {:ok, a} = Durable.receive_log(restored, payload)
-    {:ok, b} = Durable.receive_log(b, BrowserLogStore.dump_payload(a.log))
+    {:ok, b} = Durable.receive_log(b, dump!(a.log))
     assert Durable.view(a)["notes"] == Durable.view(b)["notes"]
     assert Enum.sort(Durable.view(a)["notes"]) == ["alpha", "beta"]
     assert Durable.view(a)["op_ids"] == Durable.view(b)["op_ids"]
@@ -43,24 +77,24 @@ defmodule LatticeBrowser.DurableTest do
   test "concurrent offline write becomes revoked audit evidence; observed revoke refuses new write" do
     {root, a, b, [grant | _]} = fixture()
     {:ok, a, before} = Durable.post(a, "before revocation")
-    {:ok, b} = Durable.receive_log(b, BrowserLogStore.dump_payload(a.log))
+    {:ok, b} = Durable.receive_log(b, dump!(a.log))
     revoke = Op.new(root, b.log.replica, Log.frontier(b.log), :authority, {:revoke, grant.id})
     b = %{b | log: Log.append!(b.log, revoke)}
     {:ok, a, stale} = Durable.post(a, "stale offline write")
-    {:ok, b} = Durable.receive_log(b, BrowserLogStore.dump_payload(a.log))
-    {:ok, a} = Durable.receive_log(a, BrowserLogStore.dump_payload(b.log))
+    {:ok, b} = Durable.receive_log(b, dump!(a.log))
+    {:ok, a} = Durable.receive_log(a, dump!(b.log))
     assert Durable.view(a)["rejected"][stale.id] == "revoked_capability"
     refute Map.has_key?(Durable.view(a)["rejected"], before.id)
     assert Durable.view(a)["notes"] == ["before revocation"]
     assert {:error, :revoked_capability} = Durable.post(a, "after revocation")
-    {:ok, restored} = Durable.restore(Durable.capsule(a))
+    {:ok, restored} = Durable.restore(capsule!(a))
     assert Durable.view(restored) == Durable.view(a)
   end
 
   test "a fresh VM restores the wire atom vocabulary without fixture-module warming" do
     {_, a, _, _} = fixture()
     path = Path.join(System.tmp_dir!(), "popcorn-cold-#{System.unique_integer([:positive])}")
-    File.write!(path, :erlang.term_to_binary(Durable.capsule(a)))
+    File.write!(path, :erlang.term_to_binary(capsule!(a)))
     on_exit(fn -> File.rm(path) end)
     ebin = :code.which(Durable) |> List.to_string() |> Path.dirname()
 
@@ -80,13 +114,13 @@ defmodule LatticeBrowser.DurableTest do
 
   test "corrupt storage and changed replica roots fail closed" do
     {_, a, _, _} = fixture()
-    bad = put_in(Durable.capsule(a), ["public_key"], "different")
+    bad = put_in(capsule!(a), ["public_key"], "different")
     assert {:error, :invalid_store} = Durable.restore(bad)
-    capsule = Durable.capsule(a)
+    capsule = capsule!(a)
     [op | rest] = capsule["log"]["ops"]
     bad = put_in(capsule, ["log", "ops"], [Map.put(op, "sig", Base.encode64(<<0::512>>)) | rest])
     assert {:error, :invalid_store} = Durable.restore(bad)
     {_, other, _, _} = fixture()
-    assert {:error, :invalid_replica_log} = Durable.receive_log(a, Durable.capsule(other)["log"])
+    assert {:error, :invalid_replica_log} = Durable.receive_log(a, capsule!(other)["log"])
   end
 end

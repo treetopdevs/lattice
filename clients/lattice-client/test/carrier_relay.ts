@@ -85,6 +85,48 @@ const refusedClient = new CarrierWebSocketClient(
 );
 await assert.rejects(() => refusedClient.relay(frame), /carrier peer error: read_only/);
 
+// Plan 190: report reasons are the closed `WIRE_REPORT_REASONS` set on push and relay results.
+const reasoned: CarrierPushReport = {
+  accepted: [],
+  quarantined: [[frame.id, "bad_signature"], [frame.id, "already_quarantined"]],
+  rejected: [[frame.id, "wrong_replica"]],
+  pending: [],
+};
+assert.deepEqual(
+  await new CarrierWebSocketClient(new ScriptedCarrierWebSocket({ type: "relay_result", ...reasoned })).relay(frame),
+  reasoned,
+);
+assert.deepEqual(
+  await new CarrierWebSocketClient(new ScriptedCarrierWebSocket({ type: "push_result", ...reasoned })).push([frame]),
+  reasoned,
+);
+for (const field of ["quarantined", "rejected"] as const) {
+  // An authority verdict is an op-level quarantine reason, never a report reason.
+  const offListReport = { ...accepted, [field]: [[frame.id, "invalid_transfer"]] };
+  await assert.rejects(
+    () => new CarrierWebSocketClient(new ScriptedCarrierWebSocket({ type: "relay_result", ...offListReport })).relay(frame),
+    new RegExp(`malformed carrier ${field} pairs`),
+  );
+  await assert.rejects(
+    () => new CarrierWebSocketClient(new ScriptedCarrierWebSocket({ type: "push_result", ...offListReport })).push([frame]),
+    new RegExp(`malformed carrier ${field} pairs`),
+  );
+}
+// State reports keep their own reason domain.
+const stateReport = {
+  type: "state_result",
+  state_b64: "",
+  op_ids: [frame.id],
+  frontier: [frame.id],
+  structural_quarantine: [],
+  authority_quarantine: [[frame.id, "not_holder"], [frame.id, "revoked_capability"]],
+  log_size: 1,
+};
+assert.deepEqual(
+  (await new CarrierWebSocketClient(new ScriptedCarrierWebSocket(stateReport)).stateReport()).authority_quarantine,
+  [[frame.id, "not_holder"], [frame.id, "revoked_capability"]],
+);
+
 const pushed: CarrierPushReport = {
   accepted: [frame.id],
   quarantined: [],

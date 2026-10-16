@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { authorCarrierDelegation, authorCarrierOp } from "../../src/codec";
 import { bindTownshipReplica, townshipCapTerm } from "../../src/township";
+import { isWireVocabularyName } from "../../src/wire_vocabulary";
+import { assertVectorFrames } from "./assert_vector_frames";
 export async function cutoffFixture() {
     const seed = createHash("sha256").update("r11a-cutoff-ts-root").digest();
     const signer = { publicKey: ed25519.getPublicKey(seed), sign: (bytes) => ed25519.sign(bytes, seed) };
@@ -63,6 +65,9 @@ async function main() {
         inputs.length = 0;
         for (const file of ["cutoff_atoms_member_continuity_v1.json", "cutoff_atoms_with_member_continuity_v1.json"]) {
             const names = JSON.parse(await readFile(new URL(`../vectors/catalog/${file}`, import.meta.url), "utf8"));
+            // A corpus the wire would refuse cannot be authored; fail the export instead of dropping it.
+            const offList = names.filter((name) => !isWireVocabularyName(name));
+            assert.deepEqual(offList, [], `${file}: names outside the wire vocabulary`);
             const op = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [f.genuine.id], kind: "command", cap: ["nil"],
                 body: ["tuple", [["atom", "attest_member_key_v1"], ["list", [["list", names.map((name) => ["atom", name])]]]]] });
             inputs.push({ name: `member-continuity-${names.length}-names`, replica: f.replica, frames: [...f.frames, op],
@@ -74,6 +79,7 @@ async function main() {
         assert.equal(result.ok, true, input.name);
         return { ...input, result };
     }));
+    assertVectorFrames(vectors);
     const json = serialize({ version: 1, vectors });
     await mkdir(dirname(output), { recursive: true });
     await writeFile(output, `${json}\n`);

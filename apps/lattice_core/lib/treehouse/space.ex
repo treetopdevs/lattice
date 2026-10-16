@@ -112,36 +112,36 @@ defmodule Treehouse.Space do
     delegation =
       Delegation.genesis(identity, replica, ops: @preview_commands, roles: [:admin, :moderator])
 
-    genesis = Op.new(identity, replica, [], :authority, {:genesis, delegation, %{}})
+    with {:ok, genesis} <-
+           Op.authored(identity, replica, [], :authority, {:genesis, delegation, %{}}),
+         {:ok, name_op} <-
+           Op.authored(identity, replica, [genesis.id], :command, {:create_space, [name]},
+             cap: delegation.id
+           ) do
+      log = retained || Log.new(replica)
 
-    name_op =
-      Op.new(identity, replica, [genesis.id], :command, {:create_space, [name]},
-        cap: delegation.id
-      )
+      cond do
+        log.replica != replica ->
+          {:error, :wrong_replica}
 
-    log = retained || Log.new(replica)
+        not valid_retained_log?(log) ->
+          {:error, :invalid_retained_log}
 
-    cond do
-      log.replica != replica ->
-        {:error, :wrong_replica}
+        Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
+          {:error, :wrong_root}
 
-      not valid_retained_log?(log) ->
-        {:error, :invalid_retained_log}
+        different_initialization?(log, genesis, name_op) ->
+          {:error, :different_initialization}
 
-      Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
-        {:error, :wrong_root}
-
-      different_initialization?(log, genesis, name_op) ->
-        {:error, :different_initialization}
-
-      true ->
-        {:ok,
-         %{
-           replica: replica,
-           profile: :legacy_root_only,
-           status: initialization(log),
-           pending: Enum.reject([genesis, name_op], &Log.has?(log, &1.id))
-         }}
+        true ->
+          {:ok,
+           %{
+             replica: replica,
+             profile: :legacy_root_only,
+             status: initialization(log),
+             pending: Enum.reject([genesis, name_op], &Log.has?(log, &1.id))
+           }}
+      end
     end
   end
 
@@ -192,6 +192,19 @@ defmodule Treehouse.Space do
     end)
   end
 
+  # The authoring helpers below return a bare op, so like this module's other argument checks
+  # (`text!/1`, `transfer_role/5`) they refuse by raising: an atom name outside the closed wire
+  # vocabulary would make every peer refuse the signed frame.
+  defp authored!(identity, replica, deps, kind, body) do
+    case Op.authored(identity, replica, deps, kind, body) do
+      {:ok, op} ->
+        op
+
+      {:error, :unknown_atom} ->
+        raise ArgumentError, "operation names an atom outside the wire vocabulary"
+    end
+  end
+
   @doc "Author one ordinary moderator transfer; the authority judge decides its validity."
   @spec change_moderator(Identity.t(), Log.t(), Identity.pubkey(), Delegation.t()) ::
           {Op.t(), Delegation.t()}
@@ -216,7 +229,7 @@ defmodule Treehouse.Space do
         expires_epoch: parent.expires_epoch
       )
 
-    {Op.new(
+    {authored!(
        identity,
        log.replica,
        Log.frontier(log),
@@ -229,7 +242,7 @@ defmodule Treehouse.Space do
   @spec revoke_grant(Identity.t(), Log.t(), String.t()) :: Op.t()
   def revoke_grant(identity, log, delegation_id),
     do:
-      Op.new(
+      authored!(
         identity,
         log.replica,
         Log.frontier(log),
@@ -242,7 +255,7 @@ defmodule Treehouse.Space do
   def witnessed_succession(identity, log, role, delegation, certificate)
       when role in [:admin, :moderator],
       do:
-        Op.new(
+        authored!(
           identity,
           log.replica,
           Log.frontier(log),

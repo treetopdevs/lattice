@@ -5,14 +5,36 @@ defmodule Lattice.BrowserLogStore do
 
   @schema "lattice-browser-log-v1"
 
-  @spec dump_payload(Log.t()) :: map()
+  @doc """
+  The JSON-safe snapshot of a log, or `{:error, :unknown_atom}` when any op in it (accepted
+  or quarantined) names an atom outside the closed wire vocabulary. A snapshot restores
+  through `restore_payload/1`, which refuses such a name, so it is never embedded.
+  """
+  @spec dump_payload(Log.t()) :: {:ok, map()} | {:error, :unknown_atom}
   def dump_payload(%Log{} = log) do
-    %{
-      "schema" => @schema,
-      "replica" => log.replica,
-      "ops" => log |> Log.topo_ops() |> Enum.map(&Wire.encode_op/1),
-      "quarantine" => Enum.map(Log.quarantine(log), &encode_quarantine_entry/1)
-    }
+    with {:ok, ops} <- encode_all(Log.topo_ops(log), &Wire.encode_op_checked/1),
+         {:ok, quarantine} <- encode_all(Log.quarantine(log), &encode_quarantine_entry/1) do
+      {:ok,
+       %{
+         "schema" => @schema,
+         "replica" => log.replica,
+         "ops" => ops,
+         "quarantine" => quarantine
+       }}
+    end
+  end
+
+  defp encode_all(items, encode) do
+    Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->
+      case encode.(item) do
+        {:ok, encoded} -> {:cont, {:ok, [encoded | acc]}}
+        {:error, :unknown_atom} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, encoded} -> {:ok, Enum.reverse(encoded)}
+      {:error, :unknown_atom} = error -> error
+    end
   end
 
   @spec restore_payload(map()) ::
@@ -46,7 +68,9 @@ defmodule Lattice.BrowserLogStore do
   def restore_payload(_), do: {:error, :malformed_store}
 
   defp encode_quarantine_entry(%{op: op, reason: reason}) do
-    %{"op" => Wire.encode_op(op), "reason" => Atom.to_string(reason)}
+    with {:ok, frame} <- Wire.encode_op_checked(op) do
+      {:ok, %{"op" => frame, "reason" => Atom.to_string(reason)}}
+    end
   end
 
   defp restore_accepted(replica, ops) do

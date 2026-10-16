@@ -16,6 +16,7 @@ import { canonicalBytesForTransportCatalog, canonicalBytesForCatalogRotation, ca
 import type { CatalogBootstrap, CatalogEntry, TransportCatalog, CatalogRotation, CatalogCutoff } from "../../src/treehouse_catalog_codec";
 import { deriveTreehouseCatalogCutoff } from "../../src/treehouse_catalog_cutoff";
 import { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust } from "../../src/treehouse_catalog_trust";
+import { assertVectorFrames } from "./assert_vector_frames";
 import type { TreehouseCatalogTrustDecision } from "../../src/treehouse_catalog_trust";
 
 export const fixtureId = (label: string) => createHash("sha256").update(`r11a-trust-ts:${label}`).digest("base64url");
@@ -177,6 +178,7 @@ async function main() {
       catalogBytes: b64(canonicalBytesForTransportCatalog(f.catalog)), rotationBytes: b64(canonicalBytesForCatalogRotation(f.rotation)),
       possessionBytes: b64(canonicalBytesForCatalogRotationPossession(f.rotation)),
       payloads: f.histories.flatMap((h) => h.frames.map((frame) => ({ replica: h.replica, id: frame.id, bytes: b64(canonicalBytesForCarrierOp(frame)) }))) } };
+  assertVectorFrames(vector);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(vector, null, 2)}\n`);
   console.log(`Exported independently signed Space and Thread catalog history to ${output}`);
