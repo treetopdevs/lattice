@@ -29,8 +29,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   @spec activate(Path.t(), binary() | nil, ReleaseGate.owner(), map()) ::
           {:ok, map()} | {:error, term()}
   def activate(root, expected, owner, observation) do
-    with :ok <- sealed(owner, observation),
-         {:ok, incarnation} <- guarded(root),
+    # One deployment snapshot supplies both the sealed owner and the marker,
+    # so a restart between the two can never lend this seal a newer boot's
+    # marker; it makes the captured one stale instead.
+    with {:ok, deployment} <- sealed(owner, observation),
+         {:ok, incarnation} <- guarded(root, deployment),
          %{attempt: attempt, evidence: %{manifest: manifest, logs: logs}} = observation.receipt,
          {:ok, ^expected} <- current(root),
          {:ok, %{"phase" => "carrier_pending"} = record} <- pending(expected),
@@ -64,17 +67,17 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   end
 
   defp sealed(owner, observation) do
-    with %{owner: ^owner} <- Runtime.deployment(),
+    with %{owner: ^owner} = deployment <- Runtime.deployment(),
          true <- ReleaseGate.sealed?(owner, observation) do
-      :ok
+      {:ok, deployment}
     else
       _ -> {:error, :release_not_sealed}
     end
   end
 
-  defp guarded(root) do
+  defp guarded(root, deployment) do
     with %{operator_root: guarded_root, incarnation: incarnation} when is_binary(incarnation) <-
-           Runtime.deployment(),
+           deployment,
          true <- guarded_root == Path.expand(root) do
       {:ok, incarnation}
     else
