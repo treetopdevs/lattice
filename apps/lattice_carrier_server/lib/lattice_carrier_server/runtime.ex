@@ -16,7 +16,7 @@ defmodule LatticeCarrierServer.Runtime do
   alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Health, Holder, Manifest}
 
-  alias LatticeCarrierServer.Operator.ReleaseGate
+  alias LatticeCarrierServer.Operator.{Lock, ReleaseGate}
 
   @deployment_key {__MODULE__, :deployment}
   @instance_names_key {__MODULE__, :instance_names}
@@ -74,14 +74,15 @@ defmodule LatticeCarrierServer.Runtime do
   end
 
   @doc false
-  @spec prepare_owned(nil | Path.t(), ReleaseGate.owner() | nil, boolean()) ::
+  @spec prepare_owned(nil | Path.t(), ReleaseGate.owner() | nil, boolean(), Path.t() | nil) ::
           {:ok, list()} | {:error, term()}
-  def prepare_owned(path, owner, extras? \\ false)
-  def prepare_owned(path, nil, _extras?), do: prepare(path)
+  def prepare_owned(path, owner, extras? \\ false, operator_root \\ nil)
+  def prepare_owned(path, nil, _extras?, _operator_root), do: prepare(path)
 
-  def prepare_owned(path, owner, extras?) do
+  def prepare_owned(path, owner, extras?, operator_root) do
     with {:ok, lease} <- ReleaseGate.acquire(owner, :preflight),
          {:ok, children, digest} <- do_prepare(path),
+         {:ok, guard} <- boot_guard(operator_root, path, digest),
          :ok <- ReleaseGate.complete(owner, lease, :preflight, self()) do
       deployment = deployment()
 
@@ -89,15 +90,32 @@ defmodule LatticeCarrierServer.Runtime do
       # a second read that could describe a later file.
       :persistent_term.put(
         @deployment_key,
-        Map.merge(deployment, %{
+        deployment
+        |> Map.merge(%{
           owner: owner,
           uncontrolled_routes?: extras?,
           manifest_path: Path.expand(path),
           manifest_digest: digest
         })
+        |> Map.merge(guard)
       )
 
       {:ok, children}
+    end
+  end
+
+  # With an operator root, the mutation owner confirms under its lock that the
+  # loaded bytes are still active and agree with the journal, and returns the
+  # incarnation marker an activation of this boot must present. Without one,
+  # this boot carries no marker and can never be activated.
+  defp boot_guard(nil, _path, _digest), do: {:ok, %{}}
+
+  defp boot_guard(root, path, digest) do
+    root = Path.expand(root)
+
+    case Lock.boot(root, Path.expand(path), Base.encode16(digest, case: :lower)) do
+      {:ok, incarnation} -> {:ok, %{operator_root: root, incarnation: incarnation}}
+      {:error, _} = error -> error
     end
   end
 

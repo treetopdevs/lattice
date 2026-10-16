@@ -65,11 +65,12 @@ class Protocol(unittest.TestCase):
         pending = json.dumps(self.sample())
         activated = json.dumps(dict(self.sample(), phase="activated"))
         good = {"version": 1, "kind": "activate", "expected": pending, "record": activated,
-                "attempt": self.sample()["attempt"], "artifacts": None,
+                "attempt": self.sample()["attempt"], "artifacts": None, "incarnation": "4" * 64,
                 "checks": [{"path": "/srv/active.json", "sha256": "0" * 64},
                            {"path": "/srv/space.log", "sha256": "4" * 64}]}
         log = good["checks"][1]
         malformed = [dict(good, artifacts=[]), dict(good, checks=[]),
+                     dict(good, incarnation=None), dict(good, incarnation="4" * 63),
                      dict(good, checks=good["checks"][:1]),
                      dict(good, checks=[log, log]), dict(good, attempt="short"),
                      dict(good, checks=[{"path": "relative.json", "sha256": "0" * 64}, log]),
@@ -99,7 +100,29 @@ class Protocol(unittest.TestCase):
 
     def test_activation_never_replaces_its_lock_journal_or_artifacts(self):
         names = owner.reserved("/op", self.sample())
-        self.assertEqual(names, {"/op/operator.lock", "/op/operator-journal.json", "/public/candidate"})
+        self.assertEqual(names, {"/op/operator.lock", "/op/operator-journal.json",
+                                 "/op/operator-incarnation", "/public/candidate"})
+
+    def test_boot_plan_shape_is_closed(self):
+        good = {"version": 1, "kind": "boot", "expected": None, "record": None, "attempt": None,
+                "artifacts": None, "incarnation": None,
+                "checks": [{"path": "/srv/active.json", "sha256": "0" * 64}]}
+        for plan in [dict(good, expected=json.dumps(self.sample())), dict(good, record="{}"),
+                     dict(good, attempt=self.sample()["attempt"]), dict(good, artifacts=[]),
+                     dict(good, incarnation="4" * 64), dict(good, checks=None), dict(good, checks=[]),
+                     dict(good, checks=good["checks"] * 2),
+                     dict(good, checks=[{"path": "/srv/active.json", "sha256": "short"}]),
+                     dict(good, checks=[{"path": "relative.json", "sha256": "0" * 64}])]:
+            with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+                owner.boot("/nonexistent-root", plan)
+            self.assertEqual(str(caught.exception), "malformed_operator_plan")
+
+    def test_only_boot_and_activate_plans_carry_an_incarnation(self):
+        plan = {"version": 1, "kind": "journal", "expected": None, "record": "{}", "attempt": None,
+                "checks": None, "artifacts": None, "incarnation": "4" * 64}
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.execute("/nonexistent-root", plan)
+        self.assertEqual(str(caught.exception), "malformed_operator_plan")
 
     def test_service_identity_binding_is_closed_and_canonical(self):
         good = self.sample()["service"]

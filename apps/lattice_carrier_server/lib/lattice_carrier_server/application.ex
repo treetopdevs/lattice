@@ -66,7 +66,14 @@ defmodule LatticeCarrierServer.RuntimeSupervisor do
   def init({manifest_path, configured}) do
     owner = if is_binary(manifest_path), do: LatticeCarrierServer.Operator.ReleaseGate.owner()
 
-    case LatticeCarrierServer.Runtime.prepare_owned(manifest_path, owner, configured != []) do
+    operator_root = Application.get_env(:lattice_carrier_server, :operator_root)
+
+    case LatticeCarrierServer.Runtime.prepare_owned(
+           manifest_path,
+           owner,
+           configured != [],
+           operator_root
+         ) do
       {:ok, children} -> Supervisor.init(configured ++ children, strategy: :one_for_one)
       {:error, reason} -> exit({:shutdown, {:carrier_release_preflight_refused, reason}})
     end
