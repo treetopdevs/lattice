@@ -4,6 +4,7 @@ defmodule Lattice.WireAtomVocabularyTest do
   # and reduce each vector exactly as this VM does, and both must match the oracle.
   use ExUnit.Case, async: true
 
+  alias Lattice.Carrier.Wire
   alias Mix.Tasks.Lattice.ExportVectors.PolicyFixture
 
   @vectors Path.expand("../../../../clients/lattice-client/test/vectors", __DIR__)
@@ -24,29 +25,24 @@ defmodule Lattice.WireAtomVocabularyTest do
     "replica:policy:" => {PolicyFixture, "PolicyFixture"}
   }
 
-  # The browser's judge (`browser/lib/judge.ex`), run verbatim in both VMs. The exporter module
-  # is touched only after decode and judge: loading it brings its vector-only atoms into the VM.
-  # No name from `@peer_absent` appears in this source, so compiling it adds none.
+  # The browser's judge (`browser/lib/judge.ex`) after decode, run verbatim in both VMs. Decode
+  # runs first, as its own call: compiling this source loads the exporter module (for
+  # `state_json/3`), and with it the vector-only atoms, so it must not run before decode.
   @judge """
-  alias Lattice.{Authority, Carrier.Wire, Log, Reduce, Sync}
+  alias Lattice.{Authority, Log, Reduce, Sync}
 
-  case Wire.decode_ops(frames) do
-    {:ok, [first | _] = ops} ->
-      {log, report} = Sync.deliver(Log.new(first.replica), ops)
-      analysis = Authority.analyze(module, log)
-      reduced = Reduce.reduce(module, log, quarantine: analysis.quarantine)
+  [first | _] = ops
+  {log, report} = Sync.deliver(Log.new(first.replica), ops)
+  analysis = Authority.analyze(module, log)
+  reduced = Reduce.reduce(module, log, quarantine: analysis.quarantine)
 
-      pairs =
-        analysis.reasons
-        |> Enum.map(fn {id, reason} -> [id, Atom.to_string(reason)] end)
-        |> Enum.sort()
+  pairs =
+    analysis.reasons
+    |> Enum.map(fn {id, reason} -> [id, Atom.to_string(reason)] end)
+    |> Enum.sort()
 
-      state = Mix.Tasks.Lattice.ExportVectors.state_json(module, log, realms)
-      {:ok, %{count: length(ops), size: Log.size(log), report: report, pairs: pairs, reduced: reduced, state: state}}
-
-    other ->
-      other
-  end
+  state = Mix.Tasks.Lattice.ExportVectors.state_json(module, log, realms)
+  %{count: length(ops), size: Log.size(log), report: report, pairs: pairs, reduced: reduced, state: state}
   """
 
   for {vector_name, atom_name} <- @cold_vectors do
@@ -57,30 +53,38 @@ defmodule Lattice.WireAtomVocabularyTest do
       {module, schema_name} = schema_for(vector["replica"])
       assert vector["schema"]["name"] == schema_name
 
-      bindings = [
-        module: module,
-        frames: vector["oracleCarrierOps"],
-        realms:
-          Map.new(vector["realmByPubkey"], fn {b64, realm} -> {Base.decode64!(b64), realm} end)
-      ]
+      frames = vector["oracleCarrierOps"]
+
+      realms =
+        Map.new(vector["realmByPubkey"], fn {b64, realm} -> {Base.decode64!(b64), realm} end)
 
       {:ok, peer, _node} =
         :peer.start_link(%{connection: :standard_io, args: [~c"-pa" | :code.get_path()]})
+
+      # Immediately before decode the peer holds none of the vector-only atoms, and nothing that
+      # spells them (the exporter) is loaded.
+      refute :peer.call(peer, :code, :is_loaded, [Mix.Tasks.Lattice.ExportVectors])
 
       for name <- @peer_absent do
         catch_error(:peer.call(peer, String, :to_existing_atom, [name]))
       end
 
-      {{:ok, remote}, _} = :peer.call(peer, Code, :eval_string, [@judge, bindings], 120_000)
-      {{:ok, local}, _} = Code.eval_string(@judge, bindings)
+      assert {:ok, remote_ops} = :peer.call(peer, Wire, :decode_ops, [frames])
+      assert {:ok, local_ops} = Wire.decode_ops(frames)
+      assert remote_ops == local_ops
 
-      # The peer decoded the vector's atoms itself, from the closed vocabulary alone.
+      # The peer created the vector's atoms itself, from the closed vocabulary alone.
+      refute :peer.call(peer, :code, :is_loaded, [Mix.Tasks.Lattice.ExportVectors])
       assert is_atom(:peer.call(peer, String, :to_existing_atom, [unquote(atom_name)]))
+
+      bindings = [module: module, ops: local_ops, realms: realms]
+      {remote, _} = :peer.call(peer, Code, :eval_string, [@judge, bindings], 120_000)
+      {local, _} = Code.eval_string(@judge, bindings)
 
       assert remote == local
 
       # Every op is admitted structurally; refusals live in the authority verdict.
-      assert local.count == length(bindings[:frames])
+      assert local.count == length(frames)
       assert local.size == local.count
       assert %{quarantined: [], rejected: [], pending: []} = local.report
 

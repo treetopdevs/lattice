@@ -45,7 +45,7 @@ defmodule TownshipWeb.CarrierProjection do
 
   @impl GenServer
   def init(opts) do
-    # Carrier wire decoding permits only existing atoms, so load the trusted schema before pulling.
+    # Load the trusted schema before pulling; wire decoding admits only the closed vocabulary.
     Code.ensure_loaded!(Authority)
     Code.ensure_loaded!(Matter)
 

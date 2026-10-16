@@ -135,8 +135,8 @@ defmodule Lattice.Authority.SuccessionCertificate do
 
   defp certificate_parts(_certificate), do: {:error, :malformed_recovery_certificate}
 
-  # A role name the decoding VM lacks arrives as Lattice.Canonical.Atom (row 190); it is
-  # still a well-shaped role and fails only the expected-claim comparison.
+  # A log persisted under PR #114 can hold a role as Lattice.Canonical.Atom; it is still a
+  # well-shaped role and fails only the expected-claim comparison. Wire decode now yields atoms.
   defp atom_name?(role), do: is_atom(role) or match?(%Lattice.Canonical.Atom{}, role)
 
   defp valid_claim_shape?(claim) do

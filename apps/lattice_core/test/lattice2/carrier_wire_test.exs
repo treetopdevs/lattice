@@ -356,6 +356,17 @@ defmodule Lattice.CarrierWireTest do
       end
     end
 
+    test "the checked encode agrees with decode on nil and boolean delegation names" do
+      issuer = Identity.from_seed("issuer", "wire-vocabulary-checked-scalar-names")
+
+      for opts <- [[ops: [true]], [ops: [:post], roles: [nil]], [ops: [:post], roles: [false]]] do
+        delegation = Delegation.new(issuer, "replica:wire", issuer.pub, opts)
+        op = Op.new(issuer, "replica:wire", [], :authority, {:grant, delegation})
+        assert {:error, :unknown_atom} = Wire.encode_op_checked(op)
+        assert {:error, :malformed_op} = op |> Wire.encode_op() |> Wire.decode_op()
+      end
+    end
+
     test "a listed name encodes to the unchecked bytes and round-trips in a cold VM" do
       peer = cold_peer()
       assert_cold(peer, "seize_records")

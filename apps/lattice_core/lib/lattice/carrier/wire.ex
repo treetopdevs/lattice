@@ -102,8 +102,9 @@ defmodule Lattice.Carrier.Wire do
   def listed_term?(value) when is_atom(value), do: WireVocabulary.known?(Atom.to_string(value))
   def listed_term?(%CanonicalAtom{name: name}), do: WireVocabulary.known?(name)
 
+  # Delegation ops and roles ride the wire as bare names, so `nil` and booleans are names here.
   def listed_term?(%Delegation{ops: ops, roles: roles}),
-    do: Enum.all?(ops, &listed_term?/1) and Enum.all?(roles, &listed_term?/1)
+    do: Enum.all?(ops, &listed_name?/1) and Enum.all?(roles, &listed_name?/1)
 
   def listed_term?(%MapSet{} = value), do: value |> MapSet.to_list() |> listed_term?()
   def listed_term?(value) when is_list(value), do: Enum.all?(value, &listed_term?/1)
@@ -113,6 +114,10 @@ defmodule Lattice.Carrier.Wire do
     do: Enum.all?(value, fn {k, v} -> listed_term?(k) and listed_term?(v) end)
 
   def listed_term?(_value), do: true
+
+  defp listed_name?(value) when is_atom(value), do: WireVocabulary.known?(Atom.to_string(value))
+  defp listed_name?(%CanonicalAtom{name: name}), do: WireVocabulary.known?(name)
+  defp listed_name?(_value), do: false
 
   @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
   def decode_op(%{
