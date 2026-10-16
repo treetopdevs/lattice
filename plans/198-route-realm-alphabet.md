@@ -160,8 +160,10 @@ Only these files change. Nothing under `clients/lattice-client`, `apps/`, or `.g
    (`ordinaryConnectSrc` + one `ws://<host>:*` per loopback host + `wss:` when `schemes.wss ===
    "any-host"`) instead of the literal; keep the ordinary `connect-src` pin and the overlay shape
    pins.
-10. `src/App.vue` — `describe()` gains `invalid_relay`: "A saved relay route no longer meets the
-    route rules. Nothing has been replaced or rewritten, but the saved record cannot be opened until an operator repairs its routes."
+10. `src/App.vue` — `describe()` gains `invalid_relay`, which the native parser raises both for a
+    route that fails the rules and for a route set that does not name the held Space: "A saved relay
+    route no longer meets the route rules, or the route set does not name this Space. Nothing has been
+    replaced or rewritten, but the saved record cannot be opened until an operator repairs its routes."
 11. `package.json` — `test` runs `tsx test/route_alphabet.ts` after `test/storage.ts`; new script
     `route-alphabet:cases` = `tsx test/support/route_alphabet_cases.ts --write`.
 12. `plans/README.md` — row 198 status cell (one line, ≤ 200 characters).
