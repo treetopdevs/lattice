@@ -470,6 +470,8 @@ console.log("\x1b[32m✓ TypeScript carrier availability feed checks passed\x1b[
 // the socket and then stalls can hold neither a dial nor a request open forever.
 console.log("\n▸ TypeScript carrier deadlines (row 196)");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Node's view of live timers: a bound that is cleared on reply or on a completed dial leaves none.
+const activeTimeouts = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
 const connectArgs = {
     url: "ws://carrier.test/carrier",
     localRealm: "resident",
@@ -542,6 +544,7 @@ assert.equal(carrierRequestTimeoutMs, 30_000, "D3 pins the request bound at 30 s
     assert.deepEqual(await advertised, ["op-1"]);
     await sleep(40);
     assert.equal(socket.closed, false, "an answered request must not close a healthy socket later");
+    assert.equal(activeTimeouts(), 0, "an answered request leaves no timer running");
     const again = client.advertise();
     socket.receive({ type: "frontier_result", ids: ["op-2"] });
     assert.deepEqual(await again, ["op-2"]);
@@ -589,6 +592,7 @@ assert.equal(carrierRequestTimeoutMs, 30_000, "D3 pins the request bound at 30 s
     const socket = instance;
     await sleep(40);
     assert.equal(socket.closed, false, "a completed dial must not be closed by its own expired bound");
+    assert.equal(activeTimeouts(), 0, "a completed dial leaves no timer running");
     await assert.rejects(client.advertise(), /carrier request timeout/);
     assert.equal(socket.closed, true);
 }

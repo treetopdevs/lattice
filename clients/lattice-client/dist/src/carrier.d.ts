@@ -41,7 +41,9 @@ export interface ConnectCarrierWebSocketOptions {
     signal?: AbortSignal;
     /**
      * Bound on the whole dial (socket open, server nonce, challenge signing, hello). Expiry closes the
-     * socket and rejects with `carrier connect timeout`. Defaults to `carrierDialTimeoutMs`.
+     * socket and rejects with `carrier connect timeout`. Defaults to `carrierDialTimeoutMs`. The hello
+     * step is also a request, so a dial bound longer than the request bound sees a stalled hello fail as
+     * `carrier request timeout` instead; both are transient to callers.
      */
     dialTimeoutMs?: number;
     /**
@@ -59,8 +61,10 @@ export interface CarrierWebSocketClientOptions {
     requestTimeoutMs?: number;
 }
 /**
- * Row 196 (D3, 2026-10-14): every carrier-client await is bounded at this one boundary. A dial gets
- * 10 s and each request 30 s; neither can be disabled, only shortened or lengthened.
+ * Row 196 (D3, 2026-10-14): the dial and every request/response round trip are bounded at this one
+ * boundary. A dial gets 10 s and each request 30 s; neither can be disabled, only shortened or
+ * lengthened. The bound is per request, so a paged `advertise()` or `pull()` is bounded per page, and
+ * a subscription's `next()` waits for pushed hints until the socket closes or fails, by design.
  */
 export declare const carrierDialTimeoutMs = 10000;
 export declare const carrierRequestTimeoutMs = 30000;

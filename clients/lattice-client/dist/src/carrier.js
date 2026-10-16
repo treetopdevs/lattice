@@ -5,8 +5,10 @@ import { continuationFamily } from "./authority";
 import { continuationProfileFromCarrierTerm, continuationCertificateFromCarrierTerm } from "./continuation";
 import { integrate } from "./sync";
 /**
- * Row 196 (D3, 2026-10-14): every carrier-client await is bounded at this one boundary. A dial gets
- * 10 s and each request 30 s; neither can be disabled, only shortened or lengthened.
+ * Row 196 (D3, 2026-10-14): the dial and every request/response round trip are bounded at this one
+ * boundary. A dial gets 10 s and each request 30 s; neither can be disabled, only shortened or
+ * lengthened. The bound is per request, so a paged `advertise()` or `pull()` is bounded per page, and
+ * a subscription's `next()` waits for pushed hints until the socket closes or fails, by design.
  */
 export const carrierDialTimeoutMs = 10_000;
 export const carrierRequestTimeoutMs = 30_000;
