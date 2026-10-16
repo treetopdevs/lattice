@@ -281,15 +281,18 @@ def commit(root, old, raw, activation=False):
 
 def activate(root, plan):
     """Replace the active manifest with the staged candidate, then record it.
+    checks[0] is the active manifest; the rest are the sealed route logs, which
+    must still hold the exact bytes the seal captured.
     The manifest replace is the activation point. A retry after a replace whose
     journal commit was lost finds the candidate bytes already active and only
     commits the journal; any other active content is stale intent."""
     checks = plan["checks"]
     if (plan["artifacts"] is not None or type(plan["expected"]) is not str
-            or not op_id(plan["attempt"]) or type(checks) is not list or len(checks) != 1
-            or not closed(checks[0], ["path", "sha256"]) or not hex_id(checks[0]["sha256"])
-            or type(checks[0]["path"]) is not str or not os.path.isabs(checks[0]["path"])
-            or os.path.normpath(checks[0]["path"]) != checks[0]["path"]):
+            or not op_id(plan["attempt"]) or type(checks) is not list or not 2 <= len(checks) <= 129
+            or not all(closed(c, ["path", "sha256"]) and hex_id(c["sha256"])
+                       and type(c["path"]) is str and os.path.isabs(c["path"])
+                       and os.path.normpath(c["path"]) == c["path"] for c in checks)
+            or len({c["path"] for c in checks}) != len(checks)):
         refuse("malformed_operator_plan")
     old = record(plan["expected"])
     if (old["phase"] != "carrier_pending" or old["attempt"] != plan["attempt"]
@@ -310,6 +313,7 @@ def activate(root, plan):
         staged(a)
     expected(root, plan["expected"])
     current_service(old["service"])
+    snapshots(checks[1:])
     present = digest(active(target))
     if present == old["manifest_digest"]:
         # Beside the target, so the replace never crosses a filesystem. An
@@ -319,6 +323,7 @@ def activate(root, plan):
         retain(temporary, candidate)
         expected(root, plan["expected"])
         current_service(old["service"])
+        snapshots(checks[1:])
         if digest(active(target)) != old["manifest_digest"]:
             refuse("stale_operator_intent")
         os.replace(temporary, target)

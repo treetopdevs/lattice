@@ -19,13 +19,14 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   and is neither readiness, catalog publication nor catalog replacement.
   """
   alias LatticeCarrierServer.Operator.{Journal, Lock, ReleaseGate}
-  alias LatticeCarrierServer.{Manifest, Runtime}
+  alias Lattice.Log
+  alias LatticeCarrierServer.{Durability, Manifest, Runtime}
 
   @spec activate(Path.t(), binary() | nil, ReleaseGate.owner(), map()) ::
           {:ok, map()} | {:error, term()}
   def activate(root, expected, owner, observation) do
     with :ok <- sealed(owner, observation),
-         %{attempt: attempt, evidence: %{manifest: manifest}} = observation.receipt,
+         %{attempt: attempt, evidence: %{manifest: manifest, logs: logs}} = observation.receipt,
          {:ok, ^expected} <- current(root),
          {:ok, %{"phase" => "carrier_pending"} = record} <- pending(expected),
          :ok <- same(attempt == record["attempt"], :release_attempt_mismatch),
@@ -33,6 +34,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
          :ok <- same(digest == record["manifest_digest"], :release_manifest_mismatch),
          :ok <- same(Journal.service_identity_current?(record["service"]), :stale_operator_intent),
          :ok <- identities_current(record, manifest.instances),
+         :ok <- logs_current(manifest.instances, logs),
          next = Map.put(record, "phase", "activated"),
          :ok <-
            Lock.activate(
@@ -40,6 +42,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
              expected,
              attempt,
              %{path: manifest.manifest_path, sha256: digest},
+             Enum.map(logs, &%{path: &1.path, sha256: &1.sha256}),
              Journal.encode(next)
            ),
          # The owner holds no gate binding, so a restart while it ran would
@@ -80,6 +83,33 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
       :ok
     else
       _ -> {:error, :release_identity_changed}
+    end
+  end
+
+  # Every sealed route log must still be the exact verified history the seal
+  # captured; the owner rechecks the same digests around its replace.
+  defp logs_current(instances, logs) do
+    if length(logs) == length(instances) and
+         Enum.all?(Enum.zip(instances, logs), fn {instance, sealed} ->
+           log_current(instance, sealed)
+         end),
+       do: :ok,
+       else: {:error, :release_bytes_changed}
+  end
+
+  defp log_current(instance, sealed) do
+    case Durability.with_target_lock(
+           instance.log_file,
+           fn -> Log.restore_verified(instance.log_file) end,
+           retries: 0
+         ) do
+      {:ok, %{log: log, sha256: sha256}} ->
+        sealed.name == instance.name and sealed.path == instance.log_file and
+          sealed.replica == instance.replica and log.replica == instance.replica and
+          sealed.sha256 == sha256 and sealed.frontier == Enum.sort(Log.frontier(log))
+
+      _ ->
+        false
     end
   end
 

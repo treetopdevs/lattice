@@ -66,12 +66,16 @@ class Protocol(unittest.TestCase):
         activated = json.dumps(dict(self.sample(), phase="activated"))
         good = {"version": 1, "kind": "activate", "expected": pending, "record": activated,
                 "attempt": self.sample()["attempt"], "artifacts": None,
-                "checks": [{"path": "/srv/active.json", "sha256": "0" * 64}]}
+                "checks": [{"path": "/srv/active.json", "sha256": "0" * 64},
+                           {"path": "/srv/space.log", "sha256": "4" * 64}]}
+        log = good["checks"][1]
         malformed = [dict(good, artifacts=[]), dict(good, checks=[]),
-                     dict(good, checks=good["checks"] * 2), dict(good, attempt="short"),
-                     dict(good, checks=[{"path": "relative.json", "sha256": "0" * 64}]),
-                     dict(good, checks=[{"path": "/srv/../active.json", "sha256": "0" * 64}])]
-        stale = [dict(good, checks=[{"path": "/srv/active.json", "sha256": "3" * 64}]),
+                     dict(good, checks=good["checks"][:1]),
+                     dict(good, checks=[log, log]), dict(good, attempt="short"),
+                     dict(good, checks=[{"path": "relative.json", "sha256": "0" * 64}, log]),
+                     dict(good, checks=[{"path": "/srv/../active.json", "sha256": "0" * 64}, log]),
+                     dict(good, checks=[good["checks"][0], dict(log, path="space.log")])]
+        stale = [dict(good, checks=[{"path": "/srv/active.json", "sha256": "3" * 64}, log]),
                  dict(good, expected=activated),
                  dict(good, record=json.dumps(dict(self.sample(), phase="activated", generation=1))),
                  dict(good, record=pending)]

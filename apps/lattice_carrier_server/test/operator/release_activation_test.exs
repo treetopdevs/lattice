@@ -129,6 +129,18 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     unchanged!(f)
   end
 
+  test "an existing route log rewritten after the seal refuses", f do
+    {owner, observation} = sealed(f)
+    :ok = Log.dump(f.updated_log, f.active_log)
+
+    assert {:error, :release_bytes_changed} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert File.read!(f.manifest) == f.active_manifest
+    assert {:ok, journal} = Journal.read(f.root)
+    assert journal == f.journal
+  end
+
   test "an active manifest changed after the seal refuses", f do
     {owner, observation} = sealed(f)
     changed = f.active_manifest <> "\n"
