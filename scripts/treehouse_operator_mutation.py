@@ -258,7 +258,10 @@ def retain(path, raw):
 
 def commit(root, old, raw, activation=False):
     next_record = record(raw)
-    # Only activate() may move an attempt's phase, after its own checks.
+    # Only activate() may write an activated record, after its own checks;
+    # an ordinary plan can neither create one nor move an attempt's phase.
+    if not activation and next_record["phase"] != "carrier_pending":
+        refuse("stale_operator_intent")
     if old is not None and not activation:
         old_record = record(old)
         if old_record["attempt"] == next_record["attempt"] and old_record != next_record:
@@ -297,13 +300,15 @@ def activate(root, plan):
     if len(manifests) != 1:
         refuse("corrupt_operator_journal")
     candidate = staged(manifests[0])
+    # Every staged artifact still holds its reviewed bytes, on the first
+    # attempt and on a retry alike.
+    for a in old["artifacts"]:
+        staged(a)
     target = checks[0]["path"]
     expected(root, plan["expected"])
     current_service(old["service"])
     present = digest(active(target))
     if present == old["manifest_digest"]:
-        for a in old["artifacts"]:
-            staged(a)
         # Beside the target, so the replace never crosses a filesystem. An
         # exclusive temp is preserved on failure, exactly like the journal's.
         temporary = os.path.join(os.path.dirname(target),
@@ -317,10 +322,23 @@ def activate(root, plan):
         sync_dir(os.path.dirname(target))
         if active(target) != candidate:
             refuse("immutable_artifact_conflict")
-    elif present != manifests[0]["sha256"]:
+    elif present == manifests[0]["sha256"]:
+        # A lost commit may also have lost the directory sync after its
+        # replace; make the active candidate durable before recording it.
+        durable(target)
+    else:
         refuse("stale_operator_intent")
     commit(root, plan["expected"], plan["record"], activation=True)
     reply({"ok": True})
+
+
+def durable(path):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    sync_dir(os.path.dirname(path))
 
 
 def staged(artifact):

@@ -8,6 +8,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   against, may ask the Python mutation owner to replace that manifest with the
   staged candidate. The owner rechecks every byte and remains the only writer.
 
+  The owner's plan carries no gate binding: nothing yet stops a full
+  application restart while it runs. A seal lost by the time it returns is
+  reported, not hidden, and the journal then disagrees with the running
+  incarnation until the next controlled restart.
+
   Activation does not reopen admission or restart a route: the sealed
   incarnation stays closed, and the new route set is served only after a full
   application restart. It signs nothing, generates no identity, resets no log,
@@ -35,7 +40,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
              attempt,
              %{path: manifest.manifest_path, sha256: digest},
              Journal.encode(next)
-           ) do
+           ),
+         # The owner holds no gate binding, so a restart while it ran would
+         # leave a new incarnation serving the replaced manifest's old bytes.
+         :ok <- same(sealed(owner, observation) == :ok, :release_seal_lost_during_activation) do
       {:ok, next}
     else
       {:ok, _other} -> {:error, :stale_operator_intent}

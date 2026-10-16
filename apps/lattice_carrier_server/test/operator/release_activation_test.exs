@@ -191,6 +191,33 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert File.read!(f.manifest) == File.read!(f.candidate["path"])
   end
 
+  test "a retry after a lost journal commit still checks every staged artifact", f do
+    {owner, observation} = sealed(f)
+    File.write!(f.manifest, File.read!(f.candidate["path"]))
+    [child] = Enum.filter(f.record["artifacts"], &(&1["kind"] == "log"))
+    File.write!(child["path"], File.read!(child["path"]) <> "\n")
+
+    assert {:error, {:operator_refused, "immutable_artifact_conflict"}} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert {:ok, journal} = Journal.read(f.root)
+    assert journal == f.journal
+  end
+
+  test "an ordinary journal commit can never write an activated record", f do
+    other = Base.url_encode64(:crypto.hash(:sha256, "other-attempt"), padding: false)
+
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             Journal.compare_and_set(
+               f.root,
+               f.journal,
+               %{f.record | "attempt" => other, "phase" => "activated"}
+             )
+
+    assert {:ok, journal} = Journal.read(f.root)
+    assert journal == f.journal
+  end
+
   test "an activated journal never activates twice", f do
     {owner, observation} = sealed(f)
     assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
