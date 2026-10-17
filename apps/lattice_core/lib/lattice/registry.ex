@@ -22,7 +22,10 @@ defmodule Lattice.Registry do
       vocabulary, the answer is instead the 2-tuple `{:response, ref}` ("answered, result
       unrepresentable"), built only from names already on the vocabulary, so it is
       admitted by peers; `await/3` then returns `{:error, :unrepresentable_result}` (a
-      local return value, never on the wire) and the request is not retried.
+      local return value, never on the wire) and the request is not retried. The guarantee
+      holds for peers that already hold the response's ancestors, as with this module's
+      in-process sync. Over a checked carrier pull it does not: the off-vocabulary atom
+      came from an op in the target log, and that op refuses its whole pull page (row 208).
 
   Lifecycle:
 
@@ -459,7 +462,9 @@ defmodule Lattice.Registry do
     # No peer would admit such a response, so instead of signing it (or staying silent, which
     # left `await/3` at `:pending` forever) answer with the 2-tuple `{:response, ref}`: it uses
     # only vocabulary names and a binary, counts as answered (never retried), and `await/3`
-    # maps it to `{:error, :unrepresentable_result}`.
+    # maps it to `{:error, :unrepresentable_result}`. Its deps are the target frontier, which
+    # may hold the off-vocabulary op itself, so only peers that already have those ancestors
+    # (in-process sync) receive it; a checked carrier pull refuses that page (row 208).
     resp =
       case Op.authored(
              entry.identity,
