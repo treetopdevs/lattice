@@ -350,8 +350,12 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
   test "a boot refuses a deployment file that aliases the incarnation marker", f do
     {:ok, manifest} = Manifest.load(f.manifest)
     [instance | _] = manifest.instances
-    alias_root = Path.join(Path.dirname(f.root), "alias-operator-root")
+
+    alias_root =
+      Path.join(Path.dirname(f.root), "alias-operator-root-#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(alias_root)
+    on_exit(fn -> File.rm_rf(alias_root) end)
     File.chmod!(alias_root, 0o700)
     File.ln!(instance.log_file, Path.join(alias_root, "operator-incarnation"))
     log = File.read!(instance.log_file)
