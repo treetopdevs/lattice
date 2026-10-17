@@ -20,6 +20,21 @@ tsx calls that load the fake relay, while the BEAM helpers sit in a node-only `.
 pinned enrollment scripts are unchanged; Vite `preserveSymlinks` is deferred to PR 2; the bundle guard
 lives in `vite.config.ts` under `build`. CI coverage of the kit's own checks is row 220, needed before PR 2.
 
+PR 2a (2026-10-17) landed row 220 (unit installs the kit and runs typecheck and the boundary check; the enrollment
+cargo cache key hashes kit source), the route validator factory (design decision 7) and Vite `preserveSymlinks`.
+It then hit a STOP condition: `test/enrollment_ci_contract.mjs` pins the `packaged:enrollment` script to
+`tsx test/packaged_enrollment.ts` with no switches, and that harness imports the relay client and sync. A kit
+module importing `@treetopdevs/lattice-client` at runtime cannot resolve without `--preserve-symlinks`; unflagged
+tsx fails with "ERR_MODULE_NOT_FOUND: Cannot find package '@treetopdevs/lattice-client' imported from
+.../clients/lattice-shell-kit/src/...", and the contract documents no refresh procedure for that pin. PR 2 therefore
+halts after commit 1 instead of using the sync/feed split allowance, so this is not a further split under rule 9:
+the remainder (relay client, sync, feed, panel sync) lands as one PR once the operator answers the pin question in
+row 221 (re-pin with a documented procedure, inject lattice-client values into the kit per decision 4c, or set
+`NODE_PRESERVE_SYMLINKS=1` in the job env, unverified and possibly pinned itself). PR 2a deviations from decision 7:
+the factory takes `isSpace(replica)` instead of `classify`, since the kit needs only the Space test, and reads
+`maxRoutes` lazily through a getter because `treehouse_state` and `treehouse_routes` import each other. When the
+relay client and sync move, `product_contract.mjs`'s `carrierClientFiles` must name their kit paths.
+
 ## Header
 
 - **Priority**: P2

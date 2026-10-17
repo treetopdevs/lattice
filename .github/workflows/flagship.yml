@@ -197,6 +197,7 @@ jobs:
           cache-dependency-path: |
             clients/lattice-client/package-lock.json
             clients/lattice-mobile-core/package-lock.json
+            clients/lattice-shell-kit/package-lock.json
             clients/township-tauri-shell/package-lock.json
             clients/treehouse-tauri-shell/package-lock.json
       - name: Cache deps and _build
@@ -228,6 +229,14 @@ jobs:
       - name: Build client before reciprocal preview test
         working-directory: clients/lattice-client
         run: npm run build
+      # Plan 186 / row 220: the shell kit has no build (exports point at .ts source) and its
+      # lattice-client peer is not installed (legacy-peer-deps), so only typecheck and the boundary check run.
+      - name: Install shell kit dependencies
+        working-directory: clients/lattice-shell-kit
+        run: npm ci
+      - name: Shell kit typecheck and boundary check
+        working-directory: clients/lattice-shell-kit
+        run: npm run typecheck && npm run check
       - name: Install offline Treehouse preview dependencies
         working-directory: clients/treehouse-tauri-shell
         run: npm ci
@@ -803,7 +812,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             clients/treehouse-tauri-shell/src-tauri/target
-          key: ${{ runner.os }}-${{ runner.arch }}-treehouse-enrollment-tauri-${{ hashFiles('clients/treehouse-tauri-shell/src-tauri/Cargo.lock', 'clients/treehouse-tauri-shell/src-tauri/src/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/tests/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/*.json', 'clients/treehouse-tauri-shell/src/**', 'clients/treehouse-tauri-shell/package-lock.json') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-treehouse-enrollment-tauri-${{ hashFiles('clients/treehouse-tauri-shell/src-tauri/Cargo.lock', 'clients/treehouse-tauri-shell/src-tauri/src/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/tests/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/*.json', 'clients/treehouse-tauri-shell/src/**', 'clients/lattice-shell-kit/src/**', 'clients/treehouse-tauri-shell/package-lock.json') }}
           restore-keys: ${{ runner.os }}-${{ runner.arch }}-treehouse-enrollment-tauri-
 
       - name: Install Elixir dependencies

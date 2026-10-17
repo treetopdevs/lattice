@@ -50,7 +50,9 @@ const forbiddenEverywhere =
   /insert_seeded_dev_key|import_seed|DEV_SEED|SEED_PHRASE|governance-test-presence|NativeCarrierPeer|discovery/i;
 const forbiddenOutsideClient = /websocket/i;
 const nativeFiles = await sourceFiles("src-tauri/src");
-for (const file of [...(await sourceFiles("src")), ...nativeFiles]) {
+// Plan 186 decision 11: code moved into the shell kit stays under the same marker scan.
+const kitFiles = await sourceFiles("../lattice-shell-kit/src");
+for (const file of [...(await sourceFiles("src")), ...kitFiles, ...nativeFiles]) {
   const text = await readFile(file, "utf8");
   assert(!forbiddenEverywhere.test(text), file);
   if (!carrierClientFiles.has(file)) {
