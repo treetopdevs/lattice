@@ -261,4 +261,4 @@ file's source text.
 
 ## Status
 
-In progress, PR pending
+Done (PR #132); follow-ups are index rows 211 to 215.
