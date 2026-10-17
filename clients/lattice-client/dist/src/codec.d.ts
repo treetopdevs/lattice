@@ -69,7 +69,8 @@ export declare function verifyCarrierOp(frame: CarrierOpFrame, verifier: Verifie
 /**
  * Plan 190: refuse any atom name or delegation op/role name outside the closed wire
  * vocabulary. Walks the raw carrier term grammar, so it never needs a decoded term and
- * ignores malformed shapes (the decoders own those).
+ * ignores malformed shapes (the decoders own those), except that an atom term's arity and
+ * name type are checked here: the BEAM refuses the whole batch for a malformed atom term.
  */
 export declare function assertWireVocabularyTerm(term: unknown): void;
 export declare function authorCarrierOp(input: AuthorCarrierOpInput): Promise<CarrierOpFrame>;

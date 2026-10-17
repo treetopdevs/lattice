@@ -48,7 +48,8 @@ export async function verifyCarrierOp(frame, verifier) {
 /**
  * Plan 190: refuse any atom name or delegation op/role name outside the closed wire
  * vocabulary. Walks the raw carrier term grammar, so it never needs a decoded term and
- * ignores malformed shapes (the decoders own those).
+ * ignores malformed shapes (the decoders own those), except that an atom term's arity and
+ * name type are checked here: the BEAM refuses the whole batch for a malformed atom term.
  */
 export function assertWireVocabularyTerm(term) {
     if (!Array.isArray(term))
@@ -56,6 +57,8 @@ export function assertWireVocabularyTerm(term) {
     const [tag, value] = term;
     switch (tag) {
         case "atom":
+            if (term.length !== 2)
+                throw new Error("malformed carrier op");
             assertWireVocabularyName(value);
             return;
         case "list":
@@ -83,7 +86,9 @@ export function assertWireVocabularyTerm(term) {
     }
 }
 function assertWireVocabularyName(name) {
-    if (typeof name === "string" && !isWireVocabularyName(name)) {
+    if (typeof name !== "string")
+        throw new Error("malformed carrier op");
+    if (!isWireVocabularyName(name)) {
         throw new Error(`atom name outside the wire vocabulary: ${name}`);
     }
 }

@@ -196,6 +196,13 @@ interface Vector {
   ops: Op[];
   capabilityCase?: {
     expectedSuccessorPubkey?: string;
+    wireCases?: {
+      name: string;
+      position: string;
+      decode: "admit" | "malformed_op";
+      directIngest?: "admit" | "refuse";
+      frames: CarrierOpFrame[];
+    }[];
     [key: string]: unknown;
   };
   applicationPolicyCase?: {
@@ -311,6 +318,7 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
   if (vec.scenario === "township_beacon_witnessed_large_policy_integer" ||
       vec.scenario === "township_beacon_witnessed_unbound_root" ||
       vec.scenario === "township_beacon_witnessed_policy_metadata" ||
+      vec.scenario === "township_beacon_witnessed_high_integer_metadata" ||
       vec.scenario === "township_beacon_witnessed_certificate_metadata" ||
       vec.scenario === "township_beacon_witnessed_high_legacy" ||
       vec.scenario === "township_beacon_witnessed_high_nonroot" ||
@@ -320,6 +328,21 @@ for (const file of readdirSync(vecDir).filter((f) => f.endsWith(".json"))) {
       check("beacon review raw frame hash/signature", await verifyCarrierOp(frame, verifier),
         { hash: true, signature: true, valid: true });
       check("contextual decoding preserves exact raw frame", decodeCarrierOpFrame(frame), frame);
+    }
+  }
+
+  if (Array.isArray(vec.capabilityCase?.wireCases)) {
+    for (const wireCase of vec.capabilityCase.wireCases) {
+      const label = `wire case ${wireCase.name} (${wireCase.position})`;
+      let decoded: CarrierOpFrame[] | undefined;
+      try { decoded = wireCase.frames.map(decodeCarrierOpFrame); } catch { decoded = undefined; }
+      check(`${label}: strict decode`, decoded === undefined ? "malformed_op" : "admit", wireCase.decode);
+      if (decoded !== undefined) check(`${label}: decoded frames equal input`, decoded, wireCase.frames);
+      if (wireCase.directIngest !== undefined) {
+        let count: number | undefined;
+        try { count = carrierOpsToSemanticOps(wireCase.frames, vec.realmByPubkey ?? {}).length; } catch { count = undefined; }
+        check(`${label}: direct ingest`, count === undefined ? "refuse" : count, wireCase.directIngest === "refuse" ? "refuse" : wireCase.frames.length);
+      }
     }
   }
 
