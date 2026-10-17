@@ -4,7 +4,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  CarrierPeerError,
   carrierOpsToSemanticOps,
+  carrierPeerErrorReason,
   syncCarrierOnce,
   type CarrierOpFrame,
   type CarrierPushReport,
@@ -313,6 +315,120 @@ await assert.rejects(
     }),
   /carrier peer error: unavailable/,
 );
+
+// Plan 197: the default mode is unchanged and the error is now typed.
+const typedUnavailable = new CarrierPeerError("unavailable");
+assert.equal(typedUnavailable.message, "carrier peer error: unavailable", "message parity with the old plain Error");
+assert.ok(typedUnavailable instanceof Error);
+const typedUnavailableClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map([[genesis.id, new CarrierPeerError("unavailable")]]),
+);
+const typedRejection = await syncCarrierOnce(typedUnavailableClient, localOps, [genesis], vector.realmByPubkey, {
+  verifier: operationVerifier,
+  submission: "relay",
+  expectedReplica: vector.replica,
+}).then(
+  () => null,
+  (error: unknown) => error,
+);
+assert.ok(typedRejection instanceof CarrierPeerError, "default mode rethrows the typed error");
+assert.equal((typedRejection as CarrierPeerError).reason, "unavailable");
+assert.match((typedRejection as CarrierPeerError).message, /carrier peer error: unavailable/);
+
+// Stop mode: a relay error reply after earlier acceptance keeps the gathered progress.
+const readOnlyClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map<string, RelayOutcome>([
+    [genesis.id, { ...emptyReport(), accepted: [genesis.id] }],
+    [grant.id, new CarrierPeerError("read_only")],
+  ]),
+);
+const stopped = await syncCarrierOnce(readOnlyClient, localOps, [grant, genesis], vector.realmByPubkey, {
+  verifier: operationVerifier,
+  submission: "relay",
+  expectedReplica: vector.replica,
+  onRelayError: "stop",
+});
+assert.deepEqual(readOnlyClient.relayedIds, [genesis.id, grant.id], "nothing after the failing frame is offered");
+assert.deepEqual(stopped.pushedFrames.map(frameId), [genesis.id]);
+assert.deepEqual(stopped.pushReport, { ...emptyReport(), accepted: [genesis.id] });
+assert.deepEqual(stopped.peerReportedFrameIds, [genesis.id]);
+assert.deepEqual(stopped.pulledFrames, []);
+assert.deepEqual(stopped.submitStop, { frameId: grant.id, reason: "read_only" });
+
+// A plain Error with the same message is classified the same way (fakes and scripted clients).
+const plainStopClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map([[genesis.id, new Error("carrier peer error: unavailable")]]),
+);
+const plainStopped = await syncCarrierOnce(plainStopClient, localOps, [genesis], vector.realmByPubkey, {
+  verifier: operationVerifier,
+  submission: "relay",
+  expectedReplica: vector.replica,
+  onRelayError: "stop",
+});
+assert.deepEqual(plainStopped.pushedFrames, []);
+assert.deepEqual(plainStopped.submitStop, { frameId: genesis.id, reason: "unavailable" });
+
+// Stop mode never swallows a transport failure.
+const transportClient = new ScriptedRelaySyncClient(
+  [[]],
+  new Map([[genesis.id, new Error("carrier websocket closed")]]),
+);
+await assert.rejects(
+  () =>
+    syncCarrierOnce(transportClient, localOps, [genesis], vector.realmByPubkey, {
+      verifier: operationVerifier,
+      submission: "relay",
+      expectedReplica: vector.replica,
+      onRelayError: "stop",
+    }),
+  /carrier websocket closed/,
+);
+
+// Stop mode does not cover the duplicate-confirming advertise.
+class DuplicateAdvertiseFailsClient extends ScriptedRelaySyncClient {
+  override async advertise(): Promise<string[]> {
+    if (this.advertiseCalls++ === 0) return [];
+    throw new CarrierPeerError("unavailable");
+  }
+}
+await assert.rejects(
+  () =>
+    syncCarrierOnce(
+      new DuplicateAdvertiseFailsClient([[]], new Map()),
+      localOps,
+      [post],
+      vector.realmByPubkey,
+      {
+        verifier: operationVerifier,
+        submission: "relay",
+        expectedReplica: vector.replica,
+        onRelayError: "stop",
+      },
+    ),
+  /carrier peer error: unavailable/,
+);
+
+// Default-mode rate_limited is unchanged and now also names the stop.
+assert.deepEqual(partiallySynced.submitStop, { frameId: grant.id, reason: "rate_limited" });
+const noStop = await syncCarrierOnce(
+  new ScriptedRelaySyncClient([[]], new Map([[genesis.id, { ...emptyReport(), accepted: [genesis.id] }]])),
+  localOps,
+  [genesis],
+  vector.realmByPubkey,
+  { verifier: operationVerifier, submission: "relay", expectedReplica: vector.replica, onRelayError: "stop" },
+);
+assert.equal(noStop.submitStop, undefined, "no stop recorded when every frame was answered");
+
+// carrierPeerErrorReason.
+assert.equal(carrierPeerErrorReason(new CarrierPeerError("read_only")), "read_only");
+assert.equal(carrierPeerErrorReason(new Error("carrier peer error: read_only")), "read_only");
+assert.equal(carrierPeerErrorReason(new Error("carrier websocket closed")), null);
+assert.equal(carrierPeerErrorReason("carrier peer error: read_only"), null);
+assert.equal(carrierPeerErrorReason(undefined), null);
+assert.equal(carrierPeerErrorReason({ message: "carrier peer error: read_only" }), null);
 
 const confirmedDuplicateClient = new ScriptedRelaySyncClient([[], [post.id]], new Map());
 const confirmedDuplicate = await syncCarrierOnce(

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
+  CarrierPeerError,
   authorTreehouseCommand,
   carrierDelegationsFromFrames,
   decodeTreehouseJoinRequest,
@@ -69,7 +70,7 @@ async function founder(trace: string[] = []) {
   return { native, app, space: spaceOf(app).replica, thread: threadOf(app).replica };
 }
 
-// ---- 1. report buckets: accepted and quarantined ack; rejected and pending never ack -----------------
+// ---- 1. report buckets: only accepted acks; quarantined, rejected and pending never ack --------------
 {
   const f = await founder();
   const relays = new Relays();
@@ -82,23 +83,107 @@ async function founder(trace: string[] = []) {
   const result = await syncTreehouseRoute(f.app, route, relays.options());
   const profile = profileOf(f.native, f.thread);
   const acked = new Set(profile.acked);
-  for (const id of [...profile.outbox.slice(0, 2), posts[0]!, posts[1]!]) assert(acked.has(id), `acked ${id}`);
+  for (const id of [...profile.outbox.slice(0, 2), posts[0]!]) assert(acked.has(id), `acked ${id}`);
+  assert(!acked.has(posts[1]!), "a quarantined id never acks: the relay keeps it as evidence and never serves it");
   assert(!acked.has(posts[2]!), "a rejected id never acks");
   assert(!acked.has(posts[3]!), "a pending id never acks");
   assert.deepEqual(result.rejected.map(([id]) => id), [posts[2]]);
   assert.deepEqual(result.relayPending, [posts[3]]);
-  assert.deepEqual(result.quarantined.map(([id]) => id), [posts[1]]);
-  assert.deepEqual(result.pendingIds.sort(), [posts[2]!, posts[3]!].sort());
+  assert.deepEqual(result.quarantined, [[posts[1]!, "bad_signature"]]);
+  assert.deepEqual(result.pendingIds.sort(), [posts[1]!, posts[2]!, posts[3]!].sort());
+  assert(!relay.log.has(posts[1]!), "the relay does not store a quarantined op in its log");
+  assert(!relay.advertisedIds().includes(posts[1]!), "and never advertises it");
   assert.equal(result.matchesRelay, false);
   assert(profile.acked.every((id) => profile.outbox.includes(id)), "every ack is a locally authored id here");
   assert.equal(new Set(profile.acked).size, profile.acked.length);
-  // The stuck tail is not retried forever and a repeat sync writes nothing.
+  // The stuck tail is not retried forever: a repeat sync submits the quarantined frame once more, the relay
+  // answers already_quarantined, and nothing is written.
+  const attempts = () => relay.events.filter((e) => e === `relay:${posts[1]}`).length;
+  assert.equal(attempts(), 1);
   const before = f.native.record;
   const writes = f.native.writes;
-  await syncTreehouseRoute(f.app, route, relays.options());
+  const again = await syncTreehouseRoute(f.app, route, relays.options());
   assert.equal(f.native.record, before, "a no-progress sync leaves the record byte-identical");
   assert.equal(f.native.writes, writes);
-  console.log("PASS accepted and quarantined ack; rejected and pending never ack; no-progress sync writes nothing");
+  assert.equal(attempts(), 2, "exactly one more submit of the quarantined frame per sync");
+  assert.deepEqual(again.quarantined, [[posts[1]!, "already_quarantined"]]);
+  assert(!new Set(profileOf(f.native, f.thread).acked).has(posts[1]!));
+  console.log("PASS accepted acks; quarantined, rejected and pending never ack; no-progress sync writes nothing");
+}
+
+// ---- 1b. a quarantined frame is submitted once per sync, even while the relay rate-limits ------------
+{
+  const f = await founder();
+  const relays = new Relays();
+  const posts: string[] = [];
+  for (const text of ["a", "b", "c", "d", "e", "f"]) posts.push(await f.app.command(f.thread, { command: "post", text }));
+  const relay = relays.for(f.thread);
+  relay.forced.set(posts[2]!, "quarantined");
+  relay.tokens = 4;
+  const route = f.app.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  const result = await syncTreehouseRoute(f.app, route, relays.options());
+  // A rate-limited submit is not a verdict, so count what the relay judged.
+  const attempts = (id: string) => relay.judged.filter((x) => x === id).length;
+  assert(relays.clock.ms > 0, "the relay's refill was waited for");
+  assert.equal(result.rateLimited, false);
+  assert.equal(attempts(posts[2]!), 1, "the quarantined frame is submitted once in the whole call");
+  for (const id of [posts[0]!, posts[1]!]) assert(profileOf(f.native, f.thread).acked.includes(id), `acked ${id}`);
+  assert(!profileOf(f.native, f.thread).acked.includes(posts[2]!));
+  assert.deepEqual(result.pendingIds.sort(), posts.slice(2).sort(), "the quarantined frame and its dependents stay pending");
+  console.log("PASS a quarantined frame mid-outbox is submitted once per sync under rate limiting");
+}
+
+// ---- 1c. a relay that later accepts the quarantined frame heals the route ---------------------------
+{
+  const f = await founder();
+  const relays = new Relays();
+  const first = await f.app.command(f.thread, { command: "post", text: "stuck" });
+  const second = await f.app.command(f.thread, { command: "post", text: "behind it" });
+  const relay = relays.for(f.thread);
+  relay.forced.set(first, "quarantined");
+  const route = f.app.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  const stuck = await syncTreehouseRoute(f.app, route, relays.options());
+  assert.deepEqual(stuck.pendingIds.sort(), [first, second].sort());
+  relay.forced.delete(first);
+  const healed = await syncTreehouseRoute(f.app, route, relays.options());
+  assert.deepEqual(healed.pendingIds, []);
+  assert.equal(healed.matchesRelay, true);
+  const done = profileOf(f.native, f.thread);
+  assert.deepEqual([...done.acked].sort(), [...done.outbox].sort());
+  assert.equal(new Set(done.acked).size, done.acked.length, "no duplicate ack entries");
+  assert.equal(new Set(done.frames.map((x) => x.id)).size, done.frames.length, "no duplicate frames");
+  assert.equal(relay.log.size, done.frames.length, "the relay gained no duplicate");
+  console.log("PASS a relay that later accepts the quarantined frame acks it on the next sync");
+}
+
+// ---- 1d. a profile saved before quarantined ids stopped acking is not trusted -----------------------
+// `acked` never shrinks, so a legacy ack of a quarantined frame stays saved; the relay's live verdict still
+// reports the frame pending and refused, and a relay that later accepts it settles it.
+{
+  const f = await founder();
+  const relays = new Relays();
+  const stuck = await f.app.command(f.thread, { command: "post", text: "legacy ack" });
+  const relay = relays.for(f.thread);
+  relay.forced.set(stuck, "quarantined");
+  const route = f.app.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  await syncTreehouseRoute(f.app, route, relays.options());
+  assert(!profileOf(f.native, f.thread).acked.includes(stuck));
+  // What the old build saved after a `quarantined` reply.
+  await f.app.mergeSync(f.thread, [], [stuck]);
+  const reopened = await fresh(f.native);
+  assert(profileOf(f.native, f.thread).acked.includes(stuck), "the legacy ack is saved");
+  const again = await syncTreehouseRoute(reopened, route, relays.options());
+  assert.deepEqual(again.quarantined, [[stuck, "already_quarantined"]]);
+  assert(again.pendingIds.includes(stuck), "a refused id is pending although the saved set acks it");
+  assert.equal(again.matchesRelay, false);
+  assert(!relay.log.has(stuck));
+  relay.forced.delete(stuck);
+  relay.quarantine.delete(stuck);
+  const healed = await syncTreehouseRoute(reopened, route, relays.options());
+  assert.deepEqual(healed.pendingIds, []);
+  assert.equal(healed.matchesRelay, true);
+  assert(relay.log.has(stuck));
+  console.log("PASS a legacy ack of a quarantined frame is reported pending and heals when the relay accepts it");
 }
 
 // ---- 2. persist-after-ack ordering and the restart pending set -------------------------------------
@@ -394,5 +479,137 @@ console.log("PASS fake-relay enrollment: pull, accept, grant, member post and co
     /relay_request_timeout/,
   );
   console.log("PASS a relay that stops answering fails the route within the request deadline");
+}
+
+// ---- 6. a submit error reply keeps the pass's progress (plan 197) -------------------------------------
+// The case 5 fixture: a joiner whose posts reach the relay before the founder has pulled them (the foreign
+// frame P), and a founder with own frames A and B. Each scenario fails the relay's reply for B only.
+{
+  const thread = f.thread;
+  const relay = relays.for(thread);
+  const route = f.app.state.relay!.routes.find((r) => r.replica === thread)!;
+  const relaySeen = (id: string) => relay.events.filter((e) => e === `relay:${id}`).length;
+  const noDuplicates = () => {
+    const p = profileOf(f.native, thread);
+    assert.equal(new Set(p.acked).size, p.acked.length, "no duplicate ack entries");
+    assert.equal(new Set(p.frames.map((x) => x.id)).size, p.frames.length, "no duplicate frames");
+  };
+  const stage = async (label: string) => {
+    const foreign = await joiner.command(thread, { command: "post", text: `foreign ${label}` });
+    await syncTreehouse(joiner, relays.options());
+    assert(relay.log.has(foreign), "the foreign frame is on the relay");
+    assert(!profileOf(f.native, thread).frames.some((x) => x.id === foreign), "and not yet pulled by the founder");
+    const a = await f.app.command(thread, { command: "post", text: `A ${label}` });
+    const b = await f.app.command(thread, { command: "post", text: `B ${label}` });
+    return { foreign, a, b };
+  };
+
+  for (const reason of ["unavailable", "read_only"]) {
+    const { foreign, a, b } = await stage(reason);
+    relay.errors.set(b, reason);
+    const result = await syncTreehouseRoute(f.app, route, relays.options());
+    const p = profileOf(f.native, thread);
+    assert(p.acked.includes(a), `${reason}: the earlier ack survives the error`);
+    assert(p.frames.some((x) => x.id === foreign), `${reason}: the pulled frame was merged`);
+    assert.equal(result.pulledFrames, 1);
+    assert(result.pendingIds.includes(b) && !p.acked.includes(b));
+    assert.deepEqual(result.submitStopped, { id: b, reason });
+    assert.equal(relaySeen(b), 1, `${reason}: the failing frame is offered once`);
+    relay.errors.delete(b);
+    const healed = await syncTreehouseRoute(f.app, route, relays.options());
+    assert(profileOf(f.native, thread).acked.includes(b), `${reason}: the next sync acks it`);
+    assert.equal(healed.submitStopped, null);
+    assert.deepEqual(healed.pendingIds, []);
+    assert.equal(healed.matchesRelay, true);
+    noDuplicates();
+  }
+  console.log("PASS unavailable and read_only keep the pulled frames and earlier acks; the next sync acks the rest");
+
+  {
+    const { foreign, a, b } = await stage("malformed");
+    const c = await f.app.command(thread, { command: "post", text: "C malformed" });
+    relay.errors.set(b, "malformed");
+    const result = await syncTreehouseRoute(f.app, route, relays.options());
+    const p = profileOf(f.native, thread);
+    assert(p.acked.includes(a) && p.frames.some((x) => x.id === foreign));
+    assert.deepEqual(result.rejected, [[b, "malformed"]]);
+    assert.deepEqual(result.relayPending, [c], "the dependent answers pending");
+    assert.equal(result.submitStopped, null);
+    assert.equal(relaySeen(b), 1, "a malformed frame is not retried inside the sync");
+    assert.deepEqual(result.pendingIds.sort(), [b, c].sort());
+    relay.errors.delete(b);
+    const healed = await syncTreehouseRoute(f.app, route, relays.options());
+    assert.deepEqual(healed.pendingIds, []);
+    noDuplicates();
+    console.log("PASS a malformed reply rejects that frame once and continues with the rest");
+  }
+
+  // A stop reply is kept while the pulled set still has open dependencies: the pull-only rounds do not
+  // resubmit, and the stop is applied once the set closes.
+  {
+    const twin = new FaultNative();
+    twin.seed = f.native.seed;
+    twin.record = f.native.record;
+    const other = await fresh(twin);
+    const otherRoute = other.state.relay!.routes.find((r) => r.replica === thread)!;
+    await syncTreehouseRoute(other, otherRoute, relays.options());
+    const chain: string[] = [];
+    for (const text of ["x1", "x2", "x3"]) chain.push(await other.command(thread, { command: "post", text }));
+    await syncTreehouseRoute(other, otherRoute, relays.options());
+    const mine = await f.app.command(thread, { command: "post", text: "mine open deps" });
+    relay.errors.set(mine, "read_only");
+    relay.pullPage = 1;
+    const result = await syncTreehouseRoute(f.app, route, relays.options());
+    relay.pullPage = null;
+    assert.deepEqual(result.submitStopped, { id: mine, reason: "read_only" });
+    assert.equal(relaySeen(mine), 1, "pull-only rounds under a stop never resubmit");
+    const p = profileOf(f.native, thread);
+    for (const id of chain) assert(p.frames.some((x) => x.id === id), "every pulled frame merged despite the stop");
+    assert(result.pendingIds.includes(mine));
+    relay.errors.delete(mine);
+    assert.deepEqual((await syncTreehouseRoute(f.app, route, relays.options())).pendingIds, []);
+    noDuplicates();
+    console.log("PASS a stop reply is kept across open-dependency pull rounds and applied once the set closes");
+  }
+
+  // A relay that keeps rate-limiting one frame ends the sync with rateLimited set; nothing is lost.
+  {
+    const clock = relays.clock.ms;
+    const mine = await f.app.command(thread, { command: "post", text: "always limited" });
+    relay.errors.set(mine, "rate_limited");
+    const before = relaySeen(mine);
+    const result = await syncTreehouseRoute(f.app, route, relays.options());
+    assert.equal(result.rateLimited, true);
+    assert.equal(result.submitStopped, null);
+    assert(result.pendingIds.includes(mine));
+    assert.equal(relaySeen(mine) - before, 40, "one offer per stall, bounded by MAX_STALLS");
+    assert(relays.clock.ms > clock, "each stall waited for a refill");
+    relay.errors.delete(mine);
+    const healed = await syncTreehouseRoute(f.app, route, relays.options());
+    assert.equal(healed.rateLimited, false);
+    assert.deepEqual(healed.pendingIds, []);
+    noDuplicates();
+    console.log("PASS persistent rate limiting exhausts the stall bound with rateLimited set and settles later");
+  }
+
+  for (const reason of ["unauthenticated", "weird"]) {
+    const { foreign, a, b } = await stage(reason);
+    relay.errors.set(b, reason);
+    await assert.rejects(
+      syncTreehouseRoute(f.app, route, relays.options()),
+      (error: unknown) =>
+        error instanceof CarrierPeerError &&
+        error.reason === reason &&
+        error.message === `carrier peer error: ${reason}`,
+    );
+    const p = profileOf(f.native, thread);
+    assert(p.acked.includes(a), `${reason}: the earlier ack is committed before the throw`);
+    assert(p.frames.some((x) => x.id === foreign), `${reason}: so is the pulled frame`);
+    assert(!p.acked.includes(b));
+    relay.errors.delete(b);
+    assert.deepEqual((await syncTreehouseRoute(f.app, route, relays.options())).pendingIds, []);
+    noDuplicates();
+  }
+  console.log("PASS unauthenticated and unknown reasons still reject, after committing the pass's progress");
 }
 

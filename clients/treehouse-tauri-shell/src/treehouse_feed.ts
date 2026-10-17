@@ -41,6 +41,14 @@ export interface TreehouseRouteFeedState {
   generation: number | null;
   /** Local ids equal the advertised relay frontier after the last sync. Null before the first sync. */
   matchesRelay: boolean | null;
+  /**
+   * Ids the relay will not hold as of the last completed sync: its quarantined verdicts, then its rejected
+   * ones, as `[id, reason]`. The last sync's verdict only, not durable history: empty after a restart and
+   * cleared when a later sync fails. An id listed here counts as pending, never as acknowledged.
+   */
+  refused: [string, string][];
+  /** The relay's error reason when the last sync stopped submitting (`unavailable`, `read_only`), else null. */
+  submitStopped: string | null;
   message: string;
 }
 
@@ -199,7 +207,10 @@ export function createTreehouseFeedController(
 
   const counts = (replica: string) => {
     const profile = workflow.state.profiles.find((p) => p.replica === replica);
-    const acked = new Set(profile?.acked ?? []);
+    // An id the relay refused in the last sync is not acknowledged whatever the saved set says: a profile
+    // written before quarantined ids stopped acking still holds them in `acked`, and `acked` never shrinks.
+    const refused = new Set((link.get(replica)?.refused ?? []).map(([id]) => id));
+    const acked = new Set((profile?.acked ?? []).filter((id) => !refused.has(id)));
     return {
       pending: (profile?.outbox ?? []).filter((id) => !acked.has(id)).length,
       acked: acked.size,
@@ -215,6 +226,8 @@ export function createTreehouseFeedController(
         connection: own?.connection ?? "idle",
         generation: own?.generation ?? null,
         matchesRelay: own?.matchesRelay ?? null,
+        refused: own?.refused ?? [],
+        submitStopped: own?.submitStopped ?? null,
         message: own?.message ?? "Not connected.",
         ...counts(route.replica),
       };
@@ -235,6 +248,8 @@ export function createTreehouseFeedController(
       acked: 0,
       generation: null,
       matchesRelay: null,
+      refused: [],
+      submitStopped: null,
       message: "Not connected.",
     };
     link.set(replica, { ...current, ...patch });
@@ -243,8 +258,22 @@ export function createTreehouseFeedController(
   const syncRoute = async (route: RelayRoute, at: number): Promise<RouteSyncResult> => {
     const sync = syncOptions(syncAbort.signal);
     // A sync that outlives its epoch must not write route state into the next one.
-    const record = (replica: string, matchesRelay: boolean): void => {
-      if (!stopped && at === epoch) setLink(replica, { matchesRelay });
+    // A failed sync leaves the previous verdict unknown, so it is cleared rather than shown stale.
+    const forget = (replica: string): void => {
+      if (stopped || at !== epoch) return;
+      setLink(replica, { refused: [], submitStopped: null });
+    };
+    const record = (replica: string, result: RouteSyncResult): void => {
+      if (stopped || at !== epoch) return;
+      const submitStopped = result.submitStopped?.reason ?? null;
+      setLink(replica, {
+        matchesRelay: result.matchesRelay,
+        refused: [...result.quarantined, ...result.rejected],
+        submitStopped,
+      });
+      // The subscription message only describes a live connection; any other state keeps its own message.
+      if (link.get(replica)?.connection === "live")
+        setLink(replica, { message: liveMessage(submitStopped) });
     };
     // Each route's worker subscribes on its own socket, so a Thread hint can arrive before the Space has
     // synced even though the queue orders routes that wait together. A Thread merged without its Space
@@ -252,14 +281,20 @@ export function createTreehouseFeedController(
     if (!isSpace(route.replica) && !workflow.state.profiles.some((p) => p.product === "Treehouse.Space")) {
       const space = routes().find((r) => isSpace(r.replica));
       if (space) {
-        const first = await syncTreehouseRoute(workflow, space, sync);
-        record(space.replica, first.matchesRelay);
+        const first = await syncTreehouseRoute(workflow, space, sync).catch((error: unknown) => {
+          forget(space.replica);
+          throw error;
+        });
+        record(space.replica, first);
         // A reconfigure or stop during the Space pre-sync ends this sync before it dials the next route.
         if (stopped || at !== epoch) throw new Error("feed_reconfigured");
       }
     }
-    const result = await syncTreehouseRoute(workflow, route, sync);
-    record(route.replica, result.matchesRelay);
+    const result = await syncTreehouseRoute(workflow, route, sync).catch((error: unknown) => {
+      forget(route.replica);
+      throw error;
+    });
+    record(route.replica, result);
     return result;
   };
 
@@ -397,7 +432,7 @@ export function createTreehouseFeedController(
         setLink(replica, {
           connection: "live",
           generation: subscription.baseline.generation,
-          message: "Relay subscription is live.",
+          message: liveMessage(link.get(replica)?.submitStopped ?? null),
         });
         emit(worker);
         // The delay resets only after a completed sync. A subscribe alone proves nothing: a relay whose pulls
@@ -459,7 +494,7 @@ export function createTreehouseFeedController(
         await Promise.race([request(replica), worker.cancelled$]);
         if (!active(worker)) return;
         synced();
-        setLink(replica, { message: "Relay subscription is live." });
+        setLink(replica, { message: liveMessage(link.get(replica)?.submitStopped ?? null) });
         emit(worker);
         worker.settleFirst();
       }
@@ -603,6 +638,12 @@ export function createTreehouseFeedController(
       await teardown();
     },
   };
+}
+
+function liveMessage(submitStopped: string | null): string {
+  return submitStopped === null
+    ? "Relay subscription is live."
+    : `Relay subscription is live. Submit stopped: ${submitStopped}`;
 }
 
 function errorMessage(error: unknown): string {

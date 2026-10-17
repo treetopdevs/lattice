@@ -676,7 +676,7 @@ export class CarrierWebSocketClient {
             clearTimeout(timer);
         }
         if (hasType(decoded, "error"))
-            throw new Error(`carrier peer error: ${String(decoded.reason)}`);
+            throw new CarrierPeerError(String(decoded.reason));
         return decoded;
     }
     receive(data) {
@@ -837,7 +837,7 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
         .map(({ candidate }) => candidate);
     const unverifiableFrameIds = candidateVerification.flatMap(({ id, valid }) => !valid && id !== null ? [id] : []);
     const submission = options.submission ?? "push";
-    const submitted = await submitCarrierFrames(client, candidateFrames, submission);
+    const submitted = await submitCarrierFrames(client, candidateFrames, submission, options.onRelayError ?? "throw");
     // A carrier response only ever confirms possession of frames submitted in
     // THIS call: an id it names without having received the frame (a foreign,
     // unbound, or locally unverifiable frame filtered from egress) must not
@@ -861,9 +861,10 @@ export async function syncCarrierOnce(client, localOps, localCarrierFrames, real
         pushReport: submitted.pushReport,
         peerReportedFrameIds,
         unverifiableFrameIds,
+        ...(submitted.submitStop ? { submitStop: submitted.submitStop } : {}),
     };
 }
-async function submitCarrierFrames(client, frames, submission) {
+async function submitCarrierFrames(client, frames, submission, onRelayError) {
     if (submission === "push") {
         return {
             pushedFrames: frames,
@@ -877,15 +878,21 @@ async function submitCarrierFrames(client, frames, submission) {
     const pushedFrames = [];
     const pushReport = emptyPushReport();
     const confirmedDuplicateIds = [];
+    let submitStop;
     for (const frame of orderedFrames) {
         let report;
         try {
             report = await client.relay(frame);
         }
         catch (error) {
-            if (carrierRateLimited(error))
-                break;
-            throw error;
+            // Only the relay's own error reply is classified; a transport failure carries no reason and throws.
+            const reason = carrierPeerErrorReason(error);
+            if (reason === null)
+                throw error;
+            if (reason !== "rate_limited" && onRelayError !== "stop")
+                throw error;
+            submitStop = { frameId: frame.id, reason };
+            break;
         }
         pushedFrames.push(frame);
         appendPushReport(pushReport, report);
@@ -895,10 +902,28 @@ async function submitCarrierFrames(client, frames, submission) {
                 confirmedDuplicateIds.push(frame.id);
         }
     }
-    return { pushedFrames, pushReport, confirmedDuplicateIds };
+    return { pushedFrames, pushReport, confirmedDuplicateIds, ...(submitStop ? { submitStop } : {}) };
 }
-function carrierRateLimited(error) {
-    return error instanceof Error && error.message === "carrier peer error: rate_limited";
+/** An error reply from the carrier peer (`{type: "error", reason}`); the socket stays open. */
+export class CarrierPeerError extends Error {
+    reason;
+    constructor(reason) {
+        super(`carrier peer error: ${reason}`);
+        this.reason = reason;
+    }
+}
+const CARRIER_PEER_ERROR_PREFIX = "carrier peer error: ";
+/**
+ * The reason of a carrier peer error reply, or null for anything else (a transport failure, a timeout, a
+ * decode error). A plain `Error` carrying the same message is accepted so scripted clients and fakes that
+ * throw one keep working.
+ */
+export function carrierPeerErrorReason(error) {
+    if (error instanceof CarrierPeerError)
+        return error.reason;
+    if (error instanceof Error && error.message.startsWith(CARRIER_PEER_ERROR_PREFIX))
+        return error.message.slice(CARRIER_PEER_ERROR_PREFIX.length);
+    return null;
 }
 function canRelay(client) {
     return typeof client.relay === "function";

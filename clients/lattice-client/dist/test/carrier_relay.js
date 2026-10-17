@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CarrierWebSocketClient, } from "../src/index";
+import { CarrierPeerError, CarrierWebSocketClient, } from "../src/index";
 const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(readFileSync(join(here, "vectors", "township_carrier_w1.json"), "utf8"));
 const frame = vector.clientDivergedCarrierOps.at(-1);
@@ -56,7 +56,9 @@ await assert.rejects(() => malformedClient.relay(frame), /malformed carrier acce
 const wrongTagClient = new CarrierWebSocketClient(new ScriptedCarrierWebSocket({ type: "push_result", ...accepted }));
 await assert.rejects(() => wrongTagClient.relay(frame), /malformed carrier relay response/);
 const refusedClient = new CarrierWebSocketClient(new ScriptedCarrierWebSocket({ type: "error", reason: "read_only" }));
-await assert.rejects(() => refusedClient.relay(frame), /carrier peer error: read_only/);
+await assert.rejects(() => refusedClient.relay(frame), (error) => /carrier peer error: read_only/.test(String(error.message)) &&
+    error instanceof CarrierPeerError &&
+    error.reason === "read_only");
 // Plan 190: report reasons are the closed `WIRE_REPORT_REASONS` set on push and relay results.
 const reasoned = {
     accepted: [],
