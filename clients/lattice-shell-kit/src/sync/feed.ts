@@ -2,15 +2,12 @@ import type {
   CarrierAvailability,
   CarrierAvailabilitySubscription,
 } from "@treetopdevs/lattice-client";
-import { MAX_ROUTES } from "./treehouse_state";
-import type { RelayRoute } from "./treehouse_state";
-import { productOf } from "./treehouse_routes";
-import { syncTreehouseRoute } from "./treehouse_sync";
-import type { RouteSyncResult, SyncTreehouseOptions, TreehouseRelayConnection } from "./treehouse_sync";
-import type { TreehouseWorkflow } from "./treehouse_workflow";
+import type { CarrierRoute, ShellHost } from "./host";
+import { syncRoute as syncOneRoute } from "./sync";
+import type { RelayConnection, RouteSyncResult, SyncOptions } from "./sync";
 
 // Plan 181 slice 3b2. The feed controller keeps one availability subscription per configured route and
-// turns each hint into one verified sync of that route. It is adapted from the Township feed controller
+// turns each hint into one verified sync of that route. It is adapted from the earlier shell's feed controller
 // (connect, subscribe, coalesced trailing refresh, reconnect backoff, epoch cancel) with two changes: the
 // relay has no state reporter, so the verified pull plus the local `verifyProfile` is the check, and a sync
 // also submits locally authored frames. A hint carries no operation and no authority; it only says the relay
@@ -18,21 +15,21 @@ import type { TreehouseWorkflow } from "./treehouse_workflow";
 // labelled peer convergence.
 
 /** The subscription connection of one route. By type it cannot submit anything. */
-export interface TreehouseFeedSession {
+export interface FeedSession {
   subscribeAvailability(): Promise<CarrierAvailabilitySubscription>;
   close(): void;
 }
 
-export type TreehouseRouteConnection =
+export type RouteConnection =
   | "idle"
   | "connecting"
   | "live"
   | "reconnecting"
   | "refused";
 
-export interface TreehouseRouteFeedState {
+export interface RouteFeedState {
   replica: string;
-  connection: TreehouseRouteConnection;
+  connection: RouteConnection;
   /** Authored ids not yet durable on the relay: outbox minus acked. */
   pending: number;
   /** Ids known durable on the relay. */
@@ -52,9 +49,9 @@ export interface TreehouseRouteFeedState {
   message: string;
 }
 
-export interface TreehouseFeedState {
+export interface FeedState {
   configured: boolean;
-  routes: TreehouseRouteFeedState[];
+  routes: RouteFeedState[];
 }
 
 export interface FeedTimers {
@@ -62,13 +59,13 @@ export interface FeedTimers {
   clear(handle: unknown): void;
 }
 
-export interface CreateTreehouseFeedControllerOptions {
-  workflow: TreehouseWorkflow;
+export interface CreateFeedControllerOptions {
+  host: ShellHost;
   /** Per-sync connection and verification options (the sync module's own seam). */
-  sync: SyncTreehouseOptions;
+  sync: SyncOptions;
   /** One availability connection per route. The signal aborts a handshake still in progress. */
-  connect(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseFeedSession>;
-  onState(state: TreehouseFeedState): void;
+  connect(route: CarrierRoute, localRealm: string, signal?: AbortSignal): Promise<FeedSession>;
+  onState(state: FeedState): void;
   sleep?(delay: number, signal: AbortSignal): Promise<void>;
   timers?: FeedTimers;
   /** Poll fallback interval in milliseconds. 0 disables it. Defaults to 60000. */
@@ -77,30 +74,18 @@ export interface CreateTreehouseFeedControllerOptions {
   autosyncOnMount?: boolean;
 }
 
-export interface TreehouseFeedController {
+export interface FeedController {
   /** Start the per-route feeds, or stay idle when autosync on mount is off. Refuses above four routes. */
   start(): Promise<void>;
   /** One verified sync per route. It starts the subscriptions first when they are not running. */
-  syncNow(): Promise<TreehouseFeedState>;
+  syncNow(): Promise<FeedState>;
   /** Re-read the saved routes and restart every feed under a new epoch. */
   reconfigure(): Promise<void>;
   stop(): Promise<void>;
-  state(): TreehouseFeedState;
+  state(): FeedState;
 }
 
-const DEFAULT_POLL_MS = 60_000;
-const isSpace = (replica: string) => productOf(replica) === "Treehouse.Space";
-
-/** Build-time feed flags: `VITE_TREEHOUSE_POLL_MS` (0 disables) and `VITE_TREEHOUSE_AUTOSYNC_ON_MOUNT`. */
-export function treehouseFeedEnv(env: Record<string, string | undefined>): {
-  pollMs: number;
-  autosyncOnMount: boolean;
-} {
-  const raw = env.VITE_TREEHOUSE_POLL_MS;
-  const parsed = raw === undefined || raw.trim() === "" ? NaN : Number(raw);
-  const pollMs = Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_POLL_MS;
-  return { pollMs, autosyncOnMount: env.VITE_TREEHOUSE_AUTOSYNC_ON_MOUNT !== "0" };
-}
+export const DEFAULT_POLL_MS = 60_000;
 
 /** A relay that does not hold the pinned identity is refused, not retried. */
 function refusal(error: unknown): boolean {
@@ -121,9 +106,9 @@ function refusal(error: unknown): boolean {
 
 interface Worker {
   epoch: number;
-  route: RelayRoute;
+  route: CarrierRoute;
   cancelled: boolean;
-  session: TreehouseFeedSession | null;
+  session: FeedSession | null;
   abort: AbortController;
   done: Promise<void>;
   /** Settles after the first completed baseline sync or the first connect failure. */
@@ -134,9 +119,9 @@ interface Worker {
   ended: boolean;
 }
 
-export function createTreehouseFeedController(
-  options: CreateTreehouseFeedControllerOptions,
-): TreehouseFeedController {
+export function createFeedController(
+  options: CreateFeedControllerOptions,
+): FeedController {
   const sleep = options.sleep ?? abortableSleep;
   const timers: FeedTimers = options.timers ?? {
     set: (fn, ms) => setInterval(fn, ms),
@@ -144,14 +129,14 @@ export function createTreehouseFeedController(
   };
   const pollMs = options.pollMs ?? DEFAULT_POLL_MS;
   const autosync = options.autosyncOnMount ?? true;
-  const workflow = options.workflow;
+  const host = options.host;
 
   let epoch = 0;
   let stopped = false;
   let running = false;
   let pollHandle: unknown = null;
   let workers = new Map<string, Worker>();
-  const link = new Map<string, TreehouseRouteFeedState>();
+  const link = new Map<string, RouteFeedState>();
   // Syncs are serialized across routes through one queue, the Space first, so a joiner holds the Space
   // before the Threads that reference it. A hint that arrives mid-sync waits as one trailing sync.
   const queued = new Map<
@@ -169,7 +154,7 @@ export function createTreehouseFeedController(
   // stops answering cannot leave the drain, and with it reconfigure, pending forever.
   let syncAbort = new AbortController();
 
-  const syncOptions = (signal: AbortSignal): SyncTreehouseOptions => ({
+  const syncOptions = (signal: AbortSignal): SyncOptions => ({
     ...options.sync,
     async connect(route, localRealm) {
       if (signal.aborted) throw new Error("feed_reconfigured");
@@ -184,7 +169,7 @@ export function createTreehouseFeedController(
       dialing.then((late) => {
         if (signal.aborted) late.close();
       }, () => undefined);
-      let connection: TreehouseRelayConnection;
+      let connection: RelayConnection;
       try {
         connection = await Promise.race([dialing, aborted]);
       } finally {
@@ -203,10 +188,10 @@ export function createTreehouseFeedController(
     },
   });
 
-  const routes = (): RelayRoute[] => workflow.state.relay?.routes ?? [];
+  const routes = (): CarrierRoute[] => host.relay()?.routes ?? [];
 
   const counts = (replica: string) => {
-    const profile = workflow.state.profiles.find((p) => p.replica === replica);
+    const profile = host.profile(replica);
     // An id the relay refused in the last sync is not acknowledged whatever the saved set says: a profile
     // written before quarantined ids stopped acking still holds them in `acked`, and `acked` never shrinks.
     const refused = new Set((link.get(replica)?.refused ?? []).map(([id]) => id));
@@ -217,8 +202,8 @@ export function createTreehouseFeedController(
     };
   };
 
-  const snapshot = (): TreehouseFeedState => ({
-    configured: workflow.state.relay !== null,
+  const snapshot = (): FeedState => ({
+    configured: host.relay() !== null,
     routes: routes().map((route) => {
       const own = link.get(route.replica);
       return {
@@ -240,10 +225,10 @@ export function createTreehouseFeedController(
     options.onState(snapshot());
   };
 
-  const setLink = (replica: string, patch: Partial<TreehouseRouteFeedState>): void => {
+  const setLink = (replica: string, patch: Partial<RouteFeedState>): void => {
     const current = link.get(replica) ?? {
       replica,
-      connection: "idle" as TreehouseRouteConnection,
+      connection: "idle" as RouteConnection,
       pending: 0,
       acked: 0,
       generation: null,
@@ -255,7 +240,7 @@ export function createTreehouseFeedController(
     link.set(replica, { ...current, ...patch });
   };
 
-  const syncRoute = async (route: RelayRoute, at: number): Promise<RouteSyncResult> => {
+  const syncRoute = async (route: CarrierRoute, at: number): Promise<RouteSyncResult> => {
     const sync = syncOptions(syncAbort.signal);
     // A sync that outlives its epoch must not write route state into the next one.
     // A failed sync leaves the previous verdict unknown, so it is cleared rather than shown stale.
@@ -278,10 +263,10 @@ export function createTreehouseFeedController(
     // Each route's worker subscribes on its own socket, so a Thread hint can arrive before the Space has
     // synced even though the queue orders routes that wait together. A Thread merged without its Space
     // fails the profile check, so the Space syncs first here, and only while no Space profile is held.
-    if (!isSpace(route.replica) && !workflow.state.profiles.some((p) => p.product === "Treehouse.Space")) {
-      const space = routes().find((r) => isSpace(r.replica));
+    if (!host.isAnchor(route.replica) && !host.holdsAnchorProfile()) {
+      const space = routes().find((r) => host.isAnchor(r.replica));
       if (space) {
-        const first = await syncTreehouseRoute(workflow, space, sync).catch((error: unknown) => {
+        const first = await syncOneRoute(host, space, sync).catch((error: unknown) => {
           forget(space.replica);
           throw error;
         });
@@ -290,7 +275,7 @@ export function createTreehouseFeedController(
         if (stopped || at !== epoch) throw new Error("feed_reconfigured");
       }
     }
-    const result = await syncTreehouseRoute(workflow, route, sync).catch((error: unknown) => {
+    const result = await syncOneRoute(host, route, sync).catch((error: unknown) => {
       forget(route.replica);
       throw error;
     });
@@ -308,7 +293,7 @@ export function createTreehouseFeedController(
   const drainQueue = async (): Promise<void> => {
     while (queued.size > 0) {
       const replica =
-        [...queued.keys()].find(isSpace) ?? [...queued.keys()][0]!;
+        [...queued.keys()].find((r) => host.isAnchor(r)) ?? [...queued.keys()][0]!;
       const waiter = queued.get(replica)!;
       queued.delete(replica);
       const route = routes().find((r) => r.replica === replica);
@@ -317,8 +302,8 @@ export function createTreehouseFeedController(
         if (!route) throw new Error("unknown_route_replica");
         const result = await syncRoute(route, waiter.epoch);
         waiter.resolve(result);
-        if (isSpace(replica) && result.pulledFrames > 0 && waiter.epoch === epoch && !stopped)
-          for (const thread of routes().filter((r) => !isSpace(r.replica)))
+        if (host.isAnchor(replica) && result.pulledFrames > 0 && waiter.epoch === epoch && !stopped)
+          for (const thread of routes().filter((r) => !host.isAnchor(r.replica)))
             request(thread.replica).catch((error: unknown) => {
               setLink(thread.replica, { message: `Sync failed: ${errorMessage(error)}` });
               emit();
@@ -370,7 +355,7 @@ export function createTreehouseFeedController(
     pollHandle = null;
   };
 
-  const spawn = (route: RelayRoute): Worker => {
+  const spawn = (route: CarrierRoute): Worker => {
     let settle!: () => void;
     const first = new Promise<void>((resolve) => {
       settle = resolve;
@@ -416,11 +401,11 @@ export function createTreehouseFeedController(
     let attempt = 0;
     const replica = worker.route.replica;
     while (active(worker)) {
-      let session: TreehouseFeedSession | null = null;
+      let session: FeedSession | null = null;
       try {
         // The dial is cancellable: a server that accepts the socket but never completes the handshake
         // must not hold teardown open. A session that still arrives after cancellation is closed.
-        const dialing = options.connect(worker.route, workflow.state.relay!.localRealm, worker.abort.signal);
+        const dialing = options.connect(worker.route, host.relay()!.localRealm, worker.abort.signal);
         dialing.then((late) => {
           if (!active(worker)) late.close();
         }, () => undefined);
@@ -471,7 +456,7 @@ export function createTreehouseFeedController(
 
   const runSession = async (
     worker: Worker,
-    session: TreehouseFeedSession,
+    session: FeedSession,
     subscription: CarrierAvailabilitySubscription,
     synced: () => void,
   ): Promise<void> => {
@@ -535,16 +520,16 @@ export function createTreehouseFeedController(
 
   const guard = (): void => {
     if (stopped) throw new Error("feed_stopped");
-    if (workflow.state.relay === null) throw new Error("routes_not_configured");
-    if (routes().length > MAX_ROUTES) throw new Error("too_many_routes");
+    if (host.relay() === null) throw new Error("routes_not_configured");
+    if (routes().length > host.maxRoutes) throw new Error("too_many_routes");
   };
 
   const launch = (): void => {
     running = true;
     startPoll();
     const ordered = [
-      ...routes().filter((r) => isSpace(r.replica)),
-      ...routes().filter((r) => !isSpace(r.replica)),
+      ...routes().filter((r) => host.isAnchor(r.replica)),
+      ...routes().filter((r) => !host.isAnchor(r.replica)),
     ];
     for (const route of ordered) spawn(route);
   };
@@ -564,11 +549,11 @@ export function createTreehouseFeedController(
 
     async start() {
       if (stopped) return;
-      if (workflow.state.relay === null) {
+      if (host.relay() === null) {
         options.onState(snapshot());
         return;
       }
-      if (routes().length > MAX_ROUTES) throw new Error("too_many_routes");
+      if (routes().length > host.maxRoutes) throw new Error("too_many_routes");
       options.onState(snapshot());
       if (autosync && !running) launch();
     },
@@ -618,11 +603,11 @@ export function createTreehouseFeedController(
       syncAbort = new AbortController();
       link.clear();
       running = false;
-      if (workflow.state.relay === null) {
+      if (host.relay() === null) {
         options.onState(snapshot());
         return;
       }
-      if (routes().length > MAX_ROUTES) throw new Error("too_many_routes");
+      if (routes().length > host.maxRoutes) throw new Error("too_many_routes");
       options.onState(snapshot());
       if (autosync || wasRunning) launch();
     },
@@ -658,12 +643,12 @@ function reconnectDelay(attempt: number): number {
 function abortableSleep(delay: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
-      reject(new Error("Treehouse feed worker stopped"));
+      reject(new Error("feed worker stopped"));
       return;
     }
     const onAbort = (): void => {
       clearTimeout(timer);
-      reject(new Error("Treehouse feed worker stopped"));
+      reject(new Error("feed worker stopped"));
     };
     const timer = setTimeout(() => {
       signal.removeEventListener("abort", onAbort);

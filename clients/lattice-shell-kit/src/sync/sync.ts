@@ -2,7 +2,6 @@ import {
   CarrierPeerError,
   carrierOpsToSemanticOps,
   syncCarrierOnce,
-  treehouseCommandDecoders,
 } from "@treetopdevs/lattice-client";
 import type {
   CarrierOpFrame,
@@ -10,24 +9,20 @@ import type {
   CarrierSyncClient,
   Verifier,
 } from "@treetopdevs/lattice-client";
-import { MAX_ROUTES } from "./treehouse_state";
-import type { LocalProfile, RelayRoute } from "./treehouse_state";
-import { productOf } from "./treehouse_routes";
-import { strictVerifier } from "./treehouse_workflow";
-import type { TreehouseWorkflow } from "./treehouse_workflow";
+import type { CarrierRoute, HeldProfile, ShellHost } from "./host";
 
-// Plan 181 slice 3b1. Sync is the only network action of the Treehouse shell and the only caller of the
+// Plan 181 slice 3b1. Sync is the only network action of the shell and the only caller of the
 // relay. It pulls and verifies, merges only dependency-closed sets, and submits locally authored frames
 // one signed op at a time. The relay stays a plaintext-readable, availability-withholding transport: its
 // reply decides durability of what this device sent, never semantic authority.
 
-export type TreehouseRelayConnection = CarrierSyncClient &
+export type RelayConnection = CarrierSyncClient &
   CarrierRelayClient & { close(): void };
 
-export interface SyncTreehouseOptions {
+export interface SyncOptions {
   /** One authenticated connection per replica route (the hello challenge binds a replica). */
-  connect(route: RelayRoute, localRealm: string, signal?: AbortSignal): Promise<TreehouseRelayConnection>;
-  /** Operation signature check. Defaults to strict Ed25519, as `verifyProfile` uses. */
+  connect(route: CarrierRoute, localRealm: string, signal?: AbortSignal): Promise<RelayConnection>;
+  /** Operation signature check. Defaults to the host's verifier (the shell's strict Ed25519, as `verifyProfile` uses). */
   verifier?: Verifier;
   /** Backoff between rate-limited rounds. Defaults to a real timer; tests inject a fake clock. */
   sleep?: (ms: number) => Promise<void>;
@@ -81,7 +76,7 @@ export type RouteOutcome =
   | ({ ok: true } & RouteSyncResult)
   | { ok: false; replica: string; error: string };
 
-export interface TreehouseSyncResult {
+export interface SyncResult {
   routes: RouteOutcome[];
 }
 
@@ -101,7 +96,7 @@ function deadline<T>(work: Promise<T>, ms: number, expire: () => void): Promise<
 }
 
 /** The connection with every request bounded by the deadline; `close` passes straight through. */
-function bounded(connection: TreehouseRelayConnection, ms: number): TreehouseRelayConnection {
+function bounded(connection: RelayConnection, ms: number): RelayConnection {
   return new Proxy(connection, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver);
@@ -129,21 +124,21 @@ const sameSet = (a: Set<string>, b: Set<string>) =>
  * references. A failing route is reported and does not stop the others. More than four routes, or no
  * routes, refuses before any connection is made.
  */
-export async function syncTreehouse(
-  workflow: TreehouseWorkflow,
-  options: SyncTreehouseOptions,
-): Promise<TreehouseSyncResult> {
-  const relay = workflow.state.relay;
+export async function syncRoutes(
+  host: ShellHost,
+  options: SyncOptions,
+): Promise<SyncResult> {
+  const relay = host.relay();
   if (relay === null) throw new Error("routes_not_configured");
-  if (relay.routes.length > MAX_ROUTES) throw new Error("too_many_routes");
+  if (relay.routes.length > host.maxRoutes) throw new Error("too_many_routes");
   const ordered = [
-    ...relay.routes.filter((r) => productOf(r.replica) === "Treehouse.Space"),
-    ...relay.routes.filter((r) => productOf(r.replica) === "Treehouse.Thread"),
+    ...relay.routes.filter((r) => host.isAnchor(r.replica)),
+    ...relay.routes.filter((r) => !host.isAnchor(r.replica)),
   ];
   const routes: RouteOutcome[] = [];
   for (const route of ordered) {
     try {
-      routes.push({ ok: true, ...(await syncTreehouseRoute(workflow, route, options)) });
+      routes.push({ ok: true, ...(await syncRoute(host, route, options)) });
     } catch (error) {
       routes.push({
         ok: false,
@@ -162,24 +157,23 @@ export async function syncTreehouse(
  * lists it. The quarantined, rejected and pending buckets never ack; each id is submitted at most once per
  * sync and is offered again by the next one.
  */
-export async function syncTreehouseRoute(
-  workflow: TreehouseWorkflow,
-  route: RelayRoute,
-  options: SyncTreehouseOptions,
+export async function syncRoute(
+  host: ShellHost,
+  route: CarrierRoute,
+  options: SyncOptions,
 ): Promise<RouteSyncResult> {
-  const relay = workflow.state.relay;
+  const relay = host.relay();
   if (relay === null) throw new Error("routes_not_configured");
-  if (relay.routes.length > MAX_ROUTES) throw new Error("too_many_routes");
+  if (relay.routes.length > host.maxRoutes) throw new Error("too_many_routes");
   // Only a configured route may be dialled; the caller's copy is never trusted over the saved one.
   const configured = relay.routes.find((r) => r.replica === route.replica);
   if (!configured) throw new Error("unknown_route_replica");
   const replica = configured.replica;
-  const decoders = treehouseCommandDecoders(productOf(replica));
-  const verifier = options.verifier ?? strictVerifier;
+  const decoders = host.decoders(replica);
+  const verifier = options.verifier ?? host.verifier;
   const sleep = options.sleep ?? defaultSleep;
   const maxPullRounds = options.maxPullRounds ?? DEFAULT_PULL_ROUNDS;
-  const profileNow = (): LocalProfile | undefined =>
-    workflow.state.profiles.find((p) => p.replica === replica);
+  const profileNow = (): HeldProfile | undefined => host.profile(replica);
 
   const timeout = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const dialing = options.connect(configured, relay.localRealm);
@@ -295,7 +289,7 @@ export async function syncTreehouseRoute(
       const frames = open ? [] : [...accumulated.values()];
       for (const id of ackNow) deliveredNow.add(id);
       if (frames.length > 0 || ackNow.size > 0) {
-        await workflow.mergeSync(replica, frames, [...ackNow]);
+        await host.mergeSync(replica, frames, [...ackNow]);
         result.pulledFrames += frames.filter((f) => !heldIds.has(f.id)).length;
         result.ackedSubmissions += ackNow.size;
         if (!open) accumulated.clear();
@@ -344,7 +338,7 @@ export async function syncTreehouseRoute(
       (id) => !profile!.acked.includes(id) && frontier.has(id),
     );
     if (late.length > 0) {
-      await workflow.mergeSync(replica, [], late);
+      await host.mergeSync(replica, [], late);
       result.ackedSubmissions += late.length;
     }
     const final = profileNow();

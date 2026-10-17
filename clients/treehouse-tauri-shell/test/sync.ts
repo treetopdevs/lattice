@@ -7,8 +7,8 @@ import {
   decodeTreehouseJoinRequest,
 } from "@treetopdevs/lattice-client";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
-import { syncTreehouse, syncTreehouseRoute } from "../src/treehouse_sync";
-import type { SyncTreehouseOptions } from "../src/treehouse_sync";
+import { syncTreehouse, syncTreehouseRoute } from "../src/treehouse_host";
+import type { SyncTreehouseOptions } from "../src/treehouse_host";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import type { LocalProfile } from "../src/treehouse_state";

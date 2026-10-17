@@ -326,7 +326,7 @@ defmodule Lattice.Treehouse.R13LiteContractTest do
   end
 
   defp shell_copy do
-    for file <- ["App.vue", "EnrollmentPanel.vue", "treehouse_panel_sync.ts"] do
+    for file <- ["App.vue", "EnrollmentPanel.vue", "treehouse_host.ts"] do
       {"shell copy " <> file, File.read!(Path.join(@shell_src, file))}
     end
   end

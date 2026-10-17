@@ -9,18 +9,18 @@ import type {
 import {
   createTreehouseFeedController,
   treehouseFeedEnv,
-} from "../src/treehouse_feed";
+} from "../src/treehouse_host";
 import type {
   TreehouseFeedController,
   TreehouseFeedSession,
   TreehouseFeedState,
-} from "../src/treehouse_feed";
+} from "../src/treehouse_host";
 import {
   createTreehouseRelayConnector,
   treehouseCarrierSigner,
-} from "../src/treehouse_relay_client";
-import { syncTreehouseRoute } from "../src/treehouse_sync";
-import type { SyncTreehouseOptions } from "../src/treehouse_sync";
+} from "../src/treehouse_host";
+import { syncTreehouseRoute } from "../src/treehouse_host";
+import type { SyncTreehouseOptions } from "../src/treehouse_host";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import type { RelayRoute } from "../src/treehouse_state";

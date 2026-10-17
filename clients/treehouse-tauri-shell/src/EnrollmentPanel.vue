@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { OfferReview, TreehouseWorkflow } from "./treehouse_workflow";
 import type { PreviewState } from "./treehouse_state";
-import { createPanelSync } from "./treehouse_panel_sync";
+import { createPanelSync } from "./treehouse_host";
 
 // Plan 181 S2c. Loaded only when the app is built with VITE_TREEHOUSE_ENROLLMENT=1. Use (import and
 // review), Sign (accept, admit and grant) and Sync stay separate actions: only the Sync button (and the
