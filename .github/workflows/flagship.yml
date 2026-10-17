@@ -55,7 +55,8 @@ jobs:
             while IFS= read -r path; do
               case "$path" in
                 clients/township-tauri-shell/*|apps/township_web/*|apps/township_bench/*|scripts/township_*|scripts/android-pilot/*|playwright.township*.config.mjs) township=true ;;
-                clients/treehouse-tauri-shell/*|tools/android-witness-validator/*|scripts/treehouse_*) treehouse=true ;;
+                # Shell kit (plan 186): only Treehouse consumes it; a second consumer adds its flag here.
+                clients/treehouse-tauri-shell/*|clients/lattice-shell-kit/*|tools/android-witness-validator/*|scripts/treehouse_*) treehouse=true ;;
                 apps/lattice_server/*|apps/lattice_demo/*|apps/lattice_stress/*|scripts/lattice_*|playwright.config.mjs|tests/*) legacy=true ;;
                 docs/android_pilot_*) township=true ;;
                 docs/township_*) township=true ;;

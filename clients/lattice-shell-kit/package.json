@@ -1,0 +1,24 @@
+{
+  "name": "@treetopdevs/lattice-shell-kit",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts",
+    "./testing/beam": "./src/testing/beam.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "node scripts/boundary.mjs"
+  },
+  "peerDependencies": {
+    "@noble/curves": "2.2.0",
+    "@treetopdevs/lattice-client": "file:../lattice-client"
+  },
+  "devDependencies": {
+    "@noble/curves": "2.2.0",
+    "@types/node": "^26.1.0",
+    "typescript": "5.9.3"
+  }
+}

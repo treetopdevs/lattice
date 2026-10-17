@@ -13,7 +13,12 @@
 
 ## Status
 
-Design written 2026-10-17; no code moved.
+Design written 2026-10-17. PR 1 (skeleton, wiring, test support, classifier arm) in review 2026-10-17.
+PR 1 deviations: lattice-client is a kit peer only (a kit-local copy splits `instanceof` under
+`--preserve-symlinks`), and the kit typechecks it through a `paths` entry; `--preserve-symlinks` goes on the
+tsx calls that load the fake relay, while the BEAM helpers sit in a node-only `./testing/beam` subpath so the
+pinned enrollment scripts are unchanged; Vite `preserveSymlinks` is deferred to PR 2; the bundle guard
+lives in `vite.config.ts` under `build`. CI coverage of the kit's own checks is row 220, needed before PR 2.
 
 ## Header
 

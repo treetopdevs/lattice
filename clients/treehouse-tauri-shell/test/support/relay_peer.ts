@@ -1,25 +1,21 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { createServer } from "node:net";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { chmodSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { ed25519 } from "@noble/curves/ed25519.js";
+import { assertPrivateChain, awaitExit, codePathArgs, elixirBin, pinnedBeamPath, repoRoot } from "@treetopdevs/lattice-shell-kit/testing/beam";
 import { connectCarrierWebSocket, decodeCarrierOpFrame, verifyCarrierOp } from "@treetopdevs/lattice-client";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
 import type { RelayRoute } from "../../src/treehouse_state";
 import { fromBase64 } from "../../src/treehouse_workflow";
 
-// Plan 181 slice 4 harness support: the manifest relay spawner and BEAM helpers. The BEAM helpers are
-// copies of the small functions in the Township shell's beam_peer.ts (they are not imported across
-// shells). The relay is the existing `pilot_node.exs` fixture entrypoint: loopback only, started as a
-// separate OS process, with a hand-written manifest. It is not a staged, sealed or admitted route, its
+// Plan 181 slice 4 harness support: the manifest relay spawner. The BEAM helpers it uses live in
+// `@treetopdevs/lattice-shell-kit/testing/beam` (plan 186 PR 1). The relay is the existing
+// `pilot_node.exs` fixture entrypoint: loopback only, started as a separate OS process, with a
+// hand-written manifest. It is not a staged, sealed or admitted route, its
 // stop and kill paths are test-only, and on macOS it uses the directory-sync approximation, so no
 // durable-ack claim is made here for macOS.
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "../../../..");
 const PILOT_SCRIPT = "apps/lattice_carrier_server/priv/pilot_node.exs";
 
 export interface PilotInstanceSpec {
@@ -39,43 +35,6 @@ export interface PilotRelay {
   stop(): Promise<void>;
   /** SIGKILL, as a crashed host. */
   kill(): Promise<void>;
-}
-
-/**
- * Create a scratch root under the repo build tree (or `$RUNNER_TEMP`), never `os.tmpdir()`: the manifest
- * loader refuses any ancestor with a group or other write bit, and a world-writable `/tmp` has one.
- * The path is realpath-resolved because macOS temp dirs sit under the `/var` symlink, which is refused.
- */
-export function makeGateRoot(prefix: string): string {
-  const bases = [join(repoRoot, "_build/test/tmp"), ...(process.env.RUNNER_TEMP ? [process.env.RUNNER_TEMP] : [])];
-  const failures: string[] = [];
-  for (const base of bases) {
-    try {
-      mkdirSync(base, { recursive: true });
-      const dir = join(realpathSync(base), `${prefix}-${process.pid}`);
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
-      chmodSync(dir, 0o700);
-      const real = realpathSync(dir);
-      assertPrivateChain(real);
-      return real;
-    } catch (error) {
-      failures.push(error instanceof Error ? error.message : String(error));
-    }
-  }
-  throw new Error(`no scratch root passes the manifest path-permission rule:\n${failures.join("\n")}`);
-}
-
-/** Every directory on the chain, root included, has no group or other write bit. */
-export function assertPrivateChain(path: string): void {
-  let current = path;
-  for (;;) {
-    const mode = statSync(current).mode;
-    if ((mode & 0o022) !== 0)
-      throw new Error(`manifest_path_permissions: ${current} is group or world writable (${(mode & 0o7777).toString(8)})`);
-    const parent = dirname(current);
-    if (parent === current) return;
-    current = parent;
-  }
 }
 
 export interface PilotManifestInput {
@@ -166,18 +125,6 @@ function awaitPilotReady(
   });
 }
 
-function awaitExit(child: ChildProcessWithoutNullStreams, ms: number): Promise<number | null> {
-  return new Promise((resolveExit, rejectExit) => {
-    const timer = setTimeout(() => rejectExit(new Error("pilot process did not exit in time")), ms);
-    child.once("exit", (code) => {
-      clearTimeout(timer);
-      resolveExit(code);
-    });
-  });
-}
-
-export const fileSha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
-
 export interface RelayObserver {
   /** Sorted op ids the relay advertises for the route. */
   ids(label: string): Promise<string[]>;
@@ -229,62 +176,3 @@ export function createRelayObserver(seed: Uint8Array, routes: Record<string, Rel
   };
 }
 
-export async function freeTcpPort(): Promise<number> {
-  return new Promise((resolvePort, rejectPort) => {
-    const server = createServer();
-    server.once("error", rejectPort);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close();
-        rejectPort(new Error("failed to reserve a TCP port"));
-        return;
-      }
-      server.close((error) => (error ? rejectPort(error) : resolvePort(address.port)));
-    });
-  });
-}
-
-/** Run a BEAM support script to completion; its output must carry `expectedMarker`. */
-export async function runBeamSupport(script: string, args: string[], expectedMarker: string): Promise<string> {
-  const child = spawn(elixirBin(), [...codePathArgs(), script, ...args], {
-    cwd: repoRoot,
-    stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env, PATH: pinnedBeamPath() },
-  });
-  const lines: string[] = [];
-  child.stdout.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
-  child.stderr.on("data", (chunk: Buffer) => lines.push(chunk.toString()));
-  const code = await awaitExit(child, 120_000);
-  const output = lines.join("");
-  if (code !== 0) throw new Error(`${script} exited with ${code}:\n${output}`);
-  if (!output.includes(expectedMarker)) throw new Error(`${script} exited without ${expectedMarker}:\n${output}`);
-  return output;
-}
-
-function codePathArgs(): string[] {
-  const libRoot = join(repoRoot, "_build/test/lib");
-  if (!existsSync(libRoot)) throw new Error(`missing BEAM test build at ${libRoot}; run MIX_ENV=test mix compile first`);
-  return readdirSync(libRoot)
-    .map((app) => join(libRoot, app, "ebin"))
-    .filter(existsSync)
-    .flatMap((path) => ["-pa", path]);
-}
-
-function elixirBin(): string {
-  const direct = join(process.env.HOME ?? "", ".asdf/installs/elixir/1.19.5-otp-28/bin/elixir");
-  if (existsSync(direct)) return direct;
-  const asdf = join(process.env.HOME ?? "", ".asdf/shims/elixir");
-  if (existsSync(asdf)) return asdf;
-  return "elixir";
-}
-
-function pinnedBeamPath(): string {
-  const home = process.env.HOME ?? "";
-  const beamPaths = [
-    join(home, ".asdf/installs/erlang/28.3.1/bin"),
-    join(home, ".asdf/installs/erlang/28.3.1/erts-16.2/bin"),
-    join(home, ".asdf/installs/elixir/1.19.5-otp-28/bin"),
-  ].filter(existsSync);
-  return [...beamPaths, process.env.PATH ?? ""].join(":");
-}

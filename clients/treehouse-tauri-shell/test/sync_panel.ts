@@ -11,7 +11,7 @@ import {
 import type { PanelSyncStatus } from "../src/treehouse_panel_sync";
 import type { TreehouseFeedSession, TreehouseFeedState } from "../src/treehouse_feed";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
-import { FakeClock, FakeRelay } from "./support/fake_relay";
+import { FakeClock, FakeRelay } from "@treetopdevs/lattice-shell-kit/testing";
 import { FaultNative } from "./support/fault_native";
 
 // Plan 181 slice 3c: the logic behind the enrollment panel's Sync control and status. The panel itself
