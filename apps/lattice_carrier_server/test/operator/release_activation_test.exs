@@ -311,6 +311,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert :ok = Application.stop(:lattice_carrier_server)
     holder = hold_lock(f.root)
 
+    assert {:error, {:operator_refused, "operator_busy"}} =
+             Lock.boot(f.root, f.manifest, f.record["manifest_digest"])
+
     assert {:error, _} = Application.ensure_all_started(:lattice_carrier_server)
     assert Runtime.deployment() == nil
 
@@ -361,8 +364,89 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert :ok = Application.stop(:lattice_carrier_server)
     File.write!(f.manifest, f.active_manifest)
 
+    old_digest = Base.encode16(:crypto.hash(:sha256, f.active_manifest), case: :lower)
+
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             Lock.boot(f.root, f.manifest, old_digest)
+
     assert {:error, _} = Application.ensure_all_started(:lattice_carrier_server)
     assert Runtime.deployment() == nil
+  end
+
+  test "a boot over an already activated record with its candidate active serves it", f do
+    {owner, observation} = sealed(f)
+    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    {:ok, activated} = Journal.read(f.root)
+    stale = Runtime.deployment().incarnation
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+
+    assert Runtime.deployment().manifest_digest ==
+             Base.decode16!(f.candidate["sha256"], case: :lower)
+
+    assert {:ok, ^activated} = Journal.read(f.root)
+    assert is_binary(Runtime.deployment().incarnation)
+    refute Runtime.deployment().incarnation == stale
+  end
+
+  test "a briefly held operator lock lets the boot succeed after a bounded retry", f do
+    sealed(f)
+    assert :ok = Application.stop(:lattice_carrier_server)
+    holder = hold_lock(f.root)
+    starter = Task.async(fn -> Application.ensure_all_started(:lattice_carrier_server) end)
+    Process.sleep(1_500)
+    refute Task.yield(starter, 0)
+    release_lock(holder)
+
+    assert {:ok, _} = Task.await(starter, 15_000)
+    assert Runtime.deployment().manifest_digest == :crypto.hash(:sha256, f.active_manifest)
+  end
+
+  test "an activation root other than the boot's operator root never activates", f do
+    {owner, observation} = sealed(f)
+    other = Path.join(Path.dirname(f.root), "other-root-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(other)
+    File.chmod!(other, 0o700)
+    on_exit(fn -> File.rm_rf(other) end)
+
+    assert {:error, :release_boot_unguarded} =
+             ReleaseActivation.activate(other, f.journal, owner, observation)
+
+    unchanged!(f)
+  end
+
+  test "a missing incarnation marker never activates", f do
+    {owner, observation} = sealed(f)
+    File.rm!(Path.join(f.root, "operator-incarnation"))
+
+    assert {:error, {:operator_refused, "stale_operator_incarnation"}} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    unchanged!(f)
+  end
+
+  test "a malformed incarnation reply is refused, never trusted" do
+    dir = Path.join(System.tmp_dir!(), "fake-py-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf(dir) end)
+    stub = Path.join(dir, "python3")
+    previous_path = System.get_env("PATH")
+    on_exit(fn -> System.put_env("PATH", previous_path) end)
+
+    replies = [
+      ~s({"incarnation":"#{String.duplicate("g", 64)}"}),
+      ~s({"incarnation":"#{String.duplicate("a", 64)}","x":1}),
+      ~s({"incarnation":"#{String.duplicate("a", 63)}"})
+    ]
+
+    for reply <- replies do
+      File.write!(stub, "#!/bin/sh\nread line\nprintf '%s\\n' '#{reply}'\n")
+      File.chmod!(stub, 0o755)
+      System.put_env("PATH", dir <> ":" <> previous_path)
+
+      assert {:error, :invalid_operator_response} =
+               Lock.boot(dir, Path.join(dir, "m.json"), String.duplicate("0", 64))
+    end
   end
 
   defp hold_lock(root) do

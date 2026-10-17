@@ -20,6 +20,8 @@ defmodule LatticeCarrierServer.Runtime do
 
   @deployment_key {__MODULE__, :deployment}
   @instance_names_key {__MODULE__, :instance_names}
+  @boot_busy_attempts 12
+  @boot_busy_sleep 750
 
   @spec prepare(nil | Path.t()) :: {:ok, [Supervisor.child_spec()]} | {:error, term()}
   def prepare(path) do
@@ -113,9 +115,24 @@ defmodule LatticeCarrierServer.Runtime do
   defp boot_guard(root, path, digest) do
     root = Path.expand(root)
 
-    case Lock.boot(root, Path.expand(path), Base.encode16(digest, case: :lower)) do
+    loaded = Base.encode16(digest, case: :lower)
+
+    case boot_lock(root, Path.expand(path), loaded, @boot_busy_attempts) do
       {:ok, incarnation} -> {:ok, %{operator_root: root, incarnation: incarnation}}
       {:error, _} = error -> error
+    end
+  end
+
+  # A short operator command (stage, journal commit) briefly holds the lock;
+  # retry only that refusal for a bounded time, then fail as any refusal does.
+  defp boot_lock(root, path, loaded, attempts) do
+    case Lock.boot(root, path, loaded) do
+      {:error, {:operator_refused, "operator_busy"}} when attempts > 1 ->
+        Process.sleep(@boot_busy_sleep)
+        boot_lock(root, path, loaded, attempts - 1)
+
+      other ->
+        other
     end
   end
 

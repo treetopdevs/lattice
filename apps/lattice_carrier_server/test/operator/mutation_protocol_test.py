@@ -71,6 +71,7 @@ class Protocol(unittest.TestCase):
         log = good["checks"][1]
         malformed = [dict(good, artifacts=[]), dict(good, checks=[]),
                      dict(good, incarnation=None), dict(good, incarnation="4" * 63),
+                     dict(good, incarnation="G" * 64), dict(good, incarnation="4" * 65),
                      dict(good, checks=good["checks"][:1]),
                      dict(good, checks=[log, log]), dict(good, attempt="short"),
                      dict(good, checks=[{"path": "relative.json", "sha256": "0" * 64}, log]),
@@ -123,6 +124,34 @@ class Protocol(unittest.TestCase):
         with self.assertRaises(owner.Refusal) as caught:
             owner.execute("/nonexistent-root", plan)
         self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        stage = dict(plan, kind="stage", record=None, attempt=self.sample()["attempt"],
+                     checks=[], artifacts=[])
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.execute("/nonexistent-root", stage)
+        self.assertEqual(str(caught.exception), "malformed_operator_plan")
+
+    def test_boot_without_journal_writes_a_fresh_private_marker(self):
+        root = self.workdir("boot-marker")
+        manifest = os.path.join(root, "active.json")
+        with open(manifest, "wb") as f:
+            f.write(b"{}")
+        os.chmod(manifest, 0o600)
+        plan = {"version": 1, "kind": "boot", "expected": None, "record": None, "attempt": None,
+                "artifacts": None, "incarnation": None,
+                "checks": [{"path": manifest, "sha256": owner.digest(b"{}")}]}
+        markers = []
+        for _ in range(2):
+            with mock.patch.object(owner, "reply") as reply:
+                owner.boot(root, plan)
+            marker = reply.call_args[0][0]["incarnation"]
+            markers.append(marker)
+            path = os.path.join(root, "operator-incarnation")
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(), marker.encode())
+            self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+        self.assertTrue(all(len(m) == 64 and set(m) <= set("0123456789abcdef") for m in markers))
+        self.assertNotEqual(markers[0], markers[1])
+        self.assertEqual([n for n in os.listdir(root) if ".tmp." in n], [])
 
     def test_service_identity_binding_is_closed_and_canonical(self):
         good = self.sample()["service"]

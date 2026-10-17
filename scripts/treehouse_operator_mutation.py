@@ -407,9 +407,16 @@ def boot(root, plan):
             refuse("stale_operator_intent")
     marker = os.urandom(32).hex()
     temporary = os.path.join(root, INCARNATION + ".tmp." + os.urandom(16).hex())
-    retain(temporary, marker.encode())
-    os.replace(temporary, os.path.join(root, INCARNATION))
-    sync_dir(root)
+    try:
+        retain(temporary, marker.encode())
+        os.replace(temporary, os.path.join(root, INCARNATION))
+        sync_dir(root)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
     if file_bytes(os.path.join(root, INCARNATION), 64, private=True) != marker.encode():
         refuse("operator_persistence_failed")
     reply({"incarnation": marker})
