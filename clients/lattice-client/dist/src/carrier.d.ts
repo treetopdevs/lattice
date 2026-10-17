@@ -99,6 +99,13 @@ export interface SyncCarrierOptions {
     expectedReplica: string;
     /** Product command decoders; omitted keeps the default Township-first table byte for byte. */
     commandDecoders?: CommandDecoderMap;
+    /**
+     * Relay mode only: what a relay error reply to one submitted frame does. `"throw"` (the default) rethrows
+     * every reply except `rate_limited`, discarding the call's gathered result. `"stop"` ends submission at
+     * that frame and returns what was gathered, with the reply in `submitStop`. Transport failures and an
+     * error from the duplicate-confirming advertise always throw.
+     */
+    onRelayError?: "throw" | "stop";
 }
 export interface CarrierStateReport {
     state_b64: string;
@@ -119,6 +126,11 @@ export interface SyncCarrierResult {
     peerReportedFrameIds: string[];
     /** Locally unverifiable push candidates omitted from egress. */
     unverifiableFrameIds: string[];
+    /** Relay mode: the frame whose submit ended this call's submission early, and the relay's error reason. */
+    submitStop?: {
+        frameId: string;
+        reason: string;
+    };
 }
 export interface CarrierOpFrame {
     v: number;
@@ -264,6 +276,17 @@ export declare class CarrierWebSocketClient {
     private closeAvailability;
 }
 export declare function syncCarrierOnce(client: CarrierSyncClient, localOps: Op[], localCarrierFrames: unknown[], realmByPubkey: Record<string, string> | undefined, options: SyncCarrierOptions): Promise<SyncCarrierResult>;
+/** An error reply from the carrier peer (`{type: "error", reason}`); the socket stays open. */
+export declare class CarrierPeerError extends Error {
+    readonly reason: string;
+    constructor(reason: string);
+}
+/**
+ * The reason of a carrier peer error reply, or null for anything else (a transport failure, a timeout, a
+ * decode error). A plain `Error` carrying the same message is accepted so scripted clients and fakes that
+ * throw one keep working.
+ */
+export declare function carrierPeerErrorReason(error: unknown): string | null;
 export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>, commandDecoders?: CommandDecoderMap): Op[];
 export declare function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame;
 export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Record<string, string>, commandDecoders?: CommandDecoderMap): Op;

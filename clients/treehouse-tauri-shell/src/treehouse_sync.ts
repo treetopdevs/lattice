@@ -1,4 +1,5 @@
 import {
+  CarrierPeerError,
   carrierOpsToSemanticOps,
   syncCarrierOnce,
   treehouseCommandDecoders,
@@ -44,17 +45,33 @@ export interface RouteSyncResult {
   replica: string;
   /** Frames newly retained from the relay by this sync. */
   pulledFrames: number;
-  /** Locally authored frames the relay persisted (accepted or structurally quarantined). */
+  /** Locally authored frames the relay made durable (accepted, or listed by a fresh advertise). */
   ackedSubmissions: number;
   accepted: string[];
+  /**
+   * Frames this sync submitted that the relay quarantined, minus any the closing advertise lists. Like
+   * `rejected`, an entry naming an id the round did not submit is ignored.
+   */
   quarantined: [string, string][];
+  /**
+   * Ids the relay will not hold. The reasons are a superset of the wire's `WIRE_REPORT_REASONS`: they also
+   * include `malformed`, which is a relay error reply for that one frame, not a report reason.
+   */
   rejected: [string, string][];
   /** Relay `pending` bucket: it lacks a dependency and did not persist the op. */
   relayPending: string[];
-  /** Authored ids not yet durable on the relay: outbox minus acked, after this sync. */
+  /**
+   * Authored ids not yet durable on the relay: outbox minus acked, after this sync, plus any id the relay
+   * refused in this sync and does not list (a legacy ack of a quarantined frame is not trusted).
+   */
   pendingIds: string[];
   /** The relay kept rate-limiting and the retry bound ran out; pending is left for the next sync. */
   rateLimited: boolean;
+  /**
+   * The relay answered a submit with `unavailable` or `read_only`: submission stopped at that frame for this
+   * sync (the pull half and every earlier ack are kept), and the next sync offers it again.
+   */
+  submitStopped: { id: string; reason: string } | null;
   /** Local ids equal the relay's advertised ids after the sync. Never labelled peer convergence. */
   matchesRelay: boolean;
   relayIdCount: number;
@@ -141,8 +158,9 @@ export async function syncTreehouse(
 /**
  * One verified sync of one replica route. Pulled frames are retained only as a dependency-closed set
  * through `mergeSync` (one CAS commit with their acks). Locally authored frames are submitted one at a
- * time; an id enters `acked` only after the relay's persisted report (accepted or quarantined) or a fresh
- * advertise that lists it. The rejected and pending buckets never ack.
+ * time; an id enters `acked` only after the relay's persisted report (accepted) or a fresh advertise that
+ * lists it. The quarantined, rejected and pending buckets never ack; each id is submitted at most once per
+ * sync and is offered again by the next one.
  */
 export async function syncTreehouseRoute(
   workflow: TreehouseWorkflow,
@@ -182,6 +200,7 @@ export async function syncTreehouseRoute(
     relayPending: [],
     pendingIds: [],
     rateLimited: false,
+    submitStopped: null,
     matchesRelay: false,
     relayIdCount: 0,
   };
@@ -191,10 +210,16 @@ export async function syncTreehouseRoute(
     // delivery of a frame the relay does not hold.
     const relayHeld = new Set(await client.advertise());
     const deliveredNow = new Set<string>();
+    // Every authored id the relay has replied to in this sync, acked or not.
+    const attemptedNow = new Set<string>();
     // Verified pulled frames not yet committed, in the relay's causal order.
     const accumulated = new Map<string, CarrierOpFrame>();
     let pullRounds = 0;
     let stalls = 0;
+    // The relay's error reply to the latest submitting round, kept across pull-only rounds so it is applied
+    // once the pulled set is dependency-closed and committed. A non-rate-limited stop ends submission for
+    // the rest of the pass; the pulls still run.
+    let stop: { frameId: string; reason: string } | null = null;
     for (;;) {
       const profile = profileNow();
       const held = profile?.frames ?? [];
@@ -202,35 +227,55 @@ export async function syncTreehouseRoute(
       const outbox = new Set(profile?.outbox ?? []);
       // Authored frames the relay did not list at the start of this sync and that no report of this sync
       // has acknowledged yet. Foreign frames are never in the outbox, so never submitted.
+      // A frame the relay already replied to in this sync is not offered again, whatever the bucket: a
+      // rejected, pending or quarantined verdict does not change by asking twice in one call.
       const candidates = held.filter(
-        (f) => outbox.has(f.id) && !relayHeld.has(f.id) && !deliveredNow.has(f.id),
+        (f) =>
+          outbox.has(f.id) &&
+          !relayHeld.has(f.id) &&
+          !deliveredNow.has(f.id) &&
+          !attemptedNow.has(f.id),
       );
       const localOps = carrierOpsToSemanticOps(
         [...held, ...accumulated.values()],
         {},
         decoders,
       );
-      const synced = await syncCarrierOnce(client, localOps, candidates, {}, {
+      const submitting = stop === null || stop.reason === "rate_limited";
+      const synced = await syncCarrierOnce(client, localOps, submitting ? candidates : [], {}, {
         verifier,
         submission: "relay",
         expectedReplica: replica,
         commandDecoders: decoders,
+        onRelayError: "stop",
       });
+      if (submitting) stop = synced.submitStop ?? null;
+      // `malformed` is a verdict on that one frame: the relay will not hold it, so it joins `rejected`, is not
+      // offered again in this sync, and the rest of the outbox continues (its dependents answer `pending`).
+      let malformedNow = false;
+      if (stop !== null && stop.reason === "malformed") {
+        result.rejected.push([stop.frameId, "malformed"]);
+        attemptedNow.add(stop.frameId);
+        stop = null;
+        malformedNow = true;
+      }
       const report = synced.pushReport;
+      const candidateIds = new Set(candidates.map(frameId));
+      const submitted = new Set(synced.pushedFrames.map(frameId));
+      // A refusal counts only for a frame this round submitted: a report naming any other id is ignored.
+      const bound = ([id]: [string, string]) => submitted.has(id) && candidateIds.has(id);
       result.accepted.push(...report.accepted);
-      result.quarantined.push(...report.quarantined);
-      result.rejected.push(...report.rejected);
+      result.quarantined.push(...report.quarantined.filter(bound));
+      result.rejected.push(...report.rejected.filter(bound));
       result.relayPending.push(...report.pending);
 
       // Acknowledgements: only frames this call submitted can ack through the report, only authored
       // frames are ever acked here, and the relay's own persist-before-reply is what makes them durable.
-      const candidateIds = new Set(candidates.map(frameId));
-      const submitted = new Set(synced.pushedFrames.map(frameId));
+      // Only `accepted` (or relay-confirmed presence) is durable and readable back: a quarantined op is kept
+      // by the relay as evidence and never advertised or served, so it never acks.
+      for (const id of submitted) attemptedNow.add(id);
       const ackNow = new Set<string>();
-      for (const id of [
-        ...report.accepted,
-        ...report.quarantined.map(([quarantinedId]) => quarantinedId),
-      ])
+      for (const id of report.accepted)
         if (submitted.has(id) && candidateIds.has(id)) ackNow.add(id);
       for (const id of synced.peerReportedFrameIds)
         if (candidateIds.has(id)) ackNow.add(id);
@@ -261,10 +306,19 @@ export async function syncTreehouseRoute(
           throw new Error("pull_incomplete");
         continue;
       }
-      const remaining = candidates.filter((f) => !ackNow.has(f.id));
+      // The relay's error reply decides what happens next, after the pass's progress is committed.
+      if (stop !== null && stop.reason !== "rate_limited") {
+        if (stop.reason === "unavailable" || stop.reason === "read_only") {
+          result.submitStopped = { id: stop.frameId, reason: stop.reason };
+          break;
+        }
+        // Unexpected (`unauthenticated`, `unsupported_frame`, an unknown reason): fail the route as before.
+        throw new CarrierPeerError(stop.reason);
+      }
+      const remaining = candidates.filter((f) => !ackNow.has(f.id) && !attemptedNow.has(f.id));
       if (remaining.length === 0) break;
-      // pushedFrames is shorter than the candidates only when the relay rate-limited the burst.
-      if (submitted.size < candidates.length) {
+      if (stop !== null) {
+        // `rate_limited`: nothing was judged past the stop, so wait for a refill and offer the rest.
         if (ackNow.size > 0 || gotNew > 0) {
           stalls = 0;
           continue;
@@ -276,7 +330,9 @@ export async function syncTreehouseRoute(
         await sleep(STALL_SLEEP_MS);
         continue;
       }
-      // Everything was submitted and the rest is rejected or pending: nothing more to do this sync.
+      if (malformedNow) continue;
+      // Everything offered was answered and the rest is rejected, pending or quarantined (or was dropped by
+      // the client as unverifiable): nothing more to do this sync.
       break;
     }
 
@@ -292,7 +348,16 @@ export async function syncTreehouseRoute(
       result.ackedSubmissions += late.length;
     }
     const final = profileNow();
-    result.pendingIds = (final?.outbox ?? []).filter((id) => !final!.acked.includes(id));
+    // A refusal the closing advertise contradicts (the relay lists the id) is dropped. An id the relay
+    // refused in this sync and does not list is pending even if the saved set acks it: a profile written
+    // before quarantined ids stopped acking holds them there, and `acked` never shrinks.
+    const unlisted = ([id]: [string, string]) => !frontier.has(id);
+    result.quarantined = result.quarantined.filter(unlisted);
+    result.rejected = result.rejected.filter(unlisted);
+    const refusedNow = new Set([...result.quarantined, ...result.rejected].map(([id]) => id));
+    result.pendingIds = (final?.outbox ?? []).filter(
+      (id) => !final!.acked.includes(id) || refusedNow.has(id),
+    );
     result.relayIdCount = frontier.size;
     result.matchesRelay = sameSet(new Set((final?.frames ?? []).map(frameId)), frontier);
     return result;

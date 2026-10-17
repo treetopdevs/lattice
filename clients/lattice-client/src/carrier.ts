@@ -150,6 +150,13 @@ export interface SyncCarrierOptions {
   expectedReplica: string;
   /** Product command decoders; omitted keeps the default Township-first table byte for byte. */
   commandDecoders?: CommandDecoderMap;
+  /**
+   * Relay mode only: what a relay error reply to one submitted frame does. `"throw"` (the default) rethrows
+   * every reply except `rate_limited`, discarding the call's gathered result. `"stop"` ends submission at
+   * that frame and returns what was gathered, with the reply in `submitStop`. Transport failures and an
+   * error from the duplicate-confirming advertise always throw.
+   */
+  onRelayError?: "throw" | "stop";
 }
 
 export interface CarrierStateReport {
@@ -172,6 +179,8 @@ export interface SyncCarrierResult {
   peerReportedFrameIds: string[];
   /** Locally unverifiable push candidates omitted from egress. */
   unverifiableFrameIds: string[];
+  /** Relay mode: the frame whose submit ended this call's submission early, and the relay's error reason. */
+  submitStop?: { frameId: string; reason: string };
 }
 
 export interface CarrierOpFrame {
@@ -1059,7 +1068,7 @@ export class CarrierWebSocketClient {
     } finally {
       clearTimeout(timer);
     }
-    if (hasType(decoded, "error")) throw new Error(`carrier peer error: ${String(decoded.reason)}`);
+    if (hasType(decoded, "error")) throw new CarrierPeerError(String(decoded.reason));
     return decoded;
   }
 
@@ -1257,7 +1266,12 @@ export async function syncCarrierOnce(
   );
 
   const submission = options.submission ?? "push";
-  const submitted = await submitCarrierFrames(client, candidateFrames, submission);
+  const submitted = await submitCarrierFrames(
+    client,
+    candidateFrames,
+    submission,
+    options.onRelayError ?? "throw",
+  );
   // A carrier response only ever confirms possession of frames submitted in
   // THIS call: an id it names without having received the frame (a foreign,
   // unbound, or locally unverifiable frame filtered from egress) must not
@@ -1286,6 +1300,7 @@ export async function syncCarrierOnce(
     pushReport: submitted.pushReport,
     peerReportedFrameIds,
     unverifiableFrameIds,
+    ...(submitted.submitStop ? { submitStop: submitted.submitStop } : {}),
   };
 }
 
@@ -1293,12 +1308,14 @@ interface CarrierSubmissionResult {
   pushedFrames: unknown[];
   pushReport: CarrierPushReport;
   confirmedDuplicateIds: string[];
+  submitStop?: { frameId: string; reason: string };
 }
 
 async function submitCarrierFrames(
   client: CarrierSyncClient,
   frames: unknown[],
   submission: CarrierSubmission,
+  onRelayError: "throw" | "stop",
 ): Promise<CarrierSubmissionResult> {
   if (submission === "push") {
     return {
@@ -1314,14 +1331,19 @@ async function submitCarrierFrames(
   const pushedFrames: CarrierOpFrame[] = [];
   const pushReport = emptyPushReport();
   const confirmedDuplicateIds: string[] = [];
+  let submitStop: { frameId: string; reason: string } | undefined;
 
   for (const frame of orderedFrames) {
     let report: CarrierPushReport;
     try {
       report = await client.relay(frame);
     } catch (error) {
-      if (carrierRateLimited(error)) break;
-      throw error;
+      // Only the relay's own error reply is classified; a transport failure carries no reason and throws.
+      const reason = carrierPeerErrorReason(error);
+      if (reason === null) throw error;
+      if (reason !== "rate_limited" && onRelayError !== "stop") throw error;
+      submitStop = { frameId: frame.id, reason };
+      break;
     }
 
     pushedFrames.push(frame);
@@ -1333,11 +1355,31 @@ async function submitCarrierFrames(
     }
   }
 
-  return { pushedFrames, pushReport, confirmedDuplicateIds };
+  return { pushedFrames, pushReport, confirmedDuplicateIds, ...(submitStop ? { submitStop } : {}) };
 }
 
-function carrierRateLimited(error: unknown): boolean {
-  return error instanceof Error && error.message === "carrier peer error: rate_limited";
+/** An error reply from the carrier peer (`{type: "error", reason}`); the socket stays open. */
+export class CarrierPeerError extends Error {
+  readonly reason: string;
+
+  constructor(reason: string) {
+    super(`carrier peer error: ${reason}`);
+    this.reason = reason;
+  }
+}
+
+const CARRIER_PEER_ERROR_PREFIX = "carrier peer error: ";
+
+/**
+ * The reason of a carrier peer error reply, or null for anything else (a transport failure, a timeout, a
+ * decode error). A plain `Error` carrying the same message is accepted so scripted clients and fakes that
+ * throw one keep working.
+ */
+export function carrierPeerErrorReason(error: unknown): string | null {
+  if (error instanceof CarrierPeerError) return error.reason;
+  if (error instanceof Error && error.message.startsWith(CARRIER_PEER_ERROR_PREFIX))
+    return error.message.slice(CARRIER_PEER_ERROR_PREFIX.length);
+  return null;
 }
 
 function canRelay(client: CarrierSyncClient): client is CarrierSyncClient & CarrierRelayClient {

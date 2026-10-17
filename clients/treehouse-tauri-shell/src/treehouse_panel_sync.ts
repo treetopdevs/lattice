@@ -26,6 +26,10 @@ export interface PanelSyncRouteStatus {
   acked: number;
   generation: number | null;
   holdsRelayLabel: string;
+  /** The relay's quarantined and rejected verdicts from the last sync, as `[id, reason]`. */
+  refused: [string, string][];
+  /** The relay's error reason when the last sync stopped submitting, else null. */
+  submitStopped: string | null;
   message: string;
 }
 
@@ -62,6 +66,8 @@ export function describeSyncStatus(feed: TreehouseFeedState): PanelSyncStatus {
           // Neutral on purpose: a local post still waiting for the relay differs the same way as a relay
           // operation not pulled yet, and the pending count already reports the first.
           : "This device and the relay do not list the same operations yet.",
+    refused: route.refused,
+    submitStopped: route.submitStopped,
     message: route.message,
   }));
   const pending = routes.reduce((n, r) => n + r.pending, 0);

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  CarrierPeerError,
   CarrierWebSocketClient,
   type CarrierOpFrame,
   type CarrierPushReport,
@@ -83,7 +84,13 @@ await assert.rejects(() => wrongTagClient.relay(frame), /malformed carrier relay
 const refusedClient = new CarrierWebSocketClient(
   new ScriptedCarrierWebSocket({ type: "error", reason: "read_only" }),
 );
-await assert.rejects(() => refusedClient.relay(frame), /carrier peer error: read_only/);
+await assert.rejects(
+  () => refusedClient.relay(frame),
+  (error: unknown) =>
+    /carrier peer error: read_only/.test(String((error as Error).message)) &&
+    error instanceof CarrierPeerError &&
+    error.reason === "read_only",
+);
 
 // Plan 190: report reasons are the closed `WIRE_REPORT_REASONS` set on push and relay results.
 const reasoned: CarrierPushReport = {

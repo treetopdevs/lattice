@@ -349,6 +349,136 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   console.log("PASS a repeating sync failure backs off, and only a completed sync resets the delay");
 }
 
+// ---- 4c. a relay that refuses submits stops the submit, not the route: no redial storm (plan 197) --------
+// The twin puts a foreign frame and the initial frames on the Thread relay; the founder then has one own post
+// the relay does not hold. Only the Thread relay answers every submit with an error reply.
+async function submitErrorFixture(reason: string, pollMs: number) {
+  const f = await founder();
+  const h = new Harness();
+  const twin = new FaultNative();
+  twin.seed = f.native.seed;
+  twin.record = f.native.record;
+  const other = await fresh(twin);
+  const route = other.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  const foreign = await other.command(f.thread, { command: "post", text: "foreign" });
+  await syncTreehouseRoute(other, route, h.syncOptions());
+  assert(h.relay(f.thread).log.has(foreign));
+  const mine = await f.app.command(f.thread, { command: "post", text: "mine" });
+  h.relay(f.thread).errors.set("*", reason);
+  const feed = h.controller(f.app, { pollMs });
+  const attempts = () => h.relay(f.thread).events.filter((e) => e === `relay:${mine}`).length;
+  const holds = (id: string) =>
+    f.app.state.profiles.find((p) => p.replica === f.thread)!.frames.some((x: CarrierOpFrame) => x.id === id);
+  return { f, h, feed, foreign, mine, attempts, holds };
+}
+
+for (const reason of ["read_only", "unavailable"]) {
+  const { f, h, feed, foreign, attempts, holds } = await submitErrorFixture(reason, 0);
+  await feed.start();
+  await until(() => live(h, f.thread) && live(h, f.space), `${reason}: both routes live`);
+  await until(() => h.routeState(f.thread).submitStopped === reason, `${reason}: the stop is reported`);
+  await quiet(40);
+  const state = h.routeState(f.thread);
+  assert.equal(state.connection, "live", `${reason}: the route stays live`);
+  assert.equal(state.submitStopped, reason);
+  assert(state.pending > 0, `${reason}: the unsent post stays pending`);
+  assert.deepEqual(state.refused, []);
+  assert.deepEqual(h.delays, [], `${reason}: no redial delay was ever taken`);
+  assert.equal(h.sessionsOf(f.thread).length, 1, `${reason}: no new session`);
+  assert(holds(foreign), `${reason}: the foreign frame was pulled despite the stop`);
+  assert.equal(attempts(), 1);
+  assert.equal(h.routeState(f.space).submitStopped, null, "the healthy route is unaffected");
+  await feed.stop();
+  console.log(`PASS a ${reason} submit reply keeps the route live: no redial, the pull half merged`);
+}
+
+{
+  const { f, h, feed, attempts } = await submitErrorFixture("read_only", 60000);
+  await feed.start();
+  await until(() => h.routeState(f.thread)?.submitStopped === "read_only" && live(h, f.space), "stopped");
+  await quiet(40);
+  const syncs = h.syncs.filter((r) => r === f.thread).length;
+  assert.equal(attempts(), 1);
+  h.timerFns[0]!();
+  await until(() => h.syncs.filter((r) => r === f.thread).length === syncs + 1, "the poll tick syncs the Thread");
+  await quiet(40);
+  assert.equal(h.syncs.filter((r) => r === f.thread).length, syncs + 1, "exactly one more sync");
+  assert.equal(attempts(), 2, "exactly one more submit attempt");
+  assert.equal(h.sessionsOf(f.thread).length, 1, "and still no new session");
+  assert.deepEqual(h.delays, []);
+  await feed.stop();
+  console.log("PASS the poll tick after a stopped submit retries exactly once on the same session");
+}
+
+{
+  const { f, h, feed, mine, attempts } = await submitErrorFixture("malformed", 0);
+  await feed.start();
+  await until(() => live(h, f.thread) && live(h, f.space), "malformed: both routes live");
+  await until(() => h.routeState(f.thread).refused.length > 0, "malformed: the frame is reported refused");
+  await quiet(40);
+  const state = h.routeState(f.thread);
+  assert.deepEqual(state.refused, [[mine, "malformed"]]);
+  assert.equal(state.submitStopped, null, "a malformed frame is a verdict, not a stop");
+  assert(state.pending > 0, "the refused frame stays pending");
+  assert.equal(attempts(), 1, "offered once");
+  assert.deepEqual(h.delays, [], "no redial");
+  assert.equal(h.sessionsOf(f.thread).length, 1);
+  await feed.stop();
+  console.log("PASS a malformed submit reply is shown as refused, with no stop and no redial");
+}
+
+{
+  // A saved ack of a quarantined frame (written before quarantined ids stopped acking) does not count.
+  const { f, h, feed, mine } = await submitErrorFixture("read_only", 0);
+  h.relay(f.thread).errors.clear();
+  h.relay(f.thread).forced.set(mine, "quarantined");
+  await f.app.mergeSync(f.thread, [], [mine]);
+  await feed.start();
+  await until(() => h.routeState(f.thread)?.refused.length > 0, "the quarantine verdict is reported");
+  const state = h.routeState(f.thread);
+  assert.deepEqual(state.refused, [[mine, "bad_signature"]]);
+  assert(state.pending >= 1, "the legacy-acked refused frame counts as pending");
+  const saved = f.app.state.profiles.find((p) => p.replica === f.thread)!;
+  assert(saved.acked.includes(mine) && state.acked < saved.acked.length, "and not as acknowledged");
+  await feed.stop();
+  console.log("PASS a legacy ack of a refused frame is shown as pending, not acknowledged");
+}
+
+{
+  // The last completed sync's verdict is not shown once a later sync fails.
+  const { f, h, feed } = await submitErrorFixture("read_only", 60000);
+  await feed.start();
+  await until(() => h.routeState(f.thread)?.submitStopped === "read_only" && live(h, f.space), "stopped");
+  await quiet(40);
+  h.syncFailures.set(f.thread, new Error("frame_conflict"));
+  h.timerFns[0]!();
+  await until(() => h.routeState(f.thread).submitStopped === null, "a failed sync clears the stale stop");
+  assert.deepEqual(h.routeState(f.thread).refused, []);
+  await feed.stop();
+  console.log("PASS a failed sync clears the previous submit verdict instead of showing it stale");
+}
+
+{
+  const { f, h, feed } = await submitErrorFixture("unauthenticated", 0);
+  await feed.start();
+  await until(() => h.routeState(f.thread)?.connection === "refused", "unauthenticated settles in refused");
+  await quiet(40);
+  assert.deepEqual(h.delays, [], "a refusal is not redialed");
+  assert.equal(h.sessionsOf(f.thread).length, 1);
+  assert.match(h.routeState(f.thread).message, /unauthenticated/);
+  await feed.stop();
+}
+
+{
+  const { f, h, feed } = await submitErrorFixture("weird", 0);
+  await feed.start();
+  await until(() => h.delays.length >= 2, "an unexpected reason backs off like any sync failure");
+  assert.deepEqual(h.delays.slice(0, 2), [100, 250]);
+  assert.notEqual(h.routeState(f.thread).connection, "refused");
+  await feed.stop();
+  console.log("PASS unauthenticated still refuses without redial; an unknown reason still backs off");
+}
+
 // ---- 5. refused route does not retry; manual sync retries --------------------------------------------
 {
   const f = await founder();

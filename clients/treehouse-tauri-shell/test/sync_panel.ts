@@ -203,8 +203,8 @@ const make = (
   const feed = (over: Partial<TreehouseFeedState["routes"][number]>): TreehouseFeedState => ({
     configured: true,
     routes: [
-      { replica: space, connection: "live", pending: 2, acked: 5, generation: 7, matchesRelay: true, message: "Relay subscription is live.", ...over },
-      { replica: thread, connection: "refused", pending: 0, acked: 1, generation: null, matchesRelay: null, message: "Relay refused: carrier hello pubkey mismatch" },
+      { replica: space, connection: "live", pending: 2, acked: 5, generation: 7, matchesRelay: true, refused: [], submitStopped: null, message: "Relay subscription is live.", ...over },
+      { replica: thread, connection: "refused", pending: 0, acked: 1, generation: null, matchesRelay: null, refused: [], submitStopped: null, message: "Relay refused: carrier hello pubkey mismatch" },
     ],
   });
   const view = describeSyncStatus(feed({}));
@@ -218,6 +218,14 @@ const make = (
   assert.match(view.routes[0]!.holdsRelayLabel, /relay/i);
   assert.equal(view.routes[1]!.holdsRelayLabel, "Not synced yet.");
   assert.match(view.summary, /2 operations waiting/);
+  // The relay's refusals and a stopped submit are passed through as data; copy for them is a later row.
+  assert.deepEqual(view.routes[0]!.refused, []);
+  assert.equal(view.routes[0]!.submitStopped, null);
+  const refusedView = describeSyncStatus(
+    feed({ refused: [["op-1", "bad_signature"], ["op-2", "malformed"]], submitStopped: "read_only" }),
+  );
+  assert.deepEqual(refusedView.routes[0]!.refused, [["op-1", "bad_signature"], ["op-2", "malformed"]]);
+  assert.equal(refusedView.routes[0]!.submitStopped, "read_only");
   const none = describeSyncStatus({ configured: false, routes: [] });
   assert.equal(none.configured, false);
   assert.match(none.summary, /no relay routes/i);
