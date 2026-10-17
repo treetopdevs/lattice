@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 // the small functions in the Township shell's beam_peer.ts, which stays a frozen copy; shells now import
 // them from `@treetopdevs/lattice-shell-kit/testing/beam`. This module imports node built-ins only, so a
 // plain `tsx` run (no `--preserve-symlinks`) can load it without resolving lattice-client.
+// The enrollment gate and packaged harness scripts depend on that; keep it free of package imports.
 
 // realpath first: under `--preserve-symlinks` this URL is the shell's node_modules symlink path, not the kit.
 const here = dirname(realpathSync(fileURLToPath(import.meta.url)));
