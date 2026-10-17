@@ -347,6 +347,23 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     unchanged!(f)
   end
 
+  test "a boot refuses a deployment file that aliases the incarnation marker", f do
+    {:ok, manifest} = Manifest.load(f.manifest)
+    [instance | _] = manifest.instances
+    alias_root = Path.join(Path.dirname(f.root), "alias-operator-root")
+    File.mkdir_p!(alias_root)
+    File.chmod!(alias_root, 0o700)
+    File.ln!(instance.log_file, Path.join(alias_root, "operator-incarnation"))
+    log = File.read!(instance.log_file)
+
+    Application.put_env(:lattice_carrier_server, :manifest, f.manifest)
+    Application.put_env(:lattice_carrier_server, :operator_root, alias_root)
+
+    assert {:error, reason} = Application.ensure_all_started(:lattice_carrier_server)
+    assert inspect(reason) =~ "operator_path_collision"
+    assert File.read!(instance.log_file) == log
+  end
+
   test "a boot whose loaded manifest was replaced under it refuses", f do
     {owner, observation} = sealed(f)
     assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)

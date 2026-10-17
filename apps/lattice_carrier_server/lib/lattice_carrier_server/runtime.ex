@@ -117,9 +117,34 @@ defmodule LatticeCarrierServer.Runtime do
 
     loaded = Base.encode16(digest, case: :lower)
 
-    case boot_lock(root, Path.expand(path), loaded, @boot_busy_attempts) do
-      {:ok, incarnation} -> {:ok, %{operator_root: root, incarnation: incarnation}}
-      {:error, _} = error -> error
+    with :ok <- apart_from_operator(root, path),
+         {:ok, incarnation} <- boot_lock(root, Path.expand(path), loaded, @boot_busy_attempts) do
+      {:ok, %{operator_root: root, incarnation: incarnation}}
+    end
+  end
+
+  # The boot replaces the incarnation marker, so no deployment file may be, or
+  # alias, one of the operator's own files: by expanded path, or by the inode
+  # of an existing one (a symlink or hard link to it).
+  defp apart_from_operator(root, path) do
+    reserved =
+      Enum.map(~w(operator.lock operator-journal.json operator-incarnation), &Path.join(root, &1))
+
+    reserved_inodes = for file <- reserved, inode = inode(file), do: inode
+
+    deployed =
+      [path | Enum.flat_map(deployment().instances, &[&1.identity_file, &1.log_file])]
+      |> Enum.map(&Path.expand/1)
+
+    if Enum.any?(deployed, &(&1 in reserved or inode(&1) in reserved_inodes)),
+      do: {:error, :operator_path_collision},
+      else: :ok
+  end
+
+  defp inode(path) do
+    case File.stat(path) do
+      {:ok, %File.Stat{major_device: device, inode: inode}} -> {device, inode}
+      {:error, _} -> nil
     end
   end
 

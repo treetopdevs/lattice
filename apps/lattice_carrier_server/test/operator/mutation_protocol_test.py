@@ -153,6 +153,23 @@ class Protocol(unittest.TestCase):
         self.assertNotEqual(markers[0], markers[1])
         self.assertEqual([n for n in os.listdir(root) if ".tmp." in n], [])
 
+    def test_boot_without_journal_still_rechecks_the_loaded_manifest(self):
+        root = self.workdir("boot-stale")
+        manifest = os.path.join(root, "active.json")
+        with open(manifest, "wb") as f:
+            f.write(b"{}")
+        os.chmod(manifest, 0o600)
+        plan = {"version": 1, "kind": "boot", "expected": None, "record": None, "attempt": None,
+                "artifacts": None, "incarnation": None,
+                "checks": [{"path": manifest, "sha256": owner.digest(b"[]")}]}
+        for target, reason in [(manifest, "stale_operator_intent"),
+                               (os.path.join(root, "missing.json"), "stale_operator_intent"),
+                               (os.path.join(root, "operator-incarnation"), "unsafe_operator_file")]:
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.boot(root, dict(plan, checks=[dict(plan["checks"][0], path=target)]))
+            self.assertEqual(str(caught.exception), reason)
+        self.assertFalse(os.path.exists(os.path.join(root, "operator-incarnation")))
+
     def test_service_identity_binding_is_closed_and_canonical(self):
         good = self.sample()["service"]
         for bad in [None, dict(good, extra="x"), {k: v for k, v in good.items() if k != "pub"},

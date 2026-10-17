@@ -372,19 +372,23 @@ def boot(root, plan):
     if not one_check(plan["checks"]):
         refuse("malformed_operator_plan")
     target, loaded = plan["checks"][0]["path"], plan["checks"][0]["sha256"]
+    if target in reserved_files(root):
+        refuse("unsafe_operator_file")
+    # The loaded bytes must still be active even with no journal yet, so a
+    # first boot cannot serve a manifest replaced before this lock was taken.
+    try:
+        present = digest(file_bytes(target, allow_root=True))
+    except FileNotFoundError:
+        refuse("stale_operator_intent")
+    except OSError:
+        refuse("unsafe_operator_file")
+    if present != loaded:
+        refuse("stale_operator_intent")
     path = os.path.join(root, "operator-journal.json")
     raw = file_bytes(path, MAX_JOURNAL, missing=True, private=True)
     if raw is not None:
         raw = raw.decode("utf-8")
         old = record(raw)
-        try:
-            present = digest(file_bytes(target, allow_root=True))
-        except FileNotFoundError:
-            refuse("stale_operator_intent")
-        except OSError:
-            refuse("unsafe_operator_file")
-        if present != loaded:
-            refuse("stale_operator_intent")
         manifests = [a for a in old["artifacts"] if a["kind"] == "manifest"]
         if len(manifests) != 1:
             refuse("corrupt_operator_journal")
@@ -444,9 +448,13 @@ def reserved(root, r):
     """Paths activation must never replace: the lock it holds, the journal it
     commits, the boot incarnation marker it checks and the staged artifacts it
     rechecks."""
-    return ({os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json"),
-             os.path.join(root, INCARNATION)}
-            | {a["path"] for a in r["artifacts"]})
+    return reserved_files(root) | {a["path"] for a in r["artifacts"]}
+
+
+def reserved_files(root):
+    """The operator's own files under its root."""
+    return {os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json"),
+            os.path.join(root, INCARNATION)}
 
 
 def durable(path):
