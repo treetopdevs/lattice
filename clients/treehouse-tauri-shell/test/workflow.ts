@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
+  authorTownshipRevocation,
   authorTreehouseCommand,
   carrierDelegationsFromFrames,
   decodeTreehouseAcceptance,
@@ -521,9 +522,20 @@ await fApp.configureRoutes(routeList(fApp, "founder"));
 assert.equal(fApp.state.relay!.routes.length, 2, "adding the Thread route extends the set");
 console.log("PASS route list validation, no-op repeat, no replacement, extension only");
 
+// Row 199 (D3): one snapshot per saved state, the same facts the readers and actions use.
+const snapBeforeIssue = fApp.snapshot();
+assert.equal(fApp.snapshot(), snapBeforeIssue, "no state change: the same snapshot object");
+assert.equal(snapBeforeIssue.founderKey, fApp.founderKey());
+assert.equal(snapBeforeIssue.canCreateThread, fApp.canCreateThread());
+assert.equal(snapBeforeIssue.commands.get(threadReplica)?.has("post"), fApp.canAuthor(threadReplica, "post"));
+for (const key of ["isFounder", "rootLive", "canConfigureRoutes", "canIssueInvitation", "canAdmit"] as const)
+  assert.equal(snapBeforeIssue[key], true, key);
+assert.equal(snapBeforeIssue.founderKey, fApp.state.publicKey);
 // Issue the invitation (Sign only: no network exists in this module).
 const revBeforeIssue = fApp.state.revision;
 const offer = await fApp.issueInvitation(joinRequest, "joiner");
+assert.notEqual(fApp.snapshot(), snapBeforeIssue, "a persisting action yields a new snapshot");
+assert.equal(fApp.snapshot(), fApp.snapshot());
 const offered = decodeTreehouseOffer(offer);
 assert.equal(offered.space, spaceReplica);
 assert.deepEqual(offered.threads, [{ replica: threadReplica, archived: false }]);
@@ -744,3 +756,46 @@ const founderAfter = await fresh(fNative);
 assert.equal(founderAfter.views.get(threadReplica)!.posts.at(-1)!.text, "Edited by member");
 assert.equal(founderAfter.views.get(threadReplica)!.quarantineReasons.size, 0);
 console.log("PASS member post and edit under the exact-audience grant; founder reads it; no root authority for the member");
+
+// Row 199 (D3): the member's snapshot carries no founder authority; its granted Thread commands do.
+{
+  const facts = jMember.snapshot();
+  for (const key of ["isFounder", "rootLive", "canConfigureRoutes", "canIssueInvitation", "canAdmit", "canCreateThread"] as const)
+    assert.equal(facts[key], false, key);
+  assert.equal(facts.founderKey, fApp.state.publicKey);
+  assert.equal(facts.commands.get(threadReplica)?.has("post"), true);
+  assert.equal(facts.commands.get(threadReplica)?.has("archive_thread"), false);
+  assert.equal(facts.commands.get(spaceReplica)?.size, 0);
+  // Reuse path: the member holds the founder's honored invitation to itself and routes, but no
+  // issue_invitation capability, so the reissue is refused before the existing-invitation lookup.
+  const rev = jMember.state.revision;
+  await unchanged(jNative, () => jMember.issueInvitation(joinRequest, "joiner"), /no_capability/);
+  assert.equal(jMember.state.revision, rev);
+  await unchanged(jNative, () => jMember.configureRoutes(routeList(jMember, "joiner")), /root_capability_unavailable/);
+}
+// A revoked root: the founder is still the committed genesis author but holds no live root.
+{
+  const revokedRoot = clone(fNative);
+  const rs = parseState(revokedRoot.record);
+  const sp = rs.profiles.find((p) => p.product === "Treehouse.Space")!;
+  const root = carrierDelegationsFromFrames(sp.frames).find((d) => d.parent_id === null)!;
+  const refs = new Set(sp.frames.flatMap((f) => f.deps));
+  const revoke = await authorTownshipRevocation({
+    replica: sp.replica,
+    deps: sp.frames.filter((f) => !refs.has(f.id)).map((f) => f.id).sort(),
+    signer: { publicKey: ed25519.getPublicKey(revokedRoot.seed!), sign: async (b) => ed25519.sign(b, revokedRoot.seed!) },
+    delegationId: root.id,
+  });
+  sp.frames.push(revoke);
+  sp.acked.push(revoke.id);
+  rs.revision += 1;
+  revokedRoot.record = JSON.stringify(rs);
+  const reopened = await fresh(revokedRoot);
+  const facts = reopened.snapshot();
+  for (const key of ["rootLive", "canConfigureRoutes", "canCreateThread", "canIssueInvitation", "canAdmit"] as const)
+    assert.equal(facts[key], false, key);
+  assert.equal(facts.isFounder, true);
+  assert.equal(facts.founderKey, reopened.state.publicKey);
+  await unchanged(revokedRoot, () => reopened.configureRoutes(routeList(reopened, "founder")), /root_capability_unavailable/);
+}
+console.log("PASS workflow snapshot: identity per saved state, founder and member facts, reuse-path refusal, revoked root");

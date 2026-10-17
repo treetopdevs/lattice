@@ -61,8 +61,14 @@ const writable = computed(
   () =>
     ready.value && workflow.keyAvailable && !state.value.intent && !busy.value,
 );
+// Every authority gate reads one snapshot per saved state; workflow is not reactive, so the bare
+// state.value read re-derives it whenever refresh or a feed sync replaces the record.
+const caps = computed(() => {
+  state.value;
+  return workflow.snapshot();
+});
 // The founder is the author of the Space's committed genesis (the one its #root: commitment names).
-const founderKey = computed(() => (space.value ? workflow.founderKey() : null));
+const founderKey = computed(() => caps.value.founderKey);
 const authorLabel = (author: string) =>
   author === state.value.publicKey
     ? "You"
@@ -74,7 +80,7 @@ const canPost = computed(
   () =>
     writable.value &&
     active.value !== undefined &&
-    workflow.canAuthor(active.value.replica, "post"),
+    (caps.value.commands.get(active.value.replica)?.has("post") ?? false),
 );
 // A join identity exists but its Space has not synced yet: creating a group would fail with
 // join_in_progress, so the welcome form is not offered.
@@ -83,14 +89,14 @@ const joining = computed(
 );
 // Only the Space's root holder can add a Thread, so a joined member never sees an action that always fails.
 const canCreateThread = computed(
-  () => writable.value && space.value !== undefined && workflow.canCreateThread(),
+  () => writable.value && space.value !== undefined && caps.value.canCreateThread,
 );
 // Each Thread action is gated on its own operation: a grant may carry one without another, and a revoked
 // or lapsed grant carries none.
 const canDo = (command: "archive_thread" | "moderator_tombstone" | "author_edit" | "author_tombstone") =>
   writable.value &&
   active.value !== undefined &&
-  workflow.canAuthor(active.value.replica, command);
+  (caps.value.commands.get(active.value.replica)?.has(command) ?? false);
 const canArchive = computed(() => canDo("archive_thread"));
 const canHideAsModerator = computed(() => canDo("moderator_tombstone"));
 const canEditOwn = computed(() => canDo("author_edit"));
@@ -500,7 +506,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
                   rows="4"
                 />
                 <div class="actions">
-                  <button :disabled="!writable || !editText.trim()">
+                  <button :disabled="!canEditOwn || !editText.trim()">
                     Save edit</button
                   ><button
                     type="button"

@@ -294,6 +294,31 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
     assert(/!signing\b/.test(disabledOf(label) ?? ""), `${label} is gated on the local key`);
   assert(!/signing/.test(disabledOf("Use offer") ?? ""), "Use offer stays a local review");
   assert(/const signing = computed\(\(\) => props\.state\.publicKey !== null && props\.workflow\.keyAvailable\)/.test(panel.sfc.scriptSetup.content));
+  // Row 199: each founder action is also gated on its own authority, read from the one snapshot.
+  for (const [label, gate] of [["Configure routes", "canConfigureRoutes"], ["Issue invitation", "canIssueInvitation"],
+    ["Admit and grant", "canAdmit"]])
+    assert(new RegExp(`!caps\\.${gate}\\b`).test(disabledOf(label) ?? ""), `${label} is gated on caps.${gate}`);
+}
+// Row 199: one derivation path. Each component reads one snapshot per saved state; the bare state read
+// inside the computed is the reactivity hook, and App.vue no longer asks the workflow gate by gate.
+{
+  const panelScript = sources.find((s) => s.path.endsWith("EnrollmentPanel.vue")).sfc.scriptSetup.content;
+  const appScript = sources.find((s) => s.path === "src/App.vue").sfc.scriptSetup.content;
+  assert(/const caps = computed\(\(\) => \{\s*props\.state;\s*return props\.workflow\.snapshot\(\);\s*\}\)/.test(panelScript),
+    "panel caps reads props.state and props.workflow.snapshot()");
+  assert(/const caps = computed\(\(\) => \{\s*state\.value;\s*return workflow\.snapshot\(\);\s*\}\)/.test(appScript),
+    "App caps reads state.value and workflow.snapshot()");
+  assert(/const isFounder = computed\(\(\) => caps\.value\.isFounder\)/.test(panelScript), "isFounder reads caps");
+  for (const call of ["workflow.canAuthor(", "workflow.founderKey(", "workflow.canCreateThread("]) {
+    assert(!appScript.includes(call), `App.vue still calls ${call}`);
+    assert(!panelScript.includes(call), `EnrollmentPanel.vue still calls ${call}`);
+  }
+  // Row 200: every refusal code that reaches explain() has its own entry. Keys only, never the text.
+  const literal = /const messages: Record<string, string> = \{([^]*?)\n\};/.exec(panelScript);
+  assert(literal, "no messages object");
+  const keys = new Set([...literal[1].matchAll(/^\s*([a-z_]+):/gm)].map((m) => m[1]));
+  for (const code of ["route_set_needs_one_space", "grant_revoked", "grant_expired", "member_removed"])
+    assert(keys.has(code), `messages lacks ${code}`);
 }
 const shown = ["Use offer", "Accept invitation", "Admit and grant", "Issue invitation"];
 for (const label of shown)
