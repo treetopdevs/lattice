@@ -4,7 +4,7 @@
 // tsc follow and list JavaScript imports too, which it otherwise drops without a diagnostic.
 import { spawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, join, sep } from "node:path";
+import { dirname, isAbsolute, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const kitRoot = realpathSync(join(dirname(fileURLToPath(import.meta.url)), ".."));
@@ -17,15 +17,20 @@ if (!existsSync(tsc)) {
 const run = spawnSync(tsc, ["--noEmit", "--listFiles", "--allowJs"], { cwd: kitRoot, encoding: "utf8" });
 const files = run.stdout
   .split(/\r?\n/)
-  .filter((line) => line.startsWith("/"))
+  .filter((line) => isAbsolute(line.trim()))
+  .map((line) => line.trim())
   .map((line) => realpathSync(line));
+if (files.length === 0) {
+  console.error("shell-kit boundary: tsc listed no files; refusing to pass an empty graph");
+  process.exit(1);
+}
 const outside = files.filter((file) => !allowed.some((root) => file.startsWith(root)));
 if (outside.length > 0) {
   console.error(`shell-kit boundary: the compiled graph reaches outside the kit:\n${outside.join("\n")}`);
   process.exit(1);
 }
 if (run.status !== 0) {
-  console.error(run.stdout.split(/\r?\n/).filter((line) => !line.startsWith("/")).join("\n"), run.stderr);
+  console.error(run.stdout.split(/\r?\n/).filter((line) => !isAbsolute(line.trim())).join("\n"), run.stderr);
   process.exit(run.status ?? 1);
 }
 console.log(`shell-kit boundary: ${files.length} compiled files, none outside the kit or lattice-client`);
