@@ -797,5 +797,7 @@ console.log("PASS member post and edit under the exact-audience grant; founder r
   assert.equal(facts.isFounder, true);
   assert.equal(facts.founderKey, reopened.state.publicKey);
   await unchanged(revokedRoot, () => reopened.configureRoutes(routeList(reopened, "founder")), /root_capability_unavailable/);
+  // Admit and grant follows its button: replaying an already-admitted acceptance is refused too.
+  await unchanged(revokedRoot, () => reopened.admitAndGrant(acceptanceText), /no_capability/);
 }
 console.log("PASS workflow snapshot: identity per saved state, founder and member facts, reuse-path refusal, revoked root");
