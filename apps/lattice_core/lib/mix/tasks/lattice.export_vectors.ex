@@ -263,6 +263,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_authority_malformed_dormant_claim(),
       township_authority_successorless_policy(),
       township_authority_non_map_policy(),
+      township_authority_non_atom_policy_key(),
       township_authority_dormant_succession_stale_holder(),
       township_authority_dormant_succession_stale_acquire(),
       township_authority_command_shaped_revoke(),
@@ -297,6 +298,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_beacon_witnessed_large_policy_integer(),
       township_beacon_witnessed_policy_metadata(),
       township_beacon_witnessed_certificate_metadata(),
+      township_beacon_witnessed_high_integer_metadata(),
+      township_wire_malformed_atom_refusal(),
       township_beacon_witnessed_high_legacy(),
       township_beacon_witnessed_high_nonroot(),
       township_beacon_witnessed_raw_duplicate_deps(),
@@ -2204,7 +2207,24 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
     )
   end
 
-  defp hand_authored_policy_vector(name, policy_fun, [tick_reason, certificate_reason]) do
+  # Row 205: a policies map keyed by non-atoms is admitted and ignored; the schema role
+  # `:clerk` has no policy, so both proof shapes refuse as unauthorized_succession.
+  defp township_authority_non_atom_policy_key do
+    hand_authored_policies_vector(
+      "township_authority_non_atom_policy_key",
+      fn resident ->
+        p = %{successor: resident.pub, dormant_ticks: 0}
+        %{"clerk" => p, 7 => p, {:clerk} => p}
+      end,
+      ["unauthorized_succession", "unauthorized_succession"]
+    )
+  end
+
+  defp hand_authored_policy_vector(name, policy_fun, reasons) do
+    hand_authored_policies_vector(name, fn r -> %{clerk: policy_fun.(r)} end, reasons)
+  end
+
+  defp hand_authored_policies_vector(name, policies_fun, [tick_reason, certificate_reason]) do
     sim =
       Sim.new(
         Matter,
@@ -2228,7 +2248,7 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         sim,
         "clerk",
         :authority,
-        {:genesis, delegation, %{clerk: policy_fun.(resident)}}
+        {:genesis, delegation, policies_fun.(resident)}
       )
 
     sim = Sim.sync_all(sim)
@@ -3705,6 +3725,217 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
         "case" => "witnessed_certificate_metadata",
         "invalidCertificateOperationIds" => ids,
         "beaconOperationId" => good.id
+      }
+    )
+  end
+
+  # Row 206: pin the portable-integer horizon at the metadata positions. A decimal string
+  # up to 2^64-1 is admitted by the wire and is simply an invalid value to the consumers.
+  defp township_beacon_witnessed_high_integer_metadata do
+    {sim, initial} = beacon_sim("high-integer-metadata")
+    {:genesis, delegation, policies} = initial.body
+    high = [9_007_199_254_740_993, 18_446_744_073_709_551_615]
+    witnesses = Enum.map(["w0", "w1"], &Sim.identity(sim, &1))
+
+    {sim, policy_ids} =
+      for v <- high,
+          field <- [:version, :threshold, :max_epoch_step, :extra],
+          reduce: {sim, []} do
+        {acc, ids} ->
+          {acc, genesis} =
+            Sim.append(
+              acc,
+              "clerk",
+              :authority,
+              {:genesis, delegation, %{__beacon__: Map.put(policies.__beacon__, field, v)}}
+            )
+
+          acc = Sim.sync_all(acc)
+          {acc, beacon} = Sim.beacon(acc, "w0", length(ids) + 1, witnesses: ["w0", "w1"])
+          acc = Sim.sync_all(acc)
+          log = Sim.log(acc, "clerk")
+          assert_authority_honored!(log, genesis.id)
+          assert_authority_honored!(log, beacon.id)
+          {acc, ids ++ [genesis.id]}
+      end
+
+    mutations = [
+      fn cert, v -> put_in(cert, [:claim, :version], v) end,
+      fn cert, v -> Map.put(cert, :extra, v) end,
+      fn cert, v -> put_in(cert, [:claim, :extra], v) end,
+      fn cert, v ->
+        update_in(cert, [:signatures], fn [first | rest] -> [Map.put(first, :extra, v) | rest] end)
+      end
+    ]
+
+    {sim, cert_ids} =
+      for v <- high, mutate <- mutations, reduce: {sim, []} do
+        {acc, ids} ->
+          claim =
+            Lattice.Authority.BeaconCertificate.claim(
+              acc.replica,
+              0,
+              Sim.identity(acc, "w0").pub,
+              Log.frontier(Sim.log(acc, "w0"))
+            )
+
+          certificate = Lattice.Authority.BeaconCertificate.new(claim, witnesses)
+          {acc, rejected} = Sim.beacon(acc, "w0", 0, certificate: mutate.(certificate, v))
+          acc = Sim.sync_all(acc)
+          assert_authority_reason!(Sim.log(acc, "clerk"), rejected.id, :unauthorized_beacon)
+          {acc, ids ++ [rejected.id]}
+      end
+
+    # Epochs 1..8 were consumed by the policy rows; the control is the next epoch.
+    {sim, good} = Sim.beacon(sim, "w0", 9, witnesses: ["w0", "w1"])
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+    assert_authority_honored!(log, good.id)
+
+    genesis_frame = carrier_frame_by_id(log, hd(policy_ids))
+    beacon_frame = carrier_frame_by_id(log, hd(cert_ids))
+
+    positions = [
+      {"policy genesis __beacon__.version", genesis_frame,
+       fn frame, v -> mutate_frame_body(frame, ["__beacon__", "version"], v) end},
+      {"beacon certificate claim.version", beacon_frame,
+       fn frame, v -> mutate_frame_body(frame, ["claim", "version"], v) end}
+    ]
+
+    wire_cases =
+      for {position, frame, mutate} <- positions, {value, decode, label} <- int_wire_inputs() do
+        wire_case("#{position} #{label}", position, decode, nil, [mutate.(frame, value)])
+      end
+
+    capability_scenario_with_canonical_ops(
+      "township_beacon_witnessed_high_integer_metadata",
+      sim,
+      log,
+      %{
+        "case" => "witnessed_high_integer_metadata",
+        "invalidPolicyOperationIds" => policy_ids,
+        "rejectedCertificateOperationIds" => cert_ids,
+        "honoredOperationId" => good.id,
+        "wireCases" => wire_cases
+      }
+    )
+  end
+
+  defp int_wire_inputs do
+    [
+      {["int", 9_007_199_254_740_991], "admit", "control 2^53-1 number"},
+      {["int", "18446744073709551615"], "admit", "string 2^64-1"},
+      {["int", "18446744073709551616"], "malformed_op", "string 2^64"},
+      {["int", 9_007_199_254_740_992], "malformed_op", "number 2^53"}
+    ]
+  end
+
+  defp carrier_frame_by_id(%Log{} = log, id) do
+    log |> carrier_ops() |> Enum.find(&(&1["id"] == id))
+  end
+
+  # Replace the integer under a nested map key path inside a tuple body's map term.
+  defp mutate_frame_body(frame, path, value) do
+    ["tuple", elems] = frame["body"]
+
+    elems =
+      Enum.map(elems, fn
+        ["map", pairs] -> ["map", put_term_path(pairs, path, value)]
+        other -> other
+      end)
+
+    Map.put(frame, "body", ["tuple", elems])
+  end
+
+  defp put_term_path(pairs, [key], value) do
+    Enum.map(pairs, fn
+      [["atom", ^key], _old] -> [["atom", key], value]
+      other -> other
+    end)
+  end
+
+  defp put_term_path(pairs, [key | rest], value) do
+    Enum.map(pairs, fn
+      [["atom", ^key], ["map", inner]] ->
+        [["atom", key], ["map", put_term_path(inner, rest, value)]]
+
+      other ->
+        other
+    end)
+  end
+
+  defp wire_case(name, position, decode, direct_ingest, frames) do
+    case {decode, CarrierWire.decode_ops(frames)} do
+      {"admit", {:ok, _}} -> :ok
+      {"malformed_op", {:error, :malformed_op}} -> :ok
+      other -> raise "wire case #{name} disagrees with BEAM: #{inspect(other)}"
+    end
+
+    base = %{"name" => name, "position" => position, "decode" => decode, "frames" => frames}
+    if direct_ingest, do: Map.put(base, "directIngest", direct_ingest), else: base
+  end
+
+  # Row 209: a malformed atom term refuses the whole batch on the BEAM.
+  defp township_wire_malformed_atom_refusal do
+    sim =
+      Sim.new(Matter, "replica:matter:wire-malformed-atom", ["clerk", "resident"],
+        seed: "township:wire-malformed-atom"
+      )
+
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, grant} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    {sim, post1} = Sim.command(sim, "resident", :post, ["first"], cap: grant.id)
+    {sim, post2} = Sim.command(sim, "resident", :post, ["second"], cap: grant.id)
+    sim = Sim.sync_all(sim)
+    log = Sim.log(sim, "clerk")
+
+    good1 = CarrierWire.encode_op(post1)
+    good2 = CarrierWire.encode_op(post2)
+    cap_good = good2["cap"]
+
+    bad = fn body, cap -> good1 |> Map.put("body", body) |> Map.put("cap", cap) end
+
+    value_cases =
+      for {label, v} <- [{"5", 5}, {"null", nil}, {"[x]", ["x"]}, {"{}", %{}}],
+          {position, body, cap} <- [
+            {"body command name", ["tuple", [["atom", v], ["list", []]]], cap_good},
+            {"body argument", ["tuple", [["atom", "post"], ["list", [["atom", v]]]]], cap_good},
+            {"cap", good1["body"], ["atom", v]}
+          ] do
+        wire_case("#{position} atom #{label}", position, "malformed_op", "refuse", [
+          bad.(body, cap),
+          good2
+        ])
+      end
+
+    arity_cases =
+      for {position, cap} <- [
+            {"cap atom arity 1", ["atom"]},
+            {"cap atom arity 3", ["atom", "post", "x"]}
+          ] do
+        wire_case(position, position, "malformed_op", "refuse", [
+          bad.(good1["body"], cap),
+          good2
+        ])
+      end
+
+    ordering =
+      wire_case("cap atom 5 after good op", "cap", "malformed_op", "refuse", [
+        good2,
+        bad.(good1["body"], ["atom", 5])
+      ])
+
+    control = wire_case("control good frames", "control", "admit", "admit", [good1, good2])
+
+    capability_scenario_with_canonical_ops(
+      "township_wire_malformed_atom_refusal",
+      sim,
+      log,
+      %{
+        "case" => "wire_malformed_atom_refusal",
+        "honoredOperationId" => post2.id,
+        "wireCases" => value_cases ++ arity_cases ++ [ordering, control]
       }
     )
   end

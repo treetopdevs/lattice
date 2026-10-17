@@ -236,13 +236,6 @@ const malformedCapFrame = structuredClone(commandFrameFixture);
 Reflect.set(malformedCapFrame, "id", `${commandFrameFixture.id}-malformed-cap`);
 Reflect.set(malformedCapFrame, "cap", ["zzz", 1]);
 malformedTermFrames.push(malformedCapFrame);
-const malformedAtomFrame = structuredClone(commandFrameFixture);
-Reflect.set(malformedAtomFrame, "id", `${commandFrameFixture.id}-malformed-atom`);
-Reflect.set(malformedAtomFrame, "body", [
-    "tuple",
-    [["atom", 5], ["list", []]],
-]);
-malformedTermFrames.push(malformedAtomFrame);
 let malformedTermOps = [];
 let malformedTermFailure = "";
 try {
@@ -677,6 +670,18 @@ function refused(name, frames) {
     }
     check(name, { refused: vocabularyRefusal.test(failure), ops: produced.length }, { refused: true, ops: 0 });
 }
+const malformedRefusal = /malformed carrier op/;
+function refusedMalformed(name, frames) {
+    let produced = [];
+    let failure = "";
+    try {
+        produced = carrierOpsToSemanticOps(frames, vector.realmByPubkey);
+    }
+    catch (error) {
+        failure = error instanceof Error ? error.message : String(error);
+    }
+    check(name, { refused: malformedRefusal.test(failure), ops: produced.length }, { refused: true, ops: 0 });
+}
 function withDelegation(frame, change) {
     const clone = structuredClone(frame);
     let changed = false;
@@ -720,6 +725,38 @@ catch (error) {
     decodeFailure = error instanceof Error ? error.message : String(error);
 }
 check("decodeCarrierOpFrame refuses an off-list name", vocabularyRefusal.test(decodeFailure), true);
+const badAtomValues = [
+    ["number", 5], ["null", null], ["list", ["x"]], ["object", {}], ["boolean", true],
+];
+const badAtomFrame = (id, set) => {
+    const frame = structuredClone(commandFrameFixture);
+    Reflect.set(frame, "id", `${commandFrameFixture.id}-bad-atom-${id}`);
+    set(frame);
+    return frame;
+};
+for (const [label, value] of badAtomValues) {
+    const bad = ["atom", value];
+    refusedMalformed(`${label} atom at command name refuses the batch`, [badAtomFrame(`name-${label}`, (f) => Reflect.set(f, "body", ["tuple", [bad, ["list", []]]]))]);
+    refusedMalformed(`${label} atom at command argument refuses the batch`, [badAtomFrame(`arg-${label}`, (f) => Reflect.set(f, "body", ["tuple", [["atom", "post"], ["list", [bad]]]]))]);
+    refusedMalformed(`${label} atom at cap refuses the batch`, [badAtomFrame(`cap-${label}`, (f) => Reflect.set(f, "cap", bad))]);
+    refusedMalformed(`${label} delegation ops element refuses the batch`, [withDelegation(delegationFrameFixture, (d) => { d.ops = [...d.ops, value]; })]);
+    refusedMalformed(`${label} delegation roles element refuses the batch`, [withDelegation(delegationFrameFixture, (d) => { d.roles = [...d.roles, value]; })]);
+}
+for (const [label, bad] of [["arity 1", ["atom"]], ["arity 3", ["atom", "post", "x"]]]) {
+    refusedMalformed(`atom ${label} at cap refuses the batch`, [badAtomFrame(`cap-${label}`, (f) => Reflect.set(f, "cap", bad))]);
+    refusedMalformed(`atom ${label} in body refuses the batch`, [badAtomFrame(`body-${label}`, (f) => Reflect.set(f, "body", ["tuple", [bad, ["list", []]]]))]);
+}
+const badAtomSibling = badAtomFrame("order", (f) => Reflect.set(f, "body", ["tuple", [["atom", 5], ["list", []]]]));
+refusedMalformed("malformed atom refuses the valid sibling (bad first)", [badAtomSibling, listedCommandFrame]);
+refusedMalformed("malformed atom refuses the valid sibling (bad last)", [listedCommandFrame, badAtomSibling]);
+let malformedDecodeFailure = "";
+try {
+    decodeCarrierOpFrame(badAtomSibling);
+}
+catch (error) {
+    malformedDecodeFailure = error instanceof Error ? error.message : String(error);
+}
+check("decodeCarrierOpFrame refuses a malformed atom term", malformedRefusal.test(malformedDecodeFailure), true);
 function committedFrameNames(path, names) {
     const visit = (value) => {
         if (Array.isArray(value)) {
@@ -786,6 +823,15 @@ for (const input of [
     }
 }
 check("authorCarrierOp refuses an off-list name in a body, cap, map key or delegation before signing", authoringRefusals.map((message) => vocabularyRefusal.test(message)), [true, true, true, true]);
+let malformedAuthoring = "";
+try {
+    await authorCarrierOp({ ...authoringInput("admin"), body: ["atom", 5] });
+    malformedAuthoring = "signed";
+}
+catch (error) {
+    malformedAuthoring = error instanceof Error ? error.message : String(error);
+}
+check("authorCarrierOp refuses a malformed atom term before signing", malformedRefusal.test(malformedAuthoring), true);
 const listedAuthored = await authorCarrierOp(authoringInput("admin"));
 check("a listed name authors a hash-valid frame", await verifyCarrierOpHash(listedAuthored), true);
 check("a listed authored frame round-trips through semantic decode", carrierOpsToSemanticOps([listedAuthored], {}).map((op) => op.id), [listedAuthored.id]);

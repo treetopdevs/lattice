@@ -1,0 +1,1471 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a776972652d6d616c666f726d65642d61746f6d23726f6f743a47307858424f354c656548515a6544514c305969627137386b6c61343530783447356f7450326b72664b495820890a43688151d18f397b281c8ea634ce3cd5998920cdf44678b77cd7ff58dac080d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b5065753641766b6a70456369466e6e4d666d4b743441383449496f66334b74777249372d3474656e6a626758537265706c6963613a6d61747465723a776972652d6d616c666f726d65642d61746f6d23726f6f743a47307858424f354c656548515a6544514c305969627137386b6c61343530783447356f7450326b72664b495820890a43688151d18f397b281c8ea634ce3cd5998920cdf44678b77cd7ff58dac05820890a43688151d18f397b281c8ea634ce3cd5998920cdf44678b77cd7ff58dac0f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf55840cd674bba02506cd3fd3d807f09177e3a59611d8ab0a899eb34be934f41868feccde634e042d0f3e47b68ec3850c8886f2b6388602db9cc37f7647129fc34c108a0f6",
+      "hash": "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk",
+      "id": "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a776972652d6d616c666f726d65642d61746f6d23726f6f743a47307858424f354c656548515a6544514c305969627137386b6c61343530783447356f7450326b72664b495820890a43688151d18f397b281c8ea634ce3cd5998920cdf44678b77cd7ff58dac081582b46666e55634f716451777576684b6e3059417848705477646e67324c6374706b6249674e4c7544594e626bd9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea6389582b313971514c315136585274565a7450413237396239753167562d5755366445304f66587076595f4d4a6e4d58537265706c6963613a6d61747465723a776972652d6d616c666f726d65642d61746f6d23726f6f743a47307858424f354c656548515a6544514c305969627137386b6c61343530783447356f7450326b72664b495820890a43688151d18f397b281c8ea634ce3cd5998920cdf44678b77cd7ff58dac0582083aadd2ffc4fb54b5699d7fcc3e7fef0ac9109ffabe53020dd0353f76ceda5f4582b5065753641766b6a70456369466e6e4d666d4b743441383449496f66334b74777249372d3474656e6a626781d9ea6044706f737480f4584093b1056a30da40dc7784b60bbb2c833e5f32ceb459fa43508b8ac2d40525772e5fdbdee7acc40c32ca0cd78b863656983a5ab92f8970f6c9aca9f41198062001f6",
+      "hash": "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M",
+      "id": "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a776972652d6d616c666f726d65642d61746f6d23726f6f743a47307858424f354c656548515a6544514c305969627137386b6c61343530783447356f7450326b72664b49582083aadd2ffc4fb54b5699d7fcc3e7fef0ac9109ffabe53020dd0353f76ceda5f481582b426864473879327970685179765544574d674546394b36614a44496d796e7a59746d645064596d6232314dd9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481456669727374582b313971514c315136585274565a7450413237396239753167562d5755366445304f66587076595f4d4a6e4d",
+      "hash": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+      "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258537265706c6963613a6d61747465723a776972652d6d616c666f726d65642d61746f6d23726f6f743a47307858424f354c656548515a6544514c305969627137386b6c61343530783447356f7450326b72664b49582083aadd2ffc4fb54b5699d7fcc3e7fef0ac9109ffabe53020dd0353f76ceda5f481582b63792d656569764d466b4b4b754c3951716850683032766164554748656b4e37692d736f6b5f5747644541d9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481467365636f6e64582b313971514c315136585274565a7450413237396239753167562d5755366445304f66587076595f4d4a6e4d",
+      "hash": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+      "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "capabilityCase": {
+    "case": "wire_malformed_atom_refusal",
+    "honoredOperationId": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+    "wireCases": [
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  5
+                ],
+                [
+                  "list",
+                  []
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body command name atom 5",
+        "position": "body command name"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "atom",
+                      5
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body argument atom 5",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "atom",
+              5
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "cap atom 5",
+        "position": "cap"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  null
+                ],
+                [
+                  "list",
+                  []
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body command name atom null",
+        "position": "body command name"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "atom",
+                      null
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body argument atom null",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "atom",
+              null
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "cap atom null",
+        "position": "cap"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  [
+                    "x"
+                  ]
+                ],
+                [
+                  "list",
+                  []
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body command name atom [x]",
+        "position": "body command name"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "atom",
+                      [
+                        "x"
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body argument atom [x]",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "atom",
+              [
+                "x"
+              ]
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "cap atom [x]",
+        "position": "cap"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  {}
+                ],
+                [
+                  "list",
+                  []
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body command name atom {}",
+        "position": "body command name"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "atom",
+                      {}
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "body argument atom {}",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "atom",
+              {}
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "cap atom {}",
+        "position": "cap"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "atom"
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "cap atom arity 1",
+        "position": "cap atom arity 1"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "atom",
+              "post",
+              "x"
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "cap atom arity 3",
+        "position": "cap atom arity 3"
+      },
+      {
+        "decode": "malformed_op",
+        "directIngest": "refuse",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "atom",
+              5
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          }
+        ],
+        "name": "cap atom 5 after good op",
+        "position": "cap"
+      },
+      {
+        "decode": "admit",
+        "directIngest": "admit",
+        "frames": [
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "Zmlyc3Q="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+            ],
+            "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+            "v": 1
+          },
+          {
+            "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+            ],
+            "deps": [
+              "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+            ],
+            "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+            "kind": "command",
+            "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+            "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+            "v": 1
+          }
+        ],
+        "name": "control good frames",
+        "position": "control"
+      }
+    ]
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [],
+    "quarantine": [],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [
+        "first",
+        "second"
+      ],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk",
+      "id": "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk"
+      ],
+      "field": "__authority",
+      "hash": "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M",
+      "id": "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+      ],
+      "field": "posts",
+      "hash": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+      "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+      "kind": "command",
+      "mutation": "append",
+      "value": "first"
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+      ],
+      "field": "posts",
+      "hash": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+      "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+      "kind": "command",
+      "mutation": "append",
+      "value": "second"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "iQpDaIFR0Y85eygcjqY0zjzVmYkgzfRGeLd81/9Y2sA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "iQpDaIFR0Y85eygcjqY0zjzVmYkgzfRGeLd81/9Y2sA=",
+              "id": "Peu6AvkjpEciFnnMfmKt4A84IIof3KtwrI7-4tenjbg",
+              "issuer": "iQpDaIFR0Y85eygcjqY0zjzVmYkgzfRGeLd81/9Y2sA=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "zWdLugJQbNP9PYB/CRd+OllhHYqwqJnrNL6TT0GGj+zN5jTgQtDz5Hto7DhQyIhvK2OIYC25zDf3ZHEp/DTBCA=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk",
+      "kind": "authority",
+      "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+      "sig": "N4XwBOUoHoWabgi5oxHTjUd4e3qm75BYfu3p0uX7crMSGVbWlK5+jyVU9RMZw973LkkhUVpUs6j++CpLTjACCQ==",
+      "v": 1
+    },
+    {
+      "author": "iQpDaIFR0Y85eygcjqY0zjzVmYkgzfRGeLd81/9Y2sA=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+              "id": "19qQL1Q6XRtVZtPA279b9u1gV-WU6dE0OfXpvY_MJnM",
+              "issuer": "iQpDaIFR0Y85eygcjqY0zjzVmYkgzfRGeLd81/9Y2sA=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "Peu6AvkjpEciFnnMfmKt4A84IIof3KtwrI7-4tenjbg",
+              "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+              "roles": [],
+              "sig": "k7EFajDaQNx3hLYLuyyDPl8yzrRZ+kNQi4rC1AUldy5f297nrMQMMsoM14uGNlaYOlq5L4lw9smsqfQRmAYgAQ=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "FfnUcOqdQwuvhKn0YAxHpTwdng2LctpkbIgNLuDYNbk"
+      ],
+      "id": "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M",
+      "kind": "authority",
+      "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+      "sig": "bxVPaa2kmMY6ZRsn4ef0IfP7gqiNLN5OgmcXo2IPUNj2y28BfxN+aLBlFP0BMLEWSEh4NbQ7HMW/SFZ1d6d8DA==",
+      "v": 1
+    },
+    {
+      "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Zmlyc3Q="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+      ],
+      "deps": [
+        "BhdG8y2yphQyvUDWMgEF9K6aJDImynzYtmdPdYmb21M"
+      ],
+      "id": "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA",
+      "kind": "command",
+      "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+      "sig": "4yk1PAiK15BDW1QQPDPL2I3t1P9Yb19z4h6+Zx0mpJaxxTWRmGp5do03gUwlw9j6i04GilkmIUhslO+aLmCWDw==",
+      "v": 1
+    },
+    {
+      "author": "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "c2Vjb25k"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "MTlxUUwxUTZYUnRWWnRQQTI3OWI5dTFnVi1XVTZkRTBPZlhwdllfTUpuTQ=="
+      ],
+      "deps": [
+        "cy-eeivMFkKKuL9QqhPh02vadUGHekN7i-sok_WGdEA"
+      ],
+      "id": "9RrJyC_W5cUHx3SBQlCAWS8sFENuc9PVs9mnIv4dtj8",
+      "kind": "command",
+      "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+      "sig": "TUZzxfYOzz6Savx5CShUlESn0n17XEt/OpCiVjvARi/5IOBedwngvqbsCGC9y6M5dv7xox5y4S4QF6gPDmwVCQ==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "g6rdL/xPtUtWmdf8w+f+8KyRCf+r5TAg3QNT92ztpfQ=": "resident",
+    "iQpDaIFR0Y85eygcjqY0zjzVmYkgzfRGeLd81/9Y2sA=": "clerk"
+  },
+  "replica": "replica:matter:wire-malformed-atom#root:G0xXBO5LeeHQZeDQL0Yibq78kla450x4G5otP2krfKI",
+  "scenario": "township_wire_malformed_atom_refusal",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}
