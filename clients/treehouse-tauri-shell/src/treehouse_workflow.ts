@@ -22,6 +22,7 @@ import {
   townshipReplicaRootTag,
   TREEHOUSE_LITE_THREAD_CAP,
   treehouseCommandDecoders,
+  treehouseCommandRoles,
   verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
 import type {
@@ -66,6 +67,29 @@ export interface OfferReview {
   /** True when retained Space frames already prove the invitation (recipient, scope, not revoked). */
   invitationVerified: boolean;
   admitted: boolean;
+}
+/**
+ * Row 199 (D3): every authority fact the shell UI reads, derived once per saved state and read by
+ * every `:disabled` binding and by the matching workflow action, so a button and its action never
+ * disagree. Recomputed only when the saved state or key availability changes.
+ */
+export interface WorkflowSnapshot {
+  /** The author of the Space's committed genesis, or null before a Space is held. */
+  readonly founderKey: string | null;
+  /** This key is the founder (founderKey equals the local public key). */
+  readonly isFounder: boolean;
+  /** This key holds the Space's live, unrevoked root delegation. */
+  readonly rootLive: boolean;
+  /** `createThread` would pass its authority and route-cap checks. */
+  readonly canCreateThread: boolean;
+  /** `configureRoutes` would pass its authority check (live root). */
+  readonly canConfigureRoutes: boolean;
+  /** `issueInvitation` would pass its authority check (an honored `issue_invitation` capability). */
+  readonly canIssueInvitation: boolean;
+  /** `admitAndGrant` would pass its Space authority check (an honored `admit_member` capability). */
+  readonly canAdmit: boolean;
+  /** Per held profile replica, the command names this key holds an honored capability for. */
+  readonly commands: ReadonlyMap<string, ReadonlySet<string>>;
 }
 export function fromBase64(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
@@ -112,6 +136,8 @@ export class TreehouseWorkflow {
   /** Reviewed but unconfirmed offer routes. Memory only: Use never persists. */
   private pendingOffer: { review: OfferReview; relay: RelayConfig } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
+  /** snapshot() cache, keyed on the identity of `state` (replaced on every persist) and `keyAvailable`. */
+  private cached: { state: PreviewState; keyAvailable: boolean; facts: WorkflowSnapshot } | null = null;
   constructor(readonly native: PreviewNative) {}
   async open() {
     const captured = await this.native.open();
@@ -300,14 +326,10 @@ export class TreehouseWorkflow {
       );
       if (!space) throw new Error("space_unavailable");
       // Only the Space's root holder can add a Thread. Refuse before any local Thread is authored.
-      if (!this.rootCapability(space)) throw new Error("root_capability_unavailable");
+      const facts = this.snapshot();
+      if (!facts.rootLive) throw new Error("root_capability_unavailable");
       // Lite shell: with routes configured, the Space plus three Threads is the whole route set.
-      if (
-        this.state.relay !== null &&
-        (this.views.get(space.replica)!.state.threads as unknown[]).length >=
-          TREEHOUSE_LITE_THREAD_CAP
-      )
-        throw new Error("thread_cap_reached");
+      if (!facts.canCreateThread) throw new Error("thread_cap_reached");
       await this.creation("thread", name);
     });
   }
@@ -420,20 +442,66 @@ export class TreehouseWorkflow {
    * competing genesis a relay serves first is never taken for it. Null before a Space is held.
    */
   founderKey(): string | null {
-    const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
-    return space === undefined ? null : (this.roots.get(space.replica) ?? null);
+    return this.snapshot().founderKey;
+  }
+  /** The authority facts for the current saved state; the same object until the state changes. */
+  snapshot(): WorkflowSnapshot {
+    const { state, keyAvailable } = this;
+    if (this.cached?.state === state && this.cached.keyAvailable === keyAvailable)
+      return this.cached.facts;
+    // A keyless select() swaps `state` without a revision bump: only a harmless recompute.
+    const space = state.profiles.find((p) => p.product === "Treehouse.Space");
+    const commands = new Map<string, ReadonlySet<string>>();
+    let rootLive = false;
+    for (const profile of state.profiles) {
+      // One authority pass per profile: the root and every member grant come from the same live list,
+      // the predicate `rootCapability` and `memberCapability` apply.
+      const live = liveTreehouseDelegations(profile.product, profile.frames, profile.replica);
+      const root = live.find((d) => d.issuer === state.publicKey && d.parent_id === null);
+      if (profile === space) rootLive = root !== undefined;
+      const names = [...treehouseCommandDecoders(profile.product).keys()];
+      const mine = live.filter((d) => d.audience === state.publicKey);
+      commands.set(
+        profile.replica,
+        new Set(
+          root !== undefined
+            ? names
+            : names.filter((command) => {
+                const roles = treehouseCommandRoles(profile.product, command);
+                return mine.some(
+                  (d) => d.ops.includes(command) && roles.every((role) => d.roles.includes(role)),
+                );
+              }),
+        ),
+      );
+    }
+    const founderKey = space === undefined ? null : (this.roots.get(space.replica) ?? null);
+    const threads =
+      space === undefined
+        ? []
+        : ((this.views.get(space.replica)?.state.threads as unknown[] | undefined) ?? []);
+    const spaceCommands = space === undefined ? undefined : commands.get(space.replica);
+    const facts: WorkflowSnapshot = {
+      founderKey,
+      isFounder: founderKey !== null && founderKey === state.publicKey,
+      rootLive,
+      canCreateThread:
+        rootLive && (state.relay === null || threads.length < TREEHOUSE_LITE_THREAD_CAP),
+      canConfigureRoutes: rootLive,
+      canIssueInvitation: spaceCommands?.has("issue_invitation") ?? false,
+      canAdmit: spaceCommands?.has("admit_member") ?? false,
+      commands,
+    };
+    this.cached = { state, keyAvailable, facts };
+    return facts;
   }
   /** True when `createThread` would proceed: the Space's live root capability, and room under the route cap. */
   canCreateThread(): boolean {
-    const space = this.state.profiles.find((p) => p.product === "Treehouse.Space");
-    if (space === undefined || this.rootCapability(space) === undefined) return false;
-    const threads = (this.views.get(space.replica)?.state.threads as unknown[] | undefined) ?? [];
-    return this.state.relay === null || threads.length < TREEHOUSE_LITE_THREAD_CAP;
+    return this.snapshot().canCreateThread;
   }
   /** True when this key holds a capability for `command` in the profile (the Post button's gate). */
   canAuthor(replica: string, command: string): boolean {
-    const profile = this.state.profiles.find((p) => p.replica === replica);
-    return profile !== undefined && this.capabilityFor(profile, command) !== null;
+    return this.snapshot().commands.get(replica)?.has(command) ?? false;
   }
   private async author(profile: LocalProfile, command: TreehouseCommand) {
     const capId = this.capabilityFor(profile, command.command);
@@ -520,8 +588,8 @@ export class TreehouseWorkflow {
     return this.exclusive(async () => {
       const config = parseRouteList(routeList);
       if (this.state.intent) throw new Error("creation_incomplete");
-      const space = this.spaceProfile();
-      if (!this.rootCapability(space)) throw new Error("root_capability_unavailable");
+      this.spaceProfile();
+      if (!this.snapshot().canConfigureRoutes) throw new Error("root_capability_unavailable");
       const known = new Set(this.state.profiles.map((p) => p.replica));
       if (config.routes.some((r) => !known.has(r.replica)))
         throw new Error("unknown_route_replica");
@@ -540,6 +608,8 @@ export class TreehouseWorkflow {
       const relay = this.state.relay;
       if (relay === null || !relay.routes.some((r) => r.replica === space.replica))
         throw new Error("routes_not_configured");
+      // Both the reuse and the authoring path need the issue_invitation capability.
+      if (!this.snapshot().canIssueInvitation) throw new Error("no_capability");
       // An honored, unrevoked invitation for this recipient with a current scope is reused.
       const existing = carrierOpsToSemanticOps(
         space.frames,
@@ -688,13 +758,15 @@ export class TreehouseWorkflow {
   }
   /**
    * Founder: admit the recipient and grant exact-audience Thread capabilities for the whole signed scope,
-   * persisted as one commit. Replaying the same acceptance authors and persists nothing.
+   * persisted as one commit. Replaying the same acceptance authors and persists nothing. Like its button, it
+   * needs an honored `admit_member` capability even for an acceptance already admitted (row 199).
    */
   admitAndGrant(acceptanceText: string) {
     return this.exclusive(async () => {
       const acceptance = decodeTreehouseAcceptance(acceptanceText);
       if (this.state.intent) throw new Error("creation_incomplete");
       const space = this.spaceProfile();
+      if (!this.snapshot().canAdmit) throw new Error("no_capability");
       const authored = await authorTreehouseAdmitAndGrant({
         signer: this.signer(),
         replica: space.replica,

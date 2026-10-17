@@ -294,6 +294,19 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
     assert(/!signing\b/.test(disabledOf(label) ?? ""), `${label} is gated on the local key`);
   assert(!/signing/.test(disabledOf("Use offer") ?? ""), "Use offer stays a local review");
   assert(/const signing = computed\(\(\) => props\.state\.publicKey !== null && props\.workflow\.keyAvailable\)/.test(panel.sfc.scriptSetup.content));
+  // Row 199: each founder action is also gated on its own authority, read from the one snapshot.
+  for (const [label, gate] of [["Configure routes", "canConfigureRoutes"], ["Issue invitation", "canIssueInvitation"],
+    ["Admit and grant", "canAdmit"]])
+    assert(new RegExp(`!caps\\.${gate}\\b`).test(disabledOf(label) ?? ""), `${label} is gated on caps.${gate}`);
+}
+// Row 200: every refusal code that reaches explain() has its own entry. Keys only, never the text.
+{
+  const panelScript = sources.find((s) => s.path.endsWith("EnrollmentPanel.vue")).sfc.scriptSetup.content;
+  const literal = /const messages: Record<string, string> = \{([^]*?)\n\};/.exec(panelScript);
+  assert(literal, "no messages object");
+  const keys = new Set([...literal[1].matchAll(/^\s*([a-z_]+):/gm)].map((m) => m[1]));
+  for (const code of ["route_set_needs_one_space", "grant_revoked", "grant_expired", "member_removed"])
+    assert(keys.has(code), `messages lacks ${code}`);
 }
 const shown = ["Use offer", "Accept invitation", "Admit and grant", "Issue invitation"];
 for (const label of shown)

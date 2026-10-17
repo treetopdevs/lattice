@@ -78,6 +78,14 @@ const messages: Record<string, string> = {
     "The offer's threads do not match the invitation. Nothing was changed.",
   invalid_acceptance: "That acceptance is not valid for this invitation.",
   invalid_recipient: "That join request carries an invalid identity.",
+  route_set_needs_one_space:
+    "A route list or offer must name exactly one group route. Nothing was changed.",
+  grant_revoked:
+    "This person's thread grant was revoked, and it cannot be issued again from this device. Nothing was changed.",
+  grant_expired:
+    "This person's thread grant has lapsed, and it cannot be issued again from this device. Nothing was changed.",
+  member_removed:
+    "This identity was removed from the group, and this invitation does not admit it again. Only a new invitation from the founder can. Nothing was changed.",
 };
 const explain = (cause: unknown) => {
   const message = cause instanceof Error ? cause.message : String(cause);
@@ -87,14 +95,14 @@ const explain = (cause: unknown) => {
 const space = computed(() =>
   props.state.profiles.find((p) => p.product === "Treehouse.Space"),
 );
+// One authority snapshot per saved state; the bare props.state read is the reactivity hook.
+const caps = computed(() => {
+  props.state;
+  return props.workflow.snapshot();
+});
 // The founder is the author of the Space's committed genesis (the one its #root: commitment names).
-const founderKey = computed(() => (space.value ? props.workflow.founderKey() : null));
-const isFounder = computed(
-  () =>
-    space.value !== undefined &&
-    props.state.publicKey !== null &&
-    founderKey.value === props.state.publicKey,
-);
+const founderKey = computed(() => caps.value.founderKey);
+const isFounder = computed(() => caps.value.isFounder);
 const canJoin = computed(() => props.state.profiles.length === 0);
 // Signing, persisting and the relay handshake need the local key; review and copy actions do not.
 const signing = computed(() => props.state.publicKey !== null && props.workflow.keyAvailable);
@@ -339,7 +347,7 @@ async function admitAndGrant() {
         type="button"
         class="secondary"
         aria-label="Configure routes"
-        :disabled="busy || !signing || !routeList.trim()"
+        :disabled="busy || !signing || !caps.canConfigureRoutes || !routeList.trim()"
         @click="configureRoutes"
       >
         Configure routes
@@ -363,7 +371,7 @@ async function admitAndGrant() {
       <button
         type="button"
         aria-label="Issue invitation"
-        :disabled="busy || !signing || !joinRequestPaste.trim() || !joinerRealm.trim()"
+        :disabled="busy || !signing || !caps.canIssueInvitation || !joinRequestPaste.trim() || !joinerRealm.trim()"
         @click="issueInvitation"
       >
         Issue invitation
@@ -397,7 +405,7 @@ async function admitAndGrant() {
       <button
         type="button"
         aria-label="Admit and grant"
-        :disabled="busy || !signing || !acceptancePaste.trim()"
+        :disabled="busy || !signing || !caps.canAdmit || !acceptancePaste.trim()"
         @click="admitAndGrant"
       >
         Admit and grant
