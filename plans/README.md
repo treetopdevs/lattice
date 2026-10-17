@@ -362,7 +362,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 
 
 | 185 | **(spike)** One judge runtime: Popcorn-hosted `lattice_core` judge inside the Treehouse Tauri webview, vector-equal, measured, GO/NO-GO (Round 6, S2) | P1 | M | 182, 183 | DONE (NO-GO 2026-10-08: 63/68 vectors equal, 5 refused by the Wire atom defect, plan 190; macOS WKWebView lacks SharedArrayBuffer so Popcorn cannot boot; Android wry panic, row 192) |
-| 186 | Shared shell kit `clients/lattice-shell-kit` (feed, outbox sync, routes, relay client, BEAM test peer, packaged harness); Treehouse consumes it (Round 6, S3) | P2 | M | 183 | PLANNED (2026-10-17; PR #135: [plan 186](186-shared-shell-kit.md) design written: three move PRs, Treehouse sole consumer, fold-back if no second shell; no code moved) |
+| 186 | Shared shell kit `clients/lattice-shell-kit` (feed, outbox sync, routes, relay client, BEAM test peer, packaged harness); Treehouse consumes it (Round 6, S3) | P2 | M | 183 | IN PROGRESS (2026-10-17; PR 1 of 3 in review: kit skeleton, test support moved, classifier arm; fold-back if no second shell; [plan 186](186-shared-shell-kit.md)) |
 | 187 | Claims as data: one registry, generated status, retire prose-pinning contract tests; folds plans 164/166 and the Township probe lazy-load (Round 6, S5) | P2 | S–M | 182 | TODO (planned, plan file not yet written) |
 | 188 | **(design)** Authority admission as one guard pipeline, Elixir-only if 185 is GO; absorbs the quadratic and Replica-DSL items (Round 6, S4) | P2 | L | 184, 185 | TODO (D4 decided 2026-10-14: keep the Elixir judge and the TS mirror, freeze new TS arms; plan file not yet written) |
 | 189 | **(design)** Extract the v1 plane to `apps/lattice_v1`; stop booting v1 children in the pilot release; decide `Live`, `Demo.Thread`, the early runtime plane (Round 6, S1 part 2) | P3 | L | 183 | TODO (planned, plan file not yet written) |
@@ -396,6 +396,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 217 | R11b roster drift since staging (PR #126 residual 3): the journal binds no active-log digests from staging, so activation cannot see Space roster changes since then; readiness and listing must re-review the roster | P2 | S–M | 216 | TODO (filed 2026-10-17 from PR #126) |
 | 218 | R11b journal history (PR #126 residual 4): the next attempt's staging overwrites an `activated` record (and a pending one) with no retained history | P3 | S | 216 | TODO (filed 2026-10-17 from PR #126) |
 | 219 | R11b activated manifest ends at mode 0600 (PR #126 residual 5); decide the intended mode and keep it across the replace | P3 | S | 216 | TODO (filed 2026-10-17 from PR #126) |
+| 220 | CI never installs or checks `clients/lattice-shell-kit` (its `typecheck` and boundary `check`), and Treehouse cache keys omit the kit; add both before plan 186 PR 2 moves runtime code | P2 | S | 186 | TODO (filed 2026-10-17 from plan 186 PR 1 review) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

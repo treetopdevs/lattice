@@ -12,7 +12,7 @@ import type { SyncTreehouseOptions } from "../src/treehouse_sync";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import type { LocalProfile } from "../src/treehouse_state";
-import { FakeClock, FakeRelay } from "./support/fake_relay";
+import { FakeClock, FakeRelay } from "@treetopdevs/lattice-shell-kit/testing";
 import { FaultNative } from "./support/fault_native";
 
 console.log("\n▸ Treehouse relay sync: acknowledgement rules, dependency-closed merge, restart");

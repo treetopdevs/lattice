@@ -20,16 +20,8 @@ import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { createAxDriver, nodesInclude } from "./support/packaged_ax";
 import type { AxDriver, AxNode, TransferMethod } from "./support/packaged_ax";
 import { assertPackagedBundleVariant } from "./support/packaged_bundle_variant";
-import {
-  assertPrivateChain,
-  createRelayObserver,
-  fileSha256,
-  freeTcpPort,
-  makeGateRoot,
-  runBeamSupport,
-  spawnPilotManifestServer,
-  writePilotManifest,
-} from "./support/relay_peer";
+import { assertPrivateChain, fileSha256, freeTcpPort, makeGateRoot, runBeamSupport } from "@treetopdevs/lattice-shell-kit/testing/beam";
+import { createRelayObserver, spawnPilotManifestServer, writePilotManifest } from "./support/relay_peer";
 import type { PilotRelay } from "./support/relay_peer";
 import { assertNoSecrets, assertScannerDetects } from "./support/secret_scan";
 import { readKv } from "./support/store_read";
