@@ -9,6 +9,8 @@ import {
   decodeTreehouseOffer,
   encodeTreehouseAcceptance,
   encodeTreehouseOffer,
+  memberCapability,
+  treehouseCommandDecoders,
 } from "@treetopdevs/lattice-client";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
@@ -766,6 +768,12 @@ console.log("PASS member post and edit under the exact-audience grant; founder r
   assert.equal(facts.commands.get(threadReplica)?.has("post"), true);
   assert.equal(facts.commands.get(threadReplica)?.has("archive_thread"), false);
   assert.equal(facts.commands.get(spaceReplica)?.size, 0);
+  // The one-pass derivation agrees with the library's per-command lookup for every held profile.
+  for (const p of jMember.state.profiles)
+    for (const command of treehouseCommandDecoders(p.product).keys())
+      assert.equal(facts.commands.get(p.replica)?.has(command),
+        memberCapability(p.frames, jMember.state.publicKey!, p.replica, { command, product: p.product }) !== null,
+        `${p.replica} ${command}`);
   // Reuse path: the member holds the founder's honored invitation to itself and routes, but no
   // issue_invitation capability, so the reissue is refused before the existing-invitation lookup.
   const rev = jMember.state.revision;

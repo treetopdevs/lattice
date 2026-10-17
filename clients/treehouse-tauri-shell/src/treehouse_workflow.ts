@@ -22,6 +22,7 @@ import {
   townshipReplicaRootTag,
   TREEHOUSE_LITE_THREAD_CAP,
   treehouseCommandDecoders,
+  treehouseCommandRoles,
   verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
 import type {
@@ -453,23 +454,24 @@ export class TreehouseWorkflow {
     const commands = new Map<string, ReadonlySet<string>>();
     let rootLive = false;
     for (const profile of state.profiles) {
-      const root = this.rootCapability(profile);
+      // One authority pass per profile: the root and every member grant come from the same live list,
+      // the predicate `rootCapability` and `memberCapability` apply.
+      const live = liveTreehouseDelegations(profile.product, profile.frames, profile.replica);
+      const root = live.find((d) => d.issuer === state.publicKey && d.parent_id === null);
       if (profile === space) rootLive = root !== undefined;
       const names = [...treehouseCommandDecoders(profile.product).keys()];
+      const mine = live.filter((d) => d.audience === state.publicKey);
       commands.set(
         profile.replica,
         new Set(
           root !== undefined
             ? names
-            : state.publicKey === null
-              ? []
-              : names.filter(
-                  (command) =>
-                    memberCapability(profile.frames, state.publicKey!, profile.replica, {
-                      command,
-                      product: profile.product,
-                    }) !== null,
-                ),
+            : names.filter((command) => {
+                const roles = treehouseCommandRoles(profile.product, command);
+                return mine.some(
+                  (d) => d.ops.includes(command) && roles.every((role) => d.roles.includes(role)),
+                );
+              }),
         ),
       );
     }
