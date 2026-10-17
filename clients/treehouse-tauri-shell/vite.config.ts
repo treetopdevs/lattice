@@ -17,5 +17,7 @@ const shellKitTestingBoundary: Plugin = {
 
 export default defineConfig({
   plugins: [vue(), shellKitTestingBoundary],
+  // Plan 186: the kit and lattice-client are file: links; resolving through the shell's node_modules keeps one lattice-client copy and lets kit modules find their peers.
+  resolve: { preserveSymlinks: true },
   server: { host: "127.0.0.1", port: 5175, strictPort: true },
 });
