@@ -124,11 +124,19 @@ class Protocol(unittest.TestCase):
         with self.assertRaises(owner.Refusal) as caught:
             owner.execute("/nonexistent-root", plan)
         self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        # A well-formed stage plan, so only the incarnation guard can refuse it
+        # as malformed; without one it gets past validation to the root check.
+        raw = b"candidate"
         stage = dict(plan, kind="stage", record=None, attempt=self.sample()["attempt"],
-                     checks=[], artifacts=[])
+                     checks=[{"path": "/srv/active.json", "sha256": "2" * 64}],
+                     artifacts=[{"sha256": owner.digest(raw),
+                                 "bytes": base64.b64encode(raw).decode()}])
         with self.assertRaises(owner.Refusal) as caught:
             owner.execute("/nonexistent-root", stage)
         self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        with self.assertRaises(Exception) as caught:
+            owner.execute("/nonexistent-root", dict(stage, incarnation=None))
+        self.assertNotEqual(str(caught.exception), "malformed_operator_plan")
 
     def test_boot_without_journal_writes_a_fresh_private_marker(self):
         root = self.workdir("boot-marker")
