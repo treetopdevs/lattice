@@ -146,7 +146,7 @@ defmodule Lattice do
   def send_durable(from_realm, {to_realm, replica}, payload),
     do: Lattice.Registry.deliver(from_realm, to_realm, replica, payload)
 
-  @doc "Await a durable promise from `realm`'s log: `{:ok, result}` or `:pending`."
+  @doc "Await a durable promise from `realm`'s log: `{:ok, result}`, `:pending`, or `{:error, :unrepresentable_result}` (target answered but its result is off the wire vocabulary)."
   def await(realm, %Lattice.Promise{replica: replica} = promise),
     do: Lattice.Registry.await(realm, replica, promise)
 

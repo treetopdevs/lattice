@@ -99,7 +99,7 @@ defmodule Lattice.V2 do
   @doc "Issue a durable call from `from_realm` to `{to_realm, replica}`; returns `{:ok, %Lattice.Promise{}}`."
   defdelegate call(from_realm, to_realm, replica, query), to: Registry
 
-  @doc "Resolve a promise from `realm`'s log: `{:ok, result}` or `:pending`."
+  @doc "Resolve a promise from `realm`'s log: `{:ok, result}`, `:pending`, or `{:error, :unrepresentable_result}` (target answered but its result is off the wire vocabulary)."
   def await(realm, %Promise{replica: replica} = promise),
     do: Registry.await(realm, replica, promise)
 
