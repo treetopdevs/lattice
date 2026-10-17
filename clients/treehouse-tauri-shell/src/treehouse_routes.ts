@@ -1,4 +1,5 @@
 import type { TreehouseOfferRoute, TreehouseProduct } from "@treetopdevs/lattice-client";
+import alphabet from "../route_alphabet.json";
 import { MAX_ROUTES } from "./treehouse_state";
 import type { RelayConfig, RelayRoute } from "./treehouse_state";
 
@@ -18,13 +19,35 @@ const fail = (label: string): never => {
   throw new Error(label);
 };
 
+// Plan 198: route_alphabet.json is the one statement of the realm and route alphabet; preview.rs reads it too.
+const EDGE_WHITESPACE: ReadonlySet<number> = new Set(
+  alphabet.realm.edgeWhitespace.map((point) => parseInt(point.slice(2), 16)),
+);
+const HOST_ALPHABET = new RegExp(alphabet.routeUrl.hostAlphabet);
+const PRINTABLE_OUTSIDE = new RegExp(
+  `[^\\x${alphabet.routeUrl.textByteMin.toString(16)}-\\x${alphabet.routeUrl.textByteMax.toString(16)}]`,
+);
+const LOOPBACK_HOSTS: readonly string[] = alphabet.routeUrl.loopbackHosts;
+const SCHEMES: Readonly<Record<string, string>> = alphabet.routeUrl.schemes;
+// A port is at most as many digits as portMax; the range itself is checked below.
+const PORT_DIGITS = String(alphabet.routeUrl.portMax).length;
+const PORT_TEXT = new RegExp(`^:[1-9][0-9]{0,${PORT_DIGITS - 1}}$`);
+
 const realmText = (value: unknown, label: string): string => {
-  // A realm is pinned for good, so stray whitespace is refused rather than silently kept.
+  // A realm is pinned for good, so stray whitespace is refused rather than silently kept. Edges are judged
+  // by code point against the table, never by trim(), whose set differs from the native store's.
+  if (typeof value !== "string" || value === "") return fail(label);
+  const points = [...value];
+  // A lone surrogate is not UTF-8 and the native store's JSON parser refuses it, so it fails here first.
+  if (points.some((point) => {
+    const code = point.codePointAt(0)!;
+    return code >= 0xd800 && code <= 0xdfff;
+  }))
+    return fail(label);
   if (
-    typeof value !== "string" ||
-    !value.trim() ||
-    value !== value.trim() ||
-    new TextEncoder().encode(value).length > 256
+    EDGE_WHITESPACE.has(points[0]!.codePointAt(0)!) ||
+    EDGE_WHITESPACE.has(points[points.length - 1]!.codePointAt(0)!) ||
+    new TextEncoder().encode(value).length > alphabet.realm.maxUtf8Bytes
   )
     return fail(label);
   return value;
@@ -44,23 +67,43 @@ export function validRouteUrl(value: string): boolean {
   }
   // URL() silently trims and strips whitespace, so the pinned text must carry none. Hosts stay ASCII so
   // the native store, which checks the raw text, judges the same host.
-  if (/[^\x21-\x7e]/.test(value) || url.username || url.password || url.hash || value.length > 2048) return false;
+  if (
+    PRINTABLE_OUTSIDE.test(value) ||
+    url.username ||
+    url.password ||
+    // The raw text, not url.hash: an empty fragment ("wss://x#") leaves hash "" yet the native store refuses any "#".
+    value.includes("#") ||
+    value.length > alphabet.routeUrl.maxLength
+  )
+    return false;
   // The host must already be in the form URL() normalizes it to (127.1 or a long IPv6 form is refused), so
   // the native store, which checks the raw text, accepts exactly the same hosts.
-  const authority = value.slice(value.indexOf("://") + 3).split(/[/?#]/)[0] ?? "";
+  // The authority must follow the scheme itself: URL() also parses "wss:example.com?://x" or a backslash form,
+  // where a later "://" would otherwise be mistaken for the authority; the native store takes the scheme as
+  // everything before the first "://" and refuses those.
+  const schemeEnd = value.indexOf("://");
+  if (schemeEnd < 0 || `${value.slice(0, schemeEnd).toLowerCase()}:` !== url.protocol) return false;
+  const authority = value.slice(schemeEnd + 3).split(/[/?#]/)[0] ?? "";
   const host = authority.startsWith("[") ? authority.slice(0, authority.indexOf("]") + 1) : authority.split(":")[0]!;
   if (host.toLowerCase() !== url.hostname) return false;
   // A name uses the native store's alphabet: letters, digits, `.`, `-` and `_` (URL() also keeps `!`, `$`, …).
-  if (!host.startsWith("[") && !/^[A-Za-z0-9._-]+$/.test(host)) return false;
+  if (!host.startsWith("[") && !HOST_ALPHABET.test(host)) return false;
+  // An `xn--` label is refused outright: URL() validates punycode (IDNA) and throws on a malformed one, and the
+  // native store has no IDNA implementation to judge the same way, so neither side accepts one.
+  if (!host.startsWith("[") && host.split(".").some((label) => label.toLowerCase().startsWith("xn--"))) return false;
   // A port, when written, is canonical decimal (no leading zeros) and not 0, which names no listening
   // endpoint; the native store requires the same.
   const port = authority.slice(host.length);
-  if (port !== "" && !/^:(?:[1-9][0-9]{0,4})?$/.test(port)) return false;
-  if (url.protocol === "wss:") return true;
-  return (
-    url.protocol === "ws:" &&
-    (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]")
-  );
+  if (port !== "" && port !== ":") {
+    if (!PORT_TEXT.test(port)) return false;
+    const number = Number(port.slice(1));
+    if (number < alphabet.routeUrl.portMin || number > alphabet.routeUrl.portMax) return false;
+  }
+  // The table says per scheme whether any host is allowed or only a loopback one. A bracketed IPv6 host is never
+  // in its loopback list, so ws://[::1] is refused. A scheme the table does not list is refused.
+  const rule = Object.hasOwn(SCHEMES, url.protocol.slice(0, -1)) ? SCHEMES[url.protocol.slice(0, -1)] : undefined;
+  if (rule === "any-host") return true;
+  return rule === "loopback-only" && LOOPBACK_HOSTS.includes(url.hostname);
 }
 
 function validPeerKey(value: unknown): boolean {

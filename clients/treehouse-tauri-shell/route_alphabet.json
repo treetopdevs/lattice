@@ -1,0 +1,29 @@
+{
+  "$comment": "Plan 198: the one statement of the Treehouse relay route and realm alphabet. src/treehouse_routes.ts and src-tauri/src/preview.rs read it; test/product_contract.mjs derives the dev-trace connect-src from it; test/route_alphabet.ts (TS) and src-tauri/tests/route_alphabet.rs (Rust) prove both validators give the same verdict on every case in test/route_alphabet_cases.json. Parsers stay code; this file holds constants only.",
+  "version": 1,
+  "realm": {
+    "$comment": "Non-empty, at most maxUtf8Bytes bytes of UTF-8, and neither its first nor its last code point is in edgeWhitespace. The set is the union of JavaScript's String.prototype.trim set and Rust's char::is_whitespace (Unicode White_Space), enumerated so neither runtime's Unicode tables decide: U+0085 is Rust-only and U+FEFF is JavaScript-only.",
+    "maxUtf8Bytes": 256,
+    "edgeWhitespace": [
+      "U+0009", "U+000A", "U+000B", "U+000C", "U+000D", "U+0020", "U+0085", "U+00A0",
+      "U+1680", "U+2000", "U+2001", "U+2002", "U+2003", "U+2004", "U+2005", "U+2006",
+      "U+2007", "U+2008", "U+2009", "U+200A", "U+2028", "U+2029", "U+202F", "U+205F",
+      "U+3000", "U+FEFF"
+    ]
+  },
+  "routeUrl": {
+    "$comment": "Printable ASCII only (textByteMin..textByteMax), at most maxLength bytes, no credentials and no fragment. The scheme is compared case-insensitively. wss may name any host; ws only a host in loopbackHosts, compared case-insensitively. A bracketed IPv6 host is never loopback (a Content-Security-Policy host-source cannot name one), so ws://[::1] is refused. A name host uses hostAlphabet; a numeric last label is parsed as IPv4. A port, when written, is canonical decimal in portMin..portMax.",
+    "maxLength": 2048,
+    "textByteMin": 33,
+    "textByteMax": 126,
+    "schemes": { "wss": "any-host", "ws": "loopback-only" },
+    "loopbackHosts": ["127.0.0.1", "localhost"],
+    "hostAlphabet": "^[A-Za-z0-9._-]+$",
+    "portMin": 1,
+    "portMax": 65535
+  },
+  "csp": {
+    "$comment": "The dev-trace build is the only variant that can configure routes, so its connect-src must admit every route this table accepts: one ws host-source per loopback host, plus the wss scheme-source. test/product_contract.mjs derives the expected value from ordinaryConnectSrc, loopbackHosts and schemes and compares it with src-tauri/tauri.dev-trace.conf.json.",
+    "ordinaryConnectSrc": "'self' ipc: http://ipc.localhost"
+  }
+}
