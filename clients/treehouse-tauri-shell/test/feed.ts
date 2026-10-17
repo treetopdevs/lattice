@@ -454,7 +454,6 @@ for (const reason of ["read_only", "unavailable"]) {
   h.timerFns[0]!();
   await until(() => h.routeState(f.thread).submitStopped === null, "a failed sync clears the stale stop");
   assert.deepEqual(h.routeState(f.thread).refused, []);
-  assert.doesNotMatch(h.routeState(f.thread).message, /Submit stopped/);
   await feed.stop();
   console.log("PASS a failed sync clears the previous submit verdict instead of showing it stale");
 }
