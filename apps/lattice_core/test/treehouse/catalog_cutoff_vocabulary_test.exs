@@ -30,15 +30,56 @@ defmodule Treehouse.CatalogCutoffVocabularyTest do
     assert MapSet.disjoint?(MapSet.new(old), MapSet.new(added))
     assert Enum.sort(old ++ added) == union
 
-    for name <- ["catalog_cutoff", "catalog_trust"] do
-      source = File.read!(Path.expand("../../lib/treehouse/" <> name <> ".ex", __DIR__))
-      [_, literal] = Regex.run(~r/@cutoff_atoms MapSet.new\(~w\((.*?)\)a\)/s, source)
-      assert String.split(literal) == union
-    end
+    source = File.read!(Path.expand("../../lib/treehouse/catalog_cutoff.ex", __DIR__))
+    [_, literal] = Regex.run(~r/@cutoff_atoms MapSet.new\(~w\((.*?)\)a\)/s, source)
+    assert String.split(literal) == union
 
     source = File.read!(Path.join(@client, "src/treehouse_catalog_cutoff.ts"))
     [_, literal] = Regex.run(~r/const atoms = new Set\((\[.*?\])\);/s, source)
     assert Jason.decode!(literal) == union
+  end
+
+  test "every cutoff name is on the closed wire vocabulary" do
+    names = CatalogCutoff.cutoff_atoms()
+    assert length(names) == 139
+
+    unknown =
+      for name <- names, not Lattice.Carrier.WireVocabulary.known?(Atom.to_string(name)), do: name
+
+    assert unknown == []
+  end
+
+  test "trust accepts exactly the CatalogCutoff names, derived rather than copied" do
+    fixture = CatalogTrustVectors.fixture(0)
+    names = CatalogCutoff.cutoff_atoms()
+
+    probe = fn body ->
+      op =
+        Op.new(
+          fixture.space.root,
+          fixture.space.replica,
+          Log.frontier(fixture.space_log),
+          :command,
+          body
+        )
+
+      raw = fixture.space_log |> Log.append!(op) |> CatalogTrustVectors.raw_history()
+
+      CatalogTrust.prepare_installation(%{
+        review: fixture.review,
+        history: raw,
+        store: %{kind: :verified_fresh, expected: @expected}
+      })
+    end
+
+    assert %{kind: :propose} = probe.({:attest_member_key_v1, [names]})
+
+    for name <- names do
+      assert %{kind: :propose} = probe.(name)
+    end
+
+    assert %{kind: :reject, reason: :unsupported_cutoff} =
+             probe.(:cutoff_unknown_evidence_v99)
   end
 
   test "signed nine and 139-name histories are portable while remaining ordinarily refused" do

@@ -18,7 +18,14 @@ defmodule Lattice.Registry do
     * `call/4` authors a `{:request, ref, query}` op and returns a `Lattice.Promise`;
       the target materialization answers with a `{:response, ref, result}` op;
       `await/3` reads the result from the log, surviving dormancy of either side
-      (behavior 12).
+      (behavior 12). If the materialized result names an atom outside the closed wire
+      vocabulary, the answer is instead the 2-tuple `{:response, ref}` ("answered, result
+      unrepresentable"), built only from names already on the vocabulary, so it is
+      admitted by peers; `await/3` then returns `{:error, :unrepresentable_result}` (a
+      local return value, never on the wire) and the request is not retried. The guarantee
+      holds for peers that already hold the response's ancestors, as with this module's
+      in-process sync. Over a checked carrier pull it does not: the off-vocabulary atom
+      came from an op in the target log, and that op refuses its whole pull page (row 208).
 
   Lifecycle:
 
@@ -100,7 +107,11 @@ defmodule Lattice.Registry do
     GenServer.call(@name, {:call, from_realm, to_realm, replica, query})
   end
 
-  @doc "Resolve a promise from `realm`'s log: `{:ok, result}` or `:pending`."
+  @doc """
+  Resolve a promise from `realm`'s log: `{:ok, result}`, `:pending` while unanswered, or
+  `{:error, :unrepresentable_result}` when the target answered but its result names an atom
+  outside the wire vocabulary (so no representable response could be signed).
+  """
   def await(realm, replica, %Promise{} = promise) do
     GenServer.call(@name, {:await, {realm, replica}, promise})
   end
@@ -281,6 +292,7 @@ defmodule Lattice.Registry do
       with {:ok, entry} <- fetch(st, key) do
         case find_response(entry.log, ref) do
           {:ok, value} -> {:ok, value}
+          :unrepresentable -> {:error, :unrepresentable_result}
           :error -> :pending
         end
       end
@@ -447,16 +459,26 @@ defmodule Lattice.Registry do
     result = answer_query(query, state)
 
     # The result is materialized state, which may hold an atom outside the wire vocabulary.
-    # Such a response is refused and the request stays unanswered (`await/3` keeps returning
-    # `:pending`) rather than signing an op no peer would admit.
+    # No peer would admit such a response, so instead of signing it (or staying silent, which
+    # left `await/3` at `:pending` forever) answer with the 2-tuple `{:response, ref}`: it uses
+    # only vocabulary names and a binary, counts as answered (never retried), and `await/3`
+    # maps it to `{:error, :unrepresentable_result}`. Its deps are the target frontier, which
+    # may hold the off-vocabulary op itself, so only peers that already have those ancestors
+    # (in-process sync) receive it; a checked carrier pull refuses that page (row 208).
     resp =
-      Op.authored(
-        entry.identity,
-        entry.replica,
-        Log.frontier(log),
-        :inbox,
-        {:response, ref, result}
-      )
+      case Op.authored(
+             entry.identity,
+             entry.replica,
+             Log.frontier(log),
+             :inbox,
+             {:response, ref, result}
+           ) do
+        {:ok, resp} ->
+          {:ok, resp}
+
+        {:error, :unknown_atom} ->
+          Op.authored(entry.identity, entry.replica, Log.frontier(log), :inbox, {:response, ref})
+      end
 
     case resp do
       {:ok, resp} -> {Log.append!(log, resp), delivered}
@@ -469,8 +491,16 @@ defmodule Lattice.Registry do
   end
 
   defp inbox_set(ordered, :response) do
-    for %Op{kind: :inbox, body: {:response, ref, _}} <- ordered, into: MapSet.new(), do: ref
+    for %Op{kind: :inbox, body: body} <- ordered,
+        {:ok, ref} <- [response_ref(body)],
+        into: MapSet.new(),
+        do: ref
   end
+
+  # Explicit patterns, no truthiness filter: a `nil` or `false` ref still counts as answered.
+  defp response_ref({:response, ref, _result}), do: {:ok, ref}
+  defp response_ref({:response, ref}), do: {:ok, ref}
+  defp response_ref(_), do: :error
 
   defp find_response(log, ref) do
     log
@@ -478,6 +508,7 @@ defmodule Lattice.Registry do
     |> Map.values()
     |> Enum.find_value(:error, fn
       %Op{kind: :inbox, body: {:response, ^ref, result}} -> {:ok, result}
+      %Op{kind: :inbox, body: {:response, ^ref}} -> :unrepresentable
       _ -> nil
     end)
   end
