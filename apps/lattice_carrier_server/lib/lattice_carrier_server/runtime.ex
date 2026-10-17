@@ -16,10 +16,12 @@ defmodule LatticeCarrierServer.Runtime do
   alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Health, Holder, Manifest}
 
-  alias LatticeCarrierServer.Operator.ReleaseGate
+  alias LatticeCarrierServer.Operator.{Lock, ReleaseGate}
 
   @deployment_key {__MODULE__, :deployment}
   @instance_names_key {__MODULE__, :instance_names}
+  @boot_busy_attempts 12
+  @boot_busy_sleep 750
 
   @spec prepare(nil | Path.t()) :: {:ok, [Supervisor.child_spec()]} | {:error, term()}
   def prepare(path) do
@@ -74,14 +76,15 @@ defmodule LatticeCarrierServer.Runtime do
   end
 
   @doc false
-  @spec prepare_owned(nil | Path.t(), ReleaseGate.owner() | nil, boolean()) ::
+  @spec prepare_owned(nil | Path.t(), ReleaseGate.owner() | nil, boolean(), Path.t() | nil) ::
           {:ok, list()} | {:error, term()}
-  def prepare_owned(path, owner, extras? \\ false)
-  def prepare_owned(path, nil, _extras?), do: prepare(path)
+  def prepare_owned(path, owner, extras? \\ false, operator_root \\ nil)
+  def prepare_owned(path, nil, _extras?, _operator_root), do: prepare(path)
 
-  def prepare_owned(path, owner, extras?) do
+  def prepare_owned(path, owner, extras?, operator_root) do
     with {:ok, lease} <- ReleaseGate.acquire(owner, :preflight),
          {:ok, children, digest} <- do_prepare(path),
+         {:ok, guard} <- boot_guard(operator_root, path, digest),
          :ok <- ReleaseGate.complete(owner, lease, :preflight, self()) do
       deployment = deployment()
 
@@ -89,15 +92,72 @@ defmodule LatticeCarrierServer.Runtime do
       # a second read that could describe a later file.
       :persistent_term.put(
         @deployment_key,
-        Map.merge(deployment, %{
+        deployment
+        |> Map.merge(%{
           owner: owner,
           uncontrolled_routes?: extras?,
           manifest_path: Path.expand(path),
           manifest_digest: digest
         })
+        |> Map.merge(guard)
       )
 
       {:ok, children}
+    end
+  end
+
+  # With an operator root, the mutation owner confirms under its lock that the
+  # loaded bytes are still active and agree with the journal, and returns the
+  # incarnation marker an activation of this boot must present. Without one,
+  # this boot carries no marker and can never be activated.
+  defp boot_guard(nil, _path, _digest), do: {:ok, %{}}
+
+  defp boot_guard(root, path, digest) do
+    root = Path.expand(root)
+
+    loaded = Base.encode16(digest, case: :lower)
+
+    with :ok <- apart_from_operator(root, path),
+         {:ok, incarnation} <- boot_lock(root, Path.expand(path), loaded, @boot_busy_attempts) do
+      {:ok, %{operator_root: root, incarnation: incarnation}}
+    end
+  end
+
+  # The boot replaces the incarnation marker, so no deployment file may be, or
+  # alias, one of the operator's own files: by expanded path, or by the inode
+  # of an existing one (a symlink or hard link to it).
+  defp apart_from_operator(root, path) do
+    reserved =
+      Enum.map(~w(operator.lock operator-journal.json operator-incarnation), &Path.join(root, &1))
+
+    reserved_inodes = for file <- reserved, inode = inode(file), do: inode
+
+    deployed =
+      [path | Enum.flat_map(deployment().instances, &[&1.identity_file, &1.log_file])]
+      |> Enum.map(&Path.expand/1)
+
+    if Enum.any?(deployed, &(&1 in reserved or inode(&1) in reserved_inodes)),
+      do: {:error, :operator_path_collision},
+      else: :ok
+  end
+
+  defp inode(path) do
+    case File.stat(path) do
+      {:ok, %File.Stat{major_device: device, inode: inode}} -> {device, inode}
+      {:error, _} -> nil
+    end
+  end
+
+  # A short operator command (stage, journal commit) briefly holds the lock;
+  # retry only that refusal for a bounded time, then fail as any refusal does.
+  defp boot_lock(root, path, loaded, attempts) do
+    case Lock.boot(root, path, loaded) do
+      {:error, {:operator_refused, "operator_busy"}} when attempts > 1 ->
+        Process.sleep(@boot_busy_sleep)
+        boot_lock(root, path, loaded, attempts - 1)
+
+      other ->
+        other
     end
   end
 

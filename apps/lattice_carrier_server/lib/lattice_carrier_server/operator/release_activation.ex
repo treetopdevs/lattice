@@ -8,10 +8,14 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   against, may ask the Python mutation owner to replace that manifest with the
   staged candidate. The owner rechecks every byte and remains the only writer.
 
-  The owner's plan carries no gate binding: nothing yet stops a full
-  application restart while it runs. A seal lost by the time it returns is
-  reported, not hidden, and the journal then disagrees with the running
-  incarnation until the next controlled restart.
+  The plan carries the incarnation marker the sealed boot received from the
+  owner (`Runtime.prepare_owned/4` with an operator root), and the owner
+  refuses it unless that boot is still the latest controlled boot. A restart
+  that completed first wrote a new marker; one that begins while the owner
+  holds the lock refuses to boot. A boot that finds the candidate already
+  active under this pending record (the owner died between the replace and
+  the commit) records it activated itself, so no new seal is needed.
+  A release booted without an operator root has no marker and never activates.
 
   Activation does not reopen admission or restart a route: the sealed
   incarnation stays closed, and the new route set is served only after a full
@@ -25,7 +29,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   @spec activate(Path.t(), binary() | nil, ReleaseGate.owner(), map()) ::
           {:ok, map()} | {:error, term()}
   def activate(root, expected, owner, observation) do
-    with :ok <- sealed(owner, observation),
+    # One deployment snapshot supplies both the sealed owner and the marker,
+    # so a restart between the two can never lend this seal a newer boot's
+    # marker; it makes the captured one stale instead.
+    with {:ok, deployment} <- sealed(owner, observation),
+         {:ok, incarnation} <- guarded(root, deployment),
          %{attempt: attempt, evidence: %{manifest: manifest, logs: logs}} = observation.receipt,
          {:ok, ^expected} <- current(root),
          {:ok, %{"phase" => "carrier_pending"} = record} <- pending(expected),
@@ -43,11 +51,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
              attempt,
              %{path: manifest.manifest_path, sha256: digest},
              Enum.map(logs, &%{path: &1.path, sha256: &1.sha256}),
-             Journal.encode(next)
-           ),
-         # The owner holds no gate binding, so a restart while it ran would
-         # leave a new incarnation serving the replaced manifest's old bytes.
-         :ok <- same(sealed(owner, observation) == :ok, :release_seal_lost_during_activation) do
+             Journal.encode(next),
+             incarnation
+           ) do
       {:ok, next}
     else
       {:ok, _other} -> {:error, :stale_operator_intent}
@@ -61,11 +67,21 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   end
 
   defp sealed(owner, observation) do
-    with %{owner: ^owner} <- Runtime.deployment(),
+    with %{owner: ^owner} = deployment <- Runtime.deployment(),
          true <- ReleaseGate.sealed?(owner, observation) do
-      :ok
+      {:ok, deployment}
     else
       _ -> {:error, :release_not_sealed}
+    end
+  end
+
+  defp guarded(root, deployment) do
+    with %{operator_root: guarded_root, incarnation: incarnation} when is_binary(incarnation) <-
+           deployment,
+         true <- guarded_root == Path.expand(root) do
+      {:ok, incarnation}
+    else
+      _ -> {:error, :release_boot_unguarded}
     end
   end
 

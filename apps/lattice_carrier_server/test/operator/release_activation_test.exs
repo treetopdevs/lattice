@@ -10,6 +10,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     ReleaseActivation,
     ReleaseGate,
     ReleaseQuiesce,
+    Lock,
     ReleaseStopSeal,
     Staging
   }
@@ -20,6 +21,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
 
     on_exit(fn ->
       Application.stop(:lattice_carrier_server)
+      # The fixture root is gone by the time this restart runs.
+      Application.delete_env(:lattice_carrier_server, :operator_root)
 
       if previous,
         do: Application.put_env(:lattice_carrier_server, :manifest, previous),
@@ -267,8 +270,238 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert {:ok, ^raw} = Journal.read(f.root)
   end
 
-  defp drained(f, attempt \\ nil) do
+  test "a release booted without the operator root never activates", f do
+    {owner, observation} = sealed(f, nil, false)
+
+    assert {:error, :release_boot_unguarded} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    unchanged!(f)
+  end
+
+  test "a crash after the manifest replace reconciles the pending record at the next boot", f do
+    sealed(f)
+    # The owner's replace landed, then the whole carrier died before the
+    # journal commit; the restarted release must not serve the candidate
+    # under a record that still says carrier_pending.
+    File.write!(f.manifest, File.read!(f.candidate["path"]))
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+
+    assert Runtime.deployment().manifest_digest ==
+             Base.decode16!(f.candidate["sha256"], case: :lower)
+
+    assert {:ok, raw} = Journal.read(f.root)
+    assert raw == Journal.encode(Map.put(f.record, "phase", "activated"))
+  end
+
+  test "a boot reconcile still checks every staged artifact and refuses to boot", f do
+    sealed(f)
+    File.write!(f.manifest, File.read!(f.candidate["path"]))
+    File.write!(f.candidate["path"], File.read!(f.candidate["path"]) <> "\n")
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:error, _} = Application.ensure_all_started(:lattice_carrier_server)
+    assert Runtime.deployment() == nil
+    assert {:ok, journal} = Journal.read(f.root)
+    assert journal == f.journal
+  end
+
+  test "a boot refuses while an activation holds the operator lock", f do
+    sealed(f)
+    assert :ok = Application.stop(:lattice_carrier_server)
+    holder = hold_lock(f.root)
+
+    assert {:error, {:operator_refused, "operator_busy"}} =
+             Lock.boot(f.root, f.manifest, f.record["manifest_digest"])
+
+    assert {:error, _} = Application.ensure_all_started(:lattice_carrier_server)
+    assert Runtime.deployment() == nil
+
+    release_lock(holder)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+    assert Runtime.deployment().manifest_digest == :crypto.hash(:sha256, f.active_manifest)
+  end
+
+  test "an owner that starts after a restart refuses the old incarnation", f do
+    {_owner, observation} = sealed(f)
+    logs = Enum.map(observation.receipt.evidence.logs, &%{path: &1.path, sha256: &1.sha256})
+    stale = Runtime.deployment().incarnation
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+    refute Runtime.deployment().incarnation == stale
+
+    activated = Journal.encode(Map.put(f.record, "phase", "activated"))
+    check = %{path: f.manifest, sha256: f.record["manifest_digest"]}
+
+    assert {:error, {:operator_refused, "stale_operator_incarnation"}} =
+             apply(Lock, :activate, [
+               f.root,
+               f.journal,
+               f.request.attempt,
+               check,
+               logs,
+               activated,
+               stale
+             ])
+
+    unchanged!(f)
+  end
+
+  test "a boot refuses a deployment file that aliases the incarnation marker", f do
+    {:ok, manifest} = Manifest.load(f.manifest)
+    [instance | _] = manifest.instances
+
+    alias_root =
+      Path.join(Path.dirname(f.root), "alias-operator-root-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(alias_root)
+    on_exit(fn -> File.rm_rf(alias_root) end)
+    File.chmod!(alias_root, 0o700)
+    File.ln!(instance.log_file, Path.join(alias_root, "operator-incarnation"))
+    log = File.read!(instance.log_file)
+
     Application.put_env(:lattice_carrier_server, :manifest, f.manifest)
+    Application.put_env(:lattice_carrier_server, :operator_root, alias_root)
+
+    assert {:error, reason} = Application.ensure_all_started(:lattice_carrier_server)
+    assert inspect(reason) =~ "operator_path_collision"
+    assert File.read!(instance.log_file) == log
+  end
+
+  test "a boot whose loaded manifest was replaced under it refuses", f do
+    {owner, observation} = sealed(f)
+    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    {:ok, activated} = Journal.read(f.root)
+
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             apply(Lock, :boot, [f.root, f.manifest, f.record["manifest_digest"]])
+
+    assert {:ok, ^activated} = Journal.read(f.root)
+  end
+
+  test "an activated record over the pre-activation bytes refuses to boot", f do
+    {owner, observation} = sealed(f)
+    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    assert :ok = Application.stop(:lattice_carrier_server)
+    File.write!(f.manifest, f.active_manifest)
+
+    old_digest = Base.encode16(:crypto.hash(:sha256, f.active_manifest), case: :lower)
+
+    assert {:error, {:operator_refused, "stale_operator_intent"}} =
+             Lock.boot(f.root, f.manifest, old_digest)
+
+    assert {:error, _} = Application.ensure_all_started(:lattice_carrier_server)
+    assert Runtime.deployment() == nil
+  end
+
+  test "a boot over an already activated record with its candidate active serves it", f do
+    {owner, observation} = sealed(f)
+    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    {:ok, activated} = Journal.read(f.root)
+    stale = Runtime.deployment().incarnation
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+
+    assert Runtime.deployment().manifest_digest ==
+             Base.decode16!(f.candidate["sha256"], case: :lower)
+
+    assert {:ok, ^activated} = Journal.read(f.root)
+    assert is_binary(Runtime.deployment().incarnation)
+    refute Runtime.deployment().incarnation == stale
+  end
+
+  test "a briefly held operator lock lets the boot succeed after a bounded retry", f do
+    sealed(f)
+    assert :ok = Application.stop(:lattice_carrier_server)
+    holder = hold_lock(f.root)
+    starter = Task.async(fn -> Application.ensure_all_started(:lattice_carrier_server) end)
+    Process.sleep(1_500)
+    refute Task.yield(starter, 0)
+    release_lock(holder)
+
+    assert {:ok, _} = Task.await(starter, 15_000)
+    assert Runtime.deployment().manifest_digest == :crypto.hash(:sha256, f.active_manifest)
+  end
+
+  test "an activation root other than the boot's operator root never activates", f do
+    {owner, observation} = sealed(f)
+    other = Path.join(Path.dirname(f.root), "other-root-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(other)
+    File.chmod!(other, 0o700)
+    on_exit(fn -> File.rm_rf(other) end)
+
+    assert {:error, :release_boot_unguarded} =
+             ReleaseActivation.activate(other, f.journal, owner, observation)
+
+    unchanged!(f)
+  end
+
+  test "a missing incarnation marker never activates", f do
+    {owner, observation} = sealed(f)
+    File.rm!(Path.join(f.root, "operator-incarnation"))
+
+    assert {:error, {:operator_refused, "stale_operator_incarnation"}} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    unchanged!(f)
+  end
+
+  test "a malformed incarnation reply is refused, never trusted" do
+    dir = Path.join(System.tmp_dir!(), "fake-py-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf(dir) end)
+    stub = Path.join(dir, "python3")
+    previous_path = System.get_env("PATH")
+    on_exit(fn -> System.put_env("PATH", previous_path) end)
+
+    replies = [
+      ~s({"incarnation":"#{String.duplicate("g", 64)}"}),
+      ~s({"incarnation":"#{String.duplicate("a", 64)}","x":1}),
+      ~s({"incarnation":"#{String.duplicate("a", 63)}"})
+    ]
+
+    for reply <- replies do
+      File.write!(stub, "#!/bin/sh\nread line\nprintf '%s\\n' '#{reply}'\n")
+      File.chmod!(stub, 0o755)
+      System.put_env("PATH", dir <> ":" <> previous_path)
+
+      assert {:error, :invalid_operator_response} =
+               Lock.boot(dir, Path.join(dir, "m.json"), String.duplicate("0", 64))
+    end
+  end
+
+  defp hold_lock(root) do
+    python = System.find_executable("python3")
+
+    script =
+      "import fcntl,os,sys\n" <>
+        "fd=os.open(sys.argv[1],os.O_RDWR|os.O_CREAT,0o600)\n" <>
+        "fcntl.flock(fd,fcntl.LOCK_EX)\nprint('held',flush=True)\nsys.stdin.readline()\n"
+
+    port =
+      Port.open({:spawn_executable, python}, [
+        :binary,
+        :exit_status,
+        {:line, 64},
+        args: ["-c", script, Path.join(root, "operator.lock")]
+      ])
+
+    assert_receive {^port, {:data, {:eol, "held"}}}, 5_000
+    port
+  end
+
+  defp release_lock(port) do
+    Port.command(port, "\n")
+    assert_receive {^port, {:exit_status, 0}}, 5_000
+  end
+
+  defp drained(f, attempt \\ nil, guarded \\ true) do
+    Application.put_env(:lattice_carrier_server, :manifest, f.manifest)
+
+    if guarded,
+      do: Application.put_env(:lattice_carrier_server, :operator_root, f.root),
+      else: Application.delete_env(:lattice_carrier_server, :operator_root)
+
     assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
     deployment = Runtime.deployment()
     {:ok, manifest} = Manifest.load(f.manifest)
@@ -288,8 +521,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     {deployment.owner, receipt}
   end
 
-  defp sealed(f, attempt \\ nil) do
-    {owner, receipt} = drained(f, attempt)
+  defp sealed(f, attempt \\ nil, guarded \\ true) do
+    {owner, receipt} = drained(f, attempt, guarded)
     assert {:ok, observation} = ReleaseStopSeal.stop_and_seal(owner, receipt)
     {owner, observation}
   end

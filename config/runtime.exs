@@ -20,6 +20,25 @@ case System.get_env("LATTICE_CARRIER_MANIFEST") do
     config :lattice_carrier_server, manifest: carrier_manifest
 end
 
+# The operator root (plan R11b) whose mutation owner a controlled boot runs
+# under: it refuses to boot while an activation holds the operator lock,
+# reconciles the journal with the loaded manifest, and issues the incarnation
+# marker that activation requires. Without it the release never activates.
+case System.get_env("LATTICE_CARRIER_OPERATOR_ROOT") do
+  nil ->
+    :ok
+
+  operator_root ->
+    # Same shape as the mutation owner's directory(): absolute and normalized,
+    # so the boot never resolves it against the process cwd.
+    if operator_root == "" or Path.type(operator_root) != :absolute or
+         Path.expand(operator_root) != operator_root do
+      raise "LATTICE_CARRIER_OPERATOR_ROOT must be a non-empty absolute normalized path"
+    end
+
+    config :lattice_carrier_server, operator_root: operator_root
+end
+
 # Signing material for the Township endpoint. Nothing is committed: production
 # supplies SECRET_KEY_BASE and LIVE_VIEW_SIGNING_SALT from the environment,
 # each required independently — one being absent must never silently suppress

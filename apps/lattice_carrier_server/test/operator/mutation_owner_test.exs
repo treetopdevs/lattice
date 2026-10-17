@@ -56,7 +56,8 @@ defmodule LatticeCarrierServer.Operator.MutationOwnerTest do
       record: nil,
       attempt: attempt,
       checks: [%{path: manifest, sha256: Journal.digest("manifest")}],
-      artifacts: [%{sha256: Journal.digest(bytes), bytes: Base.encode64(bytes)}]
+      artifacts: [%{sha256: Journal.digest(bytes), bytes: Base.encode64(bytes)}],
+      incarnation: nil
     }
 
     port =

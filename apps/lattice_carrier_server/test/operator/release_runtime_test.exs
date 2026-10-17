@@ -48,6 +48,32 @@ defmodule LatticeCarrierServer.Operator.ReleaseRuntimeTest do
     :ok
   end
 
+  test "LATTICE_CARRIER_OPERATOR_ROOT reaches :operator_root and must be absolute" do
+    names = ~w(LATTICE_CARRIER_OPERATOR_ROOT LATTICE_CARRIER_MANIFEST RELEASE_ROOT)
+    previous = Map.new(names, &{&1, System.get_env(&1)})
+
+    on_exit(fn ->
+      for {name, value} <- previous,
+          do: if(value, do: System.put_env(name, value), else: System.delete_env(name))
+    end)
+
+    # Carrier-release mode keeps the Township endpoint secrets out of the read.
+    System.put_env("RELEASE_ROOT", "/srv/release")
+    System.put_env("LATTICE_CARRIER_MANIFEST", "/srv/manifest.json")
+    path = Path.expand("../../../../config/runtime.exs", __DIR__)
+    read = fn -> Config.Reader.read!(path, env: :prod) end
+
+    System.put_env("LATTICE_CARRIER_OPERATOR_ROOT", "/srv/operator")
+    assert read.()[:lattice_carrier_server][:operator_root] == "/srv/operator"
+    System.delete_env("LATTICE_CARRIER_OPERATOR_ROOT")
+    refute Keyword.has_key?(read.()[:lattice_carrier_server], :operator_root)
+
+    for bad <- ["", "relative/root", "/srv/../operator", "/srv/operator/"] do
+      System.put_env("LATTICE_CARRIER_OPERATOR_ROOT", bad)
+      assert_raise RuntimeError, ~r/OPERATOR_ROOT/, read
+    end
+  end
+
   @tag :tmp_dir
   test "owned runtime drains exact logs, retry is identical, subsequent relay and inner bind refuse",
        %{tmp_dir: dir} do

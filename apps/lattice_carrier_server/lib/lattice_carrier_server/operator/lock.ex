@@ -25,12 +25,25 @@ defmodule LatticeCarrierServer.Operator.Lock do
 
   @doc """
   Replace the checked active manifest with the pending record's staged
-  candidate, while every sealed log still holds its checked bytes.
+  candidate, while every sealed log still holds its checked bytes and only
+  while `incarnation` is still the latest controlled boot's.
   """
-  @spec activate(Path.t(), binary(), binary(), map(), [map()], binary()) ::
+  @spec activate(Path.t(), binary(), binary(), map(), [map()], binary(), String.t()) ::
           :ok | {:error, term()}
-  def activate(root, expected, attempt, active_manifest, logs, record) do
-    run(root, plan("activate", expected, record, attempt, [active_manifest | logs], nil), nil)
+  def activate(root, expected, attempt, active_manifest, logs, record, incarnation) do
+    plan = plan("activate", expected, record, attempt, [active_manifest | logs], nil)
+    run(root, %{plan | incarnation: incarnation}, nil)
+  end
+
+  @doc """
+  The controlled boot's step under the operator lock, after the manifest at
+  `manifest_path` was loaded with lowercase-hex digest `loaded` and before any
+  route starts: refuses while another plan holds the lock, reconciles the
+  journal with the loaded bytes, and returns the new incarnation marker.
+  """
+  @spec boot(Path.t(), Path.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  def boot(root, manifest_path, loaded) do
+    run(root, plan("boot", nil, nil, nil, [%{path: manifest_path, sha256: loaded}], nil), nil)
   end
 
   defp plan(kind, expected, record, attempt, checks, artifacts) do
@@ -41,7 +54,8 @@ defmodule LatticeCarrierServer.Operator.Lock do
       record: record,
       attempt: attempt,
       checks: checks,
-      artifacts: artifacts
+      artifacts: artifacts,
+      incarnation: nil
     }
   end
 
@@ -75,6 +89,9 @@ defmodule LatticeCarrierServer.Operator.Lock do
 
           {:ok, %{"ok" => true}} ->
             exited(port)
+
+          {:ok, %{"incarnation" => incarnation}} ->
+            with :ok <- exited(port), do: {:ok, incarnation}
 
           {:error, _} = error ->
             error
@@ -111,6 +128,12 @@ defmodule LatticeCarrierServer.Operator.Lock do
 
           {:ok, value} when value in [%{"ok" => true}, %{"staged" => true}] ->
             {:ok, value}
+
+          {:ok, %{"incarnation" => <<_::binary-size(64)>> = marker} = value}
+          when map_size(value) == 1 ->
+            if marker =~ ~r/\A[0-9a-f]{64}\z/,
+              do: {:ok, value},
+              else: {:error, :invalid_operator_response}
 
           _ ->
             {:error, :invalid_operator_response}
