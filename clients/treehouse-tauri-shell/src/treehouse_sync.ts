@@ -32,7 +32,11 @@ export interface SyncTreehouseOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Pull rounds allowed while a merged set still has open dependencies. */
   maxPullRounds?: number;
-  /** Deadline for the dial and for each relay request. A silent relay fails the route instead of hanging. */
+  /**
+   * Outer deadline for the dial and for each relay method call. The carrier client applies its own
+   * 10 s dial and 30 s per-request bounds underneath (row 196), so this can shorten but not lengthen
+   * them; a silent relay fails the route with whichever bound expires first.
+   */
   requestTimeoutMs?: number;
 }
 

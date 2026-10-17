@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import "./carrier_pagination";
-import { CarrierWebSocketClient, connectCarrierWebSocket } from "../src/index";
+import { CarrierWebSocketClient, carrierDialTimeoutMs, carrierRequestTimeoutMs, connectCarrierWebSocket, } from "../src/index";
 const serverNonce = Buffer.alloc(32, 7).toString("base64url");
 class ManualCarrierWebSocket {
     sent = [];
@@ -466,6 +466,145 @@ for (const [WebSocketImpl, error] of [
     assert.deepEqual(socket.sent, []);
 }
 console.log("\x1b[32m✓ TypeScript carrier availability feed checks passed\x1b[0m");
+// Row 196 (D3): every carrier-client await is bounded inside this library, so a relay that accepts
+// the socket and then stalls can hold neither a dial nor a request open forever.
+console.log("\n▸ TypeScript carrier deadlines (row 196)");
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Node's view of live timers: a bound that is cleared on reply or on a completed dial leaves none.
+const activeTimeouts = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
+const connectArgs = {
+    url: "ws://carrier.test/carrier",
+    localRealm: "resident",
+    replica: "replica:test",
+    signer: { publicKey: new Uint8Array(32).fill(1), sign: () => new Uint8Array(64) },
+    expectedPeerRealm: "town-node",
+    expectedPeerPubkey: new Uint8Array(32).fill(2),
+    verifier: { verify: () => true },
+};
+assert.equal(carrierDialTimeoutMs, 10_000, "D3 pins the dial bound at 10 s");
+assert.equal(carrierRequestTimeoutMs, 30_000, "D3 pins the request bound at 30 s");
+{
+    // A socket that never opens: the dial bound closes it and rejects the connect.
+    let instance = null;
+    const NeverOpensWebSocket = class extends ManualCarrierWebSocket {
+        constructor(_url) {
+            super();
+            instance = this;
+        }
+    };
+    await assert.rejects(() => connectCarrierWebSocket({ ...connectArgs, webSocket: NeverOpensWebSocket, dialTimeoutMs: 20 }), /carrier connect timeout/);
+    assert.ok(instance);
+    assert.equal(instance.closed, true, "an expired dial must close its socket");
+}
+{
+    // The nonce arrives but the challenge is never answered: still the dial bound, not the request bound,
+    // because the handshake request is part of the dial.
+    const NonceThenSilentWebSocket = nonceOnlyWebSocket({
+        type: "carrier_nonce",
+        nonce: serverNonce,
+        wire_version: 1,
+        session_version: 2,
+    });
+    await assert.rejects(() => connectCarrierWebSocket({
+        ...connectArgs,
+        webSocket: NonceThenSilentWebSocket,
+        dialTimeoutMs: 20,
+        requestTimeoutMs: 10_000,
+    }), /carrier connect timeout/);
+    const socket = NonceThenSilentWebSocket.lastInstance();
+    assert.ok(socket);
+    assert.equal(socket.closed, true);
+    assert.equal(socket.sent.length, 1, "the challenge was sent before the dial expired");
+    assert.equal(socket.sent[0].type, "carrier_challenge");
+}
+{
+    // A request the relay never answers: the request bound fails the socket closed and rejects it, and
+    // later requests see the closed client rather than a dangling in-flight request.
+    const socket = new ManualCarrierWebSocket();
+    const client = new CarrierWebSocketClient(socket, { requestTimeoutMs: 20 });
+    await assert.rejects(client.advertise(), /carrier request timeout/);
+    assert.equal(socket.closed, true, "an expired request must fail the socket closed");
+    await assert.rejects(client.advertise(), /carrier websocket closed/);
+    assert.deepEqual(socket.sent, [{ type: "frontier" }]);
+}
+{
+    // A subscription the relay never acknowledges is a request like any other.
+    const socket = new ManualCarrierWebSocket();
+    const client = new CarrierWebSocketClient(socket, { requestTimeoutMs: 20 });
+    await assert.rejects(client.subscribeAvailability(), /carrier request timeout/);
+    assert.equal(socket.closed, true);
+}
+{
+    // An answered request leaves the socket open past the bound: the expiry checks that the same request
+    // is still pending, and the timer is cleared on reply.
+    const socket = new ManualCarrierWebSocket();
+    const client = new CarrierWebSocketClient(socket, { requestTimeoutMs: 20 });
+    const advertised = client.advertise();
+    socket.receive({ type: "frontier_result", ids: ["op-1"] });
+    assert.deepEqual(await advertised, ["op-1"]);
+    // Checked before the bound could have fired on its own: an uncleared timer is still armed here.
+    assert.equal(activeTimeouts(), 0, "an answered request leaves no timer running");
+    await sleep(40);
+    assert.equal(socket.closed, false, "an answered request must not close a healthy socket later");
+    const again = client.advertise();
+    socket.receive({ type: "frontier_result", ids: ["op-2"] });
+    assert.deepEqual(await again, ["op-2"]);
+}
+{
+    // A send that throws synchronously rejects at once and leaves no timer behind.
+    const socket = new ManualCarrierWebSocket();
+    const client = new CarrierWebSocketClient(socket, { requestTimeoutMs: 20 });
+    socket.failNextSend(new Error("send failed"));
+    await assert.rejects(client.advertise(), /send failed/);
+    await sleep(40);
+    assert.equal(socket.closed, false);
+}
+{
+    // A completed dial disarms the dial timer, and the connect option reaches the client's requests.
+    let instance = null;
+    const HelloWebSocket = class extends ManualCarrierWebSocket {
+        constructor(_url) {
+            super();
+            instance = this;
+            queueMicrotask(() => {
+                this.open();
+                this.receive({ type: "carrier_nonce", nonce: serverNonce, wire_version: 1, session_version: 2 });
+            });
+        }
+        send(data) {
+            super.send(data);
+            const envelope = JSON.parse(data);
+            if (envelope.type === "carrier_challenge") {
+                queueMicrotask(() => this.receive({
+                    type: "carrier_hello",
+                    realm: "town-node",
+                    pubkey: Buffer.alloc(32, 2).toString("base64"),
+                    signature: Buffer.alloc(64).toString("base64"),
+                }));
+            }
+        }
+    };
+    const client = await connectCarrierWebSocket({
+        ...connectArgs,
+        webSocket: HelloWebSocket,
+        dialTimeoutMs: 20,
+        requestTimeoutMs: 30,
+    });
+    const socket = instance;
+    assert.equal(activeTimeouts(), 0, "a completed dial leaves no timer running");
+    await sleep(40);
+    assert.equal(socket.closed, false, "a completed dial must not be closed by its own expired bound");
+    await assert.rejects(client.advertise(), /carrier request timeout/);
+    assert.equal(socket.closed, true);
+}
+for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
+    // D3 bounds every await: the bound can be shortened or lengthened, never removed. A delay past the
+    // signed 32-bit native timer limit would fire at once, so it is refused too.
+    assert.throws(() => new CarrierWebSocketClient(new ManualCarrierWebSocket(), { requestTimeoutMs: bad }), /carrier request timeout must be a positive number of milliseconds at most/);
+    await assert.rejects(() => connectCarrierWebSocket({ ...connectArgs, webSocket: ManualCarrierWebSocket, dialTimeoutMs: bad }), /carrier dial timeout must be a positive number of milliseconds at most/);
+    await assert.rejects(() => connectCarrierWebSocket({ ...connectArgs, webSocket: ManualCarrierWebSocket, requestTimeoutMs: bad }), /carrier request timeout must be a positive number of milliseconds at most/);
+}
+console.log("\x1b[32m✓ TypeScript carrier deadline checks passed\x1b[0m");
 async function establishSubscription(client, socket, generation) {
     const subscribing = client.subscribeAvailability();
     socket.receive({

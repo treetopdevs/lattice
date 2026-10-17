@@ -4,6 +4,24 @@ import { WIRE_REPORT_REASONS, isWireVocabularyName } from "./wire_vocabulary";
 import { continuationFamily } from "./authority";
 import { continuationProfileFromCarrierTerm, continuationCertificateFromCarrierTerm } from "./continuation";
 import { integrate } from "./sync";
+/**
+ * Row 196 (D3, 2026-10-14): the dial and every request/response round trip are bounded at this one
+ * boundary. A dial gets 10 s and each request 30 s; neither can be disabled, only shortened or
+ * lengthened. The bound is per request, so a paged `advertise()` or `pull()` is bounded per page, and
+ * a subscription's `next()` waits for pushed hints until the socket closes or fails, by design.
+ */
+export const carrierDialTimeoutMs = 10_000;
+export const carrierRequestTimeoutMs = 30_000;
+// Native timers take a signed 32-bit delay; a larger one fires at once in Node and browsers, which
+// would turn a "longer" bound into no bound.
+const maxCarrierTimeoutMs = 2_147_483_647;
+function carrierTimeoutMs(value, fallback, label) {
+    const ms = value ?? fallback;
+    if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0 || ms > maxCarrierTimeoutMs) {
+        throw new Error(`carrier ${label} timeout must be a positive number of milliseconds at most ${maxCarrierTimeoutMs}`);
+    }
+    return ms;
+}
 export function carrierDelegationsFromFrames(frames) {
     return frames.flatMap((frame) => carrierDelegationsFromTerm(frame.body));
 }
@@ -335,13 +353,20 @@ export async function verifyCarrierHello(challenge, hello, expectedRealm, expect
     };
 }
 export async function connectCarrierWebSocket(opts) {
+    // Validate both bounds before any socket exists, so a bad option never leaves one dangling.
+    const dialTimeoutMs = carrierTimeoutMs(opts.dialTimeoutMs, carrierDialTimeoutMs, "dial");
+    const clientOptions = {
+        requestTimeoutMs: carrierTimeoutMs(opts.requestTimeoutMs, carrierRequestTimeoutMs, "request"),
+    };
     const WebSocketImpl = opts.webSocket ?? defaultWebSocket();
     const socket = new WebSocketImpl(opts.url);
-    const client = new CarrierWebSocketClient(socket);
+    const client = new CarrierWebSocketClient(socket, clientOptions);
     const wireVersion = opts.wireVersion ?? carrierOpWireVersion;
     const sessionVersion = opts.sessionVersion ?? carrierSessionVersion;
     const serverNoncePromise = client.receiveServerNonce(wireVersion, sessionVersion);
-    // A server that never answers would otherwise hold the handshake open forever.
+    // A server that never answers would otherwise hold the handshake open forever: the caller may abort,
+    // and the dial deadline bounds it regardless. Both race the handshake, and either loser closes the
+    // socket below.
     let onAbort = null;
     const aborted = new Promise((_resolve, reject) => {
         if (opts.signal === undefined)
@@ -353,6 +378,11 @@ export async function connectCarrierWebSocket(opts) {
             opts.signal.addEventListener("abort", onAbort, { once: true });
     });
     aborted.catch(() => undefined);
+    let dialTimer;
+    const dialExpired = new Promise((_resolve, reject) => {
+        dialTimer = setTimeout(() => reject(new Error("carrier connect timeout")), dialTimeoutMs);
+    });
+    dialExpired.catch(() => undefined);
     const handshake = async () => {
         const [, serverNonce] = await Promise.all([waitForOpen(socket), serverNoncePromise]);
         const challenge = carrierChallenge(opts.localRealm, opts.replica, {
@@ -364,7 +394,7 @@ export async function connectCarrierWebSocket(opts) {
         await verifyCarrierHello(challenge, hello, opts.expectedPeerRealm, opts.expectedPeerPubkey, opts.verifier);
     };
     try {
-        await Promise.race([handshake(), aborted]);
+        await Promise.race([handshake(), aborted, dialExpired]);
         return client;
     }
     catch (error) {
@@ -372,6 +402,7 @@ export async function connectCarrierWebSocket(opts) {
         throw error;
     }
     finally {
+        clearTimeout(dialTimer);
         if (onAbort !== null)
             opts.signal?.removeEventListener("abort", onAbort);
     }
@@ -461,8 +492,10 @@ export class CarrierWebSocketClient {
     pendingRequest = null;
     availabilityRoute = null;
     closed = false;
-    constructor(socket) {
+    requestTimeoutMs;
+    constructor(socket, options = {}) {
         this.socket = socket;
+        this.requestTimeoutMs = carrierTimeoutMs(options.requestTimeoutMs, carrierRequestTimeoutMs, "request");
         socket.addEventListener("message", (event) => this.receive(event.data));
         socket.addEventListener("error", (event) => this.failClient(event instanceof Error ? event : new Error("carrier websocket error")));
         socket.addEventListener("close", () => {
@@ -628,7 +661,20 @@ export class CarrierWebSocketClient {
                 }
             }
         });
-        const decoded = await response;
+        // One request is in flight at a time, so a reply that never comes would pin every later call. On
+        // expiry the socket fails closed rather than merely rejecting: a reply arriving after the deadline
+        // could otherwise be matched to the next request.
+        const timer = setTimeout(() => {
+            if (this.pendingRequest === pending)
+                this.failClient(new Error("carrier request timeout"));
+        }, this.requestTimeoutMs);
+        let decoded;
+        try {
+            decoded = await response;
+        }
+        finally {
+            clearTimeout(timer);
+        }
         if (hasType(decoded, "error"))
             throw new Error(`carrier peer error: ${String(decoded.reason)}`);
         return decoded;
