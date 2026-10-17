@@ -428,7 +428,11 @@ async function admitAndGrant() {
           <code>{{ short(route.replica) }}</code> ({{ route.kind }}):
           {{ route.connectionLabel }}<br />Waiting for the relay:
           {{ route.pending }}<br />Acknowledged by the relay: {{ route.acked
-          }}<br />{{ route.holdsRelayLabel }}<br /><span class="muted">{{
+          }}<br />{{ route.holdsRelayLabel }}<br /><template
+            v-for="[id, reason] in route.refused"
+            :key="id"
+            >Refused by the relay: <code>{{ short(id) }}</code> ({{ reason }})<br
+          /></template><span class="muted">{{
             route.message
           }}</span>
         </li>

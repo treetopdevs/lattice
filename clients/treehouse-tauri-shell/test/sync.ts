@@ -156,6 +156,23 @@ async function founder(trace: string[] = []) {
   console.log("PASS a relay that later accepts the quarantined frame acks it on the next sync");
 }
 
+// ---- 1c2. a refusal naming an id the round did not submit, or one the relay lists, is ignored ----------
+{
+  const f = await founder();
+  const relays = new Relays();
+  const kept = await f.app.command(f.thread, { command: "post", text: "kept" });
+  const relay = relays.for(f.thread);
+  relay.lie = { quarantined: [[kept, "bad_signature"]], rejected: [["not-submitted", "wrong_replica"]] };
+  const route = f.app.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  const result = await syncTreehouseRoute(f.app, route, relays.options());
+  assert(relay.log.has(kept), "the relay accepted the post its report also calls quarantined");
+  assert.deepEqual(result.rejected, [], "an id this round never submitted is not a refusal");
+  assert.deepEqual(result.quarantined, [], "a refusal the closing advertise contradicts is dropped");
+  assert.deepEqual(result.pendingIds, []);
+  assert(profileOf(f.native, f.thread).acked.includes(kept));
+  console.log("PASS refusals bind to this round's submitted frames and yield to the closing advertise");
+}
+
 // ---- 1d. a profile saved before quarantined ids stopped acking is not trusted -----------------------
 // `acked` never shrinks, so a legacy ack of a quarantined frame stays saved; the relay's live verdict still
 // reports the frame pending and refused, and a relay that later accepts it settles it.

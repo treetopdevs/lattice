@@ -1,18 +1,9 @@
 # Plan 195 and 197: Name every relay submit outcome once (own quarantined frames stop acking; a submit error keeps the pass's progress)
 
-> **Executor instructions**: Follow this plan step by step. Run every
-> verification command and confirm the expected result before moving to the
-> next step. If anything in the "STOP conditions" section occurs, stop and
-> report — do not improvise. Two builders may split this plan (195 first, then
-> 197; they share `treehouse_sync.ts` and `fake_relay.ts`). The `plans/README.md`
-> status cells for rows 195 and 197 are the last step of the builder who finishes
-> each row — unless a reviewer dispatched you and told you they maintain the index.
->
-> **Drift check (run first)**: `git diff --stat 50e6aec34..HEAD -- clients/lattice-client/src/carrier.ts clients/lattice-client/dist clients/lattice-client/test/carrier_relay_sync.ts clients/lattice-client/test/carrier_relay.ts clients/treehouse-tauri-shell/src/treehouse_sync.ts clients/treehouse-tauri-shell/src/treehouse_feed.ts clients/treehouse-tauri-shell/src/treehouse_panel_sync.ts clients/treehouse-tauri-shell/test/support/fake_relay.ts clients/treehouse-tauri-shell/test/sync.ts clients/treehouse-tauri-shell/test/feed.ts clients/treehouse-tauri-shell/test/sync_panel.ts apps/lattice_carrier_server/lib apps/lattice_core/lib/lattice/log.ex apps/lattice_core/lib/lattice/sync.ex`
-> If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition. The row 195 and 197 line numbers in
-> `plans/README.md` are stale; the numbers below were read at `50e6aec34`.
+> **Executor instructions**: Follow this plan step by step and run every verification command. If a
+> STOP condition occurs, stop and report. Rows 195 and 197 share `treehouse_sync.ts` and `fake_relay.ts`, so
+> 195 lands first. Line numbers were read at `50e6aec34`; the pre-change line map is in this file's history
+> at `afe764eb4` and in PR #131.
 
 ## Status
 
@@ -190,51 +181,9 @@ not the one saved for the route" and kills the subscription; a read-only realm i
 serves pulls, and should keep receiving hints. Why `unavailable` is not left on the backoff: redialing a
 healthy socket cannot fix the relay's disk, and the 5 s cadence is the bug the row names.
 
-## Current state
-
-- `clients/lattice-client/src/carrier.ts`
-  - `request()` (1029-1063): an `error` reply throws `new Error("carrier peer error: " + reason)` (1062).
-  - `relay()` (953-957) returns the decoded report; `decodePushReport` (2449-2456) refuses reasons outside
-    `WIRE_REPORT_REASONS`.
-  - `syncCarrierOnce` (1206-1288): advertise, pull, verify pulled frames, filter unverifiable candidates
-    (1246-1257), `submitCarrierFrames`, returns `{ ops, pulledFrames, pulledOps, pushedFrames, pushReport,
-    peerReportedFrameIds, unverifiableFrameIds }`. `peerReportedFrameIds` already excludes the quarantined
-    bucket (1272-1282).
-  - `submitCarrierFrames` (1298-1337): relay mode submits in stable causal order; `carrierRateLimited`
-    (1339-1341) compares the message string; any other error from `client.relay` rethrows (1322-1325),
-    discarding `pushedFrames`/`pushReport`/`confirmedDuplicateIds` gathered so far.
-  - Callers of `syncCarrierOnce`: `treehouse_sync.ts:213` (relay mode), `township_sync.ts:206` (push by
-    default, relay when configured), and the `lattice-client` tests. `submitCarrierFrames` is not exported.
-- `clients/treehouse-tauri-shell/src/treehouse_sync.ts` (`syncTreehouseRoute`, 147-302): candidates are
-  outbox frames the relay did not list and `deliveredNow` does not hold (205-209); the ack set is
-  `accepted ∪ quarantined`, restricted to submitted candidates (226-235); `deliveredNow` is fed only by acks
-  (251); after the commit the loop breaks when nothing remains, stalls when `submitted.size <
-  candidates.length` (262-279), and otherwise breaks (everything submitted); the closing advertise acks
-  late ids and computes `matchesRelay = sameSet(heldIds, frontier)` (285-297). The comments at 48-49 and
-  141-145 say quarantined acks.
-- `clients/treehouse-tauri-shell/src/treehouse_feed.ts`: `record()` stores only `matchesRelay`
-  (246-262); `refreshAll` ignores the sync result and writes `"Relay subscription is live."` (454-464); a
-  throw out of `request(replica)` ends the session and `runWorker` reconnects after
-  `reconnectDelay(attempt++)` = 100, 250, 500, 1000, 2000, 5000 ms, resetting only after a completed sync
-  (`synced()`, 461); `refusal()` (98-117) is a closed list of permanent errors.
-- `clients/treehouse-tauri-shell/src/treehouse_panel_sync.ts`: `describeSyncStatus` maps feed state to the
-  panel's route rows and text (47-82).
-- `clients/treehouse-tauri-shell/test/support/fake_relay.ts` (the in-process relay): `stored` ids are
-  advertised (66) and `forced: "quarantined"` stores the op and reports reason `"authority"` (118-121); an
-  invalid signature is stored too (107-110); `deliver` can throw only `rate_limited` (84-87).
-- `clients/treehouse-tauri-shell/test/sync.ts:70-100` (case 1) asserts the quarantined id is acked (84) and
-  `matchesRelay === false` (92); `test/feed.ts:331-350` (case 4b) shows the pattern for backoff
-  assertions through `Harness.delays`; `test/sync_panel.ts:204-210` builds feed-state literals.
-- `clients/lattice-client/test/carrier_relay_sync.ts:255-307` pins rate-limit partial results and that
-  `unavailable` rejects with `/carrier peer error: unavailable/`; `test/carrier_relay.ts:84-86` pins
-  `read_only` as a rejection with `/carrier peer error: read_only/`.
-- `clients/lattice-client/dist` is committed (including `dist/test`); CI rebuilds it and fails on drift
-  (`.github/workflows/flagship.yml:289-296`); the shell consumes it through `file:../lattice-client`.
-
 ## Commands you will need
 
-Homebrew node is broken on the operator machine; use nvm's Node 22 and each package's own
-`node_modules/.bin`. A fresh worktree needs `MIX_ENV=test` compiled before the real-socket gate.
+Use nvm's Node 22; a fresh worktree needs `MIX_ENV=test` compiled before the real-socket gate.
 
 ```bash
 export PATH="$HOME/.nvm/versions/node/v22.15.1/bin:$PATH"
@@ -251,17 +200,7 @@ cd ../lattice-client && npm run carrier:township:live
 cd ../township-tauri-shell && npm run frontend:contract
 ```
 
-`clients/treehouse-tauri-shell/test/feed.ts:233` ("pending 2 !== 0") is a known CPU-load flake; rerun once
-on an idle machine before treating it as a regression.
-
 ## Scope
-
-**One PR or two.** Two, in order. PR A (row 195) is shell-only: no `lattice-client` edit, no `dist`, no
-second-review trigger beyond the ordinary adversarial review; it works against the current `dist`, because
-with no error thrown `syncCarrierOnce` already returns a report for every submitted frame. PR B (row 197)
-starts from PR A's landed `treehouse_sync.ts` and `fake_relay.ts`; it carries `carrier.ts`, the `dist`
-rebuild and the rule 3 second independent review (Codex Sol). Steps 1, 2, 4, 5 and the (a2)/(c)/(d) tests
-belong to PR B; step 3's **195** bullets, step 6's (a1) and the (b) tests belong to PR A.
 
 Only these files change. Nothing under `apps/` or `.github/`. No new dependency.
 
@@ -318,8 +257,8 @@ Only these files change. Nothing under `apps/` or `.github/`. No new dependency.
      the reason. `refreshAll` stops overwriting the message when `submitStopped` is set.
    - No change to `refusal()`, `reconnectDelay`, or `runWorker`: a stop reply no longer throws, so no
      redial is requested. The unexpected class still reaches the existing catch.
-5. `clients/treehouse-tauri-shell/src/treehouse_panel_sync.ts` — `PanelSyncRouteStatus` passes `refused`
-   and `submitStopped` through. No string changes (row 200 owns copy).
+5. `treehouse_panel_sync.ts` passes `refused` and `submitStopped` through; `EnrollmentPanel.vue` lists each
+   refused id with its reason (one label, pinned by `enrollment_ui_contract.mjs`; row 200 owns the rest).
 6. `clients/treehouse-tauri-shell/test/support/fake_relay.ts` — mirror the real relay (Test plan (a)).
 7. `clients/treehouse-tauri-shell/test/sync.ts`, `test/feed.ts`, `test/sync_panel.ts` — Test plan (b), (c).
 8. `plans/README.md` — rows 195 and 197 status cells (one line each, at most 200 characters), by the
@@ -432,7 +371,7 @@ No claim that a structurally quarantined own frame is recoverable, or that the r
 (it may be a verifier divergence or a lying relay; this plan only stops the shell from hiding it). No server
 change, so the quiesce socket-drop gap is recorded, not fixed. No change to what the real-socket gates
 exercise, no production deployment, no Phase G completion, no receipt-free W4, no catalog, mobile or device
-result. No UI copy beyond a reason string (row 200). Rows 199, 201 and 202 are untouched. The `refused` list is
+result. No UI copy beyond one refused-id label and the reason string (row 200). Rows 199, 201 and 202 are untouched. The `refused` list is
 the last sync's verdict, not durable history: after an app restart it is empty until the first sync, and a
 later failed sync clears it. A false ack saved by the previous build is not removed from the profile.
 
@@ -458,6 +397,4 @@ later failed sync clears it. A false ack saved by the previous build is not remo
   list, one relay token per frame), so a relay that answers `malformed` to every frame costs one round per
   frame, bounded by the outbox cap. Continuing the submit loop past the frame inside `submitCarrierFrames`
   would remove the per-round cost; it needs a second `lattice-client` option and is not built here.
-- The `onRelayError` option is the seam for any future shell that wants to keep progress on a submit error;
-  Township stays on `"throw"` until its own sync gets the same review.
 - Row 200 (copy for `refused`/`submitStopped` and the "yet" in the neutral label) follows this plan.

@@ -48,6 +48,10 @@ export interface RouteSyncResult {
   /** Locally authored frames the relay made durable (accepted, or listed by a fresh advertise). */
   ackedSubmissions: number;
   accepted: string[];
+  /**
+   * Frames this sync submitted that the relay quarantined, minus any the closing advertise lists. Like
+   * `rejected`, an entry naming an id the round did not submit is ignored.
+   */
   quarantined: [string, string][];
   /**
    * Ids the relay will not hold. The reasons are a superset of the wire's `WIRE_REPORT_REASONS`: they also
@@ -256,17 +260,19 @@ export async function syncTreehouseRoute(
         malformedNow = true;
       }
       const report = synced.pushReport;
+      const candidateIds = new Set(candidates.map(frameId));
+      const submitted = new Set(synced.pushedFrames.map(frameId));
+      // A refusal counts only for a frame this round submitted: a report naming any other id is ignored.
+      const bound = ([id]: [string, string]) => submitted.has(id) && candidateIds.has(id);
       result.accepted.push(...report.accepted);
-      result.quarantined.push(...report.quarantined);
-      result.rejected.push(...report.rejected);
+      result.quarantined.push(...report.quarantined.filter(bound));
+      result.rejected.push(...report.rejected.filter(bound));
       result.relayPending.push(...report.pending);
 
       // Acknowledgements: only frames this call submitted can ack through the report, only authored
       // frames are ever acked here, and the relay's own persist-before-reply is what makes them durable.
       // Only `accepted` (or relay-confirmed presence) is durable and readable back: a quarantined op is kept
       // by the relay as evidence and never advertised or served, so it never acks.
-      const candidateIds = new Set(candidates.map(frameId));
-      const submitted = new Set(synced.pushedFrames.map(frameId));
       for (const id of submitted) attemptedNow.add(id);
       const ackNow = new Set<string>();
       for (const id of report.accepted)
@@ -342,11 +348,13 @@ export async function syncTreehouseRoute(
       result.ackedSubmissions += late.length;
     }
     const final = profileNow();
-    // An id the relay refused in this sync and does not list is pending even if the saved set acks it: a
-    // profile written before quarantined ids stopped acking holds them there, and `acked` never shrinks.
-    const refusedNow = new Set(
-      [...result.quarantined, ...result.rejected].map(([id]) => id).filter((id) => !frontier.has(id)),
-    );
+    // A refusal the closing advertise contradicts (the relay lists the id) is dropped. An id the relay
+    // refused in this sync and does not list is pending even if the saved set acks it: a profile written
+    // before quarantined ids stopped acking holds them there, and `acked` never shrinks.
+    const unlisted = ([id]: [string, string]) => !frontier.has(id);
+    result.quarantined = result.quarantined.filter(unlisted);
+    result.rejected = result.rejected.filter(unlisted);
+    const refusedNow = new Set([...result.quarantined, ...result.rejected].map(([id]) => id));
     result.pendingIds = (final?.outbox ?? []).filter(
       (id) => !final!.acked.includes(id) || refusedNow.has(id),
     );

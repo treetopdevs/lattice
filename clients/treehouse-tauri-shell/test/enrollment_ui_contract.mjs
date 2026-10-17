@@ -227,6 +227,14 @@ for (const name of ["confirmRoutes", "configureRoutes", "useOffer", "joinGroup"]
   });
   assert(interpolations.includes("DISCLOSURE"), "Sync status lacks the disclosure");
   assert(/pending/.test(interpolations) && /acked/.test(interpolations), "Sync status lacks counts");
+  // A refused own operation is shown with its reason, not only counted as waiting.
+  let refusedLoop = false;
+  walk(status, (n) => {
+    if (n.type === NodeTypes.ELEMENT && n.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === "for" && /route\.refused/.test(p.exp?.loc.source ?? "")))
+      refusedLoop = true;
+  });
+  assert(refusedLoop, "Sync status does not render route.refused");
+  assert(/\breason\b/.test(interpolations), "Sync status does not show the refusal reason");
 }
 // Each moderator action is gated on its own operation, never on another one's capability.
 {

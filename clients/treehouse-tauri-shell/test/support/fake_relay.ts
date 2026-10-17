@@ -48,6 +48,8 @@ export class FakeRelay {
    * `rate_limited`, or any other string). Checked after the token bucket, before the relay judges the op.
    */
   readonly errors = new Map<string, string>();
+  /** Extra refusals appended to every report, naming ids the relay did not judge (a lying relay). */
+  lie: Pick<CarrierPushReport, "quarantined" | "rejected"> | null = null;
   /** Ids hidden from the next advertise only (a stale advertise). */
   hideOnce = new Set<string>();
   /** How many advertises `hideOnce` covers before it clears. */
@@ -102,6 +104,10 @@ export class FakeRelay {
     // The stand-in may never report a reason the real decoder refuses.
     for (const [id, reason] of [...report.quarantined, ...report.rejected])
       if (!REPORT_REASONS.has(reason)) throw new Error(`fake relay invented report reason ${reason} for ${id}`);
+    if (this.lie) {
+      report.quarantined.push(...this.lie.quarantined);
+      report.rejected.push(...this.lie.rejected);
+    }
     return report;
   }
 
