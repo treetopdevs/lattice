@@ -16,18 +16,40 @@ mkdir -p "$out"
 until [ "$("$adb" shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
 
 "$adb" install -r "$apk"
-"$adb" logcat -c
-"$adb" shell input keyevent 82 || true
-"$adb" shell am start -W -n "$pkg/.MainActivity" | tee "$out/am-start.txt"
-grep -q "Status: ok" "$out/am-start.txt"
 
-pid="$("$adb" shell pidof "$pkg" | tr -d '\r' || true)"
-echo "launched pid=${pid:-none}"
-sleep "$settle"
+# Row 228: on a Play-services emulator image Android kills any app bound to the Play fonts provider
+# when that provider's process dies; that is emulator churn, not an app fault. The app no longer
+# starts emoji2 (see AndroidManifest.xml), but if that exact kill reason still names Treehouse we
+# relaunch once and say so loudly. Every other failure, and a second such kill, still fails.
+attempt=1
+while :; do
+  "$adb" logcat -c
+  "$adb" shell input keyevent 82 || true
+  "$adb" shell am start -W -n "$pkg/.MainActivity" | tee "$out/am-start.txt"
+  grep -q "Status: ok" "$out/am-start.txt"
 
-"$adb" logcat -d -v threadtime > "$out/logcat.txt"
-"$adb" exec-out screencap -p > "$out/screen.png" || true
-alive="$("$adb" shell pidof "$pkg" | tr -d '\r' || true)"
+  pid="$("$adb" shell pidof "$pkg" | tr -d '\r' || true)"
+  echo "launched pid=${pid:-none} (attempt $attempt)"
+  sleep "$settle"
+
+  "$adb" logcat -d -v threadtime > "$out/logcat.txt"
+  "$adb" exec-out screencap -p > "$out/screen.png" || true
+  alive="$("$adb" shell pidof "$pkg" | tr -d '\r' || true)"
+  # A crash marker on the launched pid is a real fault and is never retried, even beside a kill.
+  # One awk reads the whole file, so no early-exiting reader can SIGPIPE the check under pipefail.
+  if awk -v pid="${pid:-none}" '$3 == pid && /panicked at|E RustPanic|FATAL EXCEPTION|Fatal signal/ { found = 1 }
+    END { exit !found }' "$out/logcat.txt"; then
+    break
+  fi
+  if [ "$attempt" -eq 1 ] && { [ -z "$alive" ] || [ "$alive" != "$pid" ]; } &&
+    grep -E "Killing ${pid:-none}:${pkg}[/ ].*depends on provider .*[Ff]onts" "$out/logcat.txt"; then
+    echo "::warning::Treehouse was killed because the Play fonts provider process died (emulator churn, row 228); relaunching once"
+    cp "$out/logcat.txt" "$out/logcat-fonts-provider-kill.txt"
+    attempt=2
+    continue
+  fi
+  break
+done
 # The WebView exposes rendered text to accessibility, so this proves the page loaded. Its
 # nodes can be missing from the first dump, so retry briefly.
 for _ in 1 2 3 4 5; do
