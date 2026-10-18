@@ -313,7 +313,13 @@ def history(root, old):
                 written += os.write(fd, data[written:])
             os.fsync(fd)
         except OSError:
-            os.ftruncate(fd, keep)
+            # Make the cut durable too; if even that fails, the next append
+            # still cuts the fragment back before writing.
+            try:
+                os.ftruncate(fd, keep)
+                os.fsync(fd)
+            except OSError:
+                pass
             refuse("operator_history_write_failed")
     finally:
         os.close(fd)
