@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./sync": "./src/sync/index.ts",
     "./testing": "./src/testing/index.ts",
     "./testing/beam": "./src/testing/beam.ts"
   },

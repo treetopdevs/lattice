@@ -12,8 +12,8 @@ import {
   decodeTreehouseOffer,
   encodeTreehouseAcceptance,
 } from "@treetopdevs/lattice-client";
-import { createTreehouseRelayConnector } from "../src/treehouse_relay_client";
-import { syncTreehouse } from "../src/treehouse_sync";
+import { createTreehouseRelayConnector } from "../src/treehouse_host";
+import { syncTreehouse } from "../src/treehouse_host";
 import { parseState } from "../src/treehouse_state";
 import type { PreviewNative, PreviewState, RelayRoute } from "../src/treehouse_state";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";

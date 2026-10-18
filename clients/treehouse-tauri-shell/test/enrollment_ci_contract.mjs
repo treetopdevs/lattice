@@ -24,6 +24,13 @@ import { fileURLToPath } from "node:url";
 //   of having no job-level if.
 // - android_pilot.needs gains the changes classifier. The enrollment job is still not a distribution
 //   dependency: exactly one other job, the required fan-in, may reference it.
+//
+// Re-pinned for plan 186 on 2026-10-17 (shared shell kit). Every pin below stayed exact; none was deleted or
+// loosened. What moved, and why:
+// - The packaged:enrollment script pin is now exactly `tsx --preserve-symlinks test/packaged_enrollment.ts`,
+//   because the harness imports the relay client and sync, which now live in clients/lattice-shell-kit, and a
+//   kit module resolves its lattice-client peer only through the shell's node_modules under
+//   --preserve-symlinks (decision D-15, row 221). No workflow step body changed, so both digests are unchanged.
 
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
@@ -380,7 +387,7 @@ export function check(workflow, pkg, harnessSource) {
     if (!runOf(step).includes(BUILD_STEP_CALL)) fail("variant build must be the tauri:build:dev-trace script");
   }
 
-  // The harness: real harness script, oracle inside it, evidence dir, no switches.
+  // The harness: real harness script, oracle inside it, evidence dir, no env skip or debug switches.
   if (harnessAt !== -1) {
     const step = steps[harnessAt];
     if (scalar(step, "working-directory") !== SHELL_DIR) fail("the harness runs in the Treehouse shell");
@@ -389,8 +396,8 @@ export function check(workflow, pkg, harnessSource) {
     const evidence = /^ {10}TREEHOUSE_EVIDENCE_DIR:\s*(.*)$/mu.exec(step)?.[1]?.trim();
     if (evidence !== EVIDENCE_DIR) fail("the evidence directory must be under runner.temp");
     for (const key of keys) if (/skip|only|keep/iu.test(key)) fail(`harness env ${key} is a skip or debug switch`);
-    if (pkg.scripts?.["packaged:enrollment"] !== "tsx test/packaged_enrollment.ts")
-      fail("packaged:enrollment must run test/packaged_enrollment.ts");
+    if (pkg.scripts?.["packaged:enrollment"] !== "tsx --preserve-symlinks test/packaged_enrollment.ts")
+      fail("packaged:enrollment must be exactly tsx --preserve-symlinks test/packaged_enrollment.ts");
   }
   if (typeof harnessSource === "string") {
     if (!harnessSource.includes("treehouse_enrollment_oracle.exs") || !harnessSource.includes("ORACLE_OK"))

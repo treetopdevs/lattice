@@ -1,4 +1,4 @@
-// Runtime modules (relay client, sync, feed) arrive here in plan 186 PR 2.
+// Runtime modules (relay client, sync, feed, panel sync) live under ./sync; this barrel stays inert.
 export { createRouteValidators } from "./routes";
 export type {
   CarrierRoute,

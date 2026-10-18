@@ -7,9 +7,9 @@ import type {
 import {
   createPanelSync,
   describeSyncStatus,
-} from "../src/treehouse_panel_sync";
-import type { PanelSyncStatus } from "../src/treehouse_panel_sync";
-import type { TreehouseFeedSession, TreehouseFeedState } from "../src/treehouse_feed";
+} from "../src/treehouse_host";
+import type { PanelSyncStatus } from "../src/treehouse_host";
+import type { TreehouseFeedSession, TreehouseFeedState } from "../src/treehouse_host";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { FakeClock, FakeRelay } from "@treetopdevs/lattice-shell-kit/testing";
 import { FaultNative } from "./support/fault_native";

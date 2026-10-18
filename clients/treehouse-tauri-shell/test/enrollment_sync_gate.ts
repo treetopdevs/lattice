@@ -14,11 +14,11 @@ import {
   verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
 import type { CarrierOpFrame, CarrierWebSocketClient } from "@treetopdevs/lattice-client";
-import { createTreehouseFeedController } from "../src/treehouse_feed";
-import type { TreehouseFeedController, TreehouseFeedState } from "../src/treehouse_feed";
-import { createTreehouseRelayConnector, treehouseCarrierSigner } from "../src/treehouse_relay_client";
-import { syncTreehouse, syncTreehouseRoute } from "../src/treehouse_sync";
-import type { RouteOutcome } from "../src/treehouse_sync";
+import { createTreehouseFeedController } from "../src/treehouse_host";
+import type { TreehouseFeedController, TreehouseFeedState } from "../src/treehouse_host";
+import { createTreehouseRelayConnector, treehouseCarrierSigner } from "../src/treehouse_host";
+import { syncTreehouse, syncTreehouseRoute } from "../src/treehouse_host";
+import type { RouteOutcome } from "../src/treehouse_host";
 import { parseState } from "../src/treehouse_state";
 import type { RelayRoute } from "../src/treehouse_state";
 import { TreehouseWorkflow, fromBase64 } from "../src/treehouse_workflow";
