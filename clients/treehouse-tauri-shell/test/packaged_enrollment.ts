@@ -158,9 +158,9 @@ async function stop(app: App) {
   clearTimeout(timer);
 }
 
-async function waitUi(app: App, text: string, attempts = 150) {
+async function waitUi(app: App, description: string, predicate: (nodes: AxNode[]) => boolean, attempts = 150) {
   try {
-    await app.ax!.waitFor(text, (nodes) => nodesInclude(nodes, text), attempts);
+    await app.ax!.waitFor(description, predicate, attempts);
   } catch (error) {
     const nodes = await app.ax!.dump();
     const hint =
@@ -170,7 +170,17 @@ async function waitUi(app: App, text: string, attempts = 150) {
     throw new Error(`${error instanceof Error ? error.message : String(error)}${hint}`);
   }
 }
-const waitText = (app: App, text: string, attempts = 150) => waitUi(app, text, attempts);
+const waitText = (app: App, text: string, attempts = 150) =>
+  waitUi(app, text, (nodes) => nodesInclude(nodes, text), attempts);
+const FIELD_ROLES = ["AXTextField", "AXTextArea"];
+// Author-side waits must not match the "Write a post" draft: it holds the same text until Post completes, and
+// WebKit also exposes a textarea's contents as non-field descendant nodes (the hosted negative control below
+// caught this). So a post counts only once no field holds the text, which Post's draft clear provides, and a
+// non-field node shows it.
+const posted = (nodes: AxNode[], text: string) =>
+  !nodes.some((node) => FIELD_ROLES.includes(node.role) && node.value.includes(text)) &&
+  nodesInclude(nodes.filter((node) => !FIELD_ROLES.includes(node.role)), text);
+const waitPosted = (app: App, text: string, attempts = 150) => waitUi(app, `posted: ${text}`, (nodes) => posted(nodes, text), attempts);
 
 // ---- read-only store evidence ------------------------------------------------------------------------
 
@@ -256,7 +266,7 @@ try {
   // ---- 2. founder: transfer preflight (G-AX), create the group and a Thread -------------------------
   step(2, "founder launch, G-AX transfer preflight, group and Thread");
   launch(founder);
-  await waitUi(founder, "Create local group");
+  await waitText(founder, "Create local group");
   await founder.ax!.transferPreflight("Paste offer");
   console.log(`PASS G-AX: 20 byte-exact 8 KiB round trips by ${founder.ax!.transfer}`);
   if (process.env.TREEHOUSE_PACKAGED_PREFLIGHT_ONLY === "1") {
@@ -266,10 +276,10 @@ try {
   }
   await founder.ax!.put("Group name", "Canopy");
   await founder.ax!.press("Create local group");
-  await waitUi(founder, "Thread title");
+  await waitText(founder, "Thread title");
   await founder.ax!.put("Thread title", "General");
   await founder.ax!.press("Create thread");
-  await waitUi(founder, "Write a post");
+  await waitText(founder, "Write a post");
   await poll("the founder Space and Thread in the store", () => stateOf(founder).profiles.length === 2);
   const space = stateOf(founder).profiles.find((p) => p.product === "Treehouse.Space")!;
   const thread = stateOf(founder).profiles.find((p) => p.product === "Treehouse.Thread")!;
@@ -419,7 +429,7 @@ try {
   // ---- 6. joiner: join request and its negative -----------------------------------------------------
   step(6, "joiner launch, join request, negative");
   launch(joiner);
-  await waitUi(joiner, "Join a group");
+  await waitText(joiner, "Join a group");
   await joiner.ax!.press("Join a group");
   const joinRequest = await joiner.ax!.readWhenPresent("Join request");
   await unchanged(joiner, REFUSED.wrong_product, async () => {
@@ -472,6 +482,8 @@ try {
   const acceptance = decodeTreehouseAcceptance(acceptanceText);
   // No grant has been authored yet: the joiner can type a draft but its Post control stays disabled.
   await joiner.ax!.put("Write a post", TEXTS.joiner_general!);
+  // Negative control for waitPosted: the draft field now holds the text, and nothing has been posted.
+  assert.equal(posted(await joiner.ax!.dump(), TEXTS.joiner_general!), false, "a draft is not a posted item");
   assert.equal(await joiner.ax!.isEnabled("Post"), false, "Post is disabled before any grant exists");
   const flipped = encodeTreehouseAcceptance({ ...acceptance, acceptance: flipByte(acceptance.acceptance) });
   await unchanged(founder, REFUSED.invalid_acceptance, async () => {
@@ -497,7 +509,7 @@ try {
   await converged(["space", "general"], [founder, joiner]);
   await joiner.ax!.press("Post");
   event({ type: "command", log: "general", realm: "joiner", command: "post", args: [{ textKey: "joiner_general" }] });
-  await waitText(joiner, TEXTS.joiner_general!);
+  await waitPosted(joiner, TEXTS.joiner_general!);
   await poll("the joiner post in its outbox", () => pendingOf(joiner, replicas.general).length === 1);
   const joinerPost = pendingOf(joiner, replicas.general)[0]!;
   await pressSync(joiner);
@@ -512,7 +524,7 @@ try {
   await founder.ax!.put("Write a post", TEXTS.founder_reply!);
   await founder.ax!.press("Post");
   event({ type: "command", log: "general", realm: "founder", command: "post", args: [{ textKey: "founder_reply" }] });
-  await waitText(founder, TEXTS.founder_reply!);
+  await waitPosted(founder, TEXTS.founder_reply!);
   await poll("the founder reply in its outbox", () => pendingOf(founder, replicas.general).length === 1);
   const founderReply = pendingOf(founder, replicas.general)[0]!;
   await pressSync(founder);
@@ -551,7 +563,7 @@ try {
   await joiner.ax!.put("Write a post", TEXTS.offline_joiner!);
   await joiner.ax!.press("Post");
   event({ type: "command", log: "general", realm: "joiner", command: "post", args: [{ textKey: "offline_joiner" }] });
-  await waitText(joiner, TEXTS.offline_joiner!);
+  await waitPosted(joiner, TEXTS.offline_joiner!);
   await poll("the offline joiner post pending", () => pendingOf(joiner, replicas.general).length === 1);
   const offlineJoiner = pendingOf(joiner, replicas.general)[0]!;
 
@@ -576,6 +588,7 @@ try {
   await pressSync(founder);
   await converged(LABELS, [founder, joiner]);
   assert(idsOf(founder, "general").includes(offlineJoiner), "the offline post drained to the founder");
+  await waitPosted(founder, TEXTS.offline_joiner!);
   console.log("PASS restart recovery before any Sync, an offline post pending then draining, convergence after the relay returned");
 
   // ---- 14. evidence, oracle, hygiene ----------------------------------------------------------------

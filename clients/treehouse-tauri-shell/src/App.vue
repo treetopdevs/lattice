@@ -12,9 +12,12 @@ import { native } from "./native_adapter";
 import WitnessSetup from "./WitnessSetup.vue";
 const workflow = new TreehouseWorkflow(native);
 // Plan 181 decision 11: the enrollment panel and its relay copy exist only in the build made with
-// VITE_TREEHOUSE_ENROLLMENT=1. Vite replaces the flag at build time, so the ordinary and Android builds
+// VITE_TREEHOUSE_ENROLLMENT=1 together with VITE_TREEHOUSE_DEV_TRACE=1 (vite.config.ts refuses any build
+// where only one is set). Vite replaces the flags at build time, so the ordinary and Android builds
 // neither emit the panel chunk nor name it.
-const enrollment = import.meta.env.VITE_TREEHOUSE_ENROLLMENT === "1";
+// A single comparison, not `&&`: the SFC compiler then treats the constant as never a ref and the build folds the dead branches.
+const enrollment =
+  `${import.meta.env.VITE_TREEHOUSE_ENROLLMENT}|${import.meta.env.VITE_TREEHOUSE_DEV_TRACE}` === "1|1";
 const EnrollmentPanel = enrollment
   ? defineAsyncComponent(() => import("./EnrollmentPanel.vue"))
   : null;

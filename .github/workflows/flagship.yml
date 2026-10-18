@@ -749,7 +749,7 @@ jobs:
 
       - name: Classify ordinary Treehouse bundle
         working-directory: clients/treehouse-tauri-shell
-        run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary
+        run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary dist
 
       - name: Real empty Treehouse UI and retained restart
         working-directory: clients/treehouse-tauri-shell
@@ -835,6 +835,10 @@ jobs:
       - name: Build packaged Treehouse dev-trace variant
         working-directory: clients/treehouse-tauri-shell
         run: npm run tauri:build:dev-trace
+
+      - name: Classify Treehouse dev-trace bundle
+        working-directory: clients/treehouse-tauri-shell
+        run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist
 
       - name: Verify packaged Treehouse enrollment against Lattice.Sim
         working-directory: clients/treehouse-tauri-shell
