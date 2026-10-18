@@ -28,7 +28,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <body>
 <main>
 <h1>Backlog Run Decisions</h1>
-<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-7 landed as PRs #133-#139. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
+<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-11 landed as PRs #133-#144. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
 
 <h2 id="slices">Slices</h2>
 <div class="table-wrap">
@@ -42,6 +42,10 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <tr><td>5</td><td>Row 220 (kit CI install, checks, cache keys) and plan 186 PR 2a (route validator factory, Vite preserveSymlinks); row 216 set DONE; row 221 filed</td><td><code>claude/hopeful-satoshi-71c376</code> / <a href="https://github.com/treetopdevs/lattice/pull/137">#137</a></td><td>Merged after exact tip <code>e81670282</code> run 39073113081 went green; the Codex bot reported no findings on that commit. Codex Sol xhigh: one P3 fixed; 4,704-case differential matched. Independent rule 3 review: three low/nit fixed, three nits rejected.</td></tr>
 <tr><td>6</td><td>Plan 186 PR 2: relay client, sync, feed and panel sync moved into the kit behind the host port; row 221 re-pin (D-15); row 222 filed</td><td><code>claude/interesting-aryabhata-4cd5f2</code> / <a href="https://github.com/treetopdevs/lattice/pull/138">#138</a></td><td>Merged after exact tip <code>d91217f8b</code> run 39084703912 went green on attempt 2. Attempt 1 failed only the macOS preview setup, when hex.pm timed out before any PR code ran. Codex Sol xhigh: three P2 (snapshot options) fixed with a live Proxy; a confirm pass found three more P2s, all fixed in <code>d91217f8b</code>.</td></tr>
 <tr><td>7</td><td>Plan 186 PR 3: packaged harness moved into the kit (bundle classifier parameterized; <code>./testing/packaged</code> and <code>./testing/relay</code> subpaths). Plan 186 complete.</td><td><code>claude/trusting-mcclintock-5af4b9</code> / <a href="https://github.com/treetopdevs/lattice/pull/139">#139</a></td><td>Merged after exact tip <code>79843f476</code> went green. Codex Sol xhigh: no findings. Workflow reviewers: no findings.</td></tr>
+<tr><td>8</td><td>R11b rows 217-219 (roster re-review at activation, journal history, manifest mode), row 222 feed flake, design plan 223; rows 223-225 filed</td><td><code>claude/backlog-slice-8-fa8ea8</code> / <a href="https://github.com/treetopdevs/lattice/pull/141">#141</a></td><td>Merged as <code>431b79e48</code> after the run on the updated head <code>f0f95ec73</code> (run 39124455224) went green. The Codex bot's second-round P2, a failed history write not forced to disk, was fixed. Codex Sol xhigh: one P2 (torn history append) fixed, confirm pass clean. Independent three-lens review: three fixed, two rejected.</td></tr>
+<tr><td>9</td><td>Row 201: the ordinary build cannot carry the enrollment panel (both flags required, Vite guard, frontend dist classifier, CI contract pins). Row 223 parked on plan 223 STOP 1</td><td><code>claude/confident-satoshi-050db5</code> / <a href="https://github.com/treetopdevs/lattice/pull/142">#142</a> (stacked on #141, then retargeted to main)</td><td>Merged after exact tip <code>178ac7988</code> run 39127422395 went green; CodeRabbit's three findings were fixed after the retarget. Codex Sol xhigh: three P2 fixed, confirm pass clean. Independent rule 3 review: two fixed, one rejected.</td></tr>
+<tr><td>11</td><td>Row 202: packaged enrollment waits match the posted item, not the draft, plus an AX match for the offline post. Township vue 3.5.44 (Dependabot #36). glib #13 analysed and dismissed</td><td><code>claude/backlog-slice-11-5f4ecd</code> / <a href="https://github.com/treetopdevs/lattice/pull/143">#143</a></td><td>Merged after exact tip <code>486dbe42a</code> run 39142683774 went green on attempt 2; attempt 1 failed only the emulator, when the Play fonts provider died. CodeRabbit's draft check caught a real bug, a WebKit textarea exposing its text outside the field, which was fixed. The Kotlin drain race got a test fix. Codex Sol xhigh and workflow reviewers: no findings.</td></tr>
+<tr><td>10</td><td>Row 223: R11b <code>ready</code> phase on the D-22 read-only operator probe realm; IPv6 carrier client fix; row 226 filed</td><td><code>claude/backlog-slice-10-57faa7</code> / <a href="https://github.com/treetopdevs/lattice/pull/144">#144</a></td><td>Merged after exact tip <code>828ef9082</code> run 39149941655 went green on attempt 2 (the emulator was rerun). Two follow-ups landed first: CodeRabbit found a test race on grant deletion, fixed with a shorten-only grant TTL setting, and strict Credo readability issues were fixed. Claude security review: four fixed (including a pull that served no ops), one rejected to row 226. Codex Sol xhigh: two medium fixed. Confirm pass clean.</td></tr>
 </tbody>
 </table>
 </div>
@@ -219,6 +223,93 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>When</dt><dd>2026-10-18, after slice 7; usage weekly all-models 47%, Fable 6%</dd>
 <dt>Options offered</dt><dd>(1) R11b remainder toward R11c and R13; (2) test and CI hygiene, rows 222, 202 and 201; (3) design rows 187-189; (4) the parity ladder, rows 211-215; (5) land this record.</dd>
 <dt>Decision (user)</dt><dd>Option 1, with row 222 folded into slice 8, and option 5 as its own small PR. The same PR sets plan 186 and index row 186 to DONE, the only status cell left stale after this run's merges.</dd>
+</dl>
+</article>
+
+<article id="d19">
+<h2><span>D-19</span>Slice 8 decisions, and the enrollment path's rule 8 wall</h2>
+<dl>
+<dt>217</dt><dd>Activation re-reviews the roster from the sealed Space log and refuses <code>:roster_drift_since_staging</code>, with no journal schema change. A later drift, between activation and restart, is a distinct atom in the <code>ready</code> phase.</dd>
+<dt>218</dt><dd>The owner appends each replaced journal to a reserved, private <code>operator-journal-history.jsonl</code>. A torn tail is cut back to whole lines, and a failed write refuses. Unbounded growth is row 225.</dd>
+<dt>219</dt><dd>The candidate takes the replaced manifest's mode, masked to <code>0o777</code>. A group- or world-writable manifest is refused.</dd>
+<dt>222</dt><dd><code>feed.ts</code> waits on the drained and generation conditions; it keeps the quiet windows that guard the "exactly one more" negative assertions.</dd>
+<dt>Wall</dt><dd>Plan 223 makes <code>ready</code> the next slice (row 223). <code>catalogued</code> and <code>listed</code> (row 224) are BLOCKED under rule 8 on the operator catalog signer, the root bootstrap binding and a verified signer backup. R11c needs <code>catalogued</code>, so R11c and R13 cannot start in this run without those operator inputs.</dd>
+</dl>
+</article>
+
+<article id="d20">
+<h2><span>D-20</span>Plan 223's probe key: a roster member's transport identity, never a root or service key</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18, before slice 9</dd>
+<dt>Context</dt><dd>Plan 223 STOPs if the operator holds no key in the admitted instance's <code>trusted_peers</code> for the readiness frontier pull. The set is <code>{child log root} ∪ roster</code>.</dd>
+<dt>Decision</dt><dd>The probe authenticates as a roster member whose transport identity the operator names by file, as plan 223 already specifies. It never uses the child log root's signing key or the carrier service key, so the roadmap's key-purpose separation holds. If the deployment model gives the operator no member transport key, slice 9 does not invent one: it parks row 223 with that finding and takes the next unblocked row.</dd>
+</dl>
+</article>
+
+<article id="d21">
+<h2><span>D-21</span>Row 223 parked: no operator-held key may authenticate the readiness probe</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18, slice 9</dd>
+<dt>Finding</dt><dd>The admitted instance's <code>trusted_peers</code> is pinned to exactly <code>{child log root} ∪ roster</code> (<code>staging.ex:409</code>), and the carrier admits only realms in that map (<code>web_socket.ex:112</code>). D-20 bars the root and service keys. Member keys are device-held, and the catalog lifecycle research says the operator does not sign as a member. A dedicated probe realm is plan 223 STOP 2; widening the exact-peer check is STOP 3.</dd>
+<dt>Decision</dt><dd>Slice 9 parked row 223 and took row 201 instead. The enrollment path (R11b ready, then row 224, R11c and R13) now waits on operator decisions, which go to the user.</dd>
+</dl>
+</article>
+
+<article id="d22">
+<h2><span>D-22</span>Operator decision: row 223 takes option (a), a read-only operator probe realm</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18, decided by the user as operator</dd>
+<dt>Decision</dt><dd>The readiness frontier pull authenticates through a read-only operator probe realm on the carrier server, usable for frontier and missing-op pulls only. Plan 223 is refreshed and the phase is built as slice 10. This supersedes D-20's roster-member requirement for the probe, and lifts plan 223 STOP 2 and 3 for this purpose only.</dd>
+<dt>Constraints kept</dt><dd>The probe key is named by file and kept distinct from the child root, the service key and every member key. It never joins <code>trusted_peers</code> or the roster, and cannot submit, relay or subscribe. Its seed is read for one session and never persisted or logged. Activation stays local-only (D1). Two independent adversarial reviews are required, one of them security-focused.</dd>
+</dl>
+</article>
+
+<article id="d23">
+<h2><span>D-23</span>Row 202 and Dependabot run in parallel with slice 10; Township security bumps are allowed</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18</dd>
+<dt>Ordering</dt><dd>The user said row 202 and Dependabot come "then", after slice 10. Their files share nothing with the carrier server, so they run as slice 11 alongside it (D-08). Slice 10 still merges on its own gate.</dd>
+<dt>Township</dt><dd>Alert #36 (high, <code>@vue/server-renderer</code> XSS, fixed in 3.5.42) is in frozen Township's lockfile. A security-only lockfile bump is maintenance, not the new product work rule 10 forbids.</dd>
+<dt>glib</dt><dd>Alert #13 (medium, <code>glib</code> &lt; 0.20 unsoundness) is likely held back by Tauri 2's GTK3 stack. The slice does not leave the supported Tauri line to force it. It checks whether the vulnerable API is reachable, and the coordinator dismisses the alert with that stated reason if it cannot be bumped.</dd>
+</dl>
+</article>
+
+<article id="d24">
+<h2><span>D-24</span>Dependabot #13 (glib) dismissed as not used; a <code>lattice_stress</code> restart timeout is a flake</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18, slice 11</dd>
+<dt>glib</dt><dd>No upgrade path exists: wry 0.57, tao 0.37, tauri 2.12 and webkit2gtk 2.0 all require gtk/glib ^0.18, and glib 0.20 ships only on gtk4-rs. <code>VariantStrIter</code> is built only by <code>Variant::array_iter_str</code>, which nothing in the lockfile or <code>src-tauri</code> calls, and glib is built only for Linux. The coordinator dismissed alert #13 as <code>not_used</code> with that reason. It can be reopened when Tauri moves to GTK4.</dd>
+<dt>#36</dt><dd>Township's lockfile moves vue and every <code>@vue/*</code> package to 3.5.44, a lockfile-only change with every <code>libc</code> field preserved. Treehouse already resolved 3.5.43.</dd>
+<dt>Flake</dt><dd>On an earlier #143 tip, <code>apps/lattice_stress</code> <code>failure_semantics_test.exs:41</code> timed out waiting for a crashed topology process to restart, taking 38 of 52 tests down with it. The PR changes no Elixir code, and main was green on the same suite. If it recurs on another PR, it gets its own row.</dd>
+</dl>
+</article>
+
+<article id="d25">
+<h2><span>D-25</span>An intermittent witness test is a custody row, not a PR #143 fix; main's red run is infrastructure</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18</dd>
+<dt>Main</dt><dd>Run 39130135377 on <code>eaf8b844d</code> failed only the packaged macOS preview job. The causes were a TLS <code>alert_decode_error</code> on a fetch and an artifact upload that hit <code>ENOTFOUND</code>. Its failed jobs were rerun.</dd>
+<dt>Kotlin</dt><dd><code>WitnessBindingCoordinatorTest.cancellationDuringPresenceDrainsAndNeverRestoresSpentNonce</code> failed twice on #143's tip and passed on its earlier commit and on main. #143 touches no Kotlin. The test reopens the witness journal right after the <code>cancelled</code> callback, while the presence thread may still be draining, so <code>stored()</code> sees a non-<code>Stored</code> result. Because this is witness custody code under <code>src-tauri</code> (rule 3), it goes to a new row for a slice with a second review: decide whether the drain must finish before the callback, which would be a product fix, or the test must wait, which would be a test fix. Slice 11 then pulled the test report, which showed <code>Refused(storage_busy)</code> at line 76. It pushed a test-only fix in <code>6fadff960</code> that waits on the coordinator's existing <code>onDrained</code> and <code>lifecycleCheckpoint</code> hooks. Those hooks show callback-before-close is a designed seam, so the coordinator accepted the fix. It touches no production Kotlin and no <code>src-tauri/src</code> file. Left open for a row: confirm that production callers also wait on the drain before reopening the journal.</dd>
+</dl>
+</article>
+
+<article id="d26">
+<h2><span>D-26</span>Slice 10 decisions (probe realm and <code>ready</code>)</h2>
+<dl>
+<dt>Grant</dt><dd>The probe grant is ephemeral and single-use: one public key per instance, a 10 s lifetime, consumed by an exact-object ETS delete after the challenge verifies, and revoked in an <code>after</code> block. It adds no manifest field and no standing credential.</dd>
+<dt>Realm</dt><dd><code>lattice-operator-probe</code> is checked only after a <code>trusted_peers</code> miss. A probe session may send only <code>frontier</code> and <code>pull</code>, and everything else gets <code>read_only</code> without reaching the Holder. The session closes 30 s after authentication; a very large log can hit that cap, which fails closed and is row 226.</dd>
+<dt>Key</dt><dd>The operator names the key file at call time. It is refused if it equals any service key, any <code>trusted_peers</code> key, or the Space or child authority root.</dd>
+<dt>Rule 3</dt><dd>The diff edits <code>Lattice.Carrier.WebSocket</code> in <code>apps/lattice_web_socket</code>, adding IPv6 literal hosts and removing <code>:identity</code> from transport start args. That is carrier code outside the literal rule 3 path list. The coordinator treats it as within the rule's intent, and the PR's two independent reviews satisfy it.</dd>
+<dt>Wall</dt><dd>Row 224 still needs the operator catalog signer, the root's signed bootstrap binding, and a verified signer backup with named custody.</dd>
+</dl>
+</article>
+
+<article id="d27">
+<h2><span>D-27</span>Ledger 2: rows 227 and 228 filed; the enrollment path waits on the operator ceremony</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18, after slice 10 (#144) merged</dd>
+<dt>Rows</dt><dd>Row 227 is the witness drain ordering question from D-25. It needs a rule 3 second review because it is custody code. Row 228 collects the CI flakes that cost reruns in this run.</dd>
+<dt>State</dt><dd>R11b's <code>ready</code> phase landed in #144. Row 224 (<code>catalogued</code> and <code>listed</code>), and therefore R11c and R13, waits on the operator's catalog signer, the root's signed bootstrap binding and a verified signer backup. The next step is the user's choice: CI reliability plus ceremony prep, or a pause.</dd>
 </dl>
 </article>
 
