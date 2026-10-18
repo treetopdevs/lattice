@@ -253,7 +253,7 @@ facts the `catalogued` design must carry:
 - The bootstrap is a root-authored Space command (`catalog_bootstrap_v1`) and needs a bounded
   continuation profile; a legacy-family Space is refused.
 - The Treehouse app creates legacy-family Spaces and has no authoring command, so the living root
-  cannot sign the binding today (row 229).
+  cannot sign the binding today (row 232).
 - The carrier has no `treehouse-service:<service_id>` realm yet; that is a `catalogued` dependency.
 - `catalogued`'s signer is loaded from the operator-named seed file under the `read_identity_file`
   policy and signs only inside an operator call, never in the ceremony tool.

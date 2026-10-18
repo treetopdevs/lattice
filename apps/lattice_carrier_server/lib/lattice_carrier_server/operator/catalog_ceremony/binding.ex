@@ -143,7 +143,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   defp space_log(_), do: {:error, :space_log_required}
 
   # Only a bounded-continuation Space with a selected R04 pin can carry the
-  # bootstrap; a legacy-family Space cannot (row 229).
+  # bootstrap; a legacy-family Space cannot (row 232).
   defp bounded(log) do
     case Authority.continuation_profile(log) do
       {:ok, %{profile: %{kind: :space}} = profile} -> {:ok, profile}

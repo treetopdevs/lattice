@@ -513,6 +513,10 @@ try {
   await poll("the joiner post in its outbox", () => pendingOf(joiner, replicas.general).length === 1);
   const joinerPost = pendingOf(joiner, replicas.general)[0]!;
   await pressSync(joiner);
+  // The press returns when the click lands, not when the Sync finishes. The founder's hint can only follow the
+  // relay's persist, so prove the joiner's post is durable on the relay first: a stall on the authoring side
+  // then fails here, named, and step 11 below fails only for the founder's hint-to-pull path.
+  await poll("the joiner post durable on the relay", async () => (await observer.ids("general")).includes(joinerPost), 60_000);
 
   // ---- 11. live feed, founder -----------------------------------------------------------------------
   step(11, "founder receives the post through the availability hint (no Sync pressed)");
@@ -528,6 +532,7 @@ try {
   await poll("the founder reply in its outbox", () => pendingOf(founder, replicas.general).length === 1);
   const founderReply = pendingOf(founder, replicas.general)[0]!;
   await pressSync(founder);
+  await poll("the founder reply durable on the relay", async () => (await observer.ids("general")).includes(founderReply), 60_000);
 
   // ---- 12. live feed, joiner ------------------------------------------------------------------------
   step(12, "joiner receives the reply through the availability hint (no Sync pressed)");
@@ -719,6 +724,21 @@ try {
         writeFileSync(join(evidence, `failed-ui-${app.name}.txt`), `${lines.join("\n")}\n`);
       } catch {
         // The app may already be gone; the failure above is the evidence.
+      }
+    }
+    // Which side stalled: each app's relay status text (connection state, counts, the feed's last message) and
+    // the relay's own ids. Status strings are fixed product copy and error reasons; post text is never included.
+    for (const app of apps) {
+      if (!app.ax || !app.child || app.child.exitCode !== null) continue;
+      try {
+        const nodes = await app.ax.dump();
+        const status = nodes
+          .map((n: AxNode) => n.value || n.title || n.description)
+          .filter((text: string) => /Relay |Waiting for the relay|Acknowledged by the relay|Sync failed|Poll sync failed|Refused by the relay|Submit stopped/.test(text))
+          .filter((text: string) => !Object.values(TEXTS).some((value) => text.includes(value)));
+        console.error(`--- ${app.name} relay status ---\n${status.join("\n")}`);
+      } catch {
+        // The app may already be gone.
       }
     }
     for (const app of apps) {

@@ -43,6 +43,18 @@ import { fileURLToPath } from "node:url";
 //   and VITE_TREEHOUSE_ENROLLMENT / VITE_TREEHOUSE_DEV_TRACE may appear in package.json only in the
 //   tauri:build:dev-trace script. Neither pinned workflow digest moved.
 
+// Re-pinned for row 228 on 2026-10-18 (setup-step network retries). Every pin below stayed exact; none was
+// deleted or loosened. What moved, and why:
+// - Every erlef/setup-beam step now sets install-hex and install-rebar to false and is followed by one new
+//   run step, "Install Hex and Rebar", that runs mix local.hex and mix local.rebar with a bounded four-attempt
+//   retry. setup-beam ran them once, and a 60 s timeout reaching builds.hex.pm failed whole jobs. Both
+//   packaged_macos and treehouse_packaged_macos gained those lines, so PACKAGED_MACOS_DIGEST moved from
+//   0b2ccbc32d2e01785653ff3a7952b8bb09710dd9b7242710c0ab1d899ef5c085 and TREEHOUSE_PREVIEW_DIGEST from
+//   032cc785f32d8f3dd7af93a8e2e0d2c97445795f3becbb8292079899d4b04d4d. Both new values were recomputed by this
+//   file's own functions and the old values reproduce from the previous workflow text, so no other step body moved.
+// - The enrollment job needed no pin change: its setup-beam checks (versions, order, no continue-on-error, no
+//   masking, exactly one if) all still hold with the extra step in place.
+
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
 
@@ -60,12 +72,12 @@ const REAL_DATA = "dev.treetop.lattice.treehouse";
 // Digest of every packaged_macos step body. These bodies are operator-reviewed and pinned.
 // Re-pinned for plan 183 on 2026-10-08: the Treehouse preview steps (and the classification step) left this job,
 // so the digest now covers the Township smokes and their setup only. It was a7457cfa3c27586c… before the move.
-const PACKAGED_MACOS_DIGEST = "0b2ccbc32d2e01785653ff3a7952b8bb09710dd9b7242710c0ab1d899ef5c085";
+const PACKAGED_MACOS_DIGEST = "0210087e513128d0a0db75e9fd0225515666183479a1d2424b63b7493f6e497b";
 
 // Digest of every treehouse_packaged_macos step body except the classification step, which is checked
 // structurally below. Added for plan 183 on 2026-10-08 so the moved preview bodies stay pinned exactly as
 // they were while they lived in packaged_macos (the old digest covered them).
-const TREEHOUSE_PREVIEW_DIGEST = "032cc785f32d8f3dd7af93a8e2e0d2c97445795f3becbb8292079899d4b04d4d";
+const TREEHOUSE_PREVIEW_DIGEST = "dc7e02d0255fb2d32dc53455ca0888df10fca7cec499e38b2e5e1f0cce76c4df";
 
 // Re-pinned for plan 183 on 2026-10-08: android_pilot also needs the changes classifier, whose output its
 // township gate reads. The list is exact and in workflow order.

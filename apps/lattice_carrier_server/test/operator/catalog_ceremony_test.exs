@@ -293,7 +293,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     pending_report = pending.path |> File.read!() |> Jason.decode!()
     assert pending_report["binding"]["status"] == "pending_root_signature"
     assert pending_report["binding"]["payload_sha256"] == payload["sha256"]
-    assert pending_report["binding"]["blocker"] == "row 229"
+    assert pending_report["binding"]["blocker"] == "row 232"
     assert pending_report["mode"] == "real"
 
     {signed, [op]} = sign_bootstraps(space, [record], "signed")

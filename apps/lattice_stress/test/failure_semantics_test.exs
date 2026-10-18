@@ -3,7 +3,15 @@ defmodule LatticeStress.FailureSemanticsTest do
 
   alias LatticeStress.{ProbeServer, ProbeTab}
 
+  # `LatticeCore.Supervisor` is `one_for_one` with the default intensity (3
+  # restarts per 5 s). These tests intentionally kill core children, and a
+  # kill can cascade (for example `LatticeServer.DemoHub` crashing `Lattice.LiveOps`
+  # when `Lattice.Audit` is mid-restart), so restarts left over from earlier
+  # tests can push a later kill past the limit. The supervisor then shuts the
+  # whole app down and the process never comes back. A restarted app has a fresh
+  # restart budget, so each test starts from one without changing production.
   setup do
+    restart_core!()
     Lattice.reset!()
     Lattice.Demo.SecretServer.reset_deliveries()
     {:ok, probe} = ProbeServer.start_link(owner: self(), name: :failure_probe)
@@ -88,6 +96,12 @@ defmodule LatticeStress.FailureSemanticsTest do
 
     assert {:error, :unknown_cap} = Lattice.call(tab.id, "secret-after-restart", %{})
     assert [] = Lattice.Demo.SecretServer.deliveries()
+  end
+
+  defp restart_core! do
+    :ok = Application.stop(:lattice_core)
+    {:ok, _} = Application.ensure_all_started(:lattice_core)
+    :ok
   end
 
   defp restarted?(name, old_pid) do

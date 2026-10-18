@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
@@ -29,6 +30,19 @@
           <meta-data
             android:name="android.support.FILE_PROVIDER_PATHS"
             android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- AppCompat pulls in emoji2, whose startup initializer binds this process to the Play
+             services FontsProvider. Android kills the app whenever that provider's process dies
+             ("depends on provider ... FontsProvider in dying proc", backlog row 228). The UI is a
+             WebView and renders no native emoji text, so drop the initializer. -->
+        <provider
+          android:name="androidx.startup.InitializationProvider"
+          android:authorities="${applicationId}.androidx-startup"
+          tools:node="merge">
+          <meta-data
+            android:name="androidx.emoji2.text.EmojiCompatInitializer"
+            tools:node="remove" />
         </provider>
     </application>
 </manifest>

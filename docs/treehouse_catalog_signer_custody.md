@@ -230,7 +230,7 @@ anyone signs it.
 **Honest status of the signing step.** The Space root must author this record as the Space command
 `catalog_bootstrap_v1`. Today the Tauri app creates legacy-family Spaces and has no
 `catalog_bootstrap_v1` command, so the real root cannot sign a valid binding yet (tracked as
-row 229). `binding-payload` refuses such a Space with `space_not_bounded_profile`. Until row 229
+row 232). `binding-payload` refuses such a Space with `space_not_bounded_profile`. Until row 232
 lands, finish steps 5.1 to 5.3 and produce the report with the binding pending (section 5.6).
 Do not hand-craft or sign the record outside the product.
 
@@ -266,8 +266,8 @@ public key, backup digest, format and iteration count (`ceremony_inconsistent`) 
 `backup` {`sha256`, `format`, `kdf_iterations`}, `restore` {`verified_at`, `separate_host`},
 `custody`, `binding`, `generated_at`, `claim`). Stdout carries `report` (path) and `report_sha256`.
 
-While row 229 is open, the report carries
-`"binding": {"status": "pending_root_signature", "payload_sha256": <hex or null>, "blocker": "row 229"}`
+While row 232 is open, the report carries
+`"binding": {"status": "pending_root_signature", "payload_sha256": <hex or null>, "blocker": "row 232"}`
 (`payload_sha256` is null when no `binding-payload.json` exists). After a successful
 `verify-binding`, rerun `report`; it overwrites the file and the binding becomes
 `{"status": "verified", "bootstrap_id", "record_sha256", "space"}`. A `binding.json` that does not
@@ -378,4 +378,4 @@ reviewed. The seed and backup never enter a git checkout; the tool refuses to wr
 - The seed never lives in a git checkout, a cloud-synced folder, or beside its backup.
 - Never pass a passphrase in argv or in the environment. Stdin only, from a pipe, never a terminal.
 - Never use a dry-run key, directory or output as real material, and never the reverse.
-- Never hand-sign the binding outside the product to get past row 229.
+- Never hand-sign the binding outside the product to get past row 232.
