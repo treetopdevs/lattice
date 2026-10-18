@@ -52,11 +52,13 @@ Nothing records that the restarted carrier actually serves the activated route.
   bytes plus `"\n"` to `operator-journal-history.jsonl` (O_APPEND, O_NOFOLLOW, mode 0600, regular
   single-link file owned by this uid, else `unsafe_operator_file`), fsyncs it and the root directory,
   then replaces the journal. A crash between append and replace leaves a duplicate of the current
-  record at the tail; that is accepted. The file is reserved in Python `reserved_files` and in the BEAM
+  record at the tail; that is accepted. A torn earlier append is cut back to its last complete line
+  before the next one, a failed write is cut back and refuses `operator_history_write_failed`, and
+  activation and boot reconcile check the history file before their irreversible step. The file is reserved in Python `reserved_files` and in the BEAM
   `:operator_path_collision` check. Growth is unbounded (row 225).
 - **Row 219.** Activation keeps the replaced manifest's permission bits: the owner fstats the active
   manifest, refuses `unsafe_operator_file` if `mode & 0o022 != 0`, and fchmods the candidate temp to
-  `old mode & 0o7777` before `os.replace`.
+  `old mode & 0o777` (never setuid, setgid or sticky) before `os.replace`.
 
 ## Design: the `ready` phase
 
