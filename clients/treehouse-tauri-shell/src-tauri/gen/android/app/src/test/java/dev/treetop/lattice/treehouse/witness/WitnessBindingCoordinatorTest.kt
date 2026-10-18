@@ -62,7 +62,9 @@ class WitnessBindingCoordinatorTest {
             entered.countDown()
             Thread { release.await(); callback(WitnessPresenceResult.Success(signature)) }.start()
         })
-        val coordinator = WitnessBindingCoordinator(context, bytes(7), ui, Platform(signing(keyPair())), { true })
+        val drained = CountDownLatch(1)
+        val coordinator = WitnessBindingCoordinator(context, bytes(7), ui, Platform(signing(keyPair())), { true },
+            onDrained = { drained.countDown() })
         val prepared = stored(prepare(coordinator, request(3)))
         val done = CountDownLatch(1)
         val result = AtomicReference<WitnessResult<SignedWitnessBinding>>()
@@ -72,6 +74,8 @@ class WitnessBindingCoordinatorTest {
         release.countDown()
         assertTrue(done.await(10, TimeUnit.SECONDS))
         assertEquals(WitnessResult.Refused("cancelled"), result.get())
+        // The callback runs before finish() closes the journal; reopening it before the drain races that close.
+        assertTrue(drained.await(10, TimeUnit.SECONDS))
         WitnessJournal(context, bytes(7)).use {
             val snapshot = stored(it.observeExisting())
             assertEquals(1, snapshot.spentNonces.size)
