@@ -119,13 +119,13 @@ refuse({ threshold: 4 }, /invalid_continuation_profile/);
 refuse({ threshold: 0 }, /invalid_continuation_profile/);
 refuse({ maxLeaseEpochs: 0 }, /invalid_continuation_profile/);
 refuse({ maxLeaseEpochs: 70_000 }, /invalid_continuation_profile/);
+const beforeReview = native.record;
 const review = app.reviewContinuation({ nominee, witnesses: witnesses.join("\n") });
 assert.equal(review.threshold, 2, "the default threshold is a majority of the witnesses");
 assert.equal(review.maxLeaseEpochs, 7);
 assert.deepEqual(review.witnesses, [...witnesses].sort((a, b) => Buffer.compare(Buffer.from(a, "base64"), Buffer.from(b, "base64"))),
   "the review lists witnesses in the byte order the pin signs");
-const beforePin = native.record;
-assert.equal(native.record, beforePin, "review signs and saves nothing");
+assert.equal(native.record, beforeReview, "review signs and saves nothing");
 await assert.rejects(app.pinContinuation({ ...review, threshold: 3 }), /continuation_review_mismatch/);
 await assert.rejects(app.pinContinuation({ ...review, nominee: randomKey() }), /continuation_review_mismatch/);
 // A persisted change between review and confirm invalidates the review (confirm-pass R3).

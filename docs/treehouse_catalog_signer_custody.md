@@ -295,7 +295,7 @@ public key, backup digest, format and iteration count (`ceremony_inconsistent`) 
 
 Before `verify-binding` succeeds, the report carries
 `"binding": {"status": "pending_root_signature", "payload_sha256": <hex or null>, "blocker": "row 232"}`
-(the `blocker` string is a historical label; it means only that the root has not yet signed)
+(the `blocker` string is a historical label; it means only that `verify-binding` has not yet verified the binding, which may already be signed and synced)
 (`payload_sha256` is null when no `binding-payload.json` exists). After a successful
 `verify-binding`, rerun `report`; it overwrites the file and the binding becomes
 `{"status": "verified", "bootstrap_id", "record_sha256", "space"}`. A `binding.json` that does not
