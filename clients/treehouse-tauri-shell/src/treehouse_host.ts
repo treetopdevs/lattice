@@ -82,16 +82,23 @@ function hostOver(current: () => TreehouseWorkflow): ShellHost {
 }
 
 /**
- * The caller's options object, read live as the old shell modules read it (a member reassigned after
- * construction is seen, and a method callback keeps `this` as the caller's object), with the kit's extra
- * members fixed at construction.
+ * The caller's options object, read live as the old shell modules read it: a member reassigned after
+ * construction is seen, and getters and method callbacks run with the caller's object as `this`. The kit's
+ * extra members are read from `extra` (a getter there runs when the kit reads it). The proxy wraps a fresh
+ * object, so a frozen caller object cannot trip a proxy invariant.
  */
 function liveOptions<T extends object, E extends object>(options: T, extra: E): T & E {
-  return new Proxy(options, {
-    get: (target, property, receiver) =>
-      property in extra ? Reflect.get(extra, property) : Reflect.get(target, property, receiver),
-    has: (target, property) => property in extra || property in target,
-  }) as T & E;
+  return new Proxy({} as T & E, {
+    get: (_target, property) => {
+      if (property in extra) return Reflect.get(extra, property);
+      const value: unknown = Reflect.get(options, property, options);
+      // A call keeps the caller's object as `this`; `new` (the socket seam is a constructor) passes through.
+      return typeof value === "function"
+        ? new Proxy(value, { apply: (fn, _this, args) => Reflect.apply(fn, options, args) })
+        : value;
+    },
+    has: (_target, property) => property in extra || property in options,
+  });
 }
 
 const defaultVerifier: CarrierVerifier = {
@@ -143,8 +150,15 @@ export function syncTreehouseRoute(
 export function createTreehouseFeedController(
   options: CreateTreehouseFeedControllerOptions,
 ): TreehouseFeedController {
-  // The old controller captured the workflow once and read every other option live.
-  return createFeedController(liveOptions(options, { host: treehouseHost(options.workflow) }));
+  // The old controller captured the workflow once, after its timing options, and read every other option
+  // live. The kit reads `host` once at that same point, so the getter reads the workflow then.
+  return createFeedController(
+    liveOptions(options, {
+      get host() {
+        return treehouseHost(options.workflow);
+      },
+    }),
+  );
 }
 
 /** Build-time feed flags: `VITE_TREEHOUSE_POLL_MS` (0 disables) and `VITE_TREEHOUSE_AUTOSYNC_ON_MOUNT`. */
@@ -249,7 +263,10 @@ export function createPanelSync(options: PanelSyncOptions): PanelSync {
   // As before, `onStatus` is read at each emission; the other options are read once, here.
   return createKitPanelSync(
     liveOptions(options, {
-      host: treehouseHost(options.workflow),
+      // Read when the kit builds the feed controller, where the old module passed `options.workflow`.
+      get host() {
+        return treehouseHost(options.workflow);
+      },
       connector,
       describe: describeSyncStatus,
       pollMs: flags.pollMs,
