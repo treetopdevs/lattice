@@ -18,6 +18,7 @@ defmodule LatticeCarrierServer.WebSocket do
   @authenticated_idle_timeout_ms 120_000
   @probe_session_ms 30_000
   @probe_types ["frontier", "pull"]
+  @probe_refused_types ["carrier_challenge", "relay", "subscribe", "unsubscribe", "state"]
   # Match the existing 120-per-10-second server budget: one connection may drain a
   # 120-op outbox immediately, then is held to 12 relay frames/s. Reconnects receive
   # a fresh budget; this is not a peer-level or IP-level cap.
@@ -177,7 +178,8 @@ defmodule LatticeCarrierServer.WebSocket do
 
   # A probe session answers read_only before any Holder call or relay token.
   defp refuse_probe(type, state) do
-    type = if is_binary(type), do: binary_part(type, 0, min(byte_size(type), 64)), else: "invalid"
+    # A closed vocabulary: the peer-chosen type never reaches telemetry verbatim.
+    type = if type in @probe_refused_types, do: type, else: "other"
 
     Telemetry.execute(
       [:lattice, :carrier, :probe_refused],

@@ -61,7 +61,7 @@ defmodule LatticeCarrierServer.ProbeRealmTest do
         {"unsubscribe", %{type: "unsubscribe"}},
         {"state", %{type: "state"}},
         {"carrier_challenge", %{type: "carrier_challenge", local_realm: ProbeRealm.realm()}},
-        {"mystery", %{type: "mystery"}}
+        {"other", %{type: "mystery"}}
       ]
 
       for {type, request} <- requests do

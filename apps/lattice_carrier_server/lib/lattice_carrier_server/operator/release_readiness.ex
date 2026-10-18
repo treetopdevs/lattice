@@ -24,7 +24,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   material.
   """
   alias Lattice.Carrier.WebSocket
-  alias Lattice.Log
+  alias Lattice.{Authority, Log}
   alias LatticeCarrierServer.Operator.{Journal, Lock, Staging}
   alias LatticeCarrierServer.{Durability, Health, Holder, Listener, Manifest, ProbeRealm}
   alias LatticeCarrierServer.{Runtime, Secret}
@@ -96,8 +96,13 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
           roster = Staging.roster(space)
           grants = Enum.sort(Enum.map(child["review"]["grants"], & &1["recipient"]))
 
+          # The authority roots are kept so the probe key can be refused if it
+          # reuses either one; members and the child root are trusted peers,
+          # which `ProbeRealm.register/2` already refuses.
+          roots = [Authority.root(space), Authority.root(child_log)]
+
           if grants == roster and Staging.bootstrap_peers_exact?(admitted, roster, child_log),
-            do: {:ok, Map.put(admitted, :replica, child["replica"])},
+            do: {:ok, Map.merge(admitted, %{replica: child["replica"], roots: roots})},
             else: {:error, :roster_drift_since_activation}
 
         _ ->
@@ -114,7 +119,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
       case Durability.with_target_lock(
              instance.log_file,
              fn -> Log.restore_verified(instance.log_file) end,
-             retries: 0
+             retries: 5
            ) do
         {:ok, %{log: log}} -> {:cont, {:ok, logs ++ [log]}}
         _ -> {:halt, {:error, :route_not_ready}}
@@ -136,6 +141,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   # outlives this call.
   defp pulled(admitted, probe_identity_file) do
     with {:ok, secret, pub} <- probe_key(probe_identity_file),
+         :ok <- same(pub not in admitted.roots, :readiness_probe_key_reused),
          {:ok, grant} <- ProbeRealm.register(admitted.name, pub) do
       try do
         read_route(admitted, secret)
@@ -153,14 +159,16 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   end
 
   # A <= S <= B: members may relay while this runs, so the socket's frontier
-  # must lie between the holder's ids read before and after it.
+  # must lie between the holder's ids read before and after it. The probe
+  # dials the address the listener actually bound, not an assumed loopback.
   defp read_route(admitted, secret) do
     holder = Holder.via(admitted.name)
+    {ip, port} = :ranch.get_addr(Listener.ref(admitted.name))
 
     connection =
       WebSocket.connect(
-        hostname: "127.0.0.1",
-        port: :ranch.get_port(Listener.ref(admitted.name)),
+        hostname: ip |> :inet.ntoa() |> to_string(),
+        port: port,
         identity: Secret.unwrap(secret),
         realm: ProbeRealm.realm(),
         peer_realm: admitted.realm,
@@ -187,9 +195,12 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
     with {:ok, frontier, conn} <- WebSocket.advertise(conn, nil),
          later = MapSet.new(Holder.op_ids(holder)),
          true <- MapSet.subset?(before, frontier) and MapSet.subset?(frontier, later),
-         {:ok, ops, _conn} <- WebSocket.pull(conn, frontier),
+         # Pull from nothing so every served op is encoded and sent: the
+         # served ids must cover the frontier and stay within the holder's.
+         {:ok, ops, _conn} <- WebSocket.pull(conn, MapSet.new()),
          final = MapSet.new(Holder.op_ids(holder)),
-         true <- Enum.all?(ops, &MapSet.member?(final, &1.id)) do
+         served = MapSet.new(ops, & &1.id),
+         true <- MapSet.subset?(frontier, served) and MapSet.subset?(served, final) do
       :ok
     else
       _ -> {:error, :readiness_pull_failed}
