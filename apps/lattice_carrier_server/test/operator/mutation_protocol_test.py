@@ -473,5 +473,53 @@ class Protocol(unittest.TestCase):
                 self.assertEqual(f.read(), b"")
 
 
+    def test_a_torn_history_tail_is_cut_back_before_the_next_append(self):
+        root = self.workdir("history-torn")
+        first = self.compact(self.pending(root, 0))
+        second = self.compact(self.pending(root, 1))
+        owner.commit(root, None, first)
+        self.private(os.path.join(root, owner.HISTORY), b'old\n{"version":1,"pha')
+        owner.commit(root, first, second)
+        self.assertEqual(self.history_bytes(root), b"old\n" + first.encode() + b"\n")
+        self.assertEqual(self.journal(root), second)
+
+    def test_a_failed_history_write_is_cut_back_and_the_journal_stays(self):
+        root = self.workdir("history-enospc")
+        first = self.compact(self.pending(root, 0))
+        owner.commit(root, None, first)
+        self.private(os.path.join(root, owner.HISTORY), b"old\n")
+        real = os.write
+        calls = []
+
+        def partial(fd, data):
+            # One short write lands, then the disk is full.
+            calls.append(len(data))
+            if len(calls) == 1:
+                return real(fd, data[:7])
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(owner.os, "write", side_effect=partial):
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.commit(root, first, self.compact(self.pending(root, 1)))
+        self.assertEqual(str(caught.exception), "operator_history_write_failed")
+        self.assertEqual(self.history_bytes(root), b"old\n")
+        self.assertEqual(self.journal(root), first)
+
+    def test_an_unsafe_history_file_refuses_activation_before_the_manifest_moves(self):
+        root, target, old, _, plan = self.activation("activate-unsafe-history")
+        other = self.private(os.path.join(root, "other"), b"")
+        os.symlink(other, os.path.join(root, owner.HISTORY))
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.activate(root, plan)
+        self.assertEqual(str(caught.exception), "unsafe_operator_file")
+        with open(target, "rb") as f:
+            self.assertEqual(f.read(), old)
+        self.assertEqual(self.journal(root), plan["expected"])
+
+    def test_activation_never_copies_special_mode_bits(self):
+        root, target, _, _, plan = self.activation("activate-sticky", 0o644)
+        os.chmod(target, 0o1644)
+        self.assertEqual(owner.mode_of(target), 0o644)
+
 if __name__ == "__main__":
     unittest.main()

@@ -261,26 +261,62 @@ def retain(path, raw):
         refuse("immutable_artifact_conflict")
 
 
-def history(root, old):
-    """Append the exact journal bytes about to be replaced, one per line, and
-    make them durable before the replace. A crash after this append and
-    before the replace leaves a duplicate of the current record at the tail;
-    that is accepted. Growth is unbounded for now."""
+def history_file(root):
+    """Open the journal history, creating it, and refuse anything but this
+    user's private regular single-link file. Activation and boot reconcile
+    call it before their irreversible step, so an unsafe history file never
+    refuses after the manifest is already replaced."""
     try:
         # O_NONBLOCK keeps a FIFO from blocking the open; it has no effect on
         # a regular file. A symlink (ELOOP) is a closed refusal.
         fd = os.open(os.path.join(root, HISTORY),
-                     os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+                     os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
     except OSError:
         refuse("unsafe_operator_file")
-    with os.fdopen(fd, "ab") as stream:
-        st = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != os.geteuid()
-                or st.st_mode & 0o077):
-            refuse("unsafe_operator_file")
-        stream.write(old.encode() + b"\n")
-        stream.flush()
-        os.fsync(stream.fileno())
+    st = os.fstat(fd)
+    if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != os.geteuid()
+            or st.st_mode & 0o077):
+        os.close(fd)
+        refuse("unsafe_operator_file")
+    return fd
+
+
+def complete_lines(fd, size):
+    """Offset just past the last newline: everything after it is a fragment
+    of an append that never finished, so it was never followed by a replace."""
+    end = size
+    while end > 0:
+        start = max(0, end - 65536)
+        chunk = os.pread(fd, end - start, start)
+        at = chunk.rfind(b"\n")
+        if at >= 0:
+            return start + at + 1
+        end = start
+    return 0
+
+
+def history(root, old):
+    """Append the exact journal bytes about to be replaced, one per line, and
+    make them durable before the replace. A crash after this append and
+    before the replace leaves a duplicate of the current record at the tail;
+    that is accepted. A torn earlier append is cut back to its last complete
+    line first, and a failed write is cut back too, so every line is one
+    whole record. Growth is unbounded for now (row 225)."""
+    fd = history_file(root)
+    try:
+        keep = complete_lines(fd, os.fstat(fd).st_size)
+        os.ftruncate(fd, keep)
+        data = old.encode() + b"\n"
+        try:
+            written = 0
+            while written < len(data):
+                written += os.write(fd, data[written:])
+            os.fsync(fd)
+        except OSError:
+            os.ftruncate(fd, keep)
+            refuse("operator_history_write_failed")
+    finally:
+        os.close(fd)
     sync_dir(root)
 
 
@@ -368,6 +404,7 @@ def activate(root, plan):
         # The candidate keeps the replaced manifest's permission bits, so a
         # 0644 deployment file stays readable and a 0600 one stays private.
         mode = mode_of(target)
+        os.close(history_file(root))
         fd = os.open(temporary, os.O_RDONLY | os.O_NOFOLLOW)
         try:
             os.fchmod(fd, mode)
@@ -434,6 +471,7 @@ def boot(root, plan):
             for a in old["artifacts"]:
                 staged(a)
             durable(target)
+            os.close(history_file(root))
             # The canonical record differs from its activated form in this one
             # structural member; a quote inside any string value is escaped,
             # so the pattern cannot match inside one.
@@ -518,9 +556,10 @@ def mode_of(path):
     finally:
         os.close(fd)
     # The carrier refuses a group- or other-writable manifest; never copy one.
+    # Only the permission bits carry over, never setuid, setgid or sticky.
     if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o022:
         refuse("unsafe_operator_file")
-    return st.st_mode & 0o7777
+    return st.st_mode & 0o777
 
 
 def staged(artifact):
