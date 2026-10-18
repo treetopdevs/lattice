@@ -266,6 +266,9 @@ export async function authorTreehouseCatalogBootstrap(input: {
   for (const id of canonicalOrder(history.ops, byId)) {
     const frame = history.frames.find((f) => f.id === id);
     if (frame === undefined || frame.kind !== "authority" || frame.author !== root || quarantined.has(id)) continue;
+    // Genesis only, as Elixir matches `{:genesis, delegation, _}`: a grant or transfer carrying a root delegation is not the cap.
+    const head = frame.body[0] === "tuple" ? frame.body[1][0] : undefined;
+    if (head === undefined || head[0] !== "atom" || head[1] !== "genesis") continue;
     const found = carrierDelegationsFromFrames([frame]).find((d) => d.parent_id === null && d.issuer === root && d.roles.includes("admin"));
     if (found !== undefined) { capId = found.id; break; }
   }

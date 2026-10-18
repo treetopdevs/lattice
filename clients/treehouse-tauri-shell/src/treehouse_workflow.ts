@@ -365,6 +365,8 @@ export class TreehouseWorkflow {
     }
     this.state = next;
     this.views = views;
+    // Any persisted change invalidates an unsigned continuation review.
+    this.pendingContinuation = null;
   }
   createSpace(name: string) {
     return this.exclusive(async () => {
@@ -671,17 +673,19 @@ export class TreehouseWorkflow {
       this.boundedRootSpace();
       if (this.continuation().pinned) throw new Error("continuation_already_pinned");
       // Only the parameters this workflow reviewed and showed can be signed.
-      const reviewed = this.pendingContinuation;
-      if (reviewed === null) throw new Error("no_pending_continuation");
-      if (JSON.stringify(reviewed) !== JSON.stringify(review)) throw new Error("continuation_review_mismatch");
+      const pending = this.pendingContinuation;
+      if (pending === null) throw new Error("no_pending_continuation");
+      if (JSON.stringify(pending) !== JSON.stringify(review)) throw new Error("continuation_review_mismatch");
+      // Sign the workflow's own frozen copy, never the caller's object, which it could still mutate.
+      const reviewed = structuredClone(pending);
       return this.queueSpaceFrame((space) =>
         authorTreehouseContinuationPin({
           frames: space.frames,
           signer: this.signer(),
-          nominee: review.nominee,
-          witnesses: review.witnesses,
-          threshold: review.threshold,
-          maxLeaseEpochs: review.maxLeaseEpochs,
+          nominee: reviewed.nominee,
+          witnesses: reviewed.witnesses,
+          threshold: reviewed.threshold,
+          maxLeaseEpochs: reviewed.maxLeaseEpochs,
         }),
       );
     });
