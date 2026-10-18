@@ -3,7 +3,10 @@ defmodule LatticeCarrierServer.Operator.Journal do
   Local candidate journal, never catalog authority. A record is
   `carrier_pending` until `ReleaseActivation` replaces the active manifest
   with its staged candidate, which records the same fields as `activated`.
-  Neither phase claims a restarted, ready or published route.
+  `ready` is written only by the owner's `ready` plan and claims only plan 223's
+  local facts: after one restart the loaded manifest is the activated one, every
+  route holder is ready, the roster matches, and the admitted child route
+  answered an authenticated frontier pull. No phase claims a published route.
 
   Mutations acquire and own a Linux OS lock for the entire transaction. The
   compare is cooperative CAS among those operator processes, not a lock against
@@ -180,7 +183,7 @@ defmodule LatticeCarrierServer.Operator.Journal do
 
   defp valid?(r) when is_map(r) do
     Enum.sort(Map.keys(r)) == Enum.sort(@fields) and r["version"] === 1 and
-      r["phase"] in ["carrier_pending", "activated"] and nonce?(r["attempt"]) and
+      r["phase"] in ["carrier_pending", "activated", "ready"] and nonce?(r["attempt"]) and
       is_integer(r["generation"]) and r["generation"] >= 0 and
       r["generation"] < 9_007_199_254_740_991 and
       (r["catalog_head"] == nil or op_id?(r["catalog_head"])) and

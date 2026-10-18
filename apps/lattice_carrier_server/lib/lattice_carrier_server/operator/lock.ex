@@ -36,6 +36,19 @@ defmodule LatticeCarrierServer.Operator.Lock do
   end
 
   @doc """
+  Record the `activated` journal as `ready`, only while `active_manifest` still
+  holds the activated candidate's bytes and `incarnation` is still the latest
+  controlled boot's. The BEAM proves the local facts before calling this.
+  """
+  @spec ready(Path.t(), binary(), map(), binary(), String.t()) :: :ok | {:error, term()}
+  def ready(root, expected, active_manifest, record, incarnation) do
+    with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected) do
+      plan = plan("ready", expected, record, attempt, [active_manifest], nil)
+      run(root, %{plan | incarnation: incarnation}, nil)
+    end
+  end
+
+  @doc """
   The controlled boot's step under the operator lock, after the manifest at
   `manifest_path` was loaded with lowercase-hex digest `loaded` and before any
   route starts: refuses while another plan holds the lock, reconciles the

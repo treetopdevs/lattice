@@ -218,6 +218,23 @@ defmodule LatticeCarrierServer.Manifest do
   defp require_string(value, _detail) when is_binary(value) and byte_size(value) > 0, do: :ok
   defp require_string(_value, detail), do: {:error, detail}
 
+  @doc """
+  Read one identity file under the same policy as a manifest's: a regular file
+  owned by the service uid, no group or other bits, 64 hex characters. Returns
+  the identity wrapped in `Secret` and its public key. The error carries paths
+  and atoms only, never file contents.
+  """
+  @spec read_identity_file(Path.t(), String.t()) ::
+          {:ok, Secret.t(), binary()} | {:error, term()}
+  def read_identity_file(path, realm) when is_binary(path) and is_binary(realm) do
+    expanded = Path.expand(path)
+
+    with {:ok, identity, pub, _path} <- load_identity(expanded, realm, Path.dirname(expanded)),
+         do: {:ok, identity, pub}
+  end
+
+  def read_identity_file(_path, _realm), do: {:error, :identity_file_required}
+
   defp load_identity(identity_file, realm, base_dir)
        when is_binary(identity_file) and is_binary(realm) do
     path = resolve(identity_file, base_dir)

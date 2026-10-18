@@ -33,7 +33,7 @@ defmodule LatticeCarrierServer.MixProject do
   defp deps do
     [
       {:lattice_core, in_umbrella: true},
-      {:lattice_web_socket, in_umbrella: true, only: :test, runtime: false},
+      {:lattice_web_socket, in_umbrella: true},
       {:township_web, in_umbrella: true, only: :test, runtime: false},
       {:cowboy, "~> 2.12"},
       {:jason, "~> 1.4"}

@@ -167,6 +167,16 @@ defmodule LatticeCarrierServer.Runtime do
   def deployment, do: :persistent_term.get(@deployment_key, nil)
 
   @doc false
+  @spec instance_views() :: [
+          %{name: String.t(), realm: String.t(), pub: binary(), trusted_peers: map()}
+        ]
+  def instance_views do
+    for name <- :persistent_term.get(@instance_names_key, MapSet.new()),
+        instance = :persistent_term.get(instance_key(name), nil),
+        do: Map.take(instance, [:name, :realm, :pub, :trusted_peers])
+  end
+
+  @doc false
   @spec start_instance(String.t()) :: Supervisor.on_start()
   def start_instance(name) do
     instance = :persistent_term.get(instance_key(name))

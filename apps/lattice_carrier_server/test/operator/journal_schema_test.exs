@@ -39,13 +39,13 @@ defmodule LatticeCarrierServer.Operator.JournalSchemaTest do
     assert decoded["service"] == service()
   end
 
-  test "only the pending and activated phases decode" do
-    for phase <- ["carrier_pending", "activated"] do
+  test "only the pending, activated and ready phases decode" do
+    for phase <- ["carrier_pending", "activated", "ready"] do
       raw = Journal.encode(%{record(service()) | "phase" => phase})
       assert {:ok, %{"phase" => ^phase}} = Journal.decode(raw)
     end
 
-    for phase <- ["ready", "catalogued", "listed", "Activated", nil] do
+    for phase <- ["catalogued", "listed", "Activated", "Ready", nil] do
       raw = Journal.encode(%{record(service()) | "phase" => phase})
       assert {:error, :corrupt_operator_journal} = Journal.decode(raw), inspect(phase)
     end

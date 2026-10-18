@@ -10,12 +10,14 @@ defmodule LatticeCarrierServer.WebSocket do
   @behaviour :cowboy_websocket
 
   alias Lattice.Carrier.{Session, Telemetry, Wire}
-  alias LatticeCarrierServer.Holder
+  alias LatticeCarrierServer.{Holder, ProbeRealm}
 
   @max_frame_size 64_000
   @availability_coalesce_ms 50
   @authentication_timeout_ms 5_000
   @authenticated_idle_timeout_ms 120_000
+  @probe_session_ms 30_000
+  @probe_types ["frontier", "pull"]
   # Match the existing 120-per-10-second server budget: one connection may drain a
   # 120-op outbox immediately, then is held to 12 relay frames/s. Reconnects receive
   # a fresh budget; this is not a peer-level or IP-level cap.
@@ -58,7 +60,9 @@ defmodule LatticeCarrierServer.WebSocket do
     {reply, state} =
       case Jason.decode(text) do
         {:ok, %{"type" => "carrier_challenge"} = challenge} ->
-          authenticate(challenge, state)
+          if Map.get(state, :probe?, false),
+            do: refuse_probe("carrier_challenge", state),
+            else: authenticate(challenge, state)
 
         {:ok, %{"type" => type} = message} ->
           authenticated_message(type, message, state)
@@ -97,6 +101,9 @@ defmodule LatticeCarrierServer.WebSocket do
     end
   end
 
+  def websocket_info(:probe_deadline, %{probe?: true} = state), do: {:stop, state}
+  def websocket_info(:probe_deadline, state), do: {:ok, state}
+
   def websocket_info(:authentication_deadline, %{authenticated?: false} = state) do
     {:stop, Map.delete(state, :authentication_timer)}
   end
@@ -109,7 +116,7 @@ defmodule LatticeCarrierServer.WebSocket do
 
   defp authenticate(challenge, state) do
     with %{"local_realm" => peer_realm, "replica" => replica} <- challenge,
-         {:ok, peer_pubkey} <- Map.fetch(state.trusted_peers, peer_realm),
+         {:ok, peer_pubkey, grant} <- peer_key(state, peer_realm),
          {identity, ^replica} <- Holder.session_context(state.holder),
          :ok <-
            Session.verify_challenge(challenge,
@@ -117,19 +124,68 @@ defmodule LatticeCarrierServer.WebSocket do
              expected_pubkey: peer_pubkey,
              expected_server_nonce: state.server_nonce,
              expected_wire_version: Wire.version()
-           ) do
+           ),
+         :ok <- consume_grant(state, grant) do
       response = Session.respond(challenge, identity, identity.realm_id)
 
       {response,
        state
        |> reset_subscription()
        |> cancel_authentication_deadline()
+       |> start_probe_session(grant)
        |> Map.put(:authenticated?, true)
        |> Map.put(:peer_realm, peer_realm)
        |> Map.put(:realm, identity.realm_id)}
     else
       reason -> authentication_failure(reason, challenge, state)
     end
+  end
+
+  # Trusted peers first and unchanged; only a miss for the reserved probe realm
+  # consults the instance's live single-use grant.
+  defp peer_key(state, peer_realm) do
+    case Map.fetch(state.trusted_peers, peer_realm) do
+      {:ok, pubkey} ->
+        {:ok, pubkey, nil}
+
+      :error ->
+        with true <- peer_realm == ProbeRealm.realm(),
+             {ref, pubkey} <- ProbeRealm.live_grant(Map.get(state, :instance)) do
+          {:ok, pubkey, ref}
+        else
+          _miss -> :error
+        end
+    end
+  end
+
+  defp consume_grant(_state, nil), do: :ok
+
+  defp consume_grant(state, ref) do
+    case ProbeRealm.consume(Map.get(state, :instance), ref) do
+      :ok -> :ok
+      :error -> {:error, :probe_grant_unavailable}
+    end
+  end
+
+  # Every successful authentication sets probe? explicitly.
+  defp start_probe_session(state, nil), do: Map.put(state, :probe?, false)
+
+  defp start_probe_session(state, _ref) do
+    Process.send_after(self(), :probe_deadline, @probe_session_ms)
+    Map.put(state, :probe?, true)
+  end
+
+  # A probe session answers read_only before any Holder call or relay token.
+  defp refuse_probe(type, state) do
+    type = if is_binary(type), do: binary_part(type, 0, min(byte_size(type), 64)), else: "invalid"
+
+    Telemetry.execute(
+      [:lattice, :carrier, :probe_refused],
+      %{},
+      %{type: type, probe: true, side: :server}
+    )
+
+    {%{type: "error", reason: "read_only"}, state}
   end
 
   defp authentication_failure(reason, challenge, state) do
@@ -153,6 +209,11 @@ defmodule LatticeCarrierServer.WebSocket do
   defp auth_failure_reason(:error), do: :unknown_peer
   defp auth_failure_reason({_identity, _replica}), do: :wrong_replica
   defp auth_failure_reason(_reason), do: :malformed_session
+
+  defp authenticated_message(type, _message, %{authenticated?: true, probe?: true} = state)
+       when type not in @probe_types do
+    refuse_probe(type, state)
+  end
 
   defp authenticated_message(type, message, %{authenticated?: true} = state) do
     authenticated_request(type, message, state)

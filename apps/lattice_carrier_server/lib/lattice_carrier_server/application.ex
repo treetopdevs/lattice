@@ -15,7 +15,11 @@ defmodule LatticeCarrierServer.Application do
         else: []
 
     children =
-      [{Health.StorageCache, []}, {Registry, keys: :unique, name: LatticeCarrierServer.Registry}] ++
+      [
+        {LatticeCarrierServer.ProbeRealm.Owner, []},
+        {Health.StorageCache, []},
+        {Registry, keys: :unique, name: LatticeCarrierServer.Registry}
+      ] ++
         gate_children ++
         [{LatticeCarrierServer.RuntimeSupervisor, {manifest_path, configured_server()}}]
 

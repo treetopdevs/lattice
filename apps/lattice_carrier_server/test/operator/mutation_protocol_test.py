@@ -54,10 +54,10 @@ class Protocol(unittest.TestCase):
             with self.assertRaises(owner.Refusal):
                 owner.record(json.dumps(record))
 
-    def test_only_pending_and_activated_phases_parse(self):
-        for phase in ["carrier_pending", "activated"]:
+    def test_only_pending_activated_and_ready_phases_parse(self):
+        for phase in ["carrier_pending", "activated", "ready"]:
             self.assertEqual(owner.record(json.dumps(dict(self.sample(), phase=phase)))["phase"], phase)
-        for phase in ["ready", "Activated", None, 1]:
+        for phase in ["catalogued", "listed", "Ready", "Activated", None, 1]:
             with self.assertRaises(owner.Refusal, msg=repr(phase)):
                 owner.record(json.dumps(dict(self.sample(), phase=phase)))
 
@@ -561,6 +561,182 @@ class Protocol(unittest.TestCase):
                 self.assertEqual(owner.complete_lines(fd, os.fstat(fd).st_size), 8)
         finally:
             os.close(fd)
+
+    # Plan 223: the owner's ready phase.
+
+    def activated(self, name):
+        """An activated attempt (journal, manifest and marker on disk) and the plan that readies it."""
+        root, target, _, candidate, plan = self.activation(name)
+        with mock.patch.object(owner, "reply"):
+            owner.activate(root, plan)
+        activated = plan["record"]
+        record = json.loads(activated)
+        ready = {"version": 1, "kind": "ready", "expected": activated, "attempt": record["attempt"],
+                 "record": self.compact(dict(record, phase="ready")), "artifacts": None,
+                 "incarnation": "4" * 64, "checks": [{"path": target, "sha256": owner.digest(candidate)}]}
+        return root, target, candidate, ready
+
+    def refused(self, root, plan, reason, call=None):
+        with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+            (call or owner.ready)(root, plan)
+        self.assertEqual(str(caught.exception), reason)
+
+    def test_ready_plan_shape_is_closed(self):
+        root, target, candidate, good = self.activated("ready-shape")
+        check = good["checks"][0]
+        other = dict(check, path="/srv/space.log")
+        malformed = [dict(good, artifacts=[]), dict(good, checks=[]), dict(good, checks=[check, other]),
+                     dict(good, checks=[dict(check, extra=1)]), dict(good, checks=[dict(check, sha256="G" * 64)]),
+                     dict(good, checks=[dict(check, path="relative.json")]),
+                     dict(good, checks=[dict(check, path="/srv/../active.json")]),
+                     dict(good, incarnation=None), dict(good, incarnation="4" * 63),
+                     dict(good, attempt="short"), dict(good, attempt=None), dict(good, expected=None),
+                     dict(good, record=None)]
+        for plan in malformed:
+            with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+                owner.execute(root, plan)
+            self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        # The closed top-level keys are enforced by execute() for every kind.
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.execute(root, dict(good, extra=None))
+        self.assertEqual(str(caught.exception), "malformed_operator_plan")
+
+    def test_ready_writes_phase_ready_and_appends_the_activated_bytes(self):
+        root, target, candidate, plan = self.activated("ready-ok")
+        before = self.history_bytes(root)
+        with mock.patch.object(owner, "reply") as reply:
+            owner.execute(root, plan)
+        reply.assert_called_once_with({"ok": True})
+        self.assertEqual(self.journal(root), plan["record"])
+        self.assertEqual(self.history_bytes(root), before + plan["expected"].encode() + b"\n")
+        with open(target, "rb") as f:
+            self.assertEqual(f.read(), candidate)
+
+    def test_ready_refusals_leave_journal_and_history_unchanged(self):
+        root, target, candidate, good = self.activated("ready-refusals")
+        record = json.loads(good["expected"])
+        pending = self.compact(dict(record, phase="carrier_pending"))
+        ready = json.loads(good["record"])
+        other_attempt = base64.urlsafe_b64encode(bytes([9]) * 32).decode().rstrip("=")
+        stale = [dict(good, attempt=other_attempt),
+                 dict(good, record=self.compact(dict(ready, generation=1))),
+                 dict(good, record=self.compact(dict(record, phase="activated"))),
+                 dict(good, record=pending),
+                 dict(good, expected=pending, record=self.compact(dict(record, phase="ready"))),
+                 dict(good, expected=good["record"]),
+                 dict(good, checks=[{"path": target, "sha256": "3" * 64}])]
+        journal, history = self.journal(root), self.history_bytes(root)
+        for plan in stale:
+            self.refused(root, plan, "stale_operator_intent")
+        # Equivalent JSON that is not the journal's exact bytes is stale, not corrupt.
+        self.refused(root, dict(good, expected=good["expected"].replace("generation\":0", "generation\":0 ")),
+                     "stale_operator_intent")
+        self.refused(root, dict(good, incarnation="5" * 64), "stale_operator_incarnation")
+        self.private(os.path.join(root, owner.INCARNATION), b"5" * 64)
+        self.refused(root, good, "stale_operator_incarnation")
+        self.private(os.path.join(root, owner.INCARNATION), b"4" * 64)
+        self.private(target, b"changed")
+        self.refused(root, good, "stale_operator_intent")
+        os.remove(target)
+        self.refused(root, good, "stale_operator_intent")
+        self.private(target, candidate)
+        self.assertEqual((self.journal(root), self.history_bytes(root)), (journal, history))
+
+    def test_ready_refuses_a_stale_journal_and_a_reserved_manifest(self):
+        root, target, candidate, good = self.activated("ready-stale-journal")
+        # The journal moved on after the BEAM read it.
+        record = json.loads(good["expected"])
+        moved = self.compact(dict(record, generation=1))
+        with open(os.path.join(root, "operator-journal.json"), "w") as f:
+            f.write(moved)
+        self.refused(root, good, "stale_operator_intent")
+        with open(os.path.join(root, "operator-journal.json"), "w") as f:
+            f.write(good["expected"])
+        # The operator's own journal can never be the manifest ready vouches for.
+        journal_path = os.path.join(root, "operator-journal.json")
+        self.refused(root, dict(good, checks=[{"path": journal_path, "sha256": owner.digest(candidate)}]),
+                     "unsafe_operator_file")
+
+    def test_a_journal_plan_cannot_write_or_advance_a_ready_phase(self):
+        root, _, _, good = self.activated("ready-journal-plan")
+        journal_plan = {"version": 1, "kind": "journal", "expected": good["expected"],
+                        "record": good["record"], "attempt": None, "checks": None, "artifacts": None,
+                        "incarnation": None}
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.execute(root, journal_plan)
+        self.assertEqual(str(caught.exception), "stale_operator_intent")
+        # Nor can the ready plan's own commit be reused for another phase.
+        for phase_record in (good["expected"], self.compact(dict(json.loads(good["expected"]), phase="carrier_pending"))):
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.commit(root, good["expected"], phase_record, ready=True)
+            self.assertEqual(str(caught.exception), "stale_operator_intent")
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.commit(root, None, good["record"], ready=True)
+        self.assertEqual(str(caught.exception), "stale_operator_intent")
+        self.assertEqual(self.journal(root), good["expected"])
+
+    def test_ready_is_dispatched_only_with_a_record(self):
+        root, _, _, good = self.activated("ready-dispatch")
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.execute(root, dict(good, record=None))
+        self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        self.assertEqual(self.journal(root), good["expected"])
+
+    def boot_plan(self, target, raw):
+        return {"version": 1, "kind": "boot", "expected": None, "record": None, "attempt": None,
+                "artifacts": None, "incarnation": None, "checks": [{"path": target, "sha256": owner.digest(raw)}]}
+
+    def test_boot_over_a_ready_record_keeps_it_for_its_own_bytes_only(self):
+        root, target, candidate, plan = self.activated("ready-boot")
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, plan)
+        history = self.history_bytes(root)
+        with mock.patch.object(owner, "reply") as reply:
+            owner.boot(root, self.boot_plan(target, candidate))
+        marker = reply.call_args[0][0]["incarnation"]
+        with open(os.path.join(root, owner.INCARNATION), "rb") as f:
+            self.assertEqual(f.read(), marker.encode())
+        self.assertEqual(self.journal(root), plan["record"])
+        self.assertEqual(self.history_bytes(root), history)
+        # Any other present bytes contradict the ready record, even ones that
+        # match the loaded digest, and the marker is not rewritten.
+        other = b'{"version":1,"instances":[]}'
+        self.private(target, other)
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.boot(root, self.boot_plan(target, other))
+        self.assertEqual(str(caught.exception), "stale_operator_intent")
+        with open(os.path.join(root, owner.INCARNATION), "rb") as f:
+            self.assertEqual(f.read(), marker.encode())
+        self.assertEqual(self.journal(root), plan["record"])
+
+    def test_stage_may_replace_a_ready_record(self):
+        root, target, candidate, plan = self.activated("ready-stage")
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, plan)
+        record = self.pending(root, 7)
+        raw = b"next candidate"
+        attempt_dir = os.path.join(root, "attempt-" + owner.digest(record["attempt"].encode()))
+        artifact = dict(self.sample()["artifacts"][0], path=os.path.join(attempt_dir, owner.digest(raw)),
+                        sha256=owner.digest(raw))
+        next_record = self.compact(self.pending(root, 7, artifacts=[artifact]))
+        stage = {"version": 1, "kind": "stage", "expected": plan["record"], "record": None,
+                 "attempt": record["attempt"], "incarnation": None,
+                 "checks": [{"path": target, "sha256": owner.digest(candidate)}],
+                 "artifacts": [{"sha256": owner.digest(raw), "bytes": base64.b64encode(raw).decode()}]}
+        history = self.history_bytes(root)
+        with mock.patch.object(owner, "reply"), mock.patch.object(owner, "line", return_value={"commit": next_record}):
+            owner.execute(root, stage)
+        self.assertEqual(self.journal(root), next_record)
+        self.assertEqual(self.history_bytes(root), history + plan["record"].encode() + b"\n")
+
+    def test_ready_fails_closed_on_an_unsafe_history_file(self):
+        root, target, candidate, plan = self.activated("ready-unsafe-history")
+        history = os.path.join(root, owner.HISTORY)
+        os.remove(history)
+        os.symlink(self.private(os.path.join(root, "other"), b""), history)
+        self.refused(root, plan, "unsafe_operator_file")
+        self.assertEqual(self.journal(root), plan["expected"])
+
 
 if __name__ == "__main__":
     unittest.main()
