@@ -165,16 +165,15 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
   test "a probe that cannot authenticate refuses and leaves no grant", f do
     activated = activated!(f)
     restart!()
-    # Delete every grant as soon as it exists, so the server finds none to consume.
-    eraser = spawn_link(fn -> erase(ProbeRealm.table()) end)
+    # A zero lifetime registers a grant that has already expired, so the
+    # server finds none live to consume and the probe cannot authenticate.
+    Application.put_env(:lattice_carrier_server, :probe_grant_ttl_ms, 0)
+    on_exit(fn -> Application.delete_env(:lattice_carrier_server, :probe_grant_ttl_ms) end)
 
     unchanged!(f, activated, fn ->
       assert {:error, :readiness_pull_failed} =
                ReleaseReadiness.confirm(f.root, activated, f.probe)
     end)
-
-    Process.unlink(eraser)
-    Process.exit(eraser, :kill)
   end
 
   test "a probe slot that is already granted refuses busy and keeps the other grant", f do
@@ -297,13 +296,6 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
   defp write_key(path, seed, mode \\ 0o600) do
     File.write!(path, Base.encode16(seed, case: :lower))
     File.chmod!(path, mode)
-  end
-
-  defp erase(table) do
-    :ets.delete_all_objects(table)
-    erase(table)
-  rescue
-    ArgumentError -> :ok
   end
 
   defp digest(bytes), do: :crypto.hash(:sha256, bytes)

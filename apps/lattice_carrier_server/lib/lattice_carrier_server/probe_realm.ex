@@ -15,6 +15,14 @@ defmodule LatticeCarrierServer.ProbeRealm do
   @realm "lattice-operator-probe"
   @table __MODULE__
   @ttl_ms 10_000
+  # Configuration may only shorten the grant (tests use 0 for an already
+  # expired grant); it can never extend it past `@ttl_ms`.
+  defp ttl_ms do
+    case Application.get_env(:lattice_carrier_server, :probe_grant_ttl_ms, @ttl_ms) do
+      ms when is_integer(ms) and ms >= 0 -> min(ms, @ttl_ms)
+      _ -> @ttl_ms
+    end
+  end
 
   alias LatticeCarrierServer.Runtime
 
@@ -107,7 +115,7 @@ defmodule LatticeCarrierServer.ProbeRealm do
   defp insert(instance, pubkey) do
     ref = make_ref()
     now = now()
-    object = {instance, ref, pubkey, now + @ttl_ms}
+    object = {instance, ref, pubkey, now + ttl_ms()}
 
     try do
       :ets.select_delete(@table, [{{instance, :_, :_, :"$1"}, [{:"=<", :"$1", now}], [true]}])
