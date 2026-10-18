@@ -35,7 +35,12 @@ defmodule LatticeCarrierServer.Listener do
         {:_,
          [
            {"/carrier", LatticeCarrierServer.WebSocket,
-            %{holder: holder, trusted_peers: trusted_peers, authenticated?: false}}
+            %{
+              holder: holder,
+              instance: instance,
+              trusted_peers: trusted_peers,
+              authenticated?: false
+            }}
          ]}
       ])
 

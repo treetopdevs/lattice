@@ -50,7 +50,9 @@ defmodule LatticeCarrierServer.ApplicationTest do
     assert :lattice_core in runtime_apps
     assert :cowboy in runtime_apps
     assert :jason in runtime_apps
-    refute :lattice_web_socket in runtime_apps
+    # Plan 223: the readiness probe uses the real carrier client, a library app with no
+    # supervision tree, so it ships with the server; the server apps stay out.
+    assert :lattice_web_socket in runtime_apps
     refute :lattice_node_spike in runtime_apps
     refute :lattice_server in runtime_apps
     refute :township_web in runtime_apps

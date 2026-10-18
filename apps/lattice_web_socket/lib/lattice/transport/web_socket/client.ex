@@ -83,7 +83,7 @@ defmodule Lattice.Transport.WebSocket.Client do
            :gen_tcp.connect(
              String.to_charlist(host),
              port,
-             [:binary, active: false, packet: :raw],
+             address_family(host) ++ [:binary, active: false, packet: :raw],
              connect_timeout
            ),
          {:ok, buffer} <- handshake(socket, host, port, path, deadline),
@@ -233,12 +233,25 @@ defmodule Lattice.Transport.WebSocket.Client do
   defp validate_connect_timeout(timeout) when is_integer(timeout) and timeout > 0, do: :ok
   defp validate_connect_timeout(_timeout), do: {:error, :invalid_connect_timeout}
 
+  # An IPv6 literal such as "::1" needs the inet6 family to connect and
+  # brackets in the Host header; names and IPv4 literals are unchanged.
+  defp address_family(host) do
+    case :inet.parse_ipv6strict_address(String.to_charlist(host)) do
+      {:ok, _address} -> [:inet6]
+      {:error, _reason} -> []
+    end
+  end
+
+  defp host_header(host) do
+    if address_family(host) == [:inet6], do: "[#{host}]", else: host
+  end
+
   defp handshake(socket, host, port, path, deadline) do
     key = :crypto.strong_rand_bytes(16) |> Base.encode64()
 
     request = [
       "GET #{path} HTTP/1.1\r\n",
-      "Host: #{host}:#{port}\r\n",
+      "Host: #{host_header(host)}:#{port}\r\n",
       "Upgrade: websocket\r\n",
       "Connection: Upgrade\r\n",
       "Sec-WebSocket-Key: #{key}\r\n",

@@ -50,7 +50,9 @@ defmodule Lattice.Carrier.WebSocket do
     opts = Keyword.put_new(opts, :path, "/carrier")
 
     with {:ok, session} <- session_opts(opts),
-         {:ok, client} <- Client.connect(opts) do
+         # The identity signs the challenge here and never enters the transport
+         # process's start arguments, where a crash report could print it.
+         {:ok, client} <- Client.connect(Keyword.delete(opts, :identity)) do
       conn = %__MODULE__{client: client}
 
       case authenticate(conn, session) do

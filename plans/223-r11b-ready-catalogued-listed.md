@@ -16,34 +16,24 @@
 
 ## Status
 
-Design written 2026-10-18 (slice 8). `ready` is index row 223 (now PARKED, see below). `catalogued` and `listed` are row
-224, BLOCKED on absent operator inputs (rule 8). No R11c plan is written; see "Parked phases".
+Design written 2026-10-18 (slice 8). `catalogued` and `listed` are row 224, BLOCKED on absent operator
+inputs (rule 8). No R11c plan is written; see "Parked phases".
 
-**2026-10-18, slice 9: row 223 parked on the first STOP condition (probe key).** Drift check clean (no new
-phase, plan kind or `Health.ready?/0` change). Coordinator decision D-20 requires the frontier pull to
-authenticate as a roster member whose transport identity the operator names by file, never the child log
-root or the carrier service key. No such identity exists in this deployment model:
+Slice 9 parked row 223 on STOP 1: the admitted instance's `trusted_peers` is exactly
+`{child log root} ∪ roster` (`Staging.bootstrap_peers_exact?/3`), the carrier admits only those realms,
+D-20 barred the root and service keys, and member keys are device-held.
 
-- `Staging.bootstrap_peers_exact?/3` pins the admitted instance's `trusted_peers` to exactly
-  `{child log root} ∪ roster`, and `WebSocket.authenticate/2` admits only a realm in that map. D-20
-  excludes the child root and the service key; what remains are member keys.
-- Member keys are device-held (native key custody). The lifecycle contract
-  (`docs/research/treehouse_catalog_lifecycle.md` §5) says the operator does not sign as a member, and the
-  staging check that the service key is no participant's exists because holding a member's seed gives
-  the carrier custody of that participant's authority. Step 5's "the BEAM reads the seed" would do exactly
-  that, so a member seed on the operator host is borrowing, which D-20 forbids.
-- Every other route is itself a STOP here: a dedicated probe realm is a server-side change (STOP 2);
-  admitting an extra operator peer means loosening `bootstrap_peers_exact?`, which changes staging and
-  activation (STOP 3).
+**2026-10-18, operator decision D-22** takes option (a) in a narrower form than slice 9 sketched: a
+read-only operator probe realm on the carrier server, for frontier pulls only. D-22 supersedes D-20's
+roster-member requirement for the probe and lifts STOP 2 and STOP 3 for this purpose only. The probe key
+never enters `trusted_peers` or the roster, so `bootstrap_peers_exact?/3`, staging and activation are
+unchanged. Slice 10 refreshed this plan for D-22 (section "The operator probe realm") and builds row 223.
 
-Operator choice needed before row 223 resumes, one of: (a) a reviewed operator probe identity admitted
-as a distinct, non-member transport peer, with staging and activation's exact-peer check widened to
-`{child root} ∪ roster ∪ {probe}` and the probe given read-only pull, never relay. Option (a) needs an
-explicit operator decision that supersedes D-20's roster-member requirement and lifts STOP conditions 2 and 3
-for this probe; without that decision it is not available. Or (b) drop the
-authenticated pull from `ready` and let a member's own device perform the route check, recording
-readiness from a member-signed observation (changes this plan's meaning of `ready`). The other `ready`
-steps (1-4, 6) are unaffected and need no new input.
+**Slice 10 built row 223** (IN PROGRESS until hosted `mix test` is green on the exact tip). Changes from
+this text made in review: the readiness pull asks from an empty `have` set so every served op is encoded;
+the probe dials the listener's bound address, and the carrier client connects IPv6 literals; probe keys
+equal to the Space or child authority root are refused; the admitted route is found by its staged child
+log path. Row 226 tracks the 30-second probe session cap on large logs.
 
 ## Header
 
@@ -51,7 +41,8 @@ steps (1-4, 6) are unaffected and need no new input.
 - **Effort**: M (one PR for `ready`)
 - **Risk**: MEDIUM. It adds a phase to the reviewed journal contract and a new owner plan kind. A wrong
   `ready` record would assert a served route the operator never proved.
-- **Depends on**: row 217 (activation roster re-review, landed in slice 8); rows 216, 218 and 219 landed
+- **Depends on**: row 217 (activation roster re-review, landed in slice 8); rows 216, 218 and 219
+  landed; operator decision D-22 (probe realm)
 - **Category**: carrier lifecycle (roadmap R11b, operator decision D1: route activation is local-only)
 - **Planned at**: 2026-10-18, against the tree named by the drift-check paths above
 
@@ -118,13 +109,62 @@ and rejected because a slow holder would turn a correct boot into a refused one.
    `{child log root} ∪ roster`. Refusal: `{:error, :roster_drift_since_activation}`. A distinct atom
    from row 217's, so evidence shows which window the drift fell in. The check is repeated because a
    member can be added or removed between activation and restart.
-5. Authenticated frontier pull of the admitted child route through its loopback listener with the real
-   carrier client (not an in-process `Holder` call, which would duplicate step 3). The probe identity is
-   one the operator names by file; its public key must be in the admitted instance's `trusted_peers`,
-   else `{:error, :readiness_probe_untrusted}`. The BEAM reads the seed for the one session and never
-   persists or logs it. The returned frontier must equal the holder's `Log.frontier/1` for that
-   instance, else `{:error, :readiness_pull_failed}`; a connect, auth or decode failure is the same atom.
+   The served Space log is read with `Log.restore_verified/1` of the Space instance's `log_file` under
+   `Durability.with_target_lock/3` (the holder persists before it acknowledges, so the file is the
+   served history); a read failure is `{:error, :route_not_ready}`.
+5. Authenticated read of the admitted child route through its loopback listener with the real carrier
+   client (`Lattice.Carrier.WebSocket`, not an in-process `Holder` call, which would duplicate step 3),
+   authenticating through the operator probe realm below. Race-tolerant comparison, because members may
+   relay during the check: read `A = Holder.op_ids/1`, then the socket's frontier set `S` (the client's
+   `advertise/2`), then `B = Holder.op_ids/1`; require `A ⊆ S ⊆ B`. Then `pull/2` from an empty
+   `have`; the served ids must cover `S` and lie within `Holder.op_ids/1` read after the pull. Any
+   connect, auth, decode or comparison failure is `{:error, :readiness_pull_failed}`. Probe setup
+   refusals are listed below.
 6. Only then does the BEAM send the owner a `ready` plan. The owner is never invoked on a refusal above.
+
+`confirm/3` is `confirm(root, expected, probe_identity_file)`: the operator root, the current journal
+bytes (as `activate/4` takes them) and the probe key path. Like `activate/4`, it rescues every raise and
+exit to an atom-only refusal, so no refusal term can carry key material.
+
+## The operator probe realm (D-22)
+
+**Key.** An operator Ed25519 key, named by file and passed to `confirm/3` at call time. It is read with
+the manifest identity-file policy (regular file, owned by the service uid, no group or other bits, 64 hex
+characters); `Manifest` exposes that policy as one public reader rather than a restated copy. The BEAM
+holds the seed only inside the `confirm/3` call, wrapped in `Secret` until the challenge is signed. It is
+never written to the journal, a plan, a manifest, telemetry or a log. Its public key must differ from
+every instance's service key, every `trusted_peers` key of every instance (which includes the child log
+root and every roster member) and every member key; else `{:error, :readiness_probe_key_reused}` before
+anything is registered. The carrier client gets the identity for signing only:
+`Lattice.Carrier.WebSocket.connect/1` stops passing `:identity` into its transport process's start
+arguments, so a transport crash report cannot print it.
+
+**Server side: an ephemeral, single-use grant, not configuration.** `LatticeCarrierServer.ProbeRealm`
+keeps at most one grant per instance in an ETS table owned by a supervised process:
+`{instance, grant_ref, pubkey, deadline}`. `confirm/3` registers the public key for the admitted
+instance only, immediately before connecting, and revokes it in an `after` block. Registration refuses
+`:readiness_probe_busy` when a grant exists. The grant expires 10 seconds after registration. Nothing is
+persisted, and no manifest, staging or activation field changes, so the probe realm exists only while an
+operator call runs inside this BEAM. Whoever can make that call can already read every log file, so the
+grant adds no read access the operator lacked.
+
+**Authentication.** The probe presents the reserved realm `lattice-operator-probe`. `WebSocket` checks
+`trusted_peers` first; only on a miss, and only for that realm, does it look up the grant for its own
+instance (the listener passes the instance name in the handler state). The challenge is verified
+exactly as for a peer (server nonce, wire version, replica, signature over the grant's key), so a
+recorded challenge cannot be replayed on a new connection. After verification the grant is consumed by
+an exact-object delete; if the delete removed nothing (expired, revoked or already used), the session is
+`unauthenticated`. Every successful authentication sets the session's `probe?` flag explicitly, true or
+false. A registered grant whose realm collides with a `trusted_peers` key or an instance realm is
+refused at registration. A probe session lives at most 30 seconds.
+
+**Allowed and refused.** A probe session may send only `frontier` and `pull`. Each of `relay`,
+`subscribe`, `unsubscribe`, `state`, a second `carrier_challenge` and any other type is answered with the
+existing `read_only` error reason, reaches no `Holder` call, takes no relay token and leaves the session
+a probe; telemetry records the refusal with the request type and `probe: true`, never key material.
+
+Probe setup refusals in `confirm/3`: `:readiness_probe_key_unreadable` (file policy),
+`:readiness_probe_key_reused`, `:readiness_probe_busy`.
 
 ### Owner plan `ready` (Python)
 
@@ -168,6 +208,17 @@ cannot create or advance a phase.
   each asserting the owner was not invoked (journal and history bytes unchanged); a member added to the
   Space after activation and before restart refuses `:roster_drift_since_activation`; a restart after
   confirm with the same bytes boots and keeps `ready`.
+- Elixir `probe_realm_test.exs` (runs on macOS, real loopback listener): a probe with a live grant
+  reads `frontier` and `pull`; one negative test each for `relay`, `subscribe`, `unsubscribe`, `state`,
+  a second `carrier_challenge` and an unknown type (each `read_only`, holder log and subscriber set
+  unchanged); no grant, expired grant, revoked grant and a second connection reusing a consumed grant
+  are `unauthenticated`; a grant for one instance does not open another; the probe realm signed by a
+  trusted peer's key and a trusted peer's realm signed by the probe key are refused; wrong replica is
+  refused; registration refuses a busy instance, a reused key and a colliding realm; a trusted peer's
+  session is unchanged (relay and subscribe still work).
+- `release_readiness_test.exs` also asserts that an unreadable or group-readable probe file and a probe
+  key equal to the service key, the child root or a member refuse before any grant exists, and that no
+  grant remains after `confirm/3` returns, on success or refusal.
 - Validator parity: one table of record bytes (each phase, an unknown phase, a missing field) decoded
   by both `Journal.decode/1` and the Python `record()`, asserting the same accept or refuse. Behavioural
   only, no prose pins (rule 6).
@@ -201,21 +252,26 @@ until `catalogued` exists. No R11c plan is written now.
 - No history retention or rotation (row 225).
 - No change to `Health.ready?/0` semantics or the `/health` endpoint.
 - No catalog, signer, client or Tauri work.
+- No standing probe credential: no manifest field, environment variable or file the server reads at boot.
+
+`lattice_web_socket` becomes a runtime dependency of `lattice_carrier_server` (it depends only on
+`lattice_core` and `jason`), so the client in step 5 ships in the pilot release.
 
 ## Done criteria (row 223)
 
-- [ ] (PARKED 2026-10-18, probe identity; see Status) `ready` exists in both validators and only the `ready` owner plan can write it.
-- [ ] Every refusal named above has a test, and each BEAM refusal leaves journal and history unchanged.
-- [ ] The parity table passes on both sides.
+- [x] The probe realm admits only a live single-use grant, allows only `frontier` and `pull`, and has
+      a negative test for each refusal listed above.
+- [x] `ready` exists in both validators and only the `ready` owner plan can write it.
+- [x] Every refusal named above has a test, and each BEAM refusal leaves journal and history unchanged.
+- [x] The parity table passes on both sides.
 - [ ] The carrier-server suite and `mutation_protocol_test.py` pass in Docker; hosted `mix test` is
       green on the exact tip (rule 2).
 - [ ] Row 223 updated in one line; roadmap R11b stays IN PROGRESS until row 224 clears.
 
 ## STOP conditions
 
-- The operator holds no key in the admitted instance's `trusted_peers` that it may use for the probe.
-  Who authenticates the readiness pull then becomes an operator design question; report it, do not
-  use the carrier service key or mint a peer.
-- The probe needs a server-side change to authenticate (a new realm, an operator bypass).
+- STOP 1 (no operator key in `trusted_peers`), STOP 2 (a dedicated probe realm) and STOP 3 (changing
+  activation) were lifted by D-22 for the read-only probe only. Any other server-side auth change, or
+  any need to put the probe key in `trusted_peers`, the roster or a manifest, is still a STOP.
 - Row 217's roster check cannot be reused against a served log without changing activation.
 - Any change is needed under `apps/lattice_core/lib/lattice/carrier/` or another rule 3 path.

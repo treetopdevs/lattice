@@ -3,7 +3,9 @@
 The same process owns flock and every write/fsync. Killing it stops mutation;
 there is no separately running BEAM writer after lock loss. Its one activation
 step replaces the active manifest file with a staged candidate; it never starts,
-stops or restarts a service, and never signs anything. A controlled carrier boot
+stops or restarts a service, and never signs anything. Its ready step records,
+after the BEAM proved its local facts, that the activated candidate is still the
+active manifest under the latest boot's incarnation. A controlled carrier boot
 runs its own plan under the same lock: it completes a pending activation whose
 candidate is already active, refuses bytes the journal contradicts, and writes
 the incarnation marker that binds any later activation to that boot.
@@ -21,7 +23,7 @@ MAX_LINE = 64 * 1024 * 1024
 MAX_FILE = 32 * 1024 * 1024
 MAX_JOURNAL = 1024 * 1024
 SAFE = 9007199254740991
-PHASES = ("carrier_pending", "activated")
+PHASES = ("carrier_pending", "activated", "ready")
 INCARNATION = "operator-incarnation"
 HISTORY = "operator-journal-history.jsonl"
 
@@ -333,13 +335,17 @@ def history(root, old):
     sync_dir(root)
 
 
-def commit(root, old, raw, activation=False):
+def commit(root, old, raw, activation=False, ready=False):
     next_record = record(raw)
-    # Only activate() may write an activated record, after its own checks;
-    # an ordinary plan can neither create one nor move an attempt's phase.
-    if not activation and next_record["phase"] != "carrier_pending":
+    # Only activate() may write an activated record and only ready() a ready
+    # one, each after its own checks; an ordinary plan can neither create a
+    # phase nor move an attempt's phase.
+    if ready:
+        if activation or old is None or next_record["phase"] != "ready":
+            refuse("stale_operator_intent")
+    elif not activation and next_record["phase"] != "carrier_pending":
         refuse("stale_operator_intent")
-    if old is not None and not activation:
+    if old is not None and not activation and not ready:
         old_record = record(old)
         if old_record["attempt"] == next_record["attempt"] and old_record != next_record:
             refuse("stale_operator_intent")
@@ -439,6 +445,45 @@ def activate(root, plan):
     reply({"ok": True})
 
 
+def ready(root, plan):
+    """Record that the activated candidate is still the active manifest under
+    the latest controlled boot. The BEAM has already proved its local facts
+    (plan 223); this step only re-checks, under the lock, what the owner can
+    see: the journal, the boot marker and the active bytes. It writes nothing
+    but the journal, through the row 218 history append."""
+    checks = plan["checks"]
+    if (plan["artifacts"] is not None or type(plan["expected"]) is not str
+            or type(plan["record"]) is not str or not op_id(plan["attempt"])
+            or not hex_id(plan["incarnation"]) or not one_check(checks)):
+        refuse("malformed_operator_plan")
+    old = record(plan["expected"])
+    manifests = [a for a in old["artifacts"] if a["kind"] == "manifest"]
+    if len(manifests) != 1:
+        refuse("corrupt_operator_journal")
+    if (old["phase"] != "activated" or old["attempt"] != plan["attempt"]
+            or record(plan["record"]) != dict(old, phase="ready")
+            or checks[0]["sha256"] != manifests[0]["sha256"]):
+        refuse("stale_operator_intent")
+    # A later restart wrote a new marker, so readiness observed by an older
+    # incarnation is never recorded.
+    if file_bytes(os.path.join(root, INCARNATION), 64, missing=True, private=True) != plan["incarnation"].encode():
+        refuse("stale_operator_incarnation")
+    target = checks[0]["path"]
+    if target in reserved(root, old):
+        refuse("unsafe_operator_file")
+    expected(root, plan["expected"])
+    try:
+        present = digest(file_bytes(target, allow_root=True))
+    except FileNotFoundError:
+        refuse("stale_operator_intent")
+    except OSError:
+        refuse("unsafe_operator_file")
+    if present != manifests[0]["sha256"]:
+        refuse("stale_operator_intent")
+    commit(root, plan["expected"], plan["record"], ready=True)
+    reply({"ok": True})
+
+
 def one_check(checks):
     return (type(checks) is list and len(checks) == 1 and closed(checks[0], ["path", "sha256"])
             and hex_id(checks[0]["sha256"]) and type(checks[0]["path"]) is str
@@ -497,6 +542,10 @@ def boot(root, plan):
                 refuse("corrupt_operator_journal")
             commit(root, raw, activated, activation=True)
         elif old["phase"] == "activated" and present == old["manifest_digest"] != candidate:
+            refuse("stale_operator_intent")
+        elif old["phase"] == "ready" and present != candidate:
+            # Ready describes the activated bytes; a restart does not undo
+            # them, but any other active bytes contradict the record.
             refuse("stale_operator_intent")
     marker = os.urandom(32).hex()
     temporary = os.path.join(root, INCARNATION + ".tmp." + os.urandom(16).hex())
@@ -637,6 +686,11 @@ def execute(root, plan):
         if plan["record"] is None:
             refuse("malformed_operator_plan")
         activate(root, plan)
+        return
+    if plan["kind"] == "ready":
+        if plan["record"] is None:
+            refuse("malformed_operator_plan")
+        ready(root, plan)
         return
     if plan["incarnation"] is not None:
         refuse("malformed_operator_plan")
