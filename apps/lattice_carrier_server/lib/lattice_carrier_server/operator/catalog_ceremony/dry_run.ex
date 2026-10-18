@@ -78,6 +78,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.DryRun do
   defp listing({:ok, []}), do: :ok
   defp listing(_), do: {:error, :ceremony_not_empty}
 
+  defp private_dir?(dir), do: File.mkdir_p(dir) == :ok and File.chmod(dir, 0o700) == :ok
+
   defp layout(dir) do
     paths = %{
       signer_dir: Path.join(dir, "disposable-signer"),
@@ -87,17 +89,16 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.DryRun do
       final: Path.join(dir, "disposable-space.log")
     }
 
-    for key <- [:signer_dir, :backup_dir, :restore_dir] do
-      File.mkdir_p!(paths[key])
-      File.chmod!(paths[key], 0o700)
+    if Enum.all?([:signer_dir, :backup_dir, :restore_dir], &private_dir?(paths[&1])) do
+      {:ok,
+       Map.merge(paths, %{
+         signer: Path.join(paths.signer_dir, "signer.seed"),
+         backup: Path.join(paths.backup_dir, "signer.backup"),
+         restored: Path.join(paths.restore_dir, "signer.seed")
+       })}
+    else
+      {:error, :ceremony_directory_invalid}
     end
-
-    {:ok,
-     Map.merge(paths, %{
-       signer: Path.join(paths.signer_dir, "signer.seed"),
-       backup: Path.join(paths.backup_dir, "signer.backup"),
-       restored: Path.join(paths.restore_dir, "signer.seed")
-     })}
   end
 
   defp step(dir, paths, extra) do

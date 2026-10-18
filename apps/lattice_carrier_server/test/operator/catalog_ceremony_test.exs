@@ -1501,7 +1501,15 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
   test "artifact temporary files are exclusive and never follow a planted link", f do
     victim = Path.join(f.base, "victim.txt")
     File.write!(victim, "untouched")
-    File.ln_s!(victim, Path.join(f.ceremony, ".signer.json.tmp"))
+    File.ln_s!(victim, Path.join(f.ceremony, ".probe.json.fixed.tmp"))
+
+    # The exact temporary name collides with the planted link: exclusive raw
+    # creation refuses instead of following it.
+    assert {:error, :ceremony_write_failed} =
+             Store.write_text(f.ceremony, "probe.json", "public\n", "fixed")
+
+    assert File.read!(victim) == "untouched"
+    refute File.exists?(Path.join(f.ceremony, "probe.json"))
 
     public = generate!(f)
     assert File.read!(victim) == "untouched"

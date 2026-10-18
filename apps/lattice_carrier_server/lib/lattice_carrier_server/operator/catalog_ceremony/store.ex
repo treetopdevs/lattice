@@ -97,11 +97,11 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
   @spec write(Path.t(), String.t(), map()) :: {:ok, binary()} | {:error, :ceremony_write_failed}
   def write(dir, name, map), do: write_text(dir, name, Jason.encode!(map, pretty: true) <> "\n")
 
-  @spec write_text(Path.t(), String.t(), binary()) ::
+  # `suffix` is a test seam only; callers use the random default.
+  @spec write_text(Path.t(), String.t(), binary(), String.t()) ::
           {:ok, binary()} | {:error, :ceremony_write_failed}
-  def write_text(dir, name, bytes) do
+  def write_text(dir, name, bytes, suffix \\ random_suffix()) do
     target = Path.join(dir, name)
-    suffix = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
     temporary = Path.join(dir, "." <> name <> "." <> suffix <> ".tmp")
 
     # Exclusive raw creation: a planted link at the temporary name is never followed.
@@ -119,6 +119,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
       _ -> {:error, :ceremony_write_failed}
     end
   end
+
+  defp random_suffix, do: :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
 
   defp failed(temporary) do
     File.rm(temporary)
