@@ -143,13 +143,24 @@ app.reviewContinuation({ nominee, witnesses: witnesses.join("\n") });
 const confirmed = structuredClone(review);
 const pinning2 = app.pinContinuation(confirmed);
 await Promise.resolve();
-confirmed.witnesses.reverse();
-const pinId = await pinning2;
+const intruder = randomKey();
+confirmed.witnesses[0] = intruder;
+// exclusive() timing decides whether the change lands before or after the comparison: either it is refused, or the
+// workflow's own reviewed copy is signed. The intruding key is never signed.
+let pinId: string;
+try {
+  pinId = await pinning2;
+} catch (error) {
+  assert.match((error as Error).message, /continuation_review_mismatch/);
+  app.reviewContinuation({ nominee, witnesses: witnesses.join("\n") });
+  pinId = await app.pinContinuation(structuredClone(review));
+}
 const pinned = spaceOf(app);
 assert.ok(pinned.outbox.includes(pinId) && !pinned.acked.includes(pinId), "the pin is queued, not delivered");
 const pin = treehouseContinuationPin(pinned.frames);
 assert.equal(pin.configured && pin.profileGenesis, pinId);
 assert.deepEqual(pin.configured && pin.profile.witnesses, review.witnesses, "the signed pin carries the reviewed witnesses");
+assert.ok(pin.configured && !pin.profile.witnesses.includes(intruder) && pin.profile.nominee !== intruder);
 assert.equal(app.continuation().pinned, true);
 assert.equal(app.views.get(replica)!.quarantineReasons.size, 0, "the pin is honored");
 const reopened = await fresh(native);
