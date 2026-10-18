@@ -91,8 +91,8 @@ and only when stdin is a pipe or a file. If stdin is a terminal the tool refuses
 reliably from inside the Erlang VM. Section 5.2 shows the silent shell recipe that pipes the
 passphrase in.
 
-Secret paths (the seed, a restored seed, the backup) are checked along their whole resolved
-ancestor chain: every directory up to `/` must be a real directory owned by you or root and must
+Secret paths (the seed, a restored seed, the backup) are resolved once to a canonical path, which
+every later check and write uses, and are checked along that whole ancestor chain: every directory up to `/` must be a real directory owned by you or root and must
 not be group- or other-writable unless it has the sticky bit (like `/tmp`). Files are created with
 `O_EXCL`, then bound to the created inode (chmod 0600, then the path must still be that same
 regular file with mode 0600 and one link) before any byte is written; a failure removes only the
@@ -156,9 +156,10 @@ entries differ. The restore drill in 5.3 then proves the holder's own copy decry
 `backup` needs `CEREMONY/signer.json` from step 5.1 and re-reads the seed from `SIGNER` (the
 seed must derive the recorded public key, else `signer_key_mismatch`; an unreadable or
 policy-violating seed file is `signer_unreadable`). The `BACKUP` file is created with `O_EXCL` and
-mode 0600. Its directory must exist and be a directory (removable media owned by someone else is
-fine, since the file is ciphertext); it need not be private, but its ancestors must still not be
-group- or other-writable without the sticky bit (`backup_directory_unavailable`).
+mode 0600. Its directory and every ancestor must be owned by you or root and must not be group- or
+other-writable without the sticky bit (`backup_directory_unavailable`), because nobody else may be
+able to swap the file between its creation and its chmod. A removable volume mounted by macOS with
+ownership ignored shows as yours; otherwise make a 0700 directory on the medium first.
 
 Stdout carries `bytes`, `public_key_base64`, `sha256` and `backup_record` (the path of
 `backup.json`). Refusals: `passphrase_mismatch`, `passphrase_too_short` (under 20 characters), `passphrase_too_long`

@@ -1,8 +1,8 @@
 defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
   @moduledoc false
-  # Path policy for every file that can hold a seed or a backup of one. The
-  # parent directory of a secret must be private to the operator, so the
-  # window between exclusive creation and the chmod exposes nothing.
+  # Path policy for every file that can hold a seed or a backup of one. Paths
+  # are canonicalized once and every ancestor must be unswappable by another
+  # user, so the window between exclusive creation and the chmod exposes nothing.
 
   import Bitwise
 
@@ -13,27 +13,45 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
   def signer(path, ceremony, mode) do
     with {:ok, expanded} <- explicit(path, :signer_path_required),
          :ok <- leaf(expanded, :signer_symlink),
-         :ok <- private_directory(Path.dirname(expanded)),
-         :ok <- ancestors_safe(Path.dirname(expanded), :unsafe_signer_directory),
-         :ok <- outside_git(expanded, :signer_in_git_checkout, mode),
-         :ok <- no_overlap(expanded, ceremony, mode) do
-      {:ok, expanded}
+         {:ok, canonical} <- canonical(expanded, :unsafe_signer_directory),
+         :ok <- leaf(canonical, :signer_symlink),
+         :ok <- private_directory(Path.dirname(canonical)),
+         :ok <- ancestors_safe(Path.dirname(canonical), :unsafe_signer_directory),
+         :ok <- outside_git(canonical, :signer_in_git_checkout, mode),
+         :ok <- no_overlap(canonical, ceremony, mode) do
+      {:ok, canonical}
     end
   end
 
-  # A backup path. It is ciphertext, so its directory may be removable media
-  # with foreign ownership; it only must exist, differ from the signer's
-  # directory tree, and stay out of any git work tree.
+  # A backup path. It is ciphertext, but the tool chmods it by path after the
+  # exclusive create, so its directory and every ancestor must be owned by this
+  # user or root and not group/other-writable unless sticky: nobody else may be
+  # able to swap the created entry. It must also differ from the signer's
+  # directory tree and stay out of any git work tree.
   @spec backup(term(), Path.t(), :real | :dry_run) :: {:ok, Path.t()} | {:error, atom()}
   def backup(path, signer_path, mode) do
     with {:ok, expanded} <- explicit(path, :backup_path_required),
          :ok <- leaf(expanded, :backup_symlink),
-         :ok <- plain_directory(Path.dirname(expanded)),
-         :ok <- ancestors_safe(Path.dirname(expanded), :backup_directory_unavailable),
-         :ok <- outside_git(expanded, :backup_in_git_checkout, mode),
-         :ok <- apart(expanded, signer_path) do
-      {:ok, expanded}
+         {:ok, canonical} <- canonical(expanded, :backup_directory_unavailable),
+         :ok <- leaf(canonical, :backup_symlink),
+         :ok <- plain_directory(Path.dirname(canonical)),
+         :ok <-
+           ancestors_safe(Path.dirname(canonical), :backup_directory_unavailable,
+             include_self: true
+           ),
+         :ok <- outside_git(canonical, :backup_in_git_checkout, mode),
+         :ok <- apart(canonical, signer_path) do
+      {:ok, canonical}
     end
+  end
+
+  # Resolve every link in the parent once; all later checks and all I/O use
+  # this canonical path, so a link swapped after validation is never followed
+  # through an ancestor that was not itself checked.
+  defp canonical(path, reason) do
+    {:ok, real_dir(path)}
+  catch
+    :symlink_loop -> {:error, reason}
   end
 
   # An existing backup being read: a regular file, never a link.
@@ -165,8 +183,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
   @doc """
   Every ancestor of `dir` (after resolving links), up to `/`, must be a real
   directory owned by this user or root and not group/other-writable unless it
-  has the sticky bit. With `include_self: false` the directory itself is
-  skipped (a backup directory on removable media may be foreign-owned).
+  has the sticky bit. With `include_self: false` (the default) the directory
+  itself is skipped because the caller checks it more strictly.
   """
   @spec ancestors_safe(Path.t(), atom(), keyword()) :: :ok | {:error, atom()}
   def ancestors_safe(dir, reason, opts \\ []) do

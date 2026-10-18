@@ -1187,12 +1187,21 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     generate!(f)
     opts = [signer: f.signer, ceremony: f.ceremony, passphrase_reader: passphrase_reader()]
 
-    # The backup directory itself may be foreign, its ancestors may not be open.
+    # Neither the backup directory nor its ancestors may be swappable by others.
     open_backups = Path.join(inner, "backups")
     File.mkdir_p!(open_backups)
 
     assert {:error, :backup_directory_unavailable} =
              Ceremony.backup(opts ++ [out: Path.join(open_backups, "b")])
+
+    shared_backups = Path.join(f.base, "shared-backups")
+    File.mkdir_p!(shared_backups)
+    File.chmod!(shared_backups, 0o770)
+
+    assert {:error, :backup_directory_unavailable} =
+             Ceremony.backup(opts ++ [out: Path.join(shared_backups, "b")])
+
+    refute File.exists?(Path.join(shared_backups, "b"))
 
     assert {:error, :ceremony_directory_invalid} =
              Ceremony.generate(
@@ -1204,6 +1213,13 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
 
     assert {:ok, _} =
              Ceremony.generate(signer: Path.join(sticky, "s.seed"), ceremony: sticky <> "-c")
+  end
+
+  test "a secret path through a symlinked parent is canonicalized before any check or write", f do
+    link = Path.join(f.base, "keys-link")
+    File.ln_s!(f.keys, link)
+    assert {:ok, canonical} = Paths.signer(Path.join(link, "c.seed"), f.ceremony, :real)
+    assert canonical == Path.join(Paths.real(f.keys), "c.seed")
   end
 
   test "a secret file is created exclusively, bound to its inode, and removed on failure", f do
