@@ -16,8 +16,32 @@
 
 ## Status
 
-Design written 2026-10-18 (slice 8). `ready` is index row 223 (TODO). `catalogued` and `listed` are row
+Design written 2026-10-18 (slice 8). `ready` is index row 223 (now BLOCKED, see below). `catalogued` and `listed` are row
 224, BLOCKED on absent operator inputs (rule 8). No R11c plan is written; see "Parked phases".
+
+**2026-10-18, slice 9: row 223 parked on the first STOP condition (probe key).** Drift check clean (no new
+phase, plan kind or `Health.ready?/0` change). Coordinator decision D-20 requires the frontier pull to
+authenticate as a roster member whose transport identity the operator names by file, never the child log
+root or the carrier service key. No such identity exists in this deployment model:
+
+- `Staging.bootstrap_peers_exact?/3` pins the admitted instance's `trusted_peers` to exactly
+  `{child log root} ∪ roster`, and `WebSocket.authenticate/2` admits only a realm in that map. D-20
+  excludes the child root and the service key; what remains are member keys.
+- Member keys are device-held (native key custody). The lifecycle contract
+  (`docs/research/treehouse_catalog_lifecycle.md` §5) says the operator does not sign as a member, and the
+  staging check that the service key is no participant's exists because holding a member's seed gives
+  the carrier custody of that participant's authority. Step 5's "the BEAM reads the seed" would do exactly
+  that, so a member seed on the operator host is borrowing, which D-20 forbids.
+- Every other route is itself a STOP here: a dedicated probe realm is a server-side change (STOP 2);
+  admitting an extra operator peer means loosening `bootstrap_peers_exact?`, which changes staging and
+  activation (STOP 3).
+
+Operator choice needed before row 223 resumes, one of: (a) a reviewed operator probe identity admitted
+as a distinct, non-member transport peer, with staging and activation's exact-peer check widened to
+`{child root} ∪ roster ∪ {probe}` and the probe given read-only pull, never relay; or (b) drop the
+authenticated pull from `ready` and let a member's own device perform the route check, recording
+readiness from a member-signed observation (changes this plan's meaning of `ready`). The other `ready`
+steps (1-4, 6) are unaffected and need no new input.
 
 ## Header
 
@@ -178,7 +202,7 @@ until `catalogued` exists. No R11c plan is written now.
 
 ## Done criteria (row 223)
 
-- [ ] `ready` exists in both validators and only the `ready` owner plan can write it.
+- [ ] (BLOCKED 2026-10-18, probe identity; see Status) `ready` exists in both validators and only the `ready` owner plan can write it.
 - [ ] Every refusal named above has a test, and each BEAM refusal leaves journal and history unchanged.
 - [ ] The parity table passes on both sides.
 - [ ] The carrier-server suite and `mutation_protocol_test.py` pass in Docker; hosted `mix test` is
