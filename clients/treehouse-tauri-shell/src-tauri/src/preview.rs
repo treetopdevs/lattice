@@ -106,6 +106,29 @@ fn token(value: &str) -> bool {
 /// A Space replica is exactly the legacy grammar OR this one; Threads stay legacy-only. The shell's
 /// `isProfileReplica` (treehouse_routes.ts) states the same two grammars.
 const BOUNDED_MARK: &str = "#authority:bounded-continuation-v1#root:";
+/// A 43-character token is canonical base64url for 32 bytes only when its last character has two zero low bits (one of AEIMQUYcgkosw048).
+/// The bounded grammar requires that of both tokens; the legacy grammar keeps accepting any token.
+fn canonical_token(value: &str) -> bool {
+    token(value)
+        && matches!(
+            value.as_bytes()[42],
+            b'A' | b'E'
+                | b'I'
+                | b'M'
+                | b'Q'
+                | b'U'
+                | b'Y'
+                | b'c'
+                | b'g'
+                | b'k'
+                | b'o'
+                | b's'
+                | b'w'
+                | b'0'
+                | b'4'
+                | b'8'
+        )
+}
 /// `tail` is what follows `replica:treehouse:<kind>:`.
 fn replica_tail(tail: &str, space: bool) -> bool {
     tail.split_once("#root:")
@@ -113,7 +136,7 @@ fn replica_tail(tail: &str, space: bool) -> bool {
         || (space
             && tail
                 .split_once(BOUNDED_MARK)
-                .is_some_and(|(nonce, root)| token(nonce) && token(root)))
+                .is_some_and(|(nonce, root)| canonical_token(nonce) && canonical_token(root)))
 }
 fn replica(value: &str, kind: &str) -> bool {
     value
@@ -853,7 +876,8 @@ impl PreviewStore {
                         && p.replica.starts_with(&format!(
                             "replica:treehouse:space:{}{}",
                             pending.nonce, BOUNDED_MARK
-                        )))) && !old.profiles.iter().any(|old| old.replica == p.replica)
+                        ))))
+                        && !old.profiles.iter().any(|old| old.replica == p.replica)
                 })
             {
                 return Err("creation_incomplete".into());

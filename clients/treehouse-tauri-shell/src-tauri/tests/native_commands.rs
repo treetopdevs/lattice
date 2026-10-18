@@ -584,8 +584,9 @@ fn relay_routes_are_capped_closed_and_pinned() {
 // Row 232: a bounded-family Space replica completes a Space creation intent; near misses do not.
 #[test]
 fn bounded_space_replica_completes_a_space_intent_and_near_misses_do_not() {
-    let nonce = "a".repeat(43);
-    let root = "b".repeat(43);
+    // Canonical 32-byte base64url tokens: the last character has two zero low bits.
+    let nonce = format!("{}c", "a".repeat(42));
+    let root = format!("{}c", "b".repeat(42));
     let bounded = |mark: &str| {
         let replica = format!("replica:treehouse:space:{nonce}{mark}#root:{root}");
         let id = "c".repeat(43);
@@ -601,7 +602,13 @@ fn bounded_space_replica_completes_a_space_intent_and_near_misses_do_not() {
         let dir = tempfile::tempdir().unwrap();
         let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
         let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
-        let initial = initialized(&mut store);
+        let mut initial = intent();
+        initial["intent"]["nonce"] = json!(nonce);
+        assert!(commit(&mut store, 0, &initial));
+        let key = store.initialize().unwrap();
+        initial["publicKey"] = json!(key);
+        initial["revision"] = json!(2);
+        assert!(commit(&mut store, 1, &initial));
         store.commit(2, &bounded(mark)(initial).to_string())
     };
     assert!(attempt("#authority:bounded-continuation-v1").unwrap());

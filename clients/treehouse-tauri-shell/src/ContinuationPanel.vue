@@ -46,8 +46,13 @@ const messages: Record<string, string> = {
   binding_mismatch:
     "That binding does not match this Space's pinned continuation. Nothing was changed.",
   catalog_bootstrap_exists:
-    "This Space carries a catalog binding. It is signed once.",
+    "This Space already carries a catalog binding; this app signs only one.",
   no_pending_binding: "Review a binding payload first.",
+  no_pending_continuation: "Review the continuation settings first.",
+  continuation_review_mismatch:
+    "Those settings are not the ones that were reviewed. Review them again.",
+  binding_key_reuse:
+    "The catalog or service key in that binding is the Space root's own key. Nothing was changed.",
   creation_incomplete: "Finish the pending local setup first.",
   space_unavailable: "No Space is saved on this device.",
   identity_unavailable:
@@ -267,7 +272,7 @@ function cancelBinding() {
         </ul>
         <p>
           Compare the canonical sha256 above with the one in the ceremony's
-          binding-review.txt before signing. Signing is once only.
+          binding-review.txt before signing. This app signs one binding per Space.
         </p>
         <div class="actions">
           <button

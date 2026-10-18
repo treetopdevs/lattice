@@ -219,8 +219,10 @@ defmodule Treehouse.Space do
   @spec prepare_continuation_pin(Identity.t(), Log.t(), map()) :: {:ok, Op.t()} | {:error, atom()}
   def prepare_continuation_pin(identity, %Log{} = log, params) do
     with :ok <- bounded_space(log),
+         {:ok, pinned?} <- observe_pin(log),
          :ok <- ready(log),
          :ok <- root(identity, log),
+         :ok <- if(pinned?, do: {:error, :continuation_already_pinned}, else: :ok),
          {:ok, profile} <- pin_profile(identity, params) do
       empty = Delegation.genesis(identity, log.replica, ops: [], roles: [], live: false)
 
@@ -232,6 +234,24 @@ defmodule Treehouse.Space do
         {:genesis, empty, %{__continuation__: profile}}
       )
     end
+  end
+
+  # Authenticated, complete history first (the judge's own check); a corrupt log is never signed over.
+  defp observe_pin(log) do
+    case Authority.continuation_profile(log) do
+      {:error, :invalid_verified_history} -> {:error, :invalid_verified_history}
+      {:ok, _} -> {:ok, true}
+      _ -> {:ok, false}
+    end
+  end
+
+  # Same question as `root/2` for the early refusal, answered from the replica binding alone.
+  defp root_binding(identity, %Log{replica: replica}) do
+    [name | _] = String.split(replica, "#root:", parts: 2)
+
+    if Authority.bind_replica(name, identity.pub) == replica,
+      do: :ok,
+      else: {:error, :not_root}
   end
 
   defp bounded_space(%Log{replica: replica}) do
@@ -279,10 +299,11 @@ defmodule Treehouse.Space do
   @spec author_catalog_bootstrap(Identity.t(), Log.t(), map()) :: {:ok, Op.t()} | {:error, atom()}
   def author_catalog_bootstrap(identity, %Log{} = log, record) do
     with :ok <- bounded_space(log),
-         :ok <- root(identity, log),
+         :ok <- root_binding(identity, log),
          {:ok, observed} <- bootstrap_profile(log),
          {:ok, record} <- bootstrap_record(record),
          :ok <- bootstrap_binding(identity, log, observed, record),
+         :ok <- bootstrap_key_separation(identity, record),
          :ok <- no_bootstrap(log),
          {:ok, cap} <- root_capability(log, identity) do
       Op.authored(
@@ -299,8 +320,16 @@ defmodule Treehouse.Space do
   defp bootstrap_profile(log) do
     case Authority.continuation_profile(log) do
       {:ok, observed} -> {:ok, observed}
+      {:error, :invalid_verified_history} -> {:error, :invalid_verified_history}
       _ -> {:error, :continuation_not_configured}
     end
+  end
+
+  # The ceremony's key-separation rule: the catalog and service keys are never the Space root's.
+  defp bootstrap_key_separation(identity, record) do
+    if record.catalog_key == identity.pub or record.service_key == identity.pub,
+      do: {:error, :binding_key_reuse},
+      else: :ok
   end
 
   defp bootstrap_record(record) do

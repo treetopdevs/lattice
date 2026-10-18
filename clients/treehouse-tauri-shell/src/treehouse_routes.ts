@@ -16,8 +16,18 @@ import type { RelayConfig, RelayRoute } from "./treehouse_state";
 const LEGACY_SPACE_REPLICA = /^replica:treehouse:space:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/;
 const BOUNDED_SPACE_REPLICA =
   /^replica:treehouse:space:[A-Za-z0-9_-]{43}#authority:bounded-continuation-v1#root:[A-Za-z0-9_-]{43}$/;
+// A 43-character base64url token is canonical for 32 bytes only when its last character carries two zero
+// low bits (one of A E I M Q U Y c g k o s w 0 4 8). The bounded grammar requires that of both tokens (the authority judge refuses the
+// rest as unsupported); the legacy grammar keeps accepting any 43-character token.
+const CANONICAL_TAIL = /[AEIMQUYcgkosw048]$/;
+const boundedSpaceReplica = (replica: string): boolean => {
+  if (!BOUNDED_SPACE_REPLICA.test(replica)) return false;
+  const nonce = replica.slice("replica:treehouse:space:".length).split("#")[0]!;
+  const root = replica.slice(replica.lastIndexOf("#root:") + "#root:".length);
+  return CANONICAL_TAIL.test(nonce) && CANONICAL_TAIL.test(root);
+};
 const SPACE_REPLICA = {
-  test: (replica: string) => LEGACY_SPACE_REPLICA.test(replica) || BOUNDED_SPACE_REPLICA.test(replica),
+  test: (replica: string) => LEGACY_SPACE_REPLICA.test(replica) || boundedSpaceReplica(replica),
 };
 const THREAD_REPLICA = /^replica:treehouse:thread:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/;
 /** True when `replica` is exactly the grammar of a persisted profile of that kind. */

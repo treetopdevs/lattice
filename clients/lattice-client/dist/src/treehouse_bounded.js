@@ -8,10 +8,11 @@ import { base64ToBytes, carrierDelegationsFromFrames, carrierOpsToSemanticOps, d
 import { canonicalOrder, index } from "./dag";
 import { compareUtf8 } from "./op";
 import { frontier } from "./sync";
+import { materialize } from "./materialize";
 import { bindTownshipReplica, authorTownshipGenesis } from "./township";
 import { continuationFamily, continuationProfileBindingMatches, resolveContinuationProfileFromFrames } from "./authority";
 import { continuationProfileId, continuationProfileToCarrierTerm, normalizeContinuationProfile } from "./continuation";
-import { authorTreehouseCommand, treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceInitialization } from "./treehouse";
+import { authorTreehouseCommand, treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceInitialization, treehouseSpaceSchema } from "./treehouse";
 import { catalogBootstrapToCarrierTerm, normalizeCatalogBootstrap } from "./treehouse_catalog_codec";
 const AUTHORITY_SEGMENT = "#authority:bounded-continuation-v1";
 const NONCE_REPLICA = /^replica:treehouse:space:([A-Za-z0-9_-]{43})$/;
@@ -138,6 +139,8 @@ export async function authorTreehouseContinuationPin(input) {
         throw new Error("space_not_ready");
     if (!(await signerIsRoot(replica, input.signer)))
         throw new Error("not_root");
+    if (treehouseContinuationPin(history.frames).configured)
+        throw new Error("continuation_already_pinned");
     const profile = normalizeContinuationProfile({ mode: "bounded_continuation", version: 1, product: "treehouse",
         kind: "space", role: "admin", nominee: keyB64(input.nominee), witnesses: input.witnesses.map(keyB64),
         threshold: input.threshold, maxLeaseEpochs: input.maxLeaseEpochs });
@@ -230,6 +233,8 @@ export async function reviewTreehouseCatalogBindingPayload(input) {
         return refuse("not_root");
     if (treehouseSpaceFamily(input.replica) !== "bounded")
         return refuse("not_bounded_space");
+    if (record.catalogKey === record.spaceRoot || record.serviceKey === record.spaceRoot)
+        return refuse("binding_key_reuse");
     const resolved = await resolveContinuationProfileFromFrames({ replica: input.replica, frames: input.frames });
     if (!resolved.ok)
         return refuse("continuation_not_configured");
@@ -269,6 +274,8 @@ export async function authorTreehouseCatalogBootstrap(input) {
     if (record.space !== replica || record.spaceRoot !== bytesToB64(input.signer.publicKey) ||
         record.profileGenesis !== resolved.profileGenesis || record.profileId !== resolved.profileId)
         throw new Error("binding_mismatch");
+    if (record.catalogKey === record.spaceRoot || record.serviceKey === record.spaceRoot)
+        throw new Error("binding_key_reuse");
     const history = await verifiedHistory(replica, input.frames);
     const existing = await treehouseCatalogBootstrapsFromFrames({ replica, frames: input.frames });
     if (!existing.ok)
@@ -276,9 +283,19 @@ export async function authorTreehouseCatalogBootstrap(input) {
     if (existing.bootstraps.length > 0)
         throw new Error("catalog_bootstrap_exists");
     const root = bytesToB64(input.signer.publicKey);
-    const genesis = history.frames.find((frame) => frame.kind === "authority" && frame.author === root &&
-        carrierDelegationsFromFrames([frame]).some((d) => d.parent_id === null && d.issuer === root && d.roles.includes("admin")));
-    const capId = genesis === undefined ? undefined : carrierDelegationsFromFrames([genesis])[0]?.id;
+    // The first honored root admin genesis in canonical order, as `Treehouse.Space.root_capability/2` selects it.
+    const byId = index(history.ops), quarantined = materialize(treehouseSpaceSchema, history.ops).quarantineReasons;
+    let capId;
+    for (const id of canonicalOrder(history.ops, byId)) {
+        const frame = history.frames.find((f) => f.id === id);
+        if (frame === undefined || frame.kind !== "authority" || frame.author !== root || quarantined.has(id))
+            continue;
+        const found = carrierDelegationsFromFrames([frame]).find((d) => d.parent_id === null && d.issuer === root && d.roles.includes("admin"));
+        if (found !== undefined) {
+            capId = found.id;
+            break;
+        }
+    }
     if (capId === undefined)
         throw new Error("invalid_verified_history");
     return authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier, signer: input.signer,

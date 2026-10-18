@@ -192,6 +192,7 @@ export class TreehouseWorkflow {
   /** Reviewed but unconfirmed offer routes. Memory only: Use never persists. */
   private pendingOffer: { review: OfferReview; relay: RelayConfig } | null = null;
   /** Reviewed but unsigned catalog binding payload. Memory only: cancelling or reopening discards it. */
+  private pendingContinuation: ContinuationReview | null = null;
   private pendingBinding: { payloadText: string; review: BindingReview } | null = null;
   private continuationCache: { state: PreviewState; facts: ContinuationFacts } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
@@ -225,6 +226,7 @@ export class TreehouseWorkflow {
     this.views = views;
     this.pendingOffer = null;
     this.pendingBinding = null;
+    this.pendingContinuation = null;
     this.keyAvailable = captured.keyStatus === "available";
     if (
       captured.record !== null &&
@@ -652,13 +654,26 @@ export class TreehouseWorkflow {
       maxLeaseEpochs > 65_535
     )
       throw new Error("invalid_continuation_profile");
-    return { nominee, witnesses: [...witnesses].sort(), threshold, maxLeaseEpochs };
+    // Byte order, as the signed pin sorts them, so the review shows the order that is signed.
+    const bytes = (key: string) => Uint8Array.from(atob(key), (c) => c.charCodeAt(0));
+    const byteOrder = (a: string, b: string) => {
+      const x = bytes(a), y = bytes(b);
+      for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i]! - y[i]!;
+      return x.length - y.length;
+    };
+    const reviewed = { nominee, witnesses: [...witnesses].sort(byteOrder), threshold, maxLeaseEpochs };
+    this.pendingContinuation = reviewed;
+    return { ...reviewed, witnesses: [...reviewed.witnesses] };
   }
   /** Root, Pin (the explicit confirmation): author the empty-delegation pin and queue it. Never touches the network. */
   pinContinuation(review: ContinuationReview) {
     return this.exclusive(async () => {
       this.boundedRootSpace();
       if (this.continuation().pinned) throw new Error("continuation_already_pinned");
+      // Only the parameters this workflow reviewed and showed can be signed.
+      const reviewed = this.pendingContinuation;
+      if (reviewed === null) throw new Error("no_pending_continuation");
+      if (JSON.stringify(reviewed) !== JSON.stringify(review)) throw new Error("continuation_review_mismatch");
       return this.queueSpaceFrame((space) =>
         authorTreehouseContinuationPin({
           frames: space.frames,

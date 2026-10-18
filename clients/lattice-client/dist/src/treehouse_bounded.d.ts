@@ -53,7 +53,7 @@ export type TreehouseCatalogBindingReview = {
     }[];
 } | {
     ok: false;
-    reason: "malformed_payload" | "payload_digest_mismatch" | "wrong_space" | "not_root" | "not_bounded_space" | "continuation_not_configured" | "binding_mismatch" | "catalog_bootstrap_exists";
+    reason: "malformed_payload" | "payload_digest_mismatch" | "wrong_space" | "not_root" | "not_bounded_space" | "binding_key_reuse" | "continuation_not_configured" | "binding_mismatch" | "catalog_bootstrap_exists";
 };
 /** Strict review of a ceremony `binding-payload.json` against the Space it will be signed into. */
 export declare function reviewTreehouseCatalogBindingPayload(input: {

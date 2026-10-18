@@ -10,6 +10,7 @@ import {
   authorTreehouseCatalogBootstrap, resolveContinuationProfileFromFrames, treehouseCatalogBootstrapsFromFrames,
 } from "../src/index";
 import { canonicalBytesForCarrierTerm } from "../src/codec";
+import { authorTownshipGenesis } from "../src/township";
 import { catalogBootstrapToCarrierTerm } from "../src/treehouse_catalog_codec";
 import type { CarrierOpFrame, CarrierOpSigner } from "../src/index";
 
@@ -103,6 +104,7 @@ await rejects(() => authorTreehouseContinuationPin({ ...pinInput, nominee: root.
 await rejects(() => authorTreehouseContinuationPin({ ...pinInput, witnesses: [root.publicKey, witnesses[0]!.publicKey], threshold: 1 }), "witness_is_root");
 await rejects(() => authorTreehouseContinuationPin({ ...pinInput, witnesses: [nominee.publicKey, witnesses[0]!.publicKey], threshold: 1 }), "witness_is_nominee");
 await rejects(() => authorTreehouseContinuationPin({ ...pinInput, frames: [{ ...creation.pending[1]!, sig: Buffer.alloc(64).toString("base64") }] }), "invalid_verified_history");
+await rejects(() => authorTreehouseContinuationPin({ ...pinInput, frames: withPin }), "continuation_already_pinned");
 console.log("PASS pin observation and refusals");
 
 // 4. Bootstrap authoring refusals.
@@ -116,7 +118,16 @@ for (const change of [{ space: "replica:other" }, { spaceRoot: Buffer.alloc(32, 
   { profileGenesis: bootstrap.id }, { profileId: bootstrap.id }]) {
   await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, record: { ...bootstrapRecord, ...change } }), "binding_mismatch");
 }
+for (const change of [{ catalogKey: bootstrapRecord.spaceRoot }, { serviceKey: bootstrapRecord.spaceRoot }]) {
+  await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, record: { ...bootstrapRecord, ...change } }), "binding_key_reuse");
+}
 await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [...withPin, bootstrap] }), "catalog_bootstrap_exists");
+// The capability is chosen in canonical order, so a second root admin genesis cannot make the bytes depend on array order.
+const extra = await authorTownshipGenesis({ replica: vector.replica, signer: root, ops: ["create_space"], roles: ["admin"], policies: {} });
+const first = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [...withPin, extra] });
+const second = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [extra, ...withPin].reverse() });
+assert.equal(first.id, second.id);
+assert.equal(first.sig, second.sig);
 const honored = await treehouseCatalogBootstrapsFromFrames({ replica: vector.replica, frames: [...withPin, bootstrap] });
 assert.equal(honored.ok && honored.bootstraps.length, 1);
 assert.deepEqual(honored.ok && honored.bootstraps[0]!.record, bootstrapRecord);
@@ -180,6 +191,12 @@ const legacyBytes2 = canonicalBytesForCarrierTerm(catalogBootstrapToCarrierTerm(
 legacyPayload.canonical_base64 = Buffer.from(legacyBytes2).toString("base64");
 legacyPayload.sha256 = createHash("sha256").update(legacyBytes2).digest("hex");
 assert.equal(await reason(legacyPayload, { replica: legacy.replica, frames: legacy.pending, rootPublicKey: legacyKey }), "not_bounded_space");
+{
+  const reuse = { ...vector.record, catalog_key: vector.record.space_root };
+  const bytes = canonicalBytesForCarrierTerm(catalogBootstrapToCarrierTerm({ ...bootstrapRecord, catalogKey: bootstrapRecord.spaceRoot })!);
+  assert.equal(await reason({ ...payload, record: reuse, canonical_base64: Buffer.from(bytes).toString("base64"),
+    sha256: createHash("sha256").update(bytes).digest("hex") }), "binding_key_reuse");
+}
 // A pin that names a different profile than the record refuses as binding_mismatch.
 const other = await authorTreehouseContinuationPin({ ...pinInput, threshold: 3 });
 const swapped = [creation.pending[0]!, creation.pending[1]!, other];

@@ -207,6 +207,47 @@ defmodule Treehouse.BoundedSpaceCreationTest do
     end
   end
 
+  describe "review findings" do
+    defp unsigned(log) do
+      {id, op} = Enum.find(Log.ops(log), fn {_, op} -> op.kind == :authority end)
+      %{log | ops: Map.put(log.ops, id, %{op | sig: <<0::512>>})}
+    end
+
+    test "pin authoring refuses unauthenticated or incomplete history" do
+      root = ident("root")
+      {_, log} = created(root)
+
+      assert {:error, :invalid_verified_history} =
+               Space.prepare_continuation_pin(root, unsigned(log), params())
+
+      assert {:error, :invalid_verified_history} =
+               Space.prepare_continuation_pin(
+                 root,
+                 %{log | referenced: MapSet.new()},
+                 params()
+               )
+    end
+
+    test "a second pin is refused" do
+      {root, log, _pin} = pinned()
+
+      assert {:error, :continuation_already_pinned} =
+               Space.prepare_continuation_pin(root, log, params())
+    end
+
+    test "bootstrap authoring propagates an invalid history and refuses key reuse" do
+      {root, log, pin} = pinned()
+      rec = record(root, log, pin)
+
+      assert {:error, :invalid_verified_history} =
+               Space.author_catalog_bootstrap(root, unsigned(log), rec)
+
+      for bad <- [%{rec | catalog_key: root.pub}, %{rec | service_key: root.pub}] do
+        assert {:error, :binding_key_reuse} = Space.author_catalog_bootstrap(root, log, bad)
+      end
+    end
+  end
+
   test "a legacy Space stays refused for continuation and bootstrap" do
     root = ident("root")
     legacy = legacy_log(root)

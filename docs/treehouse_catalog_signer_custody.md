@@ -246,8 +246,11 @@ place. The path is:
    line to `binding-review.txt`, signs, and syncs until acknowledged.
 6. The operator runs `verify-binding` (5.5) against the relay log, then `report` (5.6).
 
-The binding is one-time: a second `catalog_bootstrap_v1` in the Space is refused. Do not hand-craft
-or sign the record outside the product.
+The binding is meant to be signed once: the app and the product authoring helper refuse a second
+`catalog_bootstrap_v1`, and the app also refuses a binding whose catalog or service key is the Space
+root's own key. The Space itself does not enforce either rule, so a second record written by other
+tooling would be honored and `verify-binding` would report a fork. Do not hand-craft or sign the
+record outside the product.
 
 ### 5.5 Verify the binding (after the root has signed)
 
