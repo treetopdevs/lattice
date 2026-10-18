@@ -58,21 +58,40 @@ export type TreehouseRelayConnector = RelayConnector;
 
 /** The kit host port over one workflow. */
 export function treehouseHost(workflow: TreehouseWorkflow): ShellHost {
-  return {
-    relay: () => workflow.state.relay,
+  return hostOver(() => workflow);
+}
+
+/** The host port over whichever workflow `current` returns at each call. */
+function hostOver(current: () => TreehouseWorkflow): ShellHost {
+  const host: ShellHost = {
+    relay: () => current().state.relay,
     // A getter, as in treehouse_routes: MAX_ROUTES is read at use, never captured at construction.
     get maxRoutes() {
       return MAX_ROUTES;
     },
     isAnchor: (replica) => productOf(replica) === "Treehouse.Space",
-    holdsAnchorProfile: () => workflow.state.profiles.some((p) => p.product === "Treehouse.Space"),
-    profile: (replica) => workflow.state.profiles.find((p) => p.replica === replica),
+    holdsAnchorProfile: () => current().state.profiles.some((p) => p.product === "Treehouse.Space"),
+    profile: (replica) => current().state.profiles.find((p) => p.replica === replica),
     validators: { validateRoute, validateLocalRealm },
     decoders: (replica) => treehouseCommandDecoders(productOf(replica)),
     verifier: strictVerifier,
-    mergeSync: (replica, pulled, ackedIds) => workflow.mergeSync(replica, pulled, ackedIds),
-    signer: () => treehouseCarrierSigner(workflow),
+    mergeSync: (replica, pulled, ackedIds) => current().mergeSync(replica, pulled, ackedIds),
+    signer: () => treehouseCarrierSigner(current()),
   };
+  return host;
+}
+
+/**
+ * The caller's options object, read live as the old shell modules read it (a member reassigned after
+ * construction is seen, and a method callback keeps `this` as the caller's object), with the kit's extra
+ * members fixed at construction.
+ */
+function liveOptions<T extends object, E extends object>(options: T, extra: E): T & E {
+  return new Proxy(options, {
+    get: (target, property, receiver) =>
+      property in extra ? Reflect.get(extra, property) : Reflect.get(target, property, receiver),
+    has: (target, property) => property in extra || property in target,
+  }) as T & E;
 }
 
 const defaultVerifier: CarrierVerifier = {
@@ -95,12 +114,13 @@ export function treehouseCarrierSigner(workflow: TreehouseWorkflow): CarrierSign
 export function createTreehouseRelayConnector(
   options: TreehouseRelayConnectorOptions,
 ): TreehouseRelayConnector {
-  const { workflow, verifier, ...rest } = options;
-  return createRelayConnector({
-    ...rest,
-    host: treehouseHost(workflow),
-    verifier: verifier ?? defaultVerifier,
-  });
+  // The old connector read the workflow and the socket seam at each dial, and the verifier once.
+  return createRelayConnector(
+    liveOptions(options, {
+      host: hostOver(() => options.workflow),
+      verifier: options.verifier ?? defaultVerifier,
+    }),
+  );
 }
 
 /** Sync every configured route, the Space first. See the kit's `syncRoutes`. */
@@ -123,8 +143,8 @@ export function syncTreehouseRoute(
 export function createTreehouseFeedController(
   options: CreateTreehouseFeedControllerOptions,
 ): TreehouseFeedController {
-  const { workflow, ...rest } = options;
-  return createFeedController({ ...rest, host: treehouseHost(workflow) });
+  // The old controller captured the workflow once and read every other option live.
+  return createFeedController(liveOptions(options, { host: treehouseHost(options.workflow) }));
 }
 
 /** Build-time feed flags: `VITE_TREEHOUSE_POLL_MS` (0 disables) and `VITE_TREEHOUSE_AUTOSYNC_ON_MOUNT`. */
@@ -226,15 +246,14 @@ export function createPanelSync(options: PanelSyncOptions): PanelSync {
   const connector =
     options.connector ?? createTreehouseRelayConnector({ workflow: options.workflow });
   const flags = treehouseFeedEnv(options.env ?? {});
-  return createKitPanelSync({
-    host: treehouseHost(options.workflow),
-    connector,
-    describe: describeSyncStatus,
-    pollMs: flags.pollMs,
-    autosyncOnMount: flags.autosyncOnMount,
-    onStatus: options.onStatus,
-    ...(options.sync ? { sync: options.sync } : {}),
-    ...(options.feedSleep ? { feedSleep: options.feedSleep } : {}),
-    ...(options.timers ? { timers: options.timers } : {}),
-  });
+  // As before, `onStatus` is read at each emission; the other options are read once, here.
+  return createKitPanelSync(
+    liveOptions(options, {
+      host: treehouseHost(options.workflow),
+      connector,
+      describe: describeSyncStatus,
+      pollMs: flags.pollMs,
+      autosyncOnMount: flags.autosyncOnMount,
+    }),
+  );
 }

@@ -35,6 +35,22 @@ the factory takes `isSpace(replica)` instead of `classify`, since the kit needs 
 `maxRoutes` lazily through a getter because `treehouse_state` and `treehouse_routes` import each other. When the
 relay client and sync move, `product_contract.mjs`'s `carrierClientFiles` must name their kit paths.
 
+PR 2 remainder (2026-10-17, row 221 decided as D-15 option (a)): the relay client, sync, feed and panel sync wiring
+moved into `clients/lattice-shell-kit/src/sync/` behind `RouteBook` and `SyncHost` (`src/sync/host.ts`), implemented
+by the shell's new `src/treehouse_host.ts`, which also holds the Treehouse-named adapters with the old signatures, so
+tests changed import lines only. `packaged:enrollment` is re-pinned to exactly `tsx --preserve-symlinks
+test/packaged_enrollment.ts` with a dated note in `enrollment_ci_contract.mjs`; no workflow line changed. Deviations:
+the carrier modules sit behind a `./sync` subpath and the `.` barrel stays inert (routes only), so the unflagged tsx
+tests keep resolving; `gate:enrollment` also gains `--preserve-symlinks` (it imports the moved modules; unpinned);
+the signer and the two route validators are members of the port rather than a third interface; Space-first ordering
+is an `isAnchor` predicate, plus `holdsAnchorProfile` for the feed's Space pre-sync; the status copy
+(`describeSyncStatus`, connection labels) and `treehouseFeedEnv` stay in the shell as product copy and product flags,
+and the kit's `createPanelSync` takes `describe`, `pollMs` and `autosyncOnMount`; the unobservable internal string
+"Treehouse feed worker stopped" became "feed worker stopped"; the move is one commit, not five; and
+`r13_lite_contract_test.exs`'s claim-surface list now names `treehouse_host.ts`, where the status copy moved. The
+`test/feed.ts:233` timing flake predates the move (interleaved A/B: 7/8 moved, 6/8 at the base) and is row 222.
+PR 3 (packaged harness) remains.
+
 ## Header
 
 - **Priority**: P2
