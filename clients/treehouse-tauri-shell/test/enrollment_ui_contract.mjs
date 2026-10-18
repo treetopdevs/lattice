@@ -86,7 +86,11 @@ function build(enrollment) {
   try {
     const env = { ...process.env };
     delete env.VITE_TREEHOUSE_ENROLLMENT;
-    if (enrollment) env.VITE_TREEHOUSE_ENROLLMENT = "1";
+    delete env.VITE_TREEHOUSE_DEV_TRACE;
+    if (enrollment) {
+      env.VITE_TREEHOUSE_ENROLLMENT = "1";
+      env.VITE_TREEHOUSE_DEV_TRACE = "1";
+    }
     execFileSync(
       "node_modules/.bin/vite",
       ["build", "--outDir", out, "--emptyOutDir", "--logLevel", "error"],
