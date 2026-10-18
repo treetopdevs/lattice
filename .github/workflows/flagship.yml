@@ -91,6 +91,26 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -189,6 +209,26 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -590,6 +630,26 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -707,6 +767,26 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -795,6 +875,26 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -875,6 +975,26 @@ jobs:
         with:
           otp-version: "28.1"
           elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
       - name: Cache carrier release dependencies
         # Cache dependencies only. A restored _build could let the packaged
         # restart test execute stale BEAM artifacts instead of this checkout.
@@ -1029,6 +1149,24 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Install the emulator system image
+        # dl.google.com sometimes serves a truncated sys-img.xml, so sdkmanager reports "Failed to find
+        # package" and the emulator action fails before any test runs (backlog row 228). Fetch the image
+        # here, a bounded four attempts, and verify it landed. The emulator action still runs its own
+        # sdkmanager call for the image, so this only narrows the window; it is unproven until a hosted run.
+        run: |
+          image="system-images;android-34;google_apis;x86_64"
+          attempt=1
+          until echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "$image" &&
+            test -d "$ANDROID_HOME/system-images/android-34/google_apis/x86_64"; do
+            if [ "$attempt" -ge 4 ]; then
+              echo "system image install failed after $attempt attempts" >&2
+              exit 1
+            fi
+            echo "::warning::system image install failed (attempt $attempt of 4); retrying"
+            sleep $((attempt * 15))
+            attempt=$((attempt + 1))
+          done
       - name: Launch on the API 34 emulator
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
