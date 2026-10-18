@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlog Run Decisions</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1c1a;--muted:#6b6660;--line:#e3dfd7;--accent:#2d5f8a;--card:#ffffff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15161a;--fg:#ebe8e2;--muted:#9a958c;--line:#2d2f36;--accent:#7fb1dd;--card:#1d1f25}}
+:root[data-theme="dark"]{--bg:#15161a;--fg:#ebe8e2;--muted:#9a958c;--line:#2d2f36;--accent:#7fb1dd;--card:#1d1f25}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+main{max-width:880px;margin:0 auto;padding:32px 16px}
+h1{font-size:28px;margin:0 0 4px}
+p.lead{color:var(--muted);margin:0 0 24px}
+article{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:0 0 14px}
+article h2{font-size:17px;margin:0 0 6px}
+article h2 span{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:8px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:8px 0 0}
+dt{color:var(--muted)}dd{margin:0}
+a{color:var(--accent)}
+.table-wrap{overflow-x:auto;margin:12px 0 24px}
+.table-wrap table{margin:0;min-width:640px}
+code{font-size:14px;background:var(--line);padding:1px 5px;border-radius:4px}
+table{border-collapse:collapse;width:100%;margin:12px 0 24px}
+td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;font-size:15px}
+</style>
+</head>
+<body>
+<main>
+<h1>Backlog Run Decisions</h1>
+<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-7 landed as PRs #133-#139. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
+
+<h2 id="slices">Slices</h2>
+<div class="table-wrap">
+<table id="slice-table">
+<thead><tr><th>#</th><th>Slice</th><th>Branch / PR</th><th>Outcome</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Rows 199 and 200: one authority snapshot per saved state in the Treehouse shell; four refusal messages</td><td><code>claude/backlog-slice-1-3338af</code> / <a href="https://github.com/treetopdevs/lattice/pull/133">#133</a></td><td>Merged <code>11072b735</code>. Exact tip <code>4de43669d</code> run 39047097721 green. Codex Sol xhigh: two P3 fixed, one P2 (per-command history walk) fixed.</td></tr>
+<tr><td>2</td><td>R11b crash-window reconciliation for local manifest activation (row 216; salvaged the leftover branch); rows 217-219 filed</td><td><code>claude/backlog-slice-2-e59997</code> / <a href="https://github.com/treetopdevs/lattice/pull/134">#134</a></td><td>Merged after exact tip <code>7af20dcbe</code> run 39059122275 went green on all jobs; a CodeRabbit finding (the test still passed without the guard) was fixed. Codex Sol xhigh: 2 findings fixed, confirm-pass P2 fixed. Independent lock/test review: 5 lock findings (3 fixed, 2 rejected), 7 coverage gaps fixed.</td></tr>
+<tr><td>3</td><td>Rows 207 and 210 (Registry refusal response; CatalogTrust cutoff set derived) plus plan 186 shell-kit design</td><td><code>claude/elated-williams-c0f453</code> / <a href="https://github.com/treetopdevs/lattice/pull/135">#135</a></td><td>Merged as <code>71c7bd1aa</code> at 19:59 UTC by the shared account before its exact-tip run on <code>c8d5724bc</code> finished; neither slice session merged it. Both runs failed on different jobs (see D-12); every job passed at least once on that tree, and main's failed jobs were rerun. Codex Sol xhigh: five P2 findings fixed. One Claude note rejected as pre-existing.</td></tr>
+<tr><td>4</td><td>Plan 186 PR 1: lattice-shell-kit skeleton, Treehouse test support moved into it, classifier arm; row 220 filed</td><td><code>claude/upbeat-brattain-6f7f48</code> / <a href="https://github.com/treetopdevs/lattice/pull/136">#136</a></td><td>Merged after exact tip <code>3e17ccd0b</code> run 39067890389 went green on all jobs. Codex Sol xhigh: two P2 fixed before the PR, two more (Windows paths and an empty list in the boundary check) fixed after. Independent rule 3 review (workflow touched): one P2 and one P3 deferred to row 220, one P3 rejected.</td></tr>
+<tr><td>5</td><td>Row 220 (kit CI install, checks, cache keys) and plan 186 PR 2a (route validator factory, Vite preserveSymlinks); row 216 set DONE; row 221 filed</td><td><code>claude/hopeful-satoshi-71c376</code> / <a href="https://github.com/treetopdevs/lattice/pull/137">#137</a></td><td>Merged after exact tip <code>e81670282</code> run 39073113081 went green; the Codex bot reported no findings on that commit. Codex Sol xhigh: one P3 fixed; 4,704-case differential matched. Independent rule 3 review: three low/nit fixed, three nits rejected.</td></tr>
+<tr><td>6</td><td>Plan 186 PR 2: relay client, sync, feed and panel sync moved into the kit behind the host port; row 221 re-pin (D-15); row 222 filed</td><td><code>claude/interesting-aryabhata-4cd5f2</code> / <a href="https://github.com/treetopdevs/lattice/pull/138">#138</a></td><td>Merged after exact tip <code>d91217f8b</code> run 39084703912 went green on attempt 2. Attempt 1 failed only the macOS preview setup, when hex.pm timed out before any PR code ran. Codex Sol xhigh: three P2 (snapshot options) fixed with a live Proxy; a confirm pass found three more P2s, all fixed in <code>d91217f8b</code>.</td></tr>
+<tr><td>7</td><td>Plan 186 PR 3: packaged harness moved into the kit (bundle classifier parameterized; <code>./testing/packaged</code> and <code>./testing/relay</code> subpaths). Plan 186 complete.</td><td><code>claude/trusting-mcclintock-5af4b9</code> / <a href="https://github.com/treetopdevs/lattice/pull/139">#139</a></td><td>Merged after exact tip <code>79843f476</code> went green. Codex Sol xhigh: no findings. Workflow reviewers: no findings.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="decisions">Decisions</h2>
+
+<article id="d1">
+<h2><span>D-01</span>Slice sessions run on Opus 5.5; the coordinator stays on Fable</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, before slice 1</dd>
+<dt>Context</dt><dd>Usage at start: 5-hour window 58% (resets in 49 min), weekly all-models 83%, weekly Fable 96% (both weekly windows reset in 3 d 14 h). The user asked to run to 100% and reset.</dd>
+<dt>Decision</dt><dd>Start every slice session with <code>model: opus</code> so implementation work spends the all-models window rather than the 4% of Fable headroom. Coordination, verification and this record stay on Fable. Codex Sol 6.1 xhigh reviews are outside this budget and are used at every PR.</dd>
+<dt>Why</dt><dd>A Fable weekly lockout lasts three and a half days; an Opus slice plus a Codex adversarial review keeps the PR quality bar while getting more backlog through before any reset.</dd>
+<dt>Reversal</dt><dd>If the user resets the weekly windows, later slices may inherit Fable again.</dd>
+</dl>
+</article>
+
+<article id="d2">
+<h2><span>D-02</span>"All the apps" means the Treehouse shell; Township and Toolshed stay frozen</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, before slice 1</dd>
+<dt>Context</dt><dd>Working policy rule 10 (plans/README.md) freezes Township and Toolshed until R26. The unified roadmap is the only execution ledger (rule 12).</dd>
+<dt>Decision</dt><dd>Slices are chosen by whether they change what a user sees or can do in the Treehouse shell, or unblock a roadmap row on the path to R13/R14. Parity ladders (rows 211-215) are taken only when nothing shell-visible is ready; rule 9 caps ladders at three.</dd>
+</dl>
+</article>
+
+<article id="d3">
+<h2><span>D-03</span>This record lives in the repo and is committed at checkpoints, not on main directly</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17</dd>
+<dt>Decision</dt><dd>Path <code>plans/decisions-2026-10-17-backlog-run.html</code>. It was kept untracked in the main checkout through slice 7, then landed in its own small PR at the user's request on 2026-10-18. After that, the coordinator batches new entries into periodic ledger PRs; slices never edit it.</dd>
+</dl>
+</article>
+
+<article id="d4">
+<h2><span>D-04</span>Unmerged leftover branches are inputs to slice planning, not automatic work</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17</dd>
+<dt>Context</dt><dd><code>claude/r11b-activation-crash-windows</code> (2 commits, 9 files, no PR: activation bound to the controlled boot, lost-commit reconciliation) and <code>claude/packaged-sqlite-busy-retry</code> (3 commits, superseded by merged PR #119) sit unmerged.</dd>
+<dt>Decision</dt><dd>Each slice session is told these exist and may salvage the R11b branch if its planning step picks R11b; the sqlite branch is treated as superseded and left for branch cleanup.</dd>
+</dl>
+</article>
+
+<article id="d5">
+<h2><span>D-05</span>The coordinator merges a slice PR once its exact tip is green and its review threads are closed</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, after slice 1</dd>
+<dt>Context</dt><dd>Each slice is cut "from the latest tip". Leaving PRs open would cut every later slice from the same stale main and stack conflicts.</dd>
+<dt>Decision</dt><dd>Merge with a merge commit (the repo's existing style) when working policy rule 2 holds: the exact-tip hosted run is green and the branch fast-forwards from main, or a merge-result run is green. Every review thread must be fixed or rejected with one line first. The slice session itself never merges.</dd>
+</dl>
+</article>
+
+<article id="d6">
+<h2><span>D-06</span>Slice 1 decisions (rows 199/200)</h2>
+<dl>
+<dt>Scope</dt><dd>Rows 199 and 200 together, no plan file; the D3 snapshot is cached on the identity of the saved state plus key availability.</dd>
+<dt>Gating</dt><dd>Configure routes, Issue invitation, Admit and grant and Save edit now require live authority as well as a key; the matching actions check the same facts.</dd>
+<dt>Hardening</dt><dd>The invitation reuse path and an already-admitted <code>admitAndGrant</code> replay now refuse with <code>no_capability</code> without the capability, so button and action agree.</dd>
+<dt>Rule 6</dt><dd>Source-text pins on computed bodies were removed after Codex flagged them; message tests pin key presence only.</dd>
+<dt>Usage</dt><dd>Weekly Fable reached 100% during slice 1; the coordinator itself moved to Opus 5.5 at the user's switch.</dd>
+</dl>
+</article>
+
+<article id="d7">
+<h2><span>D-07</span>Slice 2 decisions (R11b, row 216)</h2>
+<dl>
+<dt>Scope</dt><dd>Salvaged <code>claude/r11b-activation-crash-windows</code> and closed PR #126 residuals 1 and 2; residuals 3-5 filed as rows 217-219. Roadmap R11b moves PLANNED to IN PROGRESS; <code>ready</code>/<code>catalogued</code>/<code>listed</code> and R11c stay open.</dd>
+<dt>Review</dt><dd>Two reviews ran although the paths are outside rule 3, following PR #126's precedent for operator contract changes.</dd>
+<dt>Rejected</dt><dd>Moving <code>boot_guard</code> before <code>do_prepare</code> (the deployment term is cleared on refusal) and binding responses to plan kind (the helper is pinned to the same checkout).</dd>
+<dt>Fail-closed</dt><dd>A guard-refused boot stays down until an operator acts; a not-yet-existing log under a symlinked parent is an accepted residual.</dd>
+</dl>
+</article>
+
+<article id="d8">
+<h2><span>D-08</span>Overlap slices when their file sets are disjoint</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, while PR #134's hosted CI ran</dd>
+<dt>Decision</dt><dd>Start the next slice before the previous PR merges when the next slice stays out of the previous PR's files (here <code>apps/lattice_carrier_server</code>, <code>config/runtime.exs</code>, the operator script). Both may touch <code>plans/README.md</code> index rows, which merge line-by-line. The later PR is synced with main before its own merge.</dd>
+<dt>Why</dt><dd>The coordinator is only woken by slice reports, not by CI success, so waiting idle on CI wastes the run.</dd>
+</dl>
+</article>
+
+<article id="d9">
+<h2><span>D-09</span>New slices start only on a user turn</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, after slice 2 reported</dd>
+<dt>Context</dt><dd>The desktop app refuses to start a session on a turn that a session report triggered. The coordinator can verify and merge on those turns, but it cannot dispatch the next slice.</dd>
+<dt>Decision</dt><dd>On a report turn the coordinator verifies, merges when green, and leaves the next slice as a card. Any user message ("go", "continue") starts it. Slice 3 waited as card <code>task_451ec195</code> until the user said go.</dd>
+</dl>
+</article>
+
+<article id="d10">
+<h2><span>D-10</span>Slice 3 decisions (rows 207, 210, plan 186)</h2>
+<dl>
+<dt>207</dt><dd>Overturns the PR #127 "by design" ruling: an unrepresentable call result is answered with a 2-tuple <code>{:response, ref}</code> inbox op, and <code>await/3</code> returns <code>{:error, :unrepresentable_result}</code>. The wire vocabulary is unchanged.</dd>
+<dt>210</dt><dd>The cutoff atom set is derived at compile time from <code>CatalogCutoff</code>; the source-regex pin is replaced by a behavioural probe and a runtime vocabulary check (rule 6).</dd>
+<dt>186</dt><dd>Design only (305 lines). Three move PRs behind a two-interface host port. Treehouse is the only consumer while rule 10 freezes Township, so the plan carries a fold-back condition.</dd>
+<dt>Carrier limit</dt><dd>CodeRabbit found that the fallback response reaches only peers that already hold the off-vocabulary op, because a checked carrier pull refuses that op's page whatever the response depends on (row 208). The slice narrowed the Registry docs to say so rather than change dependencies; row 208 stays the owner.</dd>
+<dt>Rejected</dt><dd>Nondeterministic <code>find_response</code> when a ref holds both response shapes: pre-existing, needs a second signer.</dd>
+</dl>
+</article>
+
+<article id="d11">
+<h2><span>D-11</span>Index status cells for merged slices are corrected in one closing ledger PR</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, after slice 2 noted row 216 still reads IN PROGRESS with the PR cited as open</dd>
+<dt>Decision</dt><dd>Rather than a follow-up PR per row, stale status cells (row 216 and any later ones) land together with this decisions record in one ledger PR at the end of the run, or earlier if a slice's own diff touches the same rows.</dd>
+</dl>
+</article>
+
+<article id="d12">
+<h2><span>D-12</span>PR #135's red runs are treated as flakes and rerun, not reverted</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, after #135 landed</dd>
+<dt>Evidence</dt><dd>Tip run 39064519203 failed only the packaged macOS enrollment job ("timed out waiting for the founder to receive the joiner post by hint"). Main run 39064793571 on the same tree passed that job and failed only the Android emulator launch, because Google's system-image download returned "File not found". #135 touched only <code>lattice_core</code> Registry/CatalogTrust code and plans.</dd>
+<dt>Decision</dt><dd>Rerun main's failed jobs instead of reverting. If the enrollment hint timeout recurs on an unrelated PR, it gets its own row as a packaged-gate flake.</dd>
+</dl>
+</article>
+
+<article id="d13">
+<h2><span>D-13</span>Slice 4 decisions (plan 186 PR 1)</h2>
+<dl>
+<dt>Peer only</dt><dd><code>lattice-client</code> is a kit <code>peerDependency</code>, not also a dev dependency: a kit-local copy under <code>--preserve-symlinks</code> split <code>instanceof</code>. The kit typechecks through a tsconfig <code>paths</code> entry, and <code>.npmrc</code> sets <code>legacy-peer-deps</code>.</dd>
+<dt>Subpath</dt><dd>BEAM helpers ship on a node-only <code>./testing/beam</code> subpath, so pinned enrollment scripts stay unchanged.</dd>
+<dt>Guards</dt><dd>A Vite build plugin rejects kit testing code in the production module graph; the kit <code>check</code> rejects any compiled file outside the kit or lattice-client; a runtime wiring check asserts one <code>CarrierPeerError</code> identity.</dd>
+<dt>Deferred</dt><dd>CI does not yet install or check the kit, and cache keys omit it: row 220, required before PR 2. Vite <code>preserveSymlinks</code> is deferred to PR 2.</dd>
+<dt>Lockfile</dt><dd>Edited by hand and verified with <code>npm ci</code>, because npm 10.9 and 11 both strip the existing <code>libc</code> fields.</dd>
+</dl>
+</article>
+
+<article id="d14">
+<h2><span>D-14</span>After the weekly reset, slices inherit the coordinator's model</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, during slice 4: weekly Fable 6%, all-models 8%, 5-hour 31%</dd>
+<dt>Decision</dt><dd>D-01's Opus override is dropped. Slices now inherit the coordinator's model, which the user set to Opus 5.5 with /model. The run continues until a window reaches 100%, then the coordinator sends a notification.</dd>
+</dl>
+</article>
+
+<article id="d15">
+<h2><span>D-15</span>Row 221: re-pin <code>packaged:enrollment</code> to <code>tsx --preserve-symlinks</code></h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, after slice 5 stopped plan 186 PR 2 at commit 1 on this operator question</dd>
+<dt>Options</dt><dd>(a) re-pin the script in <code>enrollment_ci_contract.mjs</code> with a documented procedure; (b) inject lattice-client values into the kit (plan 186 decision 4c); (c) set <code>NODE_PRESERVE_SYMLINKS=1</code> in the job env.</dd>
+<dt>Decision</dt><dd>(a). The contract already carries a precedent: plan 183's dated re-pin note on 2026-10-08 ("every pin below stayed exact; none was deleted or loosened. What moved, and why"). Slice 6 changes the pinned string to <code>tsx --preserve-symlinks test/packaged_enrollment.ts</code>, adds a dated plan 186 re-pin note in the same form, and keeps every other pin exact. Every other kit-consuming test script already runs that way.</dd>
+<dt>Why not (b) or (c)</dt><dd>(b) changes the kit's architecture to work around a test pin. (c) is unverified and global to the job, so it would also change how the digest-pinned steps resolve modules.</dd>
+</dl>
+</article>
+
+<article id="d16">
+<h2><span>D-16</span>Slice hand-over notes are an input to every later brief</h2>
+<dl>
+<dt>When</dt><dd>2026-10-17, at the user's prompt, during slice 6</dd>
+<dt>Context</dt><dd>Each slice leaves a hand-over note in the app's shared notes folder for this session group (slices 2 to 5 so far). The coordinator had not been reading them. They match the PR bodies but add toolchain traps.</dd>
+<dt>Traps recorded</dt><dd>Background <code>codex exec</code> waits on stdin, so append <code>&lt; /dev/null</code>. A fresh worktree needs <code>npm ci</code> in lattice-client and the Treehouse shell with Node 22, or about ten Treehouse parity tests fail with <code>:enoent</code> on tsx. A kit-local lattice-client copy splits <code>instanceof</code>. npm 10.9 and 11 strip lockfile <code>libc</code> fields. A renamed branch is not picked up by the PR bar. The Linux-only operator tests run in Docker <code>elixir:1.19.5-otp-28</code> with umask 022.</dd>
+<dt>Decision</dt><dd>The coordinator reads new hand-over notes on every slice report, forwards traps to the running slice, and puts them in the next brief. The traps above went to slice 6 and into project memory.</dd>
+</dl>
+</article>
+
+<article id="d17">
+<h2><span>D-17</span>Slice 6 decisions (plan 186 PR 2, row 221)</h2>
+<dl>
+<dt>Subpath</dt><dd>Carrier modules export on <code>./sync</code>; the <code>.</code> barrel stays routes-only so unflagged tsx tests still resolve.</dd>
+<dt>Port</dt><dd>The signer and both route validators are members of the two-interface port rather than a third interface. Space-first ordering is an <code>isAnchor</code> predicate, plus <code>holdsAnchorProfile</code> for the feed's Space pre-sync.</dd>
+<dt>Product copy</dt><dd>Status copy and feed env flags stay in the shell; the kit's panel sync takes <code>describe</code>, <code>pollMs</code> and <code>autosyncOnMount</code>.</dd>
+<dt>Re-pin</dt><dd>As D-15, plus <code>gate:enrollment</code> also gains <code>--preserve-symlinks</code>, because it imports the moved modules and nothing pins it.</dd>
+<dt>Live options</dt><dd>Adapters forward the caller's options through a Proxy so they are read live, as the old modules read them.</dd>
+<dt>Flake</dt><dd><code>test/feed.ts:233</code>'s fixed 30 ms quiet window fails under host load above 500, equally at base and head; filed as row 222.</dd>
+<dt>Coordinator</dt><dd>The Proxy fix landed after both reviews, so the coordinator asked for a Codex confirm pass. It found three more P2s in the same class: the receiver for getters and callbacks, frozen options with a <code>host</code> key, and read order. All three were fixed in <code>d91217f8b</code>, and the full chain passed. Per rule 3 there is no third round. If a later review finds the same live-options class again, the Proxy adapter becomes a design row: replace it with call-time option reads in the kit.</dd>
+</dl>
+</article>
+
+<article id="d18">
+<h2><span>D-18</span>After plan 186: the enrollment path, with the record landed separately</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18, after slice 7; usage weekly all-models 47%, Fable 6%</dd>
+<dt>Options offered</dt><dd>(1) R11b remainder toward R11c and R13; (2) test and CI hygiene, rows 222, 202 and 201; (3) design rows 187-189; (4) the parity ladder, rows 211-215; (5) land this record.</dd>
+<dt>Decision (user)</dt><dd>Option 1, with row 222 folded into slice 8, and option 5 as its own small PR. The same PR sets plan 186 and index row 186 to DONE, the only status cell left stale after this run's merges.</dd>
+</dl>
+</article>
+
+</main>
+</body>
+</html>
