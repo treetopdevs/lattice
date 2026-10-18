@@ -40,7 +40,9 @@ class WitnessBindingCoordinatorTest {
             }
             callback(WitnessPresenceResult.Success(actual))
         })
-        coordinator = WitnessBindingCoordinator(context, bytes(7), ui, Platform(signature), { true })
+        val drained = CountDownLatch(1)
+        coordinator = WitnessBindingCoordinator(context, bytes(7), ui, Platform(signature), { true },
+            onDrained = { drained.countDown() })
         val prepared = stored(prepare(coordinator, request(3)))
         assertTrue(prepared.remainingMillis in 1..60_000)
         val signed = stored(sign(coordinator, prepared.handle))
@@ -49,6 +51,7 @@ class WitnessBindingCoordinatorTest {
             initVerify(key.public); update(BindingCodec.encode(signed.claim)); verify(signed.signature)
         })
         assertEquals(WitnessResult.Refused("stale_binding_handle"), sign(coordinator, prepared.handle))
+        assertTrue(drained.await(10, TimeUnit.SECONDS))
         WitnessJournal(context, bytes(7)).use {
             assertEquals(1, stored(it.observeExisting()).spentNonces.size)
         }
@@ -126,8 +129,11 @@ class WitnessBindingCoordinatorTest {
         assertEquals(WitnessResult.Refused("cancelled"), prepare(refused, request(3)))
         WitnessJournal(context, bytes(7)).use { assertTrue(stored(it.observeExisting()).spentNonces.isEmpty()) }
 
-        val first = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true })
+        val delivered = deliveryLatch()
+        val first = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true },
+            lifecycleCheckpoint = delivered.second)
         stored(prepare(first, request(3)))
+        assertTrue(delivered.first.await(10, TimeUnit.SECONDS))
         assertTrue(first.cancel(bytes(5), bytes(8)))
         val repeated = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true })
         assertEquals(WitnessResult.Refused("validator_nonce_spent"), prepare(repeated, request(4)))
@@ -227,8 +233,11 @@ class WitnessBindingCoordinatorTest {
         assertEquals(2, scheduled.size)
         now += 60_000_000_001L
         scheduled.last().invoke()
-        val next = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true })
+        val nextDelivered = deliveryLatch()
+        val next = WitnessBindingCoordinator(context, bytes(7), Ui(), Platform(signing(keyPair())), { true },
+            lifecycleCheckpoint = nextDelivered.second)
         val nextPrepared = stored(prepare(next, request(4, 10)))
+        assertTrue(nextDelivered.first.await(10, TimeUnit.SECONDS))
         assertTrue(next.cancel(bytes(5), bytes(8)))
         assertNotNull(nextPrepared.handle)
         assertNotNull(prepared.handle)
@@ -267,6 +276,11 @@ class WitnessBindingCoordinatorTest {
         val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<PreparedWitnessBinding>>()
         coordinator.prepareBinding(request) { result.set(it); done.countDown() }
         assertTrue(done.await(10, TimeUnit.SECONDS)); return result.get()
+    }
+    /** cancel() refuses while the prepare result is still being delivered, so tests wait for delivery to complete. */
+    private fun deliveryLatch(): Pair<CountDownLatch, (String) -> Unit> {
+        val done = CountDownLatch(1)
+        return done to { point: String -> if (point == "prepare_delivery_complete") done.countDown() }
     }
     private fun sign(coordinator: WitnessBindingCoordinator, handle: WitnessBindingHandle): WitnessResult<SignedWitnessBinding> {
         val done = CountDownLatch(1); val result = AtomicReference<WitnessResult<SignedWitnessBinding>>()
