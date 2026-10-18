@@ -17,6 +17,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
          {:ok, pub, signer} <- Signer.load(dir, mode),
          :ok <- Store.undisposable([pub], mode),
          {:ok, backup} <- Store.read(dir, "backup.json"),
+         :ok <-
+           if(Backup.record_shape?(backup), do: :ok, else: {:error, :ceremony_artifact_malformed}),
          {:ok, restore} <- restored(dir, mode),
          :ok <- consistent(pub, backup, restore, signer),
          {:ok, custody} <- custody(opts),
@@ -47,7 +49,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
   # ceremony needs a restore on another host. A dry run records it as it is.
   defp restored(dir, mode) do
     with {:ok, restore} <- Store.read(dir, "restore.json"),
-         true <- restore_shape?(restore) do
+         true <- Backup.proof_shape?(restore) do
       case {restore, mode} do
         {%{"ok" => true, "separate_host" => true}, _} -> {:ok, restore}
         {%{"ok" => true}, :dry_run} -> {:ok, restore}
@@ -58,12 +60,6 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
       {:error, :ceremony_artifact_missing} -> {:error, :restore_not_verified}
       _ -> {:error, :ceremony_artifact_malformed}
     end
-  end
-
-  # Both hosts are real text and the recorded separateness is what they imply.
-  defp restore_shape?(restore) do
-    Store.host_text?(restore["host"]) and Store.host_text?(restore["generation_host"]) and
-      restore["separate_host"] == (restore["host"] != restore["generation_host"])
   end
 
   defp consistent(pub, backup, restore, signer) do
@@ -105,6 +101,12 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
   end
 
   defp binding(dir, pub) do
+    if Store.exists?(dir, "binding-payload.json") and not Store.exists?(dir, "binding-review.txt"),
+      do: {:error, :ceremony_artifact_missing},
+      else: binding_state(dir, pub)
+  end
+
+  defp binding_state(dir, pub) do
     case {Binding.load_payload(dir, pub), Store.read(dir, "binding.json")} do
       {{:ok, _payload, record, sha}, {:ok, %{} = found}} ->
         if Binding.record_shape?(found, record, sha),

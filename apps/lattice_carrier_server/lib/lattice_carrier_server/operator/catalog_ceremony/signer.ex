@@ -61,11 +61,22 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
   @doc "Read a seed file under the manifest policy; returns the seed and its public key."
   @spec read_seed(Path.t()) :: {:ok, Secret.t(), binary()} | {:error, :signer_unreadable}
   def read_seed(path) do
-    with {:ok, secret, pub} <- Manifest.read_identity_file(path, @realm),
+    with :ok <- single_regular_file(path),
+         {:ok, secret, pub} <- Manifest.read_identity_file(path, @realm),
          %{priv: <<_::binary-size(32)>> = seed} <- Secret.unwrap(secret),
          true <- public(Secret.wrap(seed)) == pub do
       {:ok, Secret.wrap(seed), pub}
     else
+      _ -> {:error, :signer_unreadable}
+    end
+  end
+
+  # An existing seed must be a regular file with exactly one link (checked on the
+  # canonical path without following a link): a second hard link is a second
+  # route to the secret.
+  defp single_regular_file(path) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :regular, links: 1}} -> :ok
       _ -> {:error, :signer_unreadable}
     end
   end

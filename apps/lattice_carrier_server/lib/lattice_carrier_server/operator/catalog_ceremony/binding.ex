@@ -30,7 +30,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
          {:ok, service_id} <- identifier(opts[:service_id]),
          record = record(log, profile, catalog_key, service_key, service_id, opts[:origin]),
          {:ok, ^record} <- normalized(record) do
-      write(dir, record)
+      write(dir, record, opts[:before_review])
     end
   end
 
@@ -77,6 +77,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   @spec load_payload(Path.t(), binary()) :: {:ok, map(), map(), String.t()} | {:error, atom()}
   def load_payload(dir, catalog_key) do
     with {:ok, payload} <- Store.read(dir, "binding-payload.json"),
+         :ok <- review_present(dir),
          true <- payload["format"] == @payload_format,
          {:ok, record} <- from_json(payload["record"]),
          canonical = Canonical.term(record),
@@ -90,6 +91,12 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
       {:error, :ceremony_artifact_missing} = refusal -> refusal
       _ -> {:error, :ceremony_artifact_malformed}
     end
+  end
+
+  defp review_present(dir) do
+    if Store.exists?(dir, "binding-review.txt"),
+      do: :ok,
+      else: {:error, :ceremony_artifact_missing}
   end
 
   @doc "The JSON-friendly record: binaries as standard base64, atoms as strings."
@@ -218,7 +225,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     end
   end
 
-  defp write(dir, record) do
+  defp write(dir, record, hook) do
     canonical = Canonical.term(record)
     sha = Store.sha256(canonical)
 
@@ -236,10 +243,26 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
       "sha256" => sha
     }
 
-    with {:ok, _} <- Store.write(dir, "binding-payload.json", payload),
-         {:ok, _} <- Store.write_text(dir, "binding-review.txt", review(record, sha)) do
-      {:ok, payload}
+    with {:ok, written} <- Store.write(dir, "binding-payload.json", payload) do
+      # A payload with no review sheet is an orphan: remove only the bytes written here.
+      with :ok <- before_review(hook, dir),
+           {:ok, _} <- Store.write_text(dir, "binding-review.txt", review(record, sha)) do
+        {:ok, payload}
+      else
+        _ ->
+          remove_if_unchanged(Path.join(dir, "binding-payload.json"), written)
+          {:error, :ceremony_write_failed}
+      end
     end
+  end
+
+  # A test seam only: the command line has no way to set it.
+  defp before_review(fun, dir) when is_function(fun, 1), do: fun.(dir)
+  defp before_review(_, _dir), do: :ok
+
+  defp remove_if_unchanged(path, bytes) do
+    if File.read(path) == {:ok, bytes}, do: File.rm(path)
+    :ok
   end
 
   defp review(record, sha) do

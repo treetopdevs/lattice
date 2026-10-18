@@ -260,6 +260,17 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
       else: :ok
   end
 
+  @doc """
+  A restore target must not lie in the backup file's directory tree (compared as
+  canonical paths, like `apart/2`).
+  """
+  @spec restore_apart(Path.t(), Path.t()) :: :ok | {:error, :restore_beside_backup}
+  def restore_apart(restore_path, backup_path) do
+    if within?(real_dir(restore_path), real(Path.dirname(backup_path))),
+      do: {:error, :restore_beside_backup},
+      else: :ok
+  end
+
   defp apart(backup_path, signer_path) do
     if within?(real_dir(backup_path), real(Path.dirname(signer_path))),
       do: {:error, :backup_beside_signer},

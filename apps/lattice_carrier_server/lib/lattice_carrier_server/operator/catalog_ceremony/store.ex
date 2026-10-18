@@ -150,6 +150,11 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
 
   def host_text?(_), do: false
 
+  @doc "A 64-character lowercase hex digest."
+  @spec sha256_text?(term()) :: boolean()
+  def sha256_text?(text) when is_binary(text), do: text =~ ~r/\A[0-9a-f]{64}\z/
+  def sha256_text?(_), do: false
+
   @doc "An ISO 8601 UTC timestamp string."
   @spec timestamp?(term()) :: boolean()
   def timestamp?(text) when is_binary(text), do: match?({:ok, _, _}, DateTime.from_iso8601(text))

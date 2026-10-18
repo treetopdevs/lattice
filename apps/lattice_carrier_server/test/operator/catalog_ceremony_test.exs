@@ -902,6 +902,186 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     backup!(f)
   end
 
+  test "an existing seed with a second hard link is refused on import and backup", f do
+    generate!(f)
+    File.rm!(Path.join(f.ceremony, "signer.json"))
+
+    twin = Path.join(f.keys, "twin.seed")
+    File.ln!(f.signer, twin)
+
+    assert {:error, :signer_unreadable} =
+             Ceremony.import_signer(signer: f.signer, ceremony: f.ceremony)
+
+    File.rm!(twin)
+    assert {:ok, _} = Ceremony.import_signer(signer: f.signer, ceremony: f.ceremony)
+
+    File.ln!(f.signer, twin)
+
+    assert {:error, :signer_unreadable} =
+             Ceremony.backup(
+               signer: f.signer,
+               ceremony: f.ceremony,
+               out: f.backup,
+               passphrase_reader: passphrase_reader()
+             )
+
+    refute File.exists?(f.backup)
+  end
+
+  test "the report refuses a restore record that is not the complete shape", f do
+    generate!(f)
+    backup!(f)
+    {:ok, _} = verify_backup!(f)
+    path = Path.join(f.ceremony, "restore.json")
+    separate_host!(f)
+    pristine = File.read!(path)
+
+    for {label, mutate} <- [
+          extra: fn r -> Map.put(r, "note", "x") end,
+          no_seed_flag: fn r -> Map.delete(r, "seed_restored") end,
+          seed_flag: fn r -> Map.put(r, "seed_restored", "yes") end,
+          ok_false: fn r -> Map.put(r, "ok", false) end,
+          ok_string: fn r -> Map.put(r, "ok", "true") end,
+          upper_sha: fn r -> Map.update!(r, "backup_sha256", &String.upcase/1) end,
+          short_sha: fn r -> Map.put(r, "backup_sha256", "ab") end,
+          short_key: fn r -> Map.put(r, "public_key_base64", Base.encode64("short")) end,
+          bad_key: fn r -> Map.put(r, "public_key_base64", "!!") end,
+          time: fn r -> Map.put(r, "verified_at", "yesterday") end,
+          time_number: fn r -> Map.put(r, "verified_at", 5) end
+        ] do
+      File.write!(path, pristine)
+      edit_json!(f.ceremony, "restore.json", mutate)
+      assert {:error, :ceremony_artifact_malformed} = report!(f), "#{label}"
+    end
+
+    File.write!(path, pristine)
+    assert {:ok, _} = report!(f)
+  end
+
+  test "report and verify-backup refuse a backup record that is not the complete shape", f do
+    generate!(f)
+    backup!(f)
+    {:ok, _} = verify_backup!(f)
+    separate_host!(f)
+    path = Path.join(f.ceremony, "backup.json")
+    pristine = File.read!(path)
+
+    for {label, mutate} <- [
+          extra: fn r -> Map.put(r, "note", "x") end,
+          missing: fn r -> Map.delete(r, "created_at") end,
+          format: fn r -> Map.put(r, "format", "other") end,
+          backup_format: fn r -> Map.put(r, "backup_format", "other") end,
+          iterations: fn r -> Map.put(r, "kdf_iterations", 1) end,
+          upper_sha: fn r -> Map.update!(r, "sha256", &String.upcase/1) end,
+          short_sha: fn r -> Map.put(r, "sha256", "ab") end,
+          zero_bytes: fn r -> Map.put(r, "bytes", 0) end,
+          string_bytes: fn r -> Map.put(r, "bytes", "9") end,
+          time: fn r -> Map.put(r, "created_at", "soon") end,
+          short_key: fn r -> Map.put(r, "public_key_base64", Base.encode64("short")) end
+        ] do
+      File.write!(path, pristine)
+      edit_json!(f.ceremony, "backup.json", mutate)
+      assert {:error, :ceremony_artifact_malformed} = report!(f), "report #{label}"
+
+      assert {:error, :ceremony_artifact_malformed} = verify_backup!(f), "verify #{label}"
+    end
+
+    File.write!(path, pristine)
+    assert {:ok, _} = report!(f)
+  end
+
+  test "a restore whose readback fails removes only the file it made", f do
+    generate!(f)
+    backup!(f)
+
+    assert {:error, :signer_unreadable} =
+             verify_backup!(f,
+               restore_to: f.restored,
+               after_restore: fn path -> File.write!(path, "not a seed\n") end
+             )
+
+    refute File.exists?(f.restored)
+    refute File.exists?(Path.join(f.ceremony, "restore.json"))
+    assert {:ok, _} = verify_backup!(f, restore_to: f.restored)
+  end
+
+  test "a restore whose record cannot be written removes the restored seed", f do
+    generate!(f)
+    backup!(f)
+
+    assert {:error, :ceremony_write_failed} =
+             verify_backup!(f,
+               restore_to: f.restored,
+               before_proof: fn _dir ->
+                 assert File.regular?(f.restored)
+                 File.chmod!(f.ceremony, 0o500)
+                 :ok
+               end
+             )
+
+    File.chmod!(f.ceremony, 0o700)
+    refute File.exists?(f.restored)
+    refute File.exists?(Path.join(f.ceremony, "restore.json"))
+    assert {:ok, _} = verify_backup!(f, restore_to: f.restored)
+  end
+
+  test "a restore target inside the backup's directory is refused before decrypting", f do
+    generate!(f)
+    backup!(f)
+    beside = Path.join(f.backups, "restored.seed")
+
+    # An unreadable passphrase would be the first refusal if decrypting came first.
+    assert {:error, :restore_beside_backup} =
+             verify_backup!(f, restore_to: beside, passphrase_reader: reader([]))
+
+    refute File.exists?(beside)
+    refute File.exists?(Path.join(f.ceremony, "restore.json"))
+
+    nested = Path.join([f.backups, "deeper", "restored.seed"])
+    File.mkdir_p!(Path.dirname(nested))
+    File.chmod!(Path.dirname(nested), 0o700)
+    assert {:error, :restore_beside_backup} = verify_backup!(f, restore_to: nested)
+    refute File.exists?(nested)
+  end
+
+  test "a binding review sheet that cannot be written removes the payload just made", f do
+    generate!(f)
+    space = space(f)
+    review = Path.join(f.ceremony, "binding-review.txt")
+
+    assert {:error, :ceremony_write_failed} =
+             Ceremony.binding_payload(
+               ceremony: f.ceremony,
+               space_log: space.pre,
+               service_public_key: service_b64(),
+               origin: @origin,
+               before_review: fn dir ->
+                 assert File.regular?(Path.join(dir, "binding-payload.json"))
+                 File.mkdir_p!(Path.join(dir, "binding-review.txt"))
+                 :ok
+               end
+             )
+
+    File.rm_rf!(review)
+    refute File.exists?(Path.join(f.ceremony, "binding-payload.json"))
+    {_payload, _record} = payload!(f, space)
+  end
+
+  test "verify-binding and the report require the review sheet beside the payload", f do
+    generate!(f)
+    backup!(f)
+    {:ok, _} = verify_backup!(f)
+    separate_host!(f)
+    space = space(f)
+    {_payload, _record} = payload!(f, space)
+    File.rm!(Path.join(f.ceremony, "binding-review.txt"))
+
+    assert {:error, :ceremony_artifact_missing} =
+             Ceremony.verify_binding(ceremony: f.ceremony, space_log: space.pre)
+
+    assert {:error, :ceremony_artifact_missing} = report!(f)
+  end
+
   defp edit_json!(dir, name, fun) do
     path = Path.join(dir, name)
     File.write!(path, path |> File.read!() |> Jason.decode!() |> fun.() |> Jason.encode!())
