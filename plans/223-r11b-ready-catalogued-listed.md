@@ -29,6 +29,12 @@ roster-member requirement for the probe and lifts STOP 2 and STOP 3 for this pur
 never enters `trusted_peers` or the roster, so `bootstrap_peers_exact?/3`, staging and activation are
 unchanged. Slice 10 refreshed this plan for D-22 (section "The operator probe realm") and builds row 223.
 
+**Slice 10 built row 223** (IN PROGRESS until hosted `mix test` is green on the exact tip). Changes from
+this text made in review: the readiness pull asks from an empty `have` set so every served op is encoded;
+the probe dials the listener's bound address, and the carrier client connects IPv6 literals; probe keys
+equal to the Space or child authority root are refused; the admitted route is found by its staged child
+log path. Row 226 tracks the 30-second probe session cap on large logs.
+
 ## Header
 
 - **Priority**: P2
@@ -110,9 +116,10 @@ and rejected because a slow holder would turn a correct boot into a refused one.
    client (`Lattice.Carrier.WebSocket`, not an in-process `Holder` call, which would duplicate step 3),
    authenticating through the operator probe realm below. Race-tolerant comparison, because members may
    relay during the check: read `A = Holder.op_ids/1`, then the socket's frontier set `S` (the client's
-   `advertise/2`), then `B = Holder.op_ids/1`; require `A ⊆ S ⊆ B`. Then `pull/2` with `have = S`; every
-   returned op id must be in `Holder.op_ids/1` read after the pull. Any connect, auth, decode or
-   comparison failure is `{:error, :readiness_pull_failed}`. Probe setup refusals are listed below.
+   `advertise/2`), then `B = Holder.op_ids/1`; require `A ⊆ S ⊆ B`. Then `pull/2` from an empty
+   `have`; the served ids must cover `S` and lie within `Holder.op_ids/1` read after the pull. Any
+   connect, auth, decode or comparison failure is `{:error, :readiness_pull_failed}`. Probe setup
+   refusals are listed below.
 6. Only then does the BEAM send the owner a `ready` plan. The owner is never invoked on a refusal above.
 
 `confirm/3` is `confirm(root, expected, probe_identity_file)`: the operator root, the current journal
@@ -252,11 +259,11 @@ until `catalogued` exists. No R11c plan is written now.
 
 ## Done criteria (row 223)
 
-- [ ] The probe realm admits only a live single-use grant, allows only `frontier` and `pull`, and has
+- [x] The probe realm admits only a live single-use grant, allows only `frontier` and `pull`, and has
       a negative test for each refusal listed above.
-- [ ] `ready` exists in both validators and only the `ready` owner plan can write it.
-- [ ] Every refusal named above has a test, and each BEAM refusal leaves journal and history unchanged.
-- [ ] The parity table passes on both sides.
+- [x] `ready` exists in both validators and only the `ready` owner plan can write it.
+- [x] Every refusal named above has a test, and each BEAM refusal leaves journal and history unchanged.
+- [x] The parity table passes on both sides.
 - [ ] The carrier-server suite and `mutation_protocol_test.py` pass in Docker; hosted `mix test` is
       green on the exact tip (rule 2).
 - [ ] Row 223 updated in one line; roadmap R11b stays IN PROGRESS until row 224 clears.
