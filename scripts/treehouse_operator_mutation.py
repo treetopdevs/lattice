@@ -287,7 +287,14 @@ def complete_lines(fd, size):
     end = size
     while end > 0:
         start = max(0, end - 65536)
-        chunk = os.pread(fd, end - start, start)
+        chunk = b""
+        while len(chunk) < end - start:
+            # A short read covers only a prefix of the range; keep reading so
+            # no unread bytes are skipped when choosing the cut.
+            part = os.pread(fd, end - start - len(chunk), start + len(chunk))
+            if not part:
+                refuse("unsafe_operator_file")
+            chunk += part
         at = chunk.rfind(b"\n")
         if at >= 0:
             return start + at + 1
@@ -338,6 +345,7 @@ def commit(root, old, raw, activation=False):
             refuse("stale_operator_intent")
     expected(root, old)
     current_service(next_record["service"])
+    apart(root, next_record["service"]["identity_file"])
     # Exclusive temp is deliberately preserved on failure; never guess that an orphan is disposable.
     temporary = os.path.join(root, "operator-journal.json.tmp." + os.urandom(16).hex())
     retain(temporary, raw.encode())
@@ -385,7 +393,7 @@ def activate(root, plan):
         refuse("corrupt_operator_journal")
     candidate = staged(manifests[0])
     target = checks[0]["path"]
-    absolute_paths(candidate)
+    absolute_paths(candidate, root)
     if target in reserved(root, old):
         refuse("unsafe_operator_file")
     # Every staged artifact still holds its reviewed bytes, on the first
@@ -507,7 +515,7 @@ def boot(root, plan):
     reply({"incarnation": marker})
 
 
-def absolute_paths(raw):
+def absolute_paths(raw, root):
     """The candidate is installed beside the active manifest, not in its
     attempt directory, so a relative path in it would name a different,
     unreviewed file after activation."""
@@ -523,6 +531,27 @@ def absolute_paths(raw):
             path = instance.get(key) if type(instance) is dict else None
             if type(path) is not str or not os.path.isabs(path) or os.path.normpath(path) != path:
                 refuse("unsafe_candidate_manifest")
+            apart(root, path)
+
+
+def apart(root, path):
+    """A deployment path that names one of the operator's own files, by path
+    or by inode, would be rewritten by the next journal, history or marker
+    write; the BEAM boot refuses the same collision."""
+    own = reserved_files(root)
+    if os.path.normpath(path) in own:
+        refuse("operator_path_collision")
+    try:
+        st = os.stat(path)
+    except OSError:
+        return
+    for name in own:
+        try:
+            other = os.stat(name)
+        except OSError:
+            continue
+        if (st.st_dev, st.st_ino) == (other.st_dev, other.st_ino):
+            refuse("operator_path_collision")
 
 
 def reserved(root, r):

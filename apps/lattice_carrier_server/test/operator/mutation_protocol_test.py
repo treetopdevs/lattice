@@ -91,12 +91,12 @@ class Protocol(unittest.TestCase):
         def manifest(**paths):
             entry = dict({"identity_file": "/srv/a.identity", "log_file": "/srv/a.log"}, **paths)
             return json.dumps({"version": 1, "instances": [entry]}).encode()
-        owner.absolute_paths(manifest())
+        owner.absolute_paths(manifest(), "/nonexistent-root")
         for bad in [manifest(identity_file="a.identity"), manifest(log_file="../a.log"),
                     manifest(log_file="/srv/../a.log"), manifest(log_file=None),
                     b'{"version":1}', b"not json", b"\xff"]:
             with self.assertRaises(owner.Refusal, msg=repr(bad)) as caught:
-                owner.absolute_paths(bad)
+                owner.absolute_paths(bad, "/nonexistent-root")
             self.assertEqual(str(caught.exception), "unsafe_candidate_manifest")
 
     def test_activation_never_replaces_its_lock_journal_or_artifacts(self):
@@ -520,6 +520,47 @@ class Protocol(unittest.TestCase):
         root, target, _, _, plan = self.activation("activate-sticky", 0o644)
         os.chmod(target, 0o1644)
         self.assertEqual(owner.mode_of(target), 0o644)
+
+    def test_a_deployment_path_naming_an_operator_file_refuses(self):
+        root = self.workdir("collision")
+        history = os.path.join(root, owner.HISTORY)
+        manifest = json.dumps({"version": 1, "instances": [
+            {"identity_file": history, "log_file": "/srv/a.log"}]}).encode()
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.absolute_paths(manifest, root)
+        self.assertEqual(str(caught.exception), "operator_path_collision")
+        # A hard link to the history file is the same file under another name.
+        self.private(history, b"")
+        alias = os.path.join(root, "alias.identity")
+        os.link(history, alias)
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.apart(root, alias)
+        self.assertEqual(str(caught.exception), "operator_path_collision")
+
+    def test_a_journal_naming_an_operator_file_as_its_service_identity_refuses(self):
+        root = self.workdir("collision-service")
+        history = self.private(os.path.join(root, owner.HISTORY), b"a" * 64)
+        record = self.pending(root, 0)
+        record["service"].update(identity_file=history)
+        with mock.patch.object(owner, "current_service"):
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.commit(root, None, self.compact(record))
+        self.assertEqual(str(caught.exception), "operator_path_collision")
+        self.assertFalse(os.path.exists(os.path.join(root, "operator-journal.json")))
+        with open(history, "rb") as f:
+            self.assertEqual(f.read(), b"a" * 64)
+
+    def test_short_history_reads_never_skip_unread_bytes(self):
+        root = self.workdir("history-short-read")
+        path = self.private(os.path.join(root, "h"), b"one\ntwo\nfrag")
+        fd = os.open(path, os.O_RDONLY)
+        real = os.pread
+        try:
+            # Every read returns at most two bytes.
+            with mock.patch.object(owner.os, "pread", side_effect=lambda f, n, o: real(f, min(n, 2), o)):
+                self.assertEqual(owner.complete_lines(fd, os.fstat(fd).st_size), 8)
+        finally:
+            os.close(fd)
 
 if __name__ == "__main__":
     unittest.main()
