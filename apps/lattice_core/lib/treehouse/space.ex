@@ -193,7 +193,7 @@ defmodule Treehouse.Space do
           Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
             {:error, :wrong_root}
 
-          different_initialization?(log, genesis, name_op) ->
+          different_initialization?(drop_pins(log, identity), genesis, name_op) ->
             {:error, :different_initialization}
 
           true ->
@@ -207,6 +207,25 @@ defmodule Treehouse.Space do
         end
       end
     end
+  end
+
+  # A later root continuation pin (empty, non-live, parentless delegation carrying a
+  # `:__continuation__` policy) is not a competing initialization of a bounded Space.
+  defp drop_pins(%Log{} = log, identity) do
+    pins =
+      for {id,
+           %Op{kind: :authority, author: author, body: {:genesis, %Delegation{} = d, policies}}} <-
+            Log.ops(log),
+          author == identity.pub and is_map(policies) and
+            match?(
+              {:ok, _},
+              ContinuationCertificate.normalize_policy(policies[:__continuation__])
+            ) and
+            d.live == false and
+            is_nil(d.parent_id) and MapSet.size(d.ops) == 0 and MapSet.size(d.roles) == 0,
+          do: id
+
+    %{log | ops: Map.drop(log.ops, pins)}
   end
 
   defp bounded_nonce("replica:treehouse:space:" <> nonce) do

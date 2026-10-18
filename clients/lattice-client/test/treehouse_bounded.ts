@@ -142,6 +142,15 @@ for (let n = 0; n < 32; n++) {
   assert.deepEqual(chosen.cap, bootstrap.cap);
 }
 assert.ok(restrictedFirst > 0, "some restricted genesis sorts ahead of the creation genesis");
+// PR review: a retained mature history (pin, bootstrap) resumes; a competing root genesis still refuses.
+for (const retained of [withPin, [...withPin, bootstrap]]) {
+  const resumed = await prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root, retained });
+  assert.equal(resumed.status, "ready");
+  assert.deepEqual(resumed.pending, []);
+}
+const rival = await authorTownshipGenesis({ replica: vector.replica, signer: root, ops: ["create_space"], roles: ["admin"], policies: {} });
+await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
+  retained: [...withPin, rival] }), "different_initialization");
 // Duplicate retained frames are an invalid history, not a collapsed one.
 await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
   retained: [...creation.pending, creation.pending[0]!] }), "invalid_retained_log");

@@ -64,7 +64,16 @@ export async function prepareTreehouseBoundedSpaceCreation(input) {
     if (retained.some((frame) => frame.deps.some((id) => !ids.has(id))))
         throw new Error("invalid_retained_log");
     const ops = carrierOpsToSemanticOps(retained, {}, treehouseCommandDecoders("Treehouse.Space"));
-    if (ops.some((op) => (op.kind === "authority" && op.authority?.type === "genesis" && op.id !== genesis.id) ||
+    // A later root continuation pin (empty, non-live, parentless delegation with a valid profile) is not a competing initialization.
+    const signer = bytesToB64(input.signer.publicKey);
+    const pins = new Set(retained.filter((frame) => {
+        const delegation = carrierDelegationsFromFrames([frame])[0];
+        const op = ops.find((o) => o.id === frame.id);
+        return frame.kind === "authority" && frame.author === signer && op?.authority?.type === "genesis" &&
+            op.authority.continuationProfile !== null && delegation !== undefined && !delegation.live &&
+            delegation.parent_id === null && delegation.ops.length === 0 && delegation.roles.length === 0;
+    }).map((frame) => frame.id));
+    if (ops.some((op) => (op.kind === "authority" && op.authority?.type === "genesis" && op.id !== genesis.id && !pins.has(op.id)) ||
         (op.kind === "command" && op.command === "create_space" && op.deps.length === 1 && op.deps[0] === genesis.id && op.id !== created.id))) {
         throw new Error("different_initialization");
     }

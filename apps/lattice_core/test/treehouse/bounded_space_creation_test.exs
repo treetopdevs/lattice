@@ -207,6 +207,34 @@ defmodule Treehouse.BoundedSpaceCreationTest do
     end
   end
 
+  describe "PR review: retained mature history" do
+    test "a retained history with the pin and bootstrap resumes; a competing genesis still refuses" do
+      {root, log, pin} = pinned()
+      {:ok, boot} = Space.author_catalog_bootstrap(root, log, record(root, log, pin))
+      mature = Log.append!(log, boot)
+
+      for retained <- [log, mature] do
+        assert {:ok, %{pending: [], status: :ready}} =
+                 Space.prepare_bounded_creation(root, @nonce_replica, "Canopy", retained)
+      end
+
+      rival =
+        Lattice.Authority.Delegation.genesis(root, log.replica,
+          ops: [:create_space],
+          roles: [:admin]
+        )
+
+      competing =
+        Log.append!(
+          mature,
+          Lattice.Op.new(root, log.replica, [], :authority, {:genesis, rival, %{}})
+        )
+
+      assert {:error, :different_initialization} =
+               Space.prepare_bounded_creation(root, @nonce_replica, "Canopy", competing)
+    end
+  end
+
   describe "PR review: capability selection" do
     test "a root admin genesis without catalog_bootstrap_v1 is never the bootstrap cap" do
       {root, log, pin} = pinned()
