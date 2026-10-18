@@ -1,0 +1,133 @@
+defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
+  @moduledoc false
+  # Public ceremony artifacts only: pretty JSON with a trailing newline in a
+  # directory that holds no secret. Every failure is an atom.
+
+  alias LatticeCarrierServer.Operator.CatalogCeremony.DryRun
+
+  @marker "DRY-RUN-NOT-REAL"
+
+  @spec marker() :: String.t()
+  def marker, do: @marker
+
+  # Resolves the ceremony directory. `create: true` makes a missing directory
+  # (mode 0700); every other command needs an existing one. A real-mode
+  # command never accepts a directory a dry run has marked.
+  @spec ceremony(keyword(), :real | :dry_run, keyword()) :: {:ok, Path.t()} | {:error, atom()}
+  def ceremony(opts, mode, flags \\ []) do
+    with dir when is_binary(dir) and dir != "" <- opts[:ceremony],
+         expanded = Path.expand(dir),
+         :ok <- directory(expanded, Keyword.get(flags, :create, false)),
+         :ok <- marker_clear(expanded, mode) do
+      {:ok, expanded}
+    else
+      nil -> {:error, :ceremony_required}
+      {:error, _} = refusal -> refusal
+      _ -> {:error, :ceremony_required}
+    end
+  end
+
+  defp directory(path, create?) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :directory}} -> :ok
+      {:ok, _} -> {:error, :ceremony_directory_invalid}
+      {:error, :enoent} when create? -> make(path)
+      {:error, _} -> {:error, :ceremony_directory_invalid}
+    end
+  end
+
+  defp make(path) do
+    with :ok <- File.mkdir_p(path),
+         :ok <- File.chmod(path, 0o700) do
+      :ok
+    else
+      _ -> {:error, :ceremony_directory_invalid}
+    end
+  end
+
+  defp marker_clear(dir, :real) do
+    if File.exists?(Path.join(dir, @marker)),
+      do: {:error, :dry_run_ceremony_dir},
+      else: :ok
+  end
+
+  defp marker_clear(_dir, :dry_run), do: :ok
+
+  # A real ceremony never uses a key a dry run derives from a public label.
+  @spec undisposable([binary()], :real | :dry_run) :: :ok | {:error, :disposable_test_key}
+  def undisposable(keys, :real) do
+    disposable = DryRun.public_keys()
+
+    if Enum.any?(keys, &(&1 in disposable)),
+      do: {:error, :disposable_test_key},
+      else: :ok
+  end
+
+  def undisposable(_keys, :dry_run), do: :ok
+
+  @spec read(Path.t(), String.t()) :: {:ok, map()} | {:error, atom()}
+  def read(dir, name) do
+    with {:ok, bytes} <- File.read(Path.join(dir, name)),
+         {:ok, %{} = map} <- Jason.decode(bytes) do
+      {:ok, map}
+    else
+      {:error, :enoent} -> {:error, :ceremony_artifact_missing}
+      _ -> {:error, :ceremony_artifact_malformed}
+    end
+  end
+
+  @spec exists?(Path.t(), String.t()) :: boolean()
+  def exists?(dir, name), do: File.exists?(Path.join(dir, name))
+
+  @spec write(Path.t(), String.t(), map()) :: {:ok, binary()} | {:error, :ceremony_write_failed}
+  def write(dir, name, map), do: write_text(dir, name, Jason.encode!(map, pretty: true) <> "\n")
+
+  @spec write_text(Path.t(), String.t(), binary()) ::
+          {:ok, binary()} | {:error, :ceremony_write_failed}
+  def write_text(dir, name, bytes) do
+    target = Path.join(dir, name)
+    temporary = Path.join(dir, "." <> name <> ".tmp")
+
+    with :ok <- File.write(temporary, bytes),
+         :ok <- File.rename(temporary, target) do
+      {:ok, bytes}
+    else
+      _ ->
+        File.rm(temporary)
+        {:error, :ceremony_write_failed}
+    end
+  end
+
+  @spec sha256(binary()) :: String.t()
+  def sha256(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
+
+  @spec now() :: String.t()
+  def now, do: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+  @spec host() :: String.t()
+  def host do
+    case :inet.gethostname() do
+      {:ok, name} -> List.to_string(name)
+      _ -> "unknown"
+    end
+  end
+
+  @spec public_info(binary()) :: map()
+  def public_info(pub) do
+    %{
+      "public_key_base64" => Base.encode64(pub),
+      "public_key_hex" => Base.encode16(pub, case: :lower),
+      "fingerprint_sha256" => sha256(pub)
+    }
+  end
+
+  @spec decode_key(term()) :: {:ok, binary()} | {:error, :malformed_key}
+  def decode_key(text) when is_binary(text) do
+    case Base.decode64(text) do
+      {:ok, <<_::binary-size(32)>> = key} -> {:ok, key}
+      _ -> {:error, :malformed_key}
+    end
+  end
+
+  def decode_key(_), do: {:error, :malformed_key}
+end

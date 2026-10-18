@@ -19,6 +19,8 @@
 Design written 2026-10-18 (slice 8). `catalogued` and `listed` are row 224, BLOCKED on absent operator
 inputs (rule 8). No R11c plan is written; see "Parked phases".
 
+Slice 13 (2026-10-18) added ceremony tooling for row 224's inputs; see "Parked phases". Row 224 stays BLOCKED.
+
 Slice 9 parked row 223 on STOP 1: the admitted instance's `trusted_peers` is exactly
 `{child log root} ∪ roster` (`Staging.bootstrap_peers_exact?/3`), the carrier admits only those realms,
 D-20 barred the root and service keys, and member keys are device-held.
@@ -242,6 +244,20 @@ generation, `catalog_head` and manifest digest, signed by the catalog signer und
 bootstrap binding. `listed` records that the signed catalog is served to retained clients, which
 verify it against their retained trust. Both remain local-only steps under D1 until the operator says
 otherwise. A design plan is written when the three inputs exist.
+
+Slice 13 (2026-10-18): ceremony tooling (`mix treehouse.catalog_ceremony`, runbook
+`docs/treehouse_catalog_signer_custody.md`) now produces inputs 1 and 3 and the binding payload for
+input 2. The ceremony itself still awaits the operator, and the plan is still not written. Design
+facts the `catalogued` design must carry:
+
+- The bootstrap is a root-authored Space command (`catalog_bootstrap_v1`) and needs a bounded
+  continuation profile; a legacy-family Space is refused.
+- The Treehouse app creates legacy-family Spaces and has no authoring command, so the living root
+  cannot sign the binding today (row 229).
+- The carrier has no `treehouse-service:<service_id>` realm yet; that is a `catalogued` dependency.
+- `catalogued`'s signer is loaded from the operator-named seed file under the `read_identity_file`
+  policy and signs only inside an operator call, never in the ceremony tool.
+- The ceremony's verification report is the citation for the inputs.
 
 R11c (catalog replacement trust) replaces a catalog that a client already retains, so it cannot start
 until `catalogued` exists. No R11c plan is written now.
