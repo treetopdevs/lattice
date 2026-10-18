@@ -49,7 +49,17 @@ and the kit's `createPanelSync` takes `describe`, `pollMs` and `autosyncOnMount`
 "Treehouse feed worker stopped" became "feed worker stopped"; the move is two commits, not five; and
 `r13_lite_contract_test.exs`'s claim-surface list now names `treehouse_host.ts`, where the status copy moved. The
 `test/feed.ts:233` timing flake predates the move and is row 222.
-PR 3 (packaged harness) remains.
+PR 3 (packaged harness, 2026-10-17) moved `packaged_ax.ts`, the Swift helper, `secret_scan.ts` and `store_read.ts` as is,
+and the bundle classifier (a `createBundleVariantClassifier` factory) and the manifest relay spawner and observer
+(`writePilotManifest` takes `manifestName`, `spawnPilotManifestServer` takes the pilot script path, routes are structural
+`ObservedRoute`s) into `clients/lattice-shell-kit/src/testing/`. Deviations: two new subpaths, the node-only `./testing/packaged`
+(so the unflagged `assert_bundle_variant.ts`, `packaged` and `npm test` entries keep resolving) and `./testing/relay` (imports
+lattice-client, reached only by `--preserve-symlinks` runs); the shell keeps `test/support/packaged_bundle_variant.ts` and
+`relay_peer.ts` as Treehouse binding files with their old export names, so their callers are unchanged; the kit exports the Swift
+helper path as `PACKAGED_ACCESSIBILITY_SWIFT`; `store_read.ts` and `secret_scan.ts` hold no KV record names, so nothing was
+parameterized there; `product_contract.mjs`'s `carrierClientFiles` names `testing/relay.ts` (moved carrier-client code entering
+the existing kit walk, decision 11). No workflow line changed. The plan is DONE once the hosted packaged jobs are green on PR 3's
+exact tip; the fold-back condition stands.
 
 ## Header
 

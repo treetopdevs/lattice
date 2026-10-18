@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-// A Treehouse-local copy of the idea behind Township's KV secret scan (no import across shells).
+// A shell-neutral copy of the idea behind Township's KV secret scan (no import across shells).
 // Two checks: no JSON field name looks like secret material, and no planted needle (a seed in hex or
 // base64, say) appears anywhere in the raw text. Post text is public content, so callers pass it as a
 // needle only for the surfaces that must not carry it (the trace and the uploaded evidence).

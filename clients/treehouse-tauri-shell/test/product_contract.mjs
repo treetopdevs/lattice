@@ -45,6 +45,7 @@ const carrierClientFiles = new Set([
   "../lattice-shell-kit/src/sync/relay_client.ts",
   "../lattice-shell-kit/src/sync/feed.ts",
   "../lattice-shell-kit/src/sync/sync.ts",
+  "../lattice-shell-kit/src/testing/relay.ts",
 ]);
 const forbiddenEverywhere =
   /insert_seeded_dev_key|import_seed|DEV_SEED|SEED_PHRASE|governance-test-presence|NativeCarrierPeer|discovery/i;

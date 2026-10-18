@@ -7,7 +7,9 @@
     ".": "./src/index.ts",
     "./sync": "./src/sync/index.ts",
     "./testing": "./src/testing/index.ts",
-    "./testing/beam": "./src/testing/beam.ts"
+    "./testing/beam": "./src/testing/beam.ts",
+    "./testing/packaged": "./src/testing/packaged.ts",
+    "./testing/relay": "./src/testing/relay.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
