@@ -145,12 +145,13 @@ argument list, and `read -rs` does not echo or enter shell history. Run this you
 terminal:
 
 ```bash
-IFS= read -rs P; printf '%s\n%s\n' "$P" "$P" | ~/.asdf/shims/mix treehouse.catalog_ceremony backup \
-  --signer "$SIGNER" --ceremony "$CEREMONY" --out "$BACKUP"; unset P
+IFS= read -rs P1; echo; IFS= read -rs P2; echo
+printf '%s\n%s\n' "$P1" "$P2" | ~/.asdf/shims/mix treehouse.catalog_ceremony backup \
+  --signer "$SIGNER" --ceremony "$CEREMONY" --out "$BACKUP"; unset P1 P2
 ```
 
-Because the same value is piped twice, a typing mistake is not caught by the confirmation; the
-restore drill in 5.3 catches it (it must decrypt with what the holder actually types).
+Type the passphrase at each silent `read`; the tool refuses `passphrase_mismatch` if the two
+entries differ. The restore drill in 5.3 then proves the holder's own copy decrypts the backup.
 
 `backup` needs `CEREMONY/signer.json` from step 5.1 and re-reads the seed from `SIGNER` (the
 seed must derive the recorded public key, else `signer_key_mismatch`; an unreadable or
