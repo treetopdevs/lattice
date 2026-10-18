@@ -207,6 +207,29 @@ defmodule Treehouse.BoundedSpaceCreationTest do
     end
   end
 
+  describe "PR review: capability selection" do
+    test "a root admin genesis without catalog_bootstrap_v1 is never the bootstrap cap" do
+      {root, log, pin} = pinned()
+      rec = record(root, log, pin)
+      {:ok, original} = Space.author_catalog_bootstrap(root, log, rec)
+
+      for n <- 1..8 do
+        restricted =
+          Lattice.Authority.Delegation.genesis(root, log.replica,
+            ops: [:create_space] ++ List.duplicate(:create_thread, rem(n, 2)),
+            roles: [:admin],
+            live: n > 4
+          )
+
+        extra = Lattice.Op.new(root, log.replica, [], :authority, {:genesis, restricted, %{}})
+        widened = Log.append!(log, extra)
+        assert {:ok, op} = Space.author_catalog_bootstrap(root, widened, rec)
+        assert op.cap == original.cap
+        refute Map.has_key?(Authority.analyze(Space, Log.append!(widened, op)).reasons, op.id)
+      end
+    end
+  end
+
   describe "review findings" do
     defp unsigned(log) do
       {id, op} = Enum.find(Log.ops(log), fn {_, op} -> op.kind == :authority end)

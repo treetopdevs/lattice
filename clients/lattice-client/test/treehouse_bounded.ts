@@ -10,6 +10,8 @@ import {
   authorTreehouseCatalogBootstrap, resolveContinuationProfileFromFrames, treehouseCatalogBootstrapsFromFrames,
 } from "../src/index";
 import { canonicalBytesForCarrierTerm } from "../src/codec";
+import { canonicalOrder, carrierOpsToSemanticOps, index } from "../src/index";
+import { treehouseCommandDecoders } from "../src/treehouse";
 import { authorTownshipGenesis } from "../src/township";
 import { catalogBootstrapToCarrierTerm } from "../src/treehouse_catalog_codec";
 import type { CarrierOpFrame, CarrierOpSigner } from "../src/index";
@@ -128,6 +130,21 @@ const first = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames:
 const second = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [extra, ...withPin].reverse() });
 assert.equal(first.id, second.id);
 assert.equal(first.sig, second.sig);
+// PR review: a root admin genesis without catalog_bootstrap_v1 is never the cap, whatever its canonical position.
+const spaceCommands = ["create_space", "create_thread", "issue_invitation", "revoke_invitation", "admit_member", "remove_member"];
+let restrictedFirst = 0;
+for (let n = 0; n < 32; n++) {
+  const restricted = await authorTownshipGenesis({ replica: vector.replica, signer: root,
+    ops: spaceCommands.filter((_, i) => (n >> (i % 5)) & 1 || i === 0), roles: ["admin"], policies: {}, live: n % 2 === 0 });
+  const semantic = carrierOpsToSemanticOps([restricted, ...withPin], {}, treehouseCommandDecoders("Treehouse.Space"));
+  if (canonicalOrder(semantic, index(semantic))[0] === restricted.id) restrictedFirst++;
+  const chosen = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [restricted, ...withPin] });
+  assert.deepEqual(chosen.cap, bootstrap.cap);
+}
+assert.ok(restrictedFirst > 0, "some restricted genesis sorts ahead of the creation genesis");
+// Duplicate retained frames are an invalid history, not a collapsed one.
+await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
+  retained: [...creation.pending, creation.pending[0]!] }), "invalid_retained_log");
 const honored = await treehouseCatalogBootstrapsFromFrames({ replica: vector.replica, frames: [...withPin, bootstrap] });
 assert.equal(honored.ok && honored.bootstraps.length, 1);
 assert.deepEqual(honored.ok && honored.bootstraps[0]!.record, bootstrapRecord);

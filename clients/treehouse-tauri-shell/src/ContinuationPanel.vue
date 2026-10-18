@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type {
   BindingReview,
   ContinuationReview,
@@ -77,6 +77,26 @@ const nominee = ref(members[0] ?? ""),
   threshold = ref<number | string>(""),
   maxLeaseEpochs = ref<number | string>(DEFAULT_MAX_LEASE_EPOCHS);
 const continuationReview = ref<ContinuationReview | null>(null);
+// Admitted members usually arrive after the panel mounts (enrollment or relay sync): refresh the
+// prefill while the root has not edited it.
+let prefill = { nominee: nominee.value, witnesses: witnesses.value };
+watch(
+  () => facts.value.members.join("\n"),
+  () => {
+    const next = facts.value.members;
+    const fresh = { nominee: next[0] ?? "", witnesses: next.slice(1).join("\n") };
+    if (nominee.value === prefill.nominee) nominee.value = fresh.nominee;
+    if (witnesses.value === prefill.witnesses) witnesses.value = fresh.witnesses;
+    prefill = fresh;
+  },
+);
+// Any saved-state change clears the workflow's pending review, so drop the shown confirmation too.
+watch(
+  () => props.state,
+  () => {
+    continuationReview.value = null;
+  },
+);
 const payloadText = ref("");
 const bindingReview = ref<BindingReview | null>(null);
 const note = ref("");

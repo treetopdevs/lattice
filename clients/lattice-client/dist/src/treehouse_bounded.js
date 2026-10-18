@@ -59,6 +59,8 @@ export async function prepareTreehouseBoundedSpaceCreation(input) {
             throw new Error("invalid_retained_log");
     }
     const ids = new Set(retained.map((frame) => frame.id));
+    if (ids.size !== retained.length)
+        throw new Error("invalid_retained_log");
     if (retained.some((frame) => frame.deps.some((id) => !ids.has(id))))
         throw new Error("invalid_retained_log");
     const ops = carrierOpsToSemanticOps(retained, {}, treehouseCommandDecoders("Treehouse.Space"));
@@ -294,7 +296,8 @@ export async function authorTreehouseCatalogBootstrap(input) {
         const head = frame.body[0] === "tuple" ? frame.body[1][0] : undefined;
         if (head === undefined || head[0] !== "atom" || head[1] !== "genesis")
             continue;
-        const found = carrierDelegationsFromFrames([frame]).find((d) => d.parent_id === null && d.issuer === root && d.roles.includes("admin"));
+        const found = carrierDelegationsFromFrames([frame]).find((d) => d.parent_id === null && d.issuer === root && d.roles.includes("admin") &&
+            d.ops.includes("catalog_bootstrap_v1"));
         if (found !== undefined) {
             capId = found.id;
             break;

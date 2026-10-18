@@ -359,8 +359,9 @@ defmodule Treehouse.Space do
 
     found =
       Enum.find(Log.topo_ops(log), fn
-        %Op{kind: :authority, body: {:genesis, %Delegation{roles: roles}, _}, id: id} = op ->
-          op.author == identity.pub and :admin in roles and
+        %Op{kind: :authority, body: {:genesis, %Delegation{roles: roles, ops: ops}, _}, id: id} =
+            op ->
+          op.author == identity.pub and :admin in roles and :catalog_bootstrap_v1 in ops and
             not MapSet.member?(analysis.quarantine, id)
 
         _ ->
