@@ -17,6 +17,9 @@ article h2{font-size:17px;margin:0 0 6px}
 article h2 span{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:8px}
 dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:8px 0 0}
 dt{color:var(--muted)}dd{margin:0}
+a{color:var(--accent)}
+.table-wrap{overflow-x:auto;margin:12px 0 24px}
+.table-wrap table{margin:0;min-width:640px}
 code{font-size:14px;background:var(--line);padding:1px 5px;border-radius:4px}
 table{border-collapse:collapse;width:100%;margin:12px 0 24px}
 td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;font-size:15px}
@@ -28,6 +31,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-7 landed as PRs #133-#139. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
 
 <h2 id="slices">Slices</h2>
+<div class="table-wrap">
 <table id="slice-table">
 <thead><tr><th>#</th><th>Slice</th><th>Branch / PR</th><th>Outcome</th></tr></thead>
 <tbody>
@@ -40,6 +44,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <tr><td>7</td><td>Plan 186 PR 3: packaged harness moved into the kit (bundle classifier parameterized; <code>./testing/packaged</code> and <code>./testing/relay</code> subpaths). Plan 186 complete.</td><td><code>claude/trusting-mcclintock-5af4b9</code> / <a href="https://github.com/treetopdevs/lattice/pull/139">#139</a></td><td>Merged after exact tip <code>79843f476</code> went green. Codex Sol xhigh: no findings. Workflow reviewers: no findings.</td></tr>
 </tbody>
 </table>
+</div>
 
 <h2 id="decisions">Decisions</h2>
 
