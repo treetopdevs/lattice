@@ -12,7 +12,7 @@ export const domainSources = [
   "lattice/demo/thread.ex", "lattice/authority/consent.ex",
   "township/matter.ex", "township/election_board.ex",
   "toolshed/shed.ex", "toolshed/tool.ex",
-  "treehouse/space.ex", "treehouse/thread.ex", "treehouse/invitation.ex",
+  "treehouse/space.ex", "treehouse/thread.ex", "treehouse/invitation.ex", "treehouse/catalog_bootstrap.ex",
   "treehouse/transport_catalog.ex", "treehouse/member_continuity.ex",
   "treehouse/member_continuity_certificate.ex", "treehouse/member_continuity_authoring.ex"
 ];
