@@ -4,7 +4,7 @@ import type { OfferReview, TreehouseWorkflow } from "./treehouse_workflow";
 import type { PreviewState } from "./treehouse_state";
 import { createPanelSync } from "./treehouse_host";
 
-// Plan 181 S2c. Loaded only when the app is built with VITE_TREEHOUSE_ENROLLMENT=1. Use (import and
+// Plan 181 S2c. Loaded only when the app is built with VITE_TREEHOUSE_ENROLLMENT=1 and VITE_TREEHOUSE_DEV_TRACE=1. Use (import and
 // review), Sign (accept, admit and grant) and Sync stay separate actions: only the Sync button (and the
 // build-time autosync flag, for routes already saved at boot) touches the network, and no button does more
 // than one of them. Saving or extending routes never connects by itself.
@@ -213,7 +213,11 @@ async function admitAndGrant() {
 }
 </script>
 <template>
-  <section class="enrollment" aria-label="Enrollment">
+  <section
+    class="enrollment"
+    aria-label="Enrollment"
+    data-treehouse-variant="treehouse.enrollment-panel.v1"
+  >
     <h2>Relay enrollment</h2>
     <p class="fine">
       Relay routes are hand-configured by an operator and are not signed by
