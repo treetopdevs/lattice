@@ -17,14 +17,12 @@ import { syncTreehouse } from "../src/treehouse_host";
 import { parseState } from "../src/treehouse_state";
 import type { PreviewNative, PreviewState, RelayRoute } from "../src/treehouse_state";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
-import { createAxDriver, nodesInclude } from "./support/packaged_ax";
-import type { AxDriver, AxNode, TransferMethod } from "./support/packaged_ax";
+import { PACKAGED_ACCESSIBILITY_SWIFT, assertNoSecrets, assertScannerDetects, createAxDriver, nodesInclude, readKv } from "@treetopdevs/lattice-shell-kit/testing/packaged";
+import type { AxDriver, AxNode, TransferMethod } from "@treetopdevs/lattice-shell-kit/testing/packaged";
 import { assertPackagedBundleVariant } from "./support/packaged_bundle_variant";
 import { assertPrivateChain, fileSha256, freeTcpPort, makeGateRoot, runBeamSupport } from "@treetopdevs/lattice-shell-kit/testing/beam";
 import { createRelayObserver, spawnPilotManifestServer, writePilotManifest } from "./support/relay_peer";
 import type { PilotRelay } from "./support/relay_peer";
-import { assertNoSecrets, assertScannerDetects } from "./support/secret_scan";
-import { readKv } from "./support/store_read";
 import { SeededNative } from "./support/seeded_native";
 
 // Plan 181 S5c1. The packaged two-instance macOS harness: two launches of one dev-trace Treehouse bundle,
@@ -251,7 +249,7 @@ try {
   }
   assert(existsSync(binary), `no packaged bundle at ${bundle}; build it first with: npm run tauri:build:dev-trace`);
   assertPackagedBundleVariant(bundle, "dev_trace");
-  execFileSync("swiftc", [join(shell, "test/support/packaged_accessibility.swift"), "-o", helper]);
+  execFileSync("swiftc", [PACKAGED_ACCESSIBILITY_SWIFT, "-o", helper]);
   assertScannerDetects(privSeed("founder").toString("hex"));
   console.log("PASS the bundle classifies as the dev-trace variant, the scratch chain is private, the helper is built");
 

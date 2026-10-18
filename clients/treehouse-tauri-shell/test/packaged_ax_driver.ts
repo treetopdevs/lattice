@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { createAxDriver, preflightArtifact } from "./support/packaged_ax";
-import type { AxExec, AxNode } from "./support/packaged_ax";
+import { createAxDriver, preflightArtifact } from "@treetopdevs/lattice-shell-kit/testing/packaged";
+import type { AxExec, AxNode } from "@treetopdevs/lattice-shell-kit/testing/packaged";
 
 // Plan 181 S5c1 (folding S5c0). The accessibility driver's logic, tested against an in-memory fake of the
 // helper so it runs everywhere, with no Accessibility permission and no app. The real transfer proof is the

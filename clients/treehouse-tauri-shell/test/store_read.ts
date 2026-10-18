@@ -4,9 +4,9 @@ import type { ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { STORE_READ_OPTIONS, parseStoreRows, readKv, readStore, storeReadArgs } from "./support/store_read";
+import { STORE_READ_OPTIONS, parseStoreRows, readKv, readStore, storeReadArgs } from "@treetopdevs/lattice-shell-kit/testing/packaged";
 
-// The packaged gates read the app's live store through support/store_read. This test runs the real sqlite3 CLI
+// The packaged gates read the app's live store through the shell kit store reader. This test runs the real sqlite3 CLI
 // against a throwaway database (never an app store) while a separate sqlite3 process holds an exclusive write
 // lock, as an app write does. It proves the bare reader fails "database is locked" (the packaged macOS failure on
 // main at 1017cb8f3), the helper's reader waits for the writer and then sees its commit, and the helper cannot

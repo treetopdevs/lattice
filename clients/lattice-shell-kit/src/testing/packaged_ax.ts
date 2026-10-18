@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 // Plan 181 S5c1 (with the S5c0 transfer check folded in). The accessibility driver of the packaged
 // harness: one instance per app pid. It talks to `packaged_accessibility.swift` through an injected
@@ -161,3 +162,6 @@ export function createAxDriver(options: AxDriverOptions): AxDriver {
     },
   };
 }
+
+/** Absolute path of the Swift accessibility helper that ships beside this module. */
+export const PACKAGED_ACCESSIBILITY_SWIFT = fileURLToPath(new URL("./packaged_accessibility.swift", import.meta.url));

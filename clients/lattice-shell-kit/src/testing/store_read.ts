@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 
-// Read-only evidence from a packaged Treehouse store, possibly while the app is running. The app opens the store
+// Read-only evidence from a packaged product store, possibly while the app is running. The app opens the store
 // in rollback-journal mode with a 5 s busy timeout (lattice-mobile-core storage.rs), so a reader that arrives
 // during a write meets SQLITE_BUSY. A bare sqlite3 read fails at once with "database is locked (5)"; ".timeout"
 // installs SQLite's busy handler, so the read waits for the writer instead of failing or spinning. The reader's

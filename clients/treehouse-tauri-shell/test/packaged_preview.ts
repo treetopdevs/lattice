@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import type { PreviewNative, Draft } from "../src/treehouse_state";
-import { readKv, readStore } from "./support/store_read";
+import { PACKAGED_ACCESSIBILITY_SWIFT, readKv, readStore } from "@treetopdevs/lattice-shell-kit/testing/packaged";
 const evidence =
   process.env.TREEHOUSE_EVIDENCE_DIR ?? "/tmp/treehouse-r12-packaged-green";
 const binary = resolve(
@@ -64,7 +64,7 @@ try {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 }
 execFileSync("swiftc", [
-  "test/support/packaged_accessibility.swift",
+  PACKAGED_ACCESSIBILITY_SWIFT,
   "-o",
   `${evidence}/accessibility`,
 ]);

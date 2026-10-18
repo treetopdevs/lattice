@@ -25,7 +25,7 @@ import { TreehouseWorkflow, fromBase64 } from "../src/treehouse_workflow";
 import { freeTcpPort, makeGateRoot, runBeamSupport } from "@treetopdevs/lattice-shell-kit/testing/beam";
 import { spawnPilotManifestServer, writePilotManifest } from "./support/relay_peer";
 import type { PilotRelay } from "./support/relay_peer";
-import { assertNoSecrets, assertScannerDetects } from "./support/secret_scan";
+import { assertNoSecrets, assertScannerDetects } from "@treetopdevs/lattice-shell-kit/testing/packaged";
 import { SeededNative } from "./support/seeded_native";
 
 // Plan 181 slice 4. A headless real-socket gate: two in-memory-native Treehouse clients (named test
