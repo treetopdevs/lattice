@@ -46,9 +46,9 @@ the signer and the two route validators are members of the port rather than a th
 is an `isAnchor` predicate, plus `holdsAnchorProfile` for the feed's Space pre-sync; the status copy
 (`describeSyncStatus`, connection labels) and `treehouseFeedEnv` stay in the shell as product copy and product flags,
 and the kit's `createPanelSync` takes `describe`, `pollMs` and `autosyncOnMount`; the unobservable internal string
-"Treehouse feed worker stopped" became "feed worker stopped"; the move is one commit, not five; and
+"Treehouse feed worker stopped" became "feed worker stopped"; the move is two commits, not five; and
 `r13_lite_contract_test.exs`'s claim-surface list now names `treehouse_host.ts`, where the status copy moved. The
-`test/feed.ts:233` timing flake predates the move (interleaved A/B: 7/8 moved, 6/8 at the base) and is row 222.
+`test/feed.ts:233` timing flake predates the move and is row 222.
 PR 3 (packaged harness) remains.
 
 ## Header
