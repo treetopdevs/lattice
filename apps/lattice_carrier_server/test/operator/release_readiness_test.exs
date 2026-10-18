@@ -270,7 +270,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
     assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
   end
 
-  defp restart!() do
+  defp restart! do
     assert :ok = Application.stop(:lattice_carrier_server)
     assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
   end

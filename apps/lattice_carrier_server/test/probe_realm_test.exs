@@ -7,7 +7,7 @@ defmodule LatticeCarrierServer.ProbeRealmTest do
 
   use ExUnit.Case, async: false
 
-  alias Lattice.Carrier.{Telemetry, WebSocket}
+  alias Lattice.Carrier.{Telemetry, WebSocket, Wire}
   alias Lattice.{Identity, Log, Op}
   alias Lattice.Transport.WebSocket.Client
   alias LatticeCarrierServer.{Holder, ProbeRealm, Runtime}
@@ -56,7 +56,7 @@ defmodule LatticeCarrierServer.ProbeRealmTest do
       attach_refusals()
 
       requests = [
-        {"relay", %{type: "relay", op: Lattice.Carrier.Wire.encode_op(op)}},
+        {"relay", %{type: "relay", op: Wire.encode_op(op)}},
         {"subscribe", %{type: "subscribe"}},
         {"unsubscribe", %{type: "unsubscribe"}},
         {"state", %{type: "state"}},

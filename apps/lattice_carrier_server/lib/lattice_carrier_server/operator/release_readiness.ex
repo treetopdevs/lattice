@@ -23,8 +23,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   Every raise or exit becomes an atom-only refusal, so no refusal carries key
   material.
   """
-  alias Lattice.Carrier.WebSocket
   alias Lattice.{Authority, Log}
+  alias Lattice.Carrier.WebSocket
   alias LatticeCarrierServer.Operator.{Journal, Lock, Staging}
   alias LatticeCarrierServer.{Durability, Health, Holder, Listener, Manifest, ProbeRealm}
   alias LatticeCarrierServer.{Runtime, Secret}
