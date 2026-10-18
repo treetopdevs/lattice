@@ -38,7 +38,9 @@ root or the carrier service key. No such identity exists in this deployment mode
 
 Operator choice needed before row 223 resumes, one of: (a) a reviewed operator probe identity admitted
 as a distinct, non-member transport peer, with staging and activation's exact-peer check widened to
-`{child root} ∪ roster ∪ {probe}` and the probe given read-only pull, never relay; or (b) drop the
+`{child root} ∪ roster ∪ {probe}` and the probe given read-only pull, never relay. Option (a) needs an
+explicit operator decision that supersedes D-20's roster-member requirement and lifts STOP conditions 2 and 3
+for this probe; without that decision it is not available. Or (b) drop the
 authenticated pull from `ready` and let a member's own device perform the route check, recording
 readiness from a member-signed observation (changes this plan's meaning of `ready`). The other `ready`
 steps (1-4, 6) are unaffected and need no new input.
