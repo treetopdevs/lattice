@@ -14,11 +14,11 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
   @spec build(keyword(), :real | :dry_run) :: {:ok, map()} | {:error, atom()}
   def build(opts, mode) do
     with {:ok, dir} <- Store.ceremony(opts, mode),
-         {:ok, pub, _signer} <- Signer.load(dir, mode),
+         {:ok, pub, signer} <- Signer.load(dir, mode),
          :ok <- Store.undisposable([pub], mode),
          {:ok, backup} <- Store.read(dir, "backup.json"),
          {:ok, restore} <- restored(dir, mode),
-         :ok <- consistent(pub, backup, restore),
+         :ok <- consistent(pub, backup, restore, signer),
          {:ok, custody} <- custody(opts),
          {:ok, binding} <- binding(dir, pub) do
       document = %{
@@ -46,18 +46,31 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
   # Separateness is hostname-based and attested by the named people; a real
   # ceremony needs a restore on another host. A dry run records it as it is.
   defp restored(dir, mode) do
-    case {Store.read(dir, "restore.json"), mode} do
-      {{:ok, %{"ok" => true, "separate_host" => true} = restore}, _} -> {:ok, restore}
-      {{:ok, %{"ok" => true} = restore}, :dry_run} -> {:ok, restore}
-      {{:ok, %{"ok" => true}}, :real} -> {:error, :restore_not_separate_host}
-      _ -> {:error, :restore_not_verified}
+    with {:ok, restore} <- Store.read(dir, "restore.json"),
+         true <- restore_shape?(restore) do
+      case {restore, mode} do
+        {%{"ok" => true, "separate_host" => true}, _} -> {:ok, restore}
+        {%{"ok" => true}, :dry_run} -> {:ok, restore}
+        {%{"ok" => true}, :real} -> {:error, :restore_not_separate_host}
+        _ -> {:error, :restore_not_verified}
+      end
+    else
+      {:error, :ceremony_artifact_missing} -> {:error, :restore_not_verified}
+      _ -> {:error, :ceremony_artifact_malformed}
     end
   end
 
-  defp consistent(pub, backup, restore) do
+  # Both hosts are real text and the recorded separateness is what they imply.
+  defp restore_shape?(restore) do
+    Store.host_text?(restore["host"]) and Store.host_text?(restore["generation_host"]) and
+      restore["separate_host"] == (restore["host"] != restore["generation_host"])
+  end
+
+  defp consistent(pub, backup, restore, signer) do
     encoded = Base.encode64(pub)
 
-    if backup["public_key_base64"] == encoded and restore["public_key_base64"] == encoded and
+    if restore["generation_host"] == signer["host"] and backup["public_key_base64"] == encoded and
+         restore["public_key_base64"] == encoded and
          backup["sha256"] == restore["backup_sha256"] and
          backup["backup_format"] == Backup.format() and
          backup["kdf_iterations"] == Backup.iterations(),
@@ -93,15 +106,17 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
 
   defp binding(dir, pub) do
     case {Binding.load_payload(dir, pub), Store.read(dir, "binding.json")} do
-      {{:ok, _payload, record, sha}, {:ok, %{"bootstrap_id" => id, "record_sha256" => sha}}}
-      when is_binary(id) ->
-        {:ok,
-         %{
-           "status" => "verified",
-           "bootstrap_id" => id,
-           "record_sha256" => sha,
-           "space" => record.space
-         }}
+      {{:ok, _payload, record, sha}, {:ok, %{} = found}} ->
+        if Binding.record_shape?(found, record, sha),
+          do:
+            {:ok,
+             %{
+               "status" => "verified",
+               "bootstrap_id" => found["bootstrap_id"],
+               "record_sha256" => sha,
+               "space" => record.space
+             }},
+          else: {:error, :ceremony_inconsistent}
 
       {{:ok, _payload, _record, sha}, {:error, :ceremony_artifact_missing}} ->
         {:ok, pending(sha)}

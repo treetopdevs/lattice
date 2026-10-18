@@ -45,6 +45,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
              mode
            ),
          {:ok, log} <- space_log(opts[:space_log]),
+         :ok <- profile_unchanged(log, record),
          {:ok, id} <- honored(log, record) do
       binding = %{
         "format" => @binding_format,
@@ -56,6 +57,20 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
 
       with {:ok, _} <- Store.write(dir, "binding.json", binding), do: {:ok, binding}
     end
+  end
+
+  @doc """
+  Whether a `binding.json` map is the complete record `verify/2` writes for this
+  payload record: exact keys, format, an id, the payload hash, the payload's
+  Space and a valid timestamp.
+  """
+  @spec record_shape?(map(), map(), String.t()) :: boolean()
+  def record_shape?(found, record, sha) do
+    Enum.sort(Map.keys(found)) ==
+      Enum.sort(~w(format bootstrap_id record_sha256 space verified_at)) and
+      found["format"] == @binding_format and ContinuationCertificate.id?(found["bootstrap_id"]) and
+      found["record_sha256"] == sha and found["space"] == record.space and
+      Store.timestamp?(found["verified_at"])
   end
 
   @doc "Read and re-check the payload artifact; returns the record rebuilt from its JSON."
@@ -148,6 +163,21 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     case Authority.continuation_profile(log) do
       {:ok, %{profile: %{kind: :space}} = profile} -> {:ok, profile}
       _ -> {:error, :space_not_bounded_profile}
+    end
+  end
+
+  # The reviewed record named the Space's pin at payload time; the supplied log
+  # must still carry exactly that pin (a later pin changes the profile).
+  defp profile_unchanged(log, record) do
+    case Authority.continuation_profile(log) do
+      {:ok, %{profile: %{kind: :space}} = profile}
+      when log.replica == record.space and profile.root == record.space_root and
+             profile.profile_genesis == record.profile_genesis and
+             profile.profile_id == record.profile_id ->
+        :ok
+
+      _ ->
+        {:error, :binding_profile_changed}
     end
   end
 

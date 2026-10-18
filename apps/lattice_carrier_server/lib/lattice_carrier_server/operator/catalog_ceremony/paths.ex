@@ -54,14 +54,32 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
     :symlink_loop -> {:error, reason}
   end
 
-  # An existing backup being read: a regular file, never a link.
-  @spec backup_input(term()) :: {:ok, Path.t()} | {:error, atom()}
-  def backup_input(path) do
-    with {:ok, expanded} <- explicit(path, :backup_path_required) do
-      case File.lstat(expanded) do
-        {:ok, %File.Stat{type: :regular}} -> {:ok, expanded}
-        _ -> {:error, :backup_unreadable}
-      end
+  # An existing backup being read. It is ciphertext, but the copy on the
+  # verifying machine follows the secret-path policy: canonicalized once, a
+  # regular file owned by this user with no group/other access and a single
+  # link, in a directory chain nobody else can swap, outside any git work tree.
+  # The returned canonical path is the only one ever read.
+  @spec backup_input(term(), :real | :dry_run) :: {:ok, Path.t()} | {:error, atom()}
+  def backup_input(path, mode) do
+    with {:ok, expanded} <- explicit(path, :backup_path_required),
+         {:ok, canonical} <- canonical(expanded, :backup_directory_unavailable),
+         :ok <-
+           ancestors_safe(Path.dirname(canonical), :backup_directory_unavailable,
+             include_self: true
+           ),
+         :ok <- private_file(canonical),
+         :ok <- outside_git(canonical, :backup_in_git_checkout, mode) do
+      {:ok, canonical}
+    end
+  end
+
+  defp private_file(path) do
+    with {:ok, %File.Stat{type: :regular, mode: mode, uid: owner, links: 1}} <- File.lstat(path),
+         true <- (mode &&& 0o077) == 0,
+         true <- owner == uid() do
+      :ok
+    else
+      _ -> {:error, :backup_unreadable}
     end
   end
 

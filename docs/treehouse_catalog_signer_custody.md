@@ -180,6 +180,13 @@ keeps it out of argv.
 Copy `CEREMONY` (public artifacts) and the backup to a different host. The seed file is **not**
 copied and is not read. The command does not need it.
 
+The copied backup on the second machine follows the secret-path policy: it must be owned by the
+verifying user with mode 0600 (`chmod 600 BACKUP`), a single link, in a directory that is mode 0700
+and whose ancestors nobody else can write, outside any git checkout. Otherwise `verify-backup`
+refuses with `backup_unreadable`, `backup_directory_unavailable` or `backup_in_git_checkout`.
+`signer.json` and `restore.json` must be the complete records the tool wrote (a hand-edited
+`separate_host` that disagrees with the two host names is refused).
+
 ```bash
 IFS= read -rs P; printf '%s\n' "$P" | ~/.asdf/shims/mix treehouse.catalog_ceremony verify-backup \
   --backup "$BACKUP" --ceremony "$CEREMONY"; unset P

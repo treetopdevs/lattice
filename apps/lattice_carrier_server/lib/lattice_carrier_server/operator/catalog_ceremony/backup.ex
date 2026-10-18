@@ -35,10 +35,18 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
          {:ok, seed} <- signer_seed(signer_path, pub),
          {:ok, passphrase} <- Passphrase.confirmed(opts),
          bytes = encode(seed, pub, passphrase),
-         :ok <- write(backup_path, bytes),
+         {:ok, inode} <- write(backup_path, bytes),
          :ok <- hook(opts, backup_path),
-         :ok <- self_check(backup_path, passphrase, pub) do
-      record(dir, bytes, pub)
+         :ok <- self_check(backup_path, inode, passphrase, pub) do
+      # A backup with no public record is an orphan: remove only the file made here.
+      case record(dir, bytes, pub, opts) do
+        {:ok, _} = ok ->
+          ok
+
+        {:error, _} ->
+          Paths.remove_created(backup_path, inode)
+          {:error, :ceremony_write_failed}
+      end
     end
   end
 
@@ -48,7 +56,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
          {:ok, pub, signer} <- Signer.load(dir, mode),
          :ok <- Store.undisposable([pub], mode),
          {:ok, recorded} <- Store.read(dir, "backup.json"),
-         {:ok, backup_path} <- Paths.backup_input(opts[:backup]),
+         {:ok, backup_path} <- Paths.backup_input(opts[:backup], mode),
          {:ok, restore_path} <- restore_target(opts, dir, mode),
          {:ok, bytes} <- read(backup_path),
          :ok <- digest(bytes, recorded),
@@ -191,25 +199,31 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
     end
   end
 
+  # A test seam only: the command line has no way to set it.
+  defp record_hook(opts, dir) do
+    case opts[:before_record] do
+      fun when is_function(fun, 1) -> fun.(dir)
+      _ -> :ok
+    end
+  end
+
   defp write(path, bytes) do
-    with {:ok, _inode} <-
-           Paths.create_private(path, fn -> bytes end, :backup_exists, :backup_unwritable),
-         do: :ok
+    Paths.create_private(path, fn -> bytes end, :backup_exists, :backup_unwritable)
   end
 
   # The file is read back and decrypted before the ceremony trusts it.
-  defp self_check(path, passphrase, pub) do
+  defp self_check(path, inode, passphrase, pub) do
     with {:ok, bytes} <- File.read(path),
          {:ok, _seed, ^pub} <- decrypt(bytes, passphrase) do
       :ok
     else
       _ ->
-        File.rm(path)
+        Paths.remove_created(path, inode)
         {:error, :backup_self_check_failed}
     end
   end
 
-  defp record(dir, bytes, pub) do
+  defp record(dir, bytes, pub, opts) do
     record = %{
       "format" => @record_format,
       "backup_format" => @format,
@@ -220,7 +234,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
       "public_key_base64" => Base.encode64(pub)
     }
 
-    with {:ok, _} <- Store.write(dir, "backup.json", record), do: {:ok, record}
+    with :ok <- record_hook(opts, dir),
+         {:ok, _} <- Store.write(dir, "backup.json", record),
+         do: {:ok, record}
   end
 
   defp read(path) do

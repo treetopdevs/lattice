@@ -139,6 +139,20 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
     end
   end
 
+  @doc "A nonempty host name: valid text, no control characters, at most 255 bytes."
+  @spec host_text?(term()) :: boolean()
+  def host_text?(host) when is_binary(host) do
+    String.valid?(host) and host != "" and byte_size(host) <= 255 and
+      not String.match?(host, ~r/[[:cntrl:]]/u)
+  end
+
+  def host_text?(_), do: false
+
+  @doc "An ISO 8601 UTC timestamp string."
+  @spec timestamp?(term()) :: boolean()
+  def timestamp?(text) when is_binary(text), do: match?({:ok, _, _}, DateTime.from_iso8601(text))
+  def timestamp?(_), do: false
+
   @spec public_info(binary()) :: map()
   def public_info(pub) do
     %{
