@@ -23,6 +23,7 @@ MAX_JOURNAL = 1024 * 1024
 SAFE = 9007199254740991
 PHASES = ("carrier_pending", "activated")
 INCARNATION = "operator-incarnation"
+HISTORY = "operator-journal-history.jsonl"
 
 
 class Refusal(Exception):
@@ -260,6 +261,78 @@ def retain(path, raw):
         refuse("immutable_artifact_conflict")
 
 
+def history_file(root):
+    """Open the journal history, creating it, and refuse anything but this
+    user's private regular single-link file. Activation and boot reconcile
+    call it before their irreversible step, so an unsafe history file never
+    refuses after the manifest is already replaced."""
+    try:
+        # O_NONBLOCK keeps a FIFO from blocking the open; it has no effect on
+        # a regular file. A symlink (ELOOP) is a closed refusal.
+        fd = os.open(os.path.join(root, HISTORY),
+                     os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    except OSError:
+        refuse("unsafe_operator_file")
+    st = os.fstat(fd)
+    if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != os.geteuid()
+            or st.st_mode & 0o077):
+        os.close(fd)
+        refuse("unsafe_operator_file")
+    return fd
+
+
+def complete_lines(fd, size):
+    """Offset just past the last newline: everything after it is a fragment
+    of an append that never finished, so it was never followed by a replace."""
+    end = size
+    while end > 0:
+        start = max(0, end - 65536)
+        chunk = b""
+        while len(chunk) < end - start:
+            # A short read covers only a prefix of the range; keep reading so
+            # no unread bytes are skipped when choosing the cut.
+            part = os.pread(fd, end - start - len(chunk), start + len(chunk))
+            if not part:
+                refuse("unsafe_operator_file")
+            chunk += part
+        at = chunk.rfind(b"\n")
+        if at >= 0:
+            return start + at + 1
+        end = start
+    return 0
+
+
+def history(root, old):
+    """Append the exact journal bytes about to be replaced, one per line, and
+    make them durable before the replace. A crash after this append and
+    before the replace leaves a duplicate of the current record at the tail;
+    that is accepted. A torn earlier append is cut back to its last complete
+    line first, and a failed write is cut back too, so every line is one
+    whole record. Growth is unbounded for now (row 225)."""
+    fd = history_file(root)
+    try:
+        keep = complete_lines(fd, os.fstat(fd).st_size)
+        os.ftruncate(fd, keep)
+        data = old.encode() + b"\n"
+        try:
+            written = 0
+            while written < len(data):
+                written += os.write(fd, data[written:])
+            os.fsync(fd)
+        except OSError:
+            # Make the cut durable too; if even that fails, the next append
+            # still cuts the fragment back before writing.
+            try:
+                os.ftruncate(fd, keep)
+                os.fsync(fd)
+            except OSError:
+                pass
+            refuse("operator_history_write_failed")
+    finally:
+        os.close(fd)
+    sync_dir(root)
+
+
 def commit(root, old, raw, activation=False):
     next_record = record(raw)
     # Only activate() may write an activated record, after its own checks;
@@ -272,11 +345,16 @@ def commit(root, old, raw, activation=False):
             refuse("stale_operator_intent")
     expected(root, old)
     current_service(next_record["service"])
+    apart(root, next_record["service"]["identity_file"])
     # Exclusive temp is deliberately preserved on failure; never guess that an orphan is disposable.
     temporary = os.path.join(root, "operator-journal.json.tmp." + os.urandom(16).hex())
     retain(temporary, raw.encode())
     expected(root, old)
     current_service(next_record["service"])
+    # expected() has just proven the journal on disk is exactly `old`; no
+    # journal (old is None) means there is nothing to keep.
+    if old is not None:
+        history(root, old)
     os.replace(temporary, os.path.join(root, "operator-journal.json"))
     sync_dir(root)
     if file_bytes(os.path.join(root, "operator-journal.json"), MAX_JOURNAL, private=True) != raw.encode():
@@ -315,7 +393,7 @@ def activate(root, plan):
         refuse("corrupt_operator_journal")
     candidate = staged(manifests[0])
     target = checks[0]["path"]
-    absolute_paths(candidate)
+    absolute_paths(candidate, root)
     if target in reserved(root, old):
         refuse("unsafe_operator_file")
     # Every staged artifact still holds its reviewed bytes, on the first
@@ -337,6 +415,16 @@ def activate(root, plan):
         snapshots(checks[1:])
         if digest(active(target)) != old["manifest_digest"]:
             refuse("stale_operator_intent")
+        # The candidate keeps the replaced manifest's permission bits, so a
+        # 0644 deployment file stays readable and a 0600 one stays private.
+        mode = mode_of(target)
+        os.close(history_file(root))
+        fd = os.open(temporary, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            os.fchmod(fd, mode)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(temporary, target)
         sync_dir(os.path.dirname(target))
         if active(target) != candidate:
@@ -397,6 +485,7 @@ def boot(root, plan):
             for a in old["artifacts"]:
                 staged(a)
             durable(target)
+            os.close(history_file(root))
             # The canonical record differs from its activated form in this one
             # structural member; a quote inside any string value is escaped,
             # so the pattern cannot match inside one.
@@ -426,7 +515,7 @@ def boot(root, plan):
     reply({"incarnation": marker})
 
 
-def absolute_paths(raw):
+def absolute_paths(raw, root):
     """The candidate is installed beside the active manifest, not in its
     attempt directory, so a relative path in it would name a different,
     unreviewed file after activation."""
@@ -442,19 +531,40 @@ def absolute_paths(raw):
             path = instance.get(key) if type(instance) is dict else None
             if type(path) is not str or not os.path.isabs(path) or os.path.normpath(path) != path:
                 refuse("unsafe_candidate_manifest")
+            apart(root, path)
+
+
+def apart(root, path):
+    """A deployment path that names one of the operator's own files, by path
+    or by inode, would be rewritten by the next journal, history or marker
+    write; the BEAM boot refuses the same collision."""
+    own = reserved_files(root)
+    if os.path.normpath(path) in own:
+        refuse("operator_path_collision")
+    try:
+        st = os.stat(path)
+    except OSError:
+        return
+    for name in own:
+        try:
+            other = os.stat(name)
+        except OSError:
+            continue
+        if (st.st_dev, st.st_ino) == (other.st_dev, other.st_ino):
+            refuse("operator_path_collision")
 
 
 def reserved(root, r):
     """Paths activation must never replace: the lock it holds, the journal it
-    commits, the boot incarnation marker it checks and the staged artifacts it
-    rechecks."""
+    commits and its history, the boot incarnation marker it checks and the
+    staged artifacts it rechecks."""
     return reserved_files(root) | {a["path"] for a in r["artifacts"]}
 
 
 def reserved_files(root):
     """The operator's own files under its root."""
     return {os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json"),
-            os.path.join(root, INCARNATION)}
+            os.path.join(root, INCARNATION), os.path.join(root, HISTORY)}
 
 
 def durable(path):
@@ -469,6 +579,22 @@ def durable(path):
     finally:
         os.close(fd)
     sync_dir(os.path.dirname(path))
+
+
+def mode_of(path):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        refuse("unsafe_operator_file")
+    try:
+        st = os.fstat(fd)
+    finally:
+        os.close(fd)
+    # The carrier refuses a group- or other-writable manifest; never copy one.
+    # Only the permission bits carry over, never setuid, setgid or sticky.
+    if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o022:
+        refuse("unsafe_operator_file")
+    return st.st_mode & 0o777
 
 
 def staged(artifact):
