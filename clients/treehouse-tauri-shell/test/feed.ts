@@ -229,7 +229,12 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   await quiet();
   assert.equal(h.syncs.filter((r) => r === f.thread).length, 1, "the baseline is one sync of the Thread");
   assert.equal(h.syncs.filter((r) => r === f.space).length, 1);
-  // The unsynced local frames drained through the baseline sync.
+  // The unsynced local frames drained through the baseline sync. A sync is counted when it starts, so
+  // wait for it to finish rather than for a fixed time.
+  await until(
+    () => h.routeState(f.thread).pending === 0 && h.routeState(f.thread).matchesRelay === true,
+    "baseline sync drains the local frames",
+  );
   assert.equal(h.routeState(f.thread).pending, 0);
   assert.equal(h.routeState(f.thread).matchesRelay, true);
   const before = h.pulls.filter((r) => r === f.thread).length;
@@ -238,6 +243,7 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   await quiet();
   assert.equal(h.syncs.filter((r) => r === f.thread).length, 2, "exactly one more sync");
   assert.equal(h.pulls.filter((r) => r === f.thread).length - before, 1, "exactly one pull for the hint");
+  await until(() => h.routeState(f.thread).generation === 2, "the hint sync records its generation");
   assert.equal(h.routeState(f.thread).generation, 2);
   assert.equal(h.syncs.filter((r) => r === f.space).length, 1, "the other route is not synced");
   await feed.stop();
@@ -269,6 +275,7 @@ const live = (h: Harness, replica: string) => h.routeState(replica)?.connection 
   await until(() => h.syncs.length === 4, "one trailing sync");
   await quiet();
   assert.equal(h.syncs.length, 4, "three queued hints coalesce into one trailing sync");
+  await until(() => h.routeState(f.thread).generation === 5, "the trailing sync records its generation");
   assert.equal(h.routeState(f.thread).generation, 5, "the trailing sync carries the latest generation");
   await feed.stop();
   console.log("PASS hints during an in-flight sync coalesce into one trailing sync");

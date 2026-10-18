@@ -1,7 +1,7 @@
 defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
   use ExUnit.Case, async: false
   if :os.type() != {:unix, :linux}, do: @moduletag(skip: "Requires actual Linux OS lock")
-  alias Lattice.Log
+  alias Lattice.{Identity, Log, Sim}
   alias LatticeCarrierServer.{Manifest, Runtime}
 
   alias LatticeCarrierServer.Operator.{
@@ -55,6 +55,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert activated == Map.put(f.record, "phase", "activated")
     assert Journal.digest(File.read!(f.manifest)) == f.candidate["sha256"]
     assert File.read!(f.manifest) == File.read!(f.candidate["path"])
+    assert Bitwise.band(File.stat!(f.manifest).mode, 0o7777) == 0o600
     assert {:ok, raw} = Journal.read(f.root)
     assert Jason.decode!(raw) == activated
     # Activation neither reopens admission nor restarts a route in place.
@@ -69,6 +70,50 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert Enum.map(deployment.instances, & &1.name) == ["space", "thread"]
     assert ReleaseGate.accepting?(deployment.owner)
     refute ReleaseGate.sealed?(deployment.owner, observation)
+  end
+
+  test "a Space member admitted after staging refuses as roster drift before the owner runs",
+       f do
+    # The staged review covered only the root member; the sealed Space log now
+    # carries a second one, so neither the child grants nor the bootstrap
+    # peers describe the roster the restarted release would serve.
+    late = Identity.from_seed("late", "operator-space:late")
+    member = Base.encode64(late.pub)
+    {space, invitation} = Sim.command(f.space, "creator", :issue_invitation, [member, []])
+    acceptance = Treehouse.Invitation.accept(late, space.replica, invitation)
+
+    {space, admission} =
+      Sim.command(space, "creator", :admit_member, [invitation.id, member, "member", acceptance])
+
+    refute Sim.quarantined(space, "creator", admission.id)
+    :ok = Log.dump(Sim.log(space, "creator"), f.active_log)
+    {owner, observation} = sealed(f)
+
+    assert {:error, :roster_drift_since_staging} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert File.read!(f.manifest) == f.active_manifest
+    assert {:ok, journal} = Journal.read(f.root)
+    assert journal == f.journal
+    refute File.exists?(Journal.history_path(f.root))
+  end
+
+  test "activation keeps the replaced manifest's permission bits", f do
+    File.chmod!(f.manifest, 0o644)
+    {owner, observation} = sealed(f)
+
+    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    assert File.read!(f.manifest) == File.read!(f.candidate["path"])
+    assert Bitwise.band(File.stat!(f.manifest).mode, 0o7777) == 0o644
+  end
+
+  test "activation appends the replaced pending journal to the operator history", f do
+    {owner, observation} = sealed(f)
+
+    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    history = File.read!(Journal.history_path(f.root))
+    assert String.ends_with?(history, f.journal <> "\n")
+    assert Bitwise.band(File.stat!(Journal.history_path(f.root)).mode, 0o777) == 0o600
   end
 
   test "a drained but unsealed release refuses and writes nothing", f do
@@ -347,25 +392,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     unchanged!(f)
   end
 
-  test "a boot refuses a deployment file that aliases the incarnation marker", f do
-    {:ok, manifest} = Manifest.load(f.manifest)
-    [instance | _] = manifest.instances
-
-    alias_root =
-      Path.join(Path.dirname(f.root), "alias-operator-root-#{System.unique_integer([:positive])}")
-
-    File.mkdir_p!(alias_root)
-    on_exit(fn -> File.rm_rf(alias_root) end)
-    File.chmod!(alias_root, 0o700)
-    File.ln!(instance.log_file, Path.join(alias_root, "operator-incarnation"))
-    log = File.read!(instance.log_file)
-
-    Application.put_env(:lattice_carrier_server, :manifest, f.manifest)
-    Application.put_env(:lattice_carrier_server, :operator_root, alias_root)
-
-    assert {:error, reason} = Application.ensure_all_started(:lattice_carrier_server)
-    assert inspect(reason) =~ "operator_path_collision"
-    assert File.read!(instance.log_file) == log
+  test "a boot refuses a deployment file that aliases an operator file", f do
+    for reserved <- ~w(operator-incarnation operator-journal-history.jsonl) do
+      Application.stop(:lattice_carrier_server)
+      boot_refuses_alias!(f, reserved)
+    end
   end
 
   test "a boot whose loaded manifest was replaced under it refuses", f do
@@ -468,6 +499,27 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
       assert {:error, :invalid_operator_response} =
                Lock.boot(dir, Path.join(dir, "m.json"), String.duplicate("0", 64))
     end
+  end
+
+  defp boot_refuses_alias!(f, reserved) do
+    {:ok, manifest} = Manifest.load(f.manifest)
+    [instance | _] = manifest.instances
+
+    alias_root =
+      Path.join(Path.dirname(f.root), "alias-operator-root-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(alias_root)
+    on_exit(fn -> File.rm_rf(alias_root) end)
+    File.chmod!(alias_root, 0o700)
+    File.ln!(instance.log_file, Path.join(alias_root, reserved))
+    log = File.read!(instance.log_file)
+
+    Application.put_env(:lattice_carrier_server, :manifest, f.manifest)
+    Application.put_env(:lattice_carrier_server, :operator_root, alias_root)
+
+    assert {:error, reason} = Application.ensure_all_started(:lattice_carrier_server)
+    assert inspect(reason) =~ "operator_path_collision"
+    assert File.read!(instance.log_file) == log
   end
 
   defp hold_lock(root) do

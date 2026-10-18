@@ -17,12 +17,17 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
   the commit) records it activated itself, so no new seal is needed.
   A release booted without an operator root has no marker and never activates.
 
+  Staging reviewed the Space roster at stage time; activation re-reviews it
+  from the sealed, verified Space log and refuses `:roster_drift_since_staging`
+  unless the staged child's reviewed grant recipients and the admitted
+  instance's bootstrap peers (that roster plus the child root) still match it.
+
   Activation does not reopen admission or restart a route: the sealed
   incarnation stays closed, and the new route set is served only after a full
   application restart. It signs nothing, generates no identity, resets no log,
   and is neither readiness, catalog publication nor catalog replacement.
   """
-  alias LatticeCarrierServer.Operator.{Journal, Lock, ReleaseGate}
+  alias LatticeCarrierServer.Operator.{Journal, Lock, ReleaseGate, Staging}
   alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Manifest, Runtime}
 
@@ -41,8 +46,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
          digest = Base.encode16(manifest.manifest_digest, case: :lower),
          :ok <- same(digest == record["manifest_digest"], :release_manifest_mismatch),
          :ok <- same(Journal.service_identity_current?(record["service"]), :stale_operator_intent),
-         :ok <- identities_current(record, manifest.instances),
-         :ok <- logs_current(manifest.instances, logs),
+         {:ok, admitted} <- identities_current(record, manifest.instances),
+         {:ok, restored} <- logs_current(manifest.instances, logs),
+         :ok <- roster_current(record, admitted, restored),
          next = Map.put(record, "phase", "activated"),
          :ok <-
            Lock.activate(
@@ -96,22 +102,26 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
          served = Enum.map(manifest.instances, inventory),
          [admitted] <- served -- Enum.map(sealed, inventory),
          true <- Base.encode64(admitted.pub) == record["service"]["pub"] do
-      :ok
+      {:ok, Enum.find(manifest.instances, &(inventory.(&1) == admitted))}
     else
       _ -> {:error, :release_identity_changed}
     end
   end
 
   # Every sealed route log must still be the exact verified history the seal
-  # captured; the owner rechecks the same digests around its replace.
-  defp logs_current(instances, logs) do
-    if length(logs) == length(instances) and
-         Enum.all?(Enum.zip(instances, logs), fn {instance, sealed} ->
-           log_current(instance, sealed)
-         end),
-       do: :ok,
-       else: {:error, :release_bytes_changed}
+  # captured; the owner rechecks the same digests around its replace. The
+  # verified logs are returned so the roster re-review reads no file again.
+  defp logs_current(instances, logs) when length(logs) == length(instances) do
+    Enum.zip(instances, logs)
+    |> Enum.reduce_while({:ok, []}, fn {instance, sealed}, {:ok, restored} ->
+      case log_current(instance, sealed) do
+        {:ok, log} -> {:cont, {:ok, restored ++ [log]}}
+        _ -> {:halt, {:error, :release_bytes_changed}}
+      end
+    end)
   end
+
+  defp logs_current(_instances, _logs), do: {:error, :release_bytes_changed}
 
   defp log_current(instance, sealed) do
     case Durability.with_target_lock(
@@ -120,12 +130,44 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivation do
            retries: 0
          ) do
       {:ok, %{log: log, sha256: sha256}} ->
-        sealed.name == instance.name and sealed.path == instance.log_file and
-          sealed.replica == instance.replica and log.replica == instance.replica and
-          sealed.sha256 == sha256 and sealed.frontier == Enum.sort(Log.frontier(log))
+        if sealed.name == instance.name and sealed.path == instance.log_file and
+             sealed.replica == instance.replica and log.replica == instance.replica and
+             sealed.sha256 == sha256 and sealed.frontier == Enum.sort(Log.frontier(log)),
+           do: {:ok, log},
+           else: :changed
 
       _ ->
-        false
+        :changed
+    end
+  end
+
+  # The roster staging reviewed must still be the sealed Space's roster: the
+  # child grants exactly its members and the admitted instance bootstraps
+  # exactly them plus the child root. The manifest digest binds the instance
+  # set, so a Space no longer served by exactly one sealed log is also drift.
+  # Child bytes stay the owner's to recheck, as the candidate manifest's are.
+  defp roster_current(record, admitted, restored) do
+    [reference] = Enum.filter(record["artifacts"], &(&1["kind"] == "reference"))
+    [child] = Enum.filter(record["artifacts"], &(&1["kind"] == "log"))
+
+    with {:ok, child_log} <- staged_child(child),
+         [space] <- Enum.filter(restored, &(&1.replica == reference["replica"])),
+         roster = Staging.roster(space),
+         true <- Enum.sort(Enum.map(child["review"]["grants"], & &1["recipient"])) == roster,
+         true <- Staging.bootstrap_peers_exact?(admitted, roster, child_log) do
+      :ok
+    else
+      {:error, _} = refusal -> refusal
+      _ -> {:error, :roster_drift_since_staging}
+    end
+  end
+
+  defp staged_child(child) do
+    replica = child["replica"]
+
+    case Log.restore_verified(child["path"]) do
+      {:ok, %{log: %{replica: ^replica} = log}} -> {:ok, log}
+      _ -> {:error, :invalid_staged_signed_artifact}
     end
   end
 

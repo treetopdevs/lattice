@@ -128,7 +128,8 @@ defmodule LatticeCarrierServer.Runtime do
   # of an existing one (a symlink or hard link to it).
   defp apart_from_operator(root, path) do
     reserved =
-      Enum.map(~w(operator.lock operator-journal.json operator-incarnation), &Path.join(root, &1))
+      ~w(operator.lock operator-journal.json operator-journal-history.jsonl operator-incarnation)
+      |> Enum.map(&Path.join(root, &1))
 
     reserved_inodes = for file <- reserved, inode = inode(file), do: inode
 

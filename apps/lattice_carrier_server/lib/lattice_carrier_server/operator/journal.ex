@@ -9,6 +9,11 @@ defmodule LatticeCarrierServer.Operator.Journal do
   compare is cooperative CAS among those operator processes, not a lock against
   an unrelated writer. Generation/catalog-head values are reviewed intent only.
   An ambiguous file or failed sync is retained for explicit reconciliation.
+
+  Before replacing an existing journal, the mutation owner appends the exact
+  replaced bytes plus a newline to `history_path/1` and syncs it; a crash
+  between that append and the replace leaves the current record duplicated at
+  the history tail. The history is append-only and not yet bounded.
   """
   import Bitwise
   alias Jason.OrderedObject
@@ -274,4 +279,6 @@ defmodule LatticeCarrierServer.Operator.Journal do
   def digest(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
   @spec path(Path.t()) :: Path.t()
   def path(root), do: Path.join(Path.expand(root), "operator-journal.json")
+  @spec history_path(Path.t()) :: Path.t()
+  def history_path(root), do: Path.join(Path.expand(root), "operator-journal-history.jsonl")
 end

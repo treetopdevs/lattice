@@ -325,7 +325,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
   end
 
   defp verify_candidate_manifest(%{manifest: manifest, child: child}, active, space, child_log) do
-    roster = Enum.sort(Enum.uniq(Enum.to_list(Lattice.state(Treehouse.Space, space).members)))
+    roster = roster(space)
 
     with {:ok, candidate} <- Manifest.load(manifest.path),
          true <- candidate.health == active.health,
@@ -395,9 +395,18 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
   defp comparable(instance), do: Map.drop(instance, [:ref, :identity])
 
+  # The Space roster as staging reviews it, and as activation re-reviews it
+  # from the sealed Space log: sorted, unique member keys.
+  @doc false
+  @spec roster(Log.t()) :: [binary()]
+  def roster(space),
+    do: Enum.sort(Enum.uniq(Enum.to_list(Lattice.state(Treehouse.Space, space).members)))
+
   # Bootstrap transport peers are exactly the current Space members plus the
   # independently rooted child; neither an omission nor an extra is accepted.
-  defp bootstrap_peers_exact?(instance, roster, child_log) do
+  @doc false
+  @spec bootstrap_peers_exact?(map(), [binary()], Log.t()) :: boolean()
+  def bootstrap_peers_exact?(instance, roster, child_log) do
     peers =
       for {_realm, pub} <- instance.trusted_peers, into: MapSet.new(), do: Base.encode64(pub)
 

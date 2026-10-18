@@ -23,6 +23,7 @@ MAX_JOURNAL = 1024 * 1024
 SAFE = 9007199254740991
 PHASES = ("carrier_pending", "activated")
 INCARNATION = "operator-incarnation"
+HISTORY = "operator-journal-history.jsonl"
 
 
 class Refusal(Exception):
@@ -260,6 +261,29 @@ def retain(path, raw):
         refuse("immutable_artifact_conflict")
 
 
+def history(root, old):
+    """Append the exact journal bytes about to be replaced, one per line, and
+    make them durable before the replace. A crash after this append and
+    before the replace leaves a duplicate of the current record at the tail;
+    that is accepted. Growth is unbounded for now."""
+    try:
+        # O_NONBLOCK keeps a FIFO from blocking the open; it has no effect on
+        # a regular file. A symlink (ELOOP) is a closed refusal.
+        fd = os.open(os.path.join(root, HISTORY),
+                     os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    except OSError:
+        refuse("unsafe_operator_file")
+    with os.fdopen(fd, "ab") as stream:
+        st = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != os.geteuid()
+                or st.st_mode & 0o077):
+            refuse("unsafe_operator_file")
+        stream.write(old.encode() + b"\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    sync_dir(root)
+
+
 def commit(root, old, raw, activation=False):
     next_record = record(raw)
     # Only activate() may write an activated record, after its own checks;
@@ -277,6 +301,10 @@ def commit(root, old, raw, activation=False):
     retain(temporary, raw.encode())
     expected(root, old)
     current_service(next_record["service"])
+    # expected() has just proven the journal on disk is exactly `old`; no
+    # journal (old is None) means there is nothing to keep.
+    if old is not None:
+        history(root, old)
     os.replace(temporary, os.path.join(root, "operator-journal.json"))
     sync_dir(root)
     if file_bytes(os.path.join(root, "operator-journal.json"), MAX_JOURNAL, private=True) != raw.encode():
@@ -337,6 +365,15 @@ def activate(root, plan):
         snapshots(checks[1:])
         if digest(active(target)) != old["manifest_digest"]:
             refuse("stale_operator_intent")
+        # The candidate keeps the replaced manifest's permission bits, so a
+        # 0644 deployment file stays readable and a 0600 one stays private.
+        mode = mode_of(target)
+        fd = os.open(temporary, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            os.fchmod(fd, mode)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(temporary, target)
         sync_dir(os.path.dirname(target))
         if active(target) != candidate:
@@ -446,15 +483,15 @@ def absolute_paths(raw):
 
 def reserved(root, r):
     """Paths activation must never replace: the lock it holds, the journal it
-    commits, the boot incarnation marker it checks and the staged artifacts it
-    rechecks."""
+    commits and its history, the boot incarnation marker it checks and the
+    staged artifacts it rechecks."""
     return reserved_files(root) | {a["path"] for a in r["artifacts"]}
 
 
 def reserved_files(root):
     """The operator's own files under its root."""
     return {os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json"),
-            os.path.join(root, INCARNATION)}
+            os.path.join(root, INCARNATION), os.path.join(root, HISTORY)}
 
 
 def durable(path):
@@ -469,6 +506,21 @@ def durable(path):
     finally:
         os.close(fd)
     sync_dir(os.path.dirname(path))
+
+
+def mode_of(path):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        refuse("unsafe_operator_file")
+    try:
+        st = os.fstat(fd)
+    finally:
+        os.close(fd)
+    # The carrier refuses a group- or other-writable manifest; never copy one.
+    if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o022:
+        refuse("unsafe_operator_file")
+    return st.st_mode & 0o7777
 
 
 def staged(artifact):
