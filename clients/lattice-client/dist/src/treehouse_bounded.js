@@ -22,7 +22,14 @@ export const treehouseBoundedGenesisOps = [
     "catalog_bootstrap_v1", "attest_member_key_v1", "replace_catalog_v1",
 ];
 const verifier = { verify: async (pub, bytes, sig) => ed25519.verify(sig, bytes, base64ToBytes(pub), { zip215: false }) };
-const bytesToB64 = (bytes) => Buffer.from(bytes).toString("base64");
+// No Node Buffer: this module also runs in the webview.
+const bytesToB64 = (bytes) => {
+    let binary = "";
+    for (const byte of bytes)
+        binary += String.fromCharCode(byte);
+    return btoa(binary);
+};
+const hex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 const keyB64 = (key) => typeof key === "string" ? key : bytesToB64(key);
 /** Legacy replicas keep their old grammar; only the exact bounded Space grammar is "bounded". */
 export function treehouseSpaceFamily(replica) {
@@ -34,9 +41,9 @@ export function treehouseSpaceFamily(replica) {
 /** Pure root-only preparation of a bounded-family Space. Returned pending frames are not persisted. */
 export async function prepareTreehouseBoundedSpaceCreation(input) {
     const nonce = NONCE_REPLICA.exec(input.replica)?.[1];
-    if (nonce === undefined || canonicalBase64Bytes(Buffer.from(nonce, "base64url").toString("base64"), 32) === null ||
-        Buffer.from(nonce, "base64url").toString("base64url") !== nonce)
+    if (nonce === undefined || canonicalBase64Bytes(`${nonce.replaceAll("-", "+").replaceAll("_", "/")}=`, 32) === null) {
         throw new Error("invalid_replica");
+    }
     const bound = await bindTownshipReplica(input.replica + AUTHORITY_SEGMENT, input.signer.publicKey);
     const genesis = await authorTownshipGenesis({ replica: bound, signer: input.signer,
         ops: [...treehouseBoundedGenesisOps], roles: ["admin", "moderator"], policies: {} });
@@ -203,7 +210,7 @@ const encodeRecord = (record) => {
     if (term === null)
         return null;
     const bytes = canonicalBytesForCarrierTerm(term);
-    return { canonical: bytesToB64(bytes), sha: Buffer.from(sha256(bytes)).toString("hex") };
+    return { canonical: bytesToB64(bytes), sha: hex(sha256(bytes)) };
 };
 /** Strict review of a ceremony `binding-payload.json` against the Space it will be signed into. */
 export async function reviewTreehouseCatalogBindingPayload(input) {

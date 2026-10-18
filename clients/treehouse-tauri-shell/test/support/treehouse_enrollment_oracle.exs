@@ -23,8 +23,8 @@ defmodule TreehouseGateOracle do
     "create_thread" => :create_thread,
     "post" => :post
   }
-  # The shell's "legacy root only" Space profile signs this fixed capability ceiling at genesis
-  # (`prepareTreehouseSpaceCreation`). It is stated here as an independent expectation, never read back
+  # The shell's "bounded root only" Space profile signs this fixed capability ceiling at genesis
+  # (`prepareTreehouseBoundedSpaceCreation`, row 232; it equals `Treehouse.Space`'s bounded genesis ops). It is stated here as an independent expectation, never read back
   # from the observed frames. The Thread genesis takes the full Thread command registry, as the Sim does.
   @space_genesis_ops [
     :create_space,
@@ -32,7 +32,10 @@ defmodule TreehouseGateOracle do
     :issue_invitation,
     :revoke_invitation,
     :admit_member,
-    :remove_member
+    :remove_member,
+    :catalog_bootstrap_v1,
+    :attest_member_key_v1,
+    :replace_catalog_v1
   ]
   @ops %{
     "post" => :post,

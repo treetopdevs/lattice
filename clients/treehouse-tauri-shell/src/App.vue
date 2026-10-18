@@ -10,6 +10,7 @@ import {
 import { TreehouseWorkflow } from "./treehouse_workflow";
 import { native } from "./native_adapter";
 import WitnessSetup from "./WitnessSetup.vue";
+import ContinuationPanel from "./ContinuationPanel.vue";
 const workflow = new TreehouseWorkflow(native);
 // Plan 181 decision 11: the enrollment panel and its relay copy exist only in the build made with
 // VITE_TREEHOUSE_ENROLLMENT=1 together with VITE_TREEHOUSE_DEV_TRACE=1 (vite.config.ts refuses any build
@@ -616,6 +617,14 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
       :run="run"
       :describe="describe"
       :refresh="refreshFromSync"
+    />
+    <ContinuationPanel
+      v-if="ready && space"
+      :workflow="workflow"
+      :state="state"
+      :busy="busy"
+      :run="run"
+      :describe="describe"
     />
     <WitnessSetup />
   </div>

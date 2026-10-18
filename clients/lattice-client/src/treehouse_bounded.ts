@@ -34,7 +34,13 @@ export const treehouseBoundedGenesisOps: readonly string[] = [
 
 const verifier = { verify: async (pub: string, bytes: Uint8Array, sig: Uint8Array) =>
   ed25519.verify(sig, bytes, base64ToBytes(pub), { zip215: false }) };
-const bytesToB64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
+// No Node Buffer: this module also runs in the webview.
+const bytesToB64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 const keyB64 = (key: string | Uint8Array): string => typeof key === "string" ? key : bytesToB64(key);
 
 /** Legacy replicas keep their old grammar; only the exact bounded Space grammar is "bounded". */
@@ -49,8 +55,9 @@ export async function prepareTreehouseBoundedSpaceCreation(input: {
   replica: string; name: string; signer: CarrierOpSigner; retained?: CarrierOpFrame[];
 }): Promise<{ replica: string; profile: "bounded_root_only"; status: TreehouseInitialization; pending: CarrierOpFrame[] }> {
   const nonce = NONCE_REPLICA.exec(input.replica)?.[1];
-  if (nonce === undefined || canonicalBase64Bytes(Buffer.from(nonce, "base64url").toString("base64"), 32) === null ||
-    Buffer.from(nonce, "base64url").toString("base64url") !== nonce) throw new Error("invalid_replica");
+  if (nonce === undefined || canonicalBase64Bytes(`${nonce.replaceAll("-", "+").replaceAll("_", "/")}=`, 32) === null) {
+    throw new Error("invalid_replica");
+  }
   const bound = await bindTownshipReplica(input.replica + AUTHORITY_SEGMENT, input.signer.publicKey);
   const genesis = await authorTownshipGenesis({ replica: bound, signer: input.signer,
     ops: [...treehouseBoundedGenesisOps], roles: ["admin", "moderator"], policies: {} });
@@ -198,7 +205,7 @@ const encodeRecord = (record: CatalogBootstrap): { canonical: string; sha: strin
   const term = catalogBootstrapToCarrierTerm(record);
   if (term === null) return null;
   const bytes = canonicalBytesForCarrierTerm(term);
-  return { canonical: bytesToB64(bytes), sha: Buffer.from(sha256(bytes)).toString("hex") };
+  return { canonical: bytesToB64(bytes), sha: hex(sha256(bytes)) };
 };
 
 /** Strict review of a ceremony `binding-payload.json` against the Space it will be signed into. */

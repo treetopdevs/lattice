@@ -581,3 +581,37 @@ fn relay_routes_are_capped_closed_and_pinned() {
     next["relay"] = relay((1..=4).map(route).collect());
     assert!(commit(&mut store, 3, &next));
 }
+// Row 232: a bounded-family Space replica completes a Space creation intent; near misses do not.
+#[test]
+fn bounded_space_replica_completes_a_space_intent_and_near_misses_do_not() {
+    let nonce = "a".repeat(43);
+    let root = "b".repeat(43);
+    let bounded = |mark: &str| {
+        let replica = format!("replica:treehouse:space:{nonce}{mark}#root:{root}");
+        let id = "c".repeat(43);
+        move |mut r: Value| {
+            r["profiles"] = json!([{"product":"Treehouse.Space","replica":replica,"frames":[{"v":1,"id":id,"replica":replica,"author":r["publicKey"],"deps":[],"kind":"authority","body":["nil"],"cap":["nil"],"sig":"native-retention-layer-sentinel"}],"outbox":[id],"acked":[]}]);
+            r["active"] = json!(replica);
+            r["intent"] = Value::Null;
+            r["revision"] = json!(3);
+            r
+        }
+    };
+    let attempt = |mark: &str| {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = Arc::new(InMemoryCarrierKeySeedStore::default());
+        let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+        let initial = initialized(&mut store);
+        store.commit(2, &bounded(mark)(initial).to_string())
+    };
+    assert!(attempt("#authority:bounded-continuation-v1").unwrap());
+    // The legacy grammar still completes it.
+    assert!(attempt("").unwrap());
+    for near in [
+        "#authority:bounded-continuation-v2",
+        "#authority:bounded-continuation-v1#authority:bounded-continuation-v1",
+        "#authority:",
+    ] {
+        assert!(attempt(near).is_err(), "{near} must be refused");
+    }
+}
