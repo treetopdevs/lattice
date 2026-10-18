@@ -30,7 +30,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
          {:ok, service_id} <- identifier(opts[:service_id]),
          record = record(log, profile, catalog_key, service_key, service_id, opts[:origin]),
          {:ok, ^record} <- normalized(record) do
-      write(dir, record)
+      write(dir, record, opts[:before_review])
     end
   end
 
@@ -45,6 +45,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
              mode
            ),
          {:ok, log} <- space_log(opts[:space_log]),
+         :ok <- profile_unchanged(log, record),
          {:ok, id} <- honored(log, record) do
       binding = %{
         "format" => @binding_format,
@@ -58,10 +59,25 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     end
   end
 
+  @doc """
+  Whether a `binding.json` map is the complete record `verify/2` writes for this
+  payload record: exact keys, format, an id, the payload hash, the payload's
+  Space and a valid timestamp.
+  """
+  @spec record_shape?(map(), map(), String.t()) :: boolean()
+  def record_shape?(found, record, sha) do
+    Enum.sort(Map.keys(found)) ==
+      Enum.sort(~w(format bootstrap_id record_sha256 space verified_at)) and
+      found["format"] == @binding_format and ContinuationCertificate.id?(found["bootstrap_id"]) and
+      found["record_sha256"] == sha and found["space"] == record.space and
+      Store.timestamp?(found["verified_at"])
+  end
+
   @doc "Read and re-check the payload artifact; returns the record rebuilt from its JSON."
   @spec load_payload(Path.t(), binary()) :: {:ok, map(), map(), String.t()} | {:error, atom()}
   def load_payload(dir, catalog_key) do
     with {:ok, payload} <- Store.read(dir, "binding-payload.json"),
+         :ok <- review_present(dir),
          true <- payload["format"] == @payload_format,
          {:ok, record} <- from_json(payload["record"]),
          canonical = Canonical.term(record),
@@ -75,6 +91,12 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
       {:error, :ceremony_artifact_missing} = refusal -> refusal
       _ -> {:error, :ceremony_artifact_malformed}
     end
+  end
+
+  defp review_present(dir) do
+    if Store.exists?(dir, "binding-review.txt"),
+      do: :ok,
+      else: {:error, :ceremony_artifact_missing}
   end
 
   @doc "The JSON-friendly record: binaries as standard base64, atoms as strings."
@@ -151,6 +173,21 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     end
   end
 
+  # The reviewed record named the Space's pin at payload time; the supplied log
+  # must still carry exactly that pin (a later pin changes the profile).
+  defp profile_unchanged(log, record) do
+    case Authority.continuation_profile(log) do
+      {:ok, %{profile: %{kind: :space}} = profile}
+      when log.replica == record.space and profile.root == record.space_root and
+             profile.profile_genesis == record.profile_genesis and
+             profile.profile_id == record.profile_id ->
+        :ok
+
+      _ ->
+        {:error, :binding_profile_changed}
+    end
+  end
+
   defp distinct(keys),
     do: if(length(Enum.uniq(keys)) == length(keys), do: :ok, else: {:error, :binding_key_reuse})
 
@@ -188,7 +225,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     end
   end
 
-  defp write(dir, record) do
+  defp write(dir, record, hook) do
     canonical = Canonical.term(record)
     sha = Store.sha256(canonical)
 
@@ -206,10 +243,26 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
       "sha256" => sha
     }
 
-    with {:ok, _} <- Store.write(dir, "binding-payload.json", payload),
-         {:ok, _} <- Store.write_text(dir, "binding-review.txt", review(record, sha)) do
-      {:ok, payload}
+    with {:ok, written} <- Store.write(dir, "binding-payload.json", payload) do
+      # A payload with no review sheet is an orphan: remove only the bytes written here.
+      with :ok <- before_review(hook, dir),
+           {:ok, _} <- Store.write_text(dir, "binding-review.txt", review(record, sha)) do
+        {:ok, payload}
+      else
+        _ ->
+          remove_if_unchanged(Path.join(dir, "binding-payload.json"), written)
+          {:error, :ceremony_write_failed}
+      end
     end
+  end
+
+  # A test seam only: the command line has no way to set it.
+  defp before_review(fun, dir) when is_function(fun, 1), do: fun.(dir)
+  defp before_review(_, _dir), do: :ok
+
+  defp remove_if_unchanged(path, bytes) do
+    if File.read(path) == {:ok, bytes}, do: File.rm(path)
+    :ok
   end
 
   defp review(record, sha) do
