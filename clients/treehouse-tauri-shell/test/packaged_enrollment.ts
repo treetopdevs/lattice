@@ -173,8 +173,13 @@ async function waitUi(app: App, description: string, predicate: (nodes: AxNode[]
 const waitText = (app: App, text: string, attempts = 150) =>
   waitUi(app, text, (nodes) => nodesInclude(nodes, text), attempts);
 const FIELD_ROLES = ["AXTextField", "AXTextArea"];
-// Author-side waits must not match the "Write a post" draft field: it holds the same text until Post completes.
-const posted = (nodes: AxNode[], text: string) => nodesInclude(nodes.filter((node) => !FIELD_ROLES.includes(node.role)), text);
+// Author-side waits must not match the "Write a post" draft: it holds the same text until Post completes, and
+// WebKit also exposes a textarea's contents as non-field descendant nodes (the hosted negative control below
+// caught this). So a post counts only once no field holds the text, which Post's draft clear provides, and a
+// non-field node shows it.
+const posted = (nodes: AxNode[], text: string) =>
+  !nodes.some((node) => FIELD_ROLES.includes(node.role) && node.value.includes(text)) &&
+  nodesInclude(nodes.filter((node) => !FIELD_ROLES.includes(node.role)), text);
 const waitPosted = (app: App, text: string, attempts = 150) => waitUi(app, `posted: ${text}`, (nodes) => posted(nodes, text), attempts);
 
 // ---- read-only store evidence ------------------------------------------------------------------------
