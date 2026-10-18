@@ -29,7 +29,7 @@ roster-member requirement for the probe and lifts STOP 2 and STOP 3 for this pur
 never enters `trusted_peers` or the roster, so `bootstrap_peers_exact?/3`, staging and activation are
 unchanged. Slice 10 refreshed this plan for D-22 (section "The operator probe realm") and builds row 223.
 
-**Slice 10 built row 223** (IN PROGRESS until hosted `mix test` is green on the exact tip). Changes from
+**Slice 10 built row 223** (DONE 2026-10-18: hosted `mix test` was green on the merged exact tip). Changes from
 this text made in review: the readiness pull asks from an empty `have` set so every served op is encoded;
 the probe dials the listener's bound address, and the carrier client connects IPv6 literals; probe keys
 equal to the Space or child authority root are refused; the admitted route is found by its staged child
@@ -264,9 +264,9 @@ until `catalogued` exists. No R11c plan is written now.
 - [x] `ready` exists in both validators and only the `ready` owner plan can write it.
 - [x] Every refusal named above has a test, and each BEAM refusal leaves journal and history unchanged.
 - [x] The parity table passes on both sides.
-- [ ] The carrier-server suite and `mutation_protocol_test.py` pass in Docker; hosted `mix test` is
+- [x] The carrier-server suite and `mutation_protocol_test.py` pass in Docker; hosted `mix test` is
       green on the exact tip (rule 2).
-- [ ] Row 223 updated in one line; roadmap R11b stays IN PROGRESS until row 224 clears.
+- [x] Row 223 updated in one line; roadmap R11b stays IN PROGRESS until row 224 clears.
 
 ## STOP conditions
 
