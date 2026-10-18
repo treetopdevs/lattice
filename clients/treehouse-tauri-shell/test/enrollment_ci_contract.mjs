@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -32,6 +32,17 @@ import { fileURLToPath } from "node:url";
 //   kit module resolves its lattice-client peer only through the shell's node_modules under
 //   --preserve-symlinks (decision D-15, row 221). No workflow step body changed, so both digests are unchanged.
 
+// Re-pinned for row 201 on 2026-10-18 (frontend variant classification). Every pin below stayed exact; none was
+// deleted or loosened. What moved, and why:
+// - assert_bundle_variant.ts now takes a required third argument, the built frontend dist, and asserts the
+//   executable variant and the paired frontend variant together. The ordinary classification step is pinned
+//   with that dist argument; it is excluded from TREEHOUSE_PREVIEW_DIGEST, so that digest is unchanged.
+// - The enrollment job gains a "Classify Treehouse dev-trace bundle" step between the dev-trace build and the
+//   harness. That job carries no digest pin, so no digest moved; the step is pinned structurally instead.
+// - New: no VITE_TREEHOUSE_* key may appear anywhere in flagship.yml (workflow, job, step env or run lines),
+//   and VITE_TREEHOUSE_ENROLLMENT / VITE_TREEHOUSE_DEV_TRACE may appear in package.json only in the
+//   tauri:build:dev-trace script. Neither pinned workflow digest moved.
+
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
 
@@ -40,6 +51,8 @@ const PREVIEW_JOB = "treehouse_packaged_macos";
 const ENROLLMENT_GATE = "needs.changes.outputs.treehouse == 'true'";
 const SHELL_DIR = "clients/treehouse-tauri-shell";
 const CLASSIFY_STEP = "Classify ordinary Treehouse bundle";
+const CLASSIFY_DEV_TRACE_STEP = "Classify Treehouse dev-trace bundle";
+const VARIANT_FLAGS = ["VITE_TREEHOUSE_ENROLLMENT", "VITE_TREEHOUSE_DEV_TRACE"];
 const BUILD_STEP_CALL = "npm run tauri:build:dev-trace";
 const EVIDENCE_DIR = "${{ runner.temp }}/treehouse-enrollment";
 const REAL_DATA = "dev.treetop.lattice.treehouse";
@@ -183,9 +196,26 @@ function pinnedUses(job, action) {
   return undefined;
 }
 
+// Row 201: each classification step runs exactly one command, so no shell wrapper (echo, if, ;) can skip it.
+const CLASSIFY_CALL = "npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app";
+const ORDINARY_CLASSIFY_RUN = `${CLASSIFY_CALL} ordinary dist`;
+const DEV_TRACE_CLASSIFY_RUN = `${CLASSIFY_CALL} dev_trace dist`;
+
 export function check(workflow, pkg, harnessSource) {
   const problems = [];
   const fail = (message) => problems.push(message);
+
+  // Row 201: the variant flags are set only by the tauri:build:dev-trace package script. No VITE_TREEHOUSE_*
+  // key may appear in any non-comment workflow line (workflow, job or step env, or an inline run).
+  // YAML double-quoted escapes are decoded first, so an escaped key cannot spell a flag past the scan.
+  const decoded = workflow.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
+    String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
+  );
+  const flagLine = decoded.split("\n").find((line) => !line.trim().startsWith("#") && /VITE_TREEHOUSE_/u.test(line));
+  if (flagLine !== undefined) fail(`flagship.yml must not set any VITE_TREEHOUSE_* key: ${flagLine.trim()}`);
+  for (const [script, body] of Object.entries(pkg.scripts ?? {}))
+    if (script !== "tauri:build:dev-trace" && VARIANT_FLAGS.some((flag) => String(body).includes(flag)))
+      fail(`package script ${script} must not set a Treehouse variant flag`);
 
   const job = findJob(workflow, JOB);
   const macos = findJob(workflow, "packaged_macos");
@@ -211,8 +241,8 @@ export function check(workflow, pkg, harnessSource) {
       if (classifyAt <= buildAt || buildAt === -1) fail("classification must run after the ordinary build");
       const classify = steps[classifyAt];
       const run = scalar(classify, "run") ?? "";
-      if (!/tsx test\/assert_bundle_variant\.ts\s+\S*Treehouse\.app\s+ordinary\s*$/mu.test(run))
-        fail("classification step must assert the ordinary variant of the ordinary bundle");
+      if (run.trim() !== ORDINARY_CLASSIFY_RUN)
+        fail("classification step must assert the ordinary variant of the ordinary bundle and its dist");
       if (scalar(classify, "working-directory") !== SHELL_DIR) fail("classification runs in the Treehouse shell");
       if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(classify) || /\|\|/u.test(run))
         fail("classification must be unconditional and blocking");
@@ -299,6 +329,7 @@ export function check(workflow, pkg, harnessSource) {
   const buildClientAt = index((step) => /^npm --prefix clients\/lattice-client run build$/mu.test(runOf(step)));
   const preAt = index((step) => stepName(step) === "Assert no ordinary Treehouse app data before the run");
   const buildAt = index((step) => /^npm run tauri:build:dev-trace$/mu.test(runOf(step)));
+  const classifyAt = named(CLASSIFY_DEV_TRACE_STEP);
   const harnessAt = index((step) => /^npm run packaged:enrollment$/mu.test(runOf(step)));
   const postAt = index((step) => stepName(step) === "Assert no ordinary Treehouse app data after the run");
   const uploadAt = index((step) => usesOf(step).startsWith("actions/upload-artifact@"));
@@ -314,6 +345,7 @@ export function check(workflow, pkg, harnessSource) {
     buildClientAt,
     preAt,
     buildAt,
+    classifyAt,
     harnessAt,
     postAt,
     uploadAt,
@@ -385,6 +417,17 @@ export function check(workflow, pkg, harnessSource) {
     ])
       if (!expanded.includes(needle)) fail(`variant build lacks ${needle}`);
     if (!runOf(step).includes(BUILD_STEP_CALL)) fail("variant build must be the tauri:build:dev-trace script");
+  }
+
+  // The dev-trace bundle and its frontend are classified together, unconditionally, before the harness runs.
+  if (classifyAt !== -1) {
+    const step = steps[classifyAt];
+    const run = runOf(step);
+    if (run.trim() !== DEV_TRACE_CLASSIFY_RUN)
+      fail("dev-trace classification must assert the dev_trace bundle and the dist");
+    if (scalar(step, "working-directory") !== SHELL_DIR) fail("dev-trace classification runs in the Treehouse shell");
+    if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(step) || /\|\|/u.test(run))
+      fail("dev-trace classification must be unconditional and blocking");
   }
 
   // The harness: real harness script, oracle inside it, evidence dir, no env skip or debug switches.
@@ -543,6 +586,76 @@ const mutations = {
     mutate(text, "Treehouse.app ordinary", "Treehouse.app dev_trace"),
   "classification masked": (text) =>
     mutate(text, "Treehouse.app ordinary", "Treehouse.app ordinary || true"),
+  "classification lacks the dist argument": (text) =>
+    mutate(text, "Treehouse.app ordinary dist", "Treehouse.app ordinary"),
+  "classification dist argument replaced": (text) =>
+    mutate(text, "Treehouse.app ordinary dist", "Treehouse.app ordinary src"),
+  "job-level VITE_TREEHOUSE_ENROLLMENT on the ordinary job (row 201)": (text) =>
+    mutate(
+      text,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    env:\n      VITE_TREEHOUSE_ENROLLMENT: "1"\n`,
+    ),
+  "job-level VITE_TREEHOUSE_DEV_TRACE on the ordinary job": (text) =>
+    mutate(
+      text,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    env:\n      VITE_TREEHOUSE_DEV_TRACE: "1"\n`,
+    ),
+  "workflow-level VITE_TREEHOUSE_ENROLLMENT": (text) => mutate(text, "\njobs:\n", '\nenv:\n  VITE_TREEHOUSE_ENROLLMENT: "1"\n\njobs:\n'),
+  "step env VITE_TREEHOUSE_DEV_TRACE on the ordinary build": (text) =>
+    mutate(
+      text,
+      "      - name: Build ordinary offline Treehouse app\n        working-directory: clients/treehouse-tauri-shell\n",
+      '      - name: Build ordinary offline Treehouse app\n        working-directory: clients/treehouse-tauri-shell\n        env:\n          VITE_TREEHOUSE_DEV_TRACE: "1"\n',
+    ),
+  "inline VITE_TREEHOUSE_ENROLLMENT in a run line": (text) =>
+    mutate(text, "run: npm run tauri -- build", "run: VITE_TREEHOUSE_ENROLLMENT=1 npm run tauri -- build"),
+  "inline VITE_TREEHOUSE_ENROLLMENT in the enrollment build": (text) =>
+    mutate(text, "run: npm run tauri:build:dev-trace", "run: VITE_TREEHOUSE_ENROLLMENT=1 npm run tauri:build:dev-trace"),
+  "unrelated VITE_TREEHOUSE key in the workflow": (text) =>
+    mutate(text, "run: npm run packaged:enrollment", "run: VITE_TREEHOUSE_POLL_MS=0 npm run packaged:enrollment"),
+  "ordinary classification only echoed (review)": (text) =>
+    mutate(text, "run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary dist", "run: echo npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary dist"),
+  "dev-trace classification inside a shell if (review)": (text) =>
+    mutate(text, "run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist", "run: if npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist; then :; fi"),
+  "YAML-escaped variant keys on the ordinary job (review)": (text) =>
+    mutate(
+      text,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    env:\n      "VITE\\u005fTREEHOUSE_ENROLLMENT": "1"\n      "VITE\\x5fTREEHOUSE_DEV_TRACE": "1"\n`,
+    ),
+  "dev-trace classification removed": (text) =>
+    mutateJob(text, (job) => job.replace(stepBlocks(job).find((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP) ?? "", "")),
+  "dev-trace classification lacks the dist argument": (text) => mutate(text, "dev_trace dist", "dev_trace"),
+  "dev-trace classification asserts ordinary": (text) => mutate(text, "dev_trace dist", "ordinary dist"),
+  "dev-trace classification masked": (text) => mutate(text, "dev_trace dist", "dev_trace dist || true"),
+  "dev-trace classification conditional": (text) =>
+    mutate(
+      text,
+      "      - name: Classify Treehouse dev-trace bundle\n",
+      "      - name: Classify Treehouse dev-trace bundle\n        if: runner.os == 'macOS'\n",
+    ),
+  "dev-trace classification before the build": (text) =>
+    mutateJob(text, (job) => {
+      const classify = stepBlocks(job).find((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP);
+      const build = stepBlocks(job).find((step) => stepName(step) === "Build packaged Treehouse dev-trace variant");
+      return job.replace(classify, "").replace(build, `${classify}${build}`);
+    }),
+  "dev-trace classification after the harness": (text) =>
+    mutateJob(text, (job) => {
+      const classify = stepBlocks(job).find((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP);
+      const harness = stepBlocks(job).find((step) => stepName(step) === "Verify packaged Treehouse enrollment against Lattice.Sim");
+      return job.replace(classify, "").replace(harness, `${harness}${classify}`);
+    }),
+  "dev-trace classification in the wrong directory": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "      - name: Classify Treehouse dev-trace bundle\n        working-directory: clients/treehouse-tauri-shell",
+        "      - name: Classify Treehouse dev-trace bundle\n        working-directory: clients/township-tauri-shell",
+      ),
+    ),
   "packaged_macos step body edited": (text) =>
     mutate(text, "run: npm run tauri:feed:smoke\n", "run: npm run tauri:feed:smoke -- --skip\n"),
   "preview job step body edited": (text) =>
@@ -609,9 +722,25 @@ const packageMutations = {
     ...p,
     scripts: { ...p.scripts, "tauri:build:dev-trace": p.scripts["tauri:build:dev-trace"].replace("VITE_TREEHOUSE_ENROLLMENT=1 ", "") },
   }),
+  "dev-trace frontend flag dropped from the build script": (p) => ({
+    ...p,
+    scripts: { ...p.scripts, "tauri:build:dev-trace": p.scripts["tauri:build:dev-trace"].replace("VITE_TREEHOUSE_DEV_TRACE=1 ", "") },
+  }),
   "overlay dropped from the build script": (p) => ({
     ...p,
     scripts: { ...p.scripts, "tauri:build:dev-trace": p.scripts["tauri:build:dev-trace"].replace(" --config src-tauri/tauri.dev-trace.conf.json", "") },
+  }),
+  "enrollment flag set in the build script": (p) => ({
+    ...p,
+    scripts: { ...p.scripts, build: `VITE_TREEHOUSE_ENROLLMENT=1 ${p.scripts.build}` },
+  }),
+  "dev-trace flag set in the tauri script": (p) => ({
+    ...p,
+    scripts: { ...p.scripts, tauri: `VITE_TREEHOUSE_DEV_TRACE=1 ${p.scripts.tauri}` },
+  }),
+  "enrollment flag set in the test script": (p) => ({
+    ...p,
+    scripts: { ...p.scripts, test: `VITE_TREEHOUSE_ENROLLMENT=1 ${p.scripts.test}` },
   }),
   "harness script repointed": (p) => ({
     ...p,
@@ -624,6 +753,15 @@ for (const [name, apply] of Object.entries(packageMutations)) {
     assert.notDeepEqual(check(workflow, apply(pkg), harnessSource), [], `contract accepted: ${name}`);
   });
 }
+
+// Row 201 review: the variant flags reach Vite only through the package script, so the shell carries no .env
+// file and Tauri's ordinary pre-build hook is exactly the plain build. The dist classification in CI is the
+// runtime backstop for any other route.
+test("the shell has no .env file and the ordinary pre-build hook is the plain build", () => {
+  assert.deepEqual(readdirSync(shellRoot).filter((name) => name.startsWith(".env")), []);
+  const conf = JSON.parse(readFileSync(resolve(shellRoot, "src-tauri/tauri.conf.json"), "utf8"));
+  assert.equal(conf.build?.beforeBuildCommand, "npm run build");
+});
 
 test("a harness without the oracle or a failing exit fails the contract", () => {
   assert.notDeepEqual(check(workflow, pkg, harnessSource.replaceAll("treehouse_enrollment_oracle.exs", "x.exs")), []);
