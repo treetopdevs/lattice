@@ -58,8 +58,8 @@ lattice-client, reached only by `--preserve-symlinks` runs); the shell keeps `te
 `relay_peer.ts` as Treehouse binding files with their old export names, so their callers are unchanged; the kit exports the Swift
 helper path as `PACKAGED_ACCESSIBILITY_SWIFT`; `store_read.ts` and `secret_scan.ts` hold no KV record names, so nothing was
 parameterized there; `product_contract.mjs`'s `carrierClientFiles` names `testing/relay.ts` (moved carrier-client code entering
-the existing kit walk, decision 11). No workflow line changed. The plan is DONE once the hosted packaged jobs are green on PR 3's
-exact tip; the fold-back condition stands.
+the existing kit walk, decision 11). No workflow line changed. DONE 2026-10-18: PR 3 (#139) hosted packaged jobs were green on its
+exact tip 79843f476 (run 39090534902); the fold-back condition stands.
 
 ## Header
 
