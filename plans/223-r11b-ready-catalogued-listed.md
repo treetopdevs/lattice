@@ -16,7 +16,7 @@
 
 ## Status
 
-Design written 2026-10-18 (slice 8). `ready` is index row 223 (now BLOCKED, see below). `catalogued` and `listed` are row
+Design written 2026-10-18 (slice 8). `ready` is index row 223 (now PARKED, see below). `catalogued` and `listed` are row
 224, BLOCKED on absent operator inputs (rule 8). No R11c plan is written; see "Parked phases".
 
 **2026-10-18, slice 9: row 223 parked on the first STOP condition (probe key).** Drift check clean (no new
@@ -202,7 +202,7 @@ until `catalogued` exists. No R11c plan is written now.
 
 ## Done criteria (row 223)
 
-- [ ] (BLOCKED 2026-10-18, probe identity; see Status) `ready` exists in both validators and only the `ready` owner plan can write it.
+- [ ] (PARKED 2026-10-18, probe identity; see Status) `ready` exists in both validators and only the `ready` owner plan can write it.
 - [ ] Every refusal named above has a test, and each BEAM refusal leaves journal and history unchanged.
 - [ ] The parity table passes on both sides.
 - [ ] The carrier-server suite and `mutation_protocol_test.py` pass in Docker; hosted `mix test` is
