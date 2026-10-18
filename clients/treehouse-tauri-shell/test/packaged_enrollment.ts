@@ -174,8 +174,8 @@ const waitText = (app: App, text: string, attempts = 150) =>
   waitUi(app, text, (nodes) => nodesInclude(nodes, text), attempts);
 const FIELD_ROLES = ["AXTextField", "AXTextArea"];
 // Author-side waits must not match the "Write a post" draft field: it holds the same text until Post completes.
-const waitPosted = (app: App, text: string, attempts = 150) =>
-  waitUi(app, `posted: ${text}`, (nodes) => nodesInclude(nodes.filter((node) => !FIELD_ROLES.includes(node.role)), text), attempts);
+const posted = (nodes: AxNode[], text: string) => nodesInclude(nodes.filter((node) => !FIELD_ROLES.includes(node.role)), text);
+const waitPosted = (app: App, text: string, attempts = 150) => waitUi(app, `posted: ${text}`, (nodes) => posted(nodes, text), attempts);
 
 // ---- read-only store evidence ------------------------------------------------------------------------
 
@@ -477,6 +477,8 @@ try {
   const acceptance = decodeTreehouseAcceptance(acceptanceText);
   // No grant has been authored yet: the joiner can type a draft but its Post control stays disabled.
   await joiner.ax!.put("Write a post", TEXTS.joiner_general!);
+  // Negative control for waitPosted: the draft field now holds the text, and nothing has been posted.
+  assert.equal(posted(await joiner.ax!.dump(), TEXTS.joiner_general!), false, "a draft is not a posted item");
   assert.equal(await joiner.ax!.isEnabled("Post"), false, "Post is disabled before any grant exists");
   const flipped = encodeTreehouseAcceptance({ ...acceptance, acceptance: flipByte(acceptance.acceptance) });
   await unchanged(founder, REFUSED.invalid_acceptance, async () => {
