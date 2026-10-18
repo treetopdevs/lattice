@@ -16,7 +16,10 @@ defmodule Mix.Tasks.Treehouse.CatalogCeremony do
 
   Run from the repository root. The task never starts the carrier application
   and signs nothing. Secret paths are always explicit; the backup passphrase is
-  read from stdin only (twice for `backup`, once for `verify-backup`). Stdout
+  read from stdin only (twice for `backup`, once for `verify-backup`), and only
+  when stdin is a pipe or file: a terminal is refused, because echo cannot be
+  turned off reliably from inside the VM (the runbook pipes it in from a silent
+  shell `read`). Passphrases are printable ASCII, 20 to 1024 characters. Stdout
   carries public values; a refusal prints `refused: <atom>` to stderr and exits
   nonzero. See `docs/treehouse_catalog_signer_custody.md`.
   """
@@ -29,6 +32,7 @@ defmodule Mix.Tasks.Treehouse.CatalogCeremony do
     Mix.Task.run("compile")
     Mix.Task.run("app.config")
     {:ok, _} = Application.ensure_all_started(:crypto)
+    LatticeCarrierServer.Operator.CatalogCeremony.Atoms.load()
 
     case Cli.run(argv) do
       :ok -> :ok

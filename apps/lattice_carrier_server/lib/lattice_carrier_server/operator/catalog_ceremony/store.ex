@@ -3,7 +3,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
   # Public ceremony artifacts only: pretty JSON with a trailing newline in a
   # directory that holds no secret. Every failure is an atom.
 
-  alias LatticeCarrierServer.Operator.CatalogCeremony.DryRun
+  import Bitwise
+
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{DryRun, Paths}
 
   @marker "DRY-RUN-NOT-REAL"
 
@@ -18,6 +20,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
     with dir when is_binary(dir) and dir != "" <- opts[:ceremony],
          expanded = Path.expand(dir),
          :ok <- directory(expanded, Keyword.get(flags, :create, false)),
+         :ok <- private(expanded),
          :ok <- marker_clear(expanded, mode) do
       {:ok, expanded}
     else
@@ -33,6 +36,18 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
       {:ok, _} -> {:error, :ceremony_directory_invalid}
       {:error, :enoent} when create? -> make(path)
       {:error, _} -> {:error, :ceremony_directory_invalid}
+    end
+  end
+
+  # An existing ceremony directory must belong to this user with no group or
+  # other access, and every ancestor must be safe to traverse.
+  defp private(path) do
+    with {:ok, %File.Stat{type: :directory, mode: mode, uid: owner}} <- File.lstat(path),
+         true <- (mode &&& 0o077) == 0 and owner == Paths.uid(),
+         :ok <- Paths.ancestors_safe(path, :ceremony_directory_invalid) do
+      :ok
+    else
+      _ -> {:error, :ceremony_directory_invalid}
     end
   end
 
@@ -86,16 +101,28 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
           {:ok, binary()} | {:error, :ceremony_write_failed}
   def write_text(dir, name, bytes) do
     target = Path.join(dir, name)
-    temporary = Path.join(dir, "." <> name <> ".tmp")
+    suffix = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
+    temporary = Path.join(dir, "." <> name <> "." <> suffix <> ".tmp")
 
-    with :ok <- File.write(temporary, bytes),
-         :ok <- File.rename(temporary, target) do
-      {:ok, bytes}
+    # Exclusive raw creation: a planted link at the temporary name is never followed.
+    with {:ok, fd} <- :file.open(temporary, [:write, :exclusive, :raw, :binary]) do
+      written = :file.write(fd, bytes)
+      :file.close(fd)
+
+      with :ok <- written,
+           :ok <- File.rename(temporary, target) do
+        {:ok, bytes}
+      else
+        _ -> failed(temporary)
+      end
     else
-      _ ->
-        File.rm(temporary)
-        {:error, :ceremony_write_failed}
+      _ -> {:error, :ceremony_write_failed}
     end
+  end
+
+  defp failed(temporary) do
+    File.rm(temporary)
+    {:error, :ceremony_write_failed}
   end
 
   @spec sha256(binary()) :: String.t()

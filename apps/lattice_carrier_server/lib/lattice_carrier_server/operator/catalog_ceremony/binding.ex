@@ -6,7 +6,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
 
   alias Lattice.{Authority, Canonical, Log}
   alias Lattice.Authority.ContinuationCertificate
-  alias LatticeCarrierServer.Operator.CatalogCeremony.{Signer, Store}
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{Atoms, Signer, Store}
   alias Treehouse.{CatalogBootstrap, TransportCatalog}
 
   @payload_format "lattice-catalog-bootstrap-payload-v1"
@@ -39,7 +39,11 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     with {:ok, dir} <- Store.ceremony(opts, mode),
          {:ok, catalog_key, _} <- Signer.load(dir, mode),
          {:ok, _payload, record, sha} <- load_payload(dir, catalog_key),
-         :ok <- Store.undisposable([record.space_root, record.service_key], mode),
+         :ok <-
+           Store.undisposable(
+             [record.catalog_key, record.space_root, record.service_key],
+             mode
+           ),
          {:ok, log} <- space_log(opts[:space_log]),
          {:ok, id} <- honored(log, record) do
       binding = %{
@@ -128,6 +132,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   end
 
   defp space_log(path) when is_binary(path) and path != "" do
+    Atoms.load()
+
     case Log.restore_verified(Path.expand(path)) do
       {:ok, %{log: log}} -> {:ok, log}
       _ -> {:error, :invalid_space_log}

@@ -85,7 +85,18 @@ Delete the rehearsal directory afterwards.
 ## 5. Ceremony steps
 
 Every command that touches a secret takes an explicit path. There are no defaults and no
-environment variables. The passphrase is read from stdin only, never from argv or the environment.
+environment variables. The passphrase is read from stdin only, never from argv or the environment,
+and only when stdin is a pipe or a file. If stdin is a terminal the tool refuses
+(`passphrase_stdin_is_terminal`) before reading anything, because echo cannot be turned off
+reliably from inside the Erlang VM. Section 5.2 shows the silent shell recipe that pipes the
+passphrase in.
+
+Secret paths (the seed, a restored seed, the backup) are checked along their whole resolved
+ancestor chain: every directory up to `/` must be a real directory owned by you or root and must
+not be group- or other-writable unless it has the sticky bit (like `/tmp`). Files are created with
+`O_EXCL`, then bound to the created inode (chmod 0600, then the path must still be that same
+regular file with mode 0600 and one link) before any byte is written; a failure removes only the
+file the tool made.
 
 ### 5.1 Generate (custodian, generating machine)
 
@@ -108,31 +119,49 @@ holds `.git`), `signer_ceremony_overlap` (the ceremony directory is inside the s
 the signer is inside the ceremony directory; symlinks are resolved), `signer_record_exists`
 (`CEREMONY/signer.json` already exists), `signer_exists` (the seed path exists),
 `signer_unwritable`, `ceremony_directory_invalid`, `disposable_test_key`,
-`dry_run_ceremony_dir`. If the seed is written but `signer.json` then fails to write
-(`ceremony_write_failed`), the seed stays on disk; recover with `import` (section 8).
+`dry_run_ceremony_dir`. An existing `CEREMONY` must be owned by you with no group or other
+permission bits (`ceremony_directory_invalid`), and its ancestors must pass the chain rule above.
+Artifacts are written through an exclusively created, uniquely named temporary file and renamed, so
+a planted link never redirects a write. If the seed is written but `signer.json` then fails to
+write (`ceremony_write_failed`), the tool deletes the seed it just created (only that inode) and
+refuses; run `generate` again. A catalog signer key that equals a dry-run key is refused wherever a
+`signer.json` is loaded (`disposable_test_key`).
 
 Record the fingerprint in the table in section 7.
 
 ### 5.2 Encrypted backup (custodian, then passphrase holder)
 
-The passphrase holder chooses a passphrase of at least 20 characters and keeps it out of the
-password manager entry for the seed and off the backup medium. The tool reads it twice from
-stdin, one line each. On a terminal it turns echo off for you.
+The passphrase holder chooses a passphrase of 20 to 1024 characters and keeps it out of the
+password manager entry for the seed and off the backup medium. It must be **printable ASCII only**
+(bytes 0x20 to 0x7E, so letters, digits, space and punctuation; no accents, emoji or control
+characters; `passphrase_not_ascii` otherwise). The reason: the key is PBKDF2 over the exact
+passphrase bytes, and an independent recovery (section 6) must derive the same bytes whatever the
+keyboard, locale or Unicode normalization. The tool strips only the trailing line break (`\n` or
+`\r\n`) and reads two lines from stdin, one per entry.
+
+The tool will not read a passphrase from a terminal. Type it into your own shell with `read -s`
+(no echo) and pipe it in. `printf` is a shell builtin, so the passphrase is not in any process
+argument list, and `read -rs` does not echo or enter shell history. Run this yourself, in your own
+terminal:
 
 ```bash
-~/.asdf/shims/mix treehouse.catalog_ceremony backup \
-  --signer "$SIGNER" --ceremony "$CEREMONY" --out "$BACKUP"
+IFS= read -rs P; printf '%s\n%s\n' "$P" "$P" | ~/.asdf/shims/mix treehouse.catalog_ceremony backup \
+  --signer "$SIGNER" --ceremony "$CEREMONY" --out "$BACKUP"; unset P
 ```
+
+Because the same value is piped twice, a typing mistake is not caught by the confirmation; the
+restore drill in 5.3 catches it (it must decrypt with what the holder actually types).
 
 `backup` needs `CEREMONY/signer.json` from step 5.1 and re-reads the seed from `SIGNER` (the
 seed must derive the recorded public key, else `signer_key_mismatch`; an unreadable or
 policy-violating seed file is `signer_unreadable`). The `BACKUP` file is created with `O_EXCL` and
 mode 0600. Its directory must exist and be a directory (removable media owned by someone else is
-fine, since the file is ciphertext); it need not be private.
+fine, since the file is ciphertext); it need not be private, but its ancestors must still not be
+group- or other-writable without the sticky bit (`backup_directory_unavailable`).
 
 Stdout carries `bytes`, `public_key_base64`, `sha256` and `backup_record` (the path of
-`backup.json`). Refusals: `passphrase_mismatch`, `passphrase_too_short` (under 20 characters),
-`passphrase_unreadable`, `backup_path_required`, `backup_symlink`, `backup_directory_unavailable`,
+`backup.json`). Refusals: `passphrase_mismatch`, `passphrase_too_short` (under 20 characters), `passphrase_too_long`
+(over 1024), `passphrase_not_ascii`, `passphrase_stdin_is_terminal`, `passphrase_unreadable`, `backup_path_required`, `backup_symlink`, `backup_directory_unavailable`,
 `backup_in_git_checkout`, `backup_beside_signer` (inside the signer's directory tree),
 `backup_exists`, `backup_unwritable`, `signer_key_mismatch`, `signer_unreadable`. The tool decrypts
 the new file in memory and checks the public key (`backup_self_check_failed` deletes the file). It
@@ -141,7 +170,8 @@ records `CEREMONY/backup.json` (`lattice-catalog-backup-record-v1`: `backup_form
 
 Copy the backup to both removable media and store them apart from the generating machine. Hand
 the passphrase to its holder through a different channel from any channel that carried the file.
-Never type the passphrase into a shell line, a script or a chat.
+Never type the passphrase into a command line, a script or a chat; the `read -rs` recipe above
+keeps it out of argv.
 
 ### 5.3 Verify the backup on a second machine
 
@@ -149,18 +179,20 @@ Copy `CEREMONY` (public artifacts) and the backup to a different host. The seed 
 copied and is not read. The command does not need it.
 
 ```bash
-~/.asdf/shims/mix treehouse.catalog_ceremony verify-backup \
-  --backup "$BACKUP" --ceremony "$CEREMONY"
+IFS= read -rs P; printf '%s\n' "$P" | ~/.asdf/shims/mix treehouse.catalog_ceremony verify-backup \
+  --backup "$BACKUP" --ceremony "$CEREMONY"; unset P
 ```
 
-The passphrase holder types the passphrase once. The tool checks the backup digest against
+The passphrase holder types the passphrase once (same terminal rule and ASCII rule as 5.2). The tool checks the backup digest against
 `backup.json` (`backup_digest_mismatch`), decrypts (`backup_decrypt_failed`), derives the public
 key and compares it with `signer.json` (`backup_key_mismatch`). Other refusals:
 `backup_unreadable`, `backup_path_required`, `malformed_backup`, `ceremony_artifact_missing`
 (no `signer.json` or `backup.json` in `CEREMONY`). It writes `CEREMONY/restore.json`
 (`ok`, `backup_sha256`, `public_key_base64`, `verified_at`, `host`, `generation_host`,
 `separate_host`, `seed_restored`). `separate_host` is true only when this host's name differs from
-`generation_host`. Stdout carries `ok`, `backup_sha256`, `public_key_base64`, `separate_host`,
+`generation_host`. That is a hostname comparison and nothing more: the tool cannot prove the second
+machine is physically or administratively separate. The restore drill is attested by the named
+people in the report, not proven by the tool. Stdout carries `ok`, `backup_sha256`, `public_key_base64`, `separate_host`,
 `seed_restored` and `restore_record`. Copy `restore.json` back to the generating machine's
 ceremony directory.
 
@@ -226,7 +258,8 @@ normalized record equals the payload and whose author is the Space root. No matc
 
 Names are trimmed, must be non-empty, at most 80 characters and contain no control characters
 (`malformed_custody_name`). The report requires `restore.json` with `ok: true`
-(`restore_not_verified`) and a custodian different from the passphrase holder, compared
+(`restore_not_verified`), in a real ceremony a restore whose `separate_host` is true
+(`restore_not_separate_host`; a dry-run report records the value as it is), and a custodian different from the passphrase holder, compared
 case-insensitively (`custody_not_split`). It re-checks that signer, backup and restore agree on the
 public key, backup digest, format and iteration count (`ceremony_inconsistent`) and writes
 `CEREMONY/verification-report.json` (`lattice-catalog-ceremony-report-v1`: `mode`, `signer`,
@@ -255,7 +288,7 @@ The backup must be recoverable without this repository. The file is one JSON obj
 }
 ```
 
-- Key: PBKDF2-HMAC-SHA256 over the UTF-8 passphrase with the decoded salt (16 bytes),
+- Key: PBKDF2-HMAC-SHA256 over the passphrase bytes (printable ASCII, so UTF-8 and ASCII agree) with the decoded salt (16 bytes),
   600000 iterations, 32-byte output.
 - Cipher: AES-256-GCM, 12-byte nonce, 16-byte tag. The plaintext is the raw 32-byte seed.
 - **AAD** is the exact UTF-8 bytes of the header: the object above **without** `ciphertext_base64`
@@ -343,6 +376,6 @@ reviewed. The seed and backup never enter a git checkout; the tool refuses to wr
 - No AI agents, chat, tickets or CI jobs ever see the seed or the passphrase. Nothing here runs
   in CI.
 - The seed never lives in a git checkout, a cloud-synced folder, or beside its backup.
-- Never pass a passphrase in argv or in the environment. Stdin only.
+- Never pass a passphrase in argv or in the environment. Stdin only, from a pipe, never a terminal.
 - Never use a dry-run key, directory or output as real material, and never the reverse.
 - Never hand-sign the binding outside the product to get past row 229.

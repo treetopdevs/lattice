@@ -17,9 +17,25 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
          seed = fresh_seed(opts, mode),
          pub = public(seed),
          :ok <- Store.undisposable([pub], mode),
-         :ok <- write_seed(path, seed),
-         {:ok, public} <- record(dir, pub, mode, false) do
-      {:ok, public}
+         {:ok, inode} <- write_seed(path, seed),
+         :ok <- hook(opts, path) do
+      # A seed with no public record is an orphan: remove only the file made here.
+      case record(dir, pub, mode, false) do
+        {:ok, _} = ok ->
+          ok
+
+        {:error, _} ->
+          Paths.remove_created(path, inode)
+          {:error, :ceremony_write_failed}
+      end
+    end
+  end
+
+  # A test seam only: the command line has no way to set it.
+  defp hook(opts, path) do
+    case opts[:after_seed] do
+      fun when is_function(fun, 1) -> fun.(path)
+      _ -> :ok
     end
   end
 
@@ -61,7 +77,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
   end
 
   @doc "Write a seed in the identity-file format (lowercase hex plus newline), exclusively, mode 0600."
-  @spec write_seed(Path.t(), Secret.t()) :: :ok | {:error, atom()}
+  @spec write_seed(Path.t(), Secret.t()) :: {:ok, non_neg_integer()} | {:error, atom()}
   def write_seed(path, secret) do
     Paths.create_private(
       path,
@@ -76,7 +92,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
   def load(dir, mode) do
     with {:ok, record} <- Store.read(dir, "signer.json"),
          {:ok, pub} <- Store.decode_key(record["public_key_base64"]),
-         true <- record["format"] == @format and record["mode"] == mode_text(mode) do
+         true <- record["format"] == @format and record["mode"] == mode_text(mode),
+         :ok <- Store.undisposable([pub], mode) do
       {:ok, pub, record}
     else
       {:error, :malformed_key} -> {:error, :ceremony_artifact_malformed}

@@ -191,8 +191,11 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
     end
   end
 
-  defp write(path, bytes),
-    do: Paths.create_private(path, fn -> bytes end, :backup_exists, :backup_unwritable)
+  defp write(path, bytes) do
+    with {:ok, _inode} <-
+           Paths.create_private(path, fn -> bytes end, :backup_exists, :backup_unwritable),
+         do: :ok
+  end
 
   # The file is read back and decrypted before the ceremony trusts it.
   defp self_check(path, passphrase, pub) do
@@ -245,7 +248,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
   defp restore(nil, _seed, _pub), do: :ok
 
   defp restore(path, seed, pub) do
-    with :ok <- Signer.write_seed(path, seed),
+    with {:ok, _inode} <- Signer.write_seed(path, seed),
          {:ok, _restored, ^pub} <- Signer.read_seed(path) do
       :ok
     else

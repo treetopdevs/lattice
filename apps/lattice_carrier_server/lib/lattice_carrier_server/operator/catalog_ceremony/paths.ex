@@ -14,6 +14,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
     with {:ok, expanded} <- explicit(path, :signer_path_required),
          :ok <- leaf(expanded, :signer_symlink),
          :ok <- private_directory(Path.dirname(expanded)),
+         :ok <- ancestors_safe(Path.dirname(expanded), :unsafe_signer_directory),
          :ok <- outside_git(expanded, :signer_in_git_checkout, mode),
          :ok <- no_overlap(expanded, ceremony, mode) do
       {:ok, expanded}
@@ -28,6 +29,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
     with {:ok, expanded} <- explicit(path, :backup_path_required),
          :ok <- leaf(expanded, :backup_symlink),
          :ok <- plain_directory(Path.dirname(expanded)),
+         :ok <- ancestors_safe(Path.dirname(expanded), :backup_directory_unavailable),
          :ok <- outside_git(expanded, :backup_in_git_checkout, mode),
          :ok <- apart(expanded, signer_path) do
       {:ok, expanded}
@@ -46,32 +48,83 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
   end
 
   @doc """
-  Create `path` exclusively (it must not exist), set mode 0600 before any byte
-  is written, then write what `content` returns. A failure removes the file.
+  Create `path` exclusively (raw `O_EXCL`, so a planted link is never followed),
+  then bind the descriptor to the path: chmod 0600, lstat, and require the same
+  inode, a regular file, mode 0600 and a single link before any byte is
+  written. Returns the created inode. A failure, including a raise while
+  producing `content`, removes the file.
   """
-  @spec create_private(Path.t(), (-> binary()), atom(), atom()) :: :ok | {:error, atom()}
+  @spec create_private(Path.t(), (-> binary()), atom(), atom()) ::
+          {:ok, non_neg_integer()} | {:error, atom()}
   def create_private(path, content, exists, failure) do
-    case File.open(path, [:write, :exclusive, :binary]) do
-      {:ok, io} ->
-        result =
-          try do
-            with :ok <- File.chmod(path, 0o600), do: IO.binwrite(io, content.())
-          after
-            File.close(io)
-          end
-
-        if result == :ok do
-          :ok
-        else
-          File.rm(path)
-          {:error, failure}
-        end
+    case :file.open(path, [:write, :exclusive, :raw, :binary]) do
+      {:ok, fd} ->
+        finish_private(fd, path, content, failure)
 
       {:error, :eexist} ->
         {:error, exists}
 
       _ ->
         {:error, failure}
+    end
+  end
+
+  defp finish_private(fd, path, content, failure) do
+    inode = descriptor_inode(fd)
+
+    try do
+      with true <- is_integer(inode),
+           :ok <- File.chmod(path, 0o600),
+           :ok <- same_file(path, inode),
+           :ok <- :file.write(fd, content.()),
+           :ok <- :file.sync(fd) do
+        {:ok, inode}
+      else
+        _ ->
+          remove_created(path, inode)
+          {:error, failure}
+      end
+    rescue
+      _ ->
+        remove_created(path, inode)
+        {:error, failure}
+    catch
+      _, _ ->
+        remove_created(path, inode)
+        {:error, failure}
+    after
+      :file.close(fd)
+    end
+  end
+
+  defp descriptor_inode(fd) do
+    case :prim_file.read_handle_info(fd) do
+      {:ok, info} -> File.Stat.from_record(info).inode
+      _ -> nil
+    end
+  end
+
+  defp same_file(path, inode) do
+    with {:ok, %File.Stat{type: :regular, inode: ^inode, links: 1, mode: mode, uid: owner}} <-
+           File.lstat(path),
+         true <- (mode &&& 0o7777) == 0o600,
+         true <- owner == uid() do
+      :ok
+    else
+      _ -> {:error, :not_the_created_file}
+    end
+  end
+
+  @doc "Remove `path` only when it is still the file this process created (same inode)."
+  @spec remove_created(Path.t(), term()) :: :ok
+  def remove_created(path, inode) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{inode: ^inode, type: :regular}} when is_integer(inode) ->
+        File.rm(path)
+        :ok
+
+      _ ->
+        :ok
     end
   end
 
@@ -106,6 +159,37 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Paths do
       :ok
     else
       _ -> {:error, :unsafe_signer_directory}
+    end
+  end
+
+  @doc """
+  Every ancestor of `dir` (after resolving links), up to `/`, must be a real
+  directory owned by this user or root and not group/other-writable unless it
+  has the sticky bit. With `include_self: false` the directory itself is
+  skipped (a backup directory on removable media may be foreign-owned).
+  """
+  @spec ancestors_safe(Path.t(), atom(), keyword()) :: :ok | {:error, atom()}
+  def ancestors_safe(dir, reason, opts \\ []) do
+    resolved = real(dir)
+    chain = ancestors(resolved)
+    chain = if Keyword.get(opts, :include_self, false), do: chain, else: tl(chain)
+    me = uid()
+
+    if me != nil and Enum.all?(chain, &safe_ancestor?(&1, me)),
+      do: :ok,
+      else: {:error, reason}
+  catch
+    :symlink_loop -> {:error, reason}
+  end
+
+  defp safe_ancestor?(dir, me) do
+    case File.lstat(dir) do
+      {:ok, %File.Stat{type: :directory, mode: mode, uid: owner}} ->
+        (owner == me or owner == 0) and
+          ((mode &&& 0o022) == 0 or (mode &&& 0o1000) != 0)
+
+      _ ->
+        false
     end
   end
 

@@ -17,7 +17,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
          {:ok, pub, _signer} <- Signer.load(dir, mode),
          :ok <- Store.undisposable([pub], mode),
          {:ok, backup} <- Store.read(dir, "backup.json"),
-         {:ok, restore} <- restored(dir),
+         {:ok, restore} <- restored(dir, mode),
          :ok <- consistent(pub, backup, restore),
          {:ok, custody} <- custody(opts),
          {:ok, binding} <- binding(dir, pub) do
@@ -43,9 +43,13 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
     end
   end
 
-  defp restored(dir) do
-    case Store.read(dir, "restore.json") do
-      {:ok, %{"ok" => true} = restore} -> {:ok, restore}
+  # Separateness is hostname-based and attested by the named people; a real
+  # ceremony needs a restore on another host. A dry run records it as it is.
+  defp restored(dir, mode) do
+    case {Store.read(dir, "restore.json"), mode} do
+      {{:ok, %{"ok" => true, "separate_host" => true} = restore}, _} -> {:ok, restore}
+      {{:ok, %{"ok" => true} = restore}, :dry_run} -> {:ok, restore}
+      {{:ok, %{"ok" => true}}, :real} -> {:error, :restore_not_separate_host}
       _ -> {:error, :restore_not_verified}
     end
   end

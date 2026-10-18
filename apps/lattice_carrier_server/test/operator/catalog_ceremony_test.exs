@@ -8,7 +8,15 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
   alias Lattice.Authority.{ContinuationCertificate, Delegation}
   alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.CatalogCeremony, as: Ceremony
-  alias LatticeCarrierServer.Operator.CatalogCeremony.{Backup, Binding, Cli, DryRun}
+
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{
+    Backup,
+    Binding,
+    Cli,
+    DryRun,
+    Passphrase,
+    Paths
+  }
 
   @passphrase "correct horse battery staple 42"
   @origin "wss://relay.example.test"
@@ -60,7 +68,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     do: :crypto.hash(:sha256, "ceremony-test-" <> label) |> Base.url_encode64(padding: false)
 
   # A disposable bounded Space with RANDOM keys; the test, never the tool, signs.
-  defp space(f, name \\ "pre") do
+  defp space(f, name \\ "pre", extra_ops \\ []) do
     root = Identity.generate("root")
     nominee = Identity.generate("nominee")
     witnesses = for n <- 1..3, do: Identity.generate("w#{n}")
@@ -75,7 +83,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
 
     delegation =
       Delegation.genesis(root, replica,
-        ops: [:create_space, :create_thread, :catalog_bootstrap_v1, :replace_catalog_v1],
+        ops:
+          [:create_space, :create_thread, :catalog_bootstrap_v1, :replace_catalog_v1] ++ extra_ops,
         roles: [:admin, :moderator]
       )
 
@@ -233,6 +242,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert report["backup"]["kdf_iterations"] == 600_000
     assert %{"ok" => true} = dir |> Path.join("restore.json") |> File.read!() |> Jason.decode!()
     assert report["claim"] =~ "not catalog publication"
+    assert report["restore"]["separate_host"] == false
     assert (File.stat!(dir).mode &&& 0o777) == 0o700
   end
 
@@ -274,6 +284,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert {:error, :binding_not_found} =
              Ceremony.verify_binding(ceremony: f.ceremony, space_log: space.pre)
 
+    # A real ceremony needs the restore drill on another host.
+    assert {:error, :restore_not_separate_host} = report!(f)
+    separate_host!(f)
+
     assert {:ok, pending} = report!(f)
     assert pending.sha256 =~ ~r/^[0-9a-f]{64}$/
     pending_report = pending.path |> File.read!() |> Jason.decode!()
@@ -297,7 +311,14 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
              "rotation_owner" => "Linus"
            }
 
-    assert final["restore"]["separate_host"] == false
+    assert final["restore"]["separate_host"] == true
+  end
+
+  # Separateness is hostname-based; a one-host test run flips it as an operator would attest.
+  defp separate_host!(f) do
+    path = Path.join(f.ceremony, "restore.json")
+    record = path |> File.read!() |> Jason.decode!() |> Map.put("separate_host", true)
+    File.write!(path, Jason.encode!(record))
   end
 
   defp report!(f, extra \\ []) do
@@ -748,6 +769,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     # The report is still possible with the binding pending (inputs 1 and 3).
     backup!(f)
     {:ok, _} = verify_backup!(f)
+    separate_host!(f)
     assert {:ok, done} = report!(f)
 
     assert %{"binding" => %{"status" => "pending_root_signature", "payload_sha256" => nil}} =
@@ -824,6 +846,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     backup!(f)
     assert {:error, :restore_not_verified} = report!(f)
     {:ok, _} = verify_backup!(f)
+    separate_host!(f)
 
     assert {:error, :custody_not_split} = report!(f, passphrase_holder: " ada ")
     assert {:error, :malformed_custody_name} = report!(f, custodian: "")
@@ -840,6 +863,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     generate!(f)
     backup!(f)
     {:ok, _} = verify_backup!(f)
+    separate_host!(f)
     path = Path.join(f.ceremony, "backup.json")
     record = path |> File.read!() |> Jason.decode!()
 
@@ -980,6 +1004,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
          [@passphrase, @passphrase]},
         {["verify-backup", "--backup", f.backup, "--restore-to", f.restored] ++ ceremony,
          [@passphrase]},
+        fn -> separate_host!(f) end,
         {[
            "binding-payload",
            "--space-log",
@@ -1040,10 +1065,15 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
   end
 
   defp collect(commands) do
-    Enum.reduce(commands, {:ok, "", ""}, fn {argv, lines}, {:ok, out, err} ->
-      {result, o, e} = cli(argv, lines)
-      assert result == :ok, inspect({argv |> hd(), result, e})
-      {:ok, out <> o, err <> e}
+    Enum.reduce(commands, {:ok, "", ""}, fn
+      step, acc when is_function(step, 0) ->
+        step.()
+        acc
+
+      {argv, lines}, {:ok, out, err} ->
+        {result, o, e} = cli(argv, lines)
+        assert result == :ok, inspect({argv |> hd(), result, e})
+        {:ok, out <> o, err <> e}
     end)
   end
 
@@ -1053,5 +1083,314 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert result == :ok and err == ""
     assert out =~ "bootstrap_id: " and out =~ "report_sha256: "
     refute out =~ Base.encode16(:crypto.hash(:sha256, @dry_label <> ":signer"), case: :lower)
+  end
+
+  # ------------------------------------------------ review-round hardening
+
+  test "the passphrase gate refuses a terminal before any read", f do
+    stat = fn type -> fn "/dev/fd/0" -> {:ok, %File.Stat{type: type}} end end
+
+    assert :ok = Passphrase.stdin_gate(stat.(:regular))
+    assert :ok = Passphrase.stdin_gate(stat.(:other))
+    assert {:error, :passphrase_stdin_is_terminal} = Passphrase.stdin_gate(stat.(:device))
+    assert {:error, :passphrase_unreadable} = Passphrase.stdin_gate(stat.(:directory))
+    assert {:error, :passphrase_unreadable} = Passphrase.stdin_gate(fn _ -> {:error, :enoent} end)
+
+    generate!(f)
+
+    refusing = fn type ->
+      Ceremony.backup(
+        signer: f.signer,
+        ceremony: f.ceremony,
+        out: f.backup,
+        stdin_stat: stat.(type)
+      )
+    end
+
+    assert {:error, :passphrase_stdin_is_terminal} = refusing.(:device)
+    refute File.exists?(f.backup)
+
+    assert {:error, :passphrase_unreadable} =
+             Ceremony.backup(
+               signer: f.signer,
+               ceremony: f.ceremony,
+               out: f.backup,
+               stdin_stat: fn _ -> {:error, :eacces} end
+             )
+
+    backup!(f)
+
+    assert {:error, :passphrase_stdin_is_terminal} =
+             Ceremony.verify_backup(
+               backup: f.backup,
+               ceremony: f.ceremony,
+               stdin_stat: stat.(:device)
+             )
+  end
+
+  test "a passphrase is printable ASCII, 20 to 1024 characters", f do
+    generate!(f)
+    opts = [signer: f.signer, ceremony: f.ceremony, out: f.backup]
+
+    for bad <- [
+          "correct horse battery staple \u00F1 42",
+          "correct horse battery\tstaple 42 xx",
+          "correct horse battery staple 42\r",
+          String.duplicate("\u00E9", 24)
+        ] do
+      assert {:error, :passphrase_not_ascii} =
+               Ceremony.backup(opts ++ [passphrase_reader: reader([bad, bad])])
+    end
+
+    long = String.duplicate("a", 1025)
+
+    assert {:error, :passphrase_too_long} =
+             Ceremony.backup(opts ++ [passphrase_reader: reader([long, long])])
+
+    edge = String.duplicate("a", 19)
+
+    assert {:error, :passphrase_too_short} =
+             Ceremony.backup(opts ++ [passphrase_reader: reader([edge, edge])])
+
+    refute File.exists?(f.backup)
+
+    ok = String.duplicate("~ ", 10)
+    assert {:ok, _} = Ceremony.backup(opts ++ [passphrase_reader: reader([ok, ok])])
+
+    assert {:error, :passphrase_not_ascii} =
+             Ceremony.verify_backup(
+               backup: f.backup,
+               ceremony: f.ceremony,
+               passphrase_reader: reader(["caf\u00E9 caf\u00E9 caf\u00E9 caf\u00E9"])
+             )
+  end
+
+  defp open_directory!(f, name, mode) do
+    dir = Path.join(f.base, name)
+    File.mkdir_p!(dir)
+    # File.chmod drops the sticky bit, so use chmod(1) for the octal string.
+    {_, 0} = System.cmd("chmod", [Integer.to_string(mode, 8), dir])
+    inner = Path.join(dir, "inner")
+    File.mkdir_p!(inner)
+    File.chmod!(inner, 0o700)
+    inner
+  end
+
+  test "every ancestor of a secret path must be unwritable by others unless sticky", f do
+    inner = open_directory!(f, "open", 0o777)
+
+    assert {:error, :unsafe_signer_directory} =
+             Ceremony.generate(signer: Path.join(inner, "s.seed"), ceremony: f.ceremony)
+
+    refute File.exists?(Path.join(inner, "s.seed"))
+
+    generate!(f)
+    opts = [signer: f.signer, ceremony: f.ceremony, passphrase_reader: passphrase_reader()]
+
+    # The backup directory itself may be foreign, its ancestors may not be open.
+    open_backups = Path.join(inner, "backups")
+    File.mkdir_p!(open_backups)
+
+    assert {:error, :backup_directory_unavailable} =
+             Ceremony.backup(opts ++ [out: Path.join(open_backups, "b")])
+
+    assert {:error, :ceremony_directory_invalid} =
+             Ceremony.generate(
+               signer: Path.join(f.keys, "other.seed"),
+               ceremony: Path.join(inner, "ceremony")
+             )
+
+    sticky = open_directory!(f, "sticky", 0o1777)
+
+    assert {:ok, _} =
+             Ceremony.generate(signer: Path.join(sticky, "s.seed"), ceremony: sticky <> "-c")
+  end
+
+  test "a secret file is created exclusively, bound to its inode, and removed on failure", f do
+    path = Path.join(f.keys, "made.seed")
+    assert {:ok, inode} = Paths.create_private(path, fn -> "abc" end, :exists, :failed)
+    assert %File.Stat{inode: ^inode, links: 1, type: :regular} = File.lstat!(path)
+    assert (File.stat!(path).mode &&& 0o7777) == 0o600
+    assert File.read!(path) == "abc"
+    assert {:error, :exists} = Paths.create_private(path, fn -> "x" end, :exists, :failed)
+    assert File.read!(path) == "abc"
+
+    raising = Path.join(f.keys, "raising.seed")
+
+    assert {:error, :failed} =
+             Paths.create_private(raising, fn -> raise "boom" end, :exists, :failed)
+
+    refute File.exists?(raising)
+
+    # Only the file this call made is ever removed.
+    File.write!(path, "other")
+    assert :ok = Paths.remove_created(path, inode + 1)
+    assert File.exists?(path)
+
+    link = Path.join(f.keys, "link.seed")
+    File.ln_s!(Path.join(f.keys, "elsewhere"), link)
+    assert {:error, :exists} = Paths.create_private(link, fn -> "x" end, :exists, :failed)
+    refute File.exists?(Path.join(f.keys, "elsewhere"))
+  end
+
+  test "an existing ceremony directory must be private to the operator", f do
+    loose = Path.join(f.base, "loose")
+    File.mkdir_p!(loose)
+    File.chmod!(loose, 0o755)
+
+    assert {:error, :ceremony_directory_invalid} =
+             Ceremony.generate(signer: f.signer, ceremony: loose)
+
+    File.chmod!(loose, 0o710)
+
+    assert {:error, :ceremony_directory_invalid} =
+             Ceremony.generate(signer: f.signer, ceremony: loose)
+
+    refute File.exists?(f.signer)
+  end
+
+  test "artifact temporary files are exclusive and never follow a planted link", f do
+    victim = Path.join(f.base, "victim.txt")
+    File.write!(victim, "untouched")
+    File.ln_s!(victim, Path.join(f.ceremony, ".signer.json.tmp"))
+
+    public = generate!(f)
+    assert File.read!(victim) == "untouched"
+    record = Path.join(f.ceremony, "signer.json")
+    assert %File.Stat{type: :regular} = File.lstat!(record)
+
+    assert record |> File.read!() |> Jason.decode!() |> Map.get("fingerprint_sha256") ==
+             public["fingerprint_sha256"]
+  end
+
+  test "generate removes the seed it just made when the public record cannot be written", f do
+    assert {:error, :ceremony_write_failed} =
+             Ceremony.generate(
+               signer: f.signer,
+               ceremony: f.ceremony,
+               after_seed: fn path ->
+                 assert File.regular?(path)
+                 File.chmod!(f.ceremony, 0o500)
+               end
+             )
+
+    File.chmod!(f.ceremony, 0o700)
+    refute File.exists?(f.signer)
+    refute File.exists?(Path.join(f.ceremony, "signer.json"))
+    assert {:ok, _} = Ceremony.generate(signer: f.signer, ceremony: f.ceremony)
+  end
+
+  test "real mode refuses a signer record that carries a dry-run key", f do
+    generate!(f)
+    space = space(f)
+    {_payload, record} = payload!(f, space)
+    {signed, _} = sign_bootstraps(space, [record], "signed")
+    path = Path.join(f.ceremony, "signer.json")
+    disposable = DryRun.public_keys() |> hd()
+
+    forged =
+      path
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.put("public_key_base64", Base.encode64(disposable))
+
+    File.write!(path, Jason.encode!(forged))
+
+    assert {:error, :disposable_test_key} =
+             Ceremony.verify_binding(ceremony: f.ceremony, space_log: signed)
+
+    assert {:error, :disposable_test_key} = report!(f)
+
+    assert {:error, :disposable_test_key} =
+             Ceremony.backup(
+               signer: f.signer,
+               ceremony: f.ceremony,
+               out: f.backup,
+               passphrase_reader: passphrase_reader()
+             )
+  end
+
+  # ------------------------------------------- fresh-process (real stdin)
+
+  # The app directory, not the umbrella root: a root-level `mix` would compile every
+  # umbrella app (some need a Rust toolchain) before running the task.
+  defp app_dir, do: Path.expand("../..", __DIR__)
+
+  defp mix_task(args, stdin_script \\ nil) do
+    mix = System.find_executable("mix")
+    quoted = Enum.map_join(["treehouse.catalog_ceremony" | args], " ", &shell_quote/1)
+
+    command =
+      (stdin_script && stdin_script <> " | ")
+      |> Kernel.||("")
+      |> Kernel.<>("#{shell_quote(mix)} #{quoted}")
+
+    System.cmd("sh", ["-c", command],
+      cd: app_dir(),
+      env: [{"MIX_ENV", "test"}],
+      stderr_to_stdout: true
+    )
+  end
+
+  defp shell_quote(text), do: "'" <> String.replace(text, "'", "'\\''") <> "'"
+
+  @tag :fresh_process
+  @tag timeout: 300_000
+  test "binding-payload decodes a Space log in a fresh mix process", f do
+    if System.find_executable("mix") == nil do
+      IO.puts("skipped: mix is not on PATH")
+    else
+      generate!(f)
+      # Atoms only Treehouse.Space declares: a fresh VM has not interned them yet.
+      space = space(f, "fresh", [:issue_invitation, :attest_member_key_v1])
+
+      {output, status} =
+        mix_task([
+          "binding-payload",
+          "--ceremony",
+          f.ceremony,
+          "--space-log",
+          space.pre,
+          "--service-public-key",
+          service_b64(),
+          "--origin",
+          @origin
+        ])
+
+      refute output =~ "invalid_space_log", output
+      assert status == 0, output
+      assert output =~ "binding_payload_sha256: "
+      assert File.regular?(Path.join(f.ceremony, "binding-payload.json"))
+    end
+  end
+
+  @tag :fresh_process
+  @tag timeout: 300_000
+  test "backup and verify-backup read the passphrase from a piped stdin", f do
+    if System.find_executable("mix") == nil do
+      IO.puts("skipped: mix is not on PATH")
+    else
+      generate!(f)
+      pipe = "printf '%s\\n%s\\n' #{shell_quote(@passphrase)} #{shell_quote(@passphrase)}"
+      once = "printf '%s\\n' #{shell_quote(@passphrase)}"
+
+      {output, status} =
+        mix_task(
+          ["backup", "--signer", f.signer, "--ceremony", f.ceremony, "--out", f.backup],
+          pipe
+        )
+
+      assert status == 0, output
+      refute output =~ @passphrase
+
+      {output, status} =
+        mix_task(
+          ["verify-backup", "--backup", f.backup, "--ceremony", f.ceremony],
+          once
+        )
+
+      assert status == 0, output
+      assert output =~ "ok: true"
+    end
   end
 end
