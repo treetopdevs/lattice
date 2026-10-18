@@ -97,11 +97,11 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
   @spec write(Path.t(), String.t(), map()) :: {:ok, binary()} | {:error, :ceremony_write_failed}
   def write(dir, name, map), do: write_text(dir, name, Jason.encode!(map, pretty: true) <> "\n")
 
-  @spec write_text(Path.t(), String.t(), binary()) ::
+  # `suffix` is a test seam only; callers use the random default.
+  @spec write_text(Path.t(), String.t(), binary(), String.t()) ::
           {:ok, binary()} | {:error, :ceremony_write_failed}
-  def write_text(dir, name, bytes) do
+  def write_text(dir, name, bytes, suffix \\ random_suffix()) do
     target = Path.join(dir, name)
-    suffix = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
     temporary = Path.join(dir, "." <> name <> "." <> suffix <> ".tmp")
 
     # Exclusive raw creation: a planted link at the temporary name is never followed.
@@ -119,6 +119,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
       _ -> {:error, :ceremony_write_failed}
     end
   end
+
+  defp random_suffix, do: :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
 
   defp failed(temporary) do
     File.rm(temporary)
@@ -138,6 +140,25 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
       _ -> "unknown"
     end
   end
+
+  @doc "A nonempty host name: valid text, no control characters, at most 255 bytes."
+  @spec host_text?(term()) :: boolean()
+  def host_text?(host) when is_binary(host) do
+    String.valid?(host) and host != "" and byte_size(host) <= 255 and
+      not String.match?(host, ~r/[[:cntrl:]]/u)
+  end
+
+  def host_text?(_), do: false
+
+  @doc "A 64-character lowercase hex digest."
+  @spec sha256_text?(term()) :: boolean()
+  def sha256_text?(text) when is_binary(text), do: text =~ ~r/\A[0-9a-f]{64}\z/
+  def sha256_text?(_), do: false
+
+  @doc "An ISO 8601 UTC timestamp string."
+  @spec timestamp?(term()) :: boolean()
+  def timestamp?(text) when is_binary(text), do: match?({:ok, _, _}, DateTime.from_iso8601(text))
+  def timestamp?(_), do: false
 
   @spec public_info(binary()) :: map()
   def public_info(pub) do

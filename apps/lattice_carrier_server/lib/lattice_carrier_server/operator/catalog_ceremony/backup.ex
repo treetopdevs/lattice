@@ -35,10 +35,18 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
          {:ok, seed} <- signer_seed(signer_path, pub),
          {:ok, passphrase} <- Passphrase.confirmed(opts),
          bytes = encode(seed, pub, passphrase),
-         :ok <- write(backup_path, bytes),
+         {:ok, inode} <- write(backup_path, bytes),
          :ok <- hook(opts, backup_path),
-         :ok <- self_check(backup_path, passphrase, pub) do
-      record(dir, bytes, pub)
+         :ok <- self_check(backup_path, inode, passphrase, pub) do
+      # A backup with no public record is an orphan: remove only the file made here.
+      case record(dir, bytes, pub, opts) do
+        {:ok, _} = ok ->
+          ok
+
+        {:error, _} ->
+          Paths.remove_created(backup_path, inode)
+          {:error, :ceremony_write_failed}
+      end
     end
   end
 
@@ -48,17 +56,71 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
          {:ok, pub, signer} <- Signer.load(dir, mode),
          :ok <- Store.undisposable([pub], mode),
          {:ok, recorded} <- Store.read(dir, "backup.json"),
-         {:ok, backup_path} <- Paths.backup_input(opts[:backup]),
+         :ok <- if(record_shape?(recorded), do: :ok, else: {:error, :ceremony_artifact_malformed}),
+         {:ok, backup_path} <- Paths.backup_input(opts[:backup], mode),
          {:ok, restore_path} <- restore_target(opts, dir, mode),
+         :ok <- restore_apart(restore_path, backup_path),
          {:ok, bytes} <- read(backup_path),
          :ok <- digest(bytes, recorded),
          {:ok, passphrase} <- Passphrase.single(opts),
          {:ok, seed, derived} <- decrypt(bytes, passphrase),
          :ok <- if(derived == pub, do: :ok, else: {:error, :backup_key_mismatch}),
-         :ok <- restore(restore_path, seed, pub) do
-      proof(dir, bytes, pub, signer, restore_path != nil)
+         {:ok, inode} <- restore(restore_path, seed, pub, opts) do
+      # A restored seed with no restore record is an orphan: remove only the file made here.
+      case proof(dir, bytes, pub, signer, restore_path != nil, opts) do
+        {:ok, _} = ok ->
+          ok
+
+        {:error, _} = refusal ->
+          Paths.remove_created(restore_path, inode)
+          refusal
+      end
     end
   end
+
+  defp restore_apart(nil, _backup_path), do: :ok
+
+  defp restore_apart(restore_path, backup_path),
+    do: Paths.restore_apart(restore_path, backup_path)
+
+  @doc """
+  Whether a `backup.json` map is the complete record `create/2` writes: exact
+  keys, the record and backup formats, the pinned iteration count, a lowercase
+  sha256, a positive byte count, a timestamp and a 32-byte public key.
+  """
+  @spec record_shape?(term()) :: boolean()
+  def record_shape?(%{} = record) do
+    Enum.sort(Map.keys(record)) ==
+      Enum.sort(~w(format backup_format kdf_iterations sha256 bytes created_at public_key_base64)) and
+      record["format"] == @record_format and record["backup_format"] == @format and
+      record["kdf_iterations"] == @iterations and Store.sha256_text?(record["sha256"]) and
+      is_integer(record["bytes"]) and record["bytes"] > 0 and
+      Store.timestamp?(record["created_at"]) and
+      match?({:ok, _}, Store.decode_key(record["public_key_base64"]))
+  end
+
+  def record_shape?(_), do: false
+
+  @doc """
+  Whether a `restore.json` map is the complete proof `verify/2` writes: exact
+  keys, `ok` true, a lowercase backup sha256, a 32-byte public key, a timestamp,
+  two host names, the separateness they imply and a boolean seed flag.
+  """
+  @spec proof_shape?(term()) :: boolean()
+  def proof_shape?(%{} = proof) do
+    Enum.sort(Map.keys(proof)) ==
+      Enum.sort(
+        ~w(ok backup_sha256 public_key_base64 verified_at host generation_host separate_host seed_restored)
+      ) and
+      proof["ok"] == true and Store.sha256_text?(proof["backup_sha256"]) and
+      match?({:ok, _}, Store.decode_key(proof["public_key_base64"])) and
+      Store.timestamp?(proof["verified_at"]) and
+      Store.host_text?(proof["host"]) and Store.host_text?(proof["generation_host"]) and
+      proof["separate_host"] == (proof["host"] != proof["generation_host"]) and
+      is_boolean(proof["seed_restored"])
+  end
+
+  def proof_shape?(_), do: false
 
   @doc "Decrypt a backup file's bytes; the seed stays wrapped."
   @spec decrypt(binary(), Secret.t()) :: {:ok, Secret.t(), binary()} | {:error, atom()}
@@ -184,32 +246,40 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
   end
 
   # A test seam only: the command line has no way to set it.
-  defp hook(opts, path) do
-    case opts[:after_write] do
+  defp hook(opts, path), do: hook(opts, :after_write, path)
+
+  defp hook(opts, name, path) do
+    case opts[name] do
       fun when is_function(fun, 1) -> fun.(path)
       _ -> :ok
     end
   end
 
+  # A test seam only: the command line has no way to set it.
+  defp record_hook(opts, dir) do
+    case opts[:before_record] do
+      fun when is_function(fun, 1) -> fun.(dir)
+      _ -> :ok
+    end
+  end
+
   defp write(path, bytes) do
-    with {:ok, _inode} <-
-           Paths.create_private(path, fn -> bytes end, :backup_exists, :backup_unwritable),
-         do: :ok
+    Paths.create_private(path, fn -> bytes end, :backup_exists, :backup_unwritable)
   end
 
   # The file is read back and decrypted before the ceremony trusts it.
-  defp self_check(path, passphrase, pub) do
+  defp self_check(path, inode, passphrase, pub) do
     with {:ok, bytes} <- File.read(path),
          {:ok, _seed, ^pub} <- decrypt(bytes, passphrase) do
       :ok
     else
       _ ->
-        File.rm(path)
+        Paths.remove_created(path, inode)
         {:error, :backup_self_check_failed}
     end
   end
 
-  defp record(dir, bytes, pub) do
+  defp record(dir, bytes, pub, opts) do
     record = %{
       "format" => @record_format,
       "backup_format" => @format,
@@ -220,7 +290,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
       "public_key_base64" => Base.encode64(pub)
     }
 
-    with {:ok, _} <- Store.write(dir, "backup.json", record), do: {:ok, record}
+    with :ok <- record_hook(opts, dir),
+         {:ok, _} <- Store.write(dir, "backup.json", record),
+         do: {:ok, record}
   end
 
   defp read(path) do
@@ -245,19 +317,28 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
 
   # A restored seed is proven by reading it back through the identity-file
   # policy and re-deriving its public key.
-  defp restore(nil, _seed, _pub), do: :ok
+  # Returns the created inode (nil when nothing is restored). If the readback
+  # fails the file made here is removed.
+  defp restore(nil, _seed, _pub, _opts), do: {:ok, nil}
 
-  defp restore(path, seed, pub) do
-    with {:ok, _inode} <- Signer.write_seed(path, seed),
-         {:ok, _restored, ^pub} <- Signer.read_seed(path) do
-      :ok
-    else
-      {:error, _} = refusal -> refusal
-      _ -> {:error, :restore_check_failed}
+  defp restore(path, seed, pub, opts) do
+    with {:ok, inode} <- Signer.write_seed(path, seed) do
+      with :ok <- hook(opts, :after_restore, path),
+           {:ok, _restored, ^pub} <- Signer.read_seed(path) do
+        {:ok, inode}
+      else
+        other ->
+          Paths.remove_created(path, inode)
+
+          case other do
+            {:error, _} = refusal -> refusal
+            _ -> {:error, :restore_check_failed}
+          end
+      end
     end
   end
 
-  defp proof(dir, bytes, pub, signer, restored?) do
+  defp proof(dir, bytes, pub, signer, restored?, opts) do
     host = Store.host()
 
     proof = %{
@@ -271,6 +352,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Backup do
       "seed_restored" => restored?
     }
 
-    with {:ok, _} <- Store.write(dir, "restore.json", proof), do: {:ok, proof}
+    with :ok <- hook(opts, :before_proof, dir),
+         {:ok, _} <- Store.write(dir, "restore.json", proof),
+         do: {:ok, proof}
   end
 end

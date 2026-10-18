@@ -8,6 +8,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
 
   @realm "lattice-catalog-signer"
   @format "lattice-catalog-signer-public-v1"
+  @keys ~w(format mode public_key_base64 public_key_hex fingerprint_sha256 created_at host)
 
   @spec generate(keyword(), :real | :dry_run) :: {:ok, map()} | {:error, atom()}
   def generate(opts, mode) do
@@ -60,11 +61,22 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
   @doc "Read a seed file under the manifest policy; returns the seed and its public key."
   @spec read_seed(Path.t()) :: {:ok, Secret.t(), binary()} | {:error, :signer_unreadable}
   def read_seed(path) do
-    with {:ok, secret, pub} <- Manifest.read_identity_file(path, @realm),
+    with :ok <- single_regular_file(path),
+         {:ok, secret, pub} <- Manifest.read_identity_file(path, @realm),
          %{priv: <<_::binary-size(32)>> = seed} <- Secret.unwrap(secret),
          true <- public(Secret.wrap(seed)) == pub do
       {:ok, Secret.wrap(seed), pub}
     else
+      _ -> {:error, :signer_unreadable}
+    end
+  end
+
+  # An existing seed must be a regular file with exactly one link (checked on the
+  # canonical path without following a link): a second hard link is a second
+  # route to the secret.
+  defp single_regular_file(path) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :regular, links: 1}} -> :ok
       _ -> {:error, :signer_unreadable}
     end
   end
@@ -92,7 +104,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
   def load(dir, mode) do
     with {:ok, record} <- Store.read(dir, "signer.json"),
          {:ok, pub} <- Store.decode_key(record["public_key_base64"]),
-         true <- record["format"] == @format and record["mode"] == mode_text(mode),
+         true <- shape?(record, pub, mode),
          :ok <- Store.undisposable([pub], mode) do
       {:ok, pub, record}
     else
@@ -100,6 +112,19 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Signer do
       {:error, _} = refusal -> refusal
       _ -> {:error, :ceremony_artifact_malformed}
     end
+  end
+
+  # The complete record: exact keys, consistent key encodings, a timestamp and
+  # a plausible generation host (separateness is judged against it).
+  defp shape?(record, pub, mode) do
+    keys = Enum.sort(Map.keys(record))
+
+    keys in [Enum.sort(@keys), Enum.sort(["imported" | @keys])] and
+      record["format"] == @format and record["mode"] == mode_text(mode) and
+      record["public_key_hex"] == Base.encode16(pub, case: :lower) and
+      record["fingerprint_sha256"] == Store.sha256(pub) and
+      Map.get(record, "imported", true) == true and
+      Store.timestamp?(record["created_at"]) and Store.host_text?(record["host"])
   end
 
   defp record_absent(dir),

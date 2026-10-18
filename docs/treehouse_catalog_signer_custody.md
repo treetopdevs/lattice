@@ -118,7 +118,7 @@ not a real directory owned by you with no group/other bits), `signer_in_git_chec
 holds `.git`), `signer_ceremony_overlap` (the ceremony directory is inside the signer's parent, or
 the signer is inside the ceremony directory; symlinks are resolved), `signer_record_exists`
 (`CEREMONY/signer.json` already exists), `signer_exists` (the seed path exists),
-`signer_unwritable`, `ceremony_directory_invalid`, `disposable_test_key`,
+`signer_unwritable`, `signer_unreadable` (an existing seed must be a regular file with a single link, owned by you, mode 0600), `ceremony_directory_invalid`, `disposable_test_key`,
 `dry_run_ceremony_dir`. An existing `CEREMONY` must be owned by you with no group or other
 permission bits (`ceremony_directory_invalid`), and its ancestors must pass the chain rule above.
 Artifacts are written through an exclusively created, uniquely named temporary file and renamed, so
@@ -180,6 +180,14 @@ keeps it out of argv.
 Copy `CEREMONY` (public artifacts) and the backup to a different host. The seed file is **not**
 copied and is not read. The command does not need it.
 
+The copied backup on the second machine follows the secret-path policy: it must be owned by the
+verifying user with mode 0600 (`chmod 600 BACKUP`), a single link, in a directory that is mode 0700
+and whose ancestors nobody else can write, outside any git checkout. Otherwise `verify-backup`
+refuses with `backup_unreadable`, `backup_directory_unavailable` or `backup_in_git_checkout`.
+`signer.json`, `backup.json` and `restore.json` must be the complete records the tool wrote, with
+exactly their keys and value shapes (a hand-edited `separate_host` that disagrees with the two host
+names, or any extra or malformed field, is refused with `ceremony_artifact_malformed`).
+
 ```bash
 IFS= read -rs P; printf '%s\n' "$P" | ~/.asdf/shims/mix treehouse.catalog_ceremony verify-backup \
   --backup "$BACKUP" --ceremony "$CEREMONY"; unset P
@@ -200,7 +208,7 @@ ceremony directory.
 
 If the drill should also restore a working signer, add `--restore-to NEWSIGNER` (same path rules
 as `SIGNER`, `O_EXCL`, mode 0600; the written seed is read back and its public key re-derived,
-`restore_check_failed` otherwise). Do that only in the loss procedure in section 8; a drill should
+`restore_check_failed` otherwise, and the file just made is removed, as it is if `restore.json` cannot be written, `ceremony_write_failed`). `NEWSIGNER` must not be in the backup file's directory tree (`restore_beside_backup`, checked before the passphrase is read). Do that only in the loss procedure in section 8; a drill should
 end by deleting any restored seed.
 
 ### 5.4 Binding payload (custodian)
@@ -223,10 +231,11 @@ is the base64 of 32 raw bytes. It refuses a log that does not verify (`invalid_s
 service key and Space root being equal (`binding_key_reuse`), and an invalid key, service id, record
 or origin (`malformed_binding`). It writes `binding-payload.json`
 (`lattice-catalog-bootstrap-payload-v1`: `record`, `record_encoding`, `canonical_base64`, `sha256`
-of the canonical bytes) and `binding-review.txt`, a plain sheet with every field. Stdout carries
-`binding_payload_sha256`, `payload` and `review_sheet` (paths).
+of the canonical bytes) and `binding-review.txt`, a plain sheet with every field. If the review sheet cannot be written the payload just written is removed (`ceremony_write_failed`).
+Stdout carries `binding_payload_sha256`, `payload` and `review_sheet` (paths).
 
-Two people read `binding-review.txt` field by field against the intended Space and relay before
+`verify-binding` and `report` refuse a payload without its `binding-review.txt` beside it
+(`ceremony_artifact_missing`). Two people read `binding-review.txt` field by field against the intended Space and relay before
 anyone signs it.
 
 **Signing step: the product path (row 232).** The Space root must author this record as the Space
