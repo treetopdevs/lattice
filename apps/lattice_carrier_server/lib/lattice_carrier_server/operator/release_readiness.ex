@@ -90,7 +90,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
 
     with {:ok, served} <- served_logs(deployment.instances),
          {:ok, child_log} <- staged_child(child),
-         [admitted] <- Enum.filter(Runtime.instance_views(), &(&1.pub == pub)) do
+         # Service keys may be shared across routes, so the admitted route is
+         # the one serving the staged child log, and it must carry the bound key.
+         [%{name: name}] <- Enum.filter(deployment.instances, &(&1.log_file == child["path"])),
+         [%{pub: ^pub} = admitted] <- Enum.filter(Runtime.instance_views(), &(&1.name == name)) do
       case Enum.filter(served, &(&1.replica == reference["replica"])) do
         [space] ->
           roster = Staging.roster(space)

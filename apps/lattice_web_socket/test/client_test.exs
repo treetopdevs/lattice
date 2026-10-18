@@ -21,6 +21,40 @@ defmodule LatticeWebSocket.ClientTest do
     assert :ok = Task.await(server)
   end
 
+  test "an IPv6 literal hostname connects over inet6 with a bracketed Host header" do
+    # Hosts without an IPv6 loopback cannot run this; there is nothing to assert.
+    case :gen_tcp.listen(0, [
+           :inet6,
+           :binary,
+           active: false,
+           packet: :raw,
+           ip: {0, 0, 0, 0, 0, 0, 0, 1}
+         ]) do
+      {:ok, listener} ->
+        {:ok, port} = :inet.port(listener)
+        parent = self()
+        # The server closes after reading the request, so the linked client exits.
+        Process.flag(:trap_exit, true)
+
+        server =
+          Task.async(fn ->
+            {:ok, socket} = :gen_tcp.accept(listener)
+            {:ok, request} = recv_headers(socket, "")
+            send(parent, {:host, Regex.run(~r/Host:\s*([^\r\n]+)/i, request)})
+            :gen_tcp.close(socket)
+            :gen_tcp.close(listener)
+          end)
+
+        _ = Client.connect(hostname: "::1", port: port, path: "/carrier", connect_timeout: 1_000)
+        assert_receive {:host, [_, host]}, 2_000
+        assert host == "[::1]:#{port}"
+        Task.await(server)
+
+      {:error, _reason} ->
+        :ok
+    end
+  end
+
   test "relay and push refuse an op naming an atom off the wire vocabulary before sending" do
     author = Lattice.Identity.from_seed("author", "client-test-off-list")
     listed = Lattice.Op.new(author, "replica:off-list", [], :command, {:post, ["listed"]})
