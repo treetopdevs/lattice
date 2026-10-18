@@ -25,14 +25,14 @@ defmodule Mix.Tasks.Treehouse.CatalogCeremony do
   """
   use Mix.Task
 
-  alias LatticeCarrierServer.Operator.CatalogCeremony.Cli
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{Atoms, Cli}
 
   @impl Mix.Task
   def run(argv) do
     Mix.Task.run("compile")
     Mix.Task.run("app.config")
     {:ok, _} = Application.ensure_all_started(:crypto)
-    LatticeCarrierServer.Operator.CatalogCeremony.Atoms.load()
+    Atoms.load()
 
     case Cli.run(argv) do
       :ok -> :ok
