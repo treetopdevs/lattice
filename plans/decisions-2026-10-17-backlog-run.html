@@ -28,7 +28,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <body>
 <main>
 <h1>Backlog Run Decisions</h1>
-<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-11 landed as PRs #133-#144. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
+<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-15 landed as PRs #133-#149. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
 
 <h2 id="slices">Slices</h2>
 <div class="table-wrap">
@@ -46,6 +46,10 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <tr><td>9</td><td>Row 201: the ordinary build cannot carry the enrollment panel (both flags required, Vite guard, frontend dist classifier, CI contract pins). Row 223 parked on plan 223 STOP 1</td><td><code>claude/confident-satoshi-050db5</code> / <a href="https://github.com/treetopdevs/lattice/pull/142">#142</a> (stacked on #141, then retargeted to main)</td><td>Merged after exact tip <code>178ac7988</code> run 39127422395 went green; CodeRabbit's three findings were fixed after the retarget. Codex Sol xhigh: three P2 fixed, confirm pass clean. Independent rule 3 review: two fixed, one rejected.</td></tr>
 <tr><td>11</td><td>Row 202: packaged enrollment waits match the posted item, not the draft, plus an AX match for the offline post. Township vue 3.5.44 (Dependabot #36). glib #13 analysed and dismissed</td><td><code>claude/backlog-slice-11-5f4ecd</code> / <a href="https://github.com/treetopdevs/lattice/pull/143">#143</a></td><td>Merged after exact tip <code>486dbe42a</code> run 39142683774 went green on attempt 2; attempt 1 failed only the emulator, when the Play fonts provider died. CodeRabbit's draft check caught a real bug, a WebKit textarea exposing its text outside the field, which was fixed. The Kotlin drain race got a test fix. Codex Sol xhigh and workflow reviewers: no findings.</td></tr>
 <tr><td>10</td><td>Row 223: R11b <code>ready</code> phase on the D-22 read-only operator probe realm; IPv6 carrier client fix; row 226 filed</td><td><code>claude/backlog-slice-10-57faa7</code> / <a href="https://github.com/treetopdevs/lattice/pull/144">#144</a></td><td>Merged after exact tip <code>828ef9082</code> run 39149941655 went green on attempt 2 (the emulator was rerun). Two follow-ups landed first: CodeRabbit found a test race on grant deletion, fixed with a shorten-only grant TTL setting, and strict Credo readability issues were fixed. Claude security review: four fixed (including a pull that served no ops), one rejected to row 226. Codex Sol xhigh: two medium fixed. Confirm pass clean.</td></tr>
+<tr><td>12</td><td>Row 228 CI flakes: stress restart budget, Android emoji2 initializer removed plus a guarded relaunch, bounded Hex/Rebar and system-image retries; rows 229-231 filed</td><td><code>claude/backlog-slice-12-50aa3f</code> / <a href="https://github.com/treetopdevs/lattice/pull/146">#146</a></td><td>Merged as <code>21615696b</code> after exact tip <code>4aff47a37</code> run 39165208250 went green on every job, the first hosted run of the Android, retry and enrollment changes. Codex Sol xhigh: one fixed, then a confirm-pass pipefail finding fixed. Independent rule 3 review: one fixed, three rejected.</td></tr>
+<tr><td>13</td><td>Row 224 ceremony prep: <code>mix treehouse.catalog_ceremony</code> (generate, import, backup, verify-backup, binding-payload, verify-binding, report, dry-run) and the custody runbook; row 232 filed</td><td><code>claude/backlog-slice-13-7286ff</code> / <a href="https://github.com/treetopdevs/lattice/pull/147">#147</a></td><td>Merged after exact tip <code>e6cded70f</code> run 39171954057 went green. Six later Codex bot findings were fixed first: a hard-linked seed, binding-record validation, backup cleanup, generation-host check, read-path policy and a profile recheck. Codex Sol xhigh: five fixed, and a confirm pass found two more path races, both fixed, which ended that class at round 2. Claude custody review: five fixed.</td></tr>
+<tr><td>14</td><td>Row 232: bounded-profile Space creation, root continuation pin, root review-and-sign of <code>catalog_bootstrap_v1</code>, Elixir/TS helpers in byte parity; rows 233-234 filed</td><td><code>claude/elated-haibt-3217de</code> / <a href="https://github.com/treetopdevs/lattice/pull/148">#148</a> (stacked on #147)</td><td>Merged as <code>d141278fb</code> by the shared account at 00:35 UTC, while CI on the final docs-only commit <code>fb5b892b6</code> was still running; the code commit <code>7f303cbce</code> under it was green (run 39180287563). Three Codex bot rounds; the third round filed row 235 under rule 3 (D-32). Codex Sol xhigh: four fixed. Claude authority/custody review: five fixed. Confirm pass: three fixed, which closes both classes under rule 3.</td></tr>
+<tr><td>15</td><td>Rows 234 (D-31) and 233: the ordinary app exports the verified Space frame set (native Downloads writer) and the ceremony accepts it; neutral pending reason; row 236 filed</td><td><code>claude/backlog-slice-15-22bd14</code> / <a href="https://github.com/treetopdevs/lattice/pull/149">#149</a></td><td>Merged as <code>b779b11cc</code> by the shared account after exact tip <code>187bebc41</code> run 39184895958 went green. Codex bot rounds: canonical list and mapset ordering fixed, then a third round filed as row 237 (rule 3), and the export gated on the pin. A CodeRabbit finding moved the native writer off the main thread. Codex Sol xhigh: one P1 and two P2 fixed. Claude custody review: two fixed, one rejected. Confirm pass clean.</td></tr>
 </tbody>
 </table>
 </div>
@@ -310,6 +314,66 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>When</dt><dd>2026-10-18, after slice 10 (#144) merged</dd>
 <dt>Rows</dt><dd>Row 227, the witness drain ordering question from D-25, is filed and closed as verified: production already waits on the drain (Codex review of this PR). Row 228 collects the CI flakes that cost reruns in this run. Rows 201 and 223 are set DONE now that their PRs merged on green exact tips.</dd>
 <dt>State</dt><dd>R11b's <code>ready</code> phase landed in #144. Row 224 (<code>catalogued</code> and <code>listed</code>), and therefore R11c and R13, waits on the operator's catalog signer, the root's signed bootstrap binding and a verified signer backup. The next step is the user's choice: CI reliability plus ceremony prep, or a pause.</dd>
+</dl>
+</article>
+
+<article id="d28">
+<h2><span>D-28</span>Slice 12 decisions (row 228)</h2>
+<dl>
+<dt>Stress</dt><dd>The stress test's restart timeout was the <code>LatticeCore.Supervisor</code> intensity (3 restarts in 5 s) being exceeded by an Audit, LiveOps and DemoHub crash cascade. The <code>lattice_core</code> application then shut down, so a longer wait could never pass. Each test now restarts the app for a fresh budget, production intensity is unchanged, and the cascade is row 231.</dd>
+<dt>Android</dt><dd>The logcat names AppCompat's emoji2 initializer depending on the dying Play fonts provider. The manifest removes <code>EmojiCompatInitializer</code>, because the UI is a WebView. The smoke relaunches once, only on that exact kill line for the launched pid, and never after a crash marker.</dd>
+<dt>Network</dt><dd><code>setup-beam</code> no longer installs Hex and Rebar itself. A separate step retries them up to 4 times, and the emulator image install is retried up to 4 times. Test steps are never retried. The artifact upload error is not a setup step, and the enrollment contract forbids conditionals there, so it is row 230.</dd>
+<dt>Enrollment</dt><dd>The hint timeout is narrowed, not root-caused. The harness now waits until the joiner's post is durable on the relay before step 11 and dumps relay status on failure. It is not quarantined, because it is the only packaged proof of hint convergence: row 229.</dd>
+<dt>Pins</dt><dd>Two digest pins moved, with a dated row 228 re-pin note; every pin stayed exact.</dd>
+</dl>
+</article>
+
+<article id="d29">
+<h2><span>D-29</span>Slice 13 decisions, and the row 232 gap behind the ceremony</h2>
+<dl>
+<dt>Crypto</dt><dd>The backup uses PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM, with a sorted-key header as AAD. Passphrases are printable ASCII only, so an independent Python recipe, which needs nothing from the repo, can recover the key.</dd>
+<dt>Custody</dt><dd>The tool refuses a terminal stdin for passphrases, because <code>System.cmd</code> <code>stty</code> has no controlling tty; the runbook reads them silently in the shell. It canonicalizes paths once, validates every ancestor's ownership, creates files raw <code>O_EXCL</code>, refuses disposable keys in real mode, never signs in real mode, and requires the restore drill on a second host. Erlang's lack of <code>fchmod</code> and <code>openat</code> is the accepted residual after two rounds.</dd>
+<dt>Gap</dt><dd>The Treehouse app creates legacy-family Spaces without the R04 bounded profile, and it has no command that authors <code>catalog_bootstrap_v1</code>, so the living root cannot sign the binding. The tool refuses such a Space (<code>space_not_bounded_profile</code>). The report records the signer and the verified backup with <code>binding: pending_root_signature</code>. Row 232 owns the fix, which is custody code under <code>src-tauri</code> and needs a rule 3 second review.</dd>
+<dt>Order</dt><dd>The operator can run the signer and backup parts of the ceremony now. The binding part follows row 232.</dd>
+</dl>
+</article>
+
+<article id="d30">
+<h2><span>D-30</span>Slice 14 decisions (row 232)</h2>
+<dl>
+<dt>Family</dt><dd>New Spaces use <code>replica:treehouse:space:&lt;nonce&gt;#authority:bounded-continuation-v1#root:&lt;tag&gt;</code>, with genesis ops for the six preview commands plus <code>catalog_bootstrap_v1</code>, <code>attest_member_key_v1</code> and <code>replace_catalog_v1</code>. Threads stay legacy. Legacy Spaces still load, cannot be migrated in place, and are refused for the pin and the binding.</dd>
+<dt>Pin</dt><dd>The root pins continuation with a later empty-delegation genesis carrying the <code>__continuation__</code> profile. Review and confirmation are separate steps, the workflow signs its own frozen copy, and a second pin is refused.</dd>
+<dt>Binding</dt><dd>The root pastes the ceremony's payload. The app checks it strictly: closed fields, canonical bytes and sha256, space, root and pin match, key separation, and no existing bootstrap. It shows every line for two-person comparison, then re-reviews against current history at signing. The copy claims only that the app refuses a second bootstrap, not the Space.</dd>
+<dt>Rule 3</dt><dd>No authority, canonical, carrier or custody Rust changed (D4 holds). The only Rust change is the replica grammar in <code>preview.rs</code>, pinned by a shared TS/Rust case table. Two reviews ran anyway.</dd>
+<dt>Open</dt><dd>Row 233 is the stale <code>blocker: row 232</code> label in the report. Row 234 is the operator's decision that the binding needs the relay-connected enrollment build, because the ordinary build writes no relay log.</dd>
+</dl>
+</article>
+
+<article id="d31">
+<h2><span>D-31</span>Operator decision: row 234 takes (a), the app exports a verified frame set for the ceremony</h2>
+<dl>
+<dt>When</dt><dd>2026-10-18, decided by the user as operator</dd>
+<dt>Why</dt><dd>Waiting for a relay-connected ordinary build is circular: R13 needs R11c, R11c needs <code>catalogued</code>, and <code>catalogued</code> needs this binding. Signing the real binding in the dev-trace enrollment build would put production evidence on a test variant.</dd>
+<dt>Decision</dt><dd>The ordinary app exports the root's verified Space frame set to a file the operator names. <code>binding-payload</code> and <code>verify-binding</code> accept that file and verify it as strictly as a <code>Log.dump</code>. Slice 15 builds it with row 233's label fix, under two independent reviews.</dd>
+</dl>
+</article>
+
+<article id="d32">
+<h2><span>D-32</span>PR #148: rule 3 stop on three repeating finding classes</h2>
+<dl>
+<dt>When</dt><dd>2026-10-19, after the Codex bot's third review round on #148</dd>
+<dt>Classes</dt><dd>Bootstrap capability selection (grants the right, then not revoked); the continuation-pin exemption in retained history (allow it, then only the recognized shape); and panel review-state clearing (on persist, then on failed revalidation). Each class had two repair rounds.</dd>
+<dt>Decision</dt><dd>No third repair round in these classes. A further finding in any of them is answered, resolved, and filed as one design row. The likely root cause is that <code>Treehouse.Space</code> and <code>treehouse_bounded.ts</code> re-derive authority facts locally instead of asking <code>Lattice.Authority</code> for the verdict, so each review finds another fact the local copy misses.</dd>
+</dl>
+</article>
+
+<article id="d33">
+<h2><span>D-33</span>Ledger 3: the enrollment path now waits only on the operator</h2>
+<dl>
+<dt>When</dt><dd>2026-10-19, after #149 merged</dd>
+<dt>State</dt><dd>Row 224 needs only the operator's own run of <code>mix treehouse.catalog_ceremony</code>: the signer, the backup with its second-host restore, and the root's pin and signed binding through the ordinary app's export. R11c and R13 follow once that run's <code>verification-report.json</code> exists.</dd>
+<dt>Rows</dt><dd>Rows 233 and 234 are set DONE. Open design rows from this stretch: 235 (Space helpers should ask <code>Lattice.Authority</code> instead of re-deriving facts) and 237 (derive the export's canonical form from the signing encoder). Row 236 is the packaged-app proof of the export.</dd>
+<dt>Merges</dt><dd>#146, #148 and #149 were merged from the shared account rather than by the coordinator. For #148, the final docs-only commit's run was still in progress at merge, and it and main both went green afterwards.</dd>
 </dl>
 </article>
 
