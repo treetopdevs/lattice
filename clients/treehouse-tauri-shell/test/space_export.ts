@@ -108,6 +108,29 @@ nested.forEach((f) => {
 });
 assert.ok(JSON.stringify(nested).includes("LEAK"), "precondition: the leak is planted");
 assert.equal(await buildSpaceFramesExport({ ...base, frames: nested }), built, "nested extras are dropped");
+// PR #149 Codex review: a delegation's ops/roles and a mapset are sets; signed bytes canonicalize them, so a
+// reversed or duplicated wire copy still verifies and must export as the BEAM re-encodes it (sorted, unique).
+const permuted = structuredClone(frames) as CarrierOpFrame[];
+let delegations = 0;
+const permute = (t: any): void => {
+  if (!Array.isArray(t)) return;
+  if (t[0] === "delegation") {
+    delegations++;
+    t[1].ops = [...t[1].ops].reverse().concat(t[1].ops.slice(0, 1));
+    t[1].roles = [...t[1].roles].reverse().concat(t[1].roles.slice(0, 1));
+  } else if (t[0] === "mapset") {
+    t[1] = t[1].concat(t[1].slice(0, 1));
+    t[1].forEach(permute);
+  } else if (Array.isArray(t[1])) t[1].forEach(permute);
+};
+permuted.forEach((f) => {
+  permute(f.body);
+  permute(f.cap);
+});
+assert.ok(delegations > 0, "precondition: the vector carries delegations");
+assert.notDeepEqual(permuted, frames, "precondition: sets were permuted");
+for (const f of permuted) assert.ok(await verify(f), "permuted or duplicated set members leave the signed bytes unchanged");
+assert.equal(await buildSpaceFramesExport({ ...base, frames: permuted }), built, "delegation and mapset sets are canonicalized");
 const malformed = structuredClone(frames[0]!) as any;
 malformed.body = ["tuple", [["bogus", 1]]];
 await assert.rejects(

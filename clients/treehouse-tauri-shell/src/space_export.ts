@@ -38,6 +38,10 @@ const bad = (): never => {
 };
 const str = (v: unknown): string => (typeof v === "string" ? v : bad());
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.map(str) : bad());
+const utf8 = new TextEncoder();
+/** Sorted by UTF-8 bytes and unique, as the BEAM re-encodes a delegation's `ops` and `roles` sets. */
+const nameSet = (v: unknown): string[] =>
+  [...new Set(strs(v))].sort((a, b) => compareBytes(utf8.encode(a), utf8.encode(b)));
 
 function delegationCopy(d: CarrierDelegation): CarrierDelegation {
   if (d === null || typeof d !== "object" || typeof d.live !== "boolean") return bad();
@@ -47,8 +51,8 @@ function delegationCopy(d: CarrierDelegation): CarrierDelegation {
     issuer: str(d.issuer),
     audience: str(d.audience),
     parent_id: d.parent_id === null ? null : str(d.parent_id),
-    ops: strs(d.ops),
-    roles: strs(d.roles),
+    ops: nameSet(d.ops),
+    roles: nameSet(d.roles),
     live: d.live,
     sig: str(d.sig),
   };
@@ -82,8 +86,13 @@ export function canonicalCarrierTerm(term: CarrierTerm): CarrierTerm {
       return term.length === 2 && Array.isArray(term[1]) ? [term[0], term[1].map(canonicalCarrierTerm)] : bad();
     case "mapset": {
       if (term.length !== 2 || !Array.isArray(term[1])) return bad();
-      const values = term[1].map(canonicalCarrierTerm);
-      return ["mapset", values.sort((a, b) => compareBytes(canonicalBytesForCarrierTerm(a), canonicalBytesForCarrierTerm(b)))];
+      const keyed = term[1]
+        .map(canonicalCarrierTerm)
+        .map((value) => ({ value, bytes: canonicalBytesForCarrierTerm(value) }))
+        .sort((a, b) => compareBytes(a.bytes, b.bytes));
+      // A set: equal elements collapse, as the BEAM decodes them into one MapSet member.
+      const unique = keyed.filter((x, i) => i === 0 || compareBytes(keyed[i - 1]!.bytes, x.bytes) !== 0);
+      return ["mapset", unique.map((x) => x.value)];
     }
     case "map": {
       if (term.length !== 2 || !Array.isArray(term[1])) return bad();
