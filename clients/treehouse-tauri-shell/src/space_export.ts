@@ -1,5 +1,5 @@
-import { canonicalBytesForCarrierTerm } from "@treetopdevs/lattice-client";
-import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "@treetopdevs/lattice-client";
+import { assertWireVocabularyTerm, canonicalCarrierTerm } from "@treetopdevs/lattice-client";
+import type { CarrierOpFrame, CarrierTerm } from "@treetopdevs/lattice-client";
 
 // Space frames export (v1): a Space's public signed carrier frames, for the catalog ceremony operator.
 // Not a backup: it carries no keys, outbox, acknowledgements, routes, drafts or state, only the frames.
@@ -28,88 +28,27 @@ const sortedJson = (value: unknown): string =>
       : v,
   );
 
-const compareBytes = (a: Uint8Array, b: Uint8Array): number => {
-  const n = Math.min(a.length, b.length);
-  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i]! < b[i]! ? -1 : 1;
-  return a.length - b.length;
-};
 const bad = (): never => {
   throw new Error("export_invalid_frame");
 };
 const str = (v: unknown): string => (typeof v === "string" ? v : bad());
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.map(str) : bad());
-const utf8 = new TextEncoder();
-/** Sorted by UTF-8 bytes and unique, as the BEAM re-encodes a delegation's `ops` and `roles` sets. */
-const nameSet = (v: unknown): string[] =>
-  [...new Set(strs(v))].sort((a, b) => compareBytes(utf8.encode(a), utf8.encode(b)));
-
-function delegationCopy(d: CarrierDelegation): CarrierDelegation {
-  if (d === null || typeof d !== "object" || typeof d.live !== "boolean") return bad();
-  const out: CarrierDelegation = {
-    id: str(d.id),
-    replica: str(d.replica),
-    issuer: str(d.issuer),
-    audience: str(d.audience),
-    parent_id: d.parent_id === null ? null : str(d.parent_id),
-    ops: nameSet(d.ops),
-    roles: nameSet(d.roles),
-    live: d.live,
-    sig: str(d.sig),
-  };
-  if (d.expires_epoch !== undefined && d.expires_epoch !== null) {
-    if (typeof d.expires_epoch !== "number") return bad();
-    out.expires_epoch = d.expires_epoch;
-  }
-  return out;
-}
 
 /**
- * Rebuild a term arm by arm, so nothing but the closed grammar survives, and put map pairs and mapset elements in
- * the canonical order the BEAM encoder emits (Lattice.Carrier.Wire.encode_op): by canonical key bytes. The app's
- * own pin is authored in insertion order; the export must match the BEAM re-encoding byte for byte.
+ * The term exactly as the BEAM re-encodes it (Lattice.Carrier.Wire.encode_op): the library decodes the term's own
+ * canonical bytes, so map and mapset order, set members and integer spelling all come from those bytes and nothing
+ * but the closed grammar survives. Any term the codec refuses, or a name outside the closed wire vocabulary (which
+ * Lattice.Carrier.Wire.decode_op refuses), is an invalid frame.
  */
-export function canonicalCarrierTerm(term: CarrierTerm): CarrierTerm {
-  if (!Array.isArray(term)) return bad();
-  switch (term[0]) {
-    case "nil":
-      return term.length === 1 ? ["nil"] : bad();
-    case "bool":
-      return term.length === 2 && typeof term[1] === "boolean" ? ["bool", term[1]] : bad();
-    case "int":
-      return term.length === 2 && (typeof term[1] === "number" || typeof term[1] === "string") ? ["int", term[1]] : bad();
-    case "bin":
-      return term.length === 2 ? ["bin", str(term[1])] : bad();
-    case "atom":
-      return term.length === 2 ? ["atom", str(term[1])] : bad();
-    case "list":
-    case "tuple":
-      return term.length === 2 && Array.isArray(term[1]) ? [term[0], term[1].map(canonicalCarrierTerm)] : bad();
-    case "mapset": {
-      if (term.length !== 2 || !Array.isArray(term[1])) return bad();
-      const keyed = term[1]
-        .map(canonicalCarrierTerm)
-        .map((value) => ({ value, bytes: canonicalBytesForCarrierTerm(value) }))
-        .sort((a, b) => compareBytes(a.bytes, b.bytes));
-      // A set: equal elements collapse, as the BEAM decodes them into one MapSet member.
-      const unique = keyed.filter((x, i) => i === 0 || compareBytes(keyed[i - 1]!.bytes, x.bytes) !== 0);
-      return ["mapset", unique.map((x) => x.value)];
-    }
-    case "map": {
-      if (term.length !== 2 || !Array.isArray(term[1])) return bad();
-      const pairs = term[1].map((pair) => {
-        if (!Array.isArray(pair) || pair.length !== 2) return bad();
-        return [canonicalCarrierTerm(pair[0]), canonicalCarrierTerm(pair[1])] as [CarrierTerm, CarrierTerm];
-      });
-      const keyed = pairs.map((p) => [canonicalBytesForCarrierTerm(p[0]), p] as const);
-      keyed.sort((a, b) => compareBytes(a[0], b[0]));
-      return ["map", keyed.map(([, p]) => p)];
-    }
-    case "delegation":
-      return term.length === 2 ? ["delegation", delegationCopy(term[1])] : bad();
-    default:
-      return bad();
+const beamTerm = (term: CarrierTerm): CarrierTerm => {
+  try {
+    const canonical = canonicalCarrierTerm(term);
+    assertWireVocabularyTerm(canonical);
+    return canonical;
+  } catch {
+    return bad();
   }
-}
+};
 
 export async function buildSpaceFramesExport(input: {
   space: string;
@@ -129,7 +68,7 @@ export async function buildSpaceFramesExport(input: {
     ids.add(frame.id);
     // A malformed frame makes the verifier throw; either way the frame is refused.
     if (!(await verify(frame).catch(() => false))) throw new Error("export_invalid_frame");
-    // Rebuilt field by field, terms arm by arm: a retained object may carry nothing else into the file, at any depth.
+    // Rebuilt field by field, terms from their canonical bytes: a retained object may carry nothing else into the file, at any depth.
     copies.push({
       v: frame.v,
       id: frame.id,
@@ -137,8 +76,8 @@ export async function buildSpaceFramesExport(input: {
       author: frame.author,
       deps: strs(frame.deps),
       kind: frame.kind,
-      body: canonicalCarrierTerm(frame.body),
-      cap: canonicalCarrierTerm(frame.cap),
+      body: beamTerm(frame.body),
+      cap: beamTerm(frame.cap),
       sig: frame.sig,
     });
   }

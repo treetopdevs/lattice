@@ -222,6 +222,237 @@ export async function authorCarrierDelegation(input) {
 export function canonicalBytesForCarrierTerm(term) {
     return encodeCarrierTerm(term);
 }
+/**
+ * Row 237: the carrier JSON term `Lattice.Carrier.Wire` would emit for the same value, derived
+ * by decoding this module's own signing bytes. Map pair, mapset element, and delegation
+ * op/role order plus the int representation therefore cannot drift from the encoder.
+ */
+export function canonicalCarrierTerm(term) {
+    return carrierTermFromCanonicalBytes(canonicalBytesForCarrierTerm(term));
+}
+/**
+ * Strictly decode one `lattice-cbor-v1` carrier term: shortest heads, no indefinite lengths,
+ * only the four Lattice tags, strictly ascending map keys and mapset elements, and no trailing
+ * bytes. Grammar only; the wire vocabulary stays with `assertWireVocabularyTerm`.
+ */
+export function carrierTermFromCanonicalBytes(input) {
+    const reader = { input, offset: 0 };
+    const term = decodeCarrierTerm(reader, maxTermDepth);
+    if (reader.offset !== input.length)
+        throw new Error("trailing bytes after canonical term");
+    return term;
+}
+// Mirrors `Lattice.Carrier.Wire`'s @max_decode_depth container budget.
+const maxTermDepth = 64;
+const maxJsonSafeInteger = BigInt(Number.MAX_SAFE_INTEGER);
+const strictUtf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+function decodeCarrierTerm(reader, depth) {
+    const start = reader.offset;
+    const initial = readByte(reader);
+    switch (initial) {
+        case 0xf4:
+            return ["bool", false];
+        case 0xf5:
+            return ["bool", true];
+        case 0xf6:
+            return ["nil"];
+    }
+    reader.offset = start;
+    const [majorType, argument] = readHead(reader);
+    switch (majorType) {
+        case 0:
+            return ["int", carrierInt(argument)];
+        case 2:
+            return ["bin", bytesToBase64(readSlice(reader, argument))];
+        case 4:
+            return ["list", decodeTermArray(reader, argument, containerDepth(depth))];
+        case 5:
+            return ["map", decodeTermMap(reader, argument, containerDepth(depth))];
+        case 6:
+            return decodeTagged(reader, argument, depth);
+        default:
+            throw new Error(`unsupported canonical major type: ${majorType}`);
+    }
+}
+function decodeTagged(reader, tag, depth) {
+    switch (tag) {
+        case BigInt(atomTag):
+            return ["atom", readUtf8Bytes(reader)];
+        case BigInt(tupleTag):
+            return ["tuple", decodeTermArray(reader, readArrayHead(reader), containerDepth(depth))];
+        case BigInt(mapsetTag): {
+            const length = readArrayHead(reader);
+            // Charged before the elements, as Wire charges a mapset (even an empty one) one level.
+            const elementDepth = containerDepth(depth);
+            const elements = [];
+            let previous = null;
+            for (let i = 0n; i < length; i++) {
+                const start = reader.offset;
+                elements.push(decodeCarrierTerm(reader, elementDepth));
+                const encoded = reader.input.subarray(start, reader.offset);
+                if (previous !== null && compareBytes(previous, encoded) >= 0) {
+                    throw new Error("non-canonical mapset order");
+                }
+                previous = encoded;
+            }
+            return ["mapset", elements];
+        }
+        case BigInt(delegationTermTag):
+            return ["delegation", decodeDelegationTerm(reader)];
+        default:
+            throw new Error(`unsupported canonical tag: ${tag}`);
+    }
+}
+function decodeDelegationTerm(reader) {
+    const length = readArrayHead(reader);
+    if (length !== 9n && length !== 10n)
+        throw new Error("malformed canonical delegation");
+    const id = readUtf8Bytes(reader);
+    const replica = readUtf8Bytes(reader);
+    const issuer = bytesToBase64(readFixedBytes(reader, 32));
+    const audience = bytesToBase64(readFixedBytes(reader, 32));
+    const parentId = readOptionalUtf8Bytes(reader);
+    const ops = readAtomNames(reader);
+    const roles = readAtomNames(reader);
+    const live = readBoolean(reader);
+    const sig = bytesToBase64(readFixedBytes(reader, 64));
+    const delegation = {
+        id,
+        replica,
+        issuer,
+        audience,
+        parent_id: parentId,
+        ops,
+        roles,
+        live,
+        sig,
+    };
+    // A lease epoch above 2^53-1 is refused here although Wire admits it up to 2^64-1: the term
+    // carries it as a JSON number, which cannot hold it exactly. Deliberate fail-closed bound.
+    if (length === 10n) {
+        const [majorType, epoch] = readHead(reader);
+        if (majorType !== 0 || epoch > maxJsonSafeInteger) {
+            throw new Error("unsupported canonical delegation lease");
+        }
+        delegation.expires_epoch = Number(epoch);
+    }
+    return delegation;
+}
+function decodeTermArray(reader, length, depth) {
+    const elements = [];
+    for (let i = 0n; i < length; i++)
+        elements.push(decodeCarrierTerm(reader, depth));
+    return elements;
+}
+function decodeTermMap(reader, length, depth) {
+    const pairs = [];
+    let previousKey = null;
+    for (let i = 0n; i < length; i++) {
+        const start = reader.offset;
+        const key = decodeCarrierTerm(reader, depth);
+        const encodedKey = reader.input.subarray(start, reader.offset);
+        if (previousKey !== null && compareBytes(previousKey, encodedKey) >= 0) {
+            throw new Error("non-canonical map key order");
+        }
+        previousKey = encodedKey;
+        pairs.push([key, decodeCarrierTerm(reader, depth)]);
+    }
+    return pairs;
+}
+/** Delegation op/role names: strictly ascending in the encoder's `uniqueSorted` order. */
+function readAtomNames(reader) {
+    const length = readArrayHead(reader);
+    const names = [];
+    for (let i = 0n; i < length; i++) {
+        const [majorType, tag] = readHead(reader);
+        if (majorType !== 6 || tag !== BigInt(atomTag))
+            throw new Error("malformed canonical atom");
+        const name = readUtf8Bytes(reader);
+        const previous = names[names.length - 1];
+        if (previous !== undefined && !(previous < name)) {
+            throw new Error("non-canonical delegation name order");
+        }
+        names.push(name);
+    }
+    return names;
+}
+function readOptionalUtf8Bytes(reader) {
+    if (peekByte(reader) !== 0xf6)
+        return readUtf8Bytes(reader);
+    reader.offset++;
+    return null;
+}
+function readBoolean(reader) {
+    const value = readByte(reader);
+    if (value === 0xf5)
+        return true;
+    if (value === 0xf4)
+        return false;
+    throw new Error("malformed canonical boolean");
+}
+function readArrayHead(reader) {
+    const [majorType, length] = readHead(reader);
+    if (majorType !== 4)
+        throw new Error("expected canonical array");
+    return length;
+}
+function readFixedBytes(reader, length) {
+    const [majorType, size] = readHead(reader);
+    if (majorType !== 2 || size !== BigInt(length))
+        throw new Error("malformed canonical bytes");
+    return readSlice(reader, size);
+}
+function readUtf8Bytes(reader) {
+    const [majorType, size] = readHead(reader);
+    if (majorType !== 2)
+        throw new Error("expected canonical byte string");
+    return strictUtf8.decode(readSlice(reader, size));
+}
+/** One shortest-form CBOR head; additional info 28-31 (incl. indefinite) is refused. */
+function readHead(reader) {
+    const initial = readByte(reader);
+    const majorType = initial >> 5;
+    const info = initial & 0x1f;
+    if (info < 24)
+        return [majorType, BigInt(info)];
+    const width = info === 24 ? 1 : info === 25 ? 2 : info === 26 ? 4 : info === 27 ? 8 : 0;
+    if (width === 0)
+        throw new Error("unsupported canonical head");
+    let value = 0n;
+    for (let i = 0; i < width; i++)
+        value = (value << 8n) | BigInt(readByte(reader));
+    const floor = info === 24 ? 24n : 1n << BigInt(8 * (width / 2));
+    if (value < floor)
+        throw new Error("non-shortest canonical head");
+    return [majorType, value];
+}
+function carrierInt(value) {
+    return value <= maxJsonSafeInteger ? Number(value) : value.toString();
+}
+function containerDepth(depth) {
+    if (depth <= 0)
+        throw new Error("canonical term too deep");
+    return depth - 1;
+}
+function readSlice(reader, length) {
+    if (length > BigInt(reader.input.length - reader.offset)) {
+        throw new Error("truncated canonical term");
+    }
+    const start = reader.offset;
+    reader.offset += Number(length);
+    return reader.input.subarray(start, reader.offset);
+}
+function peekByte(reader) {
+    const value = reader.input[reader.offset];
+    if (value === undefined)
+        throw new Error("truncated canonical term");
+    return value;
+}
+function readByte(reader) {
+    const value = peekByte(reader);
+    reader.offset++;
+    return value;
+}
 function encodeCarrierTerm(term) {
     const [tag] = term;
     switch (tag) {

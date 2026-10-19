@@ -18,6 +18,21 @@ export declare function resolveContinuationProfileFromFrames(input: {
     replica: string;
     frames: readonly unknown[];
 }): Promise<ContinuationProfileObservation>;
+export type ContinuationPinsObservation = {
+    ok: true;
+    pins: {
+        opId: string;
+        profile: ContinuationProfile;
+    }[];
+} | {
+    ok: false;
+    reason: string;
+};
+/** The judge's root-authenticated pins of a complete store snapshot, in canonical order; no root means none. */
+export declare function resolveContinuationPinsFromFrames(input: {
+    replica: string;
+    frames: readonly unknown[];
+}): Promise<ContinuationPinsObservation>;
 /** Internal application predicate over authenticated causal semantic ops; this does not authenticate input. */
 export declare function continuationProfileBindingMatches(replica: string, causalOps: readonly Op[], expectedRoot: string, expectedPin: string, expectedProfileId: string): boolean;
 /** One honored role acquisition, in processing (canonical) order. */

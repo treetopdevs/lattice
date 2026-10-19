@@ -47,28 +47,9 @@ export async function resolveContinuationProfileFromFrames(
   input: {replica: string; frames: readonly unknown[]},
 ): Promise<ContinuationProfileObservation> {
   try {
-    const {replica, frames} = structuredClone(input);
-    const family = continuationFamily(replica);
-    if (family === "legacy") return {ok: false, reason: "unauthorized_continuation"};
-    if (family === "unsupported") return {ok: false, reason: "unsupported_authority_profile"};
-    const decoded = frames.map(decodeCarrierOpFrame);
-    const ids = new Set(decoded.map((frame) => frame.id));
-    if (ids.size !== decoded.length || decoded.some((frame) => frame.replica !== replica ||
-      frame.deps.some((dep) => !ids.has(dep)))) return {ok: false, reason: "invalid_verified_history"};
-    for (const frame of decoded) {
-      const verified = await verifyCarrierOp(frame, {verify: async (author, bytes, signature) => {
-        const key = canonicalBase64Bytes(author, 32);
-        return key !== null && ed25519.verify(signature, bytes, key, {zip215: false});
-      }});
-      if (!verified.valid) return {ok: false, reason: "invalid_verified_history"};
-    }
-    const ops = carrierOpsToSemanticOps(decoded), byId = index(ops);
-    const order = canonicalOrder(ops, byId);
-    if (order.length !== ops.length) return {ok: false, reason: "invalid_verified_history"};
-    const ordered = order.map((id) => byId.get(id)!);
-    const delegations = validateDelegations(ordered, collectDelegations(ordered), replica);
-    const root = resolveRoot(ordered, delegations);
-    const context = continuationContext(replica, ordered, delegations, root, []);
+    const verified = await verifiedContinuationContext(input);
+    if (!verified.ok) return verified;
+    const {replica, ids, ops, root, context} = verified;
     const pin = continuationPin(context, ids);
     if (pin === undefined || root === null || root.pubkey === null) return {ok: false, reason: "continuation_not_configured"};
     const profileId = continuationProfileId(pin.profile);
@@ -79,6 +60,57 @@ export async function resolveContinuationProfileFromFrames(
   } catch {
     return {ok: false, reason: "invalid_verified_history"};
   }
+}
+
+export type ContinuationPinsObservation =
+  {ok: true; pins: {opId: string; profile: ContinuationProfile}[]} |
+  {ok: false; reason: string};
+
+/** The judge's root-authenticated pins of a complete store snapshot, in canonical order; no root means none. */
+export async function resolveContinuationPinsFromFrames(
+  input: {replica: string; frames: readonly unknown[]},
+): Promise<ContinuationPinsObservation> {
+  try {
+    const verified = await verifiedContinuationContext(input);
+    if (!verified.ok) return verified;
+    return {ok: true, pins: verified.context.pins.map(({opId, profile}) => ({opId, profile}))};
+  } catch {
+    return {ok: false, reason: "invalid_verified_history"};
+  }
+}
+
+/**
+ * Verify a complete frame snapshot and build the continuation context; callers own the try.
+ * A frame whose terms the decoder cannot read (row 212: an integer above 2^53-1) refuses the
+ * whole history, fail-closed, even where BEAM would admit it.
+ */
+async function verifiedContinuationContext(input: {replica: string; frames: readonly unknown[]}): Promise<
+  {ok: true; replica: string; ids: ReadonlySet<string>; ops: Op[]; root: AuthorityRootEvidence | null;
+    context: ContinuationContext} |
+  {ok: false; reason: string}> {
+  const {replica, frames} = structuredClone(input);
+  const family = continuationFamily(replica);
+  if (family === "legacy") return {ok: false, reason: "unauthorized_continuation"};
+  if (family === "unsupported") return {ok: false, reason: "unsupported_authority_profile"};
+  const decoded = frames.map(decodeCarrierOpFrame);
+  const ops = carrierOpsToSemanticOps(decoded), byId = index(ops);
+  const ids = new Set(decoded.map((frame) => frame.id));
+  if (ids.size !== decoded.length || decoded.some((frame) => frame.replica !== replica ||
+    frame.deps.some((dep) => !ids.has(dep)))) return {ok: false, reason: "invalid_verified_history"};
+  for (const frame of decoded) {
+    const verified = await verifyCarrierOp(frame, {verify: async (author, bytes, signature) => {
+      const key = canonicalBase64Bytes(author, 32);
+      return key !== null && ed25519.verify(signature, bytes, key, {zip215: false});
+    }});
+    if (!verified.valid) return {ok: false, reason: "invalid_verified_history"};
+  }
+  const order = canonicalOrder(ops, byId);
+  if (order.length !== ops.length) return {ok: false, reason: "invalid_verified_history"};
+  const ordered = order.map((id) => byId.get(id)!);
+  const delegations = validateDelegations(ordered, collectDelegations(ordered), replica);
+  const root = resolveRoot(ordered, delegations);
+  const context = continuationContext(replica, ordered, delegations, root, []);
+  return {ok: true, replica, ids, ops, root, context};
 }
 
 /** Internal application predicate over authenticated causal semantic ops; this does not authenticate input. */

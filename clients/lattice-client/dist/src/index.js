@@ -17,7 +17,7 @@ export * from "./capability";
 export * from "./consent";
 export * from "./policy";
 // Keep the unauthenticating application predicate internal to the module graph.
-export { resolveContinuationProfileFromFrames, analyzeAuthority, continuationFamily, deriveContinuationReview, deriveWitnessedSuccessionReview, assembleWitnessedSuccessionArtifact, exportWitnessedSuccessionArtifactJson, witnessedRecoveryPolicyId, verifyWitnessedSuccessionCertificate, witnessedBeaconHorizon, } from "./authority";
+export { resolveContinuationProfileFromFrames, resolveContinuationPinsFromFrames, analyzeAuthority, continuationFamily, deriveContinuationReview, deriveWitnessedSuccessionReview, assembleWitnessedSuccessionArtifact, exportWitnessedSuccessionArtifactJson, witnessedRecoveryPolicyId, verifyWitnessedSuccessionCertificate, witnessedBeaconHorizon, } from "./authority";
 export * from "./crdt/reducers";
 export * from "./materialize";
 export * from "./sync";
