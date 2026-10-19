@@ -360,7 +360,7 @@ contract; they are not rule 3.
   socket; staging refusals for wrong realm, wrong pub, missing or duplicate route, a `trusted_peers`
   realm equal to the service realm, an unbound Space instance and unreviewed relay realms; the probe
   over the Space and child route paths, with a wrong-replica negative; activation refuses a realm
-  edited after staging; members' `trusted_peers` unchanged by the Space migration.
+  edited after staging; migrated `trusted_peers` = root plus current roster.
 - PR 3: `python3 apps/lattice_carrier_server/test/operator/mutation_protocol_test.py` and the parity
   table on both sides (each phase, missing or extra `catalog` artifact, head not equal to artifact);
   owner refuses a plan-supplied store path, a store collision, and a `journal` plan writing either
