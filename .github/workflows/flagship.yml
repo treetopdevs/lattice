@@ -843,6 +843,13 @@ jobs:
           MIX_ENV: test
         run: mix run scripts/treehouse_verify_preview.exs
 
+      - name: Export Space frames from the packaged app and verify with the ceremony reader
+        working-directory: clients/treehouse-tauri-shell
+        env:
+          TREEHOUSE_EVIDENCE_DIR: ${{ runner.temp }}/treehouse-preview/space-export
+          MIX_ENV: test
+        run: npm run packaged:export
+
       - name: Upload public Treehouse preview evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

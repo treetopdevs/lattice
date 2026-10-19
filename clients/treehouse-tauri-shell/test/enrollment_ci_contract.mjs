@@ -55,6 +55,17 @@ import { fileURLToPath } from "node:url";
 // - The enrollment job needed no pin change: its setup-beam checks (versions, order, no continue-on-error, no
 //   masking, exactly one if) all still hold with the extra step in place.
 
+// Re-pinned for row 236 on 2026-10-19 (packaged Space frames export). Every pin below stayed exact; none was
+// deleted or loosened. What moved, and why:
+// - treehouse_packaged_macos gains one step, "Export Space frames from the packaged app and verify with the
+//   ceremony reader", between the frame replay and the evidence upload. It reuses the retained app data and
+//   key from the preview run. Like the classification step it is excluded from TREEHOUSE_PREVIEW_DIGEST and
+//   pinned structurally instead: exactly one such step, its position, run, working directory, exact env, and
+//   no if, continue-on-error or masking, its own keys are exactly name, working-directory, env and run, and the
+//   whole step body equals the pinned text (quoted YAML keys would pass the line checks).
+// - The packaged:export script pin is exactly `tsx --preserve-symlinks test/packaged_export.ts`.
+// - No other step body changed, so PACKAGED_MACOS_DIGEST and TREEHOUSE_PREVIEW_DIGEST are both unchanged.
+
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
 
@@ -63,6 +74,24 @@ const PREVIEW_JOB = "treehouse_packaged_macos";
 const ENROLLMENT_GATE = "needs.changes.outputs.treehouse == 'true'";
 const SHELL_DIR = "clients/treehouse-tauri-shell";
 const CLASSIFY_STEP = "Classify ordinary Treehouse bundle";
+const REPLAY_STEP = "Independently replay exact packaged Treehouse frames";
+const EXPORT_STEP = "Export Space frames from the packaged app and verify with the ceremony reader";
+const PREVIEW_UPLOAD_STEP = "Upload public Treehouse preview evidence";
+const EXPORT_RUN = "npm run packaged:export";
+const EXPORT_STEP_BODY = [
+  "      - name: Export Space frames from the packaged app and verify with the ceremony reader",
+  "        working-directory: clients/treehouse-tauri-shell",
+  "        env:",
+  "          TREEHOUSE_EVIDENCE_DIR: ${{ runner.temp }}/treehouse-preview/space-export",
+  "          MIX_ENV: test",
+  "        run: npm run packaged:export",
+  "",
+].join("\n");
+const EXPORT_ENV = [
+  ["TREEHOUSE_EVIDENCE_DIR", "${{ runner.temp }}/treehouse-preview/space-export"],
+  ["MIX_ENV", "test"],
+];
+const EXPORT_SCRIPT = "tsx --preserve-symlinks test/packaged_export.ts";
 const CLASSIFY_DEV_TRACE_STEP = "Classify Treehouse dev-trace bundle";
 const VARIANT_FLAGS = ["VITE_TREEHOUSE_ENROLLMENT", "VITE_TREEHOUSE_DEV_TRACE"];
 const BUILD_STEP_CALL = "npm run tauri:build:dev-trace";
@@ -74,9 +103,9 @@ const REAL_DATA = "dev.treetop.lattice.treehouse";
 // so the digest now covers the Township smokes and their setup only. It was a7457cfa3c27586c… before the move.
 const PACKAGED_MACOS_DIGEST = "0210087e513128d0a0db75e9fd0225515666183479a1d2424b63b7493f6e497b";
 
-// Digest of every treehouse_packaged_macos step body except the classification step, which is checked
-// structurally below. Added for plan 183 on 2026-10-08 so the moved preview bodies stay pinned exactly as
-// they were while they lived in packaged_macos (the old digest covered them).
+// Digest of every treehouse_packaged_macos step body except the classification and Space export steps, which
+// are checked structurally below. Added for plan 183 on 2026-10-08 so the moved preview bodies stay pinned
+// exactly as they were while they lived in packaged_macos (the old digest covered them).
 const TREEHOUSE_PREVIEW_DIGEST = "dc7e02d0255fb2d32dc53455ca0888df10fca7cec499e38b2e5e1f0cce76c4df";
 
 // Re-pinned for plan 183 on 2026-10-08: android_pilot also needs the changes classifier, whose output its
@@ -163,6 +192,20 @@ function envKeys(step) {
   return keys;
 }
 
+/** Every step env entry as [key, value], in order. */
+function envEntries(step) {
+  const at = step.search(/^ {8}env:\s*$/m);
+  if (at === -1) return [];
+  const entries = [];
+  for (const line of step.slice(at).split("\n").slice(1)) {
+    if (line.trim() === "") continue;
+    if (!line.startsWith(" ".repeat(10))) break;
+    const entry = /^ {10}([^:\s]+):\s*(.*)$/u.exec(line);
+    entries.push(entry ? [entry[1], entry[2].trim()] : [line.trim(), undefined]);
+  }
+  return entries;
+}
+
 function expandRun(run, scripts) {
   return run
     .split("\n")
@@ -186,7 +229,7 @@ function packagedMacosDigest(workflow) {
 function previewDigest(workflow) {
   const job = findJob(workflow, PREVIEW_JOB);
   if (!job) return undefined;
-  const bodies = stepBlocks(job).filter((step) => stepName(step) !== CLASSIFY_STEP);
+  const bodies = stepBlocks(job).filter((step) => ![CLASSIFY_STEP, EXPORT_STEP].includes(stepName(step)));
   return sha(bodies.join(""));
 }
 
@@ -260,7 +303,34 @@ export function check(workflow, pkg, harnessSource) {
         fail("classification must be unconditional and blocking");
     }
     if (previewDigest(workflow) !== TREEHOUSE_PREVIEW_DIGEST)
-      fail(`${PREVIEW_JOB} step bodies other than the classification step changed`);
+      fail(`${PREVIEW_JOB} step bodies other than the classification and export steps changed`);
+
+    // Row 236: the Space export runs once, after the replay and before the upload, on the retained app data.
+    const exports = steps.filter((step) => stepName(step) === EXPORT_STEP);
+    if (exports.length !== 1) fail(`${PREVIEW_JOB} must have exactly one Space export step`);
+    else {
+      const exportAt = names.indexOf(EXPORT_STEP);
+      if (names[exportAt - 1] !== REPLAY_STEP) fail("the Space export must run immediately after the frame replay");
+      if (names[exportAt + 1] !== PREVIEW_UPLOAD_STEP)
+        fail("the Space export must run immediately before the evidence upload");
+      const step = exports[0];
+      const run = scalar(step, "run") ?? "";
+      if (run.trim() !== EXPORT_RUN) fail(`the Space export must run exactly ${EXPORT_RUN}`);
+      if (scalar(step, "working-directory") !== SHELL_DIR) fail("the Space export runs in the Treehouse shell");
+      if (JSON.stringify(envEntries(step)) !== JSON.stringify(EXPORT_ENV))
+        fail("the Space export env must be exactly the evidence dir and MIX_ENV");
+      if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(step) || /\|\||set\s+\+e/u.test(step))
+        fail("the Space export must be unconditional and blocking");
+      // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
+      // such as 'if' or "continue-on-error" pass the line checks above).
+      if (step.replace(/\s+$/u, "\n") !== EXPORT_STEP_BODY) fail("the Space export step body must be exactly the pinned text");
+      // No shell, timeout, id or uses may ride along: the step's own keys are exactly these four.
+      const keys = [...step.matchAll(/^ {6}- ([a-z-]+):|^ {8}([a-z-]+):/gmu)].map((m) => m[1] ?? m[2]);
+      if (JSON.stringify(keys) !== JSON.stringify(["name", "working-directory", "env", "run"]))
+        fail("the Space export step keys must be exactly name, working-directory, env and run");
+    }
+    if (pkg.scripts?.["packaged:export"] !== EXPORT_SCRIPT)
+      fail(`packaged:export must be exactly ${EXPORT_SCRIPT}`);
   }
 
   // android_pilot needs stays exactly the pinned list. The enrollment job is no distribution dependency;
@@ -672,6 +742,68 @@ const mutations = {
     mutate(text, "run: npm run tauri:feed:smoke\n", "run: npm run tauri:feed:smoke -- --skip\n"),
   "preview job step body edited": (text) =>
     mutate(text, "run: npm run packaged\n", "run: npm run packaged -- --skip\n"),
+  "export step removed (row 236)": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === EXPORT_STEP);
+    assert.ok(step, "the export step must exist to remove it");
+    return text.replace(step, "");
+  },
+  "export step duplicated": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === EXPORT_STEP);
+    return text.replace(step, `${step}${step}`);
+  },
+  "export step before the replay": (text) => {
+    const steps = stepBlocks(findJob(text, PREVIEW_JOB));
+    const step = steps.find((s) => stepName(s) === EXPORT_STEP);
+    const replay = steps.find((s) => stepName(s) === REPLAY_STEP);
+    return text.replace(step, "").replace(replay, `${step}${replay}`);
+  },
+  "export step after the upload": (text) => {
+    const steps = stepBlocks(findJob(text, PREVIEW_JOB));
+    const step = steps.find((s) => stepName(s) === EXPORT_STEP);
+    const upload = steps.find((s) => stepName(s) === PREVIEW_UPLOAD_STEP);
+    return text.replace(step, "").replace(upload, `${upload.trimEnd()}\n\n${step}`);
+  },
+  "export run replaced": (text) => mutate(text, "run: npm run packaged:export\n", "run: npm run packaged\n"),
+  "export run masked with || true": (text) =>
+    mutate(text, "run: npm run packaged:export\n", "run: npm run packaged:export || true\n"),
+  "export run behind set +e": (text) =>
+    mutate(text, "run: npm run packaged:export\n", "run: |\n          set +e\n          npm run packaged:export\n"),
+  "export in the wrong directory": (text) =>
+    mutate(
+      text,
+      `      - name: ${EXPORT_STEP}\n        working-directory: clients/treehouse-tauri-shell\n`,
+      `      - name: ${EXPORT_STEP}\n        working-directory: clients/township-tauri-shell\n`,
+    ),
+  "export conditional": (text) =>
+    mutate(text, `      - name: ${EXPORT_STEP}\n`, `      - name: ${EXPORT_STEP}\n        if: success()\n`),
+  "export continue-on-error": (text) =>
+    mutate(text, `      - name: ${EXPORT_STEP}\n`, `      - name: ${EXPORT_STEP}\n        continue-on-error: true\n`),
+  "export step gains a quoted if": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        'if': false\n        run: npm run packaged:export\n"),
+  "export step gains a quoted continue-on-error": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        \"continue-on-error\": true\n        run: npm run packaged:export\n"),
+  "export step gains a quoted shell": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        'shell': 'bash {0}'\n        run: npm run packaged:export\n"),
+  "export step gains a shell": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        shell: bash {0}\n        run: npm run packaged:export\n"),
+  "export step gains a timeout": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        timeout-minutes: 1\n        run: npm run packaged:export\n"),
+  "export evidence dir moved": (text) =>
+    mutate(text, "/treehouse-preview/space-export\n", "/space-export\n"),
+  "export env drops MIX_ENV": (text) =>
+    mutate(text, "/treehouse-preview/space-export\n          MIX_ENV: test\n", "/treehouse-preview/space-export\n"),
+  "export env gains a key": (text) =>
+    mutate(
+      text,
+      "/treehouse-preview/space-export\n          MIX_ENV: test\n",
+      "/treehouse-preview/space-export\n          MIX_ENV: test\n          TREEHOUSE_PACKAGED_KEEP: \"1\"\n",
+    ),
+  "export env reordered": (text) =>
+    mutate(
+      text,
+      "          TREEHOUSE_EVIDENCE_DIR: ${{ runner.temp }}/treehouse-preview/space-export\n          MIX_ENV: test\n",
+      "          MIX_ENV: test\n          TREEHOUSE_EVIDENCE_DIR: ${{ runner.temp }}/treehouse-preview/space-export\n",
+    ),
   "classification step moved back into packaged_macos": (text) => {
     const classify = stepBlocks(findJob(text, PREVIEW_JOB)).find((step) => stepName(step) === CLASSIFY_STEP);
     assert.ok(classify, "the classification step must exist to move it");
@@ -758,6 +890,18 @@ const packageMutations = {
     ...p,
     scripts: { ...p.scripts, "packaged:enrollment": "tsx test/packaged_preview.ts" },
   }),
+  "export script repointed (row 236)": (p) => ({
+    ...p,
+    scripts: { ...p.scripts, "packaged:export": "tsx test/packaged_preview.ts" },
+  }),
+  "export script without --preserve-symlinks": (p) => ({
+    ...p,
+    scripts: { ...p.scripts, "packaged:export": "tsx test/packaged_export.ts" },
+  }),
+  "export script removed": (p) => {
+    const { "packaged:export": _removed, ...scripts } = p.scripts;
+    return { ...p, scripts };
+  },
 };
 
 for (const [name, apply] of Object.entries(packageMutations)) {
