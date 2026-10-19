@@ -141,7 +141,7 @@ handshake, wire or session code changes: both clients treat the realm as an opaq
 - **Migration.** One staging may move every active Treehouse instance's `realm`, `route`,
   `relay_realms` and `identity_file`/`pub` to the bound and reviewed values, with the existing
   identity-file custody checks; nothing else changes (today any active-instance change refuses). A realm change breaks hand-pinned `RelayRoute`s for the old realm
-  (dev-trace fixtures only); members' `trusted_peers` entries are untouched, and a test proves it.
+  (dev-trace fixtures only); each instance's `trusted_peers` moves to `{its root} ∪ current roster`.
 - **Relay (OD-5).** Contract C07 (`lifecycle.md:561`) forbids cataloguing a read-only relay. Staging
   today requires the child's `relay_realms == []` as "a separate reviewed decision". Recommended: the
   staging request carries that reviewed decision, and staging requires each catalogued instance's
@@ -187,9 +187,9 @@ may not be lower than any of them: else `catalog_store_corrupt` (catches tail de
 envelope may lie past it: a **pending** envelope whose `previous` is the committed head. Anything
 further is `catalog_fork`.
 
-**Boot and stage.** Boot treats `catalogued` and `listed` like `ready`, and the BEAM verifies the
-store and receipts (above) before the release gate lets routes start (`catalog_store_corrupt`). Stage may replace any phase
-(history keeps it); the request's `catalog_head` must equal the committed head and no pending
+**Boot and stage.** Boot treats `catalogued`/`listed` like `ready`; whenever any record or history
+line holds a receipt, the BEAM verifies store and receipts before routes start (`catalog_store_corrupt`).
+Stage may replace any phase (history keeps it); the request's `catalog_head` must equal the committed head and no pending
 envelope may exist, else `stale_catalog_head`.
 
 ## Design 4: `catalogued`
