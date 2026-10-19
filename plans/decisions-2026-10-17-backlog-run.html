@@ -368,10 +368,10 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d33">
-<h2><span>D-33</span>Ledger 3: the enrollment path now waits only on the operator</h2>
+<h2><span>D-33</span>Ledger 3: row 224's inputs wait only on the operator; its build follows</h2>
 <dl>
 <dt>When</dt><dd>2026-10-19, after #149 merged</dd>
-<dt>State</dt><dd>Row 224 needs only the operator's own run of <code>mix treehouse.catalog_ceremony</code>: the signer, the backup with its second-host restore, and the root's pin and signed binding through the ordinary app's export. R11c and R13 follow once that run's <code>verification-report.json</code> exists.</dd>
+<dt>State</dt><dd>Row 224's inputs now wait only on the operator's own run of <code>mix treehouse.catalog_ceremony</code>: the signer, the backup with its second-host restore, and the root's pin and signed binding through the ordinary app's export. That run's <code>verification-report.json</code> unblocks building row 224 itself. The <code>catalogued</code> and <code>listed</code> phases still need a plan and an implementation, including the carrier realm (plan 223, parked phases), because the ceremony makes nothing catalogued or listed. R11c and R13 follow only after those phases land.</dd>
 <dt>Rows</dt><dd>Rows 233 and 234 are set DONE. Open design rows from this stretch: 235 (Space helpers should ask <code>Lattice.Authority</code> instead of re-deriving facts) and 237 (derive the export's canonical form from the signing encoder). Row 236 is the packaged-app proof of the export.</dd>
 <dt>Merges</dt><dd>#146, #148 and #149 were merged from the shared account rather than by the coordinator. For #148, the final docs-only commit's run was still in progress at merge, and it and main both went green afterwards.</dd>
 </dl>
