@@ -17,8 +17,7 @@
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
 the inputs in "Depends on" exist. PRs 1 and 3 need no ceremony output or decision and may start now; PR 2 waits on
 OD-1 and OD-5; PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
-Reviewed 2026-10-19 by Codex Sol 6.1 xhigh and an independent Claude custody review; dispositions
-are in the PR description.
+Reviews and their dispositions are in the PR description (rule 4).
 
 ## Header
 
@@ -159,8 +158,7 @@ handshake, wire or session code changes: both clients treat the realm as an opaq
   Treehouse instance (`release_readiness.ex:93` already allows shared keys). It must exist on the
   carrier host before `binding-payload`, because the root signs its public key permanently and R11c
   rotation is not built. Its file and backup become binding-critical; the runbook names their custody.
-- **D1 holds.** The realm is derived from a root-signed record and checked locally at staging,
-  activation and readiness. Nothing is discovered, pushed or activated remotely.
+- **D1 holds.** The realm is checked locally against a root-signed record; nothing is remote.
 
 ## Design 3: journal records and the catalog store
 
@@ -205,9 +203,10 @@ envelope may exist, else `stale_catalog_head`.
   the call. This is the slice 13 sketch; it puts the signer on the network-facing host.
 - (b) `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file)` runs the checks below and
   writes `catalog-unsigned.json` (canonical `C` and `sha256` of `catalog_bytes(C)`). The custodian
-  runs a new ceremony command `sign-catalog`. It keeps a custodian-side record of the last revision
-  and id it signed and refuses anything that is not exactly the next revision with `previous` equal
-  to it; it re-runs `CatalogEntries.observe/2` over Space and Thread exports the custodian holds;
+  runs a new ceremony command `sign-catalog`. It keeps a custodian-side record of the last signed
+  revision, id and envelope bytes (envelope written and fsynced before the record advances). It
+  replays that envelope byte for byte for the same `C`, and refuses anything else that is not the
+  next revision with `previous` equal to it; it re-runs `CatalogEntries.observe/2` over Space and Thread exports the custodian holds;
   it prints a review sheet with the binding id and, per new entry, replica, root, route and
   reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file,
   envelope_file)` re-runs every check, requires `envelope.catalog == C` exactly, and verifies the
@@ -219,7 +218,9 @@ BEAM checks (atom-only refusals; every raise rescued as in `confirm/3`):
    (`:stale_operator_intent`); loaded manifest equals the manifest artifact
    (`:release_manifest_mismatch`); `Health.ready?/0` (`:route_not_ready`).
 2. `CatalogBinding.load/2`; the record's `service.realm`/`service.pub` equal the binding
-   (`:service_binding_mismatch`); every instance's `relay_realms` is the reviewed set (`:route_read_only`).
+   (`:service_binding_mismatch`); every instance's `relay_realms` is the reviewed set (`:route_read_only`);
+   the shared roster check over the served Space log still equals the staged roster and every
+   instance's admissions (`:roster_drift_since_ready`).
 3. The probe over every route, as in Design 2 (`:readiness_pull_failed`). §5 needs the route
    authenticated at publication, and the first catalog introduces the Space route.
 4. Store state (Design 3). If a pending envelope exists, go to step 7 with it (crash recovery).
@@ -262,7 +263,9 @@ bytes to digest and trusts the BEAM for the signature.
    skips delivery but still passes the guard. `courier/3` is not reachable from `web_socket.ex` or
    `relay_realms`, and ignores the instance's relay setting.
 4. `CatalogEntries.observe/2` over the served logs of every entry, with no hypothetical frames,
-   returns `{:ok, _}`: `:catalog_invalid`. This is the client's own acceptance test.
+   returns `{:ok, _}`: `:catalog_invalid`. This is the client's own acceptance test. `listed`, like
+   `ready`, is a dated observation at that frontier: a concurrent op that arrives later and
+   quarantines the reference makes the entry pending again on clients, which judge their own logs.
 
 Owner plan `listed`: same shape as `ready`, `record = dict(old, phase="listed")`, artifacts null;
 refusals as for `ready` with old phase `catalogued`. The record is the local receipt (§5).
@@ -287,9 +290,9 @@ PR 6 gets its own plan (row 245) before any build. That plan must meet these req
    root's own signed bootstrap (row 232). Member first install waits on R13's invitation.
 2. **Evidence page** (OD-4): the whole envelope chain from revision 0 (at most 13 entries per
    envelope, ≤128 KiB each) plus each entry's Thread frames. Signed frames are self-authenticating,
-   so delivery is untrusted. The Space log comes from an authenticated pull on the pinned Space route
-   at its current frontier, never from the page: a withheld revoke or beacon would make a lapsed
-   reference look honored.
+   so delivery is untrusted. The page only bootstraps: before acceptance the client pulls the Space
+   log and every entry's Thread log over the pinned routes at their current frontiers and re-runs
+   observation on those, because a withheld revoke or beacon would make a lapsed op look honored.
 3. **Accept** only `reason == nil` with the accepted catalog id equal to the head being installed:
    `finish` keeps earlier accepted routes on `:trust_pending` (`catalog_trust.ex:264-310`).
 4. **Protected owner.** Commit through the native trusted service of
@@ -364,14 +367,13 @@ contract; they are not rule 3.
   envelope on one `previous` are refused.
 - PR 4: `release_catalog_test.exs` (Linux owner): stage, seal, activate, restart, confirm, catalog;
   one test per refusal leaving journal, history and store unchanged; revision 1 carries revision 0's
-  entries and observes both Threads; crash window (i); under (b) `sign-catalog` refuses a replayed
-  revision 0 and a branch.
+  entries and observes both Threads; crash window (i); a member removed after `ready` refuses;
+  under (b) `sign-catalog` refuses an older revision or a branch and replays a lost envelope exactly.
 - PR 5: `release_listing_test.exs`: listed after courier; a concurrent beacon lapsing the reference
   and a member removal racing the courier both refuse with the log unchanged; a frame id differing
   from the artifact refuses; a network peer cannot reach `courier/3`; crash windows (ii) and (iii);
   `CatalogTrust.evaluate` over the served logs accepts the route with `reason: nil`.
-
-Each PR: hosted `mix test` green on the exact tip (rule 2); evidence tier core unit.
+- Each PR: hosted `mix test` green on the exact tip (rule 2); evidence tier core unit.
 
 ## Done criteria (row 224)
 
@@ -379,8 +381,7 @@ Each PR: hosted `mix test` green on the exact tip (rule 2); evidence tier core u
       on the pilot host from the real ceremony inputs (the build PRs prove it on fixtures only).
 - [ ] Every refusal named in Designs 1-5 has a test, and every BEAM refusal leaves journal, history
       and store unchanged.
-- [ ] Row 224 updated in one line; roadmap R11b moves to DONE only after the operator run. PR 6 and
-      rows 244-245 may land under R11c/R13.
+- [ ] Row 224 updated (one line); R11b is DONE only after the operator run; rows 244-245 may move on.
 
 ## STOP conditions
 
