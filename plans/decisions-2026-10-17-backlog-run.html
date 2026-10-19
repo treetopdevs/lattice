@@ -383,7 +383,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <h2><span>D-34</span>Slice 16 decisions (rows 235 and 237)</h2>
 <dl>
 <dt>Accessors</dt><dd><code>Lattice.Authority.continuation_pins/1</code> and the TS <code>resolveContinuationPinsFromFrames</code> return the judge's own pin list after <code>verified_complete_log?</code>. They share a private prefix with <code>continuation_profile</code> and add no judgment arm, so D4 holds. These two read-only accessors are the only <code>authority.ex</code> and <code>authority.ts</code> changes.</dd>
-<dt>Bootstrap</dt><dd>The candidates are root-authored genesis delegations in canonical order. An ops/admin pre-filter stays, labelled advisory, so only one native signature is spent. The trial op's quarantine verdict from the judge is the only decision.</dd>
+<dt>Bootstrap</dt><dd>The candidates are root-authored genesis delegations in canonical order. An ops/admin pre-filter stays, labelled advisory. It checks capability fields, not delegation signatures, so it reduces trial signatures but does not guarantee only one is spent. The trial op's quarantine verdict from the judge is the only decision.</dd>
 <dt>Export</dt><dd><code>canonicalCarrierTerm = decode ∘ canonicalBytesForCarrierTerm</code> uses a strict decoder for the closed CBOR grammar, so ordering and the int form follow <code>Wire.encode_term</code>. The file format and fixture are unchanged for row 236.</dd>
 <dt>Wide ints</dt><dd>A genuine pin carrying a 64-bit policy entry is resumed by BEAM but refused by TS as <code>invalid_retained_log</code>. Refusing is the safe side, because a non-strict read let a forged pin through. This is the existing row 212 residual.</dd>
 </dl>
