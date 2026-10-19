@@ -158,8 +158,12 @@ async function reviewBinding() {
 }
 async function signBinding() {
   await props.run(async () => {
-    await props.workflow.signCatalogBinding();
-    bindingReview.value = null;
+    try {
+      await props.workflow.signCatalogBinding();
+    } finally {
+      // Success or refusal, the workflow has dropped its pending binding; a stale Sign button must not stay.
+      if (!props.workflow.hasPendingBinding()) bindingReview.value = null;
+    }
     payloadText.value = "";
     note.value =
       "Catalog binding signed. The operation is saved on this device and is not delivered yet.";
