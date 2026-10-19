@@ -46,6 +46,12 @@ class MemoryNative implements PreviewNative {
   async sign(bytes: Uint8Array) {
     return ed25519.sign(bytes, this.seed!);
   }
+  exported = new Map<string, string>();
+  async exportSpaceFrames(fileName: string, contents: string) {
+    if (this.exported.has(fileName)) throw new Error("export_exists");
+    this.exported.set(fileName, contents);
+    return `/downloads/${fileName}`;
+  }
 }
 const fresh = async (n: MemoryNative) => {
   const w = new TreehouseWorkflow(n);
@@ -167,6 +173,36 @@ const reopened = await fresh(native);
 assert.equal(reopened.continuation().pinned, true, "a pinned Space reloads through verifyProfile");
 assert.throws(() => reopened.reviewContinuation({ nominee, witnesses: witnesses.join("\n") }), /continuation_already_pinned/);
 await unchanged(native, () => reopened.pinContinuation(review), /continuation_already_pinned/);
+{
+  // Codex row 234 /1: the app-authored pin keeps insertion order in its map pairs; the export must carry the
+  // canonical (BEAM Wire.encode_op) order so the ceremony's re-encode check accepts it.
+  type Term = import("@treetopdevs/lattice-client").CarrierTerm;
+  const cmp = (a: Uint8Array, b: Uint8Array) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+  const ordered = (t: Term): boolean => {
+    const [tag, v] = t as [string, unknown];
+    if (tag === "map")
+      return (
+        (v as [Term, Term][]).every(([k, x]) => ordered(k) && ordered(x)) &&
+        (v as [Term, Term][]).every(
+          (p, i, a) => i === 0 || cmp(canonicalBytesForCarrierTerm(a[i - 1]![0]), canonicalBytesForCarrierTerm(p[0])) < 0,
+        )
+      );
+    if (tag === "mapset")
+      return (
+        (v as Term[]).every(ordered) &&
+        (v as Term[]).every((x, i, a) => i === 0 || cmp(canonicalBytesForCarrierTerm(a[i - 1]!), canonicalBytesForCarrierTerm(x)) < 0)
+      );
+    return tag === "list" || tag === "tuple" ? (v as Term[]).every(ordered) : true;
+  };
+  assert.ok(
+    pinned.frames.some((f) => !ordered(f.body) || !ordered(f.cap)),
+    "precondition: the stored pin frames are in insertion order, not canonical order",
+  );
+  await app.exportSpaceFrames("pinned.json");
+  const exportedFrames = JSON.parse(native.exported.get("pinned.json")!).frames as { id: string; body: Term; cap: Term }[];
+  assert.ok(exportedFrames.some((f) => f.id === pinId));
+  assert.ok(exportedFrames.every((f) => ordered(f.body) && ordered(f.cap)), "exported map pairs are in canonical order");
+}
 console.log("PASS continuation review refusals, explicit pin, queued frame and reload");
 
 // ---- 4. catalog binding: review, refusals, cancel, sign ---------------------------------------------------

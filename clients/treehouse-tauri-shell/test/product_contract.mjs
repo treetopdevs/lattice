@@ -99,12 +99,14 @@ for (const crate of [
   }
 }
 const registration = await readFile("src-tauri/src/lib.rs", "utf8");
+const exportWriter = await readFile("src-tauri/src/space_export.rs", "utf8");
 assert.deepEqual(
-  [...registration.matchAll(/#\[tauri::command\]\s*fn (\w+)/g)]
+  [...(registration + exportWriter).matchAll(/#\[tauri::command(?:\(async\))?\]\s*(?:pub\s+)?fn (\w+)/g)]
     .map((m) => m[1])
     .sort(),
   [
     "treehouse_commit",
+    "treehouse_export_space_frames",
     "treehouse_initialize_identity",
     "treehouse_load_draft",
     "treehouse_open",
@@ -112,7 +114,7 @@ assert.deepEqual(
     "treehouse_sign_carrier",
   ].sort(),
 );
-const previewCommands = ["treehouse_open", "treehouse_initialize_identity", "treehouse_commit", "treehouse_load_draft", "treehouse_save_draft", "treehouse_sign_carrier"];
+const previewCommands = ["treehouse_open", "treehouse_initialize_identity", "treehouse_commit", "treehouse_load_draft", "treehouse_save_draft", "treehouse_sign_carrier", "treehouse_export_space_frames"];
 const witnessCommands = ["treehouse_witness_public_identity", "treehouse_witness_prepare_creation", "treehouse_witness_generate", "treehouse_witness_prove_binding", "treehouse_witness_cancel"];
 const build = await readFile("src-tauri/build.rs", "utf8");
 assert.deepEqual([...build.matchAll(/"(treehouse_\w+)"/g)].map(m => m[1]).sort(), [...previewCommands, ...witnessCommands].sort());
@@ -129,5 +131,5 @@ assert(registration.includes("witness_commands::recognizes_command"));
 assert(registration.includes("witness_commands::handle(invoke)"));
 assert(!registration.includes("std::env"));
 console.log(
-  "PASS isolated offline product, fixed key service and six preview commands plus five closed witness commands",
+  "PASS isolated offline product, fixed key service and seven preview commands plus five closed witness commands",
 );

@@ -52,4 +52,7 @@ export class FaultNative implements PreviewNative {
   async sign(bytes: Uint8Array) {
     return ed25519.sign(bytes, this.seed!);
   }
+  async exportSpaceFrames(_fileName: string, _contents: string): Promise<string> {
+    throw new Error("export_unavailable");
+  }
 }

@@ -214,7 +214,9 @@ end by deleting any restored seed.
 ### 5.4 Binding payload (custodian)
 
 The binding names the catalog key, a service key, and the carrier origin for one Space. The
-Space log is the Space's signed op log exported to a file.
+Space log is the Space's signed op log in a file. `--space-log` accepts either of two files: a
+relay's path-backed `Log.dump` file, or a Space frames export
+(`lattice-space-frames-export-v1`) written by the ordinary app (see the signing step below).
 
 ```bash
 ~/.asdf/shims/mix treehouse.catalog_ceremony binding-payload \
@@ -223,7 +225,7 @@ Space log is the Space's signed op log exported to a file.
   [--service-id "$SERVICE_ID"]
 ```
 
-The tool restores the log with verification and requires a bounded Space profile. It derives the
+The tool loads the log with verification and requires a bounded Space profile. It derives the
 Space id, root, profile genesis and profile id from the log, takes `catalog_key` from
 `signer.json`, and makes a fresh nonce (and a fresh service id when you give none). `SERVICE_PUBKEY_B64`
 is the base64 of 32 raw bytes. It refuses a log that does not verify (`invalid_space_log`,
@@ -234,26 +236,44 @@ or origin (`malformed_binding`). It writes `binding-payload.json`
 of the canonical bytes) and `binding-review.txt`, a plain sheet with every field. If the review sheet cannot be written the payload just written is removed (`ceremony_write_failed`).
 Stdout carries `binding_payload_sha256`, `payload` and `review_sheet` (paths).
 
+A Space frames export is checked as strictly as a dump: every signature and content hash, the
+complete dependency history, one Space only, no duplicate or unsorted frames, each frame in its
+canonical encoding, and a declared root that equals the Space's continuation root and authored a
+genesis (a retained competing genesis by another author is quarantined by Authority, as in a dump). Every failure is
+`invalid_space_log`, the same as a bad dump.
+
 `verify-binding` and `report` refuse a payload without its `binding-review.txt` beside it
 (`ceremony_artifact_missing`). Two people read `binding-review.txt` field by field against the intended Space and relay before
 anyone signs it.
 
-**Signing step: the product path (row 232).** The Space root must author this record as the Space
-command `catalog_bootstrap_v1`, and only a bounded-profile Space can carry it. Legacy Spaces
-(created before row 232) are refused with `space_not_bounded_profile` and cannot be migrated in
-place. The path is:
+**Signing step: the product path (rows 232 and 233).** The Space root must author this record as
+the Space command `catalog_bootstrap_v1`, and only a bounded-profile Space can carry it. Legacy
+Spaces (created before row 232) are refused with `space_not_bounded_profile` and cannot be migrated
+in place. The path works with the ordinary build; no relay is needed:
 
 1. The root creates a NEW Space in the current app (it is created in the bounded family).
-2. The root enrolls members in the relay-connected (enrollment) build.
-3. The root authors the continuation pin from the app's Continuation action, then syncs until the
-   relay acknowledges it. The Space is then "pinned"; that word makes no readiness or recovery
-   claim.
-4. The operator points `--space-log` at the relay's path-backed Space log file (the file
-   `LatticeCarrierServer` persists with `Log.dump`) and runs `binding-payload` above. The ordinary
-   local-only build has no relay log, so `binding-payload` cannot run from it.
+2. The root authors the continuation pin from the app's Continuation action: Review, then Pin. The
+   pin needs the public keys the root types in: one nominee key and at least one witness key (base64,
+   32 bytes each), all different from the root's own key and from each other. They need not be
+   enrolled members, and no relay sync is needed. The Space is then "pinned"; that word makes no
+   readiness or recovery claim.
+3. The root uses Export Space frames (Continuation panel) and types a file name: one plain name
+   ending in `.json`. The app writes it into the platform Downloads folder and never overwrites an
+   existing file (`export_exists`; choose another name).
+4. The operator copies that file to the custodian machine and runs `binding-payload` above with
+   `--space-log` on it.
 5. The root pastes `binding-payload.json` into the app's Catalog binding action, compares every
-   line to `binding-review.txt`, signs, and syncs until acknowledged.
-6. The operator runs `verify-binding` (5.5) against the relay log, then `report` (5.6).
+   line to `binding-review.txt`, and signs.
+6. The root exports again, under a new name. The operator runs `verify-binding` (5.5) on the second
+   export, then `report` (5.6).
+
+The export holds only the Space's public signed frames. It carries no keys, outbox, routes, drafts or
+other app state, and it is not a backup. Treat the first export as stale once the binding is signed;
+`verify-binding` needs the second.
+
+Alternative for a relay-connected Space: sync until the relay acknowledges the pin and the binding,
+and point `--space-log` at the relay's path-backed Space log file (the file `LatticeCarrierServer`
+persists with `Log.dump`) for `binding-payload` and `verify-binding`.
 
 The binding is meant to be signed once: the app and the product authoring helper refuse a second
 `catalog_bootstrap_v1`, and the app also refuses a binding whose catalog or service key is the Space
@@ -294,8 +314,7 @@ public key, backup digest, format and iteration count (`ceremony_inconsistent`) 
 `custody`, `binding`, `generated_at`, `claim`). Stdout carries `report` (path) and `report_sha256`.
 
 Before `verify-binding` succeeds, the report carries
-`"binding": {"status": "pending_root_signature", "payload_sha256": <hex or null>, "blocker": "row 232"}`
-(the `blocker` string is a historical label; it means only that `verify-binding` has not yet verified the binding, which may already be signed and synced)
+`"binding": {"status": "pending_root_signature", "payload_sha256": <hex or null>, "reason": "binding_not_verified"}`
 (`payload_sha256` is null when no `binding-payload.json` exists). After a successful
 `verify-binding`, rerun `report`; it overwrites the file and the binding becomes
 `{"status": "verified", "bootstrap_id", "record_sha256", "space"}`. A `binding.json` that does not

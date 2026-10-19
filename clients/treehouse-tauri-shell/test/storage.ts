@@ -107,6 +107,12 @@ class MemoryNative implements PreviewNative {
   async sign(bytes: Uint8Array) {
     return ed25519.sign(bytes, this.seed!);
   }
+  exported = new Map<string, string>();
+  async exportSpaceFrames(fileName: string, contents: string) {
+    if (this.exported.has(fileName)) throw new Error("export_exists");
+    this.exported.set(fileName, contents);
+    return `/downloads/${fileName}`;
+  }
 }
 const token = (c: string) => c.repeat(43);
 const pk = (n: number) => Buffer.alloc(32, n).toString("base64");

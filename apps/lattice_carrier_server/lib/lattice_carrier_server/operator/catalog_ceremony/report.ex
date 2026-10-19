@@ -132,5 +132,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Report do
   end
 
   defp pending(sha),
-    do: %{"status" => "pending_root_signature", "payload_sha256" => sha, "blocker" => "row 232"}
+    do: %{
+      "status" => "pending_root_signature",
+      "payload_sha256" => sha,
+      "reason" => "binding_not_verified"
+    }
 end

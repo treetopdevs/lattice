@@ -234,7 +234,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     for name <-
           ~w(DRY-RUN-NOT-REAL signer.json backup.json restore.json binding-payload.json
              binding-review.txt binding.json verification-report.json
-             disposable-space-pre.log disposable-space.log) do
+             disposable-space-pre.frames.json disposable-space.frames.json) do
       assert File.regular?(Path.join(dir, name)), name
     end
 
@@ -297,7 +297,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     pending_report = pending.path |> File.read!() |> Jason.decode!()
     assert pending_report["binding"]["status"] == "pending_root_signature"
     assert pending_report["binding"]["payload_sha256"] == payload["sha256"]
-    assert pending_report["binding"]["blocker"] == "row 232"
+    assert pending_report["binding"]["reason"] == "binding_not_verified"
     assert pending_report["mode"] == "real"
 
     {signed, [op]} = sign_bootstraps(space, [record], "signed")
@@ -1370,7 +1370,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert {:error, :dry_run_ceremony_dir} =
              Ceremony.verify_binding(
                ceremony: dir,
-               space_log: Path.join(dir, "disposable-space.log")
+               space_log: Path.join(dir, "disposable-space.frames.json")
              )
 
     refute File.exists?(fresh)

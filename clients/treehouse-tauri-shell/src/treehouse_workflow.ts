@@ -36,6 +36,7 @@ import type {
   TreehouseCommand,
   Verifier,
 } from "@treetopdevs/lattice-client";
+import { buildSpaceFramesExport, isExportFileName } from "./space_export";
 import {
   assertRetainedMonotonic,
   emptyState,
@@ -738,6 +739,25 @@ export class TreehouseWorkflow {
       );
       this.pendingBinding = null;
       return id;
+    });
+  }
+  /**
+   * Root only: write the Space's public signed frames to a new file for the catalog ceremony. Sends the native
+   * writer only the export text (frames, never the outbox, acknowledgements, state or keys). Resolves to the path.
+   */
+  exportSpaceFrames(fileName: string): Promise<string> {
+    return this.exclusive(async () => {
+      const space = this.boundedRootSpace();
+      // Before the pin the history has no bounded profile, and `binding-payload` would refuse the file.
+      if (!this.continuation().pinned) throw new Error("continuation_not_pinned");
+      if (!isExportFileName(fileName)) throw new Error("invalid_export_name");
+      const text = await buildSpaceFramesExport({
+        space: space.replica,
+        rootPublicKey: this.state.publicKey!,
+        frames: space.frames,
+        verify: async (frame) => (await verifyCarrierOp(frame, strictVerifier)).valid,
+      });
+      return this.native.exportSpaceFrames(fileName, text);
     });
   }
   /** True when this key holds a capability for `command` in the profile (the Post button's gate). */

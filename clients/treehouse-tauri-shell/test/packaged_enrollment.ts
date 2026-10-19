@@ -206,6 +206,7 @@ async function readOnlyWorkflow(record: string): Promise<TreehouseWorkflow> {
     initialize: refuse,
     commit: refuse,
     sign: refuse,
+    exportSpaceFrames: refuse,
     saveDraft: refuse,
     loadDraft: async () => null,
   };

@@ -6,6 +6,7 @@ fn main() {
         "treehouse_load_draft",
         "treehouse_save_draft",
         "treehouse_sign_carrier",
+        "treehouse_export_space_frames",
         "treehouse_witness_public_identity",
         "treehouse_witness_prepare_creation",
         "treehouse_witness_generate",

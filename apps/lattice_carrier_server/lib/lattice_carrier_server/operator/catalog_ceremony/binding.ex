@@ -6,7 +6,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
 
   alias Lattice.{Authority, Canonical, Log}
   alias Lattice.Authority.ContinuationCertificate
-  alias LatticeCarrierServer.Operator.CatalogCeremony.{Atoms, Signer, Store}
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{Atoms, Signer, SpaceExport, Store}
   alias Treehouse.{CatalogBootstrap, TransportCatalog}
 
   @payload_format "lattice-catalog-bootstrap-payload-v1"
@@ -153,16 +153,41 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     end
   end
 
+  # The Space history is either a `Lattice.Log.dump` or the app's frames export
+  # (D-31, a JSON object). Dispatch is by the first non-whitespace byte; both
+  # readers verify as strictly as each other and share one refusal.
   defp space_log(path) when is_binary(path) and path != "" do
     Atoms.load()
+    path = Path.expand(path)
 
-    case Log.restore_verified(Path.expand(path)) do
+    case exported?(path) do
+      true -> export_log(path)
+      false -> dump_log(path)
+    end
+  end
+
+  defp space_log(_), do: {:error, :space_log_required}
+
+  defp export_log(path) do
+    case SpaceExport.load(path) do
+      {:ok, log} -> {:ok, log}
+      _ -> {:error, :invalid_space_log}
+    end
+  end
+
+  defp dump_log(path) do
+    case Log.restore_verified(path) do
       {:ok, %{log: log}} -> {:ok, log}
       _ -> {:error, :invalid_space_log}
     end
   end
 
-  defp space_log(_), do: {:error, :space_log_required}
+  defp exported?(path) do
+    case File.open(path, [:read, :binary], &IO.binread(&1, 64)) do
+      {:ok, head} when is_binary(head) -> String.trim_leading(head) |> String.starts_with?("{")
+      _ -> false
+    end
+  end
 
   # Only a bounded-continuation Space with a selected R04 pin can carry the
   # bootstrap; a legacy-family Space cannot (row 232).
