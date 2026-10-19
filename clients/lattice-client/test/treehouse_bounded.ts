@@ -9,10 +9,12 @@ import {
   treehouseContinuationPin, authorTreehouseContinuationPin, reviewTreehouseCatalogBindingPayload,
   authorTreehouseCatalogBootstrap, resolveContinuationProfileFromFrames, treehouseCatalogBootstrapsFromFrames,
 } from "../src/index";
-import { canonicalBytesForCarrierTerm } from "../src/codec";
+import { authorCarrierDelegation, authorCarrierOp, canonicalBytesForCarrierTerm } from "../src/codec";
+import { carrierDelegationsFromFrames } from "../src/carrier";
+import { continuationProfileToCarrierTerm } from "../src/continuation";
 import { canonicalOrder, carrierOpsToSemanticOps, index } from "../src/index";
 import { treehouseCommandDecoders } from "../src/treehouse";
-import { authorTownshipGenesis } from "../src/township";
+import { authorTownshipGenesis, authorTownshipRevocation } from "../src/township";
 import { catalogBootstrapToCarrierTerm } from "../src/treehouse_catalog_codec";
 import type { CarrierOpFrame, CarrierOpSigner } from "../src/index";
 
@@ -151,6 +153,19 @@ for (const retained of [withPin, [...withPin, bootstrap]]) {
 const rival = await authorTownshipGenesis({ replica: vector.replica, signer: root, ops: ["create_space"], roles: ["admin"], policies: {} });
 await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
   retained: [...withPin, rival] }), "different_initialization");
+// PR review: a revoked root capability yields no bootstrap; an op that would quarantine never leaves.
+const revocation = await authorTownshipRevocation({ replica: vector.replica, deps: [pin.id], signer: root, delegationId: carrierDelegationsFromFrames([creation.pending[0]!])[0]!.id });
+await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [...withPin, revocation] }), "bootstrap_not_honored");
+// PR review: an empty root genesis with a Thread profile is still a competing initialization.
+const emptyDelegation = await authorCarrierDelegation({ replica: vector.replica, audiencePubkey: root.publicKey, signer: root, live: false, ops: [], roles: [], parentId: null });
+const threadProfile = { mode: "bounded_continuation", version: 1, product: "treehouse", kind: "thread", role: "moderator",
+  nominee: Buffer.from(nominee.publicKey).toString("base64"),
+  witnesses: witnesses.map((w) => Buffer.from(w.publicKey).toString("base64")).sort((a, b) => Buffer.compare(Buffer.from(a, "base64"), Buffer.from(b, "base64"))),
+  threshold: 2, maxLeaseEpochs: 7 };
+const oddPin = await authorCarrierOp({ replica: vector.replica, deps: [pin.id], kind: "authority", signer: root, cap: ["nil"],
+  body: ["tuple", [["atom", "genesis"], ["delegation", emptyDelegation], ["map", [[["atom", "__continuation__"], continuationProfileToCarrierTerm(threadProfile)!]]]]] });
+await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
+  retained: [...withPin, oddPin] }), "different_initialization");
 // Duplicate retained frames are an invalid history, not a collapsed one.
 await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
   retained: [...creation.pending, creation.pending[0]!] }), "invalid_retained_log");

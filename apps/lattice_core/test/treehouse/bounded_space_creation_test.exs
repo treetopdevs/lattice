@@ -235,6 +235,49 @@ defmodule Treehouse.BoundedSpaceCreationTest do
     end
   end
 
+  describe "PR review: honored-only bootstrap and exact pin exemption" do
+    test "a revoked root capability yields no bootstrap" do
+      {root, log, pin} = pinned()
+      rec = record(root, log, pin)
+      {:ok, ok} = Space.author_catalog_bootstrap(root, log, rec)
+      revoked = Log.append!(log, Space.revoke_grant(root, log, ok.cap))
+
+      assert {:error, :bootstrap_not_honored} =
+               Space.author_catalog_bootstrap(root, revoked, rec)
+    end
+
+    test "an empty root genesis with a Thread profile is still a competing initialization" do
+      {root, log, _pin} = pinned()
+
+      empty =
+        Lattice.Authority.Delegation.genesis(root, log.replica, ops: [], roles: [], live: false)
+
+      thread_profile =
+        Map.merge(Map.put(params(), :witnesses, Enum.sort(params().witnesses)), %{
+          mode: :bounded_continuation,
+          version: 1,
+          product: :treehouse,
+          kind: :thread,
+          role: :moderator
+        })
+
+      odd =
+        Lattice.Op.new(root, log.replica, Log.frontier(log), :authority, {
+          :genesis,
+          empty,
+          %{__continuation__: thread_profile}
+        })
+
+      assert {:error, :different_initialization} =
+               Space.prepare_bounded_creation(
+                 root,
+                 @nonce_replica,
+                 "Canopy",
+                 Log.append!(log, odd)
+               )
+    end
+  end
+
   describe "PR review: capability selection" do
     test "a root admin genesis without catalog_bootstrap_v1 is never the bootstrap cap" do
       {root, log, pin} = pinned()

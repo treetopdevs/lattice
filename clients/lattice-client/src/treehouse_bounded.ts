@@ -79,9 +79,10 @@ export async function prepareTreehouseBoundedSpaceCreation(input: {
   const pins = new Set(retained.filter((frame) => {
     const delegation = carrierDelegationsFromFrames([frame])[0];
     const op = ops.find((o) => o.id === frame.id);
-    return frame.kind === "authority" && frame.author === signer && op?.authority?.type === "genesis" &&
-      op.authority.continuationProfile !== null && delegation !== undefined && !delegation.live &&
-      delegation.parent_id === null && delegation.ops.length === 0 && delegation.roles.length === 0;
+    const profile = op?.authority?.type === "genesis" ? op.authority.continuationProfile : null;
+    return frame.kind === "authority" && frame.author === signer && profile?.kind === "space" && profile.role === "admin" &&
+      delegation !== undefined && delegation.issuer === signer && delegation.audience === signer && !delegation.live &&
+      delegation.parent_id === null && delegation.expires_epoch === undefined && delegation.ops.length === 0 && delegation.roles.length === 0;
   }).map((frame) => frame.id));
   if (ops.some((op) => (op.kind === "authority" && op.authority?.type === "genesis" && op.id !== genesis.id && !pins.has(op.id)) ||
     (op.kind === "command" && op.command === "create_space" && op.deps.length === 1 && op.deps[0] === genesis.id && op.id !== created.id))) {
@@ -270,9 +271,9 @@ export async function authorTreehouseCatalogBootstrap(input: {
   if (!existing.ok) throw new Error("invalid_verified_history");
   if (existing.bootstraps.length > 0) throw new Error("catalog_bootstrap_exists");
   const root = bytesToB64(input.signer.publicKey);
-  // The first honored root admin genesis in canonical order, as `Treehouse.Space.root_capability/2` selects it.
+  // Each root admin genesis that grants the bootstrap, in canonical order, as `Treehouse.Space.root_capabilities/2`.
   const byId = index(history.ops), quarantined = materialize(treehouseSpaceSchema, history.ops).quarantineReasons;
-  let capId: string | undefined;
+  const caps: string[] = [];
   for (const id of canonicalOrder(history.ops, byId)) {
     const frame = history.frames.find((f) => f.id === id);
     if (frame === undefined || frame.kind !== "authority" || frame.author !== root || quarantined.has(id)) continue;
@@ -281,9 +282,14 @@ export async function authorTreehouseCatalogBootstrap(input: {
     if (head === undefined || head[0] !== "atom" || head[1] !== "genesis") continue;
     const found = carrierDelegationsFromFrames([frame]).find((d) => d.parent_id === null && d.issuer === root && d.roles.includes("admin") &&
       d.ops.includes("catalog_bootstrap_v1"));
-    if (found !== undefined) { capId = found.id; break; }
+    if (found !== undefined) caps.push(found.id);
   }
-  if (capId === undefined) throw new Error("invalid_verified_history");
-  return authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier, signer: input.signer,
-    capId, command: { command: "catalog_bootstrap_v1", record } });
+  // Return the first authored op the judge honors; one that would quarantine (revoked, expired, not granted) never leaves.
+  for (const capId of caps) {
+    const frame = await authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier, signer: input.signer,
+      capId, command: { command: "catalog_bootstrap_v1", record } });
+    const ops = carrierOpsToSemanticOps([...history.frames, frame], {}, treehouseCommandDecoders("Treehouse.Space"));
+    if (!materialize(treehouseSpaceSchema, ops).quarantineReasons.has(frame.id)) return frame;
+  }
+  throw new Error("bootstrap_not_honored");
 }

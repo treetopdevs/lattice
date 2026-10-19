@@ -216,13 +216,14 @@ defmodule Treehouse.Space do
       for {id,
            %Op{kind: :authority, author: author, body: {:genesis, %Delegation{} = d, policies}}} <-
             Log.ops(log),
-          author == identity.pub and is_map(policies) and
+          author == identity.pub and is_map(policies) and not is_struct(policies) and
             match?(
-              {:ok, _},
+              {:ok, %{kind: :space, role: :admin}},
               ContinuationCertificate.normalize_policy(policies[:__continuation__])
             ) and
-            d.live == false and
-            is_nil(d.parent_id) and MapSet.size(d.ops) == 0 and MapSet.size(d.roles) == 0,
+            d.issuer == identity.pub and d.audience == identity.pub and d.live == false and
+            is_nil(d.parent_id) and is_nil(d.expires_epoch) and MapSet.size(d.ops) == 0 and
+            MapSet.size(d.roles) == 0,
           do: id
 
     %{log | ops: Map.drop(log.ops, pins)}
@@ -323,17 +324,31 @@ defmodule Treehouse.Space do
          {:ok, record} <- bootstrap_record(record),
          :ok <- bootstrap_binding(identity, log, observed, record),
          :ok <- bootstrap_key_separation(identity, record),
-         :ok <- no_bootstrap(log),
-         {:ok, cap} <- root_capability(log, identity) do
-      Op.authored(
-        identity,
-        log.replica,
-        Enum.sort(Log.frontier(log)),
-        :command,
-        {:catalog_bootstrap_v1, [record]},
-        cap: cap
-      )
+         :ok <- no_bootstrap(log) do
+      honored_bootstrap(identity, log, record)
     end
+  end
+
+  # Try each root admin genesis that grants the bootstrap, in canonical order, and return the
+  # first authored op the judge honors; an op that would quarantine (revoked, expired, not
+  # granted) is never returned.
+  defp honored_bootstrap(identity, log, record) do
+    deps = Enum.sort(Log.frontier(log))
+
+    log
+    |> root_capabilities(identity)
+    |> Enum.find_value({:error, :bootstrap_not_honored}, fn cap ->
+      with {:ok, op} <-
+             Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
+               cap: cap
+             ),
+           false <-
+             MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
+        {:ok, op}
+      else
+        _ -> nil
+      end
+    end)
   end
 
   defp bootstrap_profile(log) do
@@ -373,24 +388,17 @@ defmodule Treehouse.Space do
     end
   end
 
-  defp root_capability(log, identity) do
+  defp root_capabilities(log, identity) do
     analysis = Authority.analyze(__MODULE__, log)
 
-    found =
-      Enum.find(Log.topo_ops(log), fn
-        %Op{kind: :authority, body: {:genesis, %Delegation{roles: roles, ops: ops}, _}, id: id} =
-            op ->
-          op.author == identity.pub and :admin in roles and :catalog_bootstrap_v1 in ops and
-            not MapSet.member?(analysis.quarantine, id)
-
-        _ ->
-          false
-      end)
-
-    case found do
-      %Op{body: {:genesis, %Delegation{id: id}, _}} -> {:ok, id}
-      nil -> {:error, :not_root}
-    end
+    for %Op{
+          kind: :authority,
+          body: {:genesis, %Delegation{id: cap, roles: roles, ops: ops}, _},
+          id: id
+        } = op <- Log.topo_ops(log),
+        op.author == identity.pub and :admin in roles and :catalog_bootstrap_v1 in ops and
+          not MapSet.member?(analysis.quarantine, id),
+        do: cap
   end
 
   defp valid_retained_log?(%Log{ops: ops, replica: replica}) when is_map(ops) do
