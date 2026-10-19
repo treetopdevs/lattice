@@ -148,6 +148,9 @@ async function verified(captured: ReturnType<typeof snapshot>) {
     sign: async () => {
       throw Error("read-only");
     },
+    exportSpaceFrames: async () => {
+      throw Error("read-only");
+    },
     saveDraft: async () => {
       throw Error("read-only");
     },

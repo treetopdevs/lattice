@@ -11,6 +11,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.DryRun do
     Binding,
     Report,
     Signer,
+    SpaceExport,
     Store
   }
 
@@ -84,8 +85,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.DryRun do
       signer_dir: Path.join(dir, "disposable-signer"),
       backup_dir: Path.join(dir, "disposable-backup"),
       restore_dir: Path.join(dir, "disposable-restore"),
-      pre: Path.join(dir, "disposable-space-pre.log"),
-      final: Path.join(dir, "disposable-space.log")
+      pre: Path.join(dir, "disposable-space-pre.frames.json"),
+      final: Path.join(dir, "disposable-space.frames.json")
     }
 
     if Enum.all?([:signer_dir, :backup_dir, :restore_dir], &private_dir?(paths[&1])) do
@@ -139,18 +140,19 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.DryRun do
   # The disposable root signs the bootstrap; the tool never does in real mode.
   defp start_space(paths) do
     history = history()
-    with :ok <- dump(history.before, paths.pre), do: {:ok, history}
+    with :ok <- export(history.before, history.root, paths.pre), do: {:ok, history}
   end
 
   defp sign_bootstrap(history, paths, payload) do
     with {:ok, record} <- Binding.from_json(payload["record"]),
          {:ok, bootstrap} <-
            Treehouse.Space.author_catalog_bootstrap(history.root, history.before, record) do
-      dump(Log.append!(history.before, bootstrap), paths.final)
+      export(Log.append!(history.before, bootstrap), history.root, paths.final)
     end
   end
 
-  defp dump(log, path), do: Log.dump(log, path)
+  # The rehearsal reads the same exported-file form the app produces (D-31).
+  defp export(log, root, path), do: File.write(path, SpaceExport.encode(log, root.pub))
 
   @doc """
   The disposable bounded-continuation Space before any bootstrap, with its pieces. Built only

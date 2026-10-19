@@ -6,6 +6,7 @@ mod catalog_store;
 mod dev_trace;
 mod key_store;
 pub mod preview;
+mod space_export;
 mod witness_android;
 pub mod witness_binding;
 mod witness_bridge;
@@ -115,7 +116,8 @@ fn application_invoke_handler<R: tauri::Runtime>(
         treehouse_commit,
         treehouse_load_draft,
         treehouse_save_draft,
-        treehouse_sign_carrier
+        treehouse_sign_carrier,
+        space_export::treehouse_export_space_frames
     ];
     move |invoke| {
         if witness_commands::recognizes_command(invoke.message.command()) {

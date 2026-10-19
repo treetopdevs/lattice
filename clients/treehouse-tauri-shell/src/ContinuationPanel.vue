@@ -7,6 +7,7 @@ import type {
 } from "./treehouse_workflow";
 import { DEFAULT_MAX_LEASE_EPOCHS } from "./treehouse_workflow";
 import type { PreviewState } from "./treehouse_state";
+import { isExportFileName, suggestExportFileName } from "./space_export";
 
 // Row 232. Two root-only actions for a bounded-family Space: pin a continuation (an empty-delegation
 // genesis carrying the nominee, witnesses, threshold and lease bound), then sign the catalog binding a
@@ -55,6 +56,15 @@ const messages: Record<string, string> = {
     "The catalog or service key in that binding is the Space root's own key. Nothing was changed.",
   creation_incomplete: "Finish the pending local setup first.",
   space_unavailable: "No Space is saved on this device.",
+  invalid_export_name:
+    "Use a plain file name ending in .json, with letters, digits, dots, dashes or underscores.",
+  export_empty: "This Space has no history to export.",
+  export_too_large: "This Space's history is too large to export.",
+  export_wrong_replica: "A saved operation belongs to a different Space. Nothing was written.",
+  export_duplicate_frame: "A saved operation appears twice. Nothing was written.",
+  export_invalid_frame: "A saved operation failed verification. Nothing was written.",
+  export_exists: "A file with that name already exists in Downloads. Choose another name.",
+  export_unavailable: "Exporting a file is not available on this device.",
   identity_unavailable:
     "The signing key is unavailable. Saved history is open for reading.",
 };
@@ -97,6 +107,17 @@ watch(
     continuationReview.value = null;
   },
 );
+const spaceReplica = () =>
+  props.state.profiles.find((p) => p.product === "Treehouse.Space")?.replica ?? "";
+const exportName = ref(suggestExportFileName(spaceReplica()));
+const exportedPath = ref("");
+async function exportFrames() {
+  exportedPath.value = "";
+  note.value = "";
+  await props.run(async () => {
+    exportedPath.value = await props.workflow.exportSpaceFrames(exportName.value.trim());
+  }, explain);
+}
 const payloadText = ref("");
 const bindingReview = ref<BindingReview | null>(null);
 const note = ref("");
@@ -316,5 +337,32 @@ function cancelBinding() {
       </section>
     </div>
     <p v-if="note" role="status" class="muted">{{ note }}</p>
+
+    <h2>Export Space frames</h2>
+    <div class="enroll-step">
+      <p class="fine">
+        Writes this Space's public signed operations to a new file in Downloads,
+        for the catalog ceremony operator. It is not a backup and holds no keys.
+      </p>
+      <label for="export-name">File name</label>
+      <input
+        id="export-name"
+        v-model="exportName"
+        aria-label="Export file name"
+        :disabled="busy"
+      />
+      <button
+        type="button"
+        class="secondary"
+        aria-label="Export Space frames"
+        :disabled="busy || !isExportFileName(exportName.trim())"
+        @click="exportFrames"
+      >
+        Export Space frames
+      </button>
+      <p v-if="exportedPath" role="status" class="muted">
+        Written to <code>{{ exportedPath }}</code>
+      </p>
+    </div>
   </section>
 </template>
