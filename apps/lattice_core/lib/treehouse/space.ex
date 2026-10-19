@@ -181,30 +181,32 @@ defmodule Treehouse.Space do
              Op.authored(identity, replica, [genesis.id], :command, {:create_space, [name]},
                cap: delegation.id
              ) do
-        log = retained || Log.new(replica)
+        bounded_status(identity, replica, genesis, name_op, retained || Log.new(replica))
+      end
+    end
+  end
 
-        with :ok <- if(log.replica == replica, do: :ok, else: {:error, :wrong_replica}),
-             {:ok, pins} <- retained_pins(log) do
-          # A continuation pin the judge recognizes is not a competing initialization.
-          exempt = MapSet.new(pins, & &1.op_id)
+  defp bounded_status(identity, replica, genesis, name_op, log) do
+    with :ok <- if(log.replica == replica, do: :ok, else: {:error, :wrong_replica}),
+         {:ok, pins} <- retained_pins(log) do
+      # A continuation pin the judge recognizes is not a competing initialization.
+      exempt = MapSet.new(pins, & &1.op_id)
 
-          cond do
-            Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
-              {:error, :wrong_root}
+      cond do
+        Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
+          {:error, :wrong_root}
 
-            different_initialization?(log, genesis, name_op, exempt) ->
-              {:error, :different_initialization}
+        different_initialization?(log, genesis, name_op, exempt) ->
+          {:error, :different_initialization}
 
-            true ->
-              {:ok,
-               %{
-                 replica: replica,
-                 profile: :bounded_root_only,
-                 status: initialization(log),
-                 pending: Enum.reject([genesis, name_op], &Log.has?(log, &1.id))
-               }}
-          end
-        end
+        true ->
+          {:ok,
+           %{
+             replica: replica,
+             profile: :bounded_root_only,
+             status: initialization(log),
+             pending: Enum.reject([genesis, name_op], &Log.has?(log, &1.id))
+           }}
       end
     end
   end
