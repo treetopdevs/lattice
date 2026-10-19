@@ -61,7 +61,8 @@ import { fileURLToPath } from "node:url";
 //   ceremony reader", between the frame replay and the evidence upload. It reuses the retained app data and
 //   key from the preview run. Like the classification step it is excluded from TREEHOUSE_PREVIEW_DIGEST and
 //   pinned structurally instead: exactly one such step, its position, run, working directory, exact env, and
-//   no if, continue-on-error or masking, and its own keys are exactly name, working-directory, env and run.
+//   no if, continue-on-error or masking, its own keys are exactly name, working-directory, env and run, and the
+//   whole step body equals the pinned text (quoted YAML keys would pass the line checks).
 // - The packaged:export script pin is exactly `tsx --preserve-symlinks test/packaged_export.ts`.
 // - No other step body changed, so PACKAGED_MACOS_DIGEST and TREEHOUSE_PREVIEW_DIGEST are both unchanged.
 
@@ -77,6 +78,15 @@ const REPLAY_STEP = "Independently replay exact packaged Treehouse frames";
 const EXPORT_STEP = "Export Space frames from the packaged app and verify with the ceremony reader";
 const PREVIEW_UPLOAD_STEP = "Upload public Treehouse preview evidence";
 const EXPORT_RUN = "npm run packaged:export";
+const EXPORT_STEP_BODY = [
+  "      - name: Export Space frames from the packaged app and verify with the ceremony reader",
+  "        working-directory: clients/treehouse-tauri-shell",
+  "        env:",
+  "          TREEHOUSE_EVIDENCE_DIR: ${{ runner.temp }}/treehouse-preview/space-export",
+  "          MIX_ENV: test",
+  "        run: npm run packaged:export",
+  "",
+].join("\n");
 const EXPORT_ENV = [
   ["TREEHOUSE_EVIDENCE_DIR", "${{ runner.temp }}/treehouse-preview/space-export"],
   ["MIX_ENV", "test"],
@@ -311,6 +321,9 @@ export function check(workflow, pkg, harnessSource) {
         fail("the Space export env must be exactly the evidence dir and MIX_ENV");
       if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(step) || /\|\||set\s+\+e/u.test(step))
         fail("the Space export must be unconditional and blocking");
+      // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
+      // such as 'if' or "continue-on-error" pass the line checks above).
+      if (step.replace(/\s+$/u, "\n") !== EXPORT_STEP_BODY) fail("the Space export step body must be exactly the pinned text");
       // No shell, timeout, id or uses may ride along: the step's own keys are exactly these four.
       const keys = [...step.matchAll(/^ {6}- ([a-z-]+):|^ {8}([a-z-]+):/gmu)].map((m) => m[1] ?? m[2]);
       if (JSON.stringify(keys) !== JSON.stringify(["name", "working-directory", "env", "run"]))
@@ -765,6 +778,12 @@ const mutations = {
     mutate(text, `      - name: ${EXPORT_STEP}\n`, `      - name: ${EXPORT_STEP}\n        if: success()\n`),
   "export continue-on-error": (text) =>
     mutate(text, `      - name: ${EXPORT_STEP}\n`, `      - name: ${EXPORT_STEP}\n        continue-on-error: true\n`),
+  "export step gains a quoted if": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        'if': false\n        run: npm run packaged:export\n"),
+  "export step gains a quoted continue-on-error": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        \"continue-on-error\": true\n        run: npm run packaged:export\n"),
+  "export step gains a quoted shell": (text) =>
+    mutate(text, "        run: npm run packaged:export\n", "        'shell': 'bash {0}'\n        run: npm run packaged:export\n"),
   "export step gains a shell": (text) =>
     mutate(text, "        run: npm run packaged:export\n", "        shell: bash {0}\n        run: npm run packaged:export\n"),
   "export step gains a timeout": (text) =>
