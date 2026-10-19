@@ -271,7 +271,7 @@ const pinShaped = (delegation) => authorCarrierOp({ replica: vector.replica,
     const fresh = await prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root, retained: [] });
     assert.deepEqual(ids(fresh.pending), ids(creation.pending));
 }
-// A decoy root genesis lacking catalog_bootstrap_v1 that sorts first is tried and refused; the real cap is chosen.
+// A decoy root genesis lacking catalog_bootstrap_v1 that sorts first is skipped by the advisory pre-filter; the real cap is chosen.
 {
     let decoyFirst = false;
     for (let n = 0; n < 32 && !decoyFirst; n++) {
@@ -289,6 +289,32 @@ const pinShaped = (delegation) => authorCarrierOp({ replica: vector.replica,
         assert.equal(signs, 1);
     }
     assert.ok(decoyFirst, "a decoy genesis sorts ahead of the creation genesis");
+}
+// A field-qualifying decoy (admin, catalog_bootstrap_v1) with a flipped delegation signature that sorts first passes
+// the pre-filter, so its trial op is signed and the judge refuses it; the real cap is chosen.
+{
+    let decoyFirst = false;
+    for (let n = 0; n < 64 && !decoyFirst; n++) {
+        const base = await authorTownshipGenesis({ replica: vector.replica, signer: root, roles: ["admin"], policies: {},
+            ops: ["catalog_bootstrap_v1", ...spaceCommands.filter((_, i) => (n >> i) & 1)] });
+        const d = carrierDelegationsFromFrames([base])[0];
+        const sig = Buffer.from(d.sig, "base64");
+        sig[0] ^= 1;
+        const body = structuredClone(base.body);
+        assert.ok(body[0] === "tuple");
+        body[1][1] = ["delegation", { ...d, sig: sig.toString("base64") }];
+        const decoy = await authorCarrierOp({ replica: vector.replica, deps: base.deps, kind: "authority", signer: root, cap: base.cap, body });
+        const semantic = carrierOpsToSemanticOps([decoy, ...withPin], {}, treehouseCommandDecoders("Treehouse.Space"));
+        decoyFirst = canonicalOrder(semantic, index(semantic))[0] === decoy.id;
+        if (!decoyFirst)
+            continue;
+        let signs = 0;
+        const counting = { publicKey: root.publicKey, sign: (bytes) => (signs++, root.sign(bytes)) };
+        const chosen = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, signer: counting, frames: [decoy, ...withPin] });
+        assert.deepEqual(chosen.cap, bootstrap.cap);
+        assert.equal(signs, 2);
+    }
+    assert.ok(decoyFirst, "a qualifying decoy genesis sorts ahead of the creation genesis");
 }
 // Row 212 residual, fail-closed: a pin re-signed with an extra uint64 policy entry is a history the TS judge cannot
 // read. BEAM names a genuine one and resumes; TS refuses rather than ignore an unreadable genesis (a forged one,

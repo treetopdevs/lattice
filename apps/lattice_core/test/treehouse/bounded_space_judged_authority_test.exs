@@ -107,8 +107,8 @@ defmodule Treehouse.BoundedSpaceJudgedAuthorityTest do
                Space.prepare_bounded_creation(root, @nonce_replica, "Canopy", pinned)
     end
 
-    # TS parity: the TS judge cannot read an integer above 2^53-1 (row 212), so it keeps this
-    # pin as a malformed op rather than refusing the history; both runtimes resume `ready`.
+    # Row 212 divergence: BEAM names this pin and resumes `ready`; the TS judge cannot read an
+    # integer above 2^53-1 and refuses the history fail-closed (`invalid_retained_log`).
     test "a genuine pin with an extra uint64 policy entry resumes" do
       root = ident("root")
       log = created(root)
