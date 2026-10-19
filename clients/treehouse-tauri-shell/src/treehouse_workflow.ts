@@ -748,6 +748,8 @@ export class TreehouseWorkflow {
   exportSpaceFrames(fileName: string): Promise<string> {
     return this.exclusive(async () => {
       const space = this.boundedRootSpace();
+      // Before the pin the history has no bounded profile, and `binding-payload` would refuse the file.
+      if (!this.continuation().pinned) throw new Error("continuation_not_pinned");
       if (!isExportFileName(fileName)) throw new Error("invalid_export_name");
       const text = await buildSpaceFramesExport({
         space: space.replica,

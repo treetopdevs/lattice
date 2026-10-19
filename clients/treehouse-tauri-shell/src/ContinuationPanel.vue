@@ -59,6 +59,7 @@ const messages: Record<string, string> = {
   invalid_export_name:
     "Use a plain file name ending in .json, with letters, digits, dots, dashes or underscores.",
   export_empty: "This Space has no history to export.",
+  continuation_not_pinned: "Pin the continuation first; the ceremony needs the pinned history.",
   export_too_large: "This Space's history is too large to export.",
   export_wrong_replica: "A saved operation belongs to a different Space. Nothing was written.",
   export_duplicate_frame: "A saved operation appears twice. Nothing was written.",
@@ -100,19 +101,24 @@ watch(
     prefill = fresh;
   },
 );
+const spaceReplica = () =>
+  props.state.profiles.find((p) => p.product === "Treehouse.Space")?.replica ?? "";
+const exportName = ref(suggestExportFileName(spaceReplica()));
+const exportedPath = ref("");
+const staleExport = ref("");
 // Any saved-state change clears the workflow's pending review, so drop the shown confirmation too.
 watch(
   () => props.state,
   () => {
     continuationReview.value = null;
+    // The history changed (for example the binding was signed): an earlier export no longer matches it.
+    if (exportedPath.value) staleExport.value = exportedPath.value;
+    exportedPath.value = "";
   },
 );
-const spaceReplica = () =>
-  props.state.profiles.find((p) => p.product === "Treehouse.Space")?.replica ?? "";
-const exportName = ref(suggestExportFileName(spaceReplica()));
-const exportedPath = ref("");
 async function exportFrames() {
   exportedPath.value = "";
+  staleExport.value = "";
   note.value = "";
   await props.run(async () => {
     exportedPath.value = await props.workflow.exportSpaceFrames(exportName.value.trim());
@@ -359,13 +365,18 @@ function cancelBinding() {
         type="button"
         class="secondary"
         aria-label="Export Space frames"
-        :disabled="busy || !isExportFileName(exportName.trim())"
+        :disabled="busy || !facts.pinned || !isExportFileName(exportName.trim())"
         @click="exportFrames"
       >
         Export Space frames
       </button>
+      <p v-if="!facts.pinned" class="fine">Available after the continuation is pinned.</p>
       <p v-if="exportedPath" role="status" class="muted">
         Written to <code>{{ exportedPath }}</code>
+      </p>
+      <p v-if="staleExport" role="status" class="muted">
+        This Space's history changed after <code>{{ staleExport }}</code> was written, so that file is
+        out of date. Export again under a new name before the operator verifies the binding.
       </p>
     </div>
   </section>

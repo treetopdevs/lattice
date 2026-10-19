@@ -199,6 +199,14 @@ const app = await fresh(native);
 await app.createSpace("Canopy");
 const space = spaceOf(app);
 assert.ok(space.outbox.length > 0, "an unsent outbox exists");
+// PR #149 review: nothing is exported before the pin (binding-payload would refuse that history).
+await assert.rejects(app.exportSpaceFrames("early.json"), /continuation_not_pinned/);
+assert.equal(native.exported.size, 0);
+{
+  const key = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+  const review = app.reviewContinuation({ nominee: key(), witnesses: [key(), key(), key()].join("\n") });
+  await app.pinContinuation(review);
+}
 const before = native.record;
 const path = await app.exportSpaceFrames("mine.json");
 assert.equal(path, "/downloads/mine.json");
@@ -207,7 +215,7 @@ const file = JSON.parse(text);
 assert.deepEqual(Object.keys(file), ["format", "frames", "root", "space"]);
 assert.equal(file.space, space.replica);
 assert.equal(file.root, app.state.publicKey);
-assert.deepEqual(file.frames.map((f: CarrierOpFrame) => f.id), space.frames.map((f) => f.id).sort());
+assert.deepEqual(file.frames.map((f: CarrierOpFrame) => f.id), spaceOf(app).frames.map((f) => f.id).sort());
 assert.ok(!/outbox|acked|routes|clearedDrafts/.test(text), "no local-only state in the file");
 assert.equal(native.record, before, "exporting leaves the saved record untouched");
 await assert.rejects(app.exportSpaceFrames("../x.json"), /invalid_export_name/);
