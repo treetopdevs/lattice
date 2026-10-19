@@ -2,6 +2,8 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   authorTownshipGenesis,
   authorTreehouseAdmitAndGrant,
+  authorTreehouseCatalogBootstrap,
+  authorTreehouseContinuationPin,
   authorTreehouseCommand,
   authorTreehouseIssueInvitation,
   carrierDelegationsFromFrames,
@@ -15,10 +17,13 @@ import {
   liveTreehouseDelegations,
   memberCapability,
   observeTreehouse,
-  prepareTreehouseSpaceCreation,
+  prepareTreehouseBoundedSpaceCreation,
+  reviewTreehouseCatalogBindingPayload,
   reviewTreehouseInvitation,
   signTreehouseAcceptance,
   townshipReplicaCommitment,
+  treehouseContinuationPin,
+  treehouseSpaceFamily,
   townshipReplicaRootTag,
   TREEHOUSE_LITE_THREAD_CAP,
   treehouseCommandDecoders,
@@ -27,6 +32,7 @@ import {
 } from "@treetopdevs/lattice-client";
 import type {
   CarrierOpFrame,
+  TreehouseCatalogBindingReview,
   TreehouseCommand,
   Verifier,
 } from "@treetopdevs/lattice-client";
@@ -48,6 +54,7 @@ import type {
   RelayRoute,
 } from "./treehouse_state";
 import {
+  isProfileReplica,
   mergeRelay,
   offerRoute,
   parseRouteList,
@@ -67,6 +74,34 @@ export interface OfferReview {
   /** True when retained Space frames already prove the invitation (recipient, scope, not revoked). */
   invitationVerified: boolean;
   admitted: boolean;
+}
+/** What the root reviews before a continuation is pinned (Review, then Pin). Memory only. */
+export interface ContinuationReview {
+  nominee: string;
+  witnesses: string[];
+  threshold: number;
+  maxLeaseEpochs: number;
+}
+/** What the root reviews before a catalog binding is signed (Review, then Sign binding). Memory only. */
+export interface BindingReview {
+  record: Extract<TreehouseCatalogBindingReview, { ok: true }>["record"];
+  sha256: string;
+  lines: { field: string; value: string }[];
+}
+/**
+ * Row 232: the Space's continuation facts, for the root-only Continuation and Catalog binding actions.
+ * "legacy" Spaces were created before bounded continuation and can never carry a catalog binding.
+ */
+export interface ContinuationFacts {
+  family: "none" | "legacy" | "bounded";
+  /** This key is the root of a bounded Space, holds its live root capability and the Space is initialized. */
+  isRoot: boolean;
+  /** A continuation is pinned (an empty-delegation pin carrying the profile is honored). */
+  pinned: boolean;
+  /** An honored catalog binding is already in the Space; the binding is one-time. */
+  bound: boolean;
+  /** Admitted member keys other than the root, sorted, for prefilling the review. */
+  members: string[];
 }
 /**
  * Row 199 (D3): every authority fact the shell UI reads, derived once per saved state and read by
@@ -90,6 +125,27 @@ export interface WorkflowSnapshot {
   readonly canAdmit: boolean;
   /** Per held profile replica, the command names this key holds an honored capability for. */
   readonly commands: ReadonlyMap<string, ReadonlySet<string>>;
+}
+/** The default confirmation threshold: a majority of the witnesses. */
+export const defaultThreshold = (witnesses: number): number => Math.floor(witnesses / 2) + 1;
+export const DEFAULT_MAX_LEASE_EPOCHS = 7;
+const canonicalKey = (text: string): string | null => {
+  try {
+    const bytes = fromBase64(text);
+    return bytes.length === 32 && base64(bytes) === text ? text : null;
+  } catch {
+    return null;
+  }
+};
+/** Pasted base64 public keys, one per line; blank lines are ignored and any malformed key refuses the whole paste. */
+export function parsePublicKeys(text: string): string[] {
+  const keys: string[] = [];
+  for (const line of text.split("\n").map((l) => l.trim()).filter((l) => l !== "")) {
+    const key = canonicalKey(line);
+    if (key === null) throw new Error("invalid_public_key");
+    keys.push(key);
+  }
+  return keys;
 }
 export function fromBase64(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
@@ -135,6 +191,10 @@ export class TreehouseWorkflow {
   keyAvailable = false;
   /** Reviewed but unconfirmed offer routes. Memory only: Use never persists. */
   private pendingOffer: { review: OfferReview; relay: RelayConfig } | null = null;
+  /** Reviewed but unsigned catalog binding payload. Memory only: cancelling or reopening discards it. */
+  private pendingContinuation: ContinuationReview | null = null;
+  private pendingBinding: { payloadText: string; review: BindingReview } | null = null;
+  private continuationCache: { state: PreviewState; facts: ContinuationFacts } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   /** snapshot() cache, keyed on the identity of `state` (replaced on every persist) and `keyAvailable`. */
   private cached: { state: PreviewState; keyAvailable: boolean; facts: WorkflowSnapshot } | null = null;
@@ -165,6 +225,8 @@ export class TreehouseWorkflow {
     this.state = next;
     this.views = views;
     this.pendingOffer = null;
+    this.pendingBinding = null;
+    this.pendingContinuation = null;
     this.keyAvailable = captured.keyStatus === "available";
     if (
       captured.record !== null &&
@@ -192,10 +254,12 @@ export class TreehouseWorkflow {
     publicKey: string,
   ): Promise<Observation> {
     const kind = profile.product === "Treehouse.Space" ? "space" : "thread";
+    // Row 232: exactly the legacy grammar OR the bounded Space grammar (see treehouse_routes.ts).
+    if (!isProfileReplica(kind, profile.replica))
+      throw new Error("invalid_profile_replica");
     if (
-      !new RegExp(
-        `^replica:treehouse:${kind}:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$`,
-      ).test(profile.replica)
+      profile.replica.includes("#authority:") &&
+      treehouseSpaceFamily(profile.replica) !== "bounded"
     )
       throw new Error("invalid_profile_replica");
     const ids = new Set<string>();
@@ -301,6 +365,8 @@ export class TreehouseWorkflow {
     }
     this.state = next;
     this.views = views;
+    // Any persisted change invalidates an unsigned continuation review.
+    this.pendingContinuation = null;
   }
   createSpace(name: string) {
     return this.exclusive(async () => {
@@ -363,7 +429,9 @@ export class TreehouseWorkflow {
     const next = structuredClone(this.state);
     const changed: LocalProfile[] = [];
     if (kind === "space") {
-      const prepared = await prepareTreehouseSpaceCreation({
+      // Row 232: new Spaces are bounded-family so the root can later pin a continuation and sign the
+      // catalog binding. Threads stay legacy-family.
+      const prepared = await prepareTreehouseBoundedSpaceCreation({
         replica: nameReplica,
         name,
         signer,
@@ -498,6 +566,179 @@ export class TreehouseWorkflow {
   /** True when `createThread` would proceed: the Space's live root capability, and room under the route cap. */
   canCreateThread(): boolean {
     return this.snapshot().canCreateThread;
+  }
+  /**
+   * Row 232: the Space's continuation facts, derived once per saved state. Gates the root-only
+   * Continuation and Catalog binding actions; the workflow methods below re-check every fact.
+   */
+  continuation(): ContinuationFacts {
+    const { state } = this;
+    if (this.continuationCache?.state === state) return this.continuationCache.facts;
+    const space = state.profiles.find((p) => p.product === "Treehouse.Space");
+    let facts: ContinuationFacts = { family: "none", isRoot: false, pinned: false, bound: false, members: [] };
+    if (space !== undefined) {
+      const family = treehouseSpaceFamily(space.replica);
+      if (family !== "bounded") facts = { ...facts, family: "legacy" };
+      else {
+        const view = this.views.get(space.replica);
+        const bound = view
+          ? carrierOpsToSemanticOps(space.frames, {}, treehouseCommandDecoders("Treehouse.Space")).some(
+              (op) =>
+                op.kind === "command" &&
+                op.command === "catalog_bootstrap_v1" &&
+                !view.quarantineReasons.has(op.id),
+            )
+          : false;
+        const members = ((view?.state.members as unknown[] | undefined) ?? [])
+          .filter((m): m is string => typeof m === "string" && m !== state.publicKey)
+          .sort();
+        facts = {
+          family: "bounded",
+          isRoot: this.snapshot().isFounder && this.snapshot().rootLive,
+          pinned: treehouseContinuationPin(space.frames).configured,
+          bound,
+          members,
+        };
+      }
+    }
+    this.continuationCache = { state, facts };
+    return facts;
+  }
+  private boundedRootSpace(): LocalProfile {
+    const space = this.spaceProfile();
+    if (treehouseSpaceFamily(space.replica) !== "bounded") throw new Error("not_bounded_space");
+    if (this.state.intent) throw new Error("creation_incomplete");
+    if (!this.continuation().isRoot) throw new Error("not_root");
+    return space;
+  }
+  /** Sign one root frame for the Space, persist it into the outbox, and refuse it if the local view refuses it. */
+  private async queueSpaceFrame(make: (space: LocalProfile) => Promise<CarrierOpFrame>): Promise<string> {
+    const next = structuredClone(this.state);
+    const profile = next.profiles.find((p) => p.product === "Treehouse.Space")!;
+    const frame = await make(profile);
+    profile.frames.push(frame);
+    profile.outbox.push(frame.id);
+    const view = await this.verifyProfile(profile, this.state.publicKey!);
+    const refusal = view.quarantineReasons.get(frame.id);
+    if (refusal) throw new Error(refusal);
+    await this.persist(next, [profile], new Map([[profile.replica, view]]));
+    return frame.id;
+  }
+  /**
+   * Root, Review: validate the nominee, witnesses, threshold and lease bound a person typed or accepted.
+   * Pure; nothing is signed or saved. Throws the named refusal.
+   */
+  reviewContinuation(input: {
+    nominee: string;
+    witnesses: string;
+    threshold?: number | undefined;
+    maxLeaseEpochs?: number | undefined;
+  }): ContinuationReview {
+    this.boundedRootSpace();
+    if (this.continuation().pinned) throw new Error("continuation_already_pinned");
+    const nomineeKeys = parsePublicKeys(input.nominee);
+    if (nomineeKeys.length !== 1) throw new Error("invalid_public_key");
+    const witnesses = [...new Set(parsePublicKeys(input.witnesses))];
+    if (!witnesses.length) throw new Error("invalid_continuation_profile");
+    const nominee = nomineeKeys[0]!;
+    const root = this.state.publicKey!;
+    if (nominee === root) throw new Error("nominee_is_root");
+    if (witnesses.includes(root)) throw new Error("witness_is_root");
+    if (witnesses.includes(nominee)) throw new Error("witness_is_nominee");
+    const threshold = input.threshold ?? defaultThreshold(witnesses.length);
+    const maxLeaseEpochs = input.maxLeaseEpochs ?? DEFAULT_MAX_LEASE_EPOCHS;
+    if (
+      !Number.isSafeInteger(threshold) ||
+      threshold < 1 ||
+      threshold > witnesses.length ||
+      !Number.isSafeInteger(maxLeaseEpochs) ||
+      maxLeaseEpochs < 1 ||
+      maxLeaseEpochs > 65_535
+    )
+      throw new Error("invalid_continuation_profile");
+    // Byte order, as the signed pin sorts them, so the review shows the order that is signed.
+    const bytes = (key: string) => Uint8Array.from(atob(key), (c) => c.charCodeAt(0));
+    const byteOrder = (a: string, b: string) => {
+      const x = bytes(a), y = bytes(b);
+      for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i]! - y[i]!;
+      return x.length - y.length;
+    };
+    const reviewed = { nominee, witnesses: [...witnesses].sort(byteOrder), threshold, maxLeaseEpochs };
+    this.pendingContinuation = reviewed;
+    return { ...reviewed, witnesses: [...reviewed.witnesses] };
+  }
+  /** Root, Pin (the explicit confirmation): author the empty-delegation pin and queue it. Never touches the network. */
+  pinContinuation(review: ContinuationReview) {
+    return this.exclusive(async () => {
+      this.boundedRootSpace();
+      if (this.continuation().pinned) throw new Error("continuation_already_pinned");
+      // Only the parameters this workflow reviewed and showed can be signed.
+      const pending = this.pendingContinuation;
+      if (pending === null) throw new Error("no_pending_continuation");
+      if (JSON.stringify(pending) !== JSON.stringify(review)) throw new Error("continuation_review_mismatch");
+      // Sign the workflow's own frozen copy, never the caller's object, which it could still mutate.
+      const reviewed = structuredClone(pending);
+      return this.queueSpaceFrame((space) =>
+        authorTreehouseContinuationPin({
+          frames: space.frames,
+          signer: this.signer(),
+          nominee: reviewed.nominee,
+          witnesses: reviewed.witnesses,
+          threshold: reviewed.threshold,
+          maxLeaseEpochs: reviewed.maxLeaseEpochs,
+        }),
+      );
+    });
+  }
+  /**
+   * Root, Review: strictly review a ceremony `binding-payload.json` against this Space and root. The reviewed
+   * payload is kept in memory only until it is signed or cancelled. Throws the named refusal reason.
+   */
+  reviewCatalogBinding(payloadText: string): Promise<BindingReview> {
+    return this.exclusive(async () => {
+      const space = this.boundedRootSpace();
+      this.pendingBinding = null;
+      const reviewed = await reviewTreehouseCatalogBindingPayload({
+        payloadText,
+        replica: space.replica,
+        frames: space.frames,
+        rootPublicKey: this.state.publicKey!,
+      });
+      if (!reviewed.ok) throw new Error(reviewed.reason);
+      const review: BindingReview = { record: reviewed.record, sha256: reviewed.sha256, lines: reviewed.lines };
+      this.pendingBinding = { payloadText, review };
+      return review;
+    });
+  }
+  /** Cancel: discard the reviewed payload. Nothing was signed. */
+  cancelCatalogBinding() {
+    this.pendingBinding = null;
+  }
+  hasPendingBinding(): boolean {
+    return this.pendingBinding !== null;
+  }
+  /** Root, Sign binding (the separate explicit confirmation): re-review against the current history, then sign and queue. */
+  signCatalogBinding() {
+    return this.exclusive(async () => {
+      const pending = this.pendingBinding;
+      if (!pending) throw new Error("no_pending_binding");
+      const space = this.boundedRootSpace();
+      const again = await reviewTreehouseCatalogBindingPayload({
+        payloadText: pending.payloadText,
+        replica: space.replica,
+        frames: space.frames,
+        rootPublicKey: this.state.publicKey!,
+      });
+      if (!again.ok) {
+        this.pendingBinding = null;
+        throw new Error(again.reason);
+      }
+      const id = await this.queueSpaceFrame((profile) =>
+        authorTreehouseCatalogBootstrap({ frames: profile.frames, signer: this.signer(), record: again.record }),
+      );
+      this.pendingBinding = null;
+      return id;
+    });
   }
   /** True when this key holds a capability for `command` in the profile (the Post button's gate). */
   canAuthor(replica: string, command: string): boolean {

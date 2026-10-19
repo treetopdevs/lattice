@@ -238,12 +238,28 @@ Stdout carries `binding_payload_sha256`, `payload` and `review_sheet` (paths).
 (`ceremony_artifact_missing`). Two people read `binding-review.txt` field by field against the intended Space and relay before
 anyone signs it.
 
-**Honest status of the signing step.** The Space root must author this record as the Space command
-`catalog_bootstrap_v1`. Today the Tauri app creates legacy-family Spaces and has no
-`catalog_bootstrap_v1` command, so the real root cannot sign a valid binding yet (tracked as
-row 232). `binding-payload` refuses such a Space with `space_not_bounded_profile`. Until row 232
-lands, finish steps 5.1 to 5.3 and produce the report with the binding pending (section 5.6).
-Do not hand-craft or sign the record outside the product.
+**Signing step: the product path (row 232).** The Space root must author this record as the Space
+command `catalog_bootstrap_v1`, and only a bounded-profile Space can carry it. Legacy Spaces
+(created before row 232) are refused with `space_not_bounded_profile` and cannot be migrated in
+place. The path is:
+
+1. The root creates a NEW Space in the current app (it is created in the bounded family).
+2. The root enrolls members in the relay-connected (enrollment) build.
+3. The root authors the continuation pin from the app's Continuation action, then syncs until the
+   relay acknowledges it. The Space is then "pinned"; that word makes no readiness or recovery
+   claim.
+4. The operator points `--space-log` at the relay's path-backed Space log file (the file
+   `LatticeCarrierServer` persists with `Log.dump`) and runs `binding-payload` above. The ordinary
+   local-only build has no relay log, so `binding-payload` cannot run from it.
+5. The root pastes `binding-payload.json` into the app's Catalog binding action, compares every
+   line to `binding-review.txt`, signs, and syncs until acknowledged.
+6. The operator runs `verify-binding` (5.5) against the relay log, then `report` (5.6).
+
+The binding is meant to be signed once: the app and the product authoring helper refuse a second
+`catalog_bootstrap_v1`, and the app also refuses a binding whose catalog or service key is the Space
+root's own key. The Space itself does not enforce either rule, so a second record written by other
+tooling would be honored and `verify-binding` would report a fork. Do not hand-craft or sign the
+record outside the product.
 
 ### 5.5 Verify the binding (after the root has signed)
 
@@ -277,8 +293,9 @@ public key, backup digest, format and iteration count (`ceremony_inconsistent`) 
 `backup` {`sha256`, `format`, `kdf_iterations`}, `restore` {`verified_at`, `separate_host`},
 `custody`, `binding`, `generated_at`, `claim`). Stdout carries `report` (path) and `report_sha256`.
 
-While row 232 is open, the report carries
+Before `verify-binding` succeeds, the report carries
 `"binding": {"status": "pending_root_signature", "payload_sha256": <hex or null>, "blocker": "row 232"}`
+(the `blocker` string is a historical label; it means only that `verify-binding` has not yet verified the binding, which may already be signed and synced)
 (`payload_sha256` is null when no `binding-payload.json` exists). After a successful
 `verify-binding`, rerun `report`; it overwrites the file and the binding becomes
 `{"status": "verified", "bootstrap_id", "record_sha256", "space"}`. A `binding.json` that does not
@@ -389,4 +406,4 @@ reviewed. The seed and backup never enter a git checkout; the tool refuses to wr
 - The seed never lives in a git checkout, a cloud-synced folder, or beside its backup.
 - Never pass a passphrase in argv or in the environment. Stdin only, from a pipe, never a terminal.
 - Never use a dry-run key, directory or output as real material, and never the reverse.
-- Never hand-sign the binding outside the product to get past row 232.
+- Never hand-sign the binding outside the product; the root signs it in the app's Catalog binding action.

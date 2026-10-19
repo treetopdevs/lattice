@@ -4,8 +4,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.DryRun do
   # SHA-256 of a public label, so nothing here is, or can become, a real key.
   # The directory carries a marker that every real-mode command refuses.
 
-  alias Lattice.{Authority, Identity, Log, Op}
-  alias Lattice.Authority.Delegation
+  alias Lattice.{Identity, Log, Op}
 
   alias LatticeCarrierServer.Operator.CatalogCeremony.{
     Backup,
@@ -144,74 +143,51 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.DryRun do
   end
 
   defp sign_bootstrap(history, paths, payload) do
-    with {:ok, record} <- Binding.from_json(payload["record"]) do
-      bootstrap =
-        Op.new(
-          history.root,
-          history.replica,
-          [history.pin.id],
-          :command,
-          {:catalog_bootstrap_v1, [record]},
-          cap: history.delegation.id
-        )
-
+    with {:ok, record} <- Binding.from_json(payload["record"]),
+         {:ok, bootstrap} <-
+           Treehouse.Space.author_catalog_bootstrap(history.root, history.before, record) do
       dump(Log.append!(history.before, bootstrap), paths.final)
     end
   end
 
   defp dump(log, path), do: Log.dump(log, path)
 
-  @doc "The disposable bounded-continuation Space before any bootstrap, with its pieces."
+  @doc """
+  The disposable bounded-continuation Space before any bootstrap, with its pieces. Built only
+  through the product helpers, so the rehearsal exercises the same chain the app authors.
+  """
   @spec history() :: map()
   def history do
     root = identity("root")
     nominee = identity("nominee")
     witnesses = for n <- 1..3, do: identity("w#{n}")
 
-    replica =
-      Authority.bind_replica(
-        "replica:treehouse:space:" <> id("space") <> "#authority:bounded-continuation-v1",
-        root.pub
-      )
-
-    delegation =
-      Delegation.genesis(root, replica,
-        ops: [:create_space, :create_thread, :catalog_bootstrap_v1, :replace_catalog_v1],
-        roles: [:admin, :moderator]
-      )
-
-    genesis = Op.new(root, replica, [], :authority, {:genesis, delegation, %{}})
-
-    creation =
-      Op.new(root, replica, [genesis.id], :command, {:create_space, ["Canopy"]},
-        cap: delegation.id
-      )
-
-    profile = %{
-      mode: :bounded_continuation,
-      version: 1,
-      product: :treehouse,
-      kind: :space,
-      role: :admin,
-      nominee: nominee.pub,
-      witnesses: Enum.sort(Enum.map(witnesses, & &1.pub)),
-      threshold: 2,
-      max_lease_epochs: 7
-    }
-
-    empty = Delegation.genesis(root, replica, ops: [], roles: [], live: false)
-
-    pin =
-      Op.new(
+    {:ok, %{replica: replica, pending: pending}} =
+      Treehouse.Space.prepare_bounded_creation(
         root,
-        replica,
-        [creation.id],
-        :authority,
-        {:genesis, empty, %{__continuation__: profile}}
+        "replica:treehouse:space:" <> id("space"),
+        "Canopy"
       )
 
-    before = Enum.reduce([genesis, creation, pin], Log.new(replica), &Log.append!(&2, &1))
-    %{root: root, replica: replica, delegation: delegation, pin: pin, before: before}
+    created = Enum.reduce(pending, Log.new(replica), &Log.append!(&2, &1))
+
+    {:ok, pin} =
+      Treehouse.Space.prepare_continuation_pin(root, created, %{
+        nominee: nominee.pub,
+        witnesses: Enum.map(witnesses, & &1.pub),
+        threshold: 2,
+        max_lease_epochs: 7
+      })
+
+    [%Op{body: {:genesis, delegation, _}} | _] = pending
+
+    %{
+      root: root,
+      replica: replica,
+      delegation: delegation,
+      pin: pin,
+      before: Log.append!(created, pin)
+    }
   end
 
   defp id(label),

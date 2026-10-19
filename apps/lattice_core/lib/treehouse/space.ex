@@ -10,8 +10,8 @@ defmodule Treehouse.Space do
   use Lattice.Replica
 
   alias Lattice.{Authority, Identity, Log, Op}
-  alias Lattice.Authority.Delegation
-  alias Treehouse.{Invitation, TransportCatalog}
+  alias Lattice.Authority.{Continuation, ContinuationCertificate, Delegation}
+  alias Treehouse.{CatalogBootstrap, Invitation, TransportCatalog}
 
   @preview_commands [
     :create_space,
@@ -21,6 +21,13 @@ defmodule Treehouse.Space do
     :admit_member,
     :remove_member
   ]
+
+  # The root's capability set is final: the continuation pin adds no ops, so rotation and
+  # attestation ops are granted at birth. `replace_catalog_v1` is a closed wire atom with no
+  # Space command yet.
+  @bounded_genesis_ops @preview_commands ++
+                         [:catalog_bootstrap_v1, :attest_member_key_v1, :replace_catalog_v1]
+  @bounded_suffix "#authority:bounded-continuation-v1"
 
   @doc false
   @spec known_continuity_wire_atoms() :: [atom()]
@@ -143,6 +150,255 @@ defmodule Treehouse.Space do
            }}
       end
     end
+  end
+
+  @doc """
+  Prepare deterministic bounded-family creation. `nonce_replica` must be exactly
+  `replica:treehouse:space:<43-char base64url nonce>`; the bounded authority segment and the
+  root commitment are appended here. No continuation is pinned yet.
+  """
+  @spec prepare_bounded_creation(Identity.t(), String.t(), String.t(), Log.t() | nil) ::
+          {:ok, map()} | {:error, atom()}
+  def prepare_bounded_creation(identity, nonce_replica, name, retained \\ nil) do
+    name = text!(name)
+
+    with {:ok, nonce} <- bounded_nonce(nonce_replica) do
+      replica =
+        Authority.bind_replica(
+          "replica:treehouse:space:" <> nonce <> @bounded_suffix,
+          identity.pub
+        )
+
+      delegation =
+        Delegation.genesis(identity, replica,
+          ops: @bounded_genesis_ops,
+          roles: [:admin, :moderator]
+        )
+
+      with {:ok, genesis} <-
+             Op.authored(identity, replica, [], :authority, {:genesis, delegation, %{}}),
+           {:ok, name_op} <-
+             Op.authored(identity, replica, [genesis.id], :command, {:create_space, [name]},
+               cap: delegation.id
+             ) do
+        log = retained || Log.new(replica)
+
+        cond do
+          log.replica != replica ->
+            {:error, :wrong_replica}
+
+          not valid_retained_log?(log) ->
+            {:error, :invalid_retained_log}
+
+          Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
+            {:error, :wrong_root}
+
+          different_initialization?(drop_pins(log, identity), genesis, name_op) ->
+            {:error, :different_initialization}
+
+          true ->
+            {:ok,
+             %{
+               replica: replica,
+               profile: :bounded_root_only,
+               status: initialization(log),
+               pending: Enum.reject([genesis, name_op], &Log.has?(log, &1.id))
+             }}
+        end
+      end
+    end
+  end
+
+  # A later root continuation pin (empty, non-live, parentless delegation carrying a
+  # `:__continuation__` policy) is not a competing initialization of a bounded Space.
+  defp drop_pins(%Log{} = log, identity) do
+    pins =
+      for {id,
+           %Op{kind: :authority, author: author, body: {:genesis, %Delegation{} = d, policies}}} <-
+            Log.ops(log),
+          author == identity.pub and is_map(policies) and not is_struct(policies) and
+            match?(
+              {:ok, %{kind: :space, role: :admin}},
+              ContinuationCertificate.normalize_policy(policies[:__continuation__])
+            ) and
+            d.issuer == identity.pub and d.audience == identity.pub and d.live == false and
+            is_nil(d.parent_id) and is_nil(d.expires_epoch) and MapSet.size(d.ops) == 0 and
+            MapSet.size(d.roles) == 0,
+          do: id
+
+    %{log | ops: Map.drop(log.ops, pins)}
+  end
+
+  defp bounded_nonce("replica:treehouse:space:" <> nonce) do
+    if ContinuationCertificate.id?(nonce), do: {:ok, nonce}, else: {:error, :invalid_replica}
+  end
+
+  defp bounded_nonce(_), do: {:error, :invalid_replica}
+
+  @doc "Author the root's empty-delegation pin genesis carrying the bounded continuation profile."
+  @spec prepare_continuation_pin(Identity.t(), Log.t(), map()) :: {:ok, Op.t()} | {:error, atom()}
+  def prepare_continuation_pin(identity, %Log{} = log, params) do
+    with :ok <- bounded_space(log),
+         {:ok, pinned?} <- observe_pin(log),
+         :ok <- ready(log),
+         :ok <- root(identity, log),
+         :ok <- if(pinned?, do: {:error, :continuation_already_pinned}, else: :ok),
+         {:ok, profile} <- pin_profile(identity, params) do
+      empty = Delegation.genesis(identity, log.replica, ops: [], roles: [], live: false)
+
+      Op.authored(
+        identity,
+        log.replica,
+        Enum.sort(Log.frontier(log)),
+        :authority,
+        {:genesis, empty, %{__continuation__: profile}}
+      )
+    end
+  end
+
+  # Authenticated, complete history first (the judge's own check); a corrupt log is never signed over.
+  defp observe_pin(log) do
+    case Authority.continuation_profile(log) do
+      {:error, :invalid_verified_history} -> {:error, :invalid_verified_history}
+      {:ok, _} -> {:ok, true}
+      _ -> {:ok, false}
+    end
+  end
+
+  # Same question as `root/2` for the early refusal, answered from the replica binding alone.
+  defp root_binding(identity, %Log{replica: replica}) do
+    [name | _] = String.split(replica, "#root:", parts: 2)
+
+    if Authority.bind_replica(name, identity.pub) == replica,
+      do: :ok,
+      else: {:error, :not_root}
+  end
+
+  defp bounded_space(%Log{replica: replica}) do
+    if Continuation.family(replica) == {:bounded, :space},
+      do: :ok,
+      else: {:error, :not_bounded_space}
+  end
+
+  defp ready(log),
+    do: if(initialization(log) == :ready, do: :ok, else: {:error, :space_not_ready})
+
+  defp root(identity, log),
+    do: if(identity.pub == Authority.root(log), do: :ok, else: {:error, :not_root})
+
+  defp pin_profile(identity, %{nominee: nominee, witnesses: witnesses} = params)
+       when is_list(witnesses) do
+    profile = %{
+      mode: :bounded_continuation,
+      version: 1,
+      product: :treehouse,
+      kind: :space,
+      role: :admin,
+      nominee: nominee,
+      witnesses: Enum.sort(witnesses),
+      threshold: params[:threshold],
+      max_lease_epochs: params[:max_lease_epochs]
+    }
+
+    with {:ok, profile} <- ContinuationCertificate.normalize_policy(profile) do
+      cond do
+        profile.nominee == identity.pub -> {:error, :nominee_is_root}
+        identity.pub in profile.witnesses -> {:error, :witness_is_root}
+        profile.nominee in profile.witnesses -> {:error, :witness_is_nominee}
+        true -> {:ok, profile}
+      end
+    end
+  end
+
+  defp pin_profile(_identity, _params), do: {:error, :invalid_continuation_profile}
+
+  @doc """
+  Author the one-time catalog bootstrap command, citing the pin in its causal context and the
+  root's original full-role genesis delegation as its capability.
+  """
+  @spec author_catalog_bootstrap(Identity.t(), Log.t(), map()) :: {:ok, Op.t()} | {:error, atom()}
+  def author_catalog_bootstrap(identity, %Log{} = log, record) do
+    with :ok <- bounded_space(log),
+         :ok <- root_binding(identity, log),
+         {:ok, observed} <- bootstrap_profile(log),
+         {:ok, record} <- bootstrap_record(record),
+         :ok <- bootstrap_binding(identity, log, observed, record),
+         :ok <- bootstrap_key_separation(identity, record),
+         :ok <- no_bootstrap(log) do
+      honored_bootstrap(identity, log, record)
+    end
+  end
+
+  # Try each root admin genesis that grants the bootstrap, in canonical order, and return the
+  # first authored op the judge honors; an op that would quarantine (revoked, expired, not
+  # granted) is never returned.
+  defp honored_bootstrap(identity, log, record) do
+    deps = Enum.sort(Log.frontier(log))
+
+    log
+    |> root_capabilities(identity)
+    |> Enum.find_value({:error, :bootstrap_not_honored}, fn cap ->
+      with {:ok, op} <-
+             Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
+               cap: cap
+             ),
+           false <-
+             MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
+        {:ok, op}
+      else
+        _ -> nil
+      end
+    end)
+  end
+
+  defp bootstrap_profile(log) do
+    case Authority.continuation_profile(log) do
+      {:ok, observed} -> {:ok, observed}
+      {:error, :invalid_verified_history} -> {:error, :invalid_verified_history}
+      _ -> {:error, :continuation_not_configured}
+    end
+  end
+
+  # The ceremony's key-separation rule: the catalog and service keys are never the Space root's.
+  defp bootstrap_key_separation(identity, record) do
+    if record.catalog_key == identity.pub or record.service_key == identity.pub,
+      do: {:error, :binding_key_reuse},
+      else: :ok
+  end
+
+  defp bootstrap_record(record) do
+    case TransportCatalog.normalize_bootstrap(record) do
+      {:ok, normal} -> {:ok, normal}
+      _ -> {:error, :invalid_catalog_bootstrap}
+    end
+  end
+
+  defp bootstrap_binding(identity, log, observed, record) do
+    if record.space == log.replica and record.space_root == identity.pub and
+         observed.profile.kind == :space and observed.profile_genesis == record.profile_genesis and
+         observed.profile_id == record.profile_id,
+       do: :ok,
+       else: {:error, :binding_mismatch}
+  end
+
+  defp no_bootstrap(log) do
+    case CatalogBootstrap.observe(log) do
+      {:ok, %{bootstraps: []}} -> :ok
+      _ -> {:error, :catalog_bootstrap_exists}
+    end
+  end
+
+  defp root_capabilities(log, identity) do
+    analysis = Authority.analyze(__MODULE__, log)
+
+    for %Op{
+          kind: :authority,
+          body: {:genesis, %Delegation{id: cap, roles: roles, ops: ops}, _},
+          id: id
+        } = op <- Log.topo_ops(log),
+        op.author == identity.pub and :admin in roles and :catalog_bootstrap_v1 in ops and
+          not MapSet.member?(analysis.quarantine, id),
+        do: cap
   end
 
   defp valid_retained_log?(%Log{ops: ops, replica: replica}) when is_map(ops) do
