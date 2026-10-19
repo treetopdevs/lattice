@@ -17,7 +17,6 @@
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
 the inputs in "Depends on" exist. PRs 1 and 3 need no ceremony output or decision and may start now; PR 2 waits on
 OD-1 and OD-5; PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
-Reviews and their dispositions are in the PR description (rule 4).
 
 ## Header
 
@@ -33,8 +32,7 @@ Reviews and their dispositions are in the PR description (rule 4).
      `--service-public-key` (OD-1), on the carrier host.
   4. Operator decisions OD-1 to OD-5 below (rows 239-243).
   5. Plan 223 `ready` (row 223, DONE).
-- **Category**: carrier lifecycle (roadmap R11b; operator decision D1: route activation is local-only)
-- **Planned at**: 2026-10-19 against 1cebccd03
+- **Category**: carrier lifecycle (roadmap R11b; D1: activation is local-only). **Planned at**: 1cebccd03
 
 ## Sources this plan follows, and what it supersedes
 
@@ -140,9 +138,9 @@ handshake, wire or session code changes: both clients treat the realm as an opaq
   service realm (refused in staging, never in `web_socket.ex`). Refusal: `:service_binding_mismatch`.
   Activation (`release_activation.ex:104`) and readiness re-derive the realm from the binding rather
   than trusting the record.
-- **Space instance migration.** One staging may change the active Space instance's `realm`, `route`
-  and `relay_realms` to the bound and reviewed values; every other field stays unchanged (today any
-  active-instance change refuses). A realm change breaks hand-pinned `RelayRoute`s for the old realm
+- **Migration.** One staging may move every active Treehouse instance's `realm`, `route`,
+  `relay_realms` and `identity_file`/`pub` to the bound and reviewed values, with the existing
+  identity-file custody checks; nothing else changes (today any active-instance change refuses). A realm change breaks hand-pinned `RelayRoute`s for the old realm
   (dev-trace fixtures only); members' `trusted_peers` entries are untouched, and a test proves it.
 - **Relay (OD-5).** Contract C07 (`lifecycle.md:561`) forbids cataloguing a read-only relay. Staging
   today requires the child's `relay_realms == []` as "a separate reviewed decision". Recommended: the
@@ -189,7 +187,8 @@ may not be lower than any of them: else `catalog_store_corrupt` (catches tail de
 envelope may lie past it: a **pending** envelope whose `previous` is the committed head. Anything
 further is `catalog_fork`.
 
-**Boot and stage.** Boot treats `catalogued` and `listed` like `ready`. Stage may replace any phase
+**Boot and stage.** Boot treats `catalogued` and `listed` like `ready`, and the BEAM verifies the
+store and receipts (above) before the release gate lets routes start (`catalog_store_corrupt`). Stage may replace any phase
 (history keeps it); the request's `catalog_head` must equal the committed head and no pending
 envelope may exist, else `stale_catalog_head`.
 
@@ -206,7 +205,9 @@ envelope may exist, else `stale_catalog_head`.
   runs a new ceremony command `sign-catalog`. It keeps a custodian-side record of the last signed
   revision, id and envelope bytes (envelope written and fsynced before the record advances). It
   replays that envelope byte for byte for the same `C`, and refuses anything else that is not the
-  next revision with `previous` equal to it; it re-runs `CatalogEntries.observe/2` over Space and Thread exports the custodian holds;
+  next revision with `previous` equal to it. The package carries the staged reference frame; it
+  re-runs `CatalogEntries.observe/2` over the custodian's Space and Thread exports plus that frame,
+  as the carrier's step 6 does;
   it prints a review sheet with the binding id and, per new entry, replica, root, route and
   reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file,
   envelope_file)` re-runs every check, requires `envelope.catalog == C` exactly, and verifies the
@@ -221,10 +222,9 @@ BEAM checks (atom-only refusals; every raise rescued as in `confirm/3`):
    (`:service_binding_mismatch`); every instance's `relay_realms` is the reviewed set (`:route_read_only`);
    the shared roster check over the served Space log still equals the staged roster and every
    instance's admissions (`:roster_drift_since_ready`).
-3. The probe over every route, as in Design 2 (`:readiness_pull_failed`). §5 needs the route
-   authenticated at publication, and the first catalog introduces the Space route.
-4. Store state (Design 3). If a pending envelope exists, go to step 7 with it (crash recovery).
-   Else the committed head equals `record.catalog_head` (`:stale_catalog_head`); revision and
+3. The probe over every route, including the new Space route (Design 2; `:readiness_pull_failed`).
+4. Store state (Design 3). A pending envelope (crash recovery) still goes through steps 5-6.
+   The committed head equals `record.catalog_head` (`:stale_catalog_head`); revision and
    `previous` follow it (revision 0 and `nil` for the first); `binding` = `bootstrap_id`.
 5. Entries = the head's entries carried forward unchanged, plus this attempt's Thread entry (replica,
    root, genesis, creation from the staged child log; `reference` = the staged reference op id;
@@ -244,7 +244,8 @@ catalog_head=id, artifacts=old + [catalog artifact])`; `attempt`, `incarnation` 
 `malformed_operator_plan`; `stale_operator_intent` (old phase not `ready`, attempt differs, record is
 not the derived one, bytes digest differs, manifest digest differs); `stale_operator_incarnation`;
 `unsafe_operator_file`; `immutable_artifact_conflict`. The owner cannot verify Ed25519; it binds
-bytes to digest and trusts the BEAM for the signature.
+bytes to digest and trusts the BEAM for the signature. Like `ready`, `catalogued` is an observation at
+the checked frontiers; a later roster or authority change is caught by `listed`'s in-holder guard.
 
 ## Design 5: `listed`
 
