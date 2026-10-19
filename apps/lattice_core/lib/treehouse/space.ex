@@ -181,53 +181,45 @@ defmodule Treehouse.Space do
              Op.authored(identity, replica, [genesis.id], :command, {:create_space, [name]},
                cap: delegation.id
              ) do
-        log = retained || Log.new(replica)
-
-        cond do
-          log.replica != replica ->
-            {:error, :wrong_replica}
-
-          not valid_retained_log?(log) ->
-            {:error, :invalid_retained_log}
-
-          Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
-            {:error, :wrong_root}
-
-          different_initialization?(drop_pins(log, identity), genesis, name_op) ->
-            {:error, :different_initialization}
-
-          true ->
-            {:ok,
-             %{
-               replica: replica,
-               profile: :bounded_root_only,
-               status: initialization(log),
-               pending: Enum.reject([genesis, name_op], &Log.has?(log, &1.id))
-             }}
-        end
+        bounded_status(identity, replica, genesis, name_op, retained || Log.new(replica))
       end
     end
   end
 
-  # A later root continuation pin (empty, non-live, parentless delegation carrying a
-  # `:__continuation__` policy) is not a competing initialization of a bounded Space.
-  defp drop_pins(%Log{} = log, identity) do
-    pins =
-      for {id,
-           %Op{kind: :authority, author: author, body: {:genesis, %Delegation{} = d, policies}}} <-
-            Log.ops(log),
-          author == identity.pub and is_map(policies) and not is_struct(policies) and
-            match?(
-              {:ok, %{kind: :space, role: :admin}},
-              ContinuationCertificate.normalize_policy(policies[:__continuation__])
-            ) and
-            d.issuer == identity.pub and d.audience == identity.pub and d.live == false and
-            is_nil(d.parent_id) and is_nil(d.expires_epoch) and MapSet.size(d.ops) == 0 and
-            MapSet.size(d.roles) == 0,
-          do: id
+  defp bounded_status(identity, replica, genesis, name_op, log) do
+    with :ok <- if(log.replica == replica, do: :ok, else: {:error, :wrong_replica}),
+         {:ok, pins} <- retained_pins(log) do
+      # A continuation pin the judge recognizes is not a competing initialization.
+      exempt = MapSet.new(pins, & &1.op_id)
 
-    %{log | ops: Map.drop(log.ops, pins)}
+      cond do
+        Authority.root(Log.append!(Log.new(replica), genesis)) != identity.pub ->
+          {:error, :wrong_root}
+
+        different_initialization?(log, genesis, name_op, exempt) ->
+          {:error, :different_initialization}
+
+        true ->
+          {:ok,
+           %{
+             replica: replica,
+             profile: :bounded_root_only,
+             status: initialization(log),
+             pending: Enum.reject([genesis, name_op], &Log.has?(log, &1.id))
+           }}
+      end
+    end
   end
+
+  # Complete, authenticated history and pin recognition both come from the judge.
+  defp retained_pins(%Log{} = log) do
+    case Authority.continuation_pins(log) do
+      {:ok, pins} -> {:ok, pins}
+      {:error, _} -> {:error, :invalid_retained_log}
+    end
+  end
+
+  defp retained_pins(_), do: {:error, :invalid_retained_log}
 
   defp bounded_nonce("replica:treehouse:space:" <> nonce) do
     if ContinuationCertificate.id?(nonce), do: {:ok, nonce}, else: {:error, :invalid_replica}
@@ -329,9 +321,8 @@ defmodule Treehouse.Space do
     end
   end
 
-  # Try each root admin genesis that grants the bootstrap, in canonical order, and return the
-  # first authored op the judge honors; an op that would quarantine (revoked, expired, not
-  # granted) is never returned.
+  # Try each root genesis capability, in canonical order, and return the first authored op the
+  # judge honors; an op that would quarantine (revoked, expired, not granted) is never returned.
   defp honored_bootstrap(identity, log, record) do
     deps = Enum.sort(Log.frontier(log))
 
@@ -388,19 +379,27 @@ defmodule Treehouse.Space do
     end
   end
 
+  # Candidates only: root-authored genesis delegations. The ops/roles test is advisory: a
+  # delegation lacking the bootstrap op or the admin role is one the judge refuses anyway
+  # (`:operation_not_granted`, `:role_not_granted`), so skipping it changes no result and spares
+  # a trial per decoy. Whether a candidate is honored is the judge's verdict in
+  # `honored_bootstrap/3`.
   defp root_capabilities(log, identity) do
-    analysis = Authority.analyze(__MODULE__, log)
-
-    for %Op{
-          kind: :authority,
-          body: {:genesis, %Delegation{id: cap, roles: roles, ops: ops}, _},
-          id: id
-        } = op <- Log.topo_ops(log),
-        op.author == identity.pub and :admin in roles and :catalog_bootstrap_v1 in ops and
-          not MapSet.member?(analysis.quarantine, id),
-        do: cap
+    for(
+      %Op{
+        kind: :authority,
+        author: author,
+        body: {:genesis, %Delegation{id: cap, ops: ops, roles: roles}, _}
+      } <- Log.topo_ops(log),
+      author == identity.pub and :catalog_bootstrap_v1 in ops and :admin in roles,
+      do: cap
+    )
+    |> Enum.uniq()
   end
 
+  # Legacy creation only, and intentionally local: the judge's verified-history check
+  # (`Authority.continuation_pins/1`) refuses the legacy family, so legacy keeps this
+  # signature-and-deps check. The bounded path never uses it.
   defp valid_retained_log?(%Log{ops: ops, replica: replica}) when is_map(ops) do
     Enum.all?(ops, fn
       {id, %Op{id: id, replica: ^replica, deps: deps} = op} ->
@@ -435,10 +434,13 @@ defmodule Treehouse.Space do
     end
   end
 
-  defp different_initialization?(log, genesis, name_op) do
+  # Intentionally local and conservative: any other genesis (honored or not, except a pin the
+  # judge recognizes) and any other `create_space` on this genesis competes. This is a creation
+  # refusal, not an authority verdict; `initialization/1` reads the judged history.
+  defp different_initialization?(log, genesis, name_op, exempt \\ MapSet.new()) do
     Enum.any?(Log.ops(log), fn
       {id, %Op{kind: :authority, body: {:genesis, _, _}}} ->
-        id != genesis.id
+        id != genesis.id and not MapSet.member?(exempt, id)
 
       {id, %Op{kind: :command, body: {:create_space, [_]}, deps: deps}} ->
         deps == [genesis.id] and id != name_op.id

@@ -152,6 +152,31 @@ defmodule Lattice.Authority do
   @doc "Observe the selected root-authenticated continuation pin in complete retained history."
   @spec continuation_profile(Log.t()) :: {:ok, map()} | {:error, atom()}
   def continuation_profile(%Log{} = log) do
+    with :ok <- bounded_verified(log) do
+      continuation_profile_from_log(log)
+    end
+  rescue
+    _ -> {:error, :invalid_verified_history}
+  end
+
+  @doc """
+  Every root-authenticated continuation pin in complete retained history, in canonical
+  order. A read-only projection of the judge's existing pin recognition: the same family
+  gate, history verification and delegation validation as `continuation_profile/1`, with no
+  pin selection. An unpinned log yields `{:ok, []}`.
+  """
+  @spec continuation_pins(Log.t()) ::
+          {:ok, [%{op_id: String.t(), profile: map()}]} | {:error, atom()}
+  def continuation_pins(%Log{} = log) do
+    with :ok <- bounded_verified(log) do
+      {_root, context} = continuation_context(log)
+      {:ok, context.pins}
+    end
+  rescue
+    _ -> {:error, :invalid_verified_history}
+  end
+
+  defp bounded_verified(log) do
     case Continuation.family(log.replica) do
       :legacy ->
         {:error, :unauthorized_continuation}
@@ -160,15 +185,11 @@ defmodule Lattice.Authority do
         {:error, :unsupported_authority_profile}
 
       {:bounded, _} ->
-        if verified_complete_log?(log),
-          do: continuation_profile_from_log(log),
-          else: {:error, :invalid_verified_history}
+        if verified_complete_log?(log), do: :ok, else: {:error, :invalid_verified_history}
     end
-  rescue
-    _ -> {:error, :invalid_verified_history}
   end
 
-  defp continuation_profile_from_log(log) do
+  defp continuation_context(log) do
     ordered = Log.topo_ops(log)
     {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
     delegations = collect_delegations(ordered)
@@ -177,7 +198,11 @@ defmodule Lattice.Authority do
       validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
 
     root = resolve_root(ordered, delegations, valid, commitment)
-    context = Continuation.context(log.replica, ordered, delegations, valid, root, [])
+    {root, Continuation.context(log.replica, ordered, delegations, valid, root, [])}
+  end
+
+  defp continuation_profile_from_log(log) do
+    {root, context} = continuation_context(log)
 
     case Continuation.select_pin(context, Log.op_ids(log)) do
       nil ->

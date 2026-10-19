@@ -19,12 +19,12 @@ export * from "./consent";
 export * from "./policy";
 // Keep the unauthenticating application predicate internal to the module graph.
 export {
-  resolveContinuationProfileFromFrames, analyzeAuthority, continuationFamily, deriveContinuationReview,
+  resolveContinuationProfileFromFrames, resolveContinuationPinsFromFrames, analyzeAuthority, continuationFamily, deriveContinuationReview,
   deriveWitnessedSuccessionReview, assembleWitnessedSuccessionArtifact, exportWitnessedSuccessionArtifactJson,
   witnessedRecoveryPolicyId, verifyWitnessedSuccessionCertificate, witnessedBeaconHorizon,
 } from "./authority";
 export type {
-  ContinuationProfileObservation, HonoredAcquire, DelegationValidation, AuthorityDelegationRecord,
+  ContinuationProfileObservation, ContinuationPinsObservation, HonoredAcquire, DelegationValidation, AuthorityDelegationRecord,
   AuthorityRootEvidence, EffectiveBeaconEvidence, EffectiveRevokeEvidence, AuthoritySecurityProjection,
   RecoveryPolicyProjection, AuthorityAnalysis, WitnessedSuccessionReviewSelector, WitnessedSuccessionReview,
   WitnessedSuccessionReviewRefusal, WitnessedSuccessionReviewResult, ContinuationFamily,

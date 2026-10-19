@@ -131,12 +131,48 @@ assert.ok(delegations > 0, "precondition: the vector carries delegations");
 assert.notDeepEqual(permuted, frames, "precondition: sets were permuted");
 for (const f of permuted) assert.ok(await verify(f), "permuted or duplicated set members leave the signed bytes unchanged");
 assert.equal(await buildSpaceFramesExport({ ...base, frames: permuted }), built, "delegation and mapset sets are canonicalized");
+// Row 237: integers spelled as decimal strings (["int","7"]) have the same canonical bytes, so they verify, but the
+// BEAM emits ["int",7]. Every perturbation at once must export the unperturbed bytes, which are the fixture's.
+let ints = 0;
+let sets = 0;
+const perturb = (t: any): any => {
+  if (!Array.isArray(t)) return t;
+  if (t[0] === "int" && typeof t[1] === "number") return ints++, ["int", String(t[1])];
+  if (t[0] === "map") return ["map", [...t[1]].reverse().map(([k, x]: any[]) => [perturb(k), perturb(x)])];
+  if (t[0] === "mapset" || t[0] === "list" || t[0] === "tuple") return [t[0], [...t[1]].map(perturb)];
+  if (t[0] === "delegation") {
+    const d = { ...t[1] };
+    sets++;
+    d.ops = [...d.ops].reverse().concat(d.ops.slice(0, 1));
+    d.roles = [...d.roles].reverse().concat(d.roles.slice(0, 1));
+    return ["delegation", d];
+  }
+  return t;
+};
+const everything = frames.map((f) => ({ ...f, body: perturb(f.body), cap: perturb(f.cap) }) as CarrierOpFrame);
+assert.ok(ints > 0 && sets > 0, "precondition: the vector carries integers to respell and delegations to permute");
+assert.ok(JSON.stringify(everything).includes('["int","'), "precondition: string ints are planted");
+for (const f of everything) assert.ok(await verify(f), "the perturbed frames keep their signed bytes");
+const perturbedExport = await buildSpaceFramesExport({ ...base, frames: everything });
+assert.equal(perturbedExport, built, "perturbed frames export the unperturbed bytes");
+assert.equal(perturbedExport, readFileSync(fixture, "utf8"), "and the shared fixture's bytes");
+assert.ok(!perturbedExport.includes('["int","'), "integers are emitted as numbers, as the BEAM does");
 const malformed = structuredClone(frames[0]!) as any;
 malformed.body = ["tuple", [["bogus", 1]]];
 await assert.rejects(
   buildSpaceFramesExport({ ...base, frames: [malformed], verify: async () => true }),
   /export_invalid_frame/,
 );
+// Names outside the closed wire vocabulary: the ceremony's Wire.decode_op refuses them, so the export does too.
+for (const name of ["true", "\u{10000}"]) {
+  const offList = structuredClone(frames[0]!) as any;
+  offList.body = ["tuple", [["atom", name]]];
+  await assert.rejects(
+    buildSpaceFramesExport({ ...base, frames: [offList], verify: async () => true }),
+    /export_invalid_frame/,
+    name,
+  );
+}
 console.log("PASS refusals");
 
 // ---- 3. file names ------------------------------------------------------------------------------------------

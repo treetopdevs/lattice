@@ -13,7 +13,7 @@ import type { Op } from "./op";
 import { frontier } from "./sync";
 import { materialize } from "./materialize";
 import { bindTownshipReplica, authorTownshipGenesis } from "./township";
-import { continuationFamily, continuationProfileBindingMatches, resolveContinuationProfileFromFrames } from "./authority";
+import { continuationFamily, continuationProfileBindingMatches, resolveContinuationPinsFromFrames, resolveContinuationProfileFromFrames } from "./authority";
 import { continuationProfileId, continuationProfileToCarrierTerm, normalizeContinuationProfile } from "./continuation";
 import type { ContinuationProfile } from "./continuation";
 import { authorTreehouseCommand, treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceInitialization, treehouseSpaceSchema } from "./treehouse";
@@ -66,26 +66,23 @@ export async function prepareTreehouseBoundedSpaceCreation(input: {
   const created = await authorTreehouseCommand({ product: "Treehouse.Space", replica: genesis.replica, deps: [genesis.id],
     signer: input.signer, capId: delegation.id, command: { command: "create_space", name: input.name } });
   const retained = input.retained ?? [];
-  for (const frame of retained) {
-    if (frame.replica !== genesis.replica) throw new Error("wrong_replica");
-    if (!(await verifyCarrierOp(frame, verifier)).valid) throw new Error("invalid_retained_log");
-  }
+  for (const frame of retained) if (frame.replica !== genesis.replica) throw new Error("wrong_replica");
+  // The judge verifies the complete retained history and names its continuation pins; only those are not a competing initialization.
+  const judged = await resolveContinuationPinsFromFrames({ replica: genesis.replica, frames: retained });
+  if (!judged.ok) throw new Error("invalid_retained_log");
+  const pins = new Set(judged.pins.map((pin) => pin.opId));
   const ids = new Set(retained.map((frame) => frame.id));
-  if (ids.size !== retained.length) throw new Error("invalid_retained_log");
-  if (retained.some((frame) => frame.deps.some((id) => !ids.has(id)))) throw new Error("invalid_retained_log");
   const ops = carrierOpsToSemanticOps(retained, {}, treehouseCommandDecoders("Treehouse.Space"));
-  // A later root continuation pin (empty, non-live, parentless delegation with a valid profile) is not a competing initialization.
-  const signer = bytesToB64(input.signer.publicKey);
-  const pins = new Set(retained.filter((frame) => {
-    const delegation = carrierDelegationsFromFrames([frame])[0];
-    const op = ops.find((o) => o.id === frame.id);
-    const profile = op?.authority?.type === "genesis" ? op.authority.continuationProfile : null;
-    return frame.kind === "authority" && frame.author === signer && profile?.kind === "space" && profile.role === "admin" &&
-      delegation !== undefined && delegation.issuer === signer && delegation.audience === signer && !delegation.live &&
-      delegation.parent_id === null && delegation.expires_epoch === undefined && delegation.ops.length === 0 && delegation.roles.length === 0;
-  }).map((frame) => frame.id));
-  if (ops.some((op) => (op.kind === "authority" && op.authority?.type === "genesis" && op.id !== genesis.id && !pins.has(op.id)) ||
-    (op.kind === "command" && op.command === "create_space" && op.deps.length === 1 && op.deps[0] === genesis.id && op.id !== created.id))) {
+  // Intentionally local and conservative, as `Treehouse.Space.different_initialization?/4`: a creation refusal, not an authority verdict.
+  // A genesis is matched on the frame's structure, as BEAM matches `{:genesis, _, _}`, so a frame whose terms the semantic
+  // decoder cannot read (row 212) still counts as a competing initialization.
+  const structuralGenesis = (frame: CarrierOpFrame): boolean => {
+    const body = frame.body;
+    return frame.kind === "authority" && body[0] === "tuple" && body[1].length === 3 &&
+      body[1][0]![0] === "atom" && body[1][0]![1] === "genesis";
+  };
+  if (retained.some((frame) => structuralGenesis(frame) && frame.id !== genesis.id && !pins.has(frame.id)) ||
+    ops.some((op) => op.kind === "command" && op.command === "create_space" && op.deps.length === 1 && op.deps[0] === genesis.id && op.id !== created.id)) {
     throw new Error("different_initialization");
   }
   return { replica: genesis.replica, profile: "bounded_root_only", status: treehouseSpaceInitialization(ops),
@@ -271,18 +268,17 @@ export async function authorTreehouseCatalogBootstrap(input: {
   if (!existing.ok) throw new Error("invalid_verified_history");
   if (existing.bootstraps.length > 0) throw new Error("catalog_bootstrap_exists");
   const root = bytesToB64(input.signer.publicKey);
-  // Each root admin genesis that grants the bootstrap, in canonical order, as `Treehouse.Space.root_capabilities/2`.
-  const byId = index(history.ops), quarantined = materialize(treehouseSpaceSchema, history.ops).quarantineReasons;
-  const caps: string[] = [];
+  // Root-authored genesis delegations, in canonical order and deduplicated, as `Treehouse.Space.root_capabilities/2`.
+  // Advisory only: a delegation without the bootstrap op or the admin role is one the judge refuses anyway
+  // (operation_not_granted, role_not_granted), so skipping it changes no result and spares a signature per decoy;
+  // the trial op below is the only verdict.
+  const byId = index(history.ops), caps: string[] = [];
   for (const id of canonicalOrder(history.ops, byId)) {
-    const frame = history.frames.find((f) => f.id === id);
-    if (frame === undefined || frame.kind !== "authority" || frame.author !== root || quarantined.has(id)) continue;
-    // Genesis only, as Elixir matches `{:genesis, delegation, _}`: a grant or transfer carrying a root delegation is not the cap.
-    const head = frame.body[0] === "tuple" ? frame.body[1][0] : undefined;
-    if (head === undefined || head[0] !== "atom" || head[1] !== "genesis") continue;
-    const found = carrierDelegationsFromFrames([frame]).find((d) => d.parent_id === null && d.issuer === root && d.roles.includes("admin") &&
-      d.ops.includes("catalog_bootstrap_v1"));
-    if (found !== undefined) caps.push(found.id);
+    const op = byId.get(id)!;
+    if (op.kind !== "authority" || op.authority?.type !== "genesis" || op.authorPubkey !== root) continue;
+    const { delegation } = op.authority;
+    if (!delegation.ops.includes("catalog_bootstrap_v1") || !delegation.roles.includes("admin")) continue;
+    if (!caps.includes(delegation.id)) caps.push(delegation.id);
   }
   // Return the first authored op the judge honors; one that would quarantine (revoked, expired, not granted) never leaves.
   for (const capId of caps) {

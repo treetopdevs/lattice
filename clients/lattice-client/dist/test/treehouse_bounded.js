@@ -4,13 +4,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { prepareTreehouseBoundedSpaceCreation, prepareTreehouseSpaceCreation, treehouseSpaceFamily, treehouseContinuationPin, authorTreehouseContinuationPin, reviewTreehouseCatalogBindingPayload, authorTreehouseCatalogBootstrap, resolveContinuationProfileFromFrames, treehouseCatalogBootstrapsFromFrames, } from "../src/index";
+import { prepareTreehouseBoundedSpaceCreation, prepareTreehouseSpaceCreation, treehouseSpaceFamily, treehouseContinuationPin, authorTreehouseContinuationPin, reviewTreehouseCatalogBindingPayload, authorTreehouseCatalogBootstrap, resolveContinuationProfileFromFrames, resolveContinuationPinsFromFrames, treehouseCatalogBootstrapsFromFrames, } from "../src/index";
 import { authorCarrierDelegation, authorCarrierOp, canonicalBytesForCarrierTerm } from "../src/codec";
 import { carrierDelegationsFromFrames } from "../src/carrier";
 import { continuationProfileToCarrierTerm } from "../src/continuation";
 import { canonicalOrder, carrierOpsToSemanticOps, index } from "../src/index";
 import { treehouseCommandDecoders } from "../src/treehouse";
-import { authorTownshipGenesis, authorTownshipRevocation } from "../src/township";
+import { authorTownshipGenesis, authorTownshipRevocation, bindTownshipReplica } from "../src/township";
 import { catalogBootstrapToCarrierTerm } from "../src/treehouse_catalog_codec";
 const here = dirname(fileURLToPath(import.meta.url));
 const vector = JSON.parse(readFileSync(join(here, "vectors/treehouse/bounded_space_binding_v1.json"), "utf8"));
@@ -233,3 +233,130 @@ const other = await authorTreehouseContinuationPin({ ...pinInput, threshold: 3 }
 const swapped = [creation.pending[0], creation.pending[1], other];
 assert.equal(await reason(payload, { frames: swapped }), "binding_mismatch");
 console.log("PASS payload review accepts the vector and refuses each tamper with its named reason");
+// 6. Row 235: the judge names the continuation pins; a pin-shaped genesis it does not honor is a competing initialization.
+const pinsOf = async (replica, frames) => {
+    const r = await resolveContinuationPinsFromFrames({ replica, frames });
+    return r.ok ? r.pins.map((p) => p.opId) : r.reason;
+};
+const spaceProfile = resolved.ok ? resolved.profile : assert.fail("pin resolves");
+const pinShaped = (delegation) => authorCarrierOp({ replica: vector.replica,
+    deps: [creation.pending[1].id], kind: "authority", signer: root, cap: ["nil"],
+    body: ["tuple", [["atom", "genesis"], ["delegation", delegation], ["map", [[["atom", "__continuation__"], continuationProfileToCarrierTerm(spaceProfile)]]]]] });
+{
+    // One bit of the delegation signature flipped; the op itself is validly re-signed by the root.
+    const d = carrierDelegationsFromFrames([pin])[0];
+    const sig = Buffer.from(d.sig, "base64");
+    sig[0] ^= 1;
+    const flipped = await pinShaped({ ...d, sig: sig.toString("base64") });
+    assert.deepEqual(await pinsOf(vector.replica, [...creation.pending, flipped]), []);
+    await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
+        retained: [...creation.pending, flipped] }), "different_initialization");
+    // A pin delegation naming another replica is never honored here, whatever its shape.
+    const foreignReplica = await bindTownshipReplica(vector.nonce_replica.slice(0, -1) + (vector.nonce_replica.endsWith("A") ? "B" : "A") +
+        "#authority:bounded-continuation-v1", root.publicKey);
+    const foreign = await pinShaped(await authorCarrierDelegation({ replica: foreignReplica, audiencePubkey: root.publicKey, signer: root,
+        live: false, ops: [], roles: [], parentId: null }));
+    assert.deepEqual(await pinsOf(vector.replica, [...creation.pending, foreign]), []);
+    await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
+        retained: [...creation.pending, foreign] }), "different_initialization");
+    // The genuine pin, and an independently authored second genuine pin, resume.
+    const genuine = await pinShaped(await authorCarrierDelegation({ replica: vector.replica, audiencePubkey: root.publicKey, signer: root,
+        live: false, ops: [], roles: [], parentId: null }));
+    for (const retained of [withPin, [...creation.pending, genuine]]) {
+        const resumed = await prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root, retained });
+        assert.equal(resumed.status, "ready");
+        assert.deepEqual(resumed.pending, []);
+    }
+    // Empty retained history still prepares from scratch.
+    const fresh = await prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root, retained: [] });
+    assert.deepEqual(ids(fresh.pending), ids(creation.pending));
+}
+// A decoy root genesis lacking catalog_bootstrap_v1 that sorts first is skipped by the advisory pre-filter; the real cap is chosen.
+{
+    let decoyFirst = false;
+    for (let n = 0; n < 32 && !decoyFirst; n++) {
+        const decoy = await authorTownshipGenesis({ replica: vector.replica, signer: root, roles: ["admin"], policies: {},
+            ops: spaceCommands.filter((_, i) => i === 0 || (n >> (i - 1)) & 1) });
+        const semantic = carrierOpsToSemanticOps([decoy, ...withPin], {}, treehouseCommandDecoders("Treehouse.Space"));
+        decoyFirst = canonicalOrder(semantic, index(semantic))[0] === decoy.id;
+        if (!decoyFirst)
+            continue;
+        // The advisory ops/roles pre-filter skips the decoy, so the native signer is asked once.
+        let signs = 0;
+        const counting = { publicKey: root.publicKey, sign: (bytes) => (signs++, root.sign(bytes)) };
+        const chosen = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, signer: counting, frames: [decoy, ...withPin] });
+        assert.deepEqual(chosen.cap, bootstrap.cap);
+        assert.equal(signs, 1);
+    }
+    assert.ok(decoyFirst, "a decoy genesis sorts ahead of the creation genesis");
+}
+// A field-qualifying decoy (admin, catalog_bootstrap_v1) with a flipped delegation signature that sorts first passes
+// the pre-filter, so its trial op is signed and the judge refuses it; the real cap is chosen.
+{
+    let decoyFirst = false;
+    for (let n = 0; n < 64 && !decoyFirst; n++) {
+        const base = await authorTownshipGenesis({ replica: vector.replica, signer: root, roles: ["admin"], policies: {},
+            ops: ["catalog_bootstrap_v1", ...spaceCommands.filter((_, i) => (n >> i) & 1)] });
+        const d = carrierDelegationsFromFrames([base])[0];
+        const sig = Buffer.from(d.sig, "base64");
+        sig[0] ^= 1;
+        const body = structuredClone(base.body);
+        assert.ok(body[0] === "tuple");
+        body[1][1] = ["delegation", { ...d, sig: sig.toString("base64") }];
+        const decoy = await authorCarrierOp({ replica: vector.replica, deps: base.deps, kind: "authority", signer: root, cap: base.cap, body });
+        const semantic = carrierOpsToSemanticOps([decoy, ...withPin], {}, treehouseCommandDecoders("Treehouse.Space"));
+        decoyFirst = canonicalOrder(semantic, index(semantic))[0] === decoy.id;
+        if (!decoyFirst)
+            continue;
+        let signs = 0;
+        const counting = { publicKey: root.publicKey, sign: (bytes) => (signs++, root.sign(bytes)) };
+        const chosen = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, signer: counting, frames: [decoy, ...withPin] });
+        assert.deepEqual(chosen.cap, bootstrap.cap);
+        assert.equal(signs, 2);
+    }
+    assert.ok(decoyFirst, "a qualifying decoy genesis sorts ahead of the creation genesis");
+}
+// Row 212 residual, fail-closed: a pin re-signed with an extra uint64 policy entry is a history the TS judge cannot
+// read. BEAM names a genuine one and resumes; TS refuses rather than ignore an unreadable genesis (a forged one,
+// with a flipped delegation signature, must never resume). The structural genesis match refuses it even if decoded.
+{
+    const body = structuredClone(pin.body);
+    assert.ok(body[0] === "tuple" && body[1][2]?.[0] === "map");
+    body[1][2][1].push([["atom", "admin"], ["int", "9007199254740992"]]);
+    const wide = await authorCarrierOp({ replica: vector.replica, deps: pin.deps, kind: "authority", signer: root, cap: pin.cap, body });
+    assert.equal(await pinsOf(vector.replica, [...creation.pending, wide]), "invalid_verified_history");
+    await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
+        retained: [...creation.pending, wide] }), "invalid_retained_log");
+    const d = carrierDelegationsFromFrames([pin])[0];
+    const sig = Buffer.from(d.sig, "base64");
+    sig[0] ^= 1;
+    const forgedBody = structuredClone(body);
+    assert.ok(forgedBody[0] === "tuple");
+    forgedBody[1][1] = ["delegation", { ...d, sig: sig.toString("base64") }];
+    const forgedWide = await authorCarrierOp({ replica: vector.replica, deps: pin.deps, kind: "authority", signer: root, cap: pin.cap, body: forgedBody });
+    await rejects(() => prepareTreehouseBoundedSpaceCreation({ replica: vector.nonce_replica, name: vector.name, signer: root,
+        retained: [...creation.pending, forgedWide] }), "invalid_retained_log");
+}
+console.log("PASS retained pins come from the judge: forged and foreign pin shapes refuse, genuine pins resume, decoy caps are tried");
+// 7. resolveContinuationPinsFromFrames unit cases.
+assert.deepEqual(await pinsOf(vector.replica, []), []);
+assert.deepEqual(await pinsOf(vector.replica, creation.pending), []);
+{
+    const r = await resolveContinuationPinsFromFrames({ replica: vector.replica, frames: withPin });
+    assert.equal(r.ok, true);
+    if (r.ok)
+        assert.deepEqual(r.pins, [{ opId: pin.id, profile: spaceProfile }]);
+    const both = [...withPin, other];
+    const semantic = carrierOpsToSemanticOps(both, {}, treehouseCommandDecoders("Treehouse.Space"));
+    const order = canonicalOrder(semantic, index(semantic)).filter((id) => id === pin.id || id === other.id);
+    assert.deepEqual(await pinsOf(vector.replica, both), order);
+    const latest = await resolveContinuationProfileFromFrames({ replica: vector.replica, frames: both });
+    assert.equal(latest.ok && latest.profileGenesis, order[1]);
+}
+assert.equal(await pinsOf(legacy.replica, legacy.pending), "unauthorized_continuation");
+assert.equal(await pinsOf(vector.nonce_replica + "#authority:bounded-continuation-v2#root:x", []), "unsupported_authority_profile");
+for (const bad of [[{ ...pin, sig: Buffer.alloc(64).toString("base64") }, ...creation.pending], [...withPin, pin], [creation.pending[1]],
+    [...withPin, { ...legacy.pending[0] }], [{ not: "a frame" }]]) {
+    assert.equal(await pinsOf(vector.replica, bad), "invalid_verified_history");
+}
+console.log("PASS resolveContinuationPinsFromFrames names the judge's pins and refuses unverified histories");

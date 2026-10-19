@@ -90,6 +90,18 @@ export declare function canonicalBytesForWitnessedSuccessionArtifactId(claim: Wi
 export declare function authorCarrierDelegation(input: AuthorCarrierDelegationInput): Promise<CarrierDelegation>;
 /** Encode the existing closed carrier term grammar without an op envelope. */
 export declare function canonicalBytesForCarrierTerm(term: CarrierTerm): Uint8Array;
+/**
+ * Row 237: the carrier JSON term `Lattice.Carrier.Wire` would emit for the same value, derived
+ * by decoding this module's own signing bytes. Map pair, mapset element, and delegation
+ * op/role order plus the int representation therefore cannot drift from the encoder.
+ */
+export declare function canonicalCarrierTerm(term: CarrierTerm): CarrierTerm;
+/**
+ * Strictly decode one `lattice-cbor-v1` carrier term: shortest heads, no indefinite lengths,
+ * only the four Lattice tags, strictly ascending map keys and mapset elements, and no trailing
+ * bytes. Grammar only; the wire vocabulary stays with `assertWireVocabularyTerm`.
+ */
+export declare function carrierTermFromCanonicalBytes(input: Uint8Array): CarrierTerm;
 /** Decode canonical standard Base64, refusing malformed text or an unexpected byte length. */
 export declare function canonicalBase64Bytes(value: unknown, length?: number): Uint8Array | null;
 /**
