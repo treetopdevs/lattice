@@ -79,7 +79,7 @@ fn discard_on_error(path: &Path, result: std::io::Result<()>) -> Result<(), Stri
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn treehouse_export_space_frames<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     file_name: String,

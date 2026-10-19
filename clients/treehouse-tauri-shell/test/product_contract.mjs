@@ -101,7 +101,7 @@ for (const crate of [
 const registration = await readFile("src-tauri/src/lib.rs", "utf8");
 const exportWriter = await readFile("src-tauri/src/space_export.rs", "utf8");
 assert.deepEqual(
-  [...(registration + exportWriter).matchAll(/#\[tauri::command\]\s*(?:pub\s+)?fn (\w+)/g)]
+  [...(registration + exportWriter).matchAll(/#\[tauri::command(?:\(async\))?\]\s*(?:pub\s+)?fn (\w+)/g)]
     .map((m) => m[1])
     .sort(),
   [
