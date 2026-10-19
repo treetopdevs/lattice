@@ -28,7 +28,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <body>
 <main>
 <h1>Backlog Run Decisions</h1>
-<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-15 landed as PRs #133-#149. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
+<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-17 landed as PRs #133-#152. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
 
 <h2 id="slices">Slices</h2>
 <div class="table-wrap">
@@ -50,6 +50,8 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <tr><td>13</td><td>Row 224 ceremony prep: <code>mix treehouse.catalog_ceremony</code> (generate, import, backup, verify-backup, binding-payload, verify-binding, report, dry-run) and the custody runbook; row 232 filed</td><td><code>claude/backlog-slice-13-7286ff</code> / <a href="https://github.com/treetopdevs/lattice/pull/147">#147</a></td><td>Merged after exact tip <code>e6cded70f</code> run 39171954057 went green. Six later Codex bot findings were fixed first: a hard-linked seed, binding-record validation, backup cleanup, generation-host check, read-path policy and a profile recheck. Codex Sol xhigh: five fixed, and a confirm pass found two more path races, both fixed, which ended that class at round 2. Claude custody review: five fixed.</td></tr>
 <tr><td>14</td><td>Row 232: bounded-profile Space creation, root continuation pin, root review-and-sign of <code>catalog_bootstrap_v1</code>, Elixir/TS helpers in byte parity; rows 233-234 filed</td><td><code>claude/elated-haibt-3217de</code> / <a href="https://github.com/treetopdevs/lattice/pull/148">#148</a> (stacked on #147)</td><td>Merged as <code>d141278fb</code> by the shared account at 00:35 UTC, while CI on the final docs-only commit <code>fb5b892b6</code> was still running; the code commit <code>7f303cbce</code> under it was green (run 39180287563). Three Codex bot rounds; the third round filed row 235 under rule 3 (D-32). Codex Sol xhigh: four fixed. Claude authority/custody review: five fixed. Confirm pass: three fixed, which closes both classes under rule 3.</td></tr>
 <tr><td>15</td><td>Rows 234 (D-31) and 233: the ordinary app exports the verified Space frame set (native Downloads writer) and the ceremony accepts it; neutral pending reason; row 236 filed</td><td><code>claude/backlog-slice-15-22bd14</code> / <a href="https://github.com/treetopdevs/lattice/pull/149">#149</a></td><td>Merged as <code>b779b11cc</code> by the shared account after exact tip <code>187bebc41</code> run 39184895958 went green. Codex bot rounds: canonical list and mapset ordering fixed, then a third round filed as row 237 (rule 3), and the export gated on the pin. A CodeRabbit finding moved the native writer off the main thread. Codex Sol xhigh: one P1 and two P2 fixed. Claude custody review: two fixed, one rejected. Confirm pass clean.</td></tr>
+<tr><td>16</td><td>Rows 235 and 237: Space helpers take pins and bootstrap verdicts from Lattice.Authority through read-only accessors; the export decodes the signing encoder's bytes</td><td><code>claude/backlog-slice-16-18f661</code> / <a href="https://github.com/treetopdevs/lattice/pull/151">#151</a></td><td>Merged after exact tip <code>34a0639b4</code> run 39232108463 went green, once a strict Credo nesting failure was fixed. CodeRabbit asked for three test-comment wording fixes. Codex Sol xhigh: two fixed. Claude authority-parity review: four fixed, two documented. The confirm pass's CF1 was fixed fail-closed, and rule 3 stopped that class.</td></tr>
+<tr><td>17</td><td>Row 236: the hosted packaged macOS job pins continuation, clicks Export Space frames into a real Downloads folder, runs <code>binding-payload</code>, signs the binding as root, re-exports and runs <code>verify-binding</code>, with tamper refusals; row 238 filed</td><td><code>claude/magical-bassi-f2edd3</code> / <a href="https://github.com/treetopdevs/lattice/pull/152">#152</a></td><td>Merged after exact tip <code>867447b2c</code> run 39264730007 went green; the new step passed inside the hosted packaged preview job (pinned, exported, payload, signed, verified). Codex Sol xhigh: a P2 on quoted YAML keys fixed by pinning the step body exactly, then a confirm pass that ran 687 mutations and found nothing. Two workflow reviewers: two fixed, two rejected.</td></tr>
 </tbody>
 </table>
 </div>
@@ -374,6 +376,35 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>State</dt><dd>Row 224's inputs now wait only on the operator's own run of <code>mix treehouse.catalog_ceremony</code>: the signer, the backup with its second-host restore, and the root's pin and signed binding through the ordinary app's export. That run's <code>verification-report.json</code> unblocks building row 224 itself. The <code>catalogued</code> and <code>listed</code> phases still need a plan and an implementation, including the carrier realm (plan 223, parked phases), because the ceremony makes nothing catalogued or listed. R11c and R13 follow only after those phases land.</dd>
 <dt>Rows</dt><dd>Rows 233 and 234 are set DONE. Open design rows from this stretch: 235 (Space helpers should ask <code>Lattice.Authority</code> instead of re-deriving facts) and 237 (derive the export's canonical form from the signing encoder). Row 236 is the packaged-app proof of the export.</dd>
 <dt>Merges</dt><dd>#146, #148 and #149 were merged from the shared account rather than by the coordinator. For #148, the final docs-only commit's run was still in progress at merge, and it and main both went green afterwards.</dd>
+</dl>
+</article>
+
+<article id="d34">
+<h2><span>D-34</span>Slice 16 decisions (rows 235 and 237)</h2>
+<dl>
+<dt>Accessors</dt><dd><code>Lattice.Authority.continuation_pins/1</code> and the TS <code>resolveContinuationPinsFromFrames</code> return the judge's own pin list after <code>verified_complete_log?</code>. They share a private prefix with <code>continuation_profile</code> and add no judgment arm, so D4 holds. These two read-only accessors are the only <code>authority.ex</code> and <code>authority.ts</code> changes.</dd>
+<dt>Bootstrap</dt><dd>The candidates are root-authored genesis delegations in canonical order. An ops/admin pre-filter stays, labelled advisory, so only one native signature is spent. The trial op's quarantine verdict from the judge is the only decision.</dd>
+<dt>Export</dt><dd><code>canonicalCarrierTerm = decode ∘ canonicalBytesForCarrierTerm</code> uses a strict decoder for the closed CBOR grammar, so ordering and the int form follow <code>Wire.encode_term</code>. The file format and fixture are unchanged for row 236.</dd>
+<dt>Wide ints</dt><dd>A genuine pin carrying a 64-bit policy entry is resumed by BEAM but refused by TS as <code>invalid_retained_log</code>. Refusing is the safe side, because a non-strict read let a forged pin through. This is the existing row 212 residual.</dd>
+</dl>
+</article>
+
+<article id="d35">
+<h2><span>D-35</span>Slice 17 decisions (row 236)</h2>
+<dl>
+<dt>Placement</dt><dd>A new step in the ordinary <code>treehouse_packaged_macos</code> job, after the frame replay. It reuses the retained bounded Space and keychain key, where the device is root. The enrollment job and row 201's variant boundaries are untouched.</dd>
+<dt>Scope</dt><dd>It proves more than the export. It runs the whole app half of the row 224 binding: pin, export, payload, root review and sign, re-export, then <code>verify-binding</code>. It is a hosted rehearsal of the operator's ceremony with disposable keys.</dd>
+<dt>Controls</dt><dd>A pretty-printed copy and a flipped signature are refused as <code>invalid_space_log</code> by both readers, and the pre-binding export gives <code>binding_not_found</code>. The signer seed lives in a 0700 temp dir outside the evidence dir and is removed afterwards.</dd>
+<dt>Pins</dt><dd>The new step is pinned as exact text, and the existing digests are byte-identical. The same quoted-key gap on the older classification step and the enrollment scans is row 238.</dd>
+</dl>
+</article>
+
+<article id="d36">
+<h2><span>D-36</span>Ledger 4: rows 235 to 237 closed; the app half of the ceremony is rehearsed in hosted CI</h2>
+<dl>
+<dt>When</dt><dd>2026-10-19, after #152 merged</dd>
+<dt>Rows</dt><dd>Rows 235 and 237 are DONE with #151, and row 236 is DONE with #152's hosted pass. Row 238, quoted YAML keys on older pinned steps, is open.</dd>
+<dt>State</dt><dd>Every software piece the row 224 inputs need is merged and rehearsed in hosted CI with disposable keys. What remains is the operator's own ceremony run, followed by building <code>catalogued</code> and <code>listed</code> (plan 223) once its report exists, and only then R11c and R13.</dd>
 </dl>
 </article>
 
