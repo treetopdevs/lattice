@@ -8,6 +8,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
   alias Lattice.Authority.{ContinuationCertificate, Delegation}
   alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.CatalogCeremony, as: Ceremony
+  alias LatticeCarrierServer.Operator.CeremonyFixture, as: Fixture
 
   alias LatticeCarrierServer.Operator.CatalogCeremony.{
     Backup,
@@ -49,83 +50,18 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
 
   # ---------------------------------------------------------------- helpers
 
-  defp reader(lines) do
-    {:ok, agent} = Agent.start_link(fn -> lines end)
-
-    fn ->
-      Agent.get_and_update(agent, fn
-        [line | rest] -> {{:ok, line}, rest}
-        [] -> {:error, []}
-      end)
-    end
-  end
+  defp reader(lines), do: Fixture.reader(lines)
 
   defp passphrase_reader(count \\ 2), do: reader(List.duplicate(@passphrase, count))
 
   defp seed_hex(path), do: path |> File.read!() |> String.trim()
 
-  defp random_pub, do: elem(:crypto.generate_key(:eddsa, :ed25519), 0)
+  defp random_pub, do: Fixture.random_pub()
 
-  defp id(label),
-    do: :crypto.hash(:sha256, "ceremony-test-" <> label) |> Base.url_encode64(padding: false)
+  defp id(label), do: Fixture.id(label)
 
   # A disposable bounded Space with RANDOM keys; the test, never the tool, signs.
-  defp space(f, name \\ "pre", extra_ops \\ []) do
-    root = Identity.generate("root")
-    nominee = Identity.generate("nominee")
-    witnesses = for n <- 1..3, do: Identity.generate("w#{n}")
-
-    replica =
-      Authority.bind_replica(
-        "replica:treehouse:space:" <>
-          id("space-#{System.unique_integer()}") <>
-          "#authority:bounded-continuation-v1",
-        root.pub
-      )
-
-    delegation =
-      Delegation.genesis(root, replica,
-        ops:
-          [:create_space, :create_thread, :catalog_bootstrap_v1, :replace_catalog_v1] ++ extra_ops,
-        roles: [:admin, :moderator]
-      )
-
-    genesis = Op.new(root, replica, [], :authority, {:genesis, delegation, %{}})
-
-    creation =
-      Op.new(root, replica, [genesis.id], :command, {:create_space, ["Canopy"]},
-        cap: delegation.id
-      )
-
-    profile = %{
-      mode: :bounded_continuation,
-      version: 1,
-      product: :treehouse,
-      kind: :space,
-      role: :admin,
-      nominee: nominee.pub,
-      witnesses: Enum.sort(Enum.map(witnesses, & &1.pub)),
-      threshold: 2,
-      max_lease_epochs: 7
-    }
-
-    empty = Delegation.genesis(root, replica, ops: [], roles: [], live: false)
-
-    pin =
-      Op.new(
-        root,
-        replica,
-        [creation.id],
-        :authority,
-        {:genesis, empty, %{__continuation__: profile}}
-      )
-
-    {:ok, _} = ContinuationCertificate.profile_id(profile)
-    before = Enum.reduce([genesis, creation, pin], Log.new(replica), &Log.append!(&2, &1))
-    path = Path.join(f.space, name <> ".log")
-    :ok = Log.dump(before, path)
-    %{root: root, replica: replica, delegation: delegation, pin: pin, before: before, pre: path}
-  end
+  defp space(f, name \\ "pre", extra_ops \\ []), do: Fixture.space(f.space, name, extra_ops)
 
   defp legacy_space(f) do
     root = Identity.generate("root")
@@ -144,24 +80,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     path
   end
 
-  defp sign_bootstraps(space, records, name) do
-    ops =
-      for record <- records do
-        Op.new(
-          space.root,
-          space.replica,
-          [space.pin.id],
-          :command,
-          {:catalog_bootstrap_v1, [record]},
-          cap: space.delegation.id
-        )
-      end
-
-    log = Enum.reduce(ops, space.before, &Log.append!(&2, &1))
-    path = Path.join(Path.dirname(space.pre), name <> ".log")
-    :ok = Log.dump(log, path)
-    {path, ops}
-  end
+  defp sign_bootstraps(space, records, name), do: Fixture.sign_bootstraps(space, records, name)
 
   defp service_b64, do: Base.encode64(random_pub())
 
@@ -319,18 +238,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert final["restore"]["separate_host"] == true
   end
 
-  # Separateness is hostname-based; a one-host test run flips it as an operator would attest.
-  defp separate_host!(f) do
-    path = Path.join(f.ceremony, "restore.json")
-
-    record =
-      path
-      |> File.read!()
-      |> Jason.decode!()
-      |> Map.merge(%{"host" => "second-machine.invalid", "separate_host" => true})
-
-    File.write!(path, Jason.encode!(record))
-  end
+  defp separate_host!(f), do: Fixture.separate_host!(f.ceremony)
 
   defp report!(f, extra \\ []) do
     Ceremony.report(

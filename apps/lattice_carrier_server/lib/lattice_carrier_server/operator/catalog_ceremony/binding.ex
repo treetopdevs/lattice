@@ -69,7 +69,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   @spec record_shape?(map(), map(), String.t()) :: boolean()
   def record_shape?(found, record, sha) do
     Enum.sort(Map.keys(found)) ==
-      Enum.sort(~w(format bootstrap_id record_sha256 space verified_at)) and
+      Enum.sort(@binding_keys) and
       found["format"] == @binding_format and ContinuationCertificate.id?(found["bootstrap_id"]) and
       found["record_sha256"] == sha and found["space"] == record.space and
       Store.timestamp?(found["verified_at"])
