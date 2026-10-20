@@ -15,8 +15,8 @@
 ## Status
 
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
-the inputs in "Depends on" exist. PRs 1 and 3 need no ceremony output or decision and may start now; PR 2 waits on
-OD-1 and OD-5; PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
+the inputs in "Depends on" exist. PR 1 (Design 1, `CatalogBinding.load/2`) landed in slice 19 (PR #155). PR 3 may start
+now; PR 2 waits on OD-1 and OD-5; PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
 
 ## Header
 
