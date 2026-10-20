@@ -789,6 +789,19 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert {:error, :ceremony_artifact_malformed} = Store.read_text(dir, "t.txt", 3)
   end
 
+  test "Store.read refuses an artifact hard-linked after the descriptor check", f do
+    dir = f.ceremony
+    path = Path.join(dir, "linked.json")
+    File.write!(path, ~s({"k":1}))
+
+    link = fn
+      :before_open -> :ok
+      :after_open -> File.ln!(path, Path.join(dir, "second-link.json"))
+    end
+
+    assert {:error, :ceremony_artifact_malformed} = Store.read_between(dir, "linked.json", link)
+  end
+
   test "Store.read refuses an artifact swapped for a symlink between lstat and open", f do
     dir = f.ceremony
     path = Path.join(dir, "swap.json")

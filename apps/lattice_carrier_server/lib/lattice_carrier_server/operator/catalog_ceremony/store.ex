@@ -154,7 +154,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
 
       with {:ok, bytes} when byte_size(bytes) <= cap <- result,
            {:ok, second} <- File.lstat(path),
-           true <- second.inode == first.inode and second.size == first.size do
+           true <- same_file?(second, first) do
         {:ok, bytes}
       else
         :eof -> {:ok, ""}
@@ -163,6 +163,12 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
     else
       _ -> {:error, :ceremony_artifact_malformed}
     end
+  end
+
+  # Still the single-link regular file the first lstat saw, after the read.
+  defp same_file?(second, first) do
+    second.type == :regular and second.links == 1 and second.inode == first.inode and
+      second.major_device == first.major_device and second.size == first.size
   end
 
   # The opened descriptor must be the artifact the first lstat saw.
