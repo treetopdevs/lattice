@@ -881,6 +881,45 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert {:error, :ceremony_artifact_malformed} = Store.read_text(dir, "t.txt", 3)
   end
 
+  test "Store.read refuses an artifact swapped for a symlink between lstat and open", f do
+    dir = f.ceremony
+    path = Path.join(dir, "swap.json")
+    File.write!(path, ~s({"k":1}))
+    File.write!(Path.join(dir, "other.json"), ~s({"k":2}))
+
+    assert {:ok, %{"k" => 1}} = Store.read_between(dir, "swap.json", fn _ -> :ok end)
+
+    swap = fn
+      :before_open ->
+        File.rename!(path, Path.join(dir, "held.json"))
+        File.ln_s!(Path.join(dir, "other.json"), path)
+
+      :after_open ->
+        :ok
+    end
+
+    assert {:error, :ceremony_artifact_malformed} = Store.read_between(dir, "swap.json", swap)
+
+    # Swapped back before the final lstat: only the opened-descriptor check sees it.
+    File.rm!(path)
+    File.rename!(Path.join(dir, "held.json"), path)
+
+    swap_back = fn
+      :before_open ->
+        File.rename!(path, Path.join(dir, "held.json"))
+        File.ln_s!(Path.join(dir, "other.json"), path)
+
+      :after_open ->
+        File.rm!(path)
+        File.rename!(Path.join(dir, "held.json"), path)
+    end
+
+    assert {:error, :ceremony_artifact_malformed} =
+             Store.read_between(dir, "swap.json", swap_back)
+
+    assert {:ok, %{"k" => 1}} = Store.read_between(dir, "swap.json", fn _ -> :ok end)
+  end
+
   test "the payload artifact has a closed key set and the review sheet is exact", f do
     generate!(f)
     space = space(f)

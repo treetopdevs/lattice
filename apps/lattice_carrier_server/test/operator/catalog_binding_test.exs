@@ -2,6 +2,7 @@ defmodule LatticeCarrierServer.Operator.CatalogBindingTest do
   use ExUnit.Case, async: false
 
   alias Lattice.{Canonical, Log, Op}
+  alias LatticeCarrierServer.Durability
   alias LatticeCarrierServer.Operator.CatalogBinding
   alias LatticeCarrierServer.Operator.CatalogCeremony.{Binding, DryRun, Store}
   alias LatticeCarrierServer.Operator.CeremonyFixture, as: Fixture
@@ -238,8 +239,10 @@ defmodule LatticeCarrierServer.Operator.CatalogBindingTest do
     end
   end
 
-  test "a service key equal to the Space root is refused", %{dir: dir, fx: fx} do
-    record = %{fx.record | service_key: fx.record.space_root}
+  # Rebuilds the payload, review sheet, binding.json and served log around a
+  # hand-edited record so the ceremony stays internally consistent.
+  defp rebind!(dir, fx, changes) do
+    record = Map.merge(fx.record, changes)
     canonical = Canonical.term(record)
     sha = Store.sha256(canonical)
 
@@ -252,22 +255,90 @@ defmodule LatticeCarrierServer.Operator.CatalogBindingTest do
       }
     end)
 
-    old_service = Base.encode64(fx.record.service_key)
-    old_sha = fx.payload["sha256"]
-
     edit_text!(dir, "binding-review.txt", fn text ->
-      text
-      |> String.replace(old_service, Base.encode64(record.service_key))
-      |> String.replace(old_sha, sha)
+      changes
+      |> Enum.reduce(text, fn {field, value}, acc ->
+        String.replace(acc, Base.encode64(Map.fetch!(fx.record, field)), Base.encode64(value))
+      end)
+      |> String.replace(fx.payload["sha256"], sha)
     end)
 
-    {signed, [op]} = Fixture.sign_bootstraps(fx.space, [record], "reuse")
+    {signed, [op]} = Fixture.sign_bootstraps(fx.space, [record], "rebind")
 
     edit_json!(dir, "binding.json", fn binding ->
       %{binding | "bootstrap_id" => op.id, "record_sha256" => sha}
     end)
 
+    signed
+  end
+
+  test "a service key equal to the Space root is refused", %{dir: dir, fx: fx} do
+    signed = rebind!(dir, fx, %{service_key: fx.record.space_root})
     assert {:error, :binding_key_reuse} = CatalogBinding.load(dir, signed)
+  end
+
+  # TransportCatalog.normalize_bootstrap/1 already rejects catalog_key == service_key,
+  # so this reuse never reaches the :binding_key_reuse check in load/2.
+  test "a service key equal to the catalog key is refused as malformed", %{dir: dir, fx: fx} do
+    signed = rebind!(dir, fx, %{service_key: fx.record.catalog_key})
+    assert {:error, :ceremony_artifact_malformed} = CatalogBinding.load(dir, signed)
+  end
+
+  test "a catalog key equal to the Space root is refused", %{dir: dir, fx: fx} do
+    signed = rebind!(dir, fx, %{catalog_key: fx.record.space_root})
+    edit_json!(dir, "signer.json", &Map.merge(&1, Store.public_info(fx.record.space_root)))
+    assert {:error, :binding_key_reuse} = CatalogBinding.load(dir, signed)
+  end
+
+  test "a dry-run service key under a real catalog key is disposable", %{dir: dir, fx: fx} do
+    [dry | _] = DryRun.public_keys()
+    signed = rebind!(dir, fx, %{service_key: dry})
+    assert {:error, :disposable_test_key} = CatalogBinding.load(dir, signed)
+  end
+
+  test "a held target lock is a busy Space log, not an invalid one", %{dir: dir, log: log} do
+    parent = self()
+
+    holder =
+      spawn_link(fn ->
+        Durability.with_target_lock(log, fn ->
+          send(parent, :locked)
+
+          receive do
+            :release -> :ok
+          end
+        end)
+      end)
+
+    assert_receive :locked, 5_000
+    assert {:error, :space_log_busy} = CatalogBinding.load(dir, log)
+    send(holder, :release)
+  end
+
+  describe "report shape" do
+    test "each malformed custody, backup or restore value", %{dir: dir, log: log} do
+      edits = [
+        &put_in(&1, ["custody", "custodian"], " Ada"),
+        &put_in(&1, ["custody", "custodian"], ""),
+        &put_in(&1, ["custody", "passphrase_holder"], String.duplicate("g", 81)),
+        &put_in(&1, ["custody", "rotation_owner"], "Li\nnus"),
+        &put_in(&1, ["backup", "sha256"], String.duplicate("A", 64)),
+        &put_in(&1, ["backup", "sha256"], "abc"),
+        &put_in(&1, ["backup", "format"], String.duplicate("f", 129)),
+        &put_in(&1, ["restore", "verified_at"], "yesterday")
+      ]
+
+      path = Path.join(dir, "verification-report.json")
+      saved = File.read!(path)
+
+      for edit <- edits do
+        File.write!(path, saved |> Jason.decode!() |> edit.() |> Jason.encode!(pretty: true))
+        assert {:error, :ceremony_artifact_malformed} = CatalogBinding.load(dir, log)
+      end
+
+      File.write!(path, saved)
+      assert {:ok, _} = CatalogBinding.load(dir, log)
+    end
   end
 
   describe "the report is only cross-checked" do

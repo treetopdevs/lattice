@@ -88,8 +88,15 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
   # Strict JSON object artifact: bounded, regular, single-link, unchanged while
   # read, no repeated key at any depth.
   @spec read(Path.t(), String.t()) :: {:ok, map()} | {:error, atom()}
-  def read(dir, name) do
-    with {:ok, bytes} <- read_bounded(dir, name, @max_artifact_bytes),
+  def read(dir, name), do: read_between(dir, name, fn _ -> :ok end)
+
+  # Test seam the command line cannot reach: `between` runs after the first
+  # lstat and before the open, the window a swapped artifact would use.
+  @doc false
+  # `between` is a test seam only: called with `:before_open` and `:after_open`.
+  @spec read_between(Path.t(), String.t(), (atom() -> term())) :: {:ok, map()} | {:error, atom()}
+  def read_between(dir, name, between) when is_function(between, 1) do
+    with {:ok, bytes} <- read_bounded(dir, name, @max_artifact_bytes, between),
          {:ok, decoded} <- Jason.decode(bytes, objects: :ordered_objects),
          {:ok, %{} = map} <- plain(decoded) do
       {:ok, map}
@@ -120,12 +127,13 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
     end
   end
 
-  defp read_bounded(dir, name, cap) do
+  defp read_bounded(dir, name, cap, between \\ fn _ -> :ok end) do
     path = Path.join(dir, name)
 
     case File.lstat(path) do
       {:ok, %File.Stat{type: :regular, links: 1, size: size} = first} when size <= cap ->
-        read_file(path, first, cap)
+        between.(:before_open)
+        read_file(path, first, cap, between)
 
       {:error, :enoent} ->
         {:error, :ceremony_artifact_missing}
@@ -135,10 +143,14 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
     end
   end
 
-  defp read_file(path, first, cap) do
+  defp read_file(path, first, cap, between) do
+    # A FIFO swapped in by a same-uid writer can still block open; the 0700
+    # owner-only ceremony directory is the boundary (Erlang has no
+    # O_NOFOLLOW/O_NONBLOCK open).
     with {:ok, fd} <- :file.open(path, [:read, :raw, :binary]) do
-      result = :file.read(fd, cap + 1)
+      result = if opened_matches?(fd, first, cap), do: :file.read(fd, cap + 1), else: :swapped
       :file.close(fd)
+      between.(:after_open)
 
       with {:ok, bytes} when byte_size(bytes) <= cap <- result,
            {:ok, second} <- File.lstat(path),
@@ -150,6 +162,20 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
       end
     else
       _ -> {:error, :ceremony_artifact_malformed}
+    end
+  end
+
+  # The opened descriptor must be the artifact the first lstat saw.
+  defp opened_matches?(fd, first, cap) do
+    case :prim_file.read_handle_info(fd) do
+      {:ok, record} ->
+        info = File.Stat.from_record(record)
+
+        info.type == :regular and info.links == 1 and info.inode == first.inode and
+          info.major_device == first.major_device and info.size <= cap
+
+      _ ->
+        false
     end
   end
 

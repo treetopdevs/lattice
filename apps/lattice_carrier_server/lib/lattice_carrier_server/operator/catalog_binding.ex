@@ -98,15 +98,15 @@ defmodule LatticeCarrierServer.Operator.CatalogBinding do
       Store.timestamp?(r["generated_at"]) and
       keyed?(r["signer"], %{"public_key_base64" => :string, "fingerprint_sha256" => :string}) and
       keyed?(r["backup"], %{
-        "sha256" => :string,
-        "format" => :string,
+        "sha256" => :sha256,
+        "format" => :format,
         "kdf_iterations" => :integer
       }) and
-      keyed?(r["restore"], %{"verified_at" => :string, "separate_host" => :boolean}) and
+      keyed?(r["restore"], %{"verified_at" => :timestamp, "separate_host" => :boolean}) and
       keyed?(r["custody"], %{
-        "custodian" => :string,
-        "passphrase_holder" => :string,
-        "rotation_owner" => :string
+        "custodian" => :name,
+        "passphrase_holder" => :name,
+        "rotation_owner" => :name
       }) and
       keyed?(r["binding"], %{
         "status" => :string,
@@ -125,6 +125,16 @@ defmodule LatticeCarrierServer.Operator.CatalogBinding do
   defp keyed?(_, _), do: false
 
   defp typed?(value, :string), do: is_binary(value)
+  # Same rule as Report's private custody name check, without trimming.
+  defp typed?(value, :name) when is_binary(value) do
+    String.valid?(value) and String.trim(value) == value and value != "" and
+      String.length(value) <= 80 and not String.match?(value, ~r/[[:cntrl:]]/u)
+  end
+
+  defp typed?(value, :sha256), do: Store.sha256_text?(value)
+  defp typed?(value, :timestamp), do: Store.timestamp?(value)
+  defp typed?(value, :format), do: is_binary(value) and byte_size(value) <= 128
+  defp typed?(_value, :name), do: false
   defp typed?(value, :boolean), do: is_boolean(value)
   defp typed?(value, :integer), do: is_integer(value)
 
@@ -143,6 +153,7 @@ defmodule LatticeCarrierServer.Operator.CatalogBinding do
 
     case Durability.with_target_lock(path, read, retries: 5) do
       {:ok, %{log: log}} -> {:ok, log}
+      {:error, {Durability, :target_lock_aborted}} -> {:error, :space_log_busy}
       _ -> {:error, :invalid_space_log}
     end
   end
