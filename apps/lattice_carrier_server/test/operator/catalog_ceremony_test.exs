@@ -8,6 +8,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
   alias Lattice.Authority.{ContinuationCertificate, Delegation}
   alias LatticeCarrierServer.Manifest
   alias LatticeCarrierServer.Operator.CatalogCeremony, as: Ceremony
+  alias LatticeCarrierServer.Operator.CeremonyFixture, as: Fixture
 
   alias LatticeCarrierServer.Operator.CatalogCeremony.{
     Backup,
@@ -16,6 +17,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     DryRun,
     Passphrase,
     Paths,
+    Signer,
     Store
   }
 
@@ -48,83 +50,18 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
 
   # ---------------------------------------------------------------- helpers
 
-  defp reader(lines) do
-    {:ok, agent} = Agent.start_link(fn -> lines end)
-
-    fn ->
-      Agent.get_and_update(agent, fn
-        [line | rest] -> {{:ok, line}, rest}
-        [] -> {:error, []}
-      end)
-    end
-  end
+  defp reader(lines), do: Fixture.reader(lines)
 
   defp passphrase_reader(count \\ 2), do: reader(List.duplicate(@passphrase, count))
 
   defp seed_hex(path), do: path |> File.read!() |> String.trim()
 
-  defp random_pub, do: elem(:crypto.generate_key(:eddsa, :ed25519), 0)
+  defp random_pub, do: Fixture.random_pub()
 
-  defp id(label),
-    do: :crypto.hash(:sha256, "ceremony-test-" <> label) |> Base.url_encode64(padding: false)
+  defp id(label), do: Fixture.id(label)
 
   # A disposable bounded Space with RANDOM keys; the test, never the tool, signs.
-  defp space(f, name \\ "pre", extra_ops \\ []) do
-    root = Identity.generate("root")
-    nominee = Identity.generate("nominee")
-    witnesses = for n <- 1..3, do: Identity.generate("w#{n}")
-
-    replica =
-      Authority.bind_replica(
-        "replica:treehouse:space:" <>
-          id("space-#{System.unique_integer()}") <>
-          "#authority:bounded-continuation-v1",
-        root.pub
-      )
-
-    delegation =
-      Delegation.genesis(root, replica,
-        ops:
-          [:create_space, :create_thread, :catalog_bootstrap_v1, :replace_catalog_v1] ++ extra_ops,
-        roles: [:admin, :moderator]
-      )
-
-    genesis = Op.new(root, replica, [], :authority, {:genesis, delegation, %{}})
-
-    creation =
-      Op.new(root, replica, [genesis.id], :command, {:create_space, ["Canopy"]},
-        cap: delegation.id
-      )
-
-    profile = %{
-      mode: :bounded_continuation,
-      version: 1,
-      product: :treehouse,
-      kind: :space,
-      role: :admin,
-      nominee: nominee.pub,
-      witnesses: Enum.sort(Enum.map(witnesses, & &1.pub)),
-      threshold: 2,
-      max_lease_epochs: 7
-    }
-
-    empty = Delegation.genesis(root, replica, ops: [], roles: [], live: false)
-
-    pin =
-      Op.new(
-        root,
-        replica,
-        [creation.id],
-        :authority,
-        {:genesis, empty, %{__continuation__: profile}}
-      )
-
-    {:ok, _} = ContinuationCertificate.profile_id(profile)
-    before = Enum.reduce([genesis, creation, pin], Log.new(replica), &Log.append!(&2, &1))
-    path = Path.join(f.space, name <> ".log")
-    :ok = Log.dump(before, path)
-    %{root: root, replica: replica, delegation: delegation, pin: pin, before: before, pre: path}
-  end
+  defp space(f, name \\ "pre", extra_ops \\ []), do: Fixture.space(f.space, name, extra_ops)
 
   defp legacy_space(f) do
     root = Identity.generate("root")
@@ -143,24 +80,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     path
   end
 
-  defp sign_bootstraps(space, records, name) do
-    ops =
-      for record <- records do
-        Op.new(
-          space.root,
-          space.replica,
-          [space.pin.id],
-          :command,
-          {:catalog_bootstrap_v1, [record]},
-          cap: space.delegation.id
-        )
-      end
-
-    log = Enum.reduce(ops, space.before, &Log.append!(&2, &1))
-    path = Path.join(Path.dirname(space.pre), name <> ".log")
-    :ok = Log.dump(log, path)
-    {path, ops}
-  end
+  defp sign_bootstraps(space, records, name), do: Fixture.sign_bootstraps(space, records, name)
 
   defp service_b64, do: Base.encode64(random_pub())
 
@@ -318,18 +238,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     assert final["restore"]["separate_host"] == true
   end
 
-  # Separateness is hostname-based; a one-host test run flips it as an operator would attest.
-  defp separate_host!(f) do
-    path = Path.join(f.ceremony, "restore.json")
-
-    record =
-      path
-      |> File.read!()
-      |> Jason.decode!()
-      |> Map.merge(%{"host" => "second-machine.invalid", "separate_host" => true})
-
-    File.write!(path, Jason.encode!(record))
-  end
+  defp separate_host!(f), do: Fixture.separate_host!(f.ceremony)
 
   defp report!(f, extra \\ []) do
     Ceremony.report(
@@ -823,6 +732,136 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
              Ceremony.verify_binding(ceremony: f.ceremony, space_log: again)
 
     assert sha == payload["sha256"]
+  end
+
+  test "verify-binding refuses equal records in two honored ops as a fork", f do
+    generate!(f)
+    space = space(f)
+    {_payload, record} = payload!(f, space)
+
+    sign = fn deps ->
+      Op.new(space.root, space.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
+        cap: space.delegation.id
+      )
+    end
+
+    first = sign.([space.pin.id])
+    second = sign.([first.id])
+    refute first.id == second.id
+    log = Enum.reduce([first, second], space.before, &Log.append!(&2, &1))
+    path = Path.join(Path.dirname(space.pre), "equal-fork.log")
+    :ok = Log.dump(log, path)
+
+    assert {:error, :binding_fork} =
+             Ceremony.verify_binding(ceremony: f.ceremony, space_log: path)
+
+    refute File.exists?(Path.join(f.ceremony, "binding.json"))
+  end
+
+  test "Store.read is bounded, regular, single-link and duplicate-key free", f do
+    dir = f.ceremony
+    assert {:error, :ceremony_artifact_missing} = Store.read(dir, "a.json")
+
+    File.write!(Path.join(dir, "a.json"), ~s({"k":1}))
+    assert {:ok, %{"k" => 1}} = Store.read(dir, "a.json")
+    assert {:ok, %{"k" => 1}} = Store.read(dir, "a.json", ["k"])
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "a.json", ["k", "j"])
+
+    big = ~s({"k":") <> String.duplicate("x", Store.max_artifact_bytes()) <> ~s("})
+    File.write!(Path.join(dir, "big.json"), big)
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "big.json")
+
+    File.ln_s!(Path.join(dir, "a.json"), Path.join(dir, "sym.json"))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "sym.json")
+
+    File.ln!(Path.join(dir, "a.json"), Path.join(dir, "hard.json"))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "a.json")
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "hard.json")
+
+    File.write!(Path.join(dir, "dup.json"), ~s({"k":1,"k":2}))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "dup.json")
+
+    File.write!(Path.join(dir, "nested.json"), ~s({"k":[{"a":1,"a":2}]}))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "nested.json")
+
+    File.write!(Path.join(dir, "t.txt"), "plain")
+    assert {:ok, "plain"} = Store.read_text(dir, "t.txt", 16)
+    assert {:error, :ceremony_artifact_malformed} = Store.read_text(dir, "t.txt", 3)
+  end
+
+  test "Store.read refuses an artifact hard-linked after the descriptor check", f do
+    dir = f.ceremony
+    path = Path.join(dir, "linked.json")
+    File.write!(path, ~s({"k":1}))
+
+    link = fn
+      :before_open -> :ok
+      :after_open -> File.ln!(path, Path.join(dir, "second-link.json"))
+    end
+
+    assert {:error, :ceremony_artifact_malformed} = Store.read_between(dir, "linked.json", link)
+  end
+
+  test "Store.read refuses an artifact swapped for a symlink between lstat and open", f do
+    dir = f.ceremony
+    path = Path.join(dir, "swap.json")
+    File.write!(path, ~s({"k":1}))
+    File.write!(Path.join(dir, "other.json"), ~s({"k":2}))
+
+    assert {:ok, %{"k" => 1}} = Store.read_between(dir, "swap.json", fn _ -> :ok end)
+
+    swap = fn
+      :before_open ->
+        File.rename!(path, Path.join(dir, "held.json"))
+        File.ln_s!(Path.join(dir, "other.json"), path)
+
+      :after_open ->
+        :ok
+    end
+
+    assert {:error, :ceremony_artifact_malformed} = Store.read_between(dir, "swap.json", swap)
+
+    # Swapped back before the final lstat: only the opened-descriptor check sees it.
+    File.rm!(path)
+    File.rename!(Path.join(dir, "held.json"), path)
+
+    swap_back = fn
+      :before_open ->
+        File.rename!(path, Path.join(dir, "held.json"))
+        File.ln_s!(Path.join(dir, "other.json"), path)
+
+      :after_open ->
+        File.rm!(path)
+        File.rename!(Path.join(dir, "held.json"), path)
+    end
+
+    assert {:error, :ceremony_artifact_malformed} =
+             Store.read_between(dir, "swap.json", swap_back)
+
+    assert {:ok, %{"k" => 1}} = Store.read_between(dir, "swap.json", fn _ -> :ok end)
+  end
+
+  test "the payload artifact has a closed key set and the review sheet is exact", f do
+    generate!(f)
+    space = space(f)
+    {payload, record} = payload!(f, space)
+
+    {:ok, catalog_key, _} =
+      Signer.load(f.ceremony, :real)
+
+    sheet = File.read!(Path.join(f.ceremony, "binding-review.txt"))
+    assert Binding.review_matches?(sheet, record, payload["sha256"])
+
+    edited = String.replace(sheet, "version            1", "version            2")
+    refute edited == sheet
+    refute Binding.review_matches?(edited, record, payload["sha256"])
+
+    assert {:ok, _, _, _} = Binding.load_payload(f.ceremony, catalog_key)
+
+    edit_json!(f.ceremony, "binding-payload.json", &Map.put(&1, "extra", 1))
+
+    assert {:error, :ceremony_artifact_malformed} =
+             Binding.load_payload(f.ceremony, catalog_key)
   end
 
   test "verify-binding rejects a corrupt or foreign payload artifact", f do
