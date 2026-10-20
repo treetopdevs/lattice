@@ -8,6 +8,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
   alias LatticeCarrierServer.Operator.CatalogCeremony.{DryRun, Paths}
 
   @marker "DRY-RUN-NOT-REAL"
+  @max_artifact_bytes 64 * 1024
 
   @spec marker() :: String.t()
   def marker, do: @marker
@@ -80,16 +81,108 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Store do
 
   def undisposable(_keys, :dry_run), do: :ok
 
+  @doc "The largest ceremony artifact `read/2` and `read_text/3` accept by default."
+  @spec max_artifact_bytes() :: pos_integer()
+  def max_artifact_bytes, do: @max_artifact_bytes
+
+  # Strict JSON object artifact: bounded, regular, single-link, unchanged while
+  # read, no repeated key at any depth.
   @spec read(Path.t(), String.t()) :: {:ok, map()} | {:error, atom()}
   def read(dir, name) do
-    with {:ok, bytes} <- File.read(Path.join(dir, name)),
-         {:ok, %{} = map} <- Jason.decode(bytes) do
+    with {:ok, bytes} <- read_bounded(dir, name, @max_artifact_bytes),
+         {:ok, decoded} <- Jason.decode(bytes, objects: :ordered_objects),
+         {:ok, %{} = map} <- plain(decoded) do
       {:ok, map}
     else
-      {:error, :enoent} -> {:error, :ceremony_artifact_missing}
+      {:error, :ceremony_artifact_missing} = refusal -> refusal
       _ -> {:error, :ceremony_artifact_malformed}
     end
   end
+
+  @doc "Like `read/2`, and the top-level key set must be exactly `keys`."
+  @spec read(Path.t(), String.t(), [String.t()]) :: {:ok, map()} | {:error, atom()}
+  def read(dir, name, keys) do
+    with {:ok, map} <- read(dir, name) do
+      if Enum.sort(Map.keys(map)) == Enum.sort(keys),
+        do: {:ok, map},
+        else: {:error, :ceremony_artifact_malformed}
+    end
+  end
+
+  @spec read_text(Path.t(), String.t(), pos_integer()) :: {:ok, binary()} | {:error, atom()}
+  def read_text(dir, name, cap) do
+    with {:ok, bytes} <- read_bounded(dir, name, cap),
+         true <- String.valid?(bytes) do
+      {:ok, bytes}
+    else
+      {:error, :ceremony_artifact_missing} = refusal -> refusal
+      _ -> {:error, :ceremony_artifact_malformed}
+    end
+  end
+
+  defp read_bounded(dir, name, cap) do
+    path = Path.join(dir, name)
+
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :regular, links: 1, size: size} = first} when size <= cap ->
+        read_file(path, first, cap)
+
+      {:error, :enoent} ->
+        {:error, :ceremony_artifact_missing}
+
+      _ ->
+        {:error, :ceremony_artifact_malformed}
+    end
+  end
+
+  defp read_file(path, first, cap) do
+    with {:ok, fd} <- :file.open(path, [:read, :raw, :binary]) do
+      result = :file.read(fd, cap + 1)
+      :file.close(fd)
+
+      with {:ok, bytes} when byte_size(bytes) <= cap <- result,
+           {:ok, second} <- File.lstat(path),
+           true <- second.inode == first.inode and second.size == first.size do
+        {:ok, bytes}
+      else
+        :eof -> {:ok, ""}
+        _ -> {:error, :ceremony_artifact_malformed}
+      end
+    else
+      _ -> {:error, :ceremony_artifact_malformed}
+    end
+  end
+
+  # Ordered objects keep repeats; any repeated key refuses the whole artifact.
+  defp plain(%Jason.OrderedObject{values: values}) do
+    keys = Enum.map(values, &elem(&1, 0))
+
+    if length(Enum.uniq(keys)) == length(keys) do
+      Enum.reduce_while(values, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+        case plain(value) do
+          {:ok, converted} -> {:cont, {:ok, Map.put(acc, key, converted)}}
+          :error -> {:halt, :error}
+        end
+      end)
+    else
+      :error
+    end
+  end
+
+  defp plain(list) when is_list(list) do
+    Enum.reduce_while(list, {:ok, []}, fn item, {:ok, acc} ->
+      case plain(item) do
+        {:ok, converted} -> {:cont, {:ok, [converted | acc]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, reversed} -> {:ok, Enum.reverse(reversed)}
+      :error -> :error
+    end
+  end
+
+  defp plain(other), do: {:ok, other}
 
   @spec exists?(Path.t(), String.t()) :: boolean()
   def exists?(dir, name), do: File.exists?(Path.join(dir, name))

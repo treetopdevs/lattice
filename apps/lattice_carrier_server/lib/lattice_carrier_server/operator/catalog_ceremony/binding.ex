@@ -11,6 +11,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
 
   @payload_format "lattice-catalog-bootstrap-payload-v1"
   @binding_format "lattice-catalog-binding-record-v1"
+  @binding_keys ~w(format bootstrap_id record_sha256 space verified_at)
+  @payload_keys ~w(format record record_encoding canonical_base64 sha256)
   @base64_fields ~w(space_root catalog_key service_key)
   @atom_fields ~w(product replacement_rule)
   @fields ~w(version product space space_root profile_genesis profile_id replacement_rule
@@ -46,7 +48,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
            ),
          {:ok, log} <- space_log(opts[:space_log]),
          :ok <- profile_unchanged(log, record),
-         {:ok, id} <- honored(log, record) do
+         {:ok, id} <- honored_bootstrap(log, record) do
       binding = %{
         "format" => @binding_format,
         "bootstrap_id" => id,
@@ -73,10 +75,22 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
       Store.timestamp?(found["verified_at"])
   end
 
+  @doc "The exact top-level keys of `binding.json`."
+  @spec binding_keys() :: [String.t()]
+  def binding_keys, do: @binding_keys
+
+  @doc "The exact top-level keys of `binding-payload.json`."
+  @spec payload_keys() :: [String.t()]
+  def payload_keys, do: @payload_keys
+
+  @doc "Whether `text` is byte-for-byte the review sheet written for this record and hash."
+  @spec review_matches?(term(), map(), String.t()) :: boolean()
+  def review_matches?(text, record, sha), do: text == review(record, sha)
+
   @doc "Read and re-check the payload artifact; returns the record rebuilt from its JSON."
   @spec load_payload(Path.t(), binary()) :: {:ok, map(), map(), String.t()} | {:error, atom()}
   def load_payload(dir, catalog_key) do
-    with {:ok, payload} <- Store.read(dir, "binding-payload.json"),
+    with {:ok, payload} <- Store.read(dir, "binding-payload.json", @payload_keys),
          :ok <- review_present(dir),
          true <- payload["format"] == @payload_format,
          {:ok, record} <- from_json(payload["record"]),
@@ -200,7 +214,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
 
   # The reviewed record named the Space's pin at payload time; the supplied log
   # must still carry exactly that pin (a later pin changes the profile).
-  defp profile_unchanged(log, record) do
+  @spec profile_unchanged(Log.t(), map()) :: :ok | {:error, :binding_profile_changed}
+  def profile_unchanged(log, record) do
     case Authority.continuation_profile(log) do
       {:ok, %{profile: %{kind: :space}} = profile}
       when log.replica == record.space and profile.root == record.space_root and
@@ -311,12 +326,16 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   defp display(name, value) when name in @base64_fields, do: Base.encode64(value)
   defp display(_name, value), do: to_string(value)
 
-  # One distinct honored record, equal to the payload, authored by the root.
-  defp honored(log, record) do
+  # Never chosen by arrival order: exactly one honored root-authored op, equal
+  # to the record. Distinct op ids count, even when their records are equal.
+  @doc "The one honored root-authored bootstrap op id for this record."
+  @spec honored_bootstrap(Log.t(), map()) ::
+          {:ok, String.t()} | {:error, :binding_not_found | :binding_fork | :invalid_space_log}
+  def honored_bootstrap(log, record) do
     with {:ok, %{bootstraps: found}} <- CatalogBootstrap.observe(log) do
       authored = Enum.filter(found, &authored_by_root?(log, &1))
 
-      case Enum.uniq_by(authored, & &1.record) do
+      case Enum.uniq_by(authored, & &1.id) do
         [] -> {:error, :binding_not_found}
         [%{record: ^record, id: id}] -> {:ok, id}
         [_one] -> {:error, :binding_not_found}

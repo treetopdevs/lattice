@@ -16,6 +16,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
     DryRun,
     Passphrase,
     Paths,
+    Signer,
     Store
   }
 
@@ -823,6 +824,84 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
              Ceremony.verify_binding(ceremony: f.ceremony, space_log: again)
 
     assert sha == payload["sha256"]
+  end
+
+  test "verify-binding refuses equal records in two honored ops as a fork", f do
+    generate!(f)
+    space = space(f)
+    {_payload, record} = payload!(f, space)
+
+    sign = fn deps ->
+      Op.new(space.root, space.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
+        cap: space.delegation.id
+      )
+    end
+
+    first = sign.([space.pin.id])
+    second = sign.([first.id])
+    refute first.id == second.id
+    log = Enum.reduce([first, second], space.before, &Log.append!(&2, &1))
+    path = Path.join(Path.dirname(space.pre), "equal-fork.log")
+    :ok = Log.dump(log, path)
+
+    assert {:error, :binding_fork} =
+             Ceremony.verify_binding(ceremony: f.ceremony, space_log: path)
+
+    refute File.exists?(Path.join(f.ceremony, "binding.json"))
+  end
+
+  test "Store.read is bounded, regular, single-link and duplicate-key free", f do
+    dir = f.ceremony
+    assert {:error, :ceremony_artifact_missing} = Store.read(dir, "a.json")
+
+    File.write!(Path.join(dir, "a.json"), ~s({"k":1}))
+    assert {:ok, %{"k" => 1}} = Store.read(dir, "a.json")
+    assert {:ok, %{"k" => 1}} = Store.read(dir, "a.json", ["k"])
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "a.json", ["k", "j"])
+
+    big = ~s({"k":") <> String.duplicate("x", Store.max_artifact_bytes()) <> ~s("})
+    File.write!(Path.join(dir, "big.json"), big)
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "big.json")
+
+    File.ln_s!(Path.join(dir, "a.json"), Path.join(dir, "sym.json"))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "sym.json")
+
+    File.ln!(Path.join(dir, "a.json"), Path.join(dir, "hard.json"))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "a.json")
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "hard.json")
+
+    File.write!(Path.join(dir, "dup.json"), ~s({"k":1,"k":2}))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "dup.json")
+
+    File.write!(Path.join(dir, "nested.json"), ~s({"k":[{"a":1,"a":2}]}))
+    assert {:error, :ceremony_artifact_malformed} = Store.read(dir, "nested.json")
+
+    File.write!(Path.join(dir, "t.txt"), "plain")
+    assert {:ok, "plain"} = Store.read_text(dir, "t.txt", 16)
+    assert {:error, :ceremony_artifact_malformed} = Store.read_text(dir, "t.txt", 3)
+  end
+
+  test "the payload artifact has a closed key set and the review sheet is exact", f do
+    generate!(f)
+    space = space(f)
+    {payload, record} = payload!(f, space)
+
+    {:ok, catalog_key, _} =
+      Signer.load(f.ceremony, :real)
+
+    sheet = File.read!(Path.join(f.ceremony, "binding-review.txt"))
+    assert Binding.review_matches?(sheet, record, payload["sha256"])
+
+    edited = String.replace(sheet, "version            1", "version            2")
+    refute edited == sheet
+    refute Binding.review_matches?(edited, record, payload["sha256"])
+
+    assert {:ok, _, _, _} = Binding.load_payload(f.ceremony, catalog_key)
+
+    edit_json!(f.ceremony, "binding-payload.json", &Map.put(&1, "extra", 1))
+
+    assert {:error, :ceremony_artifact_malformed} =
+             Binding.load_payload(f.ceremony, catalog_key)
   end
 
   test "verify-binding rejects a corrupt or foreign payload artifact", f do
