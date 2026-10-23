@@ -8,7 +8,8 @@ defmodule LatticeCarrierServer.Operator.Lock do
   The helper must be deployed with the operator checkout; no release installation
   or supported-host availability is asserted by this primitive.
   """
-  alias LatticeCarrierServer.Operator.Journal
+  alias LatticeCarrierServer.Operator.{CatalogStore, Journal}
+  alias Treehouse.TransportCatalog
   @helper Path.expand("../../../../../scripts/treehouse_operator_mutation.py", __DIR__)
   @external_resource @helper
   @timeout 10_000
@@ -44,6 +45,68 @@ defmodule LatticeCarrierServer.Operator.Lock do
   def ready(root, expected, active_manifest, record, incarnation) do
     with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected) do
       plan = plan("ready", expected, record, attempt, [active_manifest], nil)
+      run(root, %{plan | incarnation: incarnation}, nil)
+    end
+  end
+
+  @doc """
+  Record the `ready` journal as `catalogued`: the owner writes the signed
+  catalog envelope into its store, then commits `record`, only while
+  `active_manifest` still holds the activated bytes and `incarnation` is current.
+  """
+  @spec catalogued(Path.t(), binary(), map(), binary(), String.t(), binary()) ::
+          :ok | {:error, term()}
+  def catalogued(root, expected, active_manifest, record, incarnation, envelope_bytes) do
+    with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected),
+         :ok <- catalog_artifact(root, record, envelope_bytes) do
+      artifacts = [
+        %{sha256: Journal.digest(envelope_bytes), bytes: Base.encode64(envelope_bytes)}
+      ]
+
+      plan = plan("catalogued", expected, record, attempt, [active_manifest], artifacts)
+      run(root, %{plan | incarnation: incarnation}, nil)
+    end
+  end
+
+  # The record must hold exactly one catalog artifact naming these bytes.
+  defp catalog_artifact(root, record, bytes) do
+    sha = Journal.digest(bytes)
+
+    with {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(bytes),
+         {:ok, decoded} <- Journal.decode(record),
+         [%{"op_id" => id, "sha256" => ^sha, "path" => path, "replica" => replica}] <-
+           Enum.filter(decoded["artifacts"], &(&1["kind"] == "catalog")),
+         true <- id == TransportCatalog.catalog_id(catalog),
+         true <- replica == catalog.space,
+         true <- path == CatalogStore.file_path(root, sha),
+         true <- extends_head?(root, catalog, sha) do
+      :ok
+    else
+      _ -> {:error, :catalog_artifact_mismatch}
+    end
+  end
+
+  # The owner cannot decode envelopes, so the chain rule is enforced here: the
+  # store has no other pending envelope and this one is the committed head's
+  # next revision (revision 0 with no head).
+  defp extends_head?(root, catalog, sha) do
+    case CatalogStore.verify(root, nil) do
+      {:ok, %{head: head, head_revision: revision, pending: pending}} ->
+        (pending == nil or pending.sha256 == sha) and catalog.previous == head and
+          catalog.revision == if(revision == nil, do: 0, else: revision + 1)
+
+      _ ->
+        false
+    end
+  end
+
+  @doc """
+  Record the `catalogued` journal as `listed`, with the same checks as `ready`.
+  """
+  @spec listed(Path.t(), binary(), map(), binary(), String.t()) :: :ok | {:error, term()}
+  def listed(root, expected, active_manifest, record, incarnation) do
+    with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected) do
+      plan = plan("listed", expected, record, attempt, [active_manifest], nil)
       run(root, %{plan | incarnation: incarnation}, nil)
     end
   end
