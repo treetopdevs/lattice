@@ -5,10 +5,11 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
   """
   use ExUnit.Case, async: false
   if :os.type() != {:unix, :linux}, do: @moduletag(skip: "Requires actual Linux OS lock")
-  alias LatticeCarrierServer.Operator.{CatalogBinding, Journal, Staging}
+  alias Lattice.{Authority, Log}
+  alias LatticeCarrierServer.Operator.{CatalogBinding, Fixture, Journal, Staging}
 
   setup do
-    {:ok, data} = LatticeCarrierServer.Operator.Fixture.new()
+    {:ok, data} = Fixture.new()
     {:ok, Map.new(data)}
   end
 
@@ -141,7 +142,7 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
   end
 
   test "another ceremony's refusal passes through unchanged", f do
-    {:ok, other} = LatticeCarrierServer.Operator.Fixture.new()
+    {:ok, other} = Fixture.new()
     other = Map.new(other)
     assert {:error, reason} = CatalogBinding.load(other.ceremony_dir, f.active_log)
 
@@ -178,6 +179,26 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
     refuses(f, mutate(f, space(&Map.put(&1, "log_file", moved))), :invalid_candidate_manifest)
   end
 
+  test "a non-Treehouse instance whose log has no authority root coexists verbatim", f do
+    {request, other} = with_rootless(f)
+    artifacts = mutate(f, &Map.update!(&1, "instances", fn [a, b] -> [a, other, b] end))
+
+    assert {:ok, record} = Staging.prepare(f.root, nil, request, artifacts, f.ceremony_dir)
+    assert record["service"]["pub"] == Base.encode64(f.service_pub)
+    assert File.read!(f.active_log) == f.active_bytes
+  end
+
+  test "a rootless non-Treehouse instance must still be kept verbatim", f do
+    {request, other} = with_rootless(f)
+    moved = put_in(other, ["listener", "port"], 41_002)
+    artifacts = mutate(f, &Map.update!(&1, "instances", fn [a, b] -> [a, moved, b] end))
+
+    assert {:error, :invalid_candidate_manifest} =
+             Staging.prepare(f.root, nil, request, artifacts, f.ceremony_dir)
+
+    assert {:ok, nil} = Journal.read(f.root)
+  end
+
   describe "migration of an unbound active Space instance" do
     for {label, opts} <- [
           {"the root as the only member", []},
@@ -185,7 +206,7 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
           {"a root that is not a member", [second_member: true, root_member: false]}
         ] do
       test "stages to the bound values with #{label}" do
-        {:ok, data} = LatticeCarrierServer.Operator.Fixture.new(unquote(opts))
+        {:ok, data} = Fixture.new(unquote(opts))
         f = Map.new(data)
         request = unbind_active(f)
 
@@ -227,6 +248,40 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
 
       assert {:ok, nil} = Journal.read(f.root)
     end
+  end
+
+  # Adds a non-Treehouse instance to the active manifest whose log is empty, so
+  # it has no authority root. Returns the request over that manifest and the
+  # instance JSON for the candidate.
+  defp with_rootless(f) do
+    log = Path.join(f.root, "other.log")
+    :ok = "replica:other:rootless" |> Log.new() |> Log.dump(log)
+    assert {:ok, %{log: rootless}} = Log.restore_verified(log)
+    assert Authority.root(rootless) == nil
+    peer = Base.encode64(:crypto.hash(:sha256, "other-peer"))
+
+    other = %{
+      "name" => "other",
+      "realm" => "other-realm",
+      "identity_file" => identity_file(f, "other.identity", "other-service"),
+      "log_file" => log,
+      "listener" => %{"ip" => "127.0.0.1", "port" => 0},
+      "trusted_peers" => [%{"realm" => "other-peer", "pubkey" => peer}],
+      "relay_realms" => []
+    }
+
+    manifest = Jason.decode!(File.read!(f.request.active_manifest))
+    path = Path.join(f.root, "with-other.json")
+    File.write!(path, Jason.encode!(Map.update!(manifest, "instances", &(&1 ++ [other]))))
+    File.chmod!(path, 0o600)
+
+    request = %{
+      f.request
+      | active_manifest: path,
+        manifest_digest: Journal.digest(File.read!(path))
+    }
+
+    {request, other}
   end
 
   # Rewrites the active manifest so its Space instance is the pre-binding

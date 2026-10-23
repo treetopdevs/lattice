@@ -468,19 +468,25 @@ defmodule LatticeCarrierServer.Operator.Staging do
   # instance. `context`:
   #   :space_replica - the Space the ceremony binds
   #   :replica_of    - fn instance -> served replica | nil
-  #   :roots         - %{replica => authority root pub}
+  #   :roots         - %{replica => authority root pub | nil}
   #   :roster        - sorted base64 member keys (`roster/1`)
   #   :peer_error    - the atom for a trusted_peers set that is not {root} + roster
   # Returns :ok or {:error, :service_binding_mismatch | context.peer_error |
-  # :relay_realms_unreviewed}, in that order of precedence.
+  # :relay_realms_unreviewed}, in that order of precedence. An instance with no
+  # known replica, or a Treehouse instance with no authority root, is a
+  # mismatch; a non-Treehouse log may have no root and is then not inventoried.
   @spec check_bound([map()], map(), map()) :: :ok | {:error, atom()}
   def check_bound(instances, context, binding) do
     treehouse = Enum.filter(instances, &treehouse?(context.replica_of.(&1)))
     key = binding.record.service_key
     roster_keys = context.roster
-    root_keys = context.roots |> Map.values() |> Enum.map(&Base.encode64/1)
 
-    with :ok <- space_present(treehouse, context),
+    root_keys =
+      for root <- Map.values(context.roots), is_binary(root), do: Base.encode64(root)
+
+    with :ok <- replicas_known(instances, context),
+         :ok <- rooted(treehouse, context),
+         :ok <- space_present(treehouse, context),
          :ok <- same_bound(treehouse, binding.realm, key),
          :ok <- distinct_key(treehouse, key, roster_keys ++ root_keys),
          :ok <- peers_exact(treehouse, context),
@@ -489,6 +495,18 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
   defp treehouse?("replica:treehouse:" <> _), do: true
   defp treehouse?(_), do: false
+
+  defp replicas_known(instances, context) do
+    if Enum.all?(instances, &is_binary(context.replica_of.(&1))),
+      do: :ok,
+      else: {:error, :service_binding_mismatch}
+  end
+
+  defp rooted(treehouse, context) do
+    if Enum.all?(treehouse, &is_binary(Map.get(context.roots, context.replica_of.(&1)))),
+      do: :ok,
+      else: {:error, :service_binding_mismatch}
+  end
 
   defp space_present(treehouse, context) do
     if Enum.any?(treehouse, &(context.replica_of.(&1) == context.space_replica)),

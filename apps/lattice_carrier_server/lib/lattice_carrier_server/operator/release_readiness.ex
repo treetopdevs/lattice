@@ -7,10 +7,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   calls `confirm/4`. It proves, in order and without writing anything: the boot
   is guarded and carries an incarnation marker; the journal is `activated` over
   the manifest this deployment loaded; every route is ready; the Space roster
-  still matches what staging reviewed; and the admitted child route answers an
-  authenticated frontier and pull over its real loopback listener. Only then
-  does it ask the Python mutation owner, the only writer, to record `ready`.
-  The owner is never invoked on a refusal.
+  still matches what staging reviewed; every Treehouse route answers an
+  authenticated frontier and pull over its real loopback listener; and the
+  ceremony binding, reloaded after those probes, is unchanged. Only then does
+  it ask the Python mutation owner, the only writer, to record `ready`. The
+  owner is never invoked on a refusal.
 
   The pull authenticates through the operator probe realm
   (`LatticeCarrierServer.ProbeRealm`): an Ed25519 key named by file, read with
@@ -52,6 +53,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
          {:ok, binding} <- bound(record, instances, ceremony_dir),
          :ok <- check_bound(instances, current, binding, reference(record)),
          :ok <- pulled(targets(current, binding), binding, probe_identity_file),
+         :ok <- rebound(record, instances, ceremony_dir, binding),
          next = Map.put(record, "phase", "ready"),
          :ok <-
            Lock.ready(
@@ -143,6 +145,22 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
              :service_binding_mismatch
            ) do
       {:ok, binding}
+    end
+  end
+
+  # The binding again, after every route was probed: a bootstrap that landed in
+  # the served Space log meanwhile refuses (`:binding_fork` and the other
+  # `CatalogBinding` atoms pass through), and a different honored bootstrap,
+  # realm or key is a mismatch. `ready` is a dated observation: the window
+  # between this recheck and the owner's commit is accepted, and PRs 4-5
+  # reload the binding before they rely on it.
+  defp rebound(record, instances, ceremony_dir, binding) do
+    with {:ok, again} <- bound(record, instances, ceremony_dir) do
+      same(
+        again.bootstrap_id == binding.bootstrap_id and again.realm == binding.realm and
+          again.record.service_key == binding.record.service_key,
+        :service_binding_mismatch
+      )
     end
   end
 
@@ -250,9 +268,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   # must lie between the holder's ids read before and after it. The probe
   # dials the address the listener actually bound, not an assumed loopback.
   defp read_route(target, secret) do
-    # Test observer: it receives the route path only, never a key.
-    case Application.get_env(:lattice_carrier_server, :readiness_probe_observer) do
-      pid when is_pid(pid) -> send(pid, {:readiness_probe, target.route})
+    # Synchronous test hook, run in this process before the route is dialed:
+    # it receives the route path only, never a key.
+    case Application.get_env(:lattice_carrier_server, :readiness_probe_hook) do
+      hook when is_function(hook, 1) -> hook.(target.route)
       _ -> :ok
     end
 

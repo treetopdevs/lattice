@@ -2,9 +2,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
   use ExUnit.Case, async: false
   if :os.type() != {:unix, :linux}, do: @moduletag(skip: "Requires actual Linux OS lock")
   alias Lattice.{Identity, Log, Sim}
-  alias LatticeCarrierServer.{Manifest, ProbeRealm, Runtime}
+  alias LatticeCarrierServer.{Holder, Manifest, ProbeRealm, Runtime}
 
   alias LatticeCarrierServer.Operator.{
+    CeremonyFixture,
     Fixture,
     Journal,
     ReleaseActivation,
@@ -239,8 +240,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
   test "confirm probes both the Space route and the child route and leaves no grant", f do
     activated = activated!(f)
     restart!()
-    Application.put_env(:lattice_carrier_server, :readiness_probe_observer, self())
-    on_exit(fn -> Application.delete_env(:lattice_carrier_server, :readiness_probe_observer) end)
+    test = self()
+    hook!(fn route -> send(test, {:readiness_probe, route}) end)
 
     assert {:ok, _} = ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
     assert_received {:readiness_probe, space_route}
@@ -250,7 +251,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
     no_grants!()
   end
 
-  test "a child route probed against another replica refuses as a failed pull", f do
+  test "a child route dialed for another replica is refused at the handshake", f do
     activated = activated!(f)
     restart!()
     target = target!(f, "thread", f.child_route)
@@ -263,18 +264,80 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
     assert {:ok, ^activated} = Journal.read(f.root)
   end
 
-  test "a ceremony binding a different service key refuses", f do
+  test "a route whose pull lacks an expected genesis op refuses as a failed pull", f do
+    activated = activated!(f)
+    restart!()
+    target = target!(f, "thread", f.child_route)
+    # The handshake succeeds; only the post-handshake pull comparison can refuse.
+    absent = %{target | genesis: target.genesis ++ [CeremonyFixture.id("absent-genesis")]}
+
+    assert {:error, :readiness_pull_failed} = ReleaseReadiness.probe_route(absent, f.probe)
+    no_grants!()
+    assert {:ok, ^activated} = Journal.read(f.root)
+  end
+
+  test "a ceremony directory that binds another Space bootstrap refuses", f do
     activated = activated!(f)
     restart!()
     {:ok, other} = Fixture.new()
     other = Map.new(other)
 
     unchanged!(f, activated, fn ->
-      assert {:error, reason} =
+      assert {:error, :binding_not_in_served_log} =
                ReleaseReadiness.confirm(f.root, activated, f.probe, other.ceremony_dir)
-
-      assert is_atom(reason)
     end)
+  end
+
+  test "a service realm edited in the journal after activation refuses as a mismatch", f do
+    activated = activated!(f)
+    restart!()
+    edited = rewrite_service(f, activated, &Map.put(&1, "realm", "edited-realm"))
+
+    unchanged!(f, edited, fn ->
+      assert {:error, :service_binding_mismatch} =
+               ReleaseReadiness.confirm(f.root, edited, f.probe, f.ceremony_dir)
+    end)
+  end
+
+  test "a service key edited in the journal after activation refuses as a mismatch", f do
+    activated = activated!(f)
+    restart!()
+    other = Base.encode64(Identity.from_seed("other", "edited-service").pub)
+    edited = rewrite_service(f, activated, &Map.put(&1, "pub", other))
+
+    unchanged!(f, edited, fn ->
+      assert {:error, :service_binding_mismatch} =
+               ReleaseReadiness.confirm(f.root, edited, f.probe, f.ceremony_dir)
+    end)
+  end
+
+  test "a second root-signed bootstrap served during the probes refuses as a fork", f do
+    activated = activated!(f)
+    restart!()
+
+    # The first binding load has passed by the time a route is dialed; the
+    # Space root then signs the same record again into the served Space log,
+    # so only the post-probe recheck can see the fork.
+    {forked, second} =
+      Sim.command(f.space, "creator", :catalog_bootstrap_v1, [f.binding.record])
+
+    refute Sim.quarantined(forked, "creator", second.id)
+    test = self()
+
+    hook!(fn route ->
+      if route == f.space_route do
+        assert {:ok, _} = Holder.relay(Holder.via("space"), "member", second)
+        send(test, :forked)
+      end
+    end)
+
+    unchanged!(f, activated, fn ->
+      assert {:error, :binding_fork} =
+               ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
+    end)
+
+    assert_received :forked
+    assert second.id in Log.op_ids(elem(Log.restore_verified(f.active_log), 1).log)
   end
 
   # --- helpers ---------------------------------------------------------------
@@ -327,6 +390,20 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
       replica: log.replica,
       genesis: for({id, %{kind: :authority, body: {:genesis, _, _}}} <- log.ops, do: id)
     }
+  end
+
+  defp hook!(fun) do
+    Application.put_env(:lattice_carrier_server, :readiness_probe_hook, fun)
+    on_exit(fn -> Application.delete_env(:lattice_carrier_server, :readiness_probe_hook) end)
+  end
+
+  # The activated record with its service entry rewritten, written over the
+  # journal so the edited bytes are what `expected` names.
+  defp rewrite_service(f, activated, fun) do
+    {:ok, record} = Journal.decode(activated)
+    edited = Journal.encode(Map.update!(record, "service", fun))
+    File.write!(Journal.path(f.root), edited)
+    edited
   end
 
   defp boot!(f) do
