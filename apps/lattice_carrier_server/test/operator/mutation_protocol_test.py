@@ -320,7 +320,7 @@ class Protocol(unittest.TestCase):
         record["artifacts"][0]["path"] = os.path.join(root, "candidate")
         record["service"]["identity_file"] = identity
         record["service"]["sha256"] = owner.digest(bound_bytes)
-        owner.commit(root, None, json.dumps(record, separators=(",", ":")))
+        owner.commit(root, None, owner.canonical(record))
         return root
 
     def test_commit_rechecks_the_bound_service_identity_digest(self):
@@ -343,7 +343,7 @@ class Protocol(unittest.TestCase):
         record["artifacts"][0]["path"] = os.path.join(root, "candidate")
         record["service"].update(identity_file=link, sha256=owner.digest(b"a" * 64))
         with self.assertRaises(owner.Refusal) as ctx:
-            owner.commit(root, None, json.dumps(record, separators=(",", ":")))
+            owner.commit(root, None, owner.canonical(record))
         self.assertEqual(str(ctx.exception), "unsafe_operator_file")
 
     def test_commit_refuses_a_shared_service_identity_file(self):
@@ -356,7 +356,7 @@ class Protocol(unittest.TestCase):
             record = self.sample()
             record["artifacts"][0]["path"] = os.path.join(root, "candidate")
             record["service"].update(identity_file=identity, sha256=owner.digest(b"a" * 64))
-            owner.commit(root, None, json.dumps(record, separators=(",", ":")))
+            owner.commit(root, None, owner.canonical(record))
         self.assertEqual(str(ctx.exception), "unsafe_operator_file")
 
     def test_raw_binary_canonical_and_bounded(self):
@@ -432,7 +432,12 @@ class Protocol(unittest.TestCase):
         return path
 
     def compact(self, value):
-        return json.dumps(value, separators=(",", ":"))
+        # Records go out in the BEAM's canonical bytes; anything that is not
+        # record-shaped is only compacted (and refused later).
+        try:
+            return owner.canonical(value)
+        except (KeyError, TypeError):
+            return json.dumps(value, separators=(",", ":"))
 
     def history_bytes(self, root):
         path = os.path.join(root, owner.HISTORY)
@@ -1118,6 +1123,123 @@ class Protocol(unittest.TestCase):
         with self.assertRaises(owner.Refusal) as caught:
             self.run_stage(root, plan, commit)
         self.assertEqual(str(caught.exception), "catalog_store_corrupt")
+
+    def test_catalogued_refuses_a_fork_when_another_envelope_is_pending(self):
+        root, _, _, plan, _ = self.catalog_plans("cat-fork")
+        other = owner.digest(b"other") + ".json"
+        store = self.store(root, other, b"other")
+        before = sorted(os.listdir(store))
+        self.refused(root, plan, "catalog_fork", owner.catalogued)
+        self.assertEqual(self.journal(root), plan["expected"])
+        self.assertEqual(sorted(os.listdir(store)), before)
+
+    def test_catalogued_refuses_to_replay_a_receipted_envelope_or_head(self):
+        root, _, _, plan, _ = self.catalog_plans("cat-replay")
+        # The envelope is already named by a history line.
+        history = os.path.join(root, owner.HISTORY)
+        before = self.history_bytes(root)
+        self.private(history, before + plan["record"].encode() + b"\n")
+        self.refused(root, plan, "stale_operator_intent", owner.catalogued)
+        self.assertFalse(os.path.exists(os.path.join(root, "catalog")))
+        self.assertEqual(self.journal(root), plan["expected"])
+        # A new artifact whose id is the committed head is a replay too.
+        root, target, candidate, plan, _ = self.catalog_plans("cat-replay-head")
+        ready = dict(json.loads(plan["expected"]), catalog_head=self.CID)
+        self.private(os.path.join(root, "operator-journal.json"), self.compact(ready).encode())
+        want = dict(json.loads(plan["record"]), artifacts=ready["artifacts"] + [self.catalog_artifact(root)])
+        self.refused(root, dict(plan, expected=self.compact(ready), record=self.compact(want)),
+                     "stale_operator_intent", owner.catalogued)
+        self.assertFalse(os.path.exists(os.path.join(root, "catalog")))
+
+    def test_catalogued_refuses_a_non_canonical_record_before_writing(self):
+        root, _, _, plan, _ = self.catalog_plans("cat-canonical")
+        spaced = json.dumps(json.loads(plan["record"]))
+        self.assertIn('"kind": "catalog"', spaced)
+        self.refused(root, dict(plan, record=spaced), "malformed_operator_plan", owner.catalogued)
+        self.assertFalse(os.path.exists(os.path.join(root, "catalog")))
+        self.assertEqual(self.journal(root), plan["expected"])
+
+    def test_commit_refuses_any_record_that_is_not_the_canonical_encoding(self):
+        root = self.workdir("canonical-commit")
+        record = self.pending(root, 0)
+        good = owner.canonical(record)
+        self.assertEqual(owner.record(good), record)
+        for raw in (json.dumps(record), json.dumps(record, separators=(",", ":")),
+                    good.replace('"version":1', '"version": 1'),
+                    json.dumps(record, separators=(",", ":"), ensure_ascii=False, sort_keys=True)):
+            with self.assertRaises(owner.Refusal, msg=raw) as caught:
+                owner.commit(root, None, raw)
+            self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        self.assertFalse(os.path.exists(os.path.join(root, "operator-journal.json")))
+        owner.commit(root, None, good)
+
+    def test_catalogued_refuses_a_temp_name_that_is_not_a_private_regular_file(self):
+        temp = ".tmp." + "ab" * 16
+        for kind in ("dir", "symlink", "fifo", "shared"):
+            root, _, _, plan, _ = self.catalog_plans("cat-temp-" + kind)
+            store = self.store(root)
+            path = os.path.join(store, temp)
+            if kind == "dir":
+                os.mkdir(path, 0o700)
+            elif kind == "symlink":
+                os.symlink(os.path.join(root, "operator-journal.json"), path)
+            elif kind == "fifo":
+                os.mkfifo(path, 0o600)
+            else:
+                self.private(path, b"torn", 0o640)
+            self.refused(root, plan, "catalog_store_corrupt", owner.catalogued)
+            self.assertEqual(os.listdir(store), [temp])
+            self.assertEqual(self.journal(root), plan["expected"])
+
+    def test_boot_removes_a_leftover_temp_that_is_linked_to_a_final(self):
+        root, target, candidate, first, _ = self.catalog_plans("cat-boot-temp")
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, first)
+        store = os.path.join(root, "catalog")
+        final = os.path.join(store, owner.digest(self.ENVELOPE) + ".json")
+        temp = os.path.join(store, ".tmp." + "ef" * 16)
+        os.link(final, temp)
+        self.assertEqual(os.stat(final).st_nlink, 2)
+        with mock.patch.object(owner, "reply"):
+            owner.boot(root, self.boot_plan(target, candidate))
+        self.assertEqual(os.listdir(store), [os.path.basename(final)])
+        self.assertEqual(os.stat(final).st_nlink, 1)
+        # A temp that is not a regular file refuses boot before any marker moves.
+        os.mkdir(temp, 0o700)
+        marker = self.private(os.path.join(root, owner.INCARNATION), b"4" * 64)
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.boot(root, self.boot_plan(target, candidate))
+        self.assertEqual(str(caught.exception), "catalog_store_corrupt")
+        with open(marker, "rb") as f:
+            self.assertEqual(f.read(), b"4" * 64)
+
+    def test_history_refuses_to_outgrow_its_bound_and_leaves_everything_alone(self):
+        root = self.workdir("history-full")
+        first = self.compact(self.pending(root, 0))
+        second = self.compact(self.pending(root, 1))
+        third = self.compact(self.pending(root, 2))
+        owner.commit(root, None, first)
+        owner.commit(root, first, second)
+        history = self.history_bytes(root)
+        with mock.patch.object(owner, "MAX_HISTORY", len(history) + len(second.encode())):
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.commit(root, second, third)
+        self.assertEqual(str(caught.exception), "operator_history_full")
+        self.assertEqual(self.journal(root), second)
+        self.assertEqual(self.history_bytes(root), history)
+        with mock.patch.object(owner, "MAX_HISTORY", len(history) + len(second.encode()) + 1):
+            owner.commit(root, second, third)
+        self.assertEqual(self.journal(root), third)
+
+    def test_activation_checks_the_history_bound_before_the_manifest_moves(self):
+        root, target, old, _, plan = self.activation("activate-full")
+        with mock.patch.object(owner, "MAX_HISTORY", 8):
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.activate(root, plan)
+        self.assertEqual(str(caught.exception), "operator_history_full")
+        with open(target, "rb") as f:
+            self.assertEqual(f.read(), old)
+        self.assertEqual(self.journal(root), plan["expected"])
 
     def test_a_deployment_path_under_the_catalog_store_collides(self):
         root = self.workdir("collision-catalog")

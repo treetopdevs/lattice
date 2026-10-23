@@ -46,9 +46,12 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
          {:ok, uid} <- Journal.effective_uid(),
          {:ok, stored} <- read_store(root, uid, key),
          {:ok, chain} <- chain(stored),
-         {:ok, receipts} <- receipts(root),
-         :ok <- match_receipts(chain, receipts) do
-      head(chain, receipts)
+         {:ok, current, receipts} <- receipts(root),
+         :ok <- match_receipts(chain, receipts),
+         {:ok, result} <- head(chain, receipts),
+         :ok <- complete_below_head(chain, receipts, result.head_revision),
+         :ok <- journal_head(current, result.head) do
+      {:ok, result}
     end
   end
 
@@ -60,7 +63,9 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
         {:ok, []}
 
       {:ok, %{type: :directory, uid: ^uid, mode: mode}} when band(mode, 0o077) == 0 ->
-        with {:ok, names} <- File.ls(dir), do: read_names(dir, names, uid, key)
+        with {:ok, names} <- File.ls(dir),
+             {:ok, entries} <- read_names(dir, names, uid, key),
+             do: split_entries(entries)
 
       _ ->
         {:error, :catalog_store_corrupt}
@@ -70,7 +75,6 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
   defp read_names(dir, names, uid, key) do
     Enum.reduce_while(names, {:ok, []}, fn name, {:ok, acc} ->
       case read_name(dir, name, uid, key) do
-        :skip -> {:cont, {:ok, acc}}
         {:ok, entry} -> {:cont, {:ok, [entry | acc]}}
         {:error, _} = error -> {:halt, error}
       end
@@ -80,7 +84,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
   defp read_name(dir, name, uid, key) do
     cond do
       Regex.match?(~r/\A\.tmp\.[0-9a-f]{32}\z/, name) ->
-        :skip
+        read_temp(Path.join(dir, name), uid)
 
       Regex.match?(~r/\A[0-9a-f]{64}\.json\z/, name) ->
         read_file(Path.join(dir, name), name, uid, key)
@@ -90,24 +94,61 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
     end
   end
 
+  # A temp is skipped by content but must still be a private regular file.
+  defp read_temp(file, uid) do
+    case File.lstat(file) do
+      {:ok, %{type: :regular, uid: ^uid, mode: mode, major_device: dev, inode: inode}}
+      when band(mode, 0o077) == 0 ->
+        {:ok, {:temp, {dev, inode}}}
+
+      _ ->
+        {:error, :catalog_store_corrupt}
+    end
+  end
+
+  # A final may have a second link only from an interrupted publish: exactly
+  # one temp in this store names the same inode.
+  defp split_entries(entries) do
+    temps = for {:temp, node} <- entries, do: node
+    finals = for {:final, entry} <- entries, do: entry
+
+    ok? =
+      Enum.all?(finals, fn %{links: links, node: node} ->
+        links == 1 or Enum.count(temps, &(&1 == node)) == 1
+      end)
+
+    if ok?, do: {:ok, finals}, else: {:error, :catalog_store_corrupt}
+  end
+
   defp read_file(file, name, uid, key) do
     sha = String.replace_suffix(name, ".json", "")
 
-    with {:ok, %{type: :regular, links: 1, uid: ^uid, mode: mode, size: size}} <-
-           File.lstat(file),
-         true <- band(mode, 0o077) == 0 and size <= @max_envelope,
+    with {:ok,
+          %{
+            type: :regular,
+            links: links,
+            uid: ^uid,
+            mode: mode,
+            size: size,
+            major_device: dev,
+            inode: inode
+          }} <- File.lstat(file),
+         true <- links in [1, 2] and band(mode, 0o077) == 0 and size <= @max_envelope,
          {:ok, bytes} <- File.read(file),
          true <- Journal.digest(bytes) == sha,
          {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(bytes),
          true <- signed?(bytes, key) do
       {:ok,
-       %{
-         id: TransportCatalog.catalog_id(catalog),
-         sha256: sha,
-         revision: catalog.revision,
-         previous: catalog.previous,
-         shared: {catalog.bootstrap, catalog.binding, catalog.space}
-       }}
+       {:final,
+        %{
+          links: links,
+          node: {dev, inode},
+          id: TransportCatalog.catalog_id(catalog),
+          sha256: sha,
+          revision: catalog.revision,
+          previous: catalog.previous,
+          shared: {catalog.bootstrap, catalog.binding, catalog.space}
+        }}}
     else
       _ -> {:error, :catalog_store_corrupt}
     end
@@ -161,7 +202,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
             %{"kind" => "catalog"} = artifact <- record["artifacts"],
             do: {artifact["op_id"], artifact["sha256"]}
 
-      {:ok, Enum.uniq(pairs)}
+      {:ok, List.first(current), Enum.uniq(pairs)}
     end
   end
 
@@ -210,6 +251,24 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
 
     if ok?, do: :ok, else: {:error, :catalog_store_corrupt}
   end
+
+  # Every envelope at or below the committed head was committed, so each must
+  # be a receipt; only envelopes past the head may lack one.
+  defp complete_below_head(_chain, _receipts, nil), do: :ok
+
+  defp complete_below_head(chain, receipts, head_revision) do
+    ok? =
+      Enum.all?(chain, fn {id, e} ->
+        e.revision > head_revision or {id, e.sha256} in receipts
+      end)
+
+    if ok?, do: :ok, else: {:error, :catalog_store_corrupt}
+  end
+
+  # The journal's catalog_head is the committed head (nil with no receipts).
+  defp journal_head(nil, _head), do: :ok
+  defp journal_head(%{"catalog_head" => head}, head), do: :ok
+  defp journal_head(_record, _head), do: {:error, :catalog_store_corrupt}
 
   defp head(chain, receipts) do
     {head, head_revision} =

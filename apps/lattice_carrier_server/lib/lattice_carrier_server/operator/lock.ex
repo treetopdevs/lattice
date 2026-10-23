@@ -8,7 +8,8 @@ defmodule LatticeCarrierServer.Operator.Lock do
   The helper must be deployed with the operator checkout; no release installation
   or supported-host availability is asserted by this primitive.
   """
-  alias LatticeCarrierServer.Operator.Journal
+  alias LatticeCarrierServer.Operator.{CatalogStore, Journal}
+  alias Treehouse.TransportCatalog
   @helper Path.expand("../../../../../scripts/treehouse_operator_mutation.py", __DIR__)
   @external_resource @helper
   @timeout 10_000
@@ -56,13 +57,30 @@ defmodule LatticeCarrierServer.Operator.Lock do
   @spec catalogued(Path.t(), binary(), map(), binary(), String.t(), binary()) ::
           :ok | {:error, term()}
   def catalogued(root, expected, active_manifest, record, incarnation, envelope_bytes) do
-    with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected) do
+    with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected),
+         :ok <- catalog_artifact(root, record, envelope_bytes) do
       artifacts = [
         %{sha256: Journal.digest(envelope_bytes), bytes: Base.encode64(envelope_bytes)}
       ]
 
       plan = plan("catalogued", expected, record, attempt, [active_manifest], artifacts)
       run(root, %{plan | incarnation: incarnation}, nil)
+    end
+  end
+
+  # The record must hold exactly one catalog artifact naming these bytes.
+  defp catalog_artifact(root, record, bytes) do
+    sha = Journal.digest(bytes)
+
+    with {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(bytes),
+         {:ok, decoded} <- Journal.decode(record),
+         [%{"op_id" => id, "sha256" => ^sha, "path" => path}] <-
+           Enum.filter(decoded["artifacts"], &(&1["kind"] == "catalog")),
+         true <- id == TransportCatalog.catalog_id(catalog),
+         true <- path == CatalogStore.file_path(root, sha) do
+      :ok
+    else
+      _ -> {:error, :catalog_artifact_mismatch}
     end
   end
 

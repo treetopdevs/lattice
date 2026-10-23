@@ -4,7 +4,8 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
   use ExUnit.Case, async: false
   alias Lattice.Carrier.Wire
   alias Lattice.Identity
-  alias LatticeCarrierServer.Operator.{CatalogStore, Journal}
+  alias LatticeCarrierServer.Operator.{CatalogStore, Journal, Lock}
+  alias LatticeCarrierServer.Runtime
   alias Treehouse.TransportCatalog
 
   setup do
@@ -321,5 +322,112 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
 
     File.write!(Journal.path(root), Journal.encode(moved))
     assert {:error, :corrupt_operator_journal} = Journal.read(root)
+  end
+
+  test "an unreceipted envelope under a receipted head is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [zero, one])
+    journal(root, "catalogued", [one])
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  defp ready_with_head(root, head) do
+    file = Journal.path(root)
+    File.write!(file, Journal.encode(%{record(root, "ready", []) | "catalog_head" => head}))
+    File.chmod!(file, 0o600)
+  end
+
+  test "the journal head must equal the committed head", %{root: root} do
+    zero = envelope(0, nil)
+    ready_with_head(root, zero.id)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+
+    store(root, [zero])
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+
+    history(root, [Journal.encode(record(root, "catalogued", [zero]))])
+    assert {:ok, %{head: head}} = CatalogStore.verify(root, nil)
+    assert head == zero.id
+
+    ready_with_head(root, nil)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  defp temp_name, do: ".tmp." <> Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)
+
+  test "a final linked to exactly one temp is an interrupted publish", %{root: root} do
+    zero = envelope(0, nil)
+    [file] = store(root, [zero])
+    tmp = Path.join(CatalogStore.path(root), temp_name())
+    :ok = File.ln(file, tmp)
+    assert {:ok, %{pending: %{revision: 0}}} = CatalogStore.verify(root, nil)
+
+    :ok = File.ln(file, Path.join(CatalogStore.path(root), temp_name()))
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a final linked outside the store is corrupt even with a temp", %{root: root} do
+    zero = envelope(0, nil)
+    [file] = store(root, [zero])
+    put(root, temp_name(), "partial")
+    :ok = File.ln(file, Path.join(root, "alias"))
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a temp must be a private regular file", %{root: root} do
+    store(root, [])
+    dir = Path.join(CatalogStore.path(root), temp_name())
+    File.mkdir!(dir)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+    File.rmdir!(dir)
+
+    link = Path.join(CatalogStore.path(root), temp_name())
+    :ok = File.ln_s(Path.join(root, "elsewhere"), link)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+    File.rm!(link)
+
+    file = put(root, temp_name(), "partial")
+    assert {:ok, _} = CatalogStore.verify(root, nil)
+    File.chmod!(file, 0o644)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "the boot guard triggers only on a journal with a catalog head", %{root: root} do
+    refute Runtime.catalog_head?(root)
+    journal(root, "ready", [])
+    refute Runtime.catalog_head?(root)
+
+    zero = envelope(0, nil)
+    journal(root, "catalogued", [zero])
+    assert Runtime.catalog_head?(root)
+  end
+
+  test "catalogued refuses a record that does not name the envelope bytes", %{root: root} do
+    zero = envelope(0, nil)
+    other = envelope(0, nil, "b")
+    expected = Journal.encode(record(root, "ready", []))
+    manifest = %{path: Path.join(root, "active.json"), sha256: Journal.digest("manifest")}
+    mismatch = {:error, :catalog_artifact_mismatch}
+
+    # Record names `zero`; the bytes are another envelope's.
+    record = Journal.encode(record(root, "catalogued", [zero]))
+    assert mismatch == Lock.catalogued(root, expected, manifest, record, "i", other.bytes)
+
+    # Right bytes, wrong path.
+    moved = record(root, "catalogued", [other])
+    moved = put_in(moved, ["artifacts", Access.at(1), "path"], Path.join(root, "x.json"))
+
+    assert mismatch ==
+             Lock.catalogued(root, expected, manifest, Journal.encode(moved), "i", other.bytes)
+
+    # A ready record holds no catalog artifact.
+    ready = Journal.encode(record(root, "ready", []))
+    assert mismatch == Lock.catalogued(root, expected, manifest, ready, "i", zero.bytes)
+
+    # Bytes that are not a catalog envelope.
+    assert mismatch == Lock.catalogued(root, expected, manifest, record, "i", "junk")
   end
 end

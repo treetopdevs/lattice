@@ -226,6 +226,26 @@ def record(raw):
     return r
 
 
+def canonical(r):
+    """The exact bytes the BEAM's Journal.encode/1 writes for a decoded
+    record: fixed key order, compact, raw UTF-8."""
+    def pick(d, keys):
+        return {k: d[k] for k in keys}
+    artifacts = []
+    for a in r["artifacts"]:
+        a = pick(a, ["kind", "op_id", "path", "replica", "review", "sha256"])
+        if a["review"] is not None:
+            review = pick(a["review"], ["creation", "grants", "profile_genesis", "profile_id"])
+            review["grants"] = [pick(g, ["delegation", "introduction", "recipient"]) for g in review["grants"]]
+            a["review"] = review
+        artifacts.append(a)
+    out = pick(r, ["version", "phase", "attempt", "generation", "catalog_head", "manifest_digest", "artifacts",
+                   "service"])
+    out["artifacts"] = artifacts
+    out["service"] = pick(r["service"], ["identity_file", "pub", "realm", "sha256"])
+    return json.dumps(out, separators=(",", ":"), ensure_ascii=False)
+
+
 def expected(root, raw):
     actual = file_bytes(os.path.join(root, "operator-journal.json"), MAX_JOURNAL, missing=True, private=True)
     if actual is not None:
@@ -319,6 +339,22 @@ def complete_lines(fd, size):
     return 0
 
 
+def history_room(root, n):
+    """Refuse operator_history_full unless n more bytes fit under MAX_HISTORY."""
+    fd = history_file(root)
+    try:
+        room(fd, n)
+    finally:
+        os.close(fd)
+
+
+def room(fd, n):
+    keep = complete_lines(fd, os.fstat(fd).st_size)
+    if keep + n > MAX_HISTORY:
+        refuse("operator_history_full")
+    return keep
+
+
 def history(root, old):
     """Append the exact journal bytes about to be replaced, one per line, and
     make them durable before the replace. A crash after this append and
@@ -328,9 +364,9 @@ def history(root, old):
     whole record. Growth is unbounded for now (row 225)."""
     fd = history_file(root)
     try:
-        keep = complete_lines(fd, os.fstat(fd).st_size)
-        os.ftruncate(fd, keep)
         data = old.encode() + b"\n"
+        keep = room(fd, len(data))
+        os.ftruncate(fd, keep)
         try:
             written = 0
             while written < len(data):
@@ -362,10 +398,13 @@ def catalog_paths(root, r):
 
 
 def store_names(root):
-    """Final envelope digests in catalog/ (none if it is absent); temps are
-    skipped and any other name is corruption."""
+    """Final envelope digests in catalog/ (none if it is absent) and its temp
+    names. A temp must be a private regular file of this user and any other
+    name is corruption."""
     path = os.path.join(root, CATALOG)
     try:
+        if not stat.S_ISDIR(os.lstat(path).st_mode):
+            refuse("catalog_store_corrupt")
         names = os.listdir(path)
     except FileNotFoundError:
         return [], []
@@ -374,10 +413,23 @@ def store_names(root):
         if re.fullmatch(r"[0-9a-f]{64}\.json", name):
             finals.append(name[:-5])
         elif re.fullmatch(r"\.tmp\.[0-9a-f]{32}", name):
+            st = os.lstat(os.path.join(path, name))
+            if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o077:
+                refuse("catalog_store_corrupt")
             temps.append(name)
         else:
             refuse("catalog_store_corrupt")
     return finals, temps
+
+
+def clear_temps(root, temps):
+    """Remove leftover temps (already checked by store_names) and make the
+    removal durable."""
+    store = os.path.join(root, CATALOG)
+    for name in temps:
+        os.unlink(os.path.join(store, name))
+    if temps:
+        sync_dir(store)
 
 
 def history_records(root):
@@ -425,6 +477,10 @@ def commit(root, old, raw, writes=None):
     """`writes` names the one phase the calling plan may record; None is the
     journal and stage plans, which only record carrier_pending."""
     next_record = record(raw)
+    # Only the BEAM's own encoding is ever journaled, so later string
+    # patterns and byte comparisons see one shape.
+    if canonical(next_record) != raw:
+        refuse("malformed_operator_plan")
     # Only activate() may write an activated record, ready() a ready one, and
     # so on, each after its own checks; an ordinary plan can neither create a
     # phase nor move an attempt's phase.
@@ -479,6 +535,9 @@ def activate(root, plan):
             or record(plan["record"]) != dict(old, phase="activated")
             or checks[0]["sha256"] != old["manifest_digest"]):
         refuse("stale_operator_intent")
+    # commit() refuses a non-canonical record; say so before the manifest moves.
+    if canonical(record(plan["record"])) != plan["record"]:
+        refuse("malformed_operator_plan")
     # The boot that sealed this attempt must still be the latest controlled
     # boot. A restart that completed before this lock was taken wrote a new
     # marker, so its old bytes are never contradicted by an activated record;
@@ -515,7 +574,7 @@ def activate(root, plan):
         # The candidate keeps the replaced manifest's permission bits, so a
         # 0644 deployment file stays readable and a 0600 one stays private.
         mode = mode_of(target)
-        os.close(history_file(root))
+        history_room(root, len(plan["expected"].encode()) + 1)
         fd = os.open(temporary, os.O_RDONLY | os.O_NOFOLLOW)
         try:
             os.fchmod(fd, mode)
@@ -622,6 +681,17 @@ def catalogued(root, plan):
     if file_bytes(os.path.join(root, INCARNATION), 64, missing=True, private=True) != plan["incarnation"].encode():
         refuse("stale_operator_incarnation")
     unchanged(root, plan, old, manifest)
+    if canonical(new) != plan["record"]:
+        refuse("malformed_operator_plan")
+    finals, temps = store_names(root)
+    # A different envelope that no record names is a pending one: this chain
+    # already forks. Replaying a receipted envelope, or one that names the
+    # committed head again, is stale intent.
+    _, receipts = catalog_receipts(root, plan["expected"])
+    if any(f != sha and f not in receipts for f in finals):
+        refuse("catalog_fork")
+    if sha in receipts or found[0]["op_id"] == old["catalog_head"]:
+        refuse("stale_operator_intent")
     store = os.path.join(root, CATALOG)
     try:
         os.mkdir(store, 0o700)
@@ -632,11 +702,8 @@ def catalogued(root, plan):
     st = os.lstat(store)
     if st.st_uid != os.geteuid() or st.st_mode & 0o077:
         refuse("unsafe_operator_directory")
-    _, temps = store_names(root)
-    for name in temps:
-        os.unlink(os.path.join(store, name))
-    if temps:
-        sync_dir(store)
+    history_room(root, len(plan["expected"].encode()) + 1)
+    clear_temps(root, temps)
     final = catalog_path(root, sha)
     temporary = os.path.join(store, ".tmp." + os.urandom(16).hex())
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -729,7 +796,7 @@ def boot(root, plan):
             for a in old["artifacts"]:
                 staged(a)
             durable(target)
-            os.close(history_file(root))
+            history_room(root, len(raw.encode()) + 1)
             # The canonical record differs from its activated form in this one
             # structural member; a quote inside any string value is escaped,
             # so the pattern cannot match inside one.
@@ -746,6 +813,9 @@ def boot(root, plan):
             # Ready describes the activated bytes; a restart does not undo
             # them, but any other active bytes contradict the record.
             refuse("stale_operator_intent")
+    # A kill between a publish link and its temp unlink leaves a final with
+    # two links; no publish is running under this lock, so clear the temps.
+    clear_temps(root, store_names(root)[1])
     marker = os.urandom(32).hex()
     temporary = os.path.join(root, INCARNATION + ".tmp." + os.urandom(16).hex())
     try:

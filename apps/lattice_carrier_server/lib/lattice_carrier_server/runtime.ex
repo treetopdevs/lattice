@@ -124,33 +124,26 @@ defmodule LatticeCarrierServer.Runtime do
     end
   end
 
-  # Once any journal record carries a catalog receipt, the store must still
-  # hold every receipted envelope in one chain before routes start. Signatures
-  # are not checked here: boot has no catalog binding key.
+  # The journal's catalog_head names the committed head, so a non-nil head
+  # means the store must still hold the chain. Signatures are not checked
+  # here: boot has no catalog binding key. Store errors pass through.
   defp catalog_guard(root) do
-    if catalog_receipts?(root) do
-      case CatalogStore.verify(root, nil) do
-        {:ok, _} ->
-          :ok
-
-        {:error, reason} when reason in [:catalog_store_corrupt, :catalog_fork] ->
-          {:error, reason}
-
-        {:error, _} ->
-          {:error, :catalog_store_corrupt}
-      end
+    if catalog_head?(root) do
+      with {:ok, _} <- CatalogStore.verify(root, nil), do: :ok
     else
       :ok
     end
   end
 
-  defp catalog_receipts?(root) do
-    Enum.any?([Journal.path(root), Journal.history_path(root)], fn file ->
-      case File.read(file) do
-        {:ok, raw} -> String.contains?(raw, ~s("kind":"catalog"))
-        {:error, _} -> false
-      end
-    end)
+  @doc false
+  @spec catalog_head?(Path.t()) :: boolean()
+  def catalog_head?(root) do
+    with {:ok, raw} when is_binary(raw) <- Journal.read(root),
+         {:ok, %{"catalog_head" => head}} <- Journal.decode(raw) do
+      head != nil
+    else
+      _ -> false
+    end
   end
 
   # The boot replaces the incarnation marker, so no deployment file may be, or
