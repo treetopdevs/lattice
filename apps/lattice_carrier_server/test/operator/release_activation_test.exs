@@ -15,7 +15,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     Staging
   }
 
-  setup do
+  setup context do
     previous = Application.get_env(:lattice_carrier_server, :manifest)
     Application.stop(:lattice_carrier_server)
 
@@ -33,7 +33,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
 
     {:ok, data} = Fixture.new()
     f = Map.new(data)
-    {:ok, record} = Staging.prepare(f.root, nil, f.request, f.artifacts)
+    f = if context[:unbound], do: unbind_active(f), else: f
+    {:ok, record} = Staging.prepare(f.root, nil, f.request, f.artifacts, f.ceremony_dir)
     {:ok, journal} = Journal.read(f.root)
     [candidate] = Enum.filter(record["artifacts"], &(&1["kind"] == "manifest"))
 
@@ -51,7 +52,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
        f do
     {owner, observation} = sealed(f)
 
-    assert {:ok, activated} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    assert {:ok, activated} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     assert activated == Map.put(f.record, "phase", "activated")
     assert Journal.digest(File.read!(f.manifest)) == f.candidate["sha256"]
     assert File.read!(f.manifest) == File.read!(f.candidate["path"])
@@ -72,6 +75,66 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     refute ReleaseGate.sealed?(deployment.owner, observation)
   end
 
+  @tag :unbound
+  test "a migrated deployment, its Space instance moved to the bound values, activates", f do
+    {:ok, sealed_manifest} = Manifest.load(f.manifest)
+    [space] = sealed_manifest.instances
+    refute space.realm == f.binding_realm
+    {owner, observation} = sealed(f)
+
+    assert {:ok, activated} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
+    assert activated["service"]["realm"] == f.binding_realm
+    assert File.read!(f.manifest) == File.read!(f.candidate["path"])
+    {:ok, served} = Manifest.load(f.manifest)
+    assert Enum.all?(served.instances, &(&1.realm == f.binding_realm and &1.pub == f.service_pub))
+    assert File.read!(f.active_log) == f.active_bytes
+  end
+
+  test "a service realm edited in the journal after staging refuses as a binding mismatch", f do
+    edited = rewrite_service(f, &Map.put(&1, "realm", "edited-realm"))
+    {owner, observation} = sealed(f)
+
+    assert {:error, :service_binding_mismatch} =
+             ReleaseActivation.activate(f.root, edited, owner, observation, f.ceremony_dir)
+
+    unchanged!(%{f | journal: edited})
+  end
+
+  test "a service key edited in the journal after staging refuses as a binding mismatch", f do
+    other = Base.encode64(Identity.from_seed("other", "edited-service").pub)
+    edited = rewrite_service(f, &Map.put(&1, "pub", other))
+    {owner, observation} = sealed(f)
+
+    assert {:error, :service_binding_mismatch} =
+             ReleaseActivation.activate(f.root, edited, owner, observation, f.ceremony_dir)
+
+    unchanged!(%{f | journal: edited})
+  end
+
+  test "a ceremony directory that binds a different service refuses", f do
+    {:ok, other} = Fixture.new()
+    other = Map.new(other)
+    {owner, observation} = sealed(f)
+
+    assert {:error, :binding_not_in_served_log} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, other.ceremony_dir)
+
+    unchanged!(f)
+  end
+
+  test "a missing ceremony directory refuses", f do
+    {owner, observation} = sealed(f)
+    missing = Path.join(f.root, "no-such-ceremony")
+
+    assert {:error, reason} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, missing)
+
+    assert is_atom(reason) and reason != :release_activation_refused
+    unchanged!(f)
+  end
+
   test "a Space member admitted after staging refuses as roster drift before the owner runs",
        f do
     # The staged review covered only the root member; the sealed Space log now
@@ -90,7 +153,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     {owner, observation} = sealed(f)
 
     assert {:error, :roster_drift_since_staging} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     assert File.read!(f.manifest) == f.active_manifest
     assert {:ok, journal} = Journal.read(f.root)
@@ -102,7 +165,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.chmod!(f.manifest, 0o644)
     {owner, observation} = sealed(f)
 
-    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    assert {:ok, _} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     assert File.read!(f.manifest) == File.read!(f.candidate["path"])
     assert Bitwise.band(File.stat!(f.manifest).mode, 0o7777) == 0o644
   end
@@ -110,7 +175,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
   test "activation appends the replaced pending journal to the operator history", f do
     {owner, observation} = sealed(f)
 
-    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    assert {:ok, _} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     history = File.read!(Journal.history_path(f.root))
     assert String.ends_with?(history, f.journal <> "\n")
     assert Bitwise.band(File.stat!(Journal.history_path(f.root)).mode, 0o777) == 0o600
@@ -120,7 +187,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     {owner, receipt} = drained(f)
 
     assert {:error, :release_not_sealed} =
-             ReleaseActivation.activate(f.root, f.journal, owner, receipt)
+             ReleaseActivation.activate(f.root, f.journal, owner, receipt, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -129,7 +196,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     {owner, observation} = sealed(f, nonce("another-attempt"))
 
     assert {:error, :release_attempt_mismatch} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -140,7 +207,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
 
     for current <- [owner, Runtime.deployment().owner] do
-      assert {:error, _} = ReleaseActivation.activate(f.root, f.journal, current, observation)
+      assert {:error, _} =
+               ReleaseActivation.activate(f.root, f.journal, current, observation, f.ceremony_dir)
     end
 
     unchanged!(f)
@@ -150,7 +218,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     {owner, observation} = sealed(f)
 
     assert {:error, :stale_operator_intent} =
-             ReleaseActivation.activate(f.root, nil, owner, observation)
+             ReleaseActivation.activate(f.root, nil, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -161,18 +229,19 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.write!(identity, String.upcase(File.read!(identity)))
 
     assert {:error, :stale_operator_intent} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
 
   test "an existing route's identity rewritten after the seal refuses", f do
     {owner, observation} = sealed(f)
-    identity = Path.join(f.root, "service.identity")
-    File.write!(identity, Base.encode16(:crypto.hash(:sha256, "rotated"), case: :lower))
+    # One identity file serves every Treehouse instance (OD-1), so rewriting it
+    # is also the staged service identity changing: the journal digest refuses first.
+    File.write!(f.service_identity, Base.encode16(:crypto.hash(:sha256, "rotated"), case: :lower))
 
-    assert {:error, :release_identity_changed} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    assert {:error, :stale_operator_intent} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -182,7 +251,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     :ok = Log.dump(f.updated_log, f.active_log)
 
     assert {:error, :release_bytes_changed} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     assert File.read!(f.manifest) == f.active_manifest
     assert {:ok, journal} = Journal.read(f.root)
@@ -195,7 +264,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.write!(f.manifest, changed)
 
     assert {:error, {:operator_refused, "stale_operator_intent"}} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     assert File.read!(f.manifest) == changed
     assert {:ok, journal} = Journal.read(f.root)
@@ -209,7 +278,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.ln_s!(real, f.manifest)
 
     assert {:error, {:operator_refused, "unsafe_operator_file"}} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     assert {:ok, %{type: :symlink}} = File.lstat(f.manifest)
     assert File.read!(real) == f.active_manifest
@@ -223,7 +292,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     on_exit(fn -> File.chmod(f.root, 0o700) end)
 
     assert {:error, {:operator_refused, "unsafe_operator_directory"}} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     File.chmod!(f.root, 0o700)
     unchanged!(f)
@@ -235,7 +304,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.write!(f.candidate["path"], File.read!(f.candidate["path"]) <> "\n")
 
     assert {:error, {:operator_refused, "immutable_artifact_conflict"}} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -246,7 +315,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.write!(child["path"], File.read!(child["path"]) <> "\n")
 
     assert {:error, {:operator_refused, "immutable_artifact_conflict"}} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -257,7 +326,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     # The owner's replace landed, then it died before the journal commit.
     File.write!(f.manifest, File.read!(f.candidate["path"]))
 
-    assert {:ok, activated} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+    assert {:ok, activated} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     assert activated["phase"] == "activated"
     assert File.read!(f.manifest) == File.read!(f.candidate["path"])
   end
@@ -269,7 +340,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.write!(child["path"], File.read!(child["path"]) <> "\n")
 
     assert {:error, {:operator_refused, "immutable_artifact_conflict"}} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     assert {:ok, journal} = Journal.read(f.root)
     assert journal == f.journal
@@ -291,11 +362,15 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
 
   test "an activated journal never activates twice", f do
     {owner, observation} = sealed(f)
-    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert {:ok, _} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     {:ok, activated} = Journal.read(f.root)
 
     for expected <- [f.journal, activated] do
-      assert {:error, _} = ReleaseActivation.activate(f.root, expected, owner, observation)
+      assert {:error, _} =
+               ReleaseActivation.activate(f.root, expected, owner, observation, f.ceremony_dir)
     end
 
     assert {:ok, ^activated} = Journal.read(f.root)
@@ -306,7 +381,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
              Journal.compare_and_set(f.root, f.journal, Map.put(f.record, "phase", "activated"))
 
     {owner, observation} = sealed(f)
-    assert {:ok, activated} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert {:ok, activated} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     {:ok, raw} = Journal.read(f.root)
 
     assert {:error, {:operator_refused, "stale_operator_intent"}} =
@@ -319,7 +397,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     {owner, observation} = sealed(f, nil, false)
 
     assert {:error, :release_boot_unguarded} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -393,15 +471,19 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
   end
 
   test "a boot refuses a deployment file that aliases an operator file", f do
-    for reserved <- ~w(operator-incarnation operator-journal-history.jsonl) do
+    for reserved <- ~w(operator-incarnation operator-journal-history.jsonl),
+        field <- [:log_file, :identity_file] do
       Application.stop(:lattice_carrier_server)
-      boot_refuses_alias!(f, reserved)
+      boot_refuses_alias!(f, reserved, field)
     end
   end
 
   test "a boot whose loaded manifest was replaced under it refuses", f do
     {owner, observation} = sealed(f)
-    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert {:ok, _} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     {:ok, activated} = Journal.read(f.root)
 
     assert {:error, {:operator_refused, "stale_operator_intent"}} =
@@ -412,7 +494,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
 
   test "an activated record over the pre-activation bytes refuses to boot", f do
     {owner, observation} = sealed(f)
-    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert {:ok, _} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     assert :ok = Application.stop(:lattice_carrier_server)
     File.write!(f.manifest, f.active_manifest)
 
@@ -427,7 +512,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
 
   test "a boot over an already activated record with its candidate active serves it", f do
     {owner, observation} = sealed(f)
-    assert {:ok, _} = ReleaseActivation.activate(f.root, f.journal, owner, observation)
+
+    assert {:ok, _} =
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
+
     {:ok, activated} = Journal.read(f.root)
     stale = Runtime.deployment().incarnation
     assert :ok = Application.stop(:lattice_carrier_server)
@@ -462,7 +550,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     on_exit(fn -> File.rm_rf(other) end)
 
     assert {:error, :release_boot_unguarded} =
-             ReleaseActivation.activate(other, f.journal, owner, observation)
+             ReleaseActivation.activate(other, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -472,7 +560,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.rm!(Path.join(f.root, "operator-incarnation"))
 
     assert {:error, {:operator_refused, "stale_operator_incarnation"}} =
-             ReleaseActivation.activate(f.root, f.journal, owner, observation)
+             ReleaseActivation.activate(f.root, f.journal, owner, observation, f.ceremony_dir)
 
     unchanged!(f)
   end
@@ -501,9 +589,27 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     end
   end
 
-  defp boot_refuses_alias!(f, reserved) do
+  defp boot_refuses_alias!(f, reserved, field) do
     {:ok, manifest} = Manifest.load(f.manifest)
     [instance | _] = manifest.instances
+
+    # A relaying instance's preflight rewrites its log (breaking a hard link to
+    # it) before the collision check runs, so this boot serves a relay-free copy
+    # of the active manifest; the collision check is the same for both.
+    boot_manifest = Path.join(f.root, "alias-active.json")
+
+    File.write!(
+      boot_manifest,
+      f.manifest
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.update!("instances", fn instances ->
+        Enum.map(instances, &Map.delete(&1, "relay_realms"))
+      end)
+      |> Jason.encode!()
+    )
+
+    File.chmod!(boot_manifest, 0o600)
 
     alias_root =
       Path.join(Path.dirname(f.root), "alias-operator-root-#{System.unique_integer([:positive])}")
@@ -511,15 +617,52 @@ defmodule LatticeCarrierServer.Operator.ReleaseActivationTest do
     File.mkdir_p!(alias_root)
     on_exit(fn -> File.rm_rf(alias_root) end)
     File.chmod!(alias_root, 0o700)
-    File.ln!(instance.log_file, Path.join(alias_root, reserved))
-    log = File.read!(instance.log_file)
+    target = Map.fetch!(instance, field)
+    File.ln!(target, Path.join(alias_root, reserved))
+    bytes = File.read!(target)
 
-    Application.put_env(:lattice_carrier_server, :manifest, f.manifest)
+    Application.put_env(:lattice_carrier_server, :manifest, boot_manifest)
     Application.put_env(:lattice_carrier_server, :operator_root, alias_root)
 
     assert {:error, reason} = Application.ensure_all_started(:lattice_carrier_server)
     assert inspect(reason) =~ "operator_path_collision"
-    assert File.read!(instance.log_file) == log
+    assert File.read!(target) == bytes
+  end
+
+  # Rewrites the pending record's service fields on disk; the returned bytes are
+  # the journal `expected` must then equal.
+  defp rewrite_service(f, fun) do
+    edited = Journal.encode(Map.update!(f.record, "service", fun))
+    File.write!(Journal.path(f.root), edited)
+    edited
+  end
+
+  # The pre-binding deployment: the active Space instance on a free realm with
+  # its own identity file, no route, no relay set and only the root peer. The
+  # request digest follows the rewritten active manifest.
+  defp unbind_active(f) do
+    old = Path.join(f.root, "old.identity")
+    File.write!(old, Base.encode16(:crypto.hash(:sha256, "old-service"), case: :lower))
+    File.chmod!(old, 0o600)
+
+    manifest =
+      f.request.active_manifest
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.update!("instances", fn [space] ->
+        [
+          space
+          |> Map.put("realm", "old-realm")
+          |> Map.put("identity_file", old)
+          |> Map.delete("route")
+          |> Map.put("relay_realms", [])
+          |> Map.update!("trusted_peers", &Enum.take(&1, 1))
+        ]
+      end)
+
+    File.write!(f.request.active_manifest, Jason.encode!(manifest))
+    digest = Journal.digest(File.read!(f.request.active_manifest))
+    %{f | request: %{f.request | manifest_digest: digest}}
   end
 
   defp hold_lock(root) do

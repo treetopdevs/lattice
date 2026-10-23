@@ -30,18 +30,24 @@ defmodule LatticeCarrierServer.Listener do
     ip = Keyword.get(listener_opts, :ip, {127, 0, 0, 1})
     port = Keyword.get(listener_opts, :port, 4041)
 
+    state = %{
+      holder: holder,
+      instance: instance,
+      trusted_peers: trusted_peers,
+      authenticated?: false
+    }
+
+    # A routed instance is also reachable at its catalog route; both paths reach
+    # the same handler with the same state, so one trusted-peer gate covers both.
+    paths =
+      case Keyword.get(listener_opts, :route) do
+        route when is_binary(route) -> ["/carrier", route]
+        _ -> ["/carrier"]
+      end
+
     dispatch =
       :cowboy_router.compile([
-        {:_,
-         [
-           {"/carrier", LatticeCarrierServer.WebSocket,
-            %{
-              holder: holder,
-              instance: instance,
-              trusted_peers: trusted_peers,
-              authenticated?: false
-            }}
-         ]}
+        {:_, Enum.map(paths, &{&1, LatticeCarrierServer.WebSocket, state})}
       ])
 
     transport_opts = %{

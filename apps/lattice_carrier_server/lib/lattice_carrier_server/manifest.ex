@@ -17,6 +17,7 @@ defmodule LatticeCarrierServer.Manifest do
 
   import Bitwise, only: [&&&: 2]
 
+  alias Lattice.Authority.ContinuationCertificate
   alias Lattice.Identity
   alias LatticeCarrierServer.Secret
 
@@ -31,7 +32,10 @@ defmodule LatticeCarrierServer.Manifest do
           pub: binary(),
           log_file: Path.t(),
           log_identity: {non_neg_integer(), non_neg_integer(), non_neg_integer()},
-          listener: [ip: :inet.ip_address(), port: :inet.port_number()],
+          listener: [
+            {:ip, :inet.ip_address()} | {:port, :inet.port_number()} | {:route, String.t()}
+          ],
+          route: String.t() | nil,
           trusted_peers: %{String.t() => binary()},
           relay_realms: [String.t()],
           state_reporter: module() | nil
@@ -178,6 +182,7 @@ defmodule LatticeCarrierServer.Manifest do
          {:ok, log_file, log_identity} <-
            require_log(Map.get(instance, "log_file"), base_dir, instance_ref),
          {:ok, listener} <- parse_listener(Map.get(instance, "listener"), instance_ref),
+         {:ok, route} <- parse_route(Map.get(instance, "route"), instance_ref),
          {:ok, trusted_peers} <-
            parse_trusted_peers(Map.get(instance, "trusted_peers"), instance_ref),
          {:ok, relay_realms} <-
@@ -198,7 +203,10 @@ defmodule LatticeCarrierServer.Manifest do
          pub: pub,
          log_file: log_file,
          log_identity: log_identity,
-         listener: listener,
+         # The route also rides in the listener options, so the runtime hands it
+         # to the listener unchanged.
+         listener: if(route, do: listener ++ [route: route], else: listener),
+         route: route,
          trusted_peers: trusted_peers,
          relay_realms: relay_realms,
          state_reporter: state_reporter
@@ -347,6 +355,16 @@ defmodule LatticeCarrierServer.Manifest do
 
   defp parse_listener(_listener, name), do: {:error, {:invalid_listener, name}}
 
+  # An optional second path the listener serves beside "/carrier": "/r/" plus the
+  # catalog's route nonce shape. Uniqueness is checked across instances.
+  defp parse_route(nil, _name), do: {:ok, nil}
+
+  defp parse_route("/r/" <> id = route, name) do
+    if ContinuationCertificate.id?(id), do: {:ok, route}, else: {:error, {:invalid_route, name}}
+  end
+
+  defp parse_route(_route, name), do: {:error, {:invalid_route, name}}
+
   # Carrier instances serve loopback only; the public edge (TLS/WSS) is a
   # separate deployment concern (plan 158, WSS Deployment and Recovery).
   defp parse_loopback_ip(ip, name) when is_binary(ip) do
@@ -434,12 +452,14 @@ defmodule LatticeCarrierServer.Manifest do
     log_files = Enum.map(instances, & &1.log_file)
     log_identities = Enum.map(instances, & &1.log_identity)
     identity_files = Enum.map(instances, & &1.identity_file)
+    routes = instances |> Enum.map(& &1.route) |> Enum.reject(&is_nil/1)
 
     with {:ok, canonical_log_files} <- canonicalize_paths(log_files),
          {:ok, canonical_identity_files} <- canonicalize_paths(identity_files) do
       validate_unique_paths(
         names,
         ports,
+        routes,
         log_files,
         log_identities,
         identity_files,
@@ -453,6 +473,7 @@ defmodule LatticeCarrierServer.Manifest do
   defp validate_unique_paths(
          names,
          ports,
+         routes,
          log_files,
          log_identities,
          identity_files,
@@ -472,6 +493,9 @@ defmodule LatticeCarrierServer.Manifest do
 
       Enum.uniq(ports) != ports ->
         {:error, :duplicate_listener_ports}
+
+      Enum.uniq(routes) != routes ->
+        {:error, :duplicate_route}
 
       Enum.uniq(log_files) != log_files ->
         {:error, :duplicate_log_file}

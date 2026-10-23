@@ -33,14 +33,43 @@ defmodule LatticeCarrierServer.Operator.CeremonyFixture do
   end
 
   @doc """
-  Build a complete real ceremony under `base` (created 0700): generate, backup,
-  verify-backup, separate-host attestation, payload, root-signed bootstrap,
-  verify-binding, report. Returns the paths, the Space, the record and the op.
+  The expensive, Space-independent part of a real ceremony (generate, backup,
+  verify-backup, separate-host attestation), built once per VM and copied per
+  use. Returns the template's directories and signer/backup paths.
   """
-  @spec build(Path.t(), keyword()) :: map()
-  def build(base, opts \\ []) do
+  @spec signer_template() :: map()
+  def signer_template do
+    key = {__MODULE__, :signer_template}
+
+    case :persistent_term.get(key, nil) do
+      nil ->
+        :global.trans({key, self()}, fn ->
+          case :persistent_term.get(key, nil) do
+            nil ->
+              template = build_signer_template()
+              :persistent_term.put(key, template)
+              template
+
+            template ->
+              template
+          end
+        end)
+
+      template ->
+        template
+    end
+  end
+
+  defp build_signer_template do
+    base =
+      Path.join(
+        System.tmp_dir!(),
+        "ceremony-signer-template-#{System.unique_integer([:positive])}-#{System.os_time()}"
+      )
+
     File.mkdir_p!(base)
     File.chmod!(base, 0o700)
+    System.at_exit(fn _ -> File.rm_rf(base) end)
 
     dirs =
       for name <- ~w(ceremony keys backups restore space), into: %{} do
@@ -75,6 +104,70 @@ defmodule LatticeCarrierServer.Operator.CeremonyFixture do
       )
 
     separate_host!(f.ceremony)
+    f
+  end
+
+  @doc """
+  A private copy of the signer part's ceremony directory at `dest` (created
+  0700), holding the signer record, backup record and restore proof only. The
+  caller adds the binding part with `bind/4`.
+  """
+  @spec copy_ceremony(Path.t()) :: Path.t()
+  def copy_ceremony(dest) do
+    File.cp_r!(signer_template().ceremony, dest)
+    File.chmod!(dest, 0o700)
+    dest
+  end
+
+  @doc """
+  The cheap per-test binding part: the payload over `pre_log` (a bounded Space
+  log carrying its pin) for `service_pub`, the record the Space root signs through
+  `sign.(record)` (returning `{signed_log_path, extra}`), verify-binding over
+  that signed log, and the report.
+  """
+  @spec bind(Path.t(), Path.t(), binary(), (map() -> {Path.t(), term()})) :: map()
+  def bind(ceremony, pre_log, service_pub, sign) do
+    {:ok, payload} =
+      Ceremony.binding_payload(
+        ceremony: ceremony,
+        space_log: pre_log,
+        service_public_key: Base.encode64(service_pub),
+        service_id: id("operator-service"),
+        origin: @origin
+      )
+
+    {:ok, record} = Binding.from_json(payload["record"])
+    {signed, extra} = sign.(record)
+    {:ok, binding} = Ceremony.verify_binding(ceremony: ceremony, space_log: signed)
+    {:ok, _} = report(ceremony)
+    %{payload: payload, record: record, binding: binding, signed: signed, extra: extra}
+  end
+
+  @doc """
+  Build a complete real ceremony under `base` (created 0700): generate, backup,
+  verify-backup, separate-host attestation, payload, root-signed bootstrap,
+  verify-binding, report. Returns the paths, the Space, the record and the op.
+  The signer part is copied from the once-per-run template.
+  """
+  @spec build(Path.t(), keyword()) :: map()
+  def build(base, opts \\ []) do
+    template = signer_template()
+    File.cp_r!(template.base, base)
+    File.chmod!(base, 0o700)
+
+    dirs =
+      for name <- ~w(ceremony keys backups restore space), into: %{} do
+        dir = Path.join(base, name)
+        File.chmod!(dir, 0o700)
+        {String.to_atom(name), dir}
+      end
+
+    f =
+      Map.merge(dirs, %{
+        base: base,
+        signer: Path.join(dirs.keys, "signer.seed"),
+        backup: Path.join(dirs.backups, "signer.backup")
+      })
 
     space = space(f.space)
 

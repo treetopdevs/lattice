@@ -5,7 +5,9 @@ defmodule LatticeCarrierServer.Operator.Fixture do
   alias Lattice.Authority.Delegation
   alias Lattice.Carrier.Wire
   alias Lattice.{Identity, Log, Sim}
+  alias LatticeCarrierServer.Operator.CeremonyFixture
   alias LatticeCarrierServer.Operator.{Journal, Staging}
+  alias Treehouse.TransportCatalog
 
   def new(opts \\ []) do
     root = Path.expand(".operator-stage-#{System.unique_integer([:positive])}", File.cwd!())
@@ -24,13 +26,61 @@ defmodule LatticeCarrierServer.Operator.Fixture do
       if(Keyword.get(opts, :root_member, true), do: root_member, else: []) ++
         if Keyword.get(opts, :second_member, false), do: second_member, else: []
 
-    space_realms = Enum.uniq(["creator" | Enum.map(members, &elem(&1, 0))])
+    space_realms =
+      Enum.uniq(["creator" | Enum.map(members, &elem(&1, 0))]) ++ ["nominee", "w1", "w2", "w3"]
+
+    # A bounded Space: the continuation pin is authored before anything else, so
+    # a catalog bootstrap can bind the carrier service key to it.
+    space_name =
+      "replica:treehouse:space:" <>
+        Treehouse.ContinuationFixtures.digest("operator-space") <>
+        "#authority:bounded-continuation-v1"
 
     {space, _} =
-      Sim.new(Treehouse.Space, "space:operator", space_realms, seed: "operator-space")
+      Sim.new(Treehouse.Space, space_name, space_realms, seed: "operator-space")
       |> Sim.create_replica("creator")
 
     {space, _} = Sim.command(space, "creator", :create_space, ["Canopy"])
+
+    space_profile = %{
+      Treehouse.ContinuationFixtures.profile(space)
+      | kind: :space,
+        role: :admin
+    }
+
+    {space, _space_pin, _} =
+      Treehouse.ContinuationFixtures.pin(space, author: "creator", profile: space_profile)
+
+    # The ceremony works over the Space as of its pin; its root then signs the
+    # reviewed bootstrap, which binds the one carrier service key.
+    work =
+      Path.join(System.tmp_dir!(), "operator-ceremony-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(work)
+    File.chmod!(work, 0o700)
+    on_exit(fn -> File.rm_rf!(work) end)
+    pre_log = Path.join(work, "space-pre.log")
+    :ok = Log.dump(Sim.log(space, "creator"), pre_log)
+    ceremony_dir = CeremonyFixture.copy_ceremony(Path.join(work, "ceremony"))
+
+    # One service identity file serves every Treehouse instance (OD-1). Its seed
+    # derivation is shared with the `:reuse_carrier_service_key` override below.
+    identity = Path.join(root, "service.identity")
+    File.write!(identity, Base.encode16(:crypto.hash(:sha256, "child-service"), case: :lower))
+    File.chmod!(identity, 0o600)
+    service_pub = Identity.from_seed("creator", "child-service").pub
+
+    bound =
+      CeremonyFixture.bind(ceremony_dir, pre_log, service_pub, fn record ->
+        {bootstrapped, op} = Sim.command(space, "creator", :catalog_bootstrap_v1, [record])
+        refute Sim.quarantined(bootstrapped, "creator", op.id)
+        signed = Path.join(work, "space-signed.log")
+        :ok = Log.dump(Sim.log(bootstrapped, "creator"), signed)
+        {signed, bootstrapped}
+      end)
+
+    space = bound.extra
+    binding_realm = TransportCatalog.service_realm(bound.record.service_id)
     space = Enum.reduce(members, space, fn {realm, _, _}, acc -> admit_member(acc, realm) end)
 
     # Every Space member receives a reviewed child grant under its own realm.
@@ -103,19 +153,38 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     child_source = Path.join(root, "child-source.log")
     :ok = Log.dump(Sim.log(child, "creator"), child_source)
     child_bytes = File.read!(child_source)
-    identity = Path.join(root, "service.identity")
-    File.write!(identity, Base.encode16(:crypto.hash(:sha256, "operator-service"), case: :lower))
-    File.chmod!(identity, 0o600)
+    space_route = "/r/" <> CeremonyFixture.id("operator-space-route")
+    child_route = "/r/" <> CeremonyFixture.id("operator-child-route")
+
+    # Trusted peers are the instance's own authority root plus the Space roster,
+    # named by roster realm; a root that is also a member is listed once.
+    roster_peers =
+      Enum.map(members, fn {realm, _, peer_realm} ->
+        {peer_realm, Sim.identity(space, realm).pub}
+      end)
+
+    peers = fn root_realm, root_pub ->
+      if Enum.any?(roster_peers, fn {_, pub} -> pub == root_pub end),
+        do: roster_peers,
+        else: roster_peers ++ [{root_realm, root_pub}]
+    end
+
+    peer_json = fn peers ->
+      Enum.map(peers, fn {realm, pub} -> %{"realm" => realm, "pubkey" => Base.encode64(pub)} end)
+    end
+
+    space_peers = peers.("space-root", Sim.identity(space, "creator").pub)
+    child_peers = peers.("child-root", Sim.identity(child, "creator").pub)
 
     instance = %{
       "name" => "space",
-      "realm" => "service",
+      "realm" => binding_realm,
       "identity_file" => identity,
       "log_file" => active_log,
       "listener" => %{"ip" => "127.0.0.1", "port" => 0},
-      "trusted_peers" => [
-        %{"realm" => "member", "pubkey" => Base.encode64(Sim.identity(space, "creator").pub)}
-      ]
+      "route" => space_route,
+      "trusted_peers" => peer_json.(space_peers),
+      "relay_realms" => Enum.map(space_peers, &elem(&1, 0))
     }
 
     active = Path.join(root, "active.json")
@@ -124,39 +193,17 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     attempt = Base.url_encode64(:crypto.hash(:sha256, "reviewed-attempt"), padding: false)
     child_path = Staging.artifact_path(root, attempt, Journal.digest(child_bytes))
 
+    # The admitted child shares the Space's service identity file and realm,
+    # serves its own route, trusts the Space roster plus the independently
+    # rooted child, and relays for exactly those peers.
     next_instance = %{
       instance
       | "name" => "thread",
         "log_file" => child_path,
-        "realm" => "child-service"
+        "route" => child_route,
+        "trusted_peers" => peer_json.(child_peers),
+        "relay_realms" => Enum.map(child_peers, &elem(&1, 0))
     }
-
-    # Existing Manifest contract requires unique identity files across instances.
-    child_identity = Path.join(root, "child-service.identity")
-
-    File.write!(
-      child_identity,
-      Base.encode16(:crypto.hash(:sha256, "child-service"), case: :lower)
-    )
-
-    File.chmod!(child_identity, 0o600)
-    next_instance = %{next_instance | "identity_file" => child_identity}
-
-    # Bootstrap peers are exactly the Space roster plus the independent child root.
-    next_instance =
-      Map.put(
-        next_instance,
-        "trusted_peers",
-        Enum.map(members, fn {realm, _, peer_realm} ->
-          %{"realm" => peer_realm, "pubkey" => Base.encode64(Sim.identity(space, realm).pub)}
-        end) ++
-          [
-            %{
-              "realm" => "child-root",
-              "pubkey" => Base.encode64(Sim.identity(child, "creator").pub)
-            }
-          ]
-      )
 
     artifacts = [
       %{
@@ -199,7 +246,14 @@ defmodule LatticeCarrierServer.Operator.Fixture do
      child: child,
      space: space,
      updated_log: Sim.log(space_with_ref, "creator"),
-     reference: reference}
+     reference: reference,
+     ceremony_dir: ceremony_dir,
+     binding: bound,
+     binding_realm: binding_realm,
+     service_pub: service_pub,
+     service_identity: identity,
+     space_route: space_route,
+     child_route: child_route}
   end
 
   # The Space root invites and admits `realm`, which signs its own acceptance.
