@@ -28,7 +28,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <body>
 <main>
 <h1>Backlog Run Decisions</h1>
-<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-19 landed as PRs #133-#155. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
+<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-20 landed as PRs #133-#158. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
 
 <h2 id="slices">Slices</h2>
 <div class="table-wrap">
@@ -54,6 +54,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <tr><td>17</td><td>Row 236: the hosted packaged macOS job pins continuation, clicks Export Space frames into a real Downloads folder, runs <code>binding-payload</code>, signs the binding as root, re-exports and runs <code>verify-binding</code>, with tamper refusals; row 238 filed</td><td><code>claude/magical-bassi-f2edd3</code> / <a href="https://github.com/treetopdevs/lattice/pull/152">#152</a></td><td>Merged after exact tip <code>867447b2c</code> run 39264730007 went green; the new step passed inside the hosted packaged preview job (pinned, exported, payload, signed, verified). Codex Sol xhigh: a P2 on quoted YAML keys fixed by pinning the step body exactly, then a confirm pass that ran 687 mutations and found nothing. Two workflow reviewers: two fixed, two rejected.</td></tr>
 <tr><td>18</td><td>Plan 224: design for R11b <code>catalogued</code> and <code>listed</code> and the carrier service realm; operator decisions OD-1 to OD-5 filed as rows 239-243, plus rows 244-247</td><td><code>claude/backlog-slice-18-45c4c4</code> / <a href="https://github.com/treetopdevs/lattice/pull/154">#154</a></td><td>Merged as <code>bd6b62d37</code> after frozen tip <code>785e53e4f</code> run 39321115205 went green (D-38). Codex Sol xhigh: 15 fixed. Claude custody review: 8 fixed. Four bot rounds followed: two edited the plan, one became rows 246-247, and one was folded in before the freeze. Design only.</td></tr>
 <tr><td>19</td><td>Plan 224 build PR 1 (ingress): <code>Operator.CatalogBinding.load</code> with bounded closed readers, the op-id fork rule and a report cross-check; row 249 filed</td><td><code>claude/backlog-slice-19-ec666d</code> / <a href="https://github.com/treetopdevs/lattice/pull/155">#155</a></td><td>Merged as <code>1557d5c0a</code> after frozen tip <code>4744b522f</code> run 39364267461 went green on attempt 2. Attempt 1 failed only an apt step, when packages.microsoft.com returned 403 after all tests had passed. Codex: file-race findings fixed over two rounds (swap, then hard link), then the branch was frozen (D-38). CodeRabbit's <code>mtime</code> suggestion is row 250.</td></tr>
+<tr><td>20</td><td>Plan 224 build PR 3: journal contract and append-only catalog store (Design 3); the store enforces its own chain rule; row 251 filed</td><td><code>claude/awesome-dubinsky-b1248d</code> / <a href="https://github.com/treetopdevs/lattice/pull/158">#158</a></td><td>Merged as <code>f17c01cde</code> after tip <code>7fd9726b6</code> run 39978398009 went green. Two local reviews (Claude crash-safety: 1 P1, 3 P2, 4 P3; Codex) were fixed before the PR. Two bot rounds, then frozen under D-38. A later CodeRabbit Major (D-38 exception) was fixed: the store accepted an envelope that did not extend its head.</td></tr>
 </tbody>
 </table>
 </div>
@@ -449,6 +450,17 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Rows</dt><dd>Rows 239 to 243 are DONE as decided in D-39. Row 250 holds CodeRabbit's deferred <code>mtime</code> hardening from #155. It needs same-uid write access in the 0700 ceremony directory, so it is not a forged-data path.</dd>
 <dt>State</dt><dd>Plan 224 PR 1 (ingress) is merged. PR 3 (journal and store) is running as slice 20. PR 2 is unblocked by OD-1 and OD-5, and this ledger updates plan 224 and row 224 to say so. PRs 4 and 5 still wait on the operator's ceremony report.</dd>
 <dt>Record</dt><dd>The coordinator's uncommitted copy of D-37 to D-39 was lost when its scratchpad was cleared while idle. These entries were rebuilt from the session transcript, so the coordinator now commits ledgers sooner.</dd>
+</dl>
+</article>
+
+<article id="d41">
+<h2><span>D-41</span>Slice 20: the catalog store enforces its own chain rule (D-38 exception)</h2>
+<dl>
+<dt>When</dt><dd>2026-10-23, on frozen PR #158</dd>
+<dt>Finding</dt><dd>CodeRabbit showed <code>Lock.catalogued/6</code> checked an envelope's id, digest, Space and path, but not <code>revision</code> or <code>previous</code> against the committed head. A caller could store a second revision-0 chain, or an envelope not extending the head. Every later boot would then refuse until manual repair. No caller exists yet: PR 4, the only planned caller, is not built and is designed to check the chain before calling.</dd>
+<dt>Decision</dt><dd>This is the D-38 exception for a write the store should refuse, so it was fixed on the frozen branch. <code>Lock.catalog_artifact/3</code> runs <code>CatalogStore.verify</code>, requires no different pending envelope, <code>previous</code> equal to the head, and <code>revision</code> one above it (0 with no head), and otherwise refuses <code>catalog_artifact_mismatch</code>. Three tests show each refusal leaves journal, history and store unchanged. The BEAM write path now enforces the chain itself, whatever any future caller checks.</dd>
+<dt>Residual</dt><dd>A direct call to the Python owner, bypassing the BEAM, skips the check. That path already trusted its caller, because the owner cannot decode envelopes.</dd>
+<dt>Next</dt><dd>Plan 224 PRs 1 and 3 are merged. PR 2 (realm, routes, relay, probe per route) can start. PRs 4 and 5 wait on the operator's ceremony report.</dd>
 </dl>
 </article>
 
