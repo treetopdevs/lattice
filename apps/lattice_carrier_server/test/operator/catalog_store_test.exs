@@ -439,6 +439,44 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
              Lock.catalogued(root, expected, manifest, Journal.encode(elsewhere), "i", zero.bytes)
   end
 
+  test "catalogued refuses an envelope that does not extend the committed head", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [zero, one])
+    history(root, [Journal.encode(record(root, "catalogued", [zero]))])
+    journal(root, "catalogued", [one])
+    expected = Journal.encode(record(root, "ready", []))
+    manifest = %{path: Path.join(root, "active.json"), sha256: Journal.digest("manifest")}
+
+    snapshot = fn ->
+      {File.read!(Journal.path(root)), File.read!(Journal.history_path(root)),
+       File.ls!(CatalogStore.path(root)) |> Enum.sort()}
+    end
+
+    before = snapshot.()
+
+    for {label, bad} <- [
+          {"second revision-0 chain", envelope(0, nil, "b")},
+          {"previous is not the head", envelope(1, zero, "b")},
+          {"skipped revision", envelope(3, one, "b")}
+        ] do
+      record = Journal.encode(record(root, "catalogued", [bad]))
+
+      assert {:error, :catalog_artifact_mismatch} ==
+               Lock.catalogued(root, expected, manifest, record, "i", bad.bytes),
+             label
+
+      assert snapshot.() == before, label
+    end
+
+    # The head's next revision passes the chain check and reaches the owner,
+    # which refuses here only off Linux.
+    next = envelope(2, one)
+    record = Journal.encode(record(root, "catalogued", [next]))
+    result = Lock.catalogued(root, expected, manifest, record, "i", next.bytes)
+    refute result == {:error, :catalog_artifact_mismatch}
+  end
+
   test "a receipt naming another Space is corrupt", %{root: root} do
     zero = envelope(0, nil)
     store(root, [zero])

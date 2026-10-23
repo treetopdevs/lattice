@@ -78,10 +78,25 @@ defmodule LatticeCarrierServer.Operator.Lock do
            Enum.filter(decoded["artifacts"], &(&1["kind"] == "catalog")),
          true <- id == TransportCatalog.catalog_id(catalog),
          true <- replica == catalog.space,
-         true <- path == CatalogStore.file_path(root, sha) do
+         true <- path == CatalogStore.file_path(root, sha),
+         true <- extends_head?(root, catalog, sha) do
       :ok
     else
       _ -> {:error, :catalog_artifact_mismatch}
+    end
+  end
+
+  # The owner cannot decode envelopes, so the chain rule is enforced here: the
+  # store has no other pending envelope and this one is the committed head's
+  # next revision (revision 0 with no head).
+  defp extends_head?(root, catalog, sha) do
+    case CatalogStore.verify(root, nil) do
+      {:ok, %{head: head, head_revision: revision, pending: pending}} ->
+        (pending == nil or pending.sha256 == sha) and catalog.previous == head and
+          catalog.revision == if(revision == nil, do: 0, else: revision + 1)
+
+      _ ->
+        false
     end
   end
 
