@@ -5,7 +5,6 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
   alias Lattice.Carrier.Wire
   alias Lattice.Identity
   alias LatticeCarrierServer.Operator.{CatalogStore, Journal, Lock}
-  alias LatticeCarrierServer.Runtime
   alias Treehouse.TransportCatalog
 
   setup do
@@ -254,6 +253,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
     store(root, [zero])
     line = Journal.encode(record(root, "catalogued", [zero]))
     File.write!(Journal.history_path(root), line <> "\n" <> binary_part(line, 0, 40))
+    journal(root, "catalogued", [zero])
 
     assert {:ok, %{head: head}} = CatalogStore.verify(root, nil)
     assert head == zero.id
@@ -395,14 +395,13 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
     assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
   end
 
-  test "the boot guard triggers only on a journal with a catalog head", %{root: root} do
-    refute Runtime.catalog_head?(root)
-    journal(root, "ready", [])
-    refute Runtime.catalog_head?(root)
-
+  test "a lost journal with a receipt in history is corrupt", %{root: root} do
     zero = envelope(0, nil)
+    store(root, [zero])
+    history(root, [Journal.encode(record(root, "catalogued", [zero]))])
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
     journal(root, "catalogued", [zero])
-    assert Runtime.catalog_head?(root)
+    assert {:ok, %{head: _}} = CatalogStore.verify(root, nil)
   end
 
   test "catalogued refuses a record that does not name the envelope bytes", %{root: root} do

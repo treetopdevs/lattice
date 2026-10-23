@@ -16,7 +16,7 @@ defmodule LatticeCarrierServer.Runtime do
   alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Health, Holder, Manifest}
 
-  alias LatticeCarrierServer.Operator.{CatalogStore, Journal, Lock, ReleaseGate}
+  alias LatticeCarrierServer.Operator.{CatalogStore, Lock, ReleaseGate}
 
   @deployment_key {__MODULE__, :deployment}
   @instance_names_key {__MODULE__, :instance_names}
@@ -124,26 +124,13 @@ defmodule LatticeCarrierServer.Runtime do
     end
   end
 
-  # The journal's catalog_head names the committed head, so a non-nil head
-  # means the store must still hold the chain. Signatures are not checked
-  # here: boot has no catalog binding key. Store errors pass through.
+  # Every controlled boot verifies the store, journal and history receipts
+  # before routes start, so a lost journal or envelope refuses rather than
+  # hiding a receipt. Signatures are not checked here: boot has no catalog
+  # binding key until the ceremony directory is threaded (plan 224 PR 2).
+  # Store errors pass through.
   defp catalog_guard(root) do
-    if catalog_head?(root) do
-      with {:ok, _} <- CatalogStore.verify(root, nil), do: :ok
-    else
-      :ok
-    end
-  end
-
-  @doc false
-  @spec catalog_head?(Path.t()) :: boolean()
-  def catalog_head?(root) do
-    with {:ok, raw} when is_binary(raw) <- Journal.read(root),
-         {:ok, %{"catalog_head" => head}} <- Journal.decode(raw) do
-      head != nil
-    else
-      _ -> false
-    end
+    with {:ok, _} <- CatalogStore.verify(root, nil), do: :ok
   end
 
   # The boot replaces the incarnation marker, so no deployment file may be, or

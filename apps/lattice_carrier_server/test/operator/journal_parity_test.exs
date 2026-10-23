@@ -144,4 +144,49 @@ defmodule LatticeCarrierServer.Operator.JournalParityTest do
       end
     end
   end
+
+  @canonical_script """
+  import importlib.util, json, sys
+  spec = importlib.util.spec_from_file_location("mutation", sys.argv[1])
+  owner = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(owner)
+  print(json.dumps([owner.canonical(owner.record(raw)) == raw for raw in json.load(sys.stdin)]))
+  """
+
+  # The owner refuses to commit any record that is not byte for byte what
+  # Journal.encode/1 writes, so its canonical encoder must reproduce Jason's
+  # escaping for every string a record can hold.
+  test "the owner's canonical bytes equal Journal.encode for awkward strings" do
+    python = System.find_executable("python3")
+
+    if python == nil do
+      IO.puts("skipping canonical parity: python3 is absent")
+    else
+      realms =
+        Enum.map(1..0x7F, &<<&1::utf8>>) ++
+          ["  ", "café", "\\u00ab", "\\\\u000b", "\"quoted\"", "/slash"]
+
+      raws =
+        for realm <- realms,
+            do: Journal.encode(put_in(base(), ["service", "realm"], "r" <> realm))
+
+      path = Path.join(System.tmp_dir!(), "canonical-#{System.unique_integer([:positive])}.json")
+      File.write!(path, Jason.encode!(raws))
+      on_exit(fn -> File.rm(path) end)
+
+      {out, 0} =
+        System.cmd("sh", [
+          "-c",
+          ~s(exec "$0" -B -c "$1" "$2" < "$3"),
+          python,
+          @canonical_script,
+          @helper,
+          path
+        ])
+
+      for {realm, same} <- Enum.zip(realms, Jason.decode!(out)) do
+        assert same, "canonical bytes differ for realm #{inspect(realm)}"
+      end
+    end
+  end
 end

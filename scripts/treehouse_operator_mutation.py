@@ -243,7 +243,10 @@ def canonical(r):
                    "service"])
     out["artifacts"] = artifacts
     out["service"] = pick(r["service"], ["identity_file", "pub", "realm", "sha256"])
-    return json.dumps(out, separators=(",", ":"), ensure_ascii=False)
+    text = json.dumps(out, separators=(",", ":"), ensure_ascii=False)
+    # Jason writes control escapes with uppercase hex; an escaped backslash is
+    # matched first so a literal "\u" in a string is never rewritten.
+    return re.sub(r"(\\\\)|\\u([0-9a-f]{4})", lambda m: m.group(1) or "\\u" + m.group(2).upper(), text)
 
 
 def expected(root, raw):

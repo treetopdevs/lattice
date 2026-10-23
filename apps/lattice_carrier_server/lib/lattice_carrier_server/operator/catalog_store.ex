@@ -266,7 +266,9 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
   end
 
   # The journal's catalog_head is the committed head (nil with no receipts).
-  defp journal_head(nil, _head), do: :ok
+  # History is appended only when a journal is replaced, so a receipt with no
+  # current journal means the journal was lost.
+  defp journal_head(nil, nil), do: :ok
   defp journal_head(%{"catalog_head" => head}, head), do: :ok
   defp journal_head(_record, _head), do: {:error, :catalog_store_corrupt}
 
