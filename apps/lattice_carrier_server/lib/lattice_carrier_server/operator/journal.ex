@@ -18,7 +18,9 @@ defmodule LatticeCarrierServer.Operator.Journal do
   Before replacing an existing journal, the mutation owner appends the exact
   replaced bytes plus a newline to `history_path/1` and syncs it; a crash
   between that append and the replace leaves the current record duplicated at
-  the history tail. The history is append-only and not yet bounded.
+  the history tail. The history is append-only and capped at 64 MiB: past the
+  cap every commit refuses `operator_history_full` until retention or rotation
+  exists (plans row 225).
   """
   import Bitwise
   alias Jason.OrderedObject

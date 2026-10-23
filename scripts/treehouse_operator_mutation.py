@@ -367,7 +367,8 @@ def history(root, old):
     before the replace leaves a duplicate of the current record at the tail;
     that is accepted. A torn earlier append is cut back to its last complete
     line first, and a failed write is cut back too, so every line is one
-    whole record. Growth is unbounded for now (row 225)."""
+    whole record. History is capped at MAX_HISTORY (64 MiB): past it every
+    commit refuses operator_history_full until retention exists (row 225)."""
     fd = history_file(root)
     try:
         data = old.encode() + b"\n"
