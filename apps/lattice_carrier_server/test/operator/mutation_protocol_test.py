@@ -38,6 +38,118 @@ class Protocol(unittest.TestCase):
                 "service": {"identity_file": "/srv/child-service.identity", "realm": "child-service",
                             "pub": base64.b64encode(bytes(32)).decode(), "sha256": "2" * 64}}
 
+    CID = base64.urlsafe_b64encode(bytes([7]) * 32).decode().rstrip("=")
+    ENVELOPE = b'{"catalog":"envelope"}'
+
+    def catalog_artifact(self, root="/op", raw=None, **fields):
+        sha = owner.digest(raw or self.ENVELOPE)
+        return dict({"kind": "catalog", "op_id": self.CID, "replica": "space-1", "review": None,
+                     "path": "{}/catalog/{}.json".format(root, sha), "sha256": sha}, **fields)
+
+    def catalog_record(self, phase="catalogued", artifacts=1, head=CID, **fields):
+        record = self.sample()
+        record["artifacts"] += [self.catalog_artifact() for _ in range(artifacts)]
+        if artifacts > 1:
+            record["artifacts"][-1]["path"] = "/op/catalog/other.json"
+        return dict(record, phase=phase, catalog_head=head, **fields)
+
+    def test_catalog_artifact_and_phase_coupling(self):
+        for phase in ("catalogued", "listed"):
+            self.assertEqual(owner.record(json.dumps(self.catalog_record(phase)))["catalog_head"], self.CID)
+        other = base64.urlsafe_b64encode(bytes([8]) * 32).decode().rstrip("=")
+        bad = [self.catalog_record(artifacts=0), self.catalog_record(artifacts=2),
+               self.catalog_record(head=None), self.catalog_record(head=other),
+               self.catalog_record("ready"), self.catalog_record("activated"),
+               self.catalog_record("carrier_pending"), self.catalog_record("ready", head=None)]
+        for record in bad:
+            with self.assertRaises(owner.Refusal, msg=repr(record)) as caught:
+                owner.record(json.dumps(record))
+            self.assertEqual(str(caught.exception), "corrupt_operator_journal")
+        # A stage record after a listing keeps the committed head and no artifact.
+        self.assertEqual(owner.record(json.dumps(dict(self.sample(), catalog_head=self.CID)))["catalog_head"],
+                         self.CID)
+        for fields in [{"review": {"creation": self.CID}}, {"op_id": None}, {"replica": ""}, {"replica": None},
+                       {"op_id": "short"}, {"sha256": "G" * 64}, {"path": "relative"}, {"extra": 1}]:
+            record = self.catalog_record()
+            record["artifacts"][-1].update(fields)
+            with self.assertRaises(owner.Refusal, msg=repr(fields)):
+                owner.record(json.dumps(record))
+
+    def test_catalogued_plan_shape_and_stale_refusals(self):
+        root = "/nonexistent-root"
+        sha = owner.digest(self.ENVELOPE)
+        good = self.catalogued_plan(root)
+        art = good["artifacts"][0]
+        wrong_path = self.catalog_record(artifacts=1)
+        wrong_path["artifacts"][-1]["path"] = "/elsewhere/{}.json".format(sha)
+        malformed = [dict(good, artifacts=None), dict(good, artifacts=[]), dict(good, artifacts=[art, art]),
+                     dict(good, artifacts=[dict(art, extra=1)]), dict(good, artifacts=[dict(art, sha256="3" * 64)]),
+                     dict(good, artifacts=[dict(art, bytes="")]), dict(good, artifacts=[dict(art, bytes="eA")]),
+                     dict(good, artifacts=[dict(art, bytes=base64.b64encode(b"x" * 131073).decode(),
+                                                sha256=owner.digest(b"x" * 131073))]),
+                     dict(good, checks=[]), dict(good, checks=good["checks"] * 2),
+                     dict(good, incarnation=None), dict(good, incarnation="4" * 63), dict(good, attempt="short"),
+                     dict(good, expected=None), dict(good, record=None),
+                     dict(good, record=json.dumps(wrong_path))]
+        for plan in malformed:
+            with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+                owner.catalogued(root, plan)
+            self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        ready = json.loads(good["expected"])
+        want = json.loads(good["record"])
+        other = base64.urlsafe_b64encode(bytes([9]) * 32).decode().rstrip("=")
+        stale = [dict(good, attempt=other),
+                 dict(good, expected=self.compact(dict(ready, phase="activated"))),
+                 dict(good, checks=[dict(good["checks"][0], sha256="3" * 64)]),
+                 dict(good, record=self.compact(dict(want, generation=1))),
+                 dict(good, record=self.compact(dict(want, phase="listed"))),
+                 dict(good, record=self.compact(dict(self.catalog_record(artifacts=0), phase="ready"))),
+                 dict(good, record=self.compact(dict(want, artifacts=want["artifacts"][-1:]))),
+                 dict(good, record=self.compact(dict(want, service=dict(want["service"], realm="other"))))]
+        for plan in stale:
+            with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+                owner.catalogued(root, plan)
+            self.assertEqual(str(caught.exception), "stale_operator_intent")
+
+    def test_listed_plan_shape_and_stale_refusals(self):
+        root = "/nonexistent-root"
+        good = self.listed_plan(root)
+        malformed = [dict(good, artifacts=[]), dict(good, checks=[]), dict(good, incarnation=None),
+                     dict(good, attempt="short"), dict(good, expected=None), dict(good, record=None)]
+        for plan in malformed:
+            with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+                owner.listed(root, plan)
+            self.assertEqual(str(caught.exception), "malformed_operator_plan")
+        catalogued = json.loads(good["expected"])
+        other = base64.urlsafe_b64encode(bytes([9]) * 32).decode().rstrip("=")
+        stale = [dict(good, attempt=other), dict(good, expected=self.compact(dict(catalogued, phase="ready", catalog_head=None,
+                                                      artifacts=catalogued["artifacts"][:1]))),
+                 dict(good, checks=[dict(good["checks"][0], sha256="3" * 64)]),
+                 dict(good, record=self.compact(dict(catalogued, phase="listed", generation=1))),
+                 dict(good, record=good["expected"])]
+        for plan in stale:
+            with self.assertRaises(owner.Refusal, msg=repr(plan)) as caught:
+                owner.listed(root, plan)
+            self.assertEqual(str(caught.exception), "stale_operator_intent")
+
+    def catalogued_plan(self, root, target="/srv/active.json", manifest="0" * 64):
+        ready = dict(self.sample(), phase="ready")
+        raw = self.compact(ready)
+        want = dict(ready, phase="catalogued", catalog_head=self.CID,
+                    artifacts=ready["artifacts"] + [self.catalog_artifact(root)])
+        return {"version": 1, "kind": "catalogued", "expected": raw, "record": self.compact(want),
+                "attempt": ready["attempt"], "incarnation": "4" * 64,
+                "artifacts": [{"sha256": owner.digest(self.ENVELOPE),
+                               "bytes": base64.b64encode(self.ENVELOPE).decode()}],
+                "checks": [{"path": target, "sha256": ready["artifacts"][0]["sha256"]}]}
+
+    def listed_plan(self, root, target="/srv/active.json"):
+        record = json.loads(self.catalogued_plan(root)["record"])
+        return {"version": 1, "kind": "listed", "expected": self.compact(record), "attempt": record["attempt"],
+                "record": self.compact(dict(record, phase="listed")), "artifacts": None,
+                "incarnation": "4" * 64,
+                "checks": [{"path": target, "sha256": record["artifacts"][0]["sha256"]}]}
+
     def test_duplicate_keys_after_escapes_and_constants_refuse(self):
         for raw in ['{"version":1,"version":2}', '{"version":1,"ver\\u0073ion":2}',
                     '{"n":NaN}', '{"n":Infinity}']:
@@ -54,10 +166,12 @@ class Protocol(unittest.TestCase):
             with self.assertRaises(owner.Refusal):
                 owner.record(json.dumps(record))
 
-    def test_only_pending_activated_and_ready_phases_parse(self):
+    def test_only_the_five_phases_parse(self):
         for phase in ["carrier_pending", "activated", "ready"]:
             self.assertEqual(owner.record(json.dumps(dict(self.sample(), phase=phase)))["phase"], phase)
-        for phase in ["catalogued", "listed", "Ready", "Activated", None, 1]:
+        for phase in ["catalogued", "listed"]:
+            self.assertEqual(owner.record(json.dumps(self.catalog_record(phase)))["phase"], phase)
+        for phase in ["Ready", "Listed", "Catalogued", None, 1]:
             with self.assertRaises(owner.Refusal, msg=repr(phase)):
                 owner.record(json.dumps(dict(self.sample(), phase=phase)))
 
@@ -668,10 +782,10 @@ class Protocol(unittest.TestCase):
         # Nor can the ready plan's own commit be reused for another phase.
         for phase_record in (good["expected"], self.compact(dict(json.loads(good["expected"]), phase="carrier_pending"))):
             with self.assertRaises(owner.Refusal) as caught:
-                owner.commit(root, good["expected"], phase_record, ready=True)
+                owner.commit(root, good["expected"], phase_record, writes="ready")
             self.assertEqual(str(caught.exception), "stale_operator_intent")
         with self.assertRaises(owner.Refusal) as caught:
-            owner.commit(root, None, good["record"], ready=True)
+            owner.commit(root, None, good["record"], writes="ready")
         self.assertEqual(str(caught.exception), "stale_operator_intent")
         self.assertEqual(self.journal(root), good["expected"])
 
@@ -736,6 +850,319 @@ class Protocol(unittest.TestCase):
         os.symlink(self.private(os.path.join(root, "other"), b""), history)
         self.refused(root, plan, "unsafe_operator_file")
         self.assertEqual(self.journal(root), plan["expected"])
+
+
+    # Plan 224 PR 3: the owner's catalogued and listed phases and the catalog store.
+
+    def readied(self, name):
+        root, target, candidate, plan = self.activated(name)
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, plan)
+        return root, target, candidate, plan["record"]
+
+    def catalog_plans(self, name, envelope=None):
+        """A ready journal, the catalogued plan for it and the listed plan after it."""
+        root, target, candidate, ready = self.readied(name)
+        envelope = envelope or self.ENVELOPE
+        record = json.loads(ready)
+        sha = owner.digest(envelope)
+        artifact = self.catalog_artifact(root, envelope)
+        catalogued = self.compact(dict(record, phase="catalogued", catalog_head=self.CID,
+                                       artifacts=record["artifacts"] + [artifact]))
+        check = [{"path": target, "sha256": owner.digest(candidate)}]
+        first = {"version": 1, "kind": "catalogued", "expected": ready, "record": catalogued,
+                 "attempt": record["attempt"], "incarnation": "4" * 64, "checks": check,
+                 "artifacts": [{"sha256": sha, "bytes": base64.b64encode(envelope).decode()}]}
+        second = {"version": 1, "kind": "listed", "expected": catalogued, "attempt": record["attempt"],
+                  "record": self.compact(dict(json.loads(catalogued), phase="listed")), "artifacts": None,
+                  "incarnation": "4" * 64, "checks": check}
+        return root, target, candidate, first, second
+
+    def store(self, root, name=None, raw=None, mode=0o600):
+        path = os.path.join(root, "catalog")
+        if not os.path.isdir(path):
+            os.mkdir(path, 0o700)
+        if name is not None:
+            self.private(os.path.join(path, name), raw, mode)
+        return path
+
+    def stage_plan(self, root, target, candidate, expected, head, n=7):
+        record = self.pending(root, n)
+        raw = b"next candidate"
+        attempt_dir = os.path.join(root, "attempt-" + owner.digest(record["attempt"].encode()))
+        artifact = dict(self.sample()["artifacts"][0], path=os.path.join(attempt_dir, owner.digest(raw)),
+                        sha256=owner.digest(raw))
+        commit = self.compact(dict(self.pending(root, n, artifacts=[artifact]), catalog_head=head))
+        return ({"version": 1, "kind": "stage", "expected": expected, "record": None,
+                 "attempt": record["attempt"], "incarnation": None,
+                 "checks": [{"path": target, "sha256": owner.digest(candidate)}],
+                 "artifacts": [{"sha256": owner.digest(raw), "bytes": base64.b64encode(raw).decode()}]}, commit)
+
+    def run_stage(self, root, plan, commit):
+        with mock.patch.object(owner, "reply"), mock.patch.object(owner, "line", return_value={"commit": commit}):
+            owner.execute(root, plan)
+
+    def test_catalogued_stores_the_envelope_and_commits(self):
+        root, target, candidate, plan, _ = self.catalog_plans("cat-ok")
+        history = self.history_bytes(root)
+        with mock.patch.object(owner, "reply") as reply:
+            owner.execute(root, plan)
+        reply.assert_called_once_with({"ok": True})
+        final = os.path.join(root, "catalog", owner.digest(self.ENVELOPE) + ".json")
+        with open(final, "rb") as f:
+            self.assertEqual(f.read(), self.ENVELOPE)
+        self.assertEqual(stat.S_IMODE(os.stat(final).st_mode), 0o600)
+        self.assertEqual(os.stat(final).st_nlink, 1)
+        self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(final)).st_mode), 0o700)
+        self.assertEqual(os.listdir(os.path.dirname(final)), [os.path.basename(final)])
+        self.assertEqual(self.journal(root), plan["record"])
+        self.assertEqual(self.history_bytes(root), history + plan["expected"].encode() + b"\n")
+        with open(target, "rb") as f:
+            self.assertEqual(f.read(), candidate)
+
+    def test_catalogued_refusals_leave_store_and_journal_alone(self):
+        root, target, candidate, plan, _ = self.catalog_plans("cat-refusals")
+        self.refused(root, dict(plan, incarnation="5" * 64), "stale_operator_incarnation", owner.catalogued)
+        self.private(os.path.join(root, owner.INCARNATION), b"5" * 64)
+        self.refused(root, plan, "stale_operator_incarnation", owner.catalogued)
+        self.private(os.path.join(root, owner.INCARNATION), b"4" * 64)
+        self.private(target, b"changed")
+        self.refused(root, plan, "stale_operator_intent", owner.catalogued)
+        self.private(target, candidate)
+        journal_path = os.path.join(root, "operator-journal.json")
+        self.refused(root, dict(plan, checks=[{"path": journal_path, "sha256": owner.digest(candidate)}]),
+                     "unsafe_operator_file", owner.catalogued)
+        self.refused(root, dict(plan, checks=[{"path": os.path.join(root, "catalog", "x"),
+                                               "sha256": owner.digest(candidate)}]),
+                     "unsafe_operator_file", owner.catalogued)
+        self.assertFalse(os.path.exists(os.path.join(root, "catalog")))
+        self.assertEqual(self.journal(root), plan["expected"])
+
+    def test_catalogued_refuses_a_plan_supplied_store_path(self):
+        root, _, _, plan, _ = self.catalog_plans("cat-path")
+        record = json.loads(plan["record"])
+        for path in ("/tmp/{}.json", os.path.join("{}".format(root), "attempt", "{}.json"),
+                     os.path.join(root, "catalog", "../{}.json")):
+            record["artifacts"][-1]["path"] = path.format(owner.digest(self.ENVELOPE))
+            self.refused(root, dict(plan, record=self.compact(record)), "malformed_operator_plan",
+                         owner.catalogued)
+        self.assertFalse(os.path.exists(os.path.join(root, "catalog")))
+        # commit() applies the same rule to any record that reaches it.
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.commit(root, plan["expected"], self.compact(record), writes="catalogued")
+        self.assertEqual(str(caught.exception), "malformed_operator_plan")
+
+    def test_catalogued_over_an_existing_final_with_other_bytes_conflicts(self):
+        root, _, _, plan, _ = self.catalog_plans("cat-conflict")
+        self.store(root, owner.digest(self.ENVELOPE) + ".json", b"different")
+        self.refused(root, plan, "immutable_artifact_conflict", owner.catalogued)
+        self.assertEqual(self.journal(root), plan["expected"])
+        with open(os.path.join(root, "catalog", owner.digest(self.ENVELOPE) + ".json"), "rb") as f:
+            self.assertEqual(f.read(), b"different")
+        self.assertEqual([n for n in os.listdir(os.path.join(root, "catalog")) if n.startswith(".tmp.")], [])
+
+    def test_catalogued_over_an_existing_final_with_equal_bytes_is_a_noop_commit(self):
+        # Crash window (i): the envelope was linked, the journal never moved.
+        root, _, _, plan, _ = self.catalog_plans("cat-crash")
+        final = owner.digest(self.ENVELOPE) + ".json"
+        self.store(root, final, self.ENVELOPE)
+        before = os.stat(os.path.join(root, "catalog", final)).st_ino
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, plan)
+        self.assertEqual(os.stat(os.path.join(root, "catalog", final)).st_ino, before)
+        self.assertEqual(self.journal(root), plan["record"])
+
+    def test_catalogued_removes_leftover_temps_and_refuses_unknown_names(self):
+        root, _, _, plan, _ = self.catalog_plans("cat-temp")
+        leftover = ".tmp." + "ab" * 16
+        self.store(root, leftover, b"torn")
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, plan)
+        self.assertEqual(os.listdir(os.path.join(root, "catalog")), [owner.digest(self.ENVELOPE) + ".json"])
+        root, _, _, plan, _ = self.catalog_plans("cat-unknown")
+        for name in ("notes.txt", ".tmp.short", "A" * 64 + ".json", ".tmp." + "AB" * 16):
+            path = self.store(root, name, b"x")
+            self.refused(root, plan, "catalog_store_corrupt", owner.catalogued)
+            os.remove(os.path.join(path, name))
+        self.assertEqual(self.journal(root), plan["expected"])
+
+    def test_catalogued_refuses_an_unsafe_store_directory(self):
+        root, _, _, plan, _ = self.catalog_plans("cat-unsafe-dir")
+        path = self.store(root)
+        os.chmod(path, 0o750)
+        self.refused(root, plan, "unsafe_operator_directory", owner.catalogued)
+        os.chmod(path, 0o700)
+        os.rmdir(path)
+        other = os.path.join(root, "elsewhere")
+        os.mkdir(other, 0o700)
+        os.symlink(other, path)
+        with self.assertRaises((owner.Refusal, OSError)):
+            owner.catalogued(root, plan)
+        self.assertEqual(os.listdir(other), [])
+        self.assertEqual(self.journal(root), plan["expected"])
+
+    def test_journal_plan_cannot_write_catalogued_or_listed(self):
+        root, _, _, first, second = self.catalog_plans("cat-journal")
+        for expected, record in [(first["expected"], first["record"]),
+                                 (second["expected"], second["record"])]:
+            plan = {"version": 1, "kind": "journal", "expected": expected, "record": record, "attempt": None,
+                    "checks": None, "artifacts": None, "incarnation": None}
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.execute(root, plan)
+            self.assertEqual(str(caught.exception), "stale_operator_intent")
+        for writes in (None, "ready", "listed", "activated"):
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.commit(root, first["expected"], first["record"], writes=writes)
+            self.assertEqual(str(caught.exception), "stale_operator_intent")
+        self.assertEqual(self.journal(root), first["expected"])
+        self.assertFalse(os.path.exists(os.path.join(root, "catalog")))
+
+    def test_commit_phase_must_match_what_it_writes(self):
+        root, _, _, first, _ = self.catalog_plans("cat-writes")
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.commit(root, None, first["record"], writes="catalogued")
+        self.assertEqual(str(caught.exception), "stale_operator_intent")
+
+    def test_listed_after_catalogued(self):
+        root, target, candidate, first, second = self.catalog_plans("cat-listed")
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, first)
+        history = self.history_bytes(root)
+        with mock.patch.object(owner, "reply") as reply:
+            owner.execute(root, second)
+        reply.assert_called_once_with({"ok": True})
+        self.assertEqual(self.journal(root), second["record"])
+        self.assertEqual(self.history_bytes(root), history + second["expected"].encode() + b"\n")
+        self.assertEqual(json.loads(self.journal(root))["catalog_head"], self.CID)
+
+    def test_listed_refusals_leave_the_journal_alone(self):
+        root, target, candidate, first, second = self.catalog_plans("cat-listed-refusals")
+        # Listing before cataloguing is not a phase move the owner allows.
+        with self.assertRaises(owner.Refusal):
+            owner.listed(root, second)
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, first)
+        final = os.path.join(root, "catalog", owner.digest(self.ENVELOPE) + ".json")
+        self.refused(root, dict(second, incarnation="5" * 64), "stale_operator_incarnation", owner.listed)
+        self.private(target, b"changed")
+        self.refused(root, second, "stale_operator_intent", owner.listed)
+        self.private(target, candidate)
+        os.chmod(final, 0o644)
+        self.refused(root, second, "unsafe_operator_file", owner.listed)
+        os.chmod(final, 0o600)
+        self.private(final, b"tampered")
+        self.refused(root, second, "immutable_artifact_conflict", owner.listed)
+        os.remove(final)
+        self.refused(root, second, "immutable_artifact_conflict", owner.listed)
+        self.assertEqual(self.journal(root), second["expected"])
+
+    def test_listed_commit_phase_and_head_are_checked(self):
+        root, _, _, first, second = self.catalog_plans("cat-listed-commit")
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, first)
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.commit(root, second["expected"], second["record"], writes="ready")
+        self.assertEqual(str(caught.exception), "stale_operator_intent")
+        # A stage after listing keeps the committed head, with no pending envelope.
+        plan, commit = self.stage_plan(root, second["checks"][0]["path"], self.ENVELOPE, second["expected"], None)
+        with self.assertRaises(owner.Refusal) as caught:
+            self.run_stage(root, dict(plan, checks=second["checks"]), commit)
+        self.assertEqual(str(caught.exception), "stale_catalog_head")
+
+    def test_stage_requires_the_committed_head_and_no_pending_envelope(self):
+        root, target, candidate, first, second = self.catalog_plans("cat-stage")
+        with mock.patch.object(owner, "reply"):
+            owner.execute(root, first)
+            owner.execute(root, second)
+        listed = second["record"]
+        journal, history = self.journal(root), self.history_bytes(root)
+        other = base64.urlsafe_b64encode(bytes([8]) * 32).decode().rstrip("=")
+        for head in (None, other):
+            plan, commit = self.stage_plan(root, target, candidate, listed, head)
+            with self.assertRaises(owner.Refusal, msg=repr(head)) as caught:
+                self.run_stage(root, plan, commit)
+            self.assertEqual(str(caught.exception), "stale_catalog_head")
+        # A pending envelope: a final whose digest no record names.
+        pending = self.store(root, owner.digest(b"pending") + ".json", b"pending")
+        plan, commit = self.stage_plan(root, target, candidate, listed, self.CID)
+        with self.assertRaises(owner.Refusal) as caught:
+            self.run_stage(root, plan, commit)
+        self.assertEqual(str(caught.exception), "stale_catalog_head")
+        self.assertEqual((self.journal(root), self.history_bytes(root)), (journal, history))
+        os.remove(os.path.join(pending, owner.digest(b"pending") + ".json"))
+        # A leftover temp is not a pending envelope.
+        self.store(root, ".tmp." + "cd" * 16, b"torn")
+        self.run_stage(root, plan, commit)
+        self.assertEqual(self.journal(root), commit)
+        self.assertEqual(json.loads(self.journal(root))["catalog_head"], self.CID)
+        # The head now lives only in history, and still binds the next stage.
+        plan, again = self.stage_plan(root, target, candidate, commit, None, n=8)
+        with self.assertRaises(owner.Refusal) as caught:
+            self.run_stage(root, plan, again)
+        self.assertEqual(str(caught.exception), "stale_catalog_head")
+        plan, again = self.stage_plan(root, target, candidate, commit, self.CID, n=8)
+        self.run_stage(root, plan, again)
+        self.assertEqual(self.journal(root), again)
+
+    def test_stage_with_a_pending_envelope_and_no_receipt_refuses_a_null_head(self):
+        root, target, candidate, ready = self.readied("cat-pending-ready")
+        self.store(root, owner.digest(b"pending") + ".json", b"pending")
+        plan, commit = self.stage_plan(root, target, candidate, ready, None)
+        with self.assertRaises(owner.Refusal) as caught:
+            self.run_stage(root, plan, commit)
+        self.assertEqual(str(caught.exception), "stale_catalog_head")
+        self.assertEqual(self.journal(root), ready)
+        # An unknown name is corruption, not a pending envelope.
+        os.remove(os.path.join(root, "catalog", owner.digest(b"pending") + ".json"))
+        self.store(root, "junk", b"x")
+        with self.assertRaises(owner.Refusal) as caught:
+            self.run_stage(root, plan, commit)
+        self.assertEqual(str(caught.exception), "catalog_store_corrupt")
+
+    def test_a_deployment_path_under_the_catalog_store_collides(self):
+        root = self.workdir("collision-catalog")
+        store = os.path.join(root, "catalog")
+        for path in (store, os.path.join(store, "x.json"), os.path.join(store, "a", "b")):
+            with self.assertRaises(owner.Refusal, msg=path) as caught:
+                owner.apart(root, path)
+            self.assertEqual(str(caught.exception), "operator_path_collision")
+            manifest = json.dumps({"version": 1, "instances": [
+                {"identity_file": "/srv/a.identity", "log_file": path}]}).encode()
+            with self.assertRaises(owner.Refusal, msg=path) as caught:
+                owner.absolute_paths(manifest, root)
+            self.assertEqual(str(caught.exception), "operator_path_collision")
+        self.assertIn(store, owner.reserved_files(root))
+        self.assertNotIn(store + "x", owner.reserved_files(root))
+        # A hard link to a stored envelope is the same file under another name.
+        name = owner.digest(b"e") + ".json"
+        self.store(root, name, b"e")
+        alias = os.path.join(root, "alias.log")
+        os.link(os.path.join(store, name), alias)
+        with self.assertRaises(owner.Refusal) as caught:
+            owner.apart(root, alias)
+        self.assertEqual(str(caught.exception), "operator_path_collision")
+        owner.apart(root, os.path.join(root, "catalogue", "x"))
+
+    def test_boot_over_catalogued_and_listed_keeps_them_for_their_own_bytes_only(self):
+        root, target, candidate, first, second = self.catalog_plans("cat-boot")
+        other = b'{"version":1,"instances":[]}'
+        for plan in (first, second):
+            with mock.patch.object(owner, "reply"):
+                owner.execute(root, plan)
+            history = self.history_bytes(root)
+            with mock.patch.object(owner, "reply") as reply:
+                owner.boot(root, self.boot_plan(target, candidate))
+            marker = reply.call_args[0][0]["incarnation"]
+            self.assertEqual(self.journal(root), plan["record"])
+            self.assertEqual(self.history_bytes(root), history)
+            self.private(target, other)
+            with self.assertRaises(owner.Refusal) as caught:
+                owner.boot(root, self.boot_plan(target, other))
+            self.assertEqual(str(caught.exception), "stale_operator_intent")
+            with open(os.path.join(root, owner.INCARNATION), "rb") as f:
+                self.assertEqual(f.read(), marker.encode())
+            self.private(target, candidate)
+            self.private(os.path.join(root, owner.INCARNATION), b"4" * 64)
 
 
 if __name__ == "__main__":

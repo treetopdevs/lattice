@@ -48,15 +48,62 @@ defmodule LatticeCarrierServer.Operator.JournalParityTest do
     }
   end
 
+  defp catalog_artifact(tag \\ "one") do
+    sha = Journal.digest("envelope-" <> tag)
+
+    %{
+      "path" => "/operator/catalog/#{sha}.json",
+      "sha256" => sha,
+      "kind" => "catalog",
+      "replica" => "replica:treehouse:space",
+      "op_id" => Base.url_encode64(:crypto.hash(:sha256, "catalog-" <> tag), padding: false),
+      "review" => nil
+    }
+  end
+
+  defp with_catalog(phase, artifacts, head) do
+    record = base()
+
+    Journal.encode(%{
+      record
+      | "phase" => phase,
+        "catalog_head" => head,
+        "artifacts" => record["artifacts"] ++ artifacts
+    })
+  end
+
   defp table do
     phase = fn p -> Journal.encode(%{base() | "phase" => p}) end
+    one = catalog_artifact()
+    two = catalog_artifact("two")
+    op = one["op_id"]
+    review = %{"creation" => op, "grants" => [], "profile_genesis" => op, "profile_id" => op}
 
     [
       {"carrier_pending", phase.("carrier_pending"), true},
       {"activated", phase.("activated"), true},
       {"ready", phase.("ready"), true},
-      {"catalogued", phase.("catalogued"), false},
-      {"listed", phase.("listed"), false},
+      {"catalogued bare", phase.("catalogued"), false},
+      {"listed bare", phase.("listed"), false},
+      {"catalogued with one catalog", with_catalog("catalogued", [one], one["op_id"]), true},
+      {"listed with one catalog", with_catalog("listed", [one], one["op_id"]), true},
+      {"catalogued without catalog", with_catalog("catalogued", [], nil), false},
+      {"catalogued head only", with_catalog("catalogued", [], one["op_id"]), false},
+      {"listed without catalog", with_catalog("listed", [], nil), false},
+      {"two catalogs", with_catalog("catalogued", [one, two], one["op_id"]), false},
+      {"catalog in ready", with_catalog("ready", [one], one["op_id"]), false},
+      {"catalog in activated", with_catalog("activated", [one], nil), false},
+      {"head differs from artifact", with_catalog("catalogued", [one], two["op_id"]), false},
+      {"head nil in catalogued", with_catalog("catalogued", [one], nil), false},
+      {"ready with head only", with_catalog("ready", [], one["op_id"]), true},
+      {"catalog with review",
+       with_catalog("catalogued", [%{one | "review" => review}], one["op_id"]), false},
+      {"catalog with null op_id", with_catalog("catalogued", [%{one | "op_id" => nil}], nil),
+       false},
+      {"catalog with null replica",
+       with_catalog("catalogued", [%{one | "replica" => nil}], one["op_id"]), false},
+      {"catalog with empty replica",
+       with_catalog("catalogued", [%{one | "replica" => ""}], one["op_id"]), false},
       {"wrong case", phase.("Ready"), false},
       {"null phase", phase.(nil), false},
       {"missing service", Journal.encode(Map.delete(base(), "service")), false},

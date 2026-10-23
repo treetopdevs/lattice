@@ -6,7 +6,9 @@ defmodule LatticeCarrierServer.Operator.Journal do
   `ready` is written only by the owner's `ready` plan and claims only plan 223's
   local facts: after one restart the loaded manifest is the activated one, every
   route holder is ready, the roster matches, and the admitted child route
-  answered an authenticated frontier pull. No phase claims a published route.
+  answered an authenticated frontier pull. `catalogued` records one signed
+  catalog envelope held in the local catalog store; `listed` records the
+  receipt of plan 224 Design 5. No phase claims a published route.
 
   Mutations acquire and own a Linux OS lock for the entire transaction. The
   compare is cooperative CAS among those operator processes, not a lock against
@@ -54,7 +56,9 @@ defmodule LatticeCarrierServer.Operator.Journal do
     end
   end
 
-  defp effective_uid do
+  @doc false
+  @spec effective_uid() :: {:ok, non_neg_integer()} | {:error, :unsafe_operator_directory}
+  def effective_uid do
     case System.cmd("id", ["-u"], stderr_to_stdout: true) do
       {uid, 0} ->
         case Integer.parse(String.trim(uid)) do
@@ -177,20 +181,41 @@ defmodule LatticeCarrierServer.Operator.Journal do
     Enum.all?(record["artifacts"], fn artifact ->
       path = artifact["path"]
 
-      is_binary(path) and Path.expand(path) == path and String.starts_with?(path, base <> "/")
+      is_binary(path) and Path.expand(path) == path and String.starts_with?(path, base <> "/") and
+        catalog_path?(artifact, base)
     end)
+  end
+
+  # A catalog envelope lives only at its digest name in the owner's store.
+  defp catalog_path?(%{"kind" => "catalog", "sha256" => sha, "path" => path}, base),
+    do: path == Path.join([base, "catalog", sha <> ".json"])
+
+  defp catalog_path?(_artifact, _base), do: true
+
+  defp catalog_coupling?(r) do
+    catalogs = Enum.filter(r["artifacts"], &(&1["kind"] == "catalog"))
+    head = r["catalog_head"]
+
+    case r["phase"] do
+      phase when phase in ["catalogued", "listed"] ->
+        match?([%{"op_id" => op_id}] when op_id == head, catalogs)
+
+      _ ->
+        catalogs == []
+    end
   end
 
   defp valid?(r) when is_map(r) do
     Enum.sort(Map.keys(r)) == Enum.sort(@fields) and r["version"] === 1 and
-      r["phase"] in ["carrier_pending", "activated", "ready"] and nonce?(r["attempt"]) and
+      r["phase"] in ["carrier_pending", "activated", "ready", "catalogued", "listed"] and
+      nonce?(r["attempt"]) and
       is_integer(r["generation"]) and r["generation"] >= 0 and
       r["generation"] < 9_007_199_254_740_991 and
       (r["catalog_head"] == nil or op_id?(r["catalog_head"])) and
       digest?(r["manifest_digest"]) and is_list(r["artifacts"]) and
       length(r["artifacts"]) in 1..128 and Enum.all?(r["artifacts"], &artifact?/1) and
       length(Enum.uniq_by(r["artifacts"], & &1["path"])) == length(r["artifacts"]) and
-      service?(r["service"])
+      service?(r["service"]) and catalog_coupling?(r)
   end
 
   defp valid?(_), do: false
@@ -240,7 +265,7 @@ defmodule LatticeCarrierServer.Operator.Journal do
   defp artifact?(a) when is_map(a) do
     Enum.sort(Map.keys(a)) == @artifact_fields and is_binary(a["path"]) and
       Path.type(a["path"]) == :absolute and digest?(a["sha256"]) and
-      a["kind"] in ["log", "reference", "manifest"] and
+      a["kind"] in ["log", "reference", "manifest", "catalog"] and
       ((a["kind"] == "manifest" and a["replica"] == nil and a["op_id"] == nil and
           a["review"] == nil) or
          (a["kind"] != "manifest" and is_binary(a["replica"]) and op_id?(a["op_id"]) and
@@ -250,6 +275,7 @@ defmodule LatticeCarrierServer.Operator.Journal do
   defp artifact?(_), do: false
 
   defp review?(%{"kind" => "reference", "review" => nil}), do: true
+  defp review?(%{"kind" => "catalog", "review" => nil, "replica" => replica}), do: replica != ""
 
   defp review?(%{"kind" => "log", "review" => r}) when is_map(r) do
     Enum.sort(Map.keys(r)) == ~w(creation grants profile_genesis profile_id) and

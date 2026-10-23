@@ -9,6 +9,8 @@ active manifest under the latest boot's incarnation. A controlled carrier boot
 runs its own plan under the same lock: it completes a pending activation whose
 candidate is already active, refuses bytes the journal contradicts, and writes
 the incarnation marker that binds any later activation to that boot.
+Its catalogued step stores one signed catalog envelope under catalog/ (never
+deleted) and its listed step records the BEAM's receipt; neither signs or serves.
 """
 import base64
 import fcntl
@@ -23,7 +25,10 @@ MAX_LINE = 64 * 1024 * 1024
 MAX_FILE = 32 * 1024 * 1024
 MAX_JOURNAL = 1024 * 1024
 SAFE = 9007199254740991
-PHASES = ("carrier_pending", "activated", "ready")
+PHASES = ("carrier_pending", "activated", "ready", "catalogued", "listed")
+MAX_CATALOG = 131072
+MAX_HISTORY = 64 * 1024 * 1024
+CATALOG = "catalog"
 INCARNATION = "operator-incarnation"
 HISTORY = "operator-journal-history.jsonl"
 
@@ -146,8 +151,10 @@ def artifact_record(a):
         return False
     if a["kind"] == "manifest":
         return a["op_id"] is None and a["replica"] is None and a["review"] is None
-    if a["kind"] not in ("log", "reference") or not op_id(a["op_id"]) or type(a["replica"]) is not str:
+    if a["kind"] not in ("log", "reference", "catalog") or not op_id(a["op_id"]) or type(a["replica"]) is not str:
         return False
+    if a["kind"] == "catalog":
+        return a["review"] is None and a["replica"] != ""
     if a["kind"] == "reference":
         return a["review"] is None
     r = a["review"]
@@ -207,6 +214,14 @@ def record(raw):
             or not all(artifact_record(a) for a in r["artifacts"])
             or len({a["path"] for a in r["artifacts"]}) != len(r["artifacts"])
             or not service_record(r["service"])):
+        refuse("corrupt_operator_journal")
+    # A catalog artifact exists exactly in the catalogued and listed phases, and
+    # then the record's head is that artifact's catalog id.
+    catalogs = [a for a in r["artifacts"] if a["kind"] == "catalog"]
+    if r["phase"] in ("catalogued", "listed"):
+        if len(catalogs) != 1 or r["catalog_head"] != catalogs[0]["op_id"]:
+            refuse("corrupt_operator_journal")
+    elif catalogs:
         refuse("corrupt_operator_journal")
     return r
 
@@ -335,23 +350,99 @@ def history(root, old):
     sync_dir(root)
 
 
-def commit(root, old, raw, activation=False, ready=False):
+def catalog_path(root, sha):
+    return os.path.join(root, CATALOG, sha + ".json")
+
+
+def catalog_paths(root, r):
+    """A catalog artifact's path is derived from its digest, never supplied."""
+    for a in r["artifacts"]:
+        if a["kind"] == "catalog" and a["path"] != catalog_path(root, a["sha256"]):
+            refuse("malformed_operator_plan")
+
+
+def store_names(root):
+    """Final envelope digests in catalog/ (none if it is absent); temps are
+    skipped and any other name is corruption."""
+    path = os.path.join(root, CATALOG)
+    try:
+        names = os.listdir(path)
+    except FileNotFoundError:
+        return [], []
+    finals, temps = [], []
+    for name in names:
+        if re.fullmatch(r"[0-9a-f]{64}\.json", name):
+            finals.append(name[:-5])
+        elif re.fullmatch(r"\.tmp\.[0-9a-f]{32}", name):
+            temps.append(name)
+        else:
+            refuse("catalog_store_corrupt")
+    return finals, temps
+
+
+def history_records(root):
+    """Complete history lines, newest first. A line that is not a record is
+    skipped here; the BEAM verifies history strictly."""
+    path = os.path.join(root, HISTORY)
+    try:
+        if os.lstat(path).st_size > MAX_HISTORY:
+            refuse("catalog_store_corrupt")
+        raw = file_bytes(path, MAX_HISTORY, missing=True, private=True)
+    except FileNotFoundError:
+        return []
+    except OSError:
+        refuse("unsafe_operator_file")
+    if raw is None:
+        return []
+    result = []
+    for text in reversed(raw.split(b"\n")[:-1]):
+        try:
+            result.append(record(text.decode("utf-8")))
+        except (Refusal, UnicodeError):
+            continue
+    return result
+
+
+def catalog_receipts(root, old):
+    """Committed head (the newest catalog artifact, journal then history) and
+    every receipt digest in either."""
+    head, shas = None, set()
+    for r in ([] if old is None else [record(old)]) + history_records(root):
+        for a in r["artifacts"]:
+            if a["kind"] == "catalog":
+                shas.add(a["sha256"])
+                head = head or a["op_id"]
+    return head, shas
+
+
+def stage_head(root, old, next_record):
+    head, shas = catalog_receipts(root, old)
+    if head != next_record["catalog_head"] or set(store_names(root)[0]) - shas:
+        refuse("stale_catalog_head")
+
+
+def commit(root, old, raw, writes=None):
+    """`writes` names the one phase the calling plan may record; None is the
+    journal and stage plans, which only record carrier_pending."""
     next_record = record(raw)
-    # Only activate() may write an activated record and only ready() a ready
-    # one, each after its own checks; an ordinary plan can neither create a
+    # Only activate() may write an activated record, ready() a ready one, and
+    # so on, each after its own checks; an ordinary plan can neither create a
     # phase nor move an attempt's phase.
-    if ready:
-        if activation or old is None or next_record["phase"] != "ready":
+    if writes is None:
+        if next_record["phase"] != "carrier_pending":
             refuse("stale_operator_intent")
-    elif not activation and next_record["phase"] != "carrier_pending":
+    elif next_record["phase"] != writes or (writes != "activated" and old is None):
         refuse("stale_operator_intent")
-    if old is not None and not activation and not ready:
+    if old is not None and writes is None:
         old_record = record(old)
         if old_record["attempt"] == next_record["attempt"] and old_record != next_record:
             refuse("stale_operator_intent")
+    catalog_paths(root, next_record)
     expected(root, old)
     current_service(next_record["service"])
     apart(root, next_record["service"]["identity_file"])
+    if writes is None:
+        stage_head(root, old, next_record)
     # Exclusive temp is deliberately preserved on failure; never guess that an orphan is disposable.
     temporary = os.path.join(root, "operator-journal.json.tmp." + os.urandom(16).hex())
     retain(temporary, raw.encode())
@@ -441,7 +532,7 @@ def activate(root, plan):
         durable(target)
     else:
         refuse("stale_operator_intent")
-    commit(root, plan["expected"], plan["record"], activation=True)
+    commit(root, plan["expected"], plan["record"], writes="activated")
     reply({"ok": True})
 
 
@@ -468,7 +559,15 @@ def ready(root, plan):
     # incarnation is never recorded.
     if file_bytes(os.path.join(root, INCARNATION), 64, missing=True, private=True) != plan["incarnation"].encode():
         refuse("stale_operator_incarnation")
-    target = checks[0]["path"]
+    unchanged(root, plan, old, manifests[0])
+    commit(root, plan["expected"], plan["record"], writes="ready")
+    reply({"ok": True})
+
+
+def unchanged(root, plan, old, manifest):
+    """The checked manifest is no owner file, the journal is still `expected`
+    and the active bytes are still the manifest artifact."""
+    target = plan["checks"][0]["path"]
     if target in reserved(root, old):
         refuse("unsafe_operator_file")
     expected(root, plan["expected"])
@@ -478,9 +577,109 @@ def ready(root, plan):
         refuse("stale_operator_intent")
     except OSError:
         refuse("unsafe_operator_file")
-    if present != manifests[0]["sha256"]:
+    if present != manifest["sha256"]:
         refuse("stale_operator_intent")
-    commit(root, plan["expected"], plan["record"], ready=True)
+
+
+def promoted(plan):
+    """Shared start of the catalogued and listed plans: shape and the one manifest
+    artifact of the old record."""
+    checks = plan["checks"]
+    if (type(plan["expected"]) is not str or type(plan["record"]) is not str
+            or not op_id(plan["attempt"]) or not hex_id(plan["incarnation"]) or not one_check(checks)):
+        refuse("malformed_operator_plan")
+    old = record(plan["expected"])
+    manifests = [a for a in old["artifacts"] if a["kind"] == "manifest"]
+    if len(manifests) != 1:
+        refuse("corrupt_operator_journal")
+    return old, manifests[0]
+
+
+def catalogued(root, plan):
+    """Store the one signed catalog envelope the BEAM checked, under catalog/
+    at a name derived from its digest, then record it. The owner binds bytes
+    to digest only; the BEAM verified the signature. A retry after a crash
+    between the store write and the commit finds the same bytes and commits."""
+    arts = plan["artifacts"]
+    if type(arts) is not list or len(arts) != 1 or not closed(arts[0], ["sha256", "bytes"]) \
+            or not hex_id(arts[0]["sha256"]):
+        refuse("malformed_operator_plan")
+    old, manifest = promoted(plan)
+    envelope = binary(arts[0]["bytes"])
+    sha = arts[0]["sha256"]
+    if digest(envelope) != sha or len(envelope) > MAX_CATALOG:
+        refuse("malformed_operator_plan")
+    new = record(plan["record"])
+    found = [a for a in new["artifacts"] if a["kind"] == "catalog"]
+    if len(found) == 1 and found[0]["sha256"] == sha and found[0]["path"] != catalog_path(root, sha):
+        refuse("malformed_operator_plan")
+    if (old["phase"] != "ready" or old["attempt"] != plan["attempt"] or len(found) != 1
+            or found[0]["sha256"] != sha
+            or new != dict(old, phase="catalogued", catalog_head=found[0]["op_id"],
+                           artifacts=old["artifacts"] + found)
+            or plan["checks"][0]["sha256"] != manifest["sha256"]):
+        refuse("stale_operator_intent")
+    if file_bytes(os.path.join(root, INCARNATION), 64, missing=True, private=True) != plan["incarnation"].encode():
+        refuse("stale_operator_incarnation")
+    unchanged(root, plan, old, manifest)
+    store = os.path.join(root, CATALOG)
+    try:
+        os.mkdir(store, 0o700)
+        sync_dir(root)
+    except FileExistsError:
+        pass
+    directory(store)
+    st = os.lstat(store)
+    if st.st_uid != os.geteuid() or st.st_mode & 0o077:
+        refuse("unsafe_operator_directory")
+    _, temps = store_names(root)
+    for name in temps:
+        os.unlink(os.path.join(store, name))
+    if temps:
+        sync_dir(store)
+    final = catalog_path(root, sha)
+    temporary = os.path.join(store, ".tmp." + os.urandom(16).hex())
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(envelope)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, final)
+        except FileExistsError:
+            if file_bytes(final, MAX_CATALOG, private=True) != envelope:
+                refuse("immutable_artifact_conflict")
+    finally:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+    sync_dir(store)
+    if file_bytes(final, MAX_CATALOG, private=True) != envelope:
+        refuse("immutable_artifact_conflict")
+    expected(root, plan["expected"])
+    commit(root, plan["expected"], plan["record"], writes="catalogued")
+    reply({"ok": True})
+
+
+def listed(root, plan):
+    """Record the BEAM's receipt that the catalogued entry is served, after
+    checking under the lock that the stored envelope is unchanged."""
+    if plan["artifacts"] is not None:
+        refuse("malformed_operator_plan")
+    old, manifest = promoted(plan)
+    if (old["phase"] != "catalogued" or old["attempt"] != plan["attempt"]
+            or record(plan["record"]) != dict(old, phase="listed")
+            or plan["checks"][0]["sha256"] != manifest["sha256"]):
+        refuse("stale_operator_intent")
+    if file_bytes(os.path.join(root, INCARNATION), 64, missing=True, private=True) != plan["incarnation"].encode():
+        refuse("stale_operator_incarnation")
+    unchanged(root, plan, old, manifest)
+    for a in old["artifacts"]:
+        if a["kind"] == "catalog":
+            staged(a)
+    commit(root, plan["expected"], plan["record"], writes="listed")
     reply({"ok": True})
 
 
@@ -540,10 +739,10 @@ def boot(root, plan):
             activated = raw.replace(pending, '"phase":"activated"')
             if record(activated) != dict(old, phase="activated"):
                 refuse("corrupt_operator_journal")
-            commit(root, raw, activated, activation=True)
+            commit(root, raw, activated, writes="activated")
         elif old["phase"] == "activated" and present == old["manifest_digest"] != candidate:
             refuse("stale_operator_intent")
-        elif old["phase"] == "ready" and present != candidate:
+        elif old["phase"] in ("ready", "catalogued", "listed") and present != candidate:
             # Ready describes the activated bytes; a restart does not undo
             # them, but any other active bytes contradict the record.
             refuse("stale_operator_intent")
@@ -594,7 +793,12 @@ def apart(root, path):
         st = os.stat(path)
     except OSError:
         return
-    for name in own:
+    store = os.path.join(root, CATALOG)
+    try:
+        listing = [os.path.join(store, n) for n in os.listdir(store)]
+    except OSError:
+        listing = []
+    for name in list(own) + [store] + listing:
         try:
             other = os.stat(name)
         except OSError:
@@ -603,17 +807,28 @@ def apart(root, path):
             refuse("operator_path_collision")
 
 
+class Reserved(set):
+    """Exact owner files plus everything at or under catalog/."""
+    def __init__(self, items, root):
+        super().__init__(items)
+        self.store = os.path.join(root, CATALOG)
+
+    def __contains__(self, path):
+        return (set.__contains__(self, path) or path == self.store
+                or (type(path) is str and path.startswith(self.store + os.sep)))
+
+
 def reserved(root, r):
     """Paths activation must never replace: the lock it holds, the journal it
     commits and its history, the boot incarnation marker it checks and the
     staged artifacts it rechecks."""
-    return reserved_files(root) | {a["path"] for a in r["artifacts"]}
+    return Reserved(reserved_files(root) | {a["path"] for a in r["artifacts"]}, root)
 
 
 def reserved_files(root):
     """The operator's own files under its root."""
-    return {os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json"),
-            os.path.join(root, INCARNATION), os.path.join(root, HISTORY)}
+    return Reserved({os.path.join(root, "operator.lock"), os.path.join(root, "operator-journal.json"),
+                     os.path.join(root, INCARNATION), os.path.join(root, HISTORY)}, root)
 
 
 def durable(path):
@@ -687,10 +902,10 @@ def execute(root, plan):
             refuse("malformed_operator_plan")
         activate(root, plan)
         return
-    if plan["kind"] == "ready":
+    if plan["kind"] in ("ready", "catalogued", "listed"):
         if plan["record"] is None:
             refuse("malformed_operator_plan")
-        ready(root, plan)
+        {"ready": ready, "catalogued": catalogued, "listed": listed}[plan["kind"]](root, plan)
         return
     if plan["incarnation"] is not None:
         refuse("malformed_operator_plan")

@@ -1,0 +1,325 @@
+defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
+  # Pure reads, so this runs on every host. Envelopes are built inline; the
+  # lattice_core vector module is not on this app's test path.
+  use ExUnit.Case, async: false
+  alias Lattice.Carrier.Wire
+  alias Lattice.Identity
+  alias LatticeCarrierServer.Operator.{CatalogStore, Journal}
+  alias Treehouse.TransportCatalog
+
+  setup do
+    root = Path.expand(".catalog-store-test-#{System.unique_integer([:positive])}", File.cwd!())
+    File.mkdir!(root)
+    File.chmod!(root, 0o700)
+    on_exit(fn -> File.rm_rf!(root) end)
+    {:ok, root: root}
+  end
+
+  defp id(tag), do: Base.url_encode64(:crypto.hash(:sha256, tag), padding: false)
+  defp signer(tag \\ "catalog"), do: Identity.from_seed("catalog", "store-test-" <> tag)
+
+  # One envelope: `previous` is the prior envelope or nil; `variant` changes
+  # the bytes so two envelopes can share a previous.
+  defp envelope(revision, previous, variant \\ "a", signer \\ signer()) do
+    catalog = %{
+      version: 1,
+      product: :treehouse,
+      space: "replica:treehouse:space:store-test",
+      bootstrap: id("bootstrap"),
+      binding: id("binding"),
+      revision: revision,
+      previous: previous && previous.id,
+      entries: [
+        %{
+          product: :treehouse,
+          replica: "replica:treehouse:space:store-test",
+          kind: :space,
+          schema: :treehouse_space_v1,
+          root: :crypto.hash(:sha256, "root"),
+          genesis: id("genesis"),
+          creation: id("creation"),
+          reference: id("bootstrap"),
+          route: "/r/" <> id("route-" <> variant),
+          service_id: id("service"),
+          service_key: :crypto.hash(:sha256, "service-key")
+        }
+      ]
+    }
+
+    signed = %{
+      catalog: catalog,
+      signature: Identity.sign(signer, TransportCatalog.catalog_bytes(catalog))
+    }
+
+    bytes = Jason.encode!(Wire.encode_value(signed))
+    {:ok, ^signed} = TransportCatalog.decode_catalog_json(bytes)
+
+    %{
+      id: TransportCatalog.catalog_id(catalog),
+      bytes: bytes,
+      sha256: Journal.digest(bytes),
+      revision: revision
+    }
+  end
+
+  defp store(root, envelopes) do
+    dir = CatalogStore.path(root)
+    File.mkdir_p!(dir)
+    File.chmod!(dir, 0o700)
+    for e <- envelopes, do: put(root, e.sha256 <> ".json", e.bytes)
+  end
+
+  defp put(root, name, bytes) do
+    file = Path.join(CatalogStore.path(root), name)
+    File.write!(file, bytes)
+    File.chmod!(file, 0o600)
+    file
+  end
+
+  defp record(root, phase, envelopes) do
+    artifacts =
+      for e <- envelopes do
+        %{
+          "path" => CatalogStore.file_path(root, e.sha256),
+          "sha256" => e.sha256,
+          "kind" => "catalog",
+          "replica" => "replica:treehouse:space:store-test",
+          "op_id" => e.id,
+          "review" => nil
+        }
+      end
+
+    identity = Path.join(root, "service.identity")
+
+    %{
+      "version" => 1,
+      "phase" => phase,
+      "attempt" => id("attempt"),
+      "generation" => 1,
+      "catalog_head" => envelopes |> List.last() |> then(&(&1 && &1.id)),
+      "manifest_digest" => Journal.digest("manifest"),
+      "artifacts" => [
+        %{
+          "path" => Path.join(root, "manifest"),
+          "sha256" => Journal.digest("manifest"),
+          "kind" => "manifest",
+          "replica" => nil,
+          "op_id" => nil,
+          "review" => nil
+        }
+        | artifacts
+      ],
+      "service" => %{
+        "identity_file" => identity,
+        "realm" => "service",
+        "pub" => Base.encode64(:crypto.hash(:sha256, "pub")),
+        "sha256" => Journal.digest("identity")
+      }
+    }
+  end
+
+  defp journal(root, phase, envelopes) do
+    file = Journal.path(root)
+    File.write!(file, Journal.encode(record(root, phase, envelopes)))
+    File.chmod!(file, 0o600)
+  end
+
+  defp history(root, lines) do
+    File.write!(Journal.history_path(root), Enum.map_join(lines, &(&1 <> "\n")))
+  end
+
+  test "an absent or empty store is empty", %{root: root} do
+    assert {:ok, %{head: nil, head_revision: nil, pending: nil, envelopes: envelopes}} =
+             CatalogStore.verify(root, nil)
+
+    assert envelopes == %{}
+    File.mkdir!(CatalogStore.path(root))
+    File.chmod!(CatalogStore.path(root), 0o700)
+    assert {:ok, %{head: nil, pending: nil}} = CatalogStore.verify(root, signer().pub)
+    assert {:ok, nil} = CatalogStore.committed_head(root)
+  end
+
+  test "a chain of revision 0 and 1 with receipts reports the head", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [zero, one])
+    history(root, [Journal.encode(record(root, "catalogued", [zero]))])
+    journal(root, "catalogued", [one])
+
+    assert {:ok, result} = CatalogStore.verify(root, signer().pub)
+    assert result.head == one.id and result.head_revision == 1 and result.pending == nil
+
+    assert result.envelopes == %{
+             zero.id => %{sha256: zero.sha256, revision: 0, previous: nil},
+             one.id => %{sha256: one.sha256, revision: 1, previous: zero.id}
+           }
+
+    assert {:ok, one.id} == CatalogStore.committed_head(root)
+  end
+
+  test "a killed temp write leaves the store readable", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero])
+    put(root, ".tmp." <> String.duplicate("a", 32), "partial")
+    journal(root, "catalogued", [zero])
+
+    assert {:ok, %{head: head, pending: nil}} = CatalogStore.verify(root, nil)
+    assert head == zero.id
+  end
+
+  test "an envelope without a receipt is pending", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [zero, one])
+    journal(root, "catalogued", [zero])
+
+    assert {:ok, %{head: head, pending: pending}} = CatalogStore.verify(root, nil)
+    assert head == zero.id
+    assert pending == %{id: one.id, sha256: one.sha256, revision: 1}
+  end
+
+  test "with no receipt the first envelope is pending", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero])
+
+    assert {:ok, %{head: nil, pending: %{id: id, revision: 0}}} = CatalogStore.verify(root, nil)
+    assert id == zero.id
+  end
+
+  test "a deleted tail envelope with a receipt is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [zero])
+    journal(root, "catalogued", [one])
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a history receipt for a missing envelope is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [one])
+    history(root, [Journal.encode(record(root, "catalogued", [zero]))])
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "two envelopes on one previous are a fork", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero, envelope(1, zero, "a"), envelope(1, zero, "b")])
+
+    assert {:error, :catalog_fork} = CatalogStore.verify(root, nil)
+  end
+
+  test "two revision 0 envelopes are a fork", %{root: root} do
+    store(root, [envelope(0, nil, "a"), envelope(0, nil, "b")])
+
+    assert {:error, :catalog_fork} = CatalogStore.verify(root, nil)
+  end
+
+  test "a gap in the chain is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [zero, envelope(2, one)])
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a chain without revision 0 is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [envelope(1, zero)])
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a bad signature is corrupt with a key and accepted without one", %{root: root} do
+    store(root, [envelope(0, nil, "a", signer("other"))])
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, signer().pub)
+    assert {:ok, %{pending: %{revision: 0}}} = CatalogStore.verify(root, nil)
+  end
+
+  test "two envelopes past the head are a fork", %{root: root} do
+    zero = envelope(0, nil)
+    one = envelope(1, zero)
+    store(root, [zero, one, envelope(2, one)])
+    journal(root, "catalogued", [zero])
+
+    assert {:error, :catalog_fork} = CatalogStore.verify(root, nil)
+  end
+
+  test "a torn history tail is ignored", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero])
+    line = Journal.encode(record(root, "catalogued", [zero]))
+    File.write!(Journal.history_path(root), line <> "\n" <> binary_part(line, 0, 40))
+
+    assert {:ok, %{head: head}} = CatalogStore.verify(root, nil)
+    assert head == zero.id
+  end
+
+  test "a complete history line that does not decode is corrupt", %{root: root} do
+    File.write!(Journal.history_path(root), "not a journal\n")
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "an unknown file name is corrupt", %{root: root} do
+    store(root, [envelope(0, nil)])
+    put(root, "notes.txt", "x")
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a file whose bytes do not match its name is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [])
+    put(root, Journal.digest("other") <> ".json", zero.bytes)
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a readable envelope or store directory is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    [file] = store(root, [zero])
+    File.chmod!(file, 0o644)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+
+    File.chmod!(file, 0o600)
+    File.chmod!(CatalogStore.path(root), 0o755)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a hard-linked envelope is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    [file] = store(root, [zero])
+    :ok = File.ln(file, Path.join(root, "alias"))
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a receipt naming other file bytes is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero])
+    journal(root, "catalogued", [%{zero | sha256: Journal.digest("other")}])
+
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "the journal refuses a catalog artifact outside the store path", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero])
+    journal(root, "catalogued", [zero])
+    assert {:ok, _} = Journal.read(root)
+
+    record = record(root, "catalogued", [zero])
+
+    moved =
+      update_in(record, ["artifacts", Access.at(1), "path"], fn _ ->
+        Path.join(root, "#{zero.sha256}.json")
+      end)
+
+    File.write!(Journal.path(root), Journal.encode(moved))
+    assert {:error, :corrupt_operator_journal} = Journal.read(root)
+  end
+end

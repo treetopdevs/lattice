@@ -16,7 +16,7 @@ defmodule LatticeCarrierServer.Runtime do
   alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Health, Holder, Manifest}
 
-  alias LatticeCarrierServer.Operator.{Lock, ReleaseGate}
+  alias LatticeCarrierServer.Operator.{CatalogStore, Journal, Lock, ReleaseGate}
 
   @deployment_key {__MODULE__, :deployment}
   @instance_names_key {__MODULE__, :instance_names}
@@ -118,9 +118,39 @@ defmodule LatticeCarrierServer.Runtime do
     loaded = Base.encode16(digest, case: :lower)
 
     with :ok <- apart_from_operator(root, path),
-         {:ok, incarnation} <- boot_lock(root, Path.expand(path), loaded, @boot_busy_attempts) do
+         {:ok, incarnation} <- boot_lock(root, Path.expand(path), loaded, @boot_busy_attempts),
+         :ok <- catalog_guard(root) do
       {:ok, %{operator_root: root, incarnation: incarnation}}
     end
+  end
+
+  # Once any journal record carries a catalog receipt, the store must still
+  # hold every receipted envelope in one chain before routes start. Signatures
+  # are not checked here: boot has no catalog binding key.
+  defp catalog_guard(root) do
+    if catalog_receipts?(root) do
+      case CatalogStore.verify(root, nil) do
+        {:ok, _} ->
+          :ok
+
+        {:error, reason} when reason in [:catalog_store_corrupt, :catalog_fork] ->
+          {:error, reason}
+
+        {:error, _} ->
+          {:error, :catalog_store_corrupt}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp catalog_receipts?(root) do
+    Enum.any?([Journal.path(root), Journal.history_path(root)], fn file ->
+      case File.read(file) do
+        {:ok, raw} -> String.contains?(raw, ~s("kind":"catalog"))
+        {:error, _} -> false
+      end
+    end)
   end
 
   # The boot replaces the incarnation marker, so no deployment file may be, or
@@ -131,15 +161,29 @@ defmodule LatticeCarrierServer.Runtime do
       ~w(operator.lock operator-journal.json operator-journal-history.jsonl operator-incarnation)
       |> Enum.map(&Path.join(root, &1))
 
-    reserved_inodes = for file <- reserved, inode = inode(file), do: inode
+    store = CatalogStore.path(root)
+    store_files = for name <- list_store(store), do: Path.join(store, name)
+    reserved_inodes = for file <- reserved ++ store_files, inode = inode(file), do: inode
 
     deployed =
       [path | Enum.flat_map(deployment().instances, &[&1.identity_file, &1.log_file])]
       |> Enum.map(&Path.expand/1)
 
-    if Enum.any?(deployed, &(&1 in reserved or inode(&1) in reserved_inodes)),
-      do: {:error, :operator_path_collision},
-      else: :ok
+    if Enum.any?(
+         deployed,
+         &(&1 in reserved or in_store?(&1, store) or inode(&1) in reserved_inodes)
+       ),
+       do: {:error, :operator_path_collision},
+       else: :ok
+  end
+
+  defp in_store?(path, store), do: path == store or String.starts_with?(path, store <> "/")
+
+  defp list_store(store) do
+    case File.ls(store) do
+      {:ok, names} -> names
+      {:error, _} -> []
+    end
   end
 
   defp inode(path) do

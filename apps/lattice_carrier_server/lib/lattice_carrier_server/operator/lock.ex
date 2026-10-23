@@ -49,6 +49,35 @@ defmodule LatticeCarrierServer.Operator.Lock do
   end
 
   @doc """
+  Record the `ready` journal as `catalogued`: the owner writes the signed
+  catalog envelope into its store, then commits `record`, only while
+  `active_manifest` still holds the activated bytes and `incarnation` is current.
+  """
+  @spec catalogued(Path.t(), binary(), map(), binary(), String.t(), binary()) ::
+          :ok | {:error, term()}
+  def catalogued(root, expected, active_manifest, record, incarnation, envelope_bytes) do
+    with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected) do
+      artifacts = [
+        %{sha256: Journal.digest(envelope_bytes), bytes: Base.encode64(envelope_bytes)}
+      ]
+
+      plan = plan("catalogued", expected, record, attempt, [active_manifest], artifacts)
+      run(root, %{plan | incarnation: incarnation}, nil)
+    end
+  end
+
+  @doc """
+  Record the `catalogued` journal as `listed`, with the same checks as `ready`.
+  """
+  @spec listed(Path.t(), binary(), map(), binary(), String.t()) :: :ok | {:error, term()}
+  def listed(root, expected, active_manifest, record, incarnation) do
+    with {:ok, %{"attempt" => attempt}} <- Journal.decode(expected) do
+      plan = plan("listed", expected, record, attempt, [active_manifest], nil)
+      run(root, %{plan | incarnation: incarnation}, nil)
+    end
+  end
+
+  @doc """
   The controlled boot's step under the operator lock, after the manifest at
   `manifest_path` was loaded with lowercase-hex digest `loaded` and before any
   route starts: refuses while another plan holds the lock, reconciles the
