@@ -438,7 +438,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>OD-2</dt><dd>(b) The catalog is prepared on the carrier host, signed on the custodian machine with a new <code>sign-catalog</code> command, and committed on the host. The signer never reaches the network-facing host.</dd>
 <dt>OD-3</dt><dd>(a) A guarded in-holder operator courier writes exactly the staged reference frame into the served Space log. This lifts plan 223's auth STOP for that one frame only, and the binding itself is never couriered.</dd>
 <dt>OD-4</dt><dd>(a) Clients receive the catalog as an operator-exported evidence page file that the root's app imports and fully verifies. There is no wire change.</dd>
-<dt>OD-5</dt><dd>(a) A reviewed staging decision sets each instance's <code>relay_realms</code> to exactly its current member realms, required before <code>catalogued</code>, which honours C07.</dd>
+<dt>OD-5</dt><dd>(a) A reviewed staging decision sets each instance's <code>relay_realms</code> to exactly its current roster member realms plus the child root for its own Thread (plan 224 Design 2), required before <code>catalogued</code>, which honours C07.</dd>
 </dl>
 </article>
 
@@ -447,7 +447,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dl>
 <dt>When</dt><dd>2026-10-23, after #155 merged</dd>
 <dt>Rows</dt><dd>Rows 239 to 243 are DONE as decided in D-39. Row 250 holds CodeRabbit's deferred <code>mtime</code> hardening from #155. It needs same-uid write access in the 0700 ceremony directory, so it is not a forged-data path.</dd>
-<dt>State</dt><dd>Plan 224 PR 1 (ingress) is merged. PR 3 (journal and store) is running as slice 20. PR 2 is unblocked by OD-1 and OD-5. PRs 4 and 5 still wait on the operator's ceremony report.</dd>
+<dt>State</dt><dd>Plan 224 PR 1 (ingress) is merged. PR 3 (journal and store) is running as slice 20. PR 2 is unblocked by OD-1 and OD-5, and this ledger updates plan 224 and row 224 to say so. PRs 4 and 5 still wait on the operator's ceremony report.</dd>
 <dt>Record</dt><dd>The coordinator's uncommitted copy of D-37 to D-39 was lost when its scratchpad was cleared while idle. These entries were rebuilt from the session transcript, so the coordinator now commits ledgers sooner.</dd>
 </dl>
 </article>
