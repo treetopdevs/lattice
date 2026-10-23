@@ -5,8 +5,10 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
   """
   use ExUnit.Case, async: false
   if :os.type() != {:unix, :linux}, do: @moduletag(skip: "Requires actual Linux OS lock")
-  alias Lattice.{Authority, Log}
-  alias LatticeCarrierServer.Operator.{CatalogBinding, Fixture, Journal, Staging}
+  alias Lattice.{Authority, Identity, Log, Sim}
+  alias Lattice.Carrier.Wire
+  alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogStore, Fixture, Journal, Staging}
+  alias Treehouse.TransportCatalog
 
   setup do
     {:ok, data} = Fixture.new()
@@ -131,6 +133,74 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
     )
   end
 
+  # A second realm whose key duplicates a roster member's collapses in the
+  # set comparison; relaying for it must still refuse.
+  defp alias_peer(m) do
+    [%{"pubkey" => member} | _] = m["trusted_peers"]
+
+    m
+    |> Map.update!("trusted_peers", &(&1 ++ [%{"realm" => "alias", "pubkey" => member}]))
+    |> Map.update!("relay_realms", &(&1 ++ ["alias"]))
+  end
+
+  test "an admitted realm aliasing a member's key refuses, even when relayed for", f do
+    refuses(f, mutate(f, child(&alias_peer/1)), :invalid_candidate_manifest)
+  end
+
+  test "a Space realm aliasing a member's key refuses, even when relayed for", f do
+    refuses(f, mutate(f, space(&alias_peer/1)), :invalid_candidate_manifest)
+  end
+
+  # Row 248(a): the service key is refused as the root of any served Thread,
+  # not only the admitted child's. The served Thread trusts the Space's peers,
+  # so only the authority-root inventory can catch the reuse.
+  test "a served Thread rooted at the service key refuses", f do
+    {request, served} = with_served_thread(f)
+    artifacts = mutate(f, &Map.update!(&1, "instances", fn [a, b] -> [a, served, b] end))
+
+    assert {:error, :service_binding_mismatch} =
+             Staging.prepare(f.root, nil, request, artifacts, f.ceremony_dir)
+
+    assert {:ok, nil} = Journal.read(f.root)
+  end
+
+  describe "a Space replica already in a committed catalog" do
+    test "keeps its catalogued route and stages", f do
+      {request, expected} = committed(f, f.space_route)
+
+      assert {:ok, record} =
+               Staging.prepare(f.root, expected, request, f.artifacts, f.ceremony_dir)
+
+      assert record["catalog_head"] == request.catalog_head
+    end
+
+    test "may not change its route", f do
+      {request, expected} = committed(f, f.space_route)
+      moved = "/r/" <> Base.url_encode64(:crypto.hash(:sha256, "moved"), padding: false)
+
+      assert {:error, :catalog_route_changed} =
+               Staging.prepare(
+                 f.root,
+                 expected,
+                 request,
+                 mutate(f, space(&Map.put(&1, "route", moved))),
+                 f.ceremony_dir
+               )
+
+      assert {:ok, ^expected} = Journal.read(f.root)
+    end
+
+    test "already catalogued under another route refuses the active route", f do
+      moved = "/r/" <> Base.url_encode64(:crypto.hash(:sha256, "moved"), padding: false)
+      {request, expected} = committed(f, moved)
+
+      assert {:error, :catalog_route_changed} =
+               Staging.prepare(f.root, expected, request, f.artifacts, f.ceremony_dir)
+
+      assert {:ok, ^expected} = Journal.read(f.root)
+    end
+  end
+
   test "a reference naming a Space no instance serves refuses", f do
     artifacts =
       Enum.map(f.artifacts, fn
@@ -248,6 +318,133 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
 
       assert {:ok, nil} = Journal.read(f.root)
     end
+  end
+
+  # Commits one catalog envelope cataloguing the Space replica under `route`:
+  # the envelope in the store and a `listed` journal of an earlier attempt
+  # whose receipt names it. Returns the request at that head and the journal.
+  defp committed(f, route) do
+    id = &Base.url_encode64(:crypto.hash(:sha256, &1), padding: false)
+
+    catalog = %{
+      version: 1,
+      product: :treehouse,
+      space: f.space.replica,
+      bootstrap: id.("bootstrap"),
+      binding: id.("binding"),
+      revision: 0,
+      previous: nil,
+      entries: [
+        %{
+          product: :treehouse,
+          replica: f.space.replica,
+          kind: :space,
+          schema: :treehouse_space_v1,
+          root: :crypto.hash(:sha256, "root"),
+          genesis: id.("genesis"),
+          creation: id.("creation"),
+          reference: id.("bootstrap"),
+          route: route,
+          service_id: id.("service"),
+          service_key: f.service_pub
+        }
+      ]
+    }
+
+    signer = Identity.from_seed("catalog", "staging-test")
+
+    bytes =
+      Jason.encode!(
+        Wire.encode_value(%{
+          catalog: catalog,
+          signature: Identity.sign(signer, TransportCatalog.catalog_bytes(catalog))
+        })
+      )
+
+    sha = Journal.digest(bytes)
+    head = TransportCatalog.catalog_id(catalog)
+    File.mkdir_p!(CatalogStore.path(f.root))
+    File.chmod!(CatalogStore.path(f.root), 0o700)
+    File.write!(CatalogStore.file_path(f.root, sha), bytes)
+    File.chmod!(CatalogStore.file_path(f.root, sha), 0o600)
+
+    raw =
+      Journal.encode(%{
+        "version" => 1,
+        "phase" => "listed",
+        "attempt" => id.("earlier-attempt"),
+        "generation" => 0,
+        "catalog_head" => head,
+        "manifest_digest" => f.request.manifest_digest,
+        "artifacts" => [
+          %{
+            "path" => Path.join(f.root, "earlier-manifest"),
+            "sha256" => f.request.manifest_digest,
+            "kind" => "manifest",
+            "replica" => nil,
+            "op_id" => nil,
+            "review" => nil
+          },
+          %{
+            "path" => CatalogStore.file_path(f.root, sha),
+            "sha256" => sha,
+            "kind" => "catalog",
+            "replica" => f.space.replica,
+            "op_id" => head,
+            "review" => nil
+          }
+        ],
+        "service" => %{
+          "identity_file" => f.service_identity,
+          "realm" => f.binding_realm,
+          "pub" => Base.encode64(f.service_pub),
+          "sha256" => Journal.digest(File.read!(f.service_identity))
+        }
+      })
+
+    File.write!(Journal.path(f.root), raw)
+    File.chmod!(Journal.path(f.root), 0o600)
+    assert {:ok, ^head} = CatalogStore.committed_head(f.root)
+    {%{f.request | catalog_head: head}, raw}
+  end
+
+  # Adds to the active manifest a bound Treehouse Thread instance whose log is
+  # rooted at the carrier service key. Returns the request over that manifest
+  # and the instance JSON for the candidate.
+  defp with_served_thread(f) do
+    replica =
+      "replica:treehouse:thread:" <>
+        Treehouse.ContinuationFixtures.digest("served") <> "#authority:bounded-continuation-v1"
+
+    {thread, _genesis} =
+      Treehouse.Thread
+      |> Sim.new(replica, ["creator"], seed: "served-thread")
+      |> then(fn sim ->
+        identity = Identity.from_seed("creator", "child-service")
+        %{sim | realms: Map.put(sim.realms, "creator", identity)}
+      end)
+      |> Sim.create_replica("creator", policies: %{})
+
+    log = Path.join(f.root, "served-thread.log")
+    :ok = Log.dump(Sim.log(thread, "creator"), log)
+    assert {:ok, %{log: served}} = Log.restore_verified(log)
+    assert Authority.root(served) == f.service_pub
+
+    manifest = Jason.decode!(File.read!(f.request.active_manifest))
+    [space] = manifest["instances"]
+    route = "/r/" <> Base.url_encode64(:crypto.hash(:sha256, "served-route"), padding: false)
+    instance = %{space | "name" => "served", "log_file" => log, "route" => route}
+    path = Path.join(f.root, "with-served.json")
+    File.write!(path, Jason.encode!(%{manifest | "instances" => [space, instance]}))
+    File.chmod!(path, 0o600)
+
+    request = %{
+      f.request
+      | active_manifest: path,
+        manifest_digest: Journal.digest(File.read!(path))
+    }
+
+    {request, instance}
   end
 
   # Adds a non-Treehouse instance to the active manifest whose log is empty, so

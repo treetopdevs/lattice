@@ -15,11 +15,12 @@ defmodule LatticeCarrierServer.Operator.Staging do
   alias Lattice.Op
   alias LatticeCarrierServer.{Durability, Manifest}
   alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogStore, Journal, Lock}
+  alias Treehouse.TransportCatalog
   @max_artifact 32 * 1024 * 1024
   # Adopted founder-lifecycle witness maximum step
   # (docs/research/treehouse_founder_lifecycle.md).
   @reviewed_max_epoch_step 1
-  @bound_refusals [:service_binding_mismatch, :relay_realms_unreviewed]
+  @bound_refusals [:service_binding_mismatch, :relay_realms_unreviewed, :catalog_route_changed]
 
   @spec artifact_path(Path.t(), binary(), binary()) :: Path.t()
   def artifact_path(root, attempt, digest),
@@ -37,7 +38,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
          :ok <- Journal.secure_root(root),
          true <- request_valid?(request) and artifacts_valid?(artifacts),
          {:ok, ^expected} <- Journal.read(root),
-         :ok <- catalog_head_current(root, request.catalog_head),
+         {:ok, catalogued} <- catalog_head_current(root, request.catalog_head),
          # The parsed manifest must describe the exact bytes just digested, not
          # whatever an unrelated writer left on disk moments later. `bytes` is
          # read once, checked, and then reconfirmed unchanged around the
@@ -64,7 +65,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
       Lock.stage(root, expected, request.attempt, checks, material, fn ->
         with {:ok, binding} <- bind_ceremony(manifest.instances, artifacts, ceremony_dir),
-             {:ok, service} <- inspect_staged(retained, manifest, binding) do
+             {:ok, service} <- inspect_staged(retained, manifest, binding, catalogued) do
           {:ok,
            %{
              "version" => 1,
@@ -97,13 +98,69 @@ defmodule LatticeCarrierServer.Operator.Staging do
   end
 
   # A stage always starts from the catalog head the store has committed, with no
-  # pending envelope past it (plan 224 Design 3).
+  # pending envelope past it (plan 224 Design 3). Returns the committed routes.
   defp catalog_head_current(root, head) do
     case CatalogStore.verify(root, nil) do
-      {:ok, %{head: ^head, pending: nil}} -> :ok
+      {:ok, %{head: ^head, pending: nil} = store} -> committed_routes(root, store)
       {:ok, _} -> {:error, :stale_catalog_head}
       {:error, _} = error -> error
     end
+  end
+
+  # Every envelope at or below the verified head, read back at its digest name
+  # and required to still hold the verified bytes.
+  defp committed_routes(_root, %{head_revision: nil}), do: {:ok, %{}}
+
+  defp committed_routes(root, %{envelopes: envelopes, head_revision: head_revision}) do
+    envelopes
+    |> Enum.filter(fn {_id, e} -> e.revision <= head_revision end)
+    |> Enum.reduce_while({:ok, []}, fn {_id, e}, {:ok, acc} ->
+      with {:ok, bytes} <- File.read(CatalogStore.file_path(root, e.sha256)),
+           true <- Journal.digest(bytes) == e.sha256,
+           {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(bytes) do
+        {:cont, {:ok, [catalog | acc]}}
+      else
+        _ -> {:halt, {:error, :catalog_store_corrupt}}
+      end
+    end)
+    |> case do
+      {:ok, catalogs} -> catalog_routes(catalogs)
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc false
+  # replica => route over every entry of the committed catalogs. Entry routes
+  # are immutable, so a replica catalogued under two routes is a corrupt store.
+  @spec catalog_routes([map()]) :: {:ok, %{String.t() => String.t()}} | {:error, atom()}
+  def catalog_routes(catalogs) do
+    pairs =
+      for catalog <- catalogs,
+          entry <- catalog.entries,
+          uniq: true,
+          do: {entry.replica, entry.route}
+
+    routes = Map.new(pairs)
+
+    if map_size(routes) == length(pairs),
+      do: {:ok, routes},
+      else: {:error, :catalog_store_corrupt}
+  end
+
+  @doc false
+  # A Treehouse instance whose replica is catalogued keeps the catalogued route.
+  @spec catalog_routes_kept([map()], (map() -> String.t() | nil), map()) ::
+          :ok | {:error, :catalog_route_changed}
+  def catalog_routes_kept(instances, replica_of, routes) do
+    ok? =
+      Enum.all?(instances, fn instance ->
+        replica = replica_of.(instance)
+
+        not treehouse?(replica) or
+          Map.get(routes, replica, instance.route) == instance.route
+      end)
+
+    if ok?, do: :ok, else: {:error, :catalog_route_changed}
   end
 
   # The Space the reference names is the instance that serves its replica; the
@@ -159,8 +216,9 @@ defmodule LatticeCarrierServer.Operator.Staging do
   end
 
   @doc false
-  @spec inspect_staged([map()], Manifest.t(), map()) :: {:ok, map()} | {:error, term()}
-  def inspect_staged(retained, manifest, binding) do
+  # `catalogued` is the committed replica => route map (`catalog_routes/1`).
+  @spec inspect_staged([map()], Manifest.t(), map(), map()) :: {:ok, map()} | {:error, term()}
+  def inspect_staged(retained, manifest, binding, catalogued \\ %{}) do
     with {:ok, bundle} <- classify(retained),
          {:ok, pairs} <- active_logs(manifest.instances),
          active = Enum.map(pairs, &elem(&1, 1)),
@@ -172,7 +230,8 @@ defmodule LatticeCarrierServer.Operator.Staging do
            pairs: pairs,
            space: space,
            child_log: child_log,
-           binding: binding
+           binding: binding,
+           catalogued: catalogued
          },
          {:ok, admitted} <- verify_candidate_manifest(bundle, manifest, context),
          do: bind_service(admitted)
@@ -423,7 +482,9 @@ defmodule LatticeCarrierServer.Operator.Staging do
          # that participant's authority.
          true <-
            Base.encode64(admitted.pub) not in [Base.encode64(Authority.root(space)) | roster],
-         :ok <- check_bound(candidate.instances, bound_context(pairs, child, context), binding),
+         bound = bound_context(pairs, child, context),
+         :ok <- check_bound(candidate.instances, bound, binding),
+         :ok <- catalog_routes_kept(candidate.instances, bound.replica_of, context.catalogued),
          true <- bootstrap_peers_exact?(admitted, roster, child_log),
          true <- Enum.sort(Enum.map(child.review["grants"], & &1["recipient"])) == roster do
       {:ok, admitted}
@@ -470,7 +531,8 @@ defmodule LatticeCarrierServer.Operator.Staging do
   #   :replica_of    - fn instance -> served replica | nil
   #   :roots         - %{replica => authority root pub | nil}
   #   :roster        - sorted base64 member keys (`roster/1`)
-  #   :peer_error    - the atom for a trusted_peers set that is not {root} + roster
+  #   :peer_error    - the atom for a trusted_peers set that is not {root} + roster,
+  #                    one realm per key
   # Returns :ok or {:error, :service_binding_mismatch | context.peer_error |
   # :relay_realms_unreviewed}, in that order of precedence. An instance with no
   # known replica, or a Treehouse instance with no authority root, is a
@@ -534,14 +596,16 @@ defmodule LatticeCarrierServer.Operator.Staging do
       else: :ok
   end
 
+  # One realm per key: a second realm aliasing the root's or a member's key
+  # would collapse in the set comparison and could then be relayed for.
   defp peers_exact(treehouse, context) do
     ok? =
       Enum.all?(treehouse, fn instance ->
         root = Map.get(context.roots, context.replica_of.(instance))
+        pubs = MapSet.new(instance.trusted_peers, fn {_, pub} -> Base.encode64(pub) end)
 
-        is_binary(root) and
-          MapSet.new(instance.trusted_peers, fn {_, pub} -> Base.encode64(pub) end) ==
-            MapSet.new([Base.encode64(root) | context.roster])
+        is_binary(root) and MapSet.size(pubs) == map_size(instance.trusted_peers) and
+          pubs == MapSet.new([Base.encode64(root) | context.roster])
       end)
 
     if ok?, do: :ok, else: {:error, context.peer_error}
