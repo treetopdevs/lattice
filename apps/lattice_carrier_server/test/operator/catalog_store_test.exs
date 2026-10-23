@@ -126,6 +126,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
 
   defp history(root, lines) do
     File.write!(Journal.history_path(root), Enum.map_join(lines, &(&1 <> "\n")))
+    File.chmod!(Journal.history_path(root), 0o600)
   end
 
   test "an absent or empty store is empty", %{root: root} do
@@ -253,6 +254,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
     store(root, [zero])
     line = Journal.encode(record(root, "catalogued", [zero]))
     File.write!(Journal.history_path(root), line <> "\n" <> binary_part(line, 0, 40))
+    File.chmod!(Journal.history_path(root), 0o600)
     journal(root, "catalogued", [zero])
 
     assert {:ok, %{head: head}} = CatalogStore.verify(root, nil)
@@ -428,5 +430,39 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
 
     # Bytes that are not a catalog envelope.
     assert mismatch == Lock.catalogued(root, expected, manifest, record, "i", "junk")
+
+    # A receipt attributed to another Space.
+    elsewhere =
+      put_in(record(root, "catalogued", [zero]), ["artifacts", Access.at(1), "replica"], "other")
+
+    assert mismatch ==
+             Lock.catalogued(root, expected, manifest, Journal.encode(elsewhere), "i", zero.bytes)
+  end
+
+  test "a receipt naming another Space is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero])
+
+    elsewhere =
+      put_in(record(root, "catalogued", [zero]), ["artifacts", Access.at(1), "replica"], "other")
+
+    File.write!(Journal.path(root), Journal.encode(elsewhere))
+    File.chmod!(Journal.path(root), 0o600)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+  end
+
+  test "a history file that is not this user's private single-link file is corrupt", %{root: root} do
+    zero = envelope(0, nil)
+    store(root, [zero])
+    history(root, [Journal.encode(record(root, "catalogued", [zero]))])
+    journal(root, "catalogued", [zero])
+    assert {:ok, _} = CatalogStore.verify(root, nil)
+
+    File.chmod!(Journal.history_path(root), 0o640)
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
+
+    File.chmod!(Journal.history_path(root), 0o600)
+    File.ln!(Journal.history_path(root), Path.join(root, "history-alias"))
+    assert {:error, :catalog_store_corrupt} = CatalogStore.verify(root, nil)
   end
 end

@@ -74,9 +74,10 @@ defmodule LatticeCarrierServer.Operator.Lock do
 
     with {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(bytes),
          {:ok, decoded} <- Journal.decode(record),
-         [%{"op_id" => id, "sha256" => ^sha, "path" => path}] <-
+         [%{"op_id" => id, "sha256" => ^sha, "path" => path, "replica" => replica}] <-
            Enum.filter(decoded["artifacts"], &(&1["kind"] == "catalog")),
          true <- id == TransportCatalog.catalog_id(catalog),
+         true <- replica == catalog.space,
          true <- path == CatalogStore.file_path(root, sha) do
       :ok
     else

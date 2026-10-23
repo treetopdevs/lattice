@@ -65,6 +65,15 @@ class Protocol(unittest.TestCase):
             with self.assertRaises(owner.Refusal, msg=repr(record)) as caught:
                 owner.record(json.dumps(record))
             self.assertEqual(str(caught.exception), "corrupt_operator_journal")
+        # 128 staged artifacts plus the catalog receipt fit; 129 staged do not.
+        full = self.catalog_record()
+        full["artifacts"] = [dict(full["artifacts"][0], path="/public/m%d" % i) for i in range(128)] \
+            + full["artifacts"][-1:]
+        self.assertEqual(len(owner.record(json.dumps(full))["artifacts"]), 129)
+        over = dict(self.sample(), artifacts=[dict(self.sample()["artifacts"][0], path="/public/m%d" % i)
+                                              for i in range(129)])
+        with self.assertRaises(owner.Refusal):
+            owner.record(json.dumps(over))
         # A stage record after a listing keeps the committed head and no artifact.
         self.assertEqual(owner.record(json.dumps(dict(self.sample(), catalog_head=self.CID)))["catalog_head"],
                          self.CID)
@@ -1095,6 +1104,15 @@ class Protocol(unittest.TestCase):
         self.assertEqual(str(caught.exception), "stale_catalog_head")
         self.assertEqual((self.journal(root), self.history_bytes(root)), (journal, history))
         os.remove(os.path.join(pending, owner.digest(b"pending") + ".json"))
+        # A receipted envelope that is gone: the store is already corrupt.
+        sha = [a for a in json.loads(listed)["artifacts"] if a["kind"] == "catalog"][0]["sha256"]
+        final = os.path.join(root, "catalog", sha + ".json")
+        os.rename(final, os.path.join(root, "aside"))
+        with self.assertRaises(owner.Refusal) as caught:
+            self.run_stage(root, plan, commit)
+        self.assertEqual(str(caught.exception), "catalog_store_corrupt")
+        self.assertEqual((self.journal(root), self.history_bytes(root)), (journal, history))
+        os.rename(os.path.join(root, "aside"), final)
         # A leftover temp is not a pending envelope.
         self.store(root, ".tmp." + "cd" * 16, b"torn")
         self.run_stage(root, plan, commit)

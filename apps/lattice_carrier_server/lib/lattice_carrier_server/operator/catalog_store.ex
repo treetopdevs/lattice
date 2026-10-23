@@ -46,8 +46,9 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
          {:ok, uid} <- Journal.effective_uid(),
          {:ok, stored} <- read_store(root, uid, key),
          {:ok, chain} <- chain(stored),
-         {:ok, current, receipts} <- receipts(root),
+         {:ok, current, receipts, replicas} <- receipts(root, uid),
          :ok <- match_receipts(chain, receipts),
+         :ok <- receipt_space(stored, replicas),
          {:ok, result} <- head(chain, receipts),
          :ok <- complete_below_head(chain, receipts, result.head_revision),
          :ok <- journal_head(current, result.head) do
@@ -194,15 +195,18 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
   defp linked?(_entry, _by_id), do: false
 
   # Every catalog artifact of the journal and of each complete history line.
-  defp receipts(root) do
+  defp receipts(root, uid) do
     with {:ok, current} <- current_record(root),
-         {:ok, lines} <- history_records(root) do
-      pairs =
+         {:ok, lines} <- history_records(root, uid) do
+      artifacts =
         for record <- current ++ lines,
             %{"kind" => "catalog"} = artifact <- record["artifacts"],
-            do: {artifact["op_id"], artifact["sha256"]}
+            do: artifact
 
-      {:ok, List.first(current), Enum.uniq(pairs)}
+      pairs = Enum.map(artifacts, &{&1["op_id"], &1["sha256"]})
+
+      {:ok, List.first(current), Enum.uniq(pairs),
+       Enum.uniq(Enum.map(artifacts, & &1["replica"]))}
     end
   end
 
@@ -214,14 +218,16 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
     end
   end
 
-  defp history_records(root) do
+  defp history_records(root, uid) do
     file = Journal.history_path(root)
 
     case File.lstat(file) do
       {:error, :enoent} ->
         {:ok, []}
 
-      {:ok, %{type: :regular, size: size}} when size <= @max_history ->
+      # The owner writes history only as this user's private single-link file.
+      {:ok, %{type: :regular, size: size, uid: ^uid, links: 1, mode: mode}}
+      when size <= @max_history and band(mode, 0o077) == 0 ->
         with {:ok, raw} <- File.read(file), do: decode_lines(raw)
 
       _ ->
@@ -242,6 +248,15 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
       end
     end)
   end
+
+  # Every receipt names the Space the stored envelopes catalog.
+  defp receipt_space(_stored, []), do: :ok
+
+  defp receipt_space([%{shared: {_, _, space}} | _], replicas) do
+    if replicas == [space], do: :ok, else: {:error, :catalog_store_corrupt}
+  end
+
+  defp receipt_space([], _replicas), do: {:error, :catalog_store_corrupt}
 
   defp match_receipts(chain, receipts) do
     ok? =

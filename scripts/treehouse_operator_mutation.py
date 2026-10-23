@@ -210,7 +210,7 @@ def record(raw):
             or type(r["version"]) is not int or r["version"] != 1 or r["phase"] not in PHASES
             or not op_id(r["attempt"]) or type(r["generation"]) is not int or not 0 <= r["generation"] < SAFE
             or not (r["catalog_head"] is None or op_id(r["catalog_head"])) or not hex_id(r["manifest_digest"])
-            or type(r["artifacts"]) is not list or not 1 <= len(r["artifacts"]) <= 128
+            or type(r["artifacts"]) is not list or not 1 <= len(r["artifacts"]) <= 129
             or not all(artifact_record(a) for a in r["artifacts"])
             or len({a["path"] for a in r["artifacts"]}) != len(r["artifacts"])
             or not service_record(r["service"])):
@@ -218,6 +218,9 @@ def record(raw):
     # A catalog artifact exists exactly in the catalogued and listed phases, and
     # then the record's head is that artifact's catalog id.
     catalogs = [a for a in r["artifacts"] if a["kind"] == "catalog"]
+    # 128 staged artifacts plus the one catalog receipt.
+    if len(r["artifacts"]) - len(catalogs) > 128:
+        refuse("corrupt_operator_journal")
     if r["phase"] in ("catalogued", "listed"):
         if len(catalogs) != 1 or r["catalog_head"] != catalogs[0]["op_id"]:
             refuse("corrupt_operator_journal")
@@ -472,7 +475,11 @@ def catalog_receipts(root, old):
 
 def stage_head(root, old, next_record):
     head, shas = catalog_receipts(root, old)
-    if head != next_record["catalog_head"] or set(store_names(root)[0]) - shas:
+    finals = set(store_names(root)[0])
+    # A receipted envelope that is gone means the store is already corrupt.
+    if shas - finals:
+        refuse("catalog_store_corrupt")
+    if head != next_record["catalog_head"] or finals - shas:
         refuse("stale_catalog_head")
 
 

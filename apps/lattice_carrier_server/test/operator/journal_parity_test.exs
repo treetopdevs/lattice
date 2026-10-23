@@ -77,6 +77,8 @@ defmodule LatticeCarrierServer.Operator.JournalParityTest do
     one = catalog_artifact()
     two = catalog_artifact("two")
     op = one["op_id"]
+    manifest = hd(base()["artifacts"])
+    staged = fn n -> for i <- 1..n, do: %{manifest | "path" => "/operator/attempt/m#{i}"} end
     review = %{"creation" => op, "grants" => [], "profile_genesis" => op, "profile_id" => op}
 
     [
@@ -104,6 +106,11 @@ defmodule LatticeCarrierServer.Operator.JournalParityTest do
        with_catalog("catalogued", [%{one | "replica" => nil}], one["op_id"]), false},
       {"catalog with empty replica",
        with_catalog("catalogued", [%{one | "replica" => ""}], one["op_id"]), false},
+      {"128 staged plus the catalog", with_catalog("catalogued", staged.(127) ++ [one], op),
+       true},
+      {"129 staged plus the catalog", with_catalog("catalogued", staged.(128) ++ [one], op),
+       false},
+      {"129 staged", with_catalog("ready", staged.(128), nil), false},
       {"wrong case", phase.("Ready"), false},
       {"null phase", phase.(nil), false},
       {"missing service", Journal.encode(Map.delete(base(), "service")), false},

@@ -212,13 +212,20 @@ defmodule LatticeCarrierServer.Operator.Journal do
       is_integer(r["generation"]) and r["generation"] >= 0 and
       r["generation"] < 9_007_199_254_740_991 and
       (r["catalog_head"] == nil or op_id?(r["catalog_head"])) and
-      digest?(r["manifest_digest"]) and is_list(r["artifacts"]) and
-      length(r["artifacts"]) in 1..128 and Enum.all?(r["artifacts"], &artifact?/1) and
-      length(Enum.uniq_by(r["artifacts"], & &1["path"])) == length(r["artifacts"]) and
+      digest?(r["manifest_digest"]) and artifacts?(r["artifacts"]) and
       service?(r["service"]) and catalog_coupling?(r)
   end
 
   defp valid?(_), do: false
+
+  # At most 128 staged artifacts plus the one catalog receipt, each path once.
+  defp artifacts?(artifacts) when is_list(artifacts) do
+    length(artifacts) in 1..129 and Enum.all?(artifacts, &artifact?/1) and
+      Enum.count(artifacts, &(&1["kind"] != "catalog")) <= 128 and
+      length(Enum.uniq_by(artifacts, & &1["path"])) == length(artifacts)
+  end
+
+  defp artifacts?(_), do: false
 
   # The admitted carrier service identity that staging reviewed: its file, the
   # realm it serves, the public key derived from it and the digest of the exact
