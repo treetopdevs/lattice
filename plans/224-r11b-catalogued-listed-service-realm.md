@@ -16,7 +16,7 @@
 
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
 the inputs in "Depends on" exist. PR 1 (Design 1) landed in PR #155; PR 3 (Design 3) landed in PR #158.
-PR 2 waits on OD-1 and OD-5; PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
+PR 2 is unblocked (OD-1 to OD-5 decided as recommended, D-39); PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
 
 ## Header
 
@@ -311,7 +311,7 @@ PR 6 gets its own plan (row 245) before any build. That plan must meet these req
    loopback `ws://` origin only in the disposable test profile (contract §2). No freshness claim:
    a withheld newer catalog is undetectable, and an older one never displaces the retained head.
 
-## Operator decisions (rows 239-243; not decided here)
+## Operator decisions (rows 239-243; decided 2026-10-19 as recommended, D-39)
 
 - **OD-1 (row 239) Service key.** (A) the existing carrier instance identity file, shared by all
   Treehouse instances; (B) a separately minted key. **Recommend A**: it already signs
@@ -331,7 +331,7 @@ PR 6 gets its own plan (row 245) before any build. That plan must meet these req
   lifts a plan 223 STOP); (c) a static file at the origin (R21a). **Recommend a**: no wire change,
   and the bytes are untrusted and fully verified.
 - **OD-5 (row 243) Relay on catalogued routes.** (a) a reviewed staging decision sets each
-  instance's `relay_realms` to exactly its current member realms, required before `catalogued`; (b)
+  instance's `relay_realms` to exactly its current member realms plus its own child root (Design 2), required before `catalogued`; (b)
   catalogue read-only routes and waive C07. **Recommend a**: C07 is part of the reviewed contract.
 
 ## Build PRs (ordered; file sets disjoint)
