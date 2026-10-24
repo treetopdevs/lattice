@@ -63,6 +63,16 @@ listing. That alternative undoes PR #165's atomic creation, changes what recipie
 accept, and still needs a new app/operator saga. Do not remove the reference or forge
 its ancestors to make existing staging tests pass.
 
+## Ceremony and bootstrap order
+
+Before offline invitations, the operator prepares the existing verified catalog/service
+ceremony public binding. The founder uses the ordinary root command path to author the
+honored `catalog_bootstrap_v1` from that binding, confirming service key, catalog key and
+origin. PR B must supply this control if absent; a fabricated bootstrap id is forbidden.
+Then issue/review/accept the invitation, admit/grant, export final histories, and import
+against the same ceremony. No relay route is installed by this public binding step.
+Fixture ceremonies supply every input in tests; real ceremony adoption stays a field gate.
+
 ## Contract amendment A: explicit initial reference mode
 
 Amend `docs/research/treehouse_catalog_lifecycle.md` §5 and plan 224 Designs 2/4/5 in
@@ -80,13 +90,19 @@ verdict, new phase or new carrier message. Existing version-1 records with null 
 retain byte-identical canonical serialization. Older readers safely refuse the new
 variant; never silently strip it. Extend kind-aware review validation/serialization
 in both Journal and `scripts/treehouse_operator_mutation.py`, with parity vectors.
-The mode remains bound to immutable artifact bytes/digests, attempt and journal CAS.
+The mode is reviewed journal metadata, not covered by the raw reference digest. Treat
+it as an assertion of observed presence: present iff `initial_existing`; otherwise
+refuse. Every activation/readiness/catalog/listing recheck repeats that observation.
+The immutable artifact digest, attempt and journal CAS bind the surrounding evidence.
 
 `initial_existing` requires ALL of the following at public staging:
 
 1. Verified CatalogStore has no committed head, pending envelope or prior committed
-   catalog/receipt history. Check durable store state; request `catalog_head: null` is
-   not proof. Corrupt, missing receipted or reset-looking store state refuses.
+   catalog/receipt history. Verify against the ceremony catalog public key inside the
+   stage lock; request `catalog_head: null` is not proof. Corrupt or missing receipted
+   state refuses. A complete deletion of store, journal and history is indistinguishable
+   from first use: operator preservation of this private state is a trust assumption,
+   not an anti-rollback guarantee. Never reset these files to obtain initial mode.
 2. Exactly one active bound Space history and one previously unserved candidate child.
    Initial Space references identify exactly this one Thread. No second initial child,
    route alias, already-served child or replacement of any previous entry is admitted.
@@ -103,6 +119,10 @@ The mode remains bound to immutable artifact bytes/digests, attempt and journal 
 6. Existing owner locking, captured active-log digests, manifest checks, immutable
    artifacts, crash recovery and stale-attempt guards bind the observation. Recheck
    membership/profile/binding at activation/readiness rather than trusting importer text.
+
+PR A must make Journal and the Python twin explicitly refuse `initial_existing` in
+`catalogued`/`listed` until C implements their guards. New downstream readers cannot
+advance the new mode accidentally; C removes that refusal with the behavioral gate.
 
 `catalogued` keeps the existing first-catalog chain, signature, carried-entry and
 actual route-probe rules. Its hypothetical reference check must distinguish the two
@@ -122,8 +142,9 @@ including carried entries, before any irreversible action.
 
 Introduce closed canonical JSON format `treehouse-offline-invitation-v1` with exactly:
 `format, product, space, spaceRoot, bootstrapId, invitationId, recipient, profiles`.
-Product is `treehouse`. Profiles are exactly one Space and one Thread, each containing
-only `product, replica, frames`. Derive Thread scope from honored Space references and
+Product is `treehouse`. Each profile contains only `product, replica, frames`. The invitation carries exactly the Space profile;
+the final provisioning format below carries Space plus Thread. Thread posts need not
+be disclosed before admission. Derive Thread scope from honored Space references and
 the invitation; do not accept duplicated scope, roles, routes, readiness, trust verdicts,
 private keys, app state, drafts, outbox or acknowledgement fields.
 
@@ -133,12 +154,19 @@ rebuilds canonical wire terms using the existing signing encoder, not hand-writt
 JSON reconstruction. Re-encoding after closed decode must equal the canonical input;
 this must reject duplicate keys rather than preserving a parser's last value.
 
+Before issuing, the founder explicitly verifies the recipient public-key fingerprint
+through an independent channel; a swapped self-consistent join request cannot be
+detected cryptographically. Capture confirmed key/state generation and invalidate
+review on change/reopen. The joiner fingerprint review below is separate.
+
 Every frame independently verifies signature/id, replica and complete dependencies.
 Repeated frame ids, identical or conflicting, are refused instead of silently collapsed. Check the committed root, canonical bounded family and creation
 for both histories, then use the existing Authority/materialization judgments for
 honored invitation, recipient, current scope and unique root bootstrap. Keep authentic
 quarantined frames; never drop them to manufacture a valid history. Required claims
-must be honored; the child must meet staging's existing clean-authority requirement.
+must be honored; final child provisioning requires zero quarantined frames under
+staging's existing clean-authority rule. Retaining an authentic quarantined child
+frame therefore preserves a refusal, not a promise that the bundle can stage.
 
 The review displays group/Thread, recipient, roots and a grouped SHA-256 fingerprint
 of a domain-separated canonical tuple `(space, spaceRoot, bootstrapId)`. The joiner
@@ -158,7 +186,11 @@ plan 261 work; this honest-shell review is not a native semantic-verification cl
 Founder issuance must work without a relay configuration. Supply the verified held
 replica inventory to the pure invitation helper as scope availability, never fabricated
 endpoint routes. Reuse an existing honored current-scope invitation. The existing
-admit-and-grant helper must use the appropriate independently owned child signer and
+admit-and-grant helper uses the founder participant signer for Space admission and
+PR #165's `threadSigners` map for direct child-root grants, never subdelegations of
+the founder posting grant. Persist all profile histories/outboxes in the single
+PreviewState revision/CAS transaction implemented by PR #165; operator dump files
+are later exports, not independent live writes. It must
 atomically persist member admission plus exact-audience child grants. Replay is a no-op;
 revoked/expired grants and removed-member replay retain their existing refusals.
 
@@ -186,12 +218,19 @@ durable and re-read/verified. An interrupted partial directory is not ready inpu
 retry verifies exact existing material or refuses, never silently replaces it.
 
 Produce Space and child artifacts that the real `Staging.prepare/5` consumes. The
-active initial manifest serves the imported Space; the candidate adds the unserved
-child. References already visible in the Space confer no catalog route availability.
+importer also emits a new Space-only initial manifest referencing its immutable
+Space dump. The existing carrier startup/boot validation starts this new deployment;
+only then does public staging use it as `active_manifest`. Refuse an already-running
+conflicting deployment, never copy over a live file. The candidate manifest adds the
+unserved child. PR A owns and tests this initial boot through the production boundary. References already visible in the Space confer no
+catalog route availability.
 No test-only fixture bypass, renamed JSON-as-Log.dump file or direct live-holder edit.
 
 Derive `treehouse-client:<canonical unpadded base64url native public key>` consistently
 in app and operator peer generation. It is an authenticated-key label, not authority.
+Peer sets retain staging's `{instance root} ∪ current roster` rule, including the
+independent child root. Deduplicate the founder who is both Space root and member;
+root allowlisting does not require another app to use that root for transport.
 Keep service realm distinct. Preserve existing saved legacy realm/routes and refuse
 conflicting attempted installation; no silent migration or Wire change. The realm
 helper is part of this behavioral path, not a standalone completion milestone.
@@ -254,7 +293,9 @@ Behavioral gates (no fixtures that bypass the named production boundary):
 4. Initial mode negatives: prior committed/pending/receipted catalog, served child,
    extra initial reference, different valid reference, unhonored reference, roster or
    bootstrap drift, changed service/manifest and stale attempt all refuse atomically.
-   Python/BEAM journal variants must agree through restore and a two-process race.
+   Python/BEAM journal variants must agree through restore and a two-process race,
+   including duplicate-recipient and noncanonical-public-key refusals at their owning
+   validation boundary; do not assume Journal alone performs staging review.
 5. Real `catalogued` then public `ReleaseListing.publish`: crash/retry before/after
    receipt commit leaves the same op set and one catalog/reference id. Count holder
    ops and compare exact canonical frames before/after initial listing: zero new Space
@@ -268,7 +309,9 @@ Behavioral gates (no fixtures that bypass the named production boundary):
 
 Land/rebase PR #165 first. Keep old pending mode default and byte-compatible. New
 reference mode is explicit and first-publication only; deploy matching Python and
-BEAM readers together. No automatic conversion of old journals, catalog deletion,
+BEAM readers together. Once new-mode records reach append-only history, older binaries
+cannot verify it: rollback requires a compatible forward fix, not journal/history
+editing. No automatic conversion of old journals, catalog deletion,
 trust reset, key regeneration or recreation of an already-listed reference.
 
 STOP and revise the design if initial admission requires weakening authority, accepting
