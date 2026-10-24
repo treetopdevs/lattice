@@ -389,13 +389,22 @@ defmodule LatticeCarrierServer.Operator.Staging do
   defp verify_child(artifact) do
     with {:ok, %{log: log, sha256: digest}} <- Log.restore_verified(artifact.path),
          true <- digest == artifact.digest and log.replica == artifact.replica,
-         :ok <- verify_child_log(log, artifact),
-         do: {:ok, log}
+         :ok <- verify_child_log(log, artifact) do
+      {:ok, log}
+    else
+      _ -> {:error, :invalid_staged_signed_artifact}
+    end
   end
 
   @doc "Verify the same closed child authority and beacon contract before import or staging."
   @spec verify_child_log(Log.t(), map()) :: :ok | {:error, atom()}
-  def verify_child_log(log, artifact) do
+  def verify_child_log(log, artifact), do: check_child_log(log, artifact, :unserved)
+
+  @doc "Recheck current authority while retaining authenticated quarantined relay evidence."
+  @spec verify_current_child_log(Log.t(), map()) :: :ok | {:error, atom()}
+  def verify_current_child_log(log, artifact), do: check_child_log(log, artifact, :current)
+
+  defp check_child_log(log, artifact, phase) do
     r = artifact.review
 
     with :ok <- Log.verify_authenticity(log),
@@ -417,7 +426,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
          %Op{kind: :authority, body: {:genesis, _, pinned}} <- log.ops[r["profile_genesis"]],
          true <- reviewed_beacon_policy?(pinned, selected.profile),
          analysis = Authority.analyze(Treehouse.Thread, log),
-         true <- analysis.reasons == %{},
+         true <- phase == :current or analysis.reasons == %{},
          %Op{kind: :command, body: {:create_thread, [_]}} <- log.ops[r["creation"]],
          # The reviewed inventory is exact: every honored active grant the child
          # log actually carries was reviewed, and nothing else was claimed.
@@ -427,7 +436,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
          # also introduces an active delegation, so authority is whitelisted:
          # the pinned genesis, the reviewed profile pin and the reviewed grant
          # introductions are the only authority operations a candidate carries.
-         true <- authority_closed?(log, artifact, reviewed),
+         true <- authority_closed_for?(phase, log, artifact, reviewed, analysis),
          # A root-authored tombstone ends the replica's lifecycle. Authority
          # analysis only quarantines an *unauthorized* tombstone, so a valid
          # one would otherwise sail through every check above; it is refused
@@ -461,6 +470,30 @@ defmodule LatticeCarrierServer.Operator.Staging do
   defp reviewed_grants(review) do
     MapSet.new(review["grants"], &{&1["introduction"], &1["delegation"], &1["recipient"]})
   end
+
+  defp authority_closed_for?(:unserved, log, artifact, reviewed, _analysis),
+    do: authority_closed?(log, artifact, reviewed)
+
+  defp authority_closed_for?(:current, log, artifact, reviewed, analysis) do
+    allowed =
+      MapSet.new([artifact.op_id, artifact.review["profile_genesis"]])
+      |> MapSet.union(MapSet.new(reviewed, &elem(&1, 0)))
+
+    Enum.all?(log.ops, fn
+      {id, %Op{kind: :authority, body: body}} ->
+        Map.has_key?(analysis.reasons, id) or MapSet.member?(allowed, id) or monitoring?(body)
+
+      _ ->
+        true
+    end)
+  end
+
+  # Only already-honored monitoring evidence may extend the frozen authority
+  # inventory. The same judge still decides grants, expiry and profile binding.
+  defp monitoring?({:beacon, _}), do: true
+  defp monitoring?({:beacon, _, _}), do: true
+  defp monitoring?({:heartbeat, _, _}), do: true
+  defp monitoring?(_), do: false
 
   defp authority_closed?(log, artifact, reviewed) do
     allowed =
@@ -783,7 +816,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
     end
   end
 
-  defp initial_child_current?(child, log), do: verify_child_log(log, child) == :ok
+  defp initial_child_current?(child, log), do: verify_current_child_log(log, child) == :ok
 
   defp staged_child(child) do
     replica = child["replica"]

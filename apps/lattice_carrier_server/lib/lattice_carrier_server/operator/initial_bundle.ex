@@ -54,6 +54,7 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
          true <-
            bootstrap.record.service_key not in [Authority.root(space), Authority.root(child)],
          {:ok, inventory} <- inventory(space, child, doc["referenceId"]),
+         true <- Base.encode64(bootstrap.record.service_key) not in inventory.roster,
          true <- canonical(doc) == bytes,
          true <- fits_initial_state?(doc, inventory.roster, Authority.root(child)) do
       {:ok,
@@ -145,7 +146,9 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
     analysis = Authority.analyze(Treehouse.Thread, child)
     roster = Staging.roster(space)
 
-    with true <- analysis.reasons == %{} and not Authority.tombstoned?(child),
+    with true <-
+           analysis.reasons == %{} and not Authority.tombstoned?(child) and
+             not Authority.tombstoned?(space),
          true <- length(roster) == 2 and Base.encode64(Authority.root(space)) in roster,
          {:ok, selected} <- Authority.continuation_profile(child),
          [%Op{body: {:genesis, root_grant, policies}} = genesis] <-

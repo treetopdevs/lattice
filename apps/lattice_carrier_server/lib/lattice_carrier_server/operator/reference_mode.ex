@@ -58,14 +58,17 @@ defmodule LatticeCarrierServer.Operator.ReferenceMode do
   defp initial_scope?(nil, _op, _space, _reasons, _child, _log), do: true
 
   defp initial_scope?(@initial, op, space, reasons, child, child_log) do
+    {:create_thread, [_, title]} = op.body
+
     references =
       for {id, %Op{kind: :command, body: {:create_thread, _}}} <- space.ops,
           not Map.has_key?(reasons, id),
           do: id
 
-    references == [op.id] and child_log.replica == child.replica and
+    not Authority.tombstoned?(space) and references == [op.id] and
+      child_log.replica == child.replica and
       match?(
-        %Op{kind: :command, body: {:create_thread, [_]}},
+        %Op{kind: :command, body: {:create_thread, [^title]}},
         child_log.ops[child.review["creation"]]
       )
   end

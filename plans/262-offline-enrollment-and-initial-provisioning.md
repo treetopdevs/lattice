@@ -341,3 +341,11 @@ any still-missing prerequisite as unfinished, not a passing fixture substitute. 
 full two-app WSS target additionally needs native member/catalog trust installation,
 ordinary networking and actual host/Keychain/restore evidence. This plan does not mark
 R13, G2, R21b, permission renewal, founder-loss recovery or the community pilot DONE.
+
+Review refinements: initial/unserved child verification remains strict; live checks
+retain quarantined evidence while enforcing the exact effective grants, profile and
+reference. The sealed public bundle supports read-only staging-input reload after
+append-only Space growth or activation; import retry itself still compares every
+byte. CLI listener ports are explicit and nonzero. Parent/child titles agree; service
+keys cannot be members and a tombstoned Space cannot be imported. Postwrite rereads
+and preservation/refusal of incomplete output are intentional safety boundaries.

@@ -36,7 +36,7 @@ defmodule LatticeCarrierServer.Operator.InitialBundleTest do
     assert {:error, :invalid_initial_bundle} = InitialBundle.decode("\n" <> f.bytes)
 
     duplicate =
-      "{\"format\":\"treehouse-initial-provisioning-v1\"," <>
+      ~s({"format":"treehouse-initial-provisioning-v1",) <>
         binary_part(f.bytes, 1, byte_size(f.bytes) - 1)
 
     assert {:error, :invalid_initial_bundle} = InitialBundle.decode(duplicate)
@@ -103,13 +103,25 @@ defmodule LatticeCarrierServer.Operator.InitialBundleTest do
   end
 
   test "a pin with an unreviewed beacon policy refuses before import", _f do
-    {:ok, hostile} = Fixture.new(second_member: true, pin_beacon: {:max_epoch_step, 65535})
+    {:ok, hostile} = Fixture.new(second_member: true, pin_beacon: {:max_epoch_step, 65_535})
     child = Sim.log(hostile[:child], "creator")
     {:ok, %{bootstraps: [bootstrap]}} = Treehouse.CatalogBootstrap.observe(hostile[:updated_log])
 
     bytes =
       InitialBundle.encode(hostile[:updated_log], child, bootstrap.id, hostile[:reference].id)
 
+    assert {:error, :invalid_initial_bundle} = InitialBundle.decode(bytes)
+  end
+
+  test "a root-authored Space tombstone refuses the initial bundle", f do
+    space = f.fixture[:updated_log]
+    owner = Sim.identity(f.fixture[:space], "creator")
+    target = f.fixture[:reference].id
+    tombstone = Lattice.Op.new(owner, space.replica, [target], :tombstone, {:delete, target})
+    changed = Lattice.Log.append!(space, tombstone)
+    assert Lattice.Authority.tombstoned?(changed)
+    {:ok, verified} = InitialBundle.decode(f.bytes)
+    bytes = InitialBundle.encode(changed, f.child, verified.bootstrap.id, verified.reference.id)
     assert {:error, :invalid_initial_bundle} = InitialBundle.decode(bytes)
   end
 

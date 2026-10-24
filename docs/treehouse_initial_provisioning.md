@@ -28,8 +28,9 @@ mix treehouse.initial_provisioning \
 ```
 
 All arguments are file paths or public configuration. No seed or passphrase goes
-in an argument, bundle or output. Ports default to zero for fixture startup;
-choose and verify real listener/proxy mappings separately before a field run.
+in an argument, bundle or output. Supply explicit distinct nonzero listener ports, and verify the host/proxy
+mapping separately before a field run. Port zero is limited to the existing test
+harness configuration; the ordinary command never enables that escape hatch.
 
 Successful output contains verified Space/Thread log dumps, the signed reference,
 derived grant review, a Space-only initial manifest, a candidate manifest, and
@@ -47,10 +48,20 @@ root. The initial deployment serves only the imported Space. The public
 and verifies the child and candidate manifest under its own mutation lock, without
 rewriting the existing Space reference or source log.
 
+After restart, call `InitialProvisioning.load_staging(output, ceremony)` to reconstruct
+those inputs from the sealed public `bundle.json`. It rechecks the immutable files,
+service binding and original operations retained in the current Space. It permits
+append-only Space growth and the known activated manifest. It does not write files
+or assert readiness; staging and activation still recheck current authority. Use
+`prepare/1` only for an exact import retry, not to repair live files.
+
 `initial_existing` is an explicit observation of an already-honored reference.
 Normal pending-reference mode still requires absence. Initial staging verifies
 an empty catalog store under its owner lock. Activation/readiness re-observe the
-reference and grants. Catalog/listing refuse this mode until their actual guarded
+reference and grants. Initial import and unserved staging require clean, closed child
+history. Live rechecks retain quarantined authentic operations without letting them
+change effective grants; reviewed authority, profile and reference drift still refuse.
+The reference title must match the child creation title. Catalog/listing refuse this mode until their actual guarded
 consumers support it; never manually advance the journal to bypass that stop.
 
 A prior controlled-boot marker prevents creating another fresh import in that

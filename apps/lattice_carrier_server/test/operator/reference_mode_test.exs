@@ -44,7 +44,9 @@ defmodule LatticeCarrierServer.Operator.ReferenceModeTest do
         original.replica,
         original.deps,
         :command,
-        {:create_thread, [initial.child.replica, "Different title"]}, cap: original.cap)
+        {:create_thread, [initial.child.replica, "Different title"]},
+        cap: original.cap
+      )
 
     assert Op.valid?(alternate)
 
@@ -59,6 +61,13 @@ defmodule LatticeCarrierServer.Operator.ReferenceModeTest do
 
     assert {:error, :invalid_staged_signed_artifact} =
              ReferenceMode.observe(changed, f.present, f.child_log)
+
+    # The alternate is present and honored, but its title disagrees with the child.
+    without_original = %{f.present | ops: Map.delete(f.present.ops, original.id)}
+    assert {:ok, present} = Log.accept(without_original, alternate)
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             ReferenceMode.observe(changed, present, f.child_log)
   end
 
   test "initial reference must be the exact artifact and child creation", f do

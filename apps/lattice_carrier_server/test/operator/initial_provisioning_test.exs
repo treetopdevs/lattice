@@ -54,6 +54,42 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
     assert File.read!(f.fixture.active_log) == f.fixture.active_bytes
   end
 
+  test "staging inputs reload after live Space growth and reject immutable tampering", f do
+    assert {:ok, imported} = InitialProvisioning.prepare(f.opts)
+    assert {:ok, reloaded} = InitialProvisioning.load_staging(f.output, f.fixture.ceremony_dir)
+    assert reloaded.request == imported.request
+    assert reloaded.artifacts == imported.artifacts
+
+    path = Path.join(f.output, "space.log")
+    assert {:ok, %{log: space}} = Lattice.Log.restore_verified(path)
+    stranger = Lattice.Identity.from_seed("noise", "reload-noise")
+
+    noise =
+      Lattice.Op.new(
+        stranger,
+        space.replica,
+        Lattice.Log.frontier(space),
+        :command,
+        {:post, ["noise"]}
+      )
+
+    assert {:ok, changed} = Lattice.Log.accept(space, noise)
+    assert Map.has_key?(Lattice.Authority.analyze(Treehouse.Space, changed).reasons, noise.id)
+    assert :ok = Lattice.Log.dump(changed, path)
+    before = snapshot(f.output)
+    assert {:ok, ^reloaded} = InitialProvisioning.load_staging(f.output, f.fixture.ceremony_dir)
+    assert snapshot(f.output) == before
+    assert {:error, _} = InitialProvisioning.prepare(f.opts)
+
+    File.write!(Path.join(f.output, "review.json"), "tampered")
+    before = snapshot(f.output)
+
+    assert {:error, :invalid_staging_inputs} =
+             InitialProvisioning.load_staging(f.output, f.fixture.ceremony_dir)
+
+    assert snapshot(f.output) == before
+  end
+
   test "missing completion marker preserves partial output and refuses retry", f do
     assert {:ok, imported} = InitialProvisioning.prepare(f.opts)
     File.rm!(imported.index)
@@ -169,6 +205,168 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
     opts = Keyword.merge(f.opts, bundle: public, ceremony: ceremony)
     assert {:ok, imported} = InitialProvisioning.prepare(opts)
 
+    boot_import!(f.fixture.root, imported)
+    assert LatticeCarrierServer.Runtime.deployment().operator_root == f.fixture.root
+    assert LatticeCarrierServer.Health.ready?()
+
+    assert {:ok, record} =
+             Staging.prepare(f.fixture.root, nil, imported.request, imported.artifacts, ceremony)
+
+    assert record["phase"] == "carrier_pending"
+    activated = activate_import!(f.fixture.root, imported, ceremony)
+    assert {:ok, resumed} = InitialProvisioning.load_staging(f.output, ceremony)
+    assert resumed.request == imported.request
+    assert resumed.artifacts == imported.artifacts
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+    probe = probe!(f.fixture.root)
+
+    assert {:ok, ready} =
+             LatticeCarrierServer.Operator.ReleaseReadiness.confirm(
+               f.fixture.root,
+               activated,
+               probe,
+               ceremony
+             )
+
+    assert ready["phase"] == "ready"
+  end
+
+  test "operator command imports with public output and never starts a deployment", f do
+    args =
+      ["treehouse.initial_provisioning"] ++
+        Enum.flat_map(Keyword.merge(f.opts, space_port: 4101, thread_port: 4102), fn {key, value} ->
+          ["--" <> (key |> Atom.to_string() |> String.replace("_", "-")), to_string(value)]
+        end)
+
+    {output, status} =
+      System.cmd(System.find_executable("mix"), args,
+        stderr_to_stdout: true,
+        env: [{"MIX_ENV", Atom.to_string(Mix.env())}]
+      )
+
+    assert status == 0, output <> "\noutput inventory: " <> inspect(File.ls(f.output))
+    result = output |> String.trim() |> String.split("\n") |> List.last() |> Jason.decode!()
+    assert result["claim"] == "verified_offline_import"
+    assert File.exists?(result["index"])
+    refute String.contains?(output, File.read!(f.fixture.service_identity))
+    assert {:ok, nil} = Journal.read(f.fixture.root)
+    refute File.exists?(Path.join(f.fixture.root, "operator-incarnation"))
+  end
+
+  test "ordinary command refuses zero ports before creating output", f do
+    args =
+      ["treehouse.initial_provisioning"] ++
+        Enum.flat_map(Keyword.merge(f.opts, space_port: 0, thread_port: 0), fn {key, value} ->
+          ["--" <> (key |> Atom.to_string() |> String.replace("_", "-")), to_string(value)]
+        end)
+
+    {output, status} =
+      System.cmd(System.find_executable("mix"), args,
+        stderr_to_stdout: true,
+        env: [{"MIX_ENV", Atom.to_string(Mix.env())}]
+      )
+
+    refute status == 0
+    assert String.contains?(output, "listener_ports_required")
+    refute File.exists?(f.output)
+  end
+
+  test "a previous controlled boot marker prevents creating another initial output", f do
+    File.write!(Path.join(f.fixture.root, "operator-incarnation"), Journal.digest("prior-boot"))
+    assert {:error, :initial_provisioning_refused} = InitialProvisioning.prepare(f.opts)
+    refute File.exists?(f.output)
+  end
+
+  test "initial activation re-observes a newly honored reference and refuses drift", f do
+    assert {:ok, imported} = InitialProvisioning.prepare(f.opts)
+    boot_import!(f.fixture.root, imported)
+
+    assert {:ok, _} =
+             Staging.prepare(
+               f.fixture.root,
+               nil,
+               imported.request,
+               imported.artifacts,
+               f.fixture.ceremony_dir
+             )
+
+    {:ok, journal} = Journal.read(f.fixture.root)
+    {:ok, %{log: space}} = Lattice.Log.restore_verified(Path.join(f.output, "space.log"))
+    root = Sim.identity(f.fixture.space, "creator")
+
+    extra =
+      Lattice.Op.new(
+        root,
+        space.replica,
+        Lattice.Log.frontier(space),
+        :command,
+        {:create_thread, [f.fixture.child.replica, "Alias"]},
+        cap: f.fixture.reference.cap
+      )
+
+    assert {:ok, _} =
+             LatticeCarrierServer.Holder.relay(
+               LatticeCarrierServer.Holder.via("space"),
+               InitialProvisioning.client_realm(root.pub),
+               extra
+             )
+
+    {:ok, %{log: changed}} = Lattice.Log.restore_verified(Path.join(f.output, "space.log"))
+    refute Map.has_key?(Lattice.Authority.analyze(Treehouse.Space, changed).reasons, extra.id)
+    {deployment, observation} = seal_import!(imported)
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             LatticeCarrierServer.Operator.ReleaseActivation.activate(
+               f.fixture.root,
+               journal,
+               deployment.owner,
+               observation,
+               f.fixture.ceremony_dir
+             )
+
+    assert {:ok, ^journal} = Journal.read(f.fixture.root)
+  end
+
+  test "initial readiness refuses authentic child revocation without changing its receipt", f do
+    assert {:ok, imported} = InitialProvisioning.prepare(f.opts)
+    boot_import!(f.fixture.root, imported)
+
+    assert {:ok, _} =
+             Staging.prepare(
+               f.fixture.root,
+               nil,
+               imported.request,
+               imported.artifacts,
+               f.fixture.ceremony_dir
+             )
+
+    activated = activate_import!(f.fixture.root, imported, f.fixture.ceremony_dir)
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+    delegation = hd(hd(f.fixture.artifacts).review["grants"])["delegation"]
+    {_sim, revoke} = Sim.revoke(f.fixture.child, "creator", delegation)
+    root = Sim.identity(f.fixture.child, "creator")
+
+    assert {:ok, _} =
+             LatticeCarrierServer.Holder.relay(
+               LatticeCarrierServer.Holder.via("thread"),
+               InitialProvisioning.client_realm(root.pub),
+               revoke
+             )
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             LatticeCarrierServer.Operator.ReleaseReadiness.confirm(
+               f.fixture.root,
+               activated,
+               probe!(f.fixture.root),
+               f.fixture.ceremony_dir
+             )
+
+    assert {:ok, ^activated} = Journal.read(f.fixture.root)
+  end
+
+  defp boot_import!(root, imported) do
     previous =
       Map.new(
         [:manifest, :operator_root],
@@ -191,38 +389,62 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
     end)
 
     Application.put_env(:lattice_carrier_server, :manifest, imported.active_manifest)
-    Application.put_env(:lattice_carrier_server, :operator_root, f.fixture.root)
+    Application.put_env(:lattice_carrier_server, :operator_root, root)
     assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
-    assert LatticeCarrierServer.Runtime.deployment().operator_root == f.fixture.root
-    assert LatticeCarrierServer.Health.ready?()
-
-    assert {:ok, record} =
-             Staging.prepare(f.fixture.root, nil, imported.request, imported.artifacts, ceremony)
-
-    assert record["phase"] == "carrier_pending"
   end
 
-  test "operator command imports with public output and never starts a deployment", f do
-    args =
-      ["treehouse.initial_provisioning"] ++
-        Enum.flat_map(f.opts, fn {key, value} ->
-          ["--" <> (key |> Atom.to_string() |> String.replace("_", "-")), value]
+  defp seal_import!(imported) do
+    deployment = LatticeCarrierServer.Runtime.deployment()
+    {:ok, manifest} = LatticeCarrierServer.Manifest.load(imported.active_manifest)
+    replicas = Map.new(manifest.instances, &{&1.name, Lattice.Log.restore_verified(&1.log_file)})
+
+    expected = %{
+      manifest_path: deployment.manifest_path,
+      manifest_digest: deployment.manifest_digest,
+      instances:
+        Enum.map(deployment.instances, fn instance ->
+          {:ok, %{log: log}} = replicas[instance.name]
+          instance |> Map.take([:name, :realm, :pub, :log_file]) |> Map.put(:replica, log.replica)
         end)
+    }
 
-    {output, status} = System.cmd(System.find_executable("mix"), args, stderr_to_stdout: true)
-    assert status == 0, output
-    result = output |> String.trim() |> String.split("\n") |> List.last() |> Jason.decode!()
-    assert result["claim"] == "verified_offline_import"
-    assert File.exists?(result["index"])
-    refute String.contains?(output, File.read!(f.fixture.service_identity))
-    assert {:ok, nil} = Journal.read(f.fixture.root)
-    refute File.exists?(Path.join(f.fixture.root, "operator-incarnation"))
+    assert {:ok, receipt} =
+             LatticeCarrierServer.Operator.ReleaseQuiesce.drain(
+               imported.request.attempt,
+               expected
+             )
+
+    assert {:ok, observation} =
+             LatticeCarrierServer.Operator.ReleaseStopSeal.stop_and_seal(
+               deployment.owner,
+               receipt
+             )
+
+    {deployment, observation}
   end
 
-  test "a previous controlled boot marker prevents creating another initial output", f do
-    File.write!(Path.join(f.fixture.root, "operator-incarnation"), Journal.digest("prior-boot"))
-    assert {:error, :initial_provisioning_refused} = InitialProvisioning.prepare(f.opts)
-    refute File.exists?(f.output)
+  defp activate_import!(root, imported, ceremony) do
+    {:ok, journal} = Journal.read(root)
+    {deployment, observation} = seal_import!(imported)
+
+    assert {:ok, _} =
+             LatticeCarrierServer.Operator.ReleaseActivation.activate(
+               root,
+               journal,
+               deployment.owner,
+               observation,
+               ceremony
+             )
+
+    {:ok, activated} = Journal.read(root)
+    activated
+  end
+
+  defp probe!(root) do
+    path = Path.join(root, "ordinary-probe.identity")
+    File.write!(path, Base.encode16(:crypto.hash(:sha256, "ordinary-probe")))
+    File.chmod!(path, 0o600)
+    path
   end
 
   defp phase(port, expected) do

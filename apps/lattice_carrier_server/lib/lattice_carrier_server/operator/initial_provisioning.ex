@@ -2,7 +2,8 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
   @moduledoc """
   Verified public-bundle import into a new private offline output directory.
 
-  The completion index is written last. Partial or conflicting directories are
+  The completion index seals data before the bootable manifest is published.
+  Partial or conflicting directories are
   preserved and refused; a completed retry rechecks every byte. No served file,
   service identity, manifest or operator journal is replaced by this importer.
   """
@@ -44,12 +45,81 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
          active_manifest: material.request.active_manifest
        }}
     else
+      {:error, reason} when is_atom(reason) -> {:error, reason}
       _ -> {:error, :initial_provisioning_refused}
     end
   rescue
     _ -> {:error, :initial_provisioning_refused}
   catch
     _, _ -> {:error, :initial_provisioning_refused}
+  end
+
+  @doc "Reload reviewed immutable staging inputs while the served Space may have grown. No write or readiness claim."
+  @spec load_staging(Path.t(), Path.t()) :: {:ok, map()} | {:error, atom()}
+  def load_staging(output, ceremony) do
+    output = Path.expand(output)
+
+    with true <- :os.type() == {:unix, :linux},
+         :ok <- private_directory(output),
+         {:ok, raw_index} <- read_private(Path.join(output, @index), 65_536),
+         {:ok, index} <- JSON.decode(raw_index),
+         true <- is_map(index) and Journal.digest?(index["identitySha256"]),
+         {:ok, blueprint} <- read_private(Path.join(output, "initial.manifest.data"), 1_048_576),
+         "treehouse-unpublished-manifest-v1\n" <> json <- blueprint,
+         {:ok, %{"instances" => [initial]}} <- JSON.decode(json),
+         {:ok, raw_candidate} <-
+           read_private(Path.join(output, "candidate.manifest.json"), 1_048_576),
+         {:ok, %{"instances" => [_, child]}} <- JSON.decode(raw_candidate),
+         {:ok, paths} <-
+           paths(
+             bundle: Path.join(output, "bundle.json"),
+             ceremony: ceremony,
+             output: output,
+             operator_root: index["operatorRoot"],
+             identity_file: initial["identity_file"]
+           ),
+         :ok <- Journal.secure_root(paths.operator),
+         {:ok, bundle} <- InitialBundle.load(paths.bundle),
+         {:ok, binding} <- CatalogBinding.load_log(paths.ceremony, bundle.space),
+         true <- binding.bootstrap_id == bundle.bootstrap.id,
+         {:ok, ports} <-
+           ports(space_port: initial["listener"]["port"], thread_port: child["listener"]["port"]),
+         {:ok, material} <- material(bundle, binding, paths, ports, index["identitySha256"]),
+         :ok <- exact_file(Path.join(output, @index), material.index),
+         :ok <- inventory(output, [@index, "initial.manifest.json" | Map.keys(material.files)]),
+         :ok <- check_files(output, Map.delete(material.files, "space.log")),
+         {:ok, boot} <- read_private(material.request.active_manifest, 1_048_576),
+         true <- boot in [material.boot, material.files["candidate.manifest.json"]],
+         {:ok, %{log: current}} <- Log.restore_verified(Path.join(output, "space.log")),
+         true <-
+           current.replica == bundle.space.replica and
+             Enum.all?(bundle.space.ops, fn {id, op} -> current.ops[id] == op end),
+         {:ok, current_binding} <- CatalogBinding.load_log(paths.ceremony, current),
+         true <- current_binding.bootstrap_id == bundle.bootstrap.id,
+         :ok <- current_service(material.service) do
+      {:ok,
+       %{
+         index: Path.join(output, @index),
+         operator_root: paths.operator,
+         active_manifest: material.request.active_manifest,
+         request: material.request,
+         artifacts: material.artifacts
+       }}
+    else
+      _ -> {:error, :invalid_staging_inputs}
+    end
+  rescue
+    _ -> {:error, :invalid_staging_inputs}
+  catch
+    _, _ -> {:error, :invalid_staging_inputs}
+  end
+
+  defp read_private(path, maximum) do
+    with {:ok, %{type: :regular, links: 1, uid: uid, mode: mode, size: size}} <- File.lstat(path),
+         true <- uid == Paths.uid() and band(mode, 0o7777) == 0o600 and size <= maximum,
+         {:ok, bytes} <- File.read(path),
+         true <- byte_size(bytes) == size,
+         do: {:ok, bytes}
   end
 
   @spec client_realm(binary()) :: String.t()
@@ -82,11 +152,19 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
   end
 
   defp ports(opts) do
-    space = Keyword.get(opts, :space_port, 0)
-    child = Keyword.get(opts, :thread_port, 0)
+    ephemeral? =
+      Application.get_env(:lattice_carrier_server, :allow_ephemeral_manifest_ports, false)
 
-    if is_integer(space) and is_integer(child) and space in 0..65535 and child in 0..65535 and
-         (space == 0 or space != child), do: {:ok, {space, child}}, else: :error
+    default = if ephemeral?, do: 0, else: nil
+    minimum = if ephemeral?, do: 0, else: 1
+    space = Keyword.get(opts, :space_port, default)
+    child = Keyword.get(opts, :thread_port, default)
+
+    if is_integer(space) and is_integer(child) and space in minimum..65_535 and
+         child in minimum..65_535 and
+         (space == 0 or space != child),
+       do: {:ok, {space, child}},
+       else: {:error, :listener_ports_required}
   end
 
   defp deployment_apart(paths, pub) do
@@ -203,6 +281,7 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
 
     files = %{
       "space.log" => space_bytes,
+      "bundle.json" => bundle.bytes,
       "thread.log" => child_bytes,
       "initial.manifest.data" => "treehouse-unpublished-manifest-v1\n" <> active,
       "candidate.manifest.json" => candidate,
@@ -369,16 +448,35 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
   end
 
   defp reread(material, binding, bundle, paths) do
-    with {:ok, %{log: space}} <- Log.restore_verified(Path.join(paths.output, "space.log")),
-         true <- space == bundle.space,
-         {:ok, %{log: child}} <- Log.restore_verified(Path.join(paths.output, "thread.log")),
-         true <- child == bundle.child,
-         {:ok, manifest} <- Manifest.review_bytes(material.boot, material.request.active_manifest),
+    with {:ok, space} <- restore_expected(Path.join(paths.output, "space.log"), bundle.space),
+         {:ok, _child} <- restore_expected(Path.join(paths.output, "thread.log"), bundle.child),
+         {:ok, manifest} <- review_manifest(material),
          [instance] <- manifest.instances,
          true <- instance.pub == binding.record.service_key and instance.realm == binding.realm,
          {:ok, rebound} <- CatalogBinding.load_log(paths.ceremony, space),
          true <- rebound.bootstrap_id == binding.bootstrap_id,
-         true <- Journal.service_identity_current?(material.service),
+         :ok <- current_service(material.service),
          do: :ok
+  end
+
+  defp restore_expected(path, expected) do
+    case Log.restore_verified(path) do
+      {:ok, %{log: ^expected}} -> {:ok, expected}
+      {:ok, _} -> {:error, :import_dump_mismatch}
+      _ -> {:error, :import_dump_invalid}
+    end
+  end
+
+  defp review_manifest(material) do
+    case Manifest.review_bytes(material.boot, material.request.active_manifest) do
+      {:ok, _} = success -> success
+      _ -> {:error, :initial_manifest_invalid}
+    end
+  end
+
+  defp current_service(service) do
+    if Journal.service_identity_current?(service),
+      do: :ok,
+      else: {:error, :service_identity_changed}
   end
 end

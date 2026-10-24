@@ -5,13 +5,12 @@ defmodule Mix.Tasks.Treehouse.InitialProvisioning do
 
       mix treehouse.initial_provisioning --bundle FILE --ceremony DIR \\
         --output NEW_DIR --operator-root PRIVATE_DIR --identity-file SERVICE_SEED_FILE \\
-        [--space-port PORT] [--thread-port PORT]
+        --space-port PORT --thread-port PORT
 
   The operator root and service identity must already exist. Output is a new
   private directory; an exact completed retry is read-only. Conflicts and partial
-  imports are preserved and refused. Ports default to zero for local prototype
-  startup; public host/proxy mapping remains a separate deployment step. Stdout
-  reports public output paths and the attempt id, never seed or bundle contents.
+  imports are preserved and refused. Listener ports must be explicit and nonzero.
+  Public host/proxy mapping remains a separate deployment step. Stdout reports public output paths and the attempt id, never seed or bundle contents.
   """
   use Mix.Task
   alias LatticeCarrierServer.Operator.{InitialBundle, InitialProvisioning}
@@ -31,7 +30,15 @@ defmodule Mix.Tasks.Treehouse.InitialProvisioning do
         ]
       )
 
-    required = [:bundle, :ceremony, :output, :operator_root, :identity_file]
+    required = [
+      :bundle,
+      :ceremony,
+      :output,
+      :operator_root,
+      :identity_file,
+      :space_port,
+      :thread_port
+    ]
 
     unless rest == [] and invalid == [] and Enum.all?(required, &Keyword.has_key?(opts, &1)) and
              length(Keyword.keys(opts)) == length(Enum.uniq(Keyword.keys(opts))) do
@@ -47,6 +54,7 @@ defmodule Mix.Tasks.Treehouse.InitialProvisioning do
         Mix.shell().info(
           InitialBundle.canonical(%{
             "index" => result.index,
+            "inputs_bundle" => Path.join(Path.dirname(result.index), "bundle.json"),
             "active_manifest" => result.active_manifest,
             "attempt" => result.request.attempt,
             "claim" => "verified_offline_import"
