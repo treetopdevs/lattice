@@ -217,7 +217,9 @@ manifest/service-identity paths. The service seed never enters a bundle or app e
 Authenticate full histories and ceremony binding; derive reference, profile ids,
 grant introductions/recipients, roots, expected service realm/key and peer maps.
 
-Write only a new private output attempt directory, with verified Log dumps, canonical
+Create fresh output before the operator root's first controlled boot; a prior boot
+marker refuses new imports rather than being erased. An exact completed retry only
+rechecks and syncs existing files. Write a new private output directory with verified Log dumps, canonical
 reference artifact and derived review inventory. Never overwrite a served log,
 manifest, existing artifact or user file; refuse symlinks/aliases, conflicting outputs
 and ambiguous partial attempts. Seal a completion index only after all outputs are
@@ -244,7 +246,8 @@ helper is part of this behavioral path, not a standalone completion milestone.
 
 ## Owning files and bounded implementation order
 
-Build each PR in a fresh worktree from current main after its prerequisites merge.
+Publish each PR from refreshed main after its prerequisites merge; isolated build
+work may use the exact reviewed dependency tip as described above.
 A single PR must not claim work still assigned to another PR below.
 
 Operator modules live under `apps/lattice_carrier_server/lib/lattice_carrier_server/operator/`;
