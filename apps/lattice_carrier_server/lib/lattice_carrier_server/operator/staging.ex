@@ -539,7 +539,8 @@ defmodule LatticeCarrierServer.Operator.Staging do
   # Returns :ok or {:error, :service_binding_mismatch | context.peer_error |
   # :relay_realms_unreviewed}, in that order of precedence. An instance with no
   # known replica, or a Treehouse instance with no authority root, is a
-  # mismatch; a non-Treehouse log may have no root and is then not inventoried.
+  # mismatch, and so are two instances serving one replica; a non-Treehouse log
+  # may have no root and is then not inventoried.
   @spec check_bound([map()], map(), map()) :: :ok | {:error, atom()}
   def check_bound(instances, context, binding) do
     treehouse = Enum.filter(instances, &treehouse?(context.replica_of.(&1)))
@@ -550,6 +551,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
       for root <- Map.values(context.roots), is_binary(root), do: Base.encode64(root)
 
     with :ok <- replicas_known(instances, context),
+         :ok <- replicas_unique(instances, context),
          :ok <- rooted(treehouse, context),
          :ok <- space_present(treehouse, context),
          :ok <- same_bound(treehouse, binding.realm, key),
@@ -563,6 +565,18 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
   defp replicas_known(instances, context) do
     if Enum.all?(instances, &is_binary(context.replica_of.(&1))),
+      do: :ok,
+      else: {:error, :service_binding_mismatch}
+  end
+
+  # `roots` is keyed by replica, so two instances serving one replica would
+  # collapse to one root and drop the other from the key-reuse inventory. Each
+  # instance serves one log, so differing roots for one replica need two
+  # instances serving it: refusing that covers both cases.
+  defp replicas_unique(instances, context) do
+    replicas = Enum.map(instances, context.replica_of)
+
+    if length(Enum.uniq(replicas)) == length(replicas),
       do: :ok,
       else: {:error, :service_binding_mismatch}
   end

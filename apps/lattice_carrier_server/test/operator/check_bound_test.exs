@@ -74,6 +74,29 @@ defmodule LatticeCarrierServer.Operator.CheckBoundTest do
              )
   end
 
+  test "two instances serving one replica are a binding mismatch" do
+    # A second, unbound legacy Thread served twice: the replica-keyed roots map
+    # keeps one root, so the twin's own root would never reach the key-reuse
+    # inventory. Without the duplicate-replica check this case is a peer
+    # refusal (:invalid_candidate_manifest), never a binding mismatch.
+    twin = %{treehouse("twin", key("twin-root")) | log_file: "/srv/twin.log"}
+    replicas = Map.put(replicas(), "twin", @thread)
+
+    assert {:error, :service_binding_mismatch} =
+             Staging.check_bound(instances() ++ [twin], context(replicas, roots()), bound())
+
+    other_twin = %{rootless() | name: "other2", log_file: "/srv/other2.log"}
+    replicas = replicas() |> Map.put("other2", @other)
+    roots = Map.put(roots(), @other, nil)
+
+    assert {:error, :service_binding_mismatch} =
+             Staging.check_bound(
+               instances() ++ [rootless(), other_twin],
+               context(replicas, roots),
+               bound()
+             )
+  end
+
   test "a Treehouse instance with no authority root is a binding mismatch" do
     for roots <- [Map.put(roots(), @thread, nil), Map.delete(roots(), @thread)] do
       assert {:error, :service_binding_mismatch} =
