@@ -24,11 +24,11 @@ run) needs the inputs under "Depends on" and is not a build PR.
   commit that wrongly marks a route trusted lets a stale or forked catalog steer a member's traffic.
 - **Depends on** (rule 8, exact inputs): (1) the operator ceremony report (`verification-report.json`,
   `mode: "real"`, `binding.status: "verified"`, runbook `docs/treehouse_catalog_signer_custody.md` §5.6);
-  (2) plan 224 PRs 4 (`catalogued`) and 5 (`listed`), whose output the exporter reads; (3) OD-6 to OD-10;
+  (2) plan 224 PRs 4 (`catalogued`) and 5 (`listed`), whose output the exporter reads; (3) OD-6 to OD-10 (decided, D-44); (6) row 256, the root's client-realm source (PRs 6-7 only);
   (4) R13 for member first install (not needed: this plan is root-only); (5) row 254, a bounded-family Thread
   to list (the app creates only legacy Threads; the pilot Thread comes from outside it).
 - **Part 1 vs Part 2 (rule 8).** PRs 1-7 finish on fixtures: test support builds catalogs, exports and logs
-  with disposable keys, so none needs (1) or (2). The operator acceptance (Done, Part 2) is parked on (1), (2), (5).
+  with disposable keys, so none needs (1) or (2). PRs 1-5 need nothing else; PRs 6-7 also need (6). The operator acceptance (Done, Part 2) is parked on (1), (2), (5).
 - **Rule 3 touches**: PRs 1, 2, 3, 5 and 7 (see the PR table). PRs 4 and 6 touch no rule 3 path.
 - **Category**: Treehouse client trust (roadmap R11b client half; D1: activation stays local-only).
 - **Planned at commit `bb40921f6`**.
@@ -332,7 +332,7 @@ PR 5 edits `preview.rs` after PR 1 (disjoint hunks; PR 1 merges first).
 
 ## Done criteria
 
-Part 1 (finishable after OD-6 to OD-10):
+Part 1 (PRs 1-5 finishable now, OD-6 to OD-10 decided; PRs 6-7 after row 256):
 - [ ] PRs 1-7 merged on green exact tips; each claims only its tier (rule 1).
 - [ ] Every Refusals atom has a test in the PR that enforces it; every refusal leaves the retained record unchanged.
 - [ ] Row 245 updated (one line); rows filed for OD-6 follow-ups and hand-off of lapsed-reference rechecks (row 244).
