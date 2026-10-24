@@ -10,11 +10,10 @@ defmodule LatticeCarrierServer.Operator.Staging do
   """
   alias Lattice.Authority
   alias Lattice.Authority.BeaconCertificate
-  alias Lattice.Carrier.Wire
   alias Lattice.Log
   alias Lattice.Op
   alias LatticeCarrierServer.{Durability, Manifest}
-  alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogStore, Journal, Lock}
+  alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogStore, Journal, Lock, ReferenceMode}
   alias Treehouse.TransportCatalog
   @max_artifact 32 * 1024 * 1024
   # Adopted founder-lifecycle witness maximum step
@@ -65,6 +64,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
       Lock.stage(root, expected, request.attempt, checks, material, fn ->
         with {:ok, binding} <- bind_ceremony(manifest.instances, artifacts, ceremony_dir),
+             :ok <- initial_catalog_current(root, retained, binding),
              {:ok, service} <- inspect_staged(retained, manifest, binding, catalogued) do
           {:ok,
            %{
@@ -225,7 +225,8 @@ defmodule LatticeCarrierServer.Operator.Staging do
          {:ok, space} <- unique_history(bundle.reference.replica, active),
          :ok <- unserved(bundle.child.replica, active),
          {:ok, child_log} <- verify_child(bundle.child),
-         :ok <- verify_reference(bundle, space),
+         :ok <- initial_active_history(bundle.reference.review, active),
+         {:ok, _observed} <- ReferenceMode.observe(bundle, space, child_log),
          context = %{
            pairs: pairs,
            space: space,
@@ -319,7 +320,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
     do: a.replica == nil and a.op_id == nil and a.review == nil
 
   defp artifact_identity_valid?(%{kind: :reference} = a),
-    do: is_binary(a.replica) and Journal.op_id?(a.op_id) and a.review == nil
+    do: is_binary(a.replica) and Journal.op_id?(a.op_id) and ReferenceMode.valid_review?(a.review)
 
   defp artifact_identity_valid?(%{kind: :log} = a),
     do: is_binary(a.replica) and Journal.op_id?(a.op_id) and review_valid?(a.review)
@@ -360,20 +361,28 @@ defmodule LatticeCarrierServer.Operator.Staging do
     end)
   end
 
-  defp verify_reference(%{reference: reference, child: child}, space) do
-    with {:ok, frame} <- Jason.decode(reference.bytes),
-         {:ok, op} <- Wire.decode_op(frame),
-         true <- Op.valid?(op) and op.id == reference.op_id and op.replica == reference.replica,
-         true <- op.kind == :command,
-         {:create_thread, [child_replica, title]} <- op.body,
-         true <- is_binary(title) and child_replica == child.replica,
-         # An op already present in the active history is published, not pending.
-         false <- Map.has_key?(space.ops, op.id),
-         {:ok, union} <- Log.accept(space, op),
-         false <- Map.has_key?(Authority.analyze(Treehouse.Space, union).reasons, op.id) do
-      :ok
+  defp initial_active_history(review, active) do
+    if ReferenceMode.initial?(review) and length(active) != 1,
+      do: {:error, :invalid_candidate_manifest},
+      else: :ok
+  end
+
+  # Runs inside the Python owner's stage lock, with the ceremony's catalog key.
+  # A nil request head or an empty route map cannot prove first publication.
+  defp initial_catalog_current(root, artifacts, binding) do
+    if Enum.any?(artifacts, &(&1.kind == :reference and ReferenceMode.initial?(&1.review))) do
+      case CatalogStore.verify(root, binding.record.catalog_key) do
+        {:ok, %{head: nil, pending: nil, envelopes: envelopes}} when map_size(envelopes) == 0 ->
+          :ok
+
+        {:ok, _} ->
+          {:error, :initial_catalog_not_empty}
+
+        {:error, _} = error ->
+          error
+      end
     else
-      _ -> {:error, :invalid_staged_signed_artifact}
+      :ok
     end
   end
 
@@ -726,6 +735,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
     with {:ok, child_log} <- staged_child(child),
          [space] <- Enum.filter(logs, &(&1.replica == reference["replica"])),
+         :ok <- initial_reference_current(reference, child, space, child_log),
          roster = roster(space),
          true <- Enum.sort(Enum.map(child["review"]["grants"], & &1["recipient"])) == roster,
          true <- bootstrap_peers_exact?(admitted, roster, child_log) do
@@ -734,6 +744,40 @@ defmodule LatticeCarrierServer.Operator.Staging do
       {:error, _} = refusal -> refusal
       _ -> {:error, window}
     end
+  end
+
+  # Activation and readiness must re-observe the current served history, not a
+  # journal boolean. Pending-mode behavior remains the existing saga.
+  defp initial_reference_current(reference, child, space, child_log) do
+    if ReferenceMode.initial?(reference["review"]) do
+      with {:ok, bytes} <- File.read(reference["path"]),
+           true <- Journal.digest(bytes) == reference["sha256"],
+           bundle = %{
+             reference: %{
+               bytes: bytes,
+               op_id: reference["op_id"],
+               replica: reference["replica"],
+               review: reference["review"]
+             },
+             child: %{replica: child["replica"], op_id: child["op_id"], review: child["review"]}
+           },
+           true <- initial_child_current?(bundle.child, child_log),
+           {:ok, _} <- ReferenceMode.observe(bundle, space, child_log) do
+        :ok
+      else
+        _ -> {:error, :invalid_staged_signed_artifact}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp initial_child_current?(child, log) do
+    analysis = Authority.analyze(Treehouse.Thread, log)
+    reviewed = reviewed_grants(child.review)
+
+    analysis.reasons == %{} and reviewed == honored_grants(log, analysis) and
+      authority_closed?(log, child, reviewed) and not Authority.tombstoned?(log)
   end
 
   defp staged_child(child) do

@@ -33,6 +33,43 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
     assert File.read!(f.active_log) == f.active_bytes
   end
 
+  test "initial adoption observes the existing reference without rewriting its history", f do
+    :ok = Lattice.Log.dump(f.updated_log, f.active_log)
+    present = File.read!(f.active_log)
+
+    artifacts =
+      Enum.map(f.artifacts, fn
+        %{kind: :reference} = reference -> %{reference | review: %{"mode" => "initial_existing"}}
+        other -> other
+      end)
+
+    # Normal pending mode must still refuse a reference that is already present.
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.prepare(f.root, nil, f.request, f.artifacts, f.ceremony_dir)
+
+    assert {:ok, nil} = Journal.read(f.root)
+    assert {:ok, record} = Staging.prepare(f.root, nil, f.request, artifacts, f.ceremony_dir)
+
+    assert Enum.find(record["artifacts"], &(&1["kind"] == "reference"))["review"] ==
+             %{"mode" => "initial_existing"}
+
+    assert File.read!(f.active_log) == present
+  end
+
+  test "initial mode refuses an absent reference rather than silently using pending mode", f do
+    artifacts =
+      Enum.map(f.artifacts, fn
+        %{kind: :reference} = reference -> %{reference | review: %{"mode" => "initial_existing"}}
+        other -> other
+      end)
+
+    assert {:error, :invalid_staged_signed_artifact} =
+             Staging.prepare(f.root, nil, f.request, artifacts, f.ceremony_dir)
+
+    assert {:ok, nil} = Journal.read(f.root)
+    assert File.read!(f.active_log) == f.active_bytes
+  end
+
   test "wrong signed replica never emits a prepared journal and preserves existing bytes", f do
     [child | rest] = f.artifacts
 

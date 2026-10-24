@@ -509,6 +509,35 @@ Do not delete a pending route/log as an automatic compensation. A failed service
 restart may interrupt unrelated routes on this single pilot host; status reports
 that outage explicitly. R16 owns supported Linux reboot and public WSS evidence.
 
+### Initial adoption of an app-created reference (plan 262)
+
+Normal staging keeps `reference.review: null`: the signed reference must be absent
+from the served Space and is published by the existing pending-reference saga.
+The explicit closed review `{"mode":"initial_existing"}` admits only a new
+one-Space/one-Thread deployment whose exact reference is already present and honored.
+This accommodates the ordinary app's atomic child/reference/admission transaction.
+It is not a general exception for already-catalogued groups.
+
+Under the staging owner's lock, verify the catalog store with the ceremony key:
+no committed head, pending envelope or prior receipted history may exist. Missing
+receipted or corrupt state refuses. Complete deletion of all operator state cannot
+be distinguished from a fresh store; preserving that state is an operator trust
+assumption, never an anti-rollback guarantee. No reset is a supported recovery path.
+
+The mode asserts observed presence, not authority. Verify the exact signed reference,
+independent child genesis/profile/creation, current roster and exact usable grants,
+service binding, peers and routes. Re-observe at activation and readiness. The review
+is journal metadata; its value is not authenticated by the raw reference digest.
+Both Python and BEAM serialize and validate it explicitly; old null-mode bytes stay
+unchanged. Old binaries refuse the new records, including append-only history, so
+rollback requires a compatible forward fix rather than editing history.
+
+Until plan 262's actual catalog/listing integration lands, both validators refuse
+`initial_existing` records in `catalogued` and `listed`. That integration must retain
+all route/catalog/holder guards and re-observe the exact reference through the live
+holder boundary, producing no second Space write. Retry must retain the same op set
+and receipt. Normal pending-mode publication still writes its signed reference once.
+
 ### Peer and removal reconciliation
 
 In the first profile the admitted carrier public key is the same public identity

@@ -2,19 +2,21 @@
 
 ## Status, dependencies and execution boundary
 
-DRAFT design, 2026-10-24. No implementation or runtime proof is supplied by this plan.
+IN PROGRESS, 2026-10-24. Design adopted; PR A is being built privately. No completed
+provisioning, ordinary offline exchange or listing proof is claimed.
 Prepared from fresh main `e8f5c285ed3508f93efaea8279819012d72b41cb`; plan number 262
 was free in that tip's plan index and tree. PR #165 is a required code dependency:
 its ordinary bounded creation, independent child custody, founder membership/grant,
-and restart behavior must merge with their required checks before build work begins.
-Refresh main and inspect PR #165's final implementation; do not assume its earlier tip.
+and restart behavior must merge with required checks before publishing implementation.
+Isolated build work may use the reviewed dependency tip while its gates run. Refresh
+and rebase onto main after #165 merges, then rerun affected checks before publication.
 
 Priority P1; effort XL across three bounded PRs below; risk HIGH. This amends an
 operator publication contract, changes the Python/BEAM journal twins and introduces
 untrusted public evidence import. It changes no authority rule or carrier Wire message.
 Read AGENTS.md and plans/README.md first. The unified roadmap remains the execution
-ledger; this is its self-contained design. The coordinator records decision D-46 in
-the existing HTML decision log after PR #165 merges; do not append that log in parallel.
+ledger; this is its self-contained design. Decision D-46 is recorded in the existing HTML decision log on the dependency-based
+implementation branch; retain D-45 unchanged when refreshing from merged main.
 
 Software build/acceptance uses disposable fixture identities, ceremony directories,
 local path-backed logs and loopback carriers. No real credentials, host, human witness
