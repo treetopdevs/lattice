@@ -365,7 +365,7 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
                noise
              )
 
-    child_path = Enum.find(activated["artifacts"], &(&1["kind"] == "log"))["path"]
+    child_path = Enum.find(JSON.decode!(activated)["artifacts"], &(&1["kind"] == "log"))["path"]
     assert {:ok, %{log: retained}} = Lattice.Log.restore_verified(child_path)
     assert retained.ops[noise.id] == noise
     assert Map.has_key?(Lattice.Authority.analyze(Treehouse.Thread, retained).reasons, noise.id)

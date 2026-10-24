@@ -439,7 +439,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 260 | Follow-up to OD-10 (D-44): native performs the plan 245 re-observation pull with a Rust carrier client inside the protected boundary (rejected option (a), estimated 1,500-2,500 lines, carrier-adjacent second review), closing the compromised-webview withheld-revoke nonclaim | P2 | L | 245 | TODO (filed 2026-10-24 from PR #163 Codex bot) |
 | 261 | [Two ordinary desktop apps over the real relay](261-two-ordinary-desktop-apps-real-relay.md) | P1 | XL | 224, 245; ceremony; two Macs | IN PROGRESS (2026-10-24; slice A custody and ordinary bounded creation implemented locally; packaged/field proof and slices B–G remain) |
 
-| 262 | [Offline enrollment and guarded initial provisioning](262-offline-enrollment-and-initial-provisioning.md) | P1 | XL | PR #165; plan 224 PRs 4-5 for listing | IN PROGRESS (2026-10-24; importer and ordinary-workflow Linux staging proof built privately; phase drift, full gates/reviews, offline controls and listing remain) |
+| 262 | [Offline enrollment and guarded initial provisioning](262-offline-enrollment-and-initial-provisioning.md) | P1 | XL | PR #165; plan 224 PRs 4-5 for listing | IN PROGRESS (#166: importer, Linux staging and phase guards implemented; local gates/reviews pass; hosted gate, offline UI and listing remain) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
