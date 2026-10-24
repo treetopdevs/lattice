@@ -15,7 +15,7 @@
 
 Design written 2026-10-23 (slice 22) against main bb40921f6; revised the same day after two independent
 reviews (dispositions in PR #162, rule 4). Parked under rule 8 for the final operator acceptance only. Part 1
-(PRs 1-7, fixtures and disposable keys) starts when OD-6 to OD-10 are decided. Part 2 (the operator's own
+(PRs 1-7, fixtures and disposable keys) can start: OD-6 to OD-10 were decided as recommended (D-44). Part 2 (the operator's own
 run) needs the inputs under "Depends on" and is not a build PR.
 
 ## Header
@@ -247,7 +247,7 @@ desktop-only**: the ordinary route alphabet already admits `wss`, and Android st
 - Grammar refusals: `treehouse_routes.ts`, `preview.rs` (PR 1). `catalog_envelope_invalid` (bad signature, bytes
   not canonical): Rust envelope verifier (PR 2).
 
-## Operator decisions (raised, not decided)
+## Operator decisions (decided 2026-10-24 as recommended, D-44)
 
 - **OD-6 Where acceptance is verified (rule 3).** (a) A Rust evaluator in `src-tauri`: canonical encoder,
   envelope verifier, bounded-continuation authority fold, catalog trust, inventory and route-reservation rules,
