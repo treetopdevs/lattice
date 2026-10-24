@@ -163,6 +163,9 @@ mod application_boundary_tests {
         let mut context = tauri::test::mock_context(tauri::test::noop_assets());
         for command in [
             "treehouse_open",
+            "treehouse_initialize_thread",
+            "treehouse_thread_identity",
+            "treehouse_sign_thread",
             witness_public::WITNESS_IDENTITY,
             witness_public::WITNESS_PREPARE_CREATION,
             witness_public::WITNESS_GENERATE,
