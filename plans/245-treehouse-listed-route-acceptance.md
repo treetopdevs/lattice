@@ -14,7 +14,7 @@
 ## Status
 
 Design written 2026-10-23 (slice 22) against main bb40921f6; revised the same day after two independent
-reviews (see "Review dispositions"). Parked under rule 8 for the final operator acceptance only. Part 1
+reviews (dispositions in PR #162, rule 4). Parked under rule 8 for the final operator acceptance only. Part 1
 (PRs 1-7, fixtures and disposable keys) starts when OD-6 to OD-10 are decided. Part 2 (the operator's own
 run) needs the inputs under "Depends on" and is not a build PR.
 
@@ -31,7 +31,7 @@ run) needs the inputs under "Depends on" and is not a build PR.
   with disposable keys, so none needs (1) or (2). The operator acceptance (Done, Part 2) is parked on (1), (2), (5).
 - **Rule 3 touches**: PRs 1, 2, 3, 5 and 7 (see the PR table). PRs 4 and 6 touch no rule 3 path.
 - **Category**: Treehouse client trust (roadmap R11b client half; D1: activation stays local-only).
-  **Planned at**: bb40921f6.
+- **Planned at commit `bb40921f6`**.
 
 ## Sources
 
@@ -193,8 +193,9 @@ refuse a state holding a bounded Thread profile ("newer builds only"). The kit i
 ## Design F: connect, refuse and the connection budget
 
 All in shell-owned `src/treehouse_host.ts` (never the word "websocket") behind plan 186's ports.
-- **Parameters** come only from `catalog_trust_routes`: `route.url`, `route.realm` as expected peer realm,
-  `route.serviceKey` as expected peer key. Native supplies them; it does not enforce the dial (honest-shell claim).
+- **Parameters** come only from `catalog_trust_routes`. `treehouse_host.ts` adapts each to the existing `RelayRoute`
+  shape: `route.url` to `url`, `route.realm` to `expectedPeerRealm`, `route.serviceKey` to `expectedPeerPubkey`
+  (`treehouse_state.ts:31`); the `RelayRoute` contract and its consumers are unchanged. Native supplies them; it does not enforce the dial (honest-shell claim).
 - **Inventory vs selection.** `RouteBook` gains a read-only `catalogInventory` (up to 13, from the receipt) and a
   shell-owned `activeSelection` of at most four foreground routes (Space first, then open Threads by recency);
   the feed is given only the selection. `MAX_ROUTES` keeps governing hand-typed routes.
@@ -338,21 +339,3 @@ routes. Unchecked until the ceremony report, plan 224 PRs 4-5 and row 254 exist.
 **Non-goals:** member first install (R13); creating bounded Threads in the app (row 254); a catalog read message,
 server push or origin file; key rotation or replacement (R11c); R21a origin mapping; mobile custody; freshness
 claims; route replacement (row 198 D3); superseding a lapsed reference (row 244); native-performed dialing.
-
-## Review dispositions
-
-Codex Sol review: 1 fixed (OD-6 now (a); (b) candidate-only, PRs 2-3). 2 escalated to OD-10 (rule 3); Design C
-keeps the generation-bound structural barrier and states the (b) nonclaim. 3 fixed (blocked gives `[]`). 4 fixed (OD-7 marker plus
-migration). 5 fixed (writers under one lock, stored `R`, race gate). 6 fixed (generation-scoped receipts).
-7 fixed (conflict check inside commit; `shadowed_by_catalog`). 8 fixed (Design G, PR 7). 9 fixed (Design E
-fixtures). 10 fixed (PR 5 files, remote-origin denial). 11 fixed (inventory vs selection). 12 fixed (grant vs
-receipt, STOP reworded). 13 fixed by the Part 1/2 split; rejected "park the whole plan" because PRs 1-7 finish on
-fixtures. 14 fixed (citations and shapes corrected in Current state).
-Custody review: 1 fixed (as Codex 1; option (i) signature-only watermark rejected, it advances on unvetted
-semantics). 2 fixed (marker in `initialize()`). 3 fixed (pin from native-persisted binding record; the evaluator
-detects a second bootstrap). 4 fixed (PR 2, STOP on Canonical). 5 fixed (keys from the pinned record; rotations
-refused). 6 fixed (digest-bound token). 7 fixed (`already_pinned`). 8 fixed (native persists only its own
-evidence). 9 fixed (unique head, rollback test). 10 fixed (reclassification). 11 fixed (shadowing, whole-install
-conflict). 12 fixed (claim text). 13 fixed (Design C.3 wording). 14 fixed (mapper guard in PR 6). 15 accepted
-(voluntary second review on PR 6). No finding was rejected outright; options rejected are named above.
-Codex confirm pass: P2 Android CSP fixed (OD-9 desktop-only override, Android check in the PR 7 gate).
