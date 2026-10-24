@@ -15,7 +15,7 @@
 
 Design written 2026-10-23 (slice 22) against main bb40921f6; revised the same day after two independent
 reviews (dispositions in PR #162, rule 4). Parked under rule 8 for the final operator acceptance only. Part 1
-(PRs 1-7, fixtures and disposable keys) can start: OD-6 to OD-10 were decided as recommended (D-44). Part 2 (the operator's own
+(PRs 1-7, fixtures and disposable keys) can start for PRs 1-5: OD-6 to OD-10 were decided as recommended (D-44). PR 6 also waits on row 256's client-realm decision. Part 2 (the operator's own
 run) needs the inputs under "Depends on" and is not a build PR.
 
 ## Header
@@ -127,9 +127,10 @@ Routes come from the untrusted catalog, so acceptance is two steps.
    required replica (Space and every listed Thread) against `route.url` with `route.realm`/`route.serviceKey` as
    expected peer, no operation sent, no route enabled in feed, sync or the saved list. It is bound to
    `digest(page head ‖ route set ‖ history generation)`, single use, in-process, and expires with the process.
-2. Who pulls is OD-10. Under (b) the webview pulls and returns, per required replica, `{replica, frames,
-   status}`; `catalog_trust_commit` refuses `probe_incomplete` when a replica is missing, `status` is not
-   complete, the grant is spent or its digest differs. Under (a) native pulls and the status is native's own.
+2. Who pulls is OD-10, decided (b) (D-44). The webview pulls and returns, per required replica, `{replica, frames}`;
+   `catalog_trust_commit` refuses `probe_incomplete` when a required replica is absent, the grant is spent or its
+   digest differs. Native takes no caller-supplied pull status: presence is a shape check, never proof that a pull
+   completed (the OD-10 (b) nonclaim). Under the rejected (a) native would pull and attest completion itself.
    Frames are self-authenticating and are unioned before the second native evaluation.
 3. **Why a withheld revoke or beacon is caught.** A page lacking a concurrent revoke, lapse or lease beacon makes
    the reference look honored. It is caught when the pull returns the op: the union is folded whole, the
@@ -185,10 +186,11 @@ key save and record commit. Every crash boundary is resumable because `trust_rec
 record: after marker, after sentinel or after key save there is no identity, so retrying `initialize` completes it.
 With an identity record, a marker and a missing or corrupt trust record is `trust_recovery_required`, the sentinel is
 never recreated and no CAS with expected `None` is allowed. Identities predating the build have neither marker
-nor trust: `status` returns `migration_required`, and the user-confirmed `catalog_trust_migrate` writes marker and
-sentinel under the lock (a crash between them retries the same way). **Nonclaim:** a pre-build identity cannot be proven never-pinned, and deleting marker and
+nor trust: an identity without a marker is `migration_required`, whatever the trust row holds. The user-confirmed
+`catalog_trust_migrate` writes the sentinel first, then the marker, under the lock: a crash after the sentinel leaves
+identity plus sentinel and no marker, still `migration_required`, and the retry no-ops the exact sentinel and writes the marker. **Nonclaim:** a pre-build identity cannot be proven never-pinned, and deleting marker and
 trust together is whole-store rollback (`lifecycle.md:452-455`). PR 5 tests: crash injected after each
-of marker, sentinel, key save and record commit, then retry succeeds with no recovery state; delete row, reopen, still
+of marker, sentinel, key save and record commit, and after the migration's sentinel write, then retry succeeds with no recovery state; delete row, reopen, still
 `trust_recovery_required`, no new sentinel; install twice (re-pin) refused `already_pinned`.
 
 ## Design E: bounded Thread grammar with TS/Rust parity
@@ -296,7 +298,7 @@ unless absolute from the repo root.
 | 3 | Rust catalog evaluator | new `src-tauri/src/catalog_eval/{authority,trust,entries}.rs`, extend `tests/catalog_eval_vectors.rs` | PR 2 | Yes, second review |
 | 4 | Operator exporter | new `apps/lattice_carrier_server/lib/lattice_carrier_server/operator/catalog_evidence.ex`, new `apps/lattice_carrier_server/lib/mix/tasks/treehouse.catalog_evidence.ex`, tests, runbook section | fixtures; real input after 224 PRs 4-5 | No |
 | 5 | Native owner | new `src-tauri/src/catalog_owner.rs`; `src-tauri/src/{lib,preview}.rs`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `test/product_contract.mjs`, `src-tauri/tests/catalog_owner.rs` | PRs 1-3; OD-7, OD-10 | Yes, second review |
-| 6 | Shell import, probe, connect and refuse | `src/treehouse_host.ts`, new `src/catalog_install.ts`, `src/CatalogPanel.vue`, `src/treehouse_workflow.ts` (catalog actions), `src/App.vue`, tests, OD-8 mapper and its guard | PRs 4-5; OD-8, OD-10 | No (voluntary second review) |
+| 6 | Shell import, probe, connect and refuse | `src/treehouse_host.ts`, new `src/catalog_install.ts`, `src/CatalogPanel.vue`, `src/treehouse_workflow.ts` (catalog actions), `src/App.vue`, tests, OD-8 mapper and its guard | PRs 4-5; OD-8, OD-10; row 256 (client realm) | No (voluntary second review) |
 | 7 | Ordinary CSP and hosted packaged gates | new desktop-only `src-tauri/tauri.macos.conf.json`, `product_contract.mjs`, `.github/workflows/flagship.yml`, new `test/packaged_catalog.ts`, `package.json`, `test/enrollment_ci_contract.mjs`, bundle-variant check | PR 6; OD-8, OD-9, OD-10 | Yes (`.github/workflows`), second review |
 
 PR 5 edits `preview.rs` after PR 1 (disjoint hunks; PR 1 merges first).
@@ -349,7 +351,7 @@ routes. Unchecked until the ceremony report, plan 224 PRs 4-5 and row 254 exist.
   committed generation-valid receipt.
 - A third review round on the same finding class (rule 3): operator design question.
 - A loopback `ws://` reaching a release bundle, or a widened `connect-src` in the shared or Android config.
-- Resolving OD-10 by adding caller-attested pull status that native treats as proof, or choosing (a) without PR 4b
+- Any caller-attested pull status that native treats as proof (OD-10 (b) takes none), or choosing (a) without PR 4b
   reviewed as carrier-adjacent.
 
 **Non-goals:** member first install (R13); creating bounded Threads in the app (row 254); a catalog read message,

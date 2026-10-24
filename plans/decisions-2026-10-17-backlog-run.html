@@ -492,10 +492,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dl>
 <dt>When</dt><dd>2026-10-24, decided by the user as operator</dd>
 <dt>OD-6</dt><dd>(a) Acceptance is verified by a Rust evaluator inside the protected native boundary, a third twin with reciprocal vectors (plan 245 PRs 2 and 3). (b) was rejected because it promotes the webview's verdict.</dd>
-<dt>OD-7</dt><dd>(a) as amended. <code>initialize()</code> writes an independent initialised marker under <code>identity_lock</code>, then the sentinel, then the identity last. A missing or corrupt trust record beside the marker is <code>trust_recovery_required</code>, with no recreation. Identities that predate the build get a one-time confirmed migration (a nonclaim).</dd>
+<dt>OD-7</dt><dd>(a) as amended. <code>initialize()</code> writes an independent initialised marker under <code>identity_lock</code>, then the sentinel, then the identity last. A missing or corrupt trust record beside the marker is <code>trust_recovery_required</code>, with no recreation. Identities that predate the build get a one-time confirmed migration (a nonclaim), which writes the sentinel before the marker so a crash between them stays retryable.</dd>
 <dt>OD-8</dt><dd>(iii) The test-profile loopback origin is a dev-trace-only origin mapper for disposable keys, compiled out of ordinary bundles.</dd>
 <dt>OD-9</dt><dd>(i) as a desktop-only override: <code>wss:</code> is added to <code>connect-src</code> in a macOS-only config. The shared and Android configs stay local-only, and PR 7 checks this.</dd>
-<dt>OD-10</dt><dd>(b) The webview performs the re-observation pull, and native enforces shape and generation binding. Against a compromised webview, re-observation is not enforced, and a withheld revoke can be installed until the next native reclassification; that is a written nonclaim at honest-shell tier. (a), native pulls with a Rust carrier client, is a filed follow-up.</dd>
+<dt>OD-10</dt><dd>(b) The webview performs the re-observation pull, and native enforces shape and generation binding. Against a compromised webview, re-observation is not enforced, and a withheld revoke can be installed until the next native reclassification; that is a written nonclaim at honest-shell tier. (a), native pulls with a Rust carrier client, is filed as follow-up row 260. Native takes no caller-supplied pull status; plan 245 Design C was corrected in ledger 8 to match its STOP condition.</dd>
+<dt>PR 6</dt><dd>Plan 245 PRs 1-5 can start on fixtures. PR 6 also waits on row 256, the source of the root's client realm when no relay configuration exists, which is an operator decision.</dd>
 </dl>
 </article>
 
