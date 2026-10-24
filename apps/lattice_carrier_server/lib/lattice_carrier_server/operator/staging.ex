@@ -482,6 +482,9 @@ defmodule LatticeCarrierServer.Operator.Staging do
          # that participant's authority.
          true <-
            Base.encode64(admitted.pub) not in [Base.encode64(Authority.root(space)) | roster],
+         # verify_child already requires the bounded Treehouse Thread family;
+         # this keeps the admitted child inside check_bound explicitly.
+         true <- treehouse?(child.replica),
          bound = bound_context(pairs, child, context),
          :ok <- check_bound(candidate.instances, bound, binding),
          :ok <- catalog_routes_kept(candidate.instances, bound.replica_of, context.catalogued),
