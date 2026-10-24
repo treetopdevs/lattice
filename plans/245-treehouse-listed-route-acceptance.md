@@ -90,11 +90,13 @@ Design 6.4 omits that a verified native commit needs a native evaluator, which d
 
 ## Design A: first install (root only) and its pin
 
-1. **Pin source.** When the root signs the binding, a new native command writes the reviewed record
-   (`bootstrapId`, `CatalogBootstrap` fields, `BindingReview.sha256`; `treehouse_bounded.ts:182-183`) write-once to
-   `treehouse:catalog:binding:v1`. For a binding signed before this build, the migration review (Design D)
-   writes it after the native evaluator confirms exactly one honored root-authored bootstrap in the persisted
-   Space frames. The catalog key and service key come from that record, never from a caller.
+1. **Pin source.** No IPC command writes the binding record, so no early call can burn the write-once slot. The
+   record (`bootstrapId`, `CatalogBootstrap` fields, `BindingReview.sha256`; `treehouse_bounded.ts:182-183`) is a
+   derived, idempotent cache at `treehouse:catalog:binding:v1`, written only by `catalog_trust_review` after the
+   native evaluator finds exactly one honored root-authored bootstrap in the persisted Space frames, and
+   rebuilt from them whenever it is absent. A crash before the history commit leaves no bootstrap and no record; a
+   crash after it leaves the bootstrap and no record, and the next review rebuilds it. If it exists it must equal
+   the unique honored bootstrap or the review refuses `catalog_fork`. The catalog and service keys come from it.
 2. **Review.** `catalog_trust_review` builds the closed review natively and shows bootstrap id, Space, root key,
    service id and origin. It refuses `not_space_root` (local key != `spaceRoot`), `already_pinned` (any non-sentinel
    record exists: the re-pin guard) and `catalog_fork` (more than one honored bootstrap).
@@ -109,7 +111,7 @@ Design 6.4 omits that a verified native commit needs a native evaluator, which d
 One file `lattice-catalog-evidence-page-v1`, a closed envelope `{format, space, bootstrapId, head, pages}` of
 TS `TreehouseCatalogEvidencePage` values: the envelope chain from revision 0 as exact JSON strings plus signed raw
 frames of the Space and each listed Thread. Bounds are existing: 32 artifacts per page, 128 KiB each
-(`catalog_trust.ex:81,1933`), 16 MiB file (the `space_export.rs` cap). Duplicate or unknown keys, non-UTF-8 and
+(`catalog_trust.ex:81,1933`), a transport cap of 64 MiB, above the evaluator's 16 MiB artifact bound (`:82`) because histories ride in the same file: the retained snapshot is capped at 32 MiB (`catalog_store.rs:14`) and JSON escaping can double it. The webview forwards the file to native in chunks of at most 4 MiB, which native assembles under the pending token up to the cap. Duplicate or unknown keys, non-UTF-8 and
 over-cap are `evidence_page_malformed`/`evidence_page_too_large`. A multi-page chain's completeness is caller-owned
 (`retained_trust.md:372-374`); a gap leaves the head `trust_pending`. A page holding a rotation is refused
 `catalog_rotation_unsupported` (R11c is a non-goal; native fails closed). The webview forwards bytes unchanged;
@@ -147,10 +149,14 @@ older page against a newer retained head is `catalog_rollback`).
 **Outcomes.** Installed: routes exposed. Pending but unblocked (`trust_pending`, `recovery_incomplete`): earlier
 accepted routes stay usable and the head is `not installed`. Blocked (`catalog_fork`, `authority_changed`,
 `control_history_limit`): `routes: []`, watermark kept. Native persists only evidence it verified itself (Rust
-evaluator output), never a webview-asserted refusal.
+evaluator output), never a webview-asserted refusal. **Fail-closed latch:** the moment a blocked outcome (fork,
+authority change, limit) is verified, native sets an in-process latch before it tries to persist; while latched,
+`catalog_trust_routes` returns `[]`. The latch clears only when that evidence is durably committed (CAS success) or a
+later evaluation supersedes it. If persistence fails (`trust_persistence_failed`) routes stay off. A crash loses the
+latch and the unpersisted evidence; that is a nonclaim, and re-importing the page restores it.
 
 **Owner** `catalog_owner.rs` (+ `PreviewStore` integration for its private db, keys and lock). Commands:
-`catalog_trust_status`, `_review`, `_probe`, `_commit`, `_routes`, `_migrate`, `catalog_binding_record_save`. None
+`catalog_trust_status`, `_review`, `_probe`, `_commit`, `_routes`, `_migrate`. None
 accepts a snapshot, route list, review object or "verified" flag. Added to `build.rs`, `capabilities/default.json`
 and the `product_contract.mjs` exact sets; a test denies each from a remote origin and the witness webview.
 
@@ -162,7 +168,9 @@ exclusive. Under it: capture history revision `R`, evaluate, CAS trust with `R` 
 **Receipts and reclassification.** A receipt is `{trust token, installedHead, routes, generation R}`. Routes are
 served only by `catalog_trust_routes`, which compares `R` with the current revision and, if different, re-runs the
 native evaluator over the current persisted histories plus retained evidence before answering; open does the same.
-Blocked yields `[]`. The shell calls it before each dial and after each sync persist. Post-install revoke or
+Blocked yields `[]`. The shell calls it before each dial and after each sync persist; if the selection lost a route, the host calls
+the feed's `reconfigure()` (`feed.ts:83`) at once, which aborts the old epoch and closes its sockets (`:153-160`),
+so a removed route is never reused by a later sync or reconnect. Post-install revoke or
 lapse is therefore caught at the next sync; the UI claims "listed as of last evaluation" (row 244 for lapsed refs).
 
 **Saved routes.** Inside the commit, catalog routes are compared with the persisted `relay.routes` (rule at
@@ -170,13 +178,17 @@ lapse is therefore caught at the next sync; the UI claims "listed as of last eva
 `route_conflicts_saved_route` until row 198's D3. An identical saved route is marked `shadowed_by_catalog` in the
 record; the shell then ignores saved routes for catalogued replicas, even when the catalog is blocked.
 
-**Ordering against an identity (OD-7 (a)).** `initialize()` writes, under `identity_lock`, an independent
-`treehouse:catalog:initialised:v1` marker first, then the identity, then a sentinel trust record (token 0/0). A
-missing or corrupt trust record beside the marker is `trust_recovery_required`; the sentinel is never recreated and
-no CAS with expected `None` is allowed once the marker exists. Identities predating the build have neither marker
+**Ordering against an identity (OD-7 (a)).** The identity is the `HISTORY_KEY` record holding `public_key`, committed
+last. `initialize()` under `identity_lock` writes the independent `treehouse:catalog:initialised:v1` marker, then
+the sentinel trust record (token 0/0, CAS from `None`; an existing exact sentinel is a no-op), then the existing
+key save and record commit. Every crash boundary is resumable because `trust_recovery_required` requires an identity
+record: after marker, after sentinel or after key save there is no identity, so retrying `initialize` completes it.
+With an identity record, a marker and a missing or corrupt trust record is `trust_recovery_required`, the sentinel is
+never recreated and no CAS with expected `None` is allowed. Identities predating the build have neither marker
 nor trust: `status` returns `migration_required`, and the user-confirmed `catalog_trust_migrate` writes marker and
-sentinel under the lock. **Nonclaim:** a pre-build identity cannot be proven never-pinned, and deleting marker and
-trust together is whole-store rollback (`lifecycle.md:452-455`). PR 5 test: delete row, reopen, still
+sentinel under the lock (a crash between them retries the same way). **Nonclaim:** a pre-build identity cannot be proven never-pinned, and deleting marker and
+trust together is whole-store rollback (`lifecycle.md:452-455`). PR 5 tests: crash injected after each
+of marker, sentinel, key save and record commit, then retry succeeds with no recovery state; delete row, reopen, still
 `trust_recovery_required`, no new sentinel; install twice (re-pin) refused `already_pinned`.
 
 ## Design E: bounded Thread grammar with TS/Rust parity
@@ -201,6 +213,8 @@ All in shell-owned `src/treehouse_host.ts` (never the word "websocket") behind p
   the feed is given only the selection. `MAX_ROUTES` keeps governing hand-typed routes.
 - **Identity of what was pulled:** replica, root and genesis must equal the route's, else the route is dropped
   (`route_replica_mismatch`, `route_root_mismatch`, `route_genesis_mismatch`).
+- **Reclassification closes sessions:** the feed captures its routes at spawn (`feed.ts:524-535`), so a route
+  removed by reclassification is acted on immediately by `reconfigure()`, not at the next reconnect.
 - **No fallback:** a hand-typed route is never used for a catalogued replica (`catalog_route_unavailable`).
 - **Scheme:** `wss://` only; the disposable-profile mapper is OD-8. **No freshness claim:** a withheld newer
   catalog is undetectable and an older one never displaces the retained head.
@@ -298,12 +312,14 @@ PR 5 edits `preview.rs` after PR 1 (disjoint hunks; PR 1 merges first).
   refusal, revoke/beacon lapse of a reference, route reservation, inventory growth) and the Rust decision, routes and
   reason equal Elixir and TS for each.
 - PR 4: `mix test` for the exporter: round-trip through `CatalogTrust.evaluate/1` to `reason: nil`; refuses
-  tampered, forked, gapped or over-cap chains and an existing output file or symlink; byte-identical on repeat.
-- PR 5: `cargo test --test catalog_owner`: one test per owner refusal; reopen returns the same receipt; the Design D
+  tampered, forked, gapped or over-cap chains and an existing output file or symlink; byte-identical on repeat; a maximum-size evaluator-valid fixture (16 MiB of artifacts plus histories to the 32 MiB snapshot cap) exports and imports within the 64 MiB cap, and one byte over it is `evidence_page_too_large`.
+- PR 5: `cargo test --test catalog_owner`: one test per owner refusal; crash on both sides of the bootstrap history commit rebuilds the binding record, no IPC call can write it; reopen returns the same receipt; the Design D
   race gate; delete row then reopen is `trust_recovery_required` with no sentinel; re-pin refused; a swapped page
-  or reused token refused; blocked routes `[]`; receipt reclassified after a history revoke and after restart;
+  or reused token refused; blocked routes `[]`; a persistence failure injected after a verified fork or reclassification keeps routes `[]` until
+  a commit succeeds; receipt reclassified after a history revoke and after restart;
   conflicting saved route refuses the install; contract exact sets and denial from remote origin and witness webview.
-- PR 6: typecheck and shell tests: Accept unreachable before commit; failed or timed-out pull refuses; a pulled
+- PR 6: typecheck and shell tests: reclassification removing a route closes its old socket before any later sync or
+  reconnect (fake relay observes the close first); Accept unreachable before commit; failed or timed-out pull refuses; a pulled
   revoke turns the head into a refusal; replica/root/genesis mismatch drops the route; 13 retained entries open at
   most four sockets; no hand-typed fallback; mapper absent from the release variant. Tier: unit and contract.
 - PR 7: hosted `treehouse_packaged_macos_enrollment` and the ordinary packaged job green on the exact tip: import,
