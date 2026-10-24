@@ -5,9 +5,12 @@ identity. Create Threads, write posts, edit or hide your own posts, and archive 
 reported as **Saved on this device** survive an app restart. The original signed history remains
 retained, including edits, hidden posts and archived Threads.
 
-**Recovery is not set up.** This preview has no invitations, member grants, live catalog, sync or
-witness setup. It is one local Space with twelve total Thread slots; archiving retains a slot.
-The signing key is stored in the platform key store, separately from the Treehouse database.
+**Recovery is not set up.** Ordinary desktop creation supports one bounded Space and three
+bounded Threads; archiving retains a slot. Thread setup captures nominee/witness public keys,
+threshold and lease bounds, but does not prove witness custody or recovery readiness. Supported
+two-person enrollment, live catalog installation and relay sync remain separate work.
+Each Thread has its own native root key. Participant keys sign posts; Thread keys sign authorized
+administration and grants. Keys stay in the platform key store, separately from the database.
 Missing history or unavailable/mismatched keys are shown explicitly and never replaced silently.
 
 Drafts save after an idle pause. Wait for **Saved on this device** before quitting. Posting commits
@@ -19,7 +22,14 @@ The initial preview limits the entire serialized public history record to 1 MiB 
 16 KiB. The existing per-Thread 4,000-operation / 8 MiB authoring stop also applies. These are bounded
 preview stops; no pilot-scale latency, full-volume capacity or mobile device claim is made.
 
-From `clients/treehouse-tauri-shell`, run `npm ci`, `npm test`, `npm run build`,
+First, from the repository root, prepare the client used by the reciprocal tests:
+
+```sh
+npm --prefix clients/lattice-client ci
+npm --prefix clients/lattice-client run build
+```
+
+Then, from `clients/treehouse-tauri-shell`, run `npm ci`, `npm test`, `npm run build`,
 `npm run native:test`, then `npm run tauri -- build` for the separately packaged macOS app.
 The package uses `dev.treetop.lattice.treehouse` and `treehouse-v1.sqlite3`. It does not import
 Township data, fixtures or signing identities.

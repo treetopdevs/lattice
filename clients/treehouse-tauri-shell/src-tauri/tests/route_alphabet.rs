@@ -76,8 +76,23 @@ fn rust_and_typescript_agree_on_every_replica_grammar_case() {
     let cases: Vec<ReplicaCase> = serde_json::from_str(REPLICA_CASES).expect("replica cases parse");
     assert!(cases.len() >= 50);
     for case in &cases {
-        assert_eq!(valid_profile_replica(&case.value, "space"), case.space, "{}", case.note);
-        assert_eq!(valid_profile_replica(&case.value, "thread"), case.thread, "{}", case.note);
-        assert_eq!(valid_route_replica(&case.value), case.space || case.thread, "{}", case.note);
+        assert_eq!(
+            valid_profile_replica(&case.value, "space"),
+            case.space,
+            "{}",
+            case.note
+        );
+        assert_eq!(
+            valid_profile_replica(&case.value, "thread"),
+            case.thread,
+            "{}",
+            case.note
+        );
+        assert_eq!(
+            valid_route_replica(&case.value),
+            case.space || case.thread,
+            "{}",
+            case.note
+        );
     }
 }

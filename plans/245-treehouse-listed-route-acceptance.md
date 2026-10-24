@@ -19,6 +19,11 @@ reviews (dispositions in PR #162, rule 4). Parked under rule 8 for the final ope
 run) needs the inputs under "Depends on" and is not a build PR.
 PR 1 landed (bounded Thread grammar, TS/Rust parity, kind-aware `verifyProfile` for row 258; PR TBD).
 
+2026-10-24 integration: plan 261 implements bounded Thread grammar, independent native child-key
+custody and ordinary desktop creation locally (row 254), retaining merged PR #164 / row 258. Rebase later PRs on that implementation;
+its packaged/staging gates remain open. This is an authorized grammar/custody change for the drift
+check, not a catalog-trust implementation. Root/member installation remains unimplemented.
+
 ## Header
 
 - **Priority**: P2. **Effort**: XL (seven PRs; PR 3, a Rust evaluator, is the bulk). **Risk**: HIGH: a native
@@ -27,7 +32,7 @@ PR 1 landed (bounded Thread grammar, TS/Rust parity, kind-aware `verifyProfile` 
   `mode: "real"`, `binding.status: "verified"`, runbook `docs/treehouse_catalog_signer_custody.md` §5.6);
   (2) plan 224 PRs 4 (`catalogued`) and 5 (`listed`), whose output the exporter reads; (3) OD-6 to OD-10 (decided, D-44); (6) row 256, the root's client-realm source (PRs 6-7 only);
   (4) R13 for member first install (not needed: this plan is root-only); (5) row 254, a bounded-family Thread
-  to list (the app creates only legacy Threads; the pilot Thread comes from outside it).
+  to list (ordinary bounded creation is implemented locally by plan 261; packaged/staging evidence is pending).
 - **Part 1 vs Part 2 (rule 8).** PRs 1-7 finish on fixtures: test support builds catalogs, exports and logs
   with disposable keys, so none needs (1) or (2). PRs 1-5 need nothing else; PRs 6-7 also need (6). The operator acceptance (Done, Part 2) is parked on (1), (2), (5).
 - **Rule 3 touches**: PRs 1, 2, 3, 5 and 7 (see the PR table). PRs 4 and 6 touch no rule 3 path.

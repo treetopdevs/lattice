@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-sign-thread"
+description = "Enables the treehouse_sign_thread command without any pre-configured scope."
+commands.allow = ["treehouse_sign_thread"]
+
+[[permission]]
+identifier = "deny-treehouse-sign-thread"
+description = "Denies the treehouse_sign_thread command without any pre-configured scope."
+commands.deny = ["treehouse_sign_thread"]

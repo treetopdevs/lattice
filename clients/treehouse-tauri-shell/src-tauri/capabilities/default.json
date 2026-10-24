@@ -1,17 +1,20 @@
 {
   "identifier": "default",
   "description": "The local Treehouse window",
-  "windows": [
-    "main"
-  ],
   "permissions": [
     "core:default",
     "allow-treehouse-open",
     "allow-treehouse-initialize-identity",
+    "allow-treehouse-initialize-thread",
+    "allow-treehouse-thread-identity",
+    "allow-treehouse-sign-thread",
     "allow-treehouse-commit",
     "allow-treehouse-load-draft",
     "allow-treehouse-save-draft",
     "allow-treehouse-sign-carrier",
     "allow-treehouse-export-space-frames"
+  ],
+  "webviews": [
+    "main"
   ]
 }

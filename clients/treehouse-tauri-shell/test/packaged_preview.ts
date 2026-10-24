@@ -229,6 +229,12 @@ try {
     await act("press", "Create local group");
     await writeFile(`${evidence}/created-ui.json`, await wait("Thread title"));
     await act("set", "Thread title", "Field notes");
+    // Public setup identities only. These test-profile keys supply no physical custody claim.
+    for (const [label, byte] of [["Thread nominee public key", 101], ["Thread witness public keys", 102]] as const) {
+      const { ed25519 } = await import("@noble/curves/ed25519.js");
+      const keys = label === "Thread witness public keys" ? [byte, byte + 1, byte + 2] : [byte];
+      await act("set", label, keys.map((n) => Buffer.from(ed25519.getPublicKey(new Uint8Array(32).fill(n))).toString("base64")).join("\n"));
+    }
     await act("press", "Create thread");
     await wait("Write a post");
     await act("set", "Write a post", "First note from the native app");

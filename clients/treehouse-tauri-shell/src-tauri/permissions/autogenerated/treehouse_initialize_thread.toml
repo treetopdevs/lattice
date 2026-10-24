@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-initialize-thread"
+description = "Enables the treehouse_initialize_thread command without any pre-configured scope."
+commands.allow = ["treehouse_initialize_thread"]
+
+[[permission]]
+identifier = "deny-treehouse-initialize-thread"
+description = "Denies the treehouse_initialize_thread command without any pre-configured scope."
+commands.deny = ["treehouse_initialize_thread"]

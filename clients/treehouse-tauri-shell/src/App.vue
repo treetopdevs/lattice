@@ -7,7 +7,7 @@ import {
   ref,
   shallowRef,
 } from "vue";
-import { TreehouseWorkflow } from "./treehouse_workflow";
+import { TreehouseWorkflow, parsePublicKeys } from "./treehouse_workflow";
 import { native } from "./native_adapter";
 import WitnessSetup from "./WitnessSetup.vue";
 import ContinuationPanel from "./ContinuationPanel.vue";
@@ -32,6 +32,8 @@ const groupName = ref(""),
   draftRevision = ref(0),
   draftSaved = ref(true);
 const draftFailed = ref(false);
+const threadNominee = ref(""), threadWitnesses = ref("");
+const threadThreshold = ref(2), threadLease = ref(7);
 const editing = ref<string | null>(null),
   editText = ref(""),
   audit = ref(false);
@@ -93,7 +95,7 @@ const joining = computed(
 );
 // Only the Space's root holder can add a Thread, so a joined member never sees an action that always fails.
 const canCreateThread = computed(
-  () => writable.value && space.value !== undefined && caps.value.canCreateThread,
+  () => writable.value && space.value !== undefined && caps.value.canCreateThread && (enrollment || threads.value.length < 3),
 );
 // Each Thread action is gated on its own operation: a grant may carry one without another, and a revoked
 // or lapsed grant carries none.
@@ -135,6 +137,16 @@ function describe(error: unknown): string {
     draft_too_large:
       "Keep this draft under 16 KiB to save it in the local preview.",
     invalid_name: "Enter a name before creating.",
+    not_bounded_space: "This older group cannot use bounded Thread setup. Use a new group in a separate profile.",
+    invalid_public_key: "A public key is malformed. Check that each witness line contains a complete public key.",
+    thread_key_unavailable: "A Thread root key is unavailable, so new member permissions cannot be signed. Saved history remains available.",
+    thread_abandon_not_allowed: "This setup cannot be discarded as a lost-key setup. Resume it if its key is still available.",
+    invalid_thread_setup: "Enter a nominee and up to 16 distinct witness public keys separate from your own identity, a witness threshold, and a lease limit.",
+    existing_thread_grant_unavailable: "Your posting permission in an existing Thread is unavailable. Resolve that permission before adding another Thread.",
+    thread_custody_unavailable: "This app build cannot store a separate Thread key. Update the desktop app before creating.",
+    thread_key_missing: "This Thread's root key is missing. It has not been replaced; saved history remains available.",
+    thread_key_mismatch: "The saved Thread key does not match its identity. Nothing has been replaced.",
+    legacy_threads_require_new_space: "This Space has older Threads. Create a new Space in a separate profile for bounded setup.",
   };
   return (
     known[message] ??
@@ -239,7 +251,10 @@ async function createGroup() {
 async function createThread() {
   await run(async () => {
     await flushDraft();
-    await workflow.createThread(threadTitle.value);
+    await workflow.createThread(threadTitle.value, enrollment ? undefined : {
+      nominee: threadNominee.value.trim(), witnesses: parsePublicKeys(threadWitnesses.value),
+      threshold: Number(threadThreshold.value), maxLeaseEpochs: Number(threadLease.value),
+    });
     threadTitle.value = "";
     refresh();
     await loadDraft();
@@ -315,6 +330,9 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
       ><span class="recovery">Recovery is not set up</span>
     </header>
     <div v-if="error" role="alert" class="notice error">{{ error }}</div>
+    <p v-if="active && workflow.threadKeyIssue(active.replica)" role="status" class="notice">
+      {{ describe(workflow.threadKeyIssue(active.replica)) }}
+    </p>
     <div v-if="!ready && !error" class="loading" role="status">
       Opening local history…
     </div>
@@ -399,7 +417,21 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
             placeholder="What’s on your mind?"
             :disabled="!canCreateThread"
             maxlength="4000"
-          /><button
+          />
+          <fieldset v-if="!enrollment" :disabled="busy || !canCreateThread">
+            <legend>Thread continuity setup</legend>
+            <p>This desktop workflow supports up to three Threads, including archived Threads.</p>
+            <p>Review who may take over moderation and which witnesses must approve it. Public keys only; no private keys or passwords.</p>
+            <label for="thread-nominee">Nominee public key</label>
+            <input id="thread-nominee" aria-label="Thread nominee public key" v-model="threadNominee" />
+            <label for="thread-witnesses">Witness public keys</label>
+            <textarea id="thread-witnesses" aria-label="Thread witness public keys" v-model="threadWitnesses" placeholder="One public key per line, up to 16 keys" maxlength="4096" />
+            <label for="thread-threshold">Required witnesses</label>
+            <input id="thread-threshold" aria-label="Thread witness threshold" v-model.number="threadThreshold" type="number" min="1" />
+            <label for="thread-lease">Maximum lease epochs</label>
+            <input id="thread-lease" aria-label="Thread lease limit" v-model.number="threadLease" type="number" min="1" max="65535" />
+          </fieldset>
+          <button
             class="secondary"
             type="submit"
             :disabled="!canCreateThread || !threadTitle.trim() || threads.length >= 12"
@@ -410,6 +442,10 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         <section v-else class="notice">
           <p>Thread setup is incomplete.</p>
           <button :disabled="busy" @click="resume">Finish local setup</button>
+          <template v-if="state.intent.kind === 'thread' && state.intent.setup">
+            <p>If this unfinished setup lost its key, you can discard only the setup. The key will not be replaced; existing history stays saved.</p>
+            <button :disabled="busy || !workflow.keyAvailable" @click="run(async () => { await workflow.abandonThreadCreation(); refresh(); })">Discard unfinished setup with lost key</button>
+          </template>
         </section>
         <div class="rail-bottom">
           <p>

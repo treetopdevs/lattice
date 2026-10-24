@@ -357,11 +357,12 @@ export async function authorTreehouseAdmitAndGrant(input) {
             throw new Error("grant_revoked");
         if (member.length > 0)
             throw new Error("grant_expired");
+        const signer = input.threadSigners?.[replica] ?? input.signer;
         const parent = delegations.find(({ delegation, refusal }) => refusal === null &&
-            delegation.audience === pubkeyBase64(input.signer.publicKey) && full(delegation))?.delegation;
+            delegation.audience === pubkeyBase64(signer.publicKey) && full(delegation))?.delegation;
         if (parent === undefined)
             throw new Error("no_capability");
-        return { replica, frames, parent };
+        return { replica, frames, parent, signer };
     });
     const admitCap = review.admitted ? null : memberCapability(input.frames, input.signer.publicKey, input.replica, { command: "admit_member", product: "Treehouse.Space" });
     if (!review.admitted && admitCap === null)
@@ -377,7 +378,7 @@ export async function authorTreehouseAdmitAndGrant(input) {
         if (plan === null)
             continue;
         const frame = await authorTownshipDelegation({ replica: plan.replica, deps: frontier(opsOf("Treehouse.Thread", plan.frames)),
-            audiencePubkey: acceptance.recipient, parentId: plan.parent.id, ops: [...MEMBER_OPS], roles: [], live: false, signer: input.signer });
+            audiencePubkey: acceptance.recipient, parentId: plan.parent.id, ops: [...MEMBER_OPS], roles: [], live: false, signer: plan.signer });
         assertHonored("Treehouse.Thread", plan.frames, frame);
         grants.push({ replica: plan.replica, frame, delegation: carrierDelegationsFromFrames([frame])[0] });
     }
