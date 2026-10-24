@@ -79,6 +79,28 @@ fn treehouse_sign_carrier(
 ) -> Result<String, String> {
     with_store(&state, |s| s.sign(&bytes))
 }
+#[tauri::command]
+fn treehouse_initialize_thread(
+    state: tauri::State<'_, AppState>,
+    nonce: String,
+) -> Result<String, String> {
+    with_store(&state, |s| s.initialize_thread(&nonce))
+}
+#[tauri::command]
+fn treehouse_thread_identity(
+    state: tauri::State<'_, AppState>,
+    nonce: String,
+) -> Result<String, String> {
+    with_store(&state, |s| s.thread_identity(&nonce))
+}
+#[tauri::command]
+fn treehouse_sign_thread(
+    state: tauri::State<'_, AppState>,
+    nonce: String,
+    bytes: String,
+) -> Result<String, String> {
+    with_store(&state, |s| s.sign_thread(&nonce, &bytes))
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -113,6 +135,9 @@ fn application_invoke_handler<R: tauri::Runtime>(
     let preview: fn(tauri::ipc::Invoke<R>) -> bool = tauri::generate_handler![
         treehouse_open,
         treehouse_initialize_identity,
+        treehouse_initialize_thread,
+        treehouse_thread_identity,
+        treehouse_sign_thread,
         treehouse_commit,
         treehouse_load_draft,
         treehouse_save_draft,
@@ -237,6 +262,30 @@ mod application_boundary_tests {
                 .resolve_access("treehouse_open", "main", "main", &tauri::ipc::Origin::Local)
                 .is_some());
             for command in [
+                "treehouse_initialize_thread",
+                "treehouse_thread_identity",
+                "treehouse_sign_thread",
+            ] {
+                assert!(authority
+                    .resolve_access(command, "main", "main", &tauri::ipc::Origin::Local)
+                    .is_some());
+                for webview in ["other", "witness"] {
+                    assert!(authority
+                        .resolve_access(command, "main", webview, &tauri::ipc::Origin::Local)
+                        .is_none());
+                }
+                assert!(authority
+                    .resolve_access(
+                        command,
+                        "main",
+                        "main",
+                        &tauri::ipc::Origin::Remote {
+                            url: "https://example.invalid".parse().unwrap()
+                        }
+                    )
+                    .is_none());
+            }
+            for command in [
                 "treehouse_witness_identity",
                 "plugin:treehouse-witness-internal|dispatch",
                 "treehouse_unregistered_action",
@@ -259,6 +308,20 @@ mod application_boundary_tests {
             .unwrap();
         assert_eq!(
             invoke(&view, "treehouse_open", json!({})),
+            Err(json!("preview_test_store_unavailable"))
+        );
+        for command in ["treehouse_initialize_thread", "treehouse_thread_identity"] {
+            assert_eq!(
+                invoke(&view, command, json!({"nonce": "A".repeat(43)})),
+                Err(json!("preview_test_store_unavailable"))
+            );
+        }
+        assert_eq!(
+            invoke(
+                &view,
+                "treehouse_sign_thread",
+                json!({"nonce": "A".repeat(43), "bytes": "YQ=="})
+            ),
             Err(json!("preview_test_store_unavailable"))
         );
         for command in [

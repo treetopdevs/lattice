@@ -40,7 +40,23 @@ defmodule Treehouse.NativePreviewOracle do
 
       true =
         Enum.any?(ops, fn op ->
-          op.author == public_key and op.deps == [] and match?({:genesis, _, _}, op.body) and
+          (op.author == public_key or
+             (module == Treehouse.Thread and
+                Authority.root(log) == op.author and
+                Enum.any?(ops, fn grant ->
+                  case grant.body do
+                    {:grant, delegation} ->
+                      delegation.audience == public_key and
+                        MapSet.member?(delegation.ops, :post) and
+                        not Map.has_key?(analysis.reasons, grant.id) and
+                        Authority.delegation_active?(log, delegation.id) and
+                        not Authority.revoked?(log, delegation.id)
+
+                    _ ->
+                      false
+                  end
+                end))) and
+            op.deps == [] and match?({:genesis, _, _}, op.body) and
             not MapSet.member?(analysis.quarantine, op.id)
         end)
 

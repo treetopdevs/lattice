@@ -6,10 +6,10 @@ pub(crate) const KEY_SERVICE: &str = "dev.treetop.lattice.treehouse.carrier";
 pub(crate) struct TreehouseKeyStore;
 impl TreehouseKeyStore {
     fn entry(&self, key_id: &str) -> Result<keyring::Entry, String> {
-        if key_id != KEY_ALIAS {
+        if key_id != KEY_ALIAS && !valid_thread_alias(key_id) {
             return Err("invalid_key_alias".into());
         }
-        keyring::Entry::new(KEY_SERVICE, KEY_ALIAS).map_err(|_| "key_store_unavailable".into())
+        keyring::Entry::new(KEY_SERVICE, key_id).map_err(|_| "key_store_unavailable".into())
     }
 }
 impl CarrierKeySeedStore for TreehouseKeyStore {
@@ -31,4 +31,22 @@ impl CarrierKeySeedStore for TreehouseKeyStore {
             .set_password(&BASE64.encode(seed))
             .map_err(|_| "key_store_unavailable".into())
     }
+}
+
+pub(crate) fn thread_key_alias(owner: &str, nonce: &str) -> String {
+    format!("thread-root-v1:{owner}:{nonce}")
+}
+fn valid_thread_alias(alias: &str) -> bool {
+    let Some(tail) = alias.strip_prefix("thread-root-v1:") else {
+        return false;
+    };
+    let Some((owner, nonce)) = tail.split_once(':') else {
+        return false;
+    };
+    [owner, nonce].iter().all(|part| {
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        URL_SAFE_NO_PAD
+            .decode(part)
+            .is_ok_and(|bytes| bytes.len() == 32 && URL_SAFE_NO_PAD.encode(bytes) == *part)
+    })
 }

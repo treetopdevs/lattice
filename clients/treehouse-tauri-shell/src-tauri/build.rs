@@ -2,6 +2,9 @@ fn main() {
     let manifest = tauri_build::AppManifest::new().commands(&[
         "treehouse_open",
         "treehouse_initialize_identity",
+        "treehouse_initialize_thread",
+        "treehouse_thread_identity",
+        "treehouse_sign_thread",
         "treehouse_commit",
         "treehouse_load_draft",
         "treehouse_save_draft",

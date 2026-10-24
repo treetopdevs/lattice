@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-thread-identity"
+description = "Enables the treehouse_thread_identity command without any pre-configured scope."
+commands.allow = ["treehouse_thread_identity"]
+
+[[permission]]
+identifier = "deny-treehouse-thread-identity"
+description = "Denies the treehouse_thread_identity command without any pre-configured scope."
+commands.deny = ["treehouse_thread_identity"]

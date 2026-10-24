@@ -1,7 +1,10 @@
 //! Bounded local persistence. Retained signatures are verified by the TS consumer;
 //! this boundary enforces identity, monotonic storage and immutable acknowledged frames.
-use crate::key_store::KEY_ALIAS;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use crate::key_store::{thread_key_alias, KEY_ALIAS};
+use base64::{
+    engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD},
+    Engine as _,
+};
 use ed25519_dalek::{Signer as _, SigningKey};
 use fs2::FileExt as _;
 use lattice_mobile_core::{
@@ -19,6 +22,8 @@ use std::{
 pub const HISTORY_KEY: &str = "treehouse:preview:history";
 pub const HISTORY_BYTES: usize = 1_048_576;
 pub const DRAFT_BYTES: usize = 16_384;
+const THREAD_CREATION_RESERVE_BYTES: usize = 131_072;
+const MAX_THREAD_WITNESSES: usize = 16;
 /// One Space route plus at most three Thread routes.
 const MAX_ROUTES: usize = 4;
 /// The join intent carries no user text; this constant satisfies the non-empty name rule.
@@ -68,6 +73,32 @@ struct Intent {
     kind: String,
     name: String,
     nonce: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    setup: Option<ThreadSetup>,
+}
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ThreadSetup {
+    nominee: String,
+    witnesses: Vec<String>,
+    threshold: u32,
+    max_lease_epochs: u32,
+}
+impl ThreadSetup {
+    fn valid(&self) -> bool {
+        public_key_text(&self.nominee)
+            && !self.witnesses.is_empty()
+            && self.witnesses.len() <= MAX_THREAD_WITNESSES
+            && self
+                .witnesses
+                .iter()
+                .all(|key| public_key_text(key) && key != &self.nominee)
+            && self.witnesses.iter().collect::<HashSet<_>>().len() == self.witnesses.len()
+            && self.threshold > 0
+            && self.threshold as usize <= self.witnesses.len()
+            && self.max_lease_epochs > 0
+            && self.max_lease_epochs <= 65_535
+    }
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -443,6 +474,12 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
     }
     let mut value: Value =
         serde_json::from_str(raw).map_err(|_| "invalid_preview_record".to_string())?;
+    if value["intent"]
+        .as_object()
+        .is_some_and(|intent| intent.get("setup").is_some_and(Value::is_null))
+    {
+        return Err("invalid_creation_intent".into());
+    }
     if value["version"] == 0 {
         let preceding = [
             "version",
@@ -535,6 +572,9 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
             || i.name.len() > DRAFT_BYTES
             || (i.kind == "join" && i.name != JOIN_INTENT_NAME)
             || !token(&i.nonce)
+            || i.setup.as_ref().is_some_and(|setup| {
+                i.kind != "thread" || !canonical_token(&i.nonce) || !setup.valid()
+            })
         {
             return Err("invalid_creation_intent".into());
         }
@@ -742,6 +782,169 @@ impl PreviewStore {
         self.identity_lock.unlock().map_err(storage_error)?;
         result
     }
+    // Only native code derives aliases. The public binding is durable before the key is returned.
+    fn thread_context(&self, nonce: &str) -> Result<(String, String, Record), String> {
+        if !canonical_token(nonce) {
+            return Err("invalid_thread_nonce".into());
+        }
+        let (_, record) = self.captured()?;
+        let key = self.loaded_key()?.ok_or("identity_unavailable")?;
+        let owner = BASE64.encode(key.verifying_key().as_bytes());
+        if record.public_key.as_deref() != Some(&owner) {
+            return Err("identity_mismatch".into());
+        }
+        let alias = thread_key_alias(
+            &URL_SAFE_NO_PAD.encode(key.verifying_key().as_bytes()),
+            nonce,
+        );
+        let binding = format!(
+            "treehouse:preview:child:{:x}",
+            Sha256::digest(alias.as_bytes())
+        );
+        Ok((alias, binding, record))
+    }
+    pub fn initialize_thread(&mut self, nonce: &str) -> Result<String, String> {
+        self.identity_lock.lock_exclusive().map_err(storage_error)?;
+        let result = (|| {
+            let (alias, binding, record) = self.thread_context(nonce)?;
+            let pending = record.intent.as_ref().is_some_and(|intent| {
+                intent.kind == "thread" && intent.nonce == nonce && intent.setup.is_some()
+            });
+            let expected = self.db.kv_get(&binding).map_err(storage_error)?;
+            if !pending {
+                let public = expected.as_ref().ok_or("thread_key_unbound")?;
+                let bytes = BASE64.decode(public).map_err(|_| "thread_key_mismatch")?;
+                let replica = format!(
+                    "replica:treehouse:thread:{nonce}{BOUNDED_MARK}{}",
+                    URL_SAFE_NO_PAD.encode(Sha256::digest(&bytes))
+                );
+                if !record.profiles.iter().any(|profile| {
+                    profile.product == "Treehouse.Thread" && profile.replica == replica
+                }) {
+                    return Err("thread_key_not_in_scope".into());
+                }
+            }
+            let existing = self
+                .keys
+                .load_seed(&alias)
+                .map_err(|_| "key_store_unavailable")?;
+            if expected.is_some() && existing.is_none() {
+                return Err("thread_key_missing".into());
+            }
+            let key = match existing {
+                Some(seed) => SigningKey::from_bytes(&seed),
+                None => {
+                    let key = SigningKey::generate(&mut rand_core::OsRng);
+                    self.keys
+                        .save_seed(&alias, key.to_bytes())
+                        .map_err(|_| "key_store_unavailable")?;
+                    key
+                }
+            };
+            let public_key = BASE64.encode(key.verifying_key().as_bytes());
+            if record.public_key.as_ref() == Some(&public_key) {
+                return Err("thread_root_reused".into());
+            }
+            if expected
+                .as_ref()
+                .is_some_and(|expected| expected != &public_key)
+            {
+                return Err("thread_key_mismatch".into());
+            }
+            // A save failure after Keychain insertion leaves the same key available for retry.
+            if expected.is_none() {
+                self.db
+                    .kv_set(&binding, &public_key)
+                    .map_err(storage_error)?;
+            }
+            Ok(public_key)
+        })();
+        self.identity_lock.unlock().map_err(storage_error)?;
+        result
+    }
+    /// Read-only ownership lookup for reopen; this method never creates a key or binding.
+    pub fn thread_identity(&self, nonce: &str) -> Result<String, String> {
+        self.identity_lock.lock_exclusive().map_err(storage_error)?;
+        let result =
+            (|| {
+                let (alias, binding, record) = self.thread_context(nonce)?;
+                let expected = self
+                    .db
+                    .kv_get(&binding)
+                    .map_err(storage_error)?
+                    .ok_or("thread_key_unbound")?;
+                let seed = self
+                    .keys
+                    .load_seed(&alias)
+                    .map_err(|_| "key_store_unavailable")?
+                    .ok_or("thread_key_missing")?;
+                let key = SigningKey::from_bytes(&seed);
+                if expected != BASE64.encode(key.verifying_key().as_bytes()) {
+                    return Err("thread_key_mismatch".into());
+                }
+                let replica = format!(
+                    "replica:treehouse:thread:{nonce}{BOUNDED_MARK}{}",
+                    URL_SAFE_NO_PAD.encode(Sha256::digest(key.verifying_key().as_bytes()))
+                );
+                if !record.profiles.iter().any(|profile| {
+                    profile.product == "Treehouse.Thread" && profile.replica == replica
+                }) {
+                    return Err("thread_key_not_in_scope".into());
+                }
+                Ok(expected)
+            })();
+        self.identity_lock.unlock().map_err(storage_error)?;
+        result
+    }
+    pub fn sign_thread(&self, nonce: &str, encoded: &str) -> Result<String, String> {
+        self.identity_lock.lock_exclusive().map_err(storage_error)?;
+        let result = (|| {
+            let (alias, binding, record) = self.thread_context(nonce)?;
+            let expected = self
+                .db
+                .kv_get(&binding)
+                .map_err(storage_error)?
+                .ok_or("thread_key_unbound")?;
+            let key = self
+                .keys
+                .load_seed(&alias)
+                .map_err(|_| "key_store_unavailable")?
+                .map(|seed| SigningKey::from_bytes(&seed))
+                .ok_or("thread_key_missing")?;
+            if expected != BASE64.encode(key.verifying_key().as_bytes()) {
+                return Err("thread_key_mismatch".into());
+            }
+            let replica = format!(
+                "replica:treehouse:thread:{nonce}{BOUNDED_MARK}{}",
+                URL_SAFE_NO_PAD.encode(Sha256::digest(key.verifying_key().as_bytes()))
+            );
+            let pending = record.intent.as_ref().is_some_and(|intent| {
+                intent.kind == "thread" && intent.nonce == nonce && intent.setup.is_some()
+            });
+            if !pending
+                && !record.profiles.iter().any(|profile| {
+                    profile.product == "Treehouse.Thread" && profile.replica == replica
+                })
+            {
+                return Err("thread_key_not_in_scope".into());
+            }
+            if encoded.len() > 85_336 {
+                return Err("signing_limit".into());
+            }
+            let bytes = BASE64
+                .decode(encoded)
+                .map_err(|_| "invalid_signing_bytes")?;
+            if bytes.is_empty() || bytes.len() > 64_000 {
+                return Err("signing_limit".into());
+            }
+            if !thread_signing_prefix(&bytes, &replica, key.verifying_key().as_bytes()) {
+                return Err("thread_signing_scope_mismatch".into());
+            }
+            Ok(BASE64.encode(key.sign(&bytes).to_bytes()))
+        })();
+        self.identity_lock.unlock().map_err(storage_error)?;
+        result
+    }
     pub fn sign(&self, bytes: &str) -> Result<String, String> {
         #[cfg(feature = "treehouse-dev-trace")]
         self.note("treehouse_sign_carrier");
@@ -762,6 +965,12 @@ impl PreviewStore {
         Ok(BASE64.encode(key.sign(&bytes).to_bytes()))
     }
     pub fn commit(&mut self, expected_revision: u64, next: &str) -> Result<bool, String> {
+        self.identity_lock.lock_exclusive().map_err(storage_error)?;
+        let result = self.commit_inner(expected_revision, next);
+        self.identity_lock.unlock().map_err(storage_error)?;
+        result
+    }
+    fn commit_inner(&mut self, expected_revision: u64, next: &str) -> Result<bool, String> {
         #[cfg(feature = "treehouse-dev-trace")]
         self.note("treehouse_commit");
         let (raw, old) = self.captured()?;
@@ -769,6 +978,14 @@ impl PreviewStore {
             return Ok(false);
         }
         let next_record = parse(Some(next))?;
+        if next_record
+            .intent
+            .as_ref()
+            .is_some_and(|intent| intent.setup.is_some())
+            && next.len() + THREAD_CREATION_RESERVE_BYTES > HISTORY_BYTES
+        {
+            return Err("preview_storage_limit".into());
+        }
         if serde_json::from_str::<Value>(next).map_err(|_| "invalid_preview_record")?["version"]
             != 2
         {
@@ -850,6 +1067,7 @@ impl PreviewStore {
             if previous.kind != pending.kind
                 || previous.nonce != pending.nonce
                 || previous.name != pending.name
+                || previous.setup != pending.setup
             {
                 return Err("creation_intent_changed".into());
             }
@@ -871,15 +1089,51 @@ impl PreviewStore {
                     (p.replica.starts_with(&format!(
                         "replica:treehouse:{}:{}#root:",
                         pending.kind, pending.nonce
-                    )) || (pending.kind == "space"
+                    )) || (matches!(pending.kind.as_str(), "space" | "thread")
                         && p.replica.starts_with(&format!(
-                            "replica:treehouse:space:{}{}",
-                            pending.nonce, BOUNDED_MARK
+                            "replica:treehouse:{}:{}{}",
+                            pending.kind, pending.nonce, BOUNDED_MARK
                         ))))
                         && !old.profiles.iter().any(|old| old.replica == p.replica)
                 })
             {
                 return Err("creation_incomplete".into());
+            }
+        }
+        if let Some(intent) = old
+            .intent
+            .as_ref()
+            .filter(|intent| intent.kind == "thread" && intent.setup.is_some())
+        {
+            if next_record.intent.is_none() {
+                let (alias, binding, _) = self.thread_context(&intent.nonce)?;
+                let expected = self
+                    .db
+                    .kv_get(&binding)
+                    .map_err(storage_error)?
+                    .ok_or("thread_key_unbound")?;
+                let seed = self
+                    .keys
+                    .load_seed(&alias)
+                    .map_err(|_| "key_store_unavailable")?
+                    .ok_or("thread_key_missing")?;
+                let key = SigningKey::from_bytes(&seed);
+                if expected != BASE64.encode(key.verifying_key().as_bytes()) {
+                    return Err("thread_key_mismatch".into());
+                }
+                let replica = format!(
+                    "replica:treehouse:thread:{}{}{}",
+                    intent.nonce,
+                    BOUNDED_MARK,
+                    URL_SAFE_NO_PAD.encode(Sha256::digest(key.verifying_key().as_bytes()))
+                );
+                if !next_record
+                    .profiles
+                    .iter()
+                    .any(|profile| profile.replica == replica)
+                {
+                    return Err("thread_key_mismatch".into());
+                }
             }
         }
         for (replica, revision) in &old.cleared_drafts {
@@ -988,4 +1242,32 @@ impl PreviewStore {
             Ok(None)
         }
     }
+}
+
+// Match the canonical domain, replica and signer prefix; this is not an Authority evaluator.
+fn thread_signing_prefix(bytes: &[u8], replica: &str, key: &[u8; 32]) -> bool {
+    fn binary(out: &mut Vec<u8>, value: &[u8]) {
+        match value.len() {
+            0..=23 => out.push(0x40 | value.len() as u8),
+            24..=255 => out.extend([0x58, value.len() as u8]),
+            _ => {
+                out.push(0x59);
+                out.extend((value.len() as u16).to_be_bytes());
+            }
+        }
+        out.extend(value);
+    }
+    [
+        (0x87, "lattice-op-v2"),
+        (0x88, "lattice-delegation-v2"),
+        (0x89, "lattice-delegation-v3"),
+    ]
+    .iter()
+    .any(|(array, tag)| {
+        let mut prefix = vec![*array];
+        binary(&mut prefix, tag.as_bytes());
+        binary(&mut prefix, replica.as_bytes());
+        binary(&mut prefix, key);
+        bytes.len() > prefix.len() && bytes.starts_with(&prefix)
+    })
 }

@@ -108,19 +108,24 @@ assert.deepEqual(
     "treehouse_commit",
     "treehouse_export_space_frames",
     "treehouse_initialize_identity",
+    "treehouse_initialize_thread",
+    "treehouse_thread_identity",
+    "treehouse_sign_thread",
     "treehouse_load_draft",
     "treehouse_open",
     "treehouse_save_draft",
     "treehouse_sign_carrier",
   ].sort(),
 );
-const previewCommands = ["treehouse_open", "treehouse_initialize_identity", "treehouse_commit", "treehouse_load_draft", "treehouse_save_draft", "treehouse_sign_carrier", "treehouse_export_space_frames"];
+const previewCommands = ["treehouse_thread_identity", "treehouse_initialize_thread", "treehouse_sign_thread", "treehouse_open", "treehouse_initialize_identity", "treehouse_commit", "treehouse_load_draft", "treehouse_save_draft", "treehouse_sign_carrier", "treehouse_export_space_frames"];
 const witnessCommands = ["treehouse_witness_public_identity", "treehouse_witness_prepare_creation", "treehouse_witness_generate", "treehouse_witness_prove_binding", "treehouse_witness_cancel"];
 const build = await readFile("src-tauri/build.rs", "utf8");
 assert.deepEqual([...build.matchAll(/"(treehouse_\w+)"/g)].map(m => m[1]).sort(), [...previewCommands, ...witnessCommands].sort());
 const previewCapability = JSON.parse(await readFile("src-tauri/capabilities/default.json", "utf8"));
 const witnessCapability = JSON.parse(await readFile("src-tauri/capabilities/witness.json", "utf8"));
 const permission = command => "allow-" + command.replaceAll("_", "-");
+assert.deepEqual(previewCapability.webviews, ["main"]);
+assert.equal(previewCapability.windows, undefined);
 assert.deepEqual(previewCapability.permissions.slice().sort(), ["core:default", ...previewCommands.map(permission)].sort());
 assert.deepEqual(witnessCapability.permissions.slice().sort(), witnessCommands.map(permission).sort());
 assert.deepEqual(witnessCapability.webviews, ["main"]);

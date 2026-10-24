@@ -20,10 +20,20 @@ export interface LocalProfile {
   /** Ids known durable on the relay. Grows only; a subset of the retained frame ids. */
   acked: string[];
 }
+/** Desktop creation bounds keep the signed policy and final transaction within native limits. */
+export const MAX_THREAD_WITNESSES = 16;
+export const THREAD_CREATION_RESERVE_BYTES = 131_072;
+export interface ThreadSetup {
+  nominee: string;
+  witnesses: string[];
+  threshold: number;
+  maxLeaseEpochs: number;
+}
 export interface CreationIntent {
   kind: "space" | "thread" | "join";
   name: string;
   nonce: string;
+  setup?: ThreadSetup;
 }
 export interface RelayRoute {
   replica: string;
@@ -59,6 +69,9 @@ export interface OpenResult {
 export interface PreviewNative {
   open(): Promise<OpenResult>;
   initialize(): Promise<string>;
+  initializeThread?(nonce: string): Promise<string>;
+  threadIdentity?(nonce: string): Promise<string>;
+  signThread?(nonce: string, bytes: Uint8Array): Promise<Uint8Array>;
   commit(expectedRevision: number, next: string): Promise<boolean>;
   loadDraft(replica: string): Promise<Draft | null>;
   saveDraft(
@@ -161,7 +174,8 @@ export function parseState(record: string | null): PreviewState {
   if (
     value.intent !== null &&
     (!object(value.intent) ||
-      !keys(value.intent, ["kind", "name", "nonce"]) ||
+      !(keys(value.intent, ["kind", "name", "nonce"]) ||
+        (keys(value.intent, ["kind", "name", "nonce", "setup"]) && value.intent.kind === "thread" && validThreadSetup(value.intent.setup))) ||
       !["space", "thread", "join"].includes(value.intent.kind as string) ||
       typeof value.intent.name !== "string" ||
       !value.intent.name.trim() ||
@@ -258,4 +272,15 @@ function publicKey(value: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+/** Closed public setup persisted in the intent so a retry signs the same policy. */
+export function validThreadSetup(value: unknown): value is ThreadSetup {
+  if (!object(value) || !keys(value, ["nominee", "witnesses", "threshold", "maxLeaseEpochs"])) return false;
+  const pub = (key: unknown) => typeof key === "string" && /^[A-Za-z0-9+/]{43}=$/.test(key) &&
+    /[AEIMQUYcgkosw048]=$/.test(key);
+  return pub(value.nominee) && Array.isArray(value.witnesses) && value.witnesses.length > 0 && value.witnesses.length <= MAX_THREAD_WITNESSES &&
+    value.witnesses.every((key) => pub(key) && key !== value.nominee) && new Set(value.witnesses).size === value.witnesses.length &&
+    Number.isInteger(value.threshold) && Number(value.threshold) >= 1 && Number(value.threshold) <= value.witnesses.length &&
+    Number.isInteger(value.maxLeaseEpochs) && Number(value.maxLeaseEpochs) >= 1 && Number(value.maxLeaseEpochs) <= 65535;
 }

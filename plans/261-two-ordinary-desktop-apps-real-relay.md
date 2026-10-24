@@ -4,9 +4,10 @@
 
 Design prepared 2026-10-24 against `ffb7f3f22d1abf7adfd437bc0f14292dadffff56`.
 User adopted D1–D6 and authorized starting slice A on 2026-10-24. Deployment remains
-a later authorized operation. Slice A is IN PROGRESS: library authoring and reciprocal
-proof are implemented; ordinary-app child-key custody and creation remain unfinished.
-No live host inspection or field proof accompanies this work.
+a later authorized operation. Slice A's library, native custody, crash recovery and
+ordinary desktop creation are implemented locally. Hosted packaged, Linux staging,
+actual Keychain/device and field evidence remain separate gates. No live host inspection
+or deployment accompanies this work.
 
 Target: one assisted, text-only session between two ordinary macOS apps, independently
 created Keychain identities, one new bounded Space and one bounded Thread, one real WSS
@@ -200,31 +201,46 @@ authority. The proof uses disposable keys; it does not prove physical witness cu
 Existing authority accepts these unleased posting grants; no Authority rule changed.
 This proves initial enrollment/posting, not permission renewal or founder-loss readiness.
 
-The existing ordinary `createThread` action remains legacy. Switching it to the new
-helper with the current single signer would violate staging's independent-root rule.
-Complete these native changes before calling slice A done:
+The ordinary UI now supplies an explicit bounded setup to `createThread`; the dev-trace
+fixture variant retains the legacy path, and existing legacy histories remain readable.
+A legacy Space/Thread group is not silently migrated into a catalogued group.
 
-1. Add one native Keychain child key per persisted creation intent, namespaced to the
-   participant identity and nonce. Persist the key's public binding to the intended
-   Thread; retry after a crash reuses it. Missing previously bound keys refuse recovery;
-   never regenerate them or garbage-collect orphan keys automatically.
-2. Add bounded native initialization/signing commands scoped to the current creation
-   intent or retained verified Thread. The webview cannot choose arbitrary key aliases.
-   Keep child seeds in native custody. Wire commands through lib/build/capability and
-   product-contract allowlists, with command denial tests for remote/witness origins.
-3. During creation, collect/review child nominee/witness keys and threshold/lease limits.
-   Generate and sign with the independent child key, issue the founder participant's
-   grant, and persist child frames, Space reference and founder membership as a resumable
-   transaction. Separate public preparation from final commit; an interrupted step
-   neither publishes half a Thread nor generates another key/genesis/reference.
-4. Keep posting, acknowledgement ownership and relay handshake on participant keys;
-   use the child signer only for child-root operations. Test signer dispatch explicitly.
-5. Exercise creation interruption before/after key storage and history commit, missing
-   child key, concurrent creators, restart, and the operator's actual staging path.
-   Only then enable ordinary bounded creation and close the app half of row 254.
+Native implementation:
 
-This custody work belongs to slice A, before B. No external credential is needed for
-its fixture implementation; real witness keys and platform prompts gate field proof.
+- Child aliases are derived natively from the participant public key and persisted nonce.
+  Keychain holds the random seed; SQLite holds only its public binding. Binding is saved
+  before a key is returned. An orphaned first-save key is reused; an already-bound missing
+  or substituted key refuses without generation or cleanup.
+- Native `initialize_thread`, read-only `thread_identity`, and `sign_thread` commands
+  accept a nonce, not an alias. They check current identity and the pending intent or
+  retained Thread. Signing is limited to canonical op/delegation prefixes carrying the
+  exact replica and child public key, under the existing 64,000-byte limit. This scopes
+  the signer; it does not add a native Authority evaluator or compromised-webview claim.
+- History commits and key initialization share the process/file identity lock. The
+  ordinary workflow commits child genesis/title/pin, Space reference, founder acceptance,
+  admission and posting grant together, and spends the intent only on that commit.
+  Public setup is immutable in the intent, so retry signs the same policy and uses the
+  same key. Reopen performs a read-only ownership lookup, never key initialization.
+- Posts, edits, tombstones and transport use the participant identity. Child-root signing
+  is reserved for authorized administration. A revoked participant grant cannot fall
+  back to the child root; the empty profile-pin delegation grants no administrative ops.
+- Setup permits at most 16 witnesses and three Threads. Existing founder grants and scope
+  are checked before saving an intent. A 128 KiB reserve in the 1 MiB history budget
+  covers the bounded creation transaction; concurrent pending writes cannot consume it.
+  Invalid setup, known unavailable grants, or insufficient capacity refuse before key creation.
+- Missing child custody leaves history readable and is shown in the app. Lost keys are
+  not regenerated. Backup/export/recovery of child seeds is outside this increment.
+
+Local regressions cover interrupted key save and final commit, uncertain successful
+commit, concurrent creators, missing/substituted/disappearing keys, no-write reopen,
+malformed/oversized setup, scope/capacity refusals, signer dispatch and revoked grants.
+The ordinary bounded workflow's actual signed frames are independently verified and
+restored by Elixir. ACL tests deny remote and non-main webviews. These software tests
+use isolated seed stores; they do not establish physical Keychain/witness custody.
+
+Before operational closure, run the hosted ordinary packaged job, Linux operator
+staging gate, and actual platform key/restart checks. The real ceremony, relay and
+second-app field exercise remain later slices. No real-relay readiness follows here.
 
 Before implementation, update plan 245 in the same PR for the member owner, bounded
 Thread authoring, budget amendment and 255–259 dispositions (README rule 7). Update plan

@@ -18,6 +18,7 @@ import {
   memberCapability,
   observeTreehouse,
   prepareTreehouseBoundedSpaceCreation,
+  prepareTreehouseBoundedThreadCreation,
   reviewTreehouseCatalogBindingPayload,
   reviewTreehouseInvitation,
   signTreehouseAcceptance,
@@ -46,6 +47,8 @@ import {
   HISTORY_BYTES,
   DRAFT_BYTES,
   JOIN_INTENT_NAME,
+  validThreadSetup,
+  THREAD_CREATION_RESERVE_BYTES,
 } from "./treehouse_state";
 import type {
   PreviewNative,
@@ -54,6 +57,7 @@ import type {
   Draft,
   RelayConfig,
   RelayRoute,
+  ThreadSetup,
 } from "./treehouse_state";
 import {
   isProfileReplica,
@@ -191,6 +195,9 @@ export class TreehouseWorkflow {
   /** Each verified replica's committed genesis author: the key its #root: commitment names. */
   private roots = new Map<string, string>();
   keyAvailable = false;
+  private ownedThreadRoots = new Map<string, string>();
+  private threadKeyProblems = new Map<string, string>();
+  threadKeyIssue(replica: string) { return this.threadKeyProblems.get(replica) ?? null; }
   /** Reviewed but unconfirmed offer routes. Memory only: Use never persists. */
   private pendingOffer: { review: OfferReview; relay: RelayConfig } | null = null;
   /** Reviewed but unsigned catalog binding payload. Memory only: cancelling or reopening discards it. */
@@ -224,6 +231,22 @@ export class TreehouseWorkflow {
         await this.verifyProfile(profile, next.publicKey!),
       );
     this.validateProfiles(next, views);
+    this.ownedThreadRoots.clear();
+    this.threadKeyProblems.clear();
+    if (this.native.threadIdentity && captured.keyStatus === "available") {
+      for (const profile of next.profiles.filter((p) => p.product === "Treehouse.Thread" && p.replica.includes("#authority:"))) {
+        try {
+          const nonce = profile.replica.split(":")[3]!.split("#")[0]!;
+          const key = await this.native.threadIdentity(nonce);
+          if (key === this.roots.get(profile.replica)) this.ownedThreadRoots.set(profile.replica, key);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          if (!["thread_key_unbound", "thread_key_missing", "thread_key_mismatch", "key_store_unavailable"].includes(reason)) throw error;
+          if (reason !== "thread_key_unbound") this.threadKeyProblems.set(profile.replica, reason);
+        }
+      }
+    }
+    this.cached = null;
     this.state = next;
     this.views = views;
     this.pendingOffer = null;
@@ -386,7 +409,8 @@ export class TreehouseWorkflow {
       await this.creation("space", name);
     });
   }
-  createThread(name: string) {
+  createThread(name: string, setup?: ThreadSetup) {
+    const capturedSetup = setup === undefined ? undefined : structuredClone(setup);
     return this.exclusive(async () => {
       if (
         this.state.profiles.filter((p) => p.product === "Treehouse.Thread")
@@ -402,7 +426,23 @@ export class TreehouseWorkflow {
       if (!facts.rootLive) throw new Error("root_capability_unavailable");
       // Lite shell: with routes configured, the Space plus three Threads is the whole route set.
       if (!facts.canCreateThread) throw new Error("thread_cap_reached");
-      await this.creation("thread", name);
+      if (capturedSetup !== undefined) {
+        if (!validThreadSetup(capturedSetup)) throw new Error("invalid_thread_setup");
+        if (this.state.intent === null && byteLength(JSON.stringify(this.state)) + THREAD_CREATION_RESERVE_BYTES > HISTORY_BYTES) throw new Error("preview_storage_limit");
+        if (this.state.profiles.filter((p) => p.product === "Treehouse.Thread").length >= TREEHOUSE_LITE_THREAD_CAP) throw new Error("thread_cap_reached");
+        if (treehouseSpaceFamily(space.replica) !== "bounded") throw new Error("not_bounded_space");
+        if (!this.native.initializeThread || !this.native.signThread) throw new Error("thread_custody_unavailable");
+        if (this.state.profiles.some((p) => p.product === "Treehouse.Thread" && !p.replica.includes("#authority:"))) throw new Error("legacy_threads_require_new_space");
+        if (!facts.canIssueInvitation || !facts.canAdmit) throw new Error("root_capability_unavailable");
+        for (const profile of this.state.profiles.filter((p) => p.product === "Treehouse.Thread")) {
+          const existing = liveTreehouseDelegations(profile.product, profile.frames, profile.replica);
+          if (!existing.some((d) => d.audience === this.state.publicKey &&
+              ["post", "author_edit", "author_tombstone"].every((name) => d.ops.includes(name)))) {
+            throw new Error("existing_thread_grant_unavailable");
+          }
+        }
+      }
+      await this.creation("thread", name, capturedSetup);
     });
   }
   resumeCreation() {
@@ -411,19 +451,19 @@ export class TreehouseWorkflow {
     if (intent.kind === "join") return this.beginJoin().then(() => undefined);
     return intent.kind === "space"
       ? this.createSpace(intent.name)
-      : this.createThread(intent.name);
+      : this.createThread(intent.name, intent.setup);
   }
-  private async creation(kind: "space" | "thread", name: string) {
+  private async creation(kind: "space" | "thread", name: string, setup?: ThreadSetup) {
     if (!name.trim() || byteLength(name) > DRAFT_BYTES)
       throw new Error("invalid_name");
     if (this.state.intent === null) {
       await this.persist({
         ...structuredClone(this.state),
-        intent: { kind, name, nonce: nonce() },
+        intent: { kind, name, nonce: nonce(), ...(setup === undefined ? {} : { setup }) },
       });
     }
     const intent = this.state.intent!;
-    if (intent.kind !== kind || intent.name !== name)
+    if (intent.kind !== kind || intent.name !== name || canonicalJson(intent.setup ?? null) !== canonicalJson(setup ?? null))
       throw new Error("different_creation_pending");
     if (this.state.publicKey === null) {
       const publicKey = await this.native.initialize();
@@ -451,6 +491,36 @@ export class TreehouseWorkflow {
       });
       next.profiles.push(changed[0]!);
       next.active = prepared.replica;
+    } else if (intent.setup !== undefined) {
+      const publicKey = await this.native.initializeThread!(intent.nonce);
+      const childSigner = { publicKey: fromBase64(publicKey), sign: (bytes: Uint8Array) => this.native.signThread!(intent.nonce, bytes) };
+      const prepared = await prepareTreehouseBoundedThreadCreation({ replica: nameReplica, title: name,
+        signer: childSigner, spaceRoot: this.state.publicKey!, ...intent.setup });
+      const profile: LocalProfile = { product: "Treehouse.Thread", replica: prepared.replica,
+        frames: prepared.pending, outbox: prepared.pending.map((f) => f.id), acked: [] };
+      const space = next.profiles.find((p) => p.product === "Treehouse.Space")!;
+      const reference = await this.author(space, { command: "create_thread", title: name, threadReplica: profile.replica });
+      space.frames.push(reference); space.outbox.push(reference.id);
+      const profiles = [...next.profiles, profile];
+      const threadFrames = Object.fromEntries(profiles.filter((p) => p.product === "Treehouse.Thread").map((p) => [p.replica, p.frames]));
+      const issued = await authorTreehouseIssueInvitation({ signer, replica: space.replica, frames: space.frames,
+        threadFrames, routes: profiles.map((p) => ({ replica: p.replica })), recipient: this.state.publicKey! });
+      space.frames.push(issued.frame); space.outbox.push(issued.frame.id);
+      const acceptance = await signTreehouseAcceptance({ replica: space.replica, frames: space.frames,
+        invitationId: issued.frame.id, signer });
+      const authored = await authorTreehouseAdmitAndGrant({ signer, replica: space.replica, frames: space.frames,
+        threadFrames, acceptance, threadSigners: { [profile.replica]: childSigner } });
+      if (authored.admit) { space.frames.push(authored.admit); space.outbox.push(authored.admit.id); }
+      for (const grant of authored.grants) {
+        const target = profiles.find((p) => p.replica === grant.replica)!;
+        target.frames.push(grant.frame); target.outbox.push(grant.frame.id);
+        if (!changed.includes(target)) changed.push(target);
+      }
+      changed.push(profile, space);
+      next.profiles.push(profile); next.active = profile.replica;
+      // Only publish ownership to the workflow after the history transaction succeeds.
+      await this.persistBoundedCreation(next, changed, profile.replica, publicKey);
+      return;
     } else {
       const genesis = await authorTownshipGenesis({
         replica: nameReplica,
@@ -490,26 +560,24 @@ export class TreehouseWorkflow {
     next.intent = null;
     await this.persist(next, changed);
   }
-  /** The local key's own root delegation, if it authored one in this profile. */
-  /** The local key's root delegation, while it is honored and unrevoked. */
-  private rootCapability(profile: LocalProfile) {
-    return liveTreehouseDelegations(
-      profile.product,
-      profile.frames,
-      profile.replica,
-    ).find((d) => d.issuer === this.state.publicKey && d.parent_id === null);
+  private async persistBoundedCreation(next: PreviewState, changed: LocalProfile[], replica: string, publicKey: string) {
+    next.intent = null;
+    await this.persist(next, changed);
+    this.ownedThreadRoots.set(replica, publicKey);
+    this.cached = null;
+  }
+  private rootCapability(profile: LocalProfile, command: string) {
+    const key = this.ownedThreadRoots.get(profile.replica) ?? this.state.publicKey;
+    if (!key) return null;
+    return memberCapability(profile.frames, key, profile.replica, { command, product: profile.product });
   }
   /** Root delegation for the founder, otherwise an honored exact-audience grant that carries `command`. */
   private capabilityFor(profile: LocalProfile, command: string): string | null {
-    const root = this.rootCapability(profile);
-    if (root) return root.id;
     if (this.state.publicKey === null) return null;
-    return (
-      memberCapability(profile.frames, this.state.publicKey, profile.replica, {
-        command,
-        product: profile.product,
-      })?.id ?? null
-    );
+    const member = memberCapability(profile.frames, this.state.publicKey, profile.replica, { command, product: profile.product });
+    const participantOnly = profile.product === "Treehouse.Thread" && this.roots.get(profile.replica) !== this.state.publicKey &&
+      ["post", "author_edit", "author_tombstone"].includes(command);
+    return member?.id ?? (participantOnly ? null : this.rootCapability(profile, command)?.id ?? null);
   }
   /**
    * The founder: the author of the Space's committed genesis, the one its #root: commitment names. A
@@ -531,21 +599,21 @@ export class TreehouseWorkflow {
       // One authority pass per profile: the root and every member grant come from the same live list,
       // the predicate `rootCapability` and `memberCapability` apply.
       const live = liveTreehouseDelegations(profile.product, profile.frames, profile.replica);
-      const root = live.find((d) => d.issuer === state.publicKey && d.parent_id === null);
-      if (profile === space) rootLive = root !== undefined;
+      const rootKey = this.ownedThreadRoots.get(profile.replica) ?? state.publicKey;
+      if (profile === space) rootLive = this.roots.get(profile.replica) === state.publicKey &&
+        live.some((d) => d.audience === state.publicKey && d.ops.includes("create_thread") && d.roles.includes("admin"));
       const names = [...treehouseCommandDecoders(profile.product).keys()];
       const mine = live.filter((d) => d.audience === state.publicKey);
       commands.set(
         profile.replica,
         new Set(
-          root !== undefined
-            ? names
-            : names.filter((command) => {
-                const roles = treehouseCommandRoles(profile.product, command);
-                return mine.some(
-                  (d) => d.ops.includes(command) && roles.every((role) => d.roles.includes(role)),
-                );
-              }),
+          names.filter((command) => {
+            const participantOnly = profile.product === "Treehouse.Thread" && this.roots.get(profile.replica) !== state.publicKey &&
+              ["post", "author_edit", "author_tombstone"].includes(command);
+            const roles = treehouseCommandRoles(profile.product, command);
+            const permits = (d: (typeof live)[number]) => d.ops.includes(command) && roles.every((role) => d.roles.includes(role));
+            return mine.some(permits) || (!participantOnly && live.some((d) => d.audience === rootKey && permits(d)));
+          }),
         ),
       );
     }
@@ -776,10 +844,18 @@ export class TreehouseWorkflow {
       product: profile.product,
       replica: profile.replica,
       deps: frontier(profile.frames),
-      signer: this.signer(),
+      signer: this.signerForCapability(profile, capId),
       capId,
       command,
     });
+  }
+  private signerForCapability(profile: LocalProfile, capId: string) {
+    const cap = liveTreehouseDelegations(profile.product, profile.frames, profile.replica).find((d) => d.id === capId);
+    if (cap?.audience === this.state.publicKey) return this.signer();
+    const key = this.ownedThreadRoots.get(profile.replica);
+    if (!key || cap?.audience !== key || !this.native.signThread) throw new Error("identity_unavailable");
+    const nonce = profile.replica.split(":")[3]!.split("#")[0]!;
+    return { publicKey: fromBase64(key), sign: (bytes: Uint8Array) => this.native.signThread!(nonce, bytes) };
   }
   command(
     replica: string,
