@@ -15,7 +15,7 @@
 
 Design written 2026-10-23 (slice 22) against main bb40921f6; revised the same day after two independent
 reviews (see "Review dispositions"). Parked under rule 8 for the final operator acceptance only. Part 1
-(PRs 1-7, fixtures and disposable keys) starts when OD-6 to OD-9 are decided. Part 2 (the operator's own
+(PRs 1-7, fixtures and disposable keys) starts when OD-6 to OD-10 are decided. Part 2 (the operator's own
 run) needs the inputs under "Depends on" and is not a build PR.
 
 ## Header
@@ -24,7 +24,7 @@ run) needs the inputs under "Depends on" and is not a build PR.
   commit that wrongly marks a route trusted lets a stale or forked catalog steer a member's traffic.
 - **Depends on** (rule 8, exact inputs): (1) the operator ceremony report (`verification-report.json`,
   `mode: "real"`, `binding.status: "verified"`, runbook `docs/treehouse_catalog_signer_custody.md` §5.6);
-  (2) plan 224 PRs 4 (`catalogued`) and 5 (`listed`), whose output the exporter reads; (3) OD-6 to OD-9;
+  (2) plan 224 PRs 4 (`catalogued`) and 5 (`listed`), whose output the exporter reads; (3) OD-6 to OD-10;
   (4) R13 for member first install (not needed: this plan is root-only); (5) row 254, a bounded-family Thread
   to list (the app creates only legacy Threads; the pilot Thread comes from outside it).
 - **Part 1 vs Part 2 (rule 8).** PRs 1-7 finish on fixtures: test support builds catalogs, exports and logs
@@ -125,16 +125,18 @@ Routes come from the untrusted catalog, so acceptance is two steps.
    required replica (Space and every listed Thread) against `route.url` with `route.realm`/`route.serviceKey` as
    expected peer, no operation sent, no route enabled in feed, sync or the saved list. It is bound to
    `digest(page head ‖ route set ‖ history generation)`, single use, in-process, and expires with the process.
-2. The webview pulls and returns, per required replica, `{replica, frames, status}`. `catalog_trust_commit`
-   refuses `probe_incomplete` when any required replica is missing, `status` is not complete (timeout, failed
-   authentication, partial), the grant is spent or its digest differs. Frames are self-authenticating and are
-   unioned before the second native evaluation.
+2. Who pulls is OD-10. Under (b) the webview pulls and returns, per required replica, `{replica, frames,
+   status}`; `catalog_trust_commit` refuses `probe_incomplete` when a replica is missing, `status` is not
+   complete, the grant is spent or its digest differs. Under (a) native pulls and the status is native's own.
+   Frames are self-authenticating and are unioned before the second native evaluation.
 3. **Why a withheld revoke or beacon is caught.** A page lacking a concurrent revoke, lapse or lease beacon makes
    the reference look honored. It is caught when the pull returns the op: the union is folded whole, the
    reference is quarantined, and the result is a refusal, never nil.
-4. **Nonclaim.** Native cannot attest network I/O. A compromised webview can fabricate "complete" statuses. The
-   barrier makes the omission structural and bound to head, routes and generation; it does not prove a dial. A
-   server withholding the op from the pull is also undetectable (Design G).
+4. **Nonclaim under OD-10 (b).** Native cannot attest webview network I/O (the carrier handshake has only a server
+   nonce). A compromised webview can fabricate "complete" statuses and resubmit old frames, so re-observation is
+   not enforced against it and a withheld revoke can be installed until the next native reclassification
+   (Design D). The barrier is structural and generation-bound only: honest-shell tier. A server withholding the
+   op from an honest pull is undetectable under (a) and (b).
 
 ## Design D: acceptance, the native owner and generation-scoped receipts
 
@@ -205,12 +207,15 @@ All in shell-owned `src/treehouse_host.ts` (never the word "websocket") behind p
 ## Design G: ordinary-build network policy (OD-9)
 
 The ordinary build connects to nothing (`tauri.conf.json:26`), so a real root's app cannot dial a catalog route.
-Option (i): add the `wss:` scheme-source to ordinary `connect-src`, update `table.csp` and the
-`product_contract.mjs` equality, and prove it in the ordinary packaged job: the app attempts a `wss://` dial to a
-fixture host and the page observes a network error with no `securitypolicyviolation` event. Option (ii): keep the
-ordinary build local-only and ship acceptance in the enrollment variant only. Option (iii): native-proxied dial
-(large; new custody). **Recommend (i)**: the ordinary route alphabet already admits `wss`, and it is the only way
-to the real claim. Android stays local-only until its own plan.
+The shared `tauri.conf.json` is also the Android bundle's config (`flagship.yml:1058` builds Android from it;
+`AndroidManifest.xml:4` already holds `INTERNET`), so widening it would widen Android. Option (i): leave
+`tauri.conf.json` local-only and add `wss:` to `connect-src` through a **desktop-only** platform override (Tauri
+`tauri.<platform>.conf.json` merge files, confirmed in PR 7), with `product_contract.mjs` asserting the merged
+desktop value and, separately, that the merged Android config's `connect-src` is still exactly the local-only
+`table.csp.ordinaryConnectSrc`. Ordinary packaged evidence: the app attempts a `wss://` dial to a fixture host and
+sees a network error with no `securitypolicyviolation`. Option (ii): ordinary stays local-only; acceptance ships in
+the enrollment variant only. Option (iii): a native-proxied dial (new custody; joins OD-10 (a)). **Recommend (i)
+desktop-only**: the ordinary route alphabet already admits `wss`, and Android stays local-only until its own plan.
 
 ## Refusals (atom: where enforced)
 
@@ -245,7 +250,24 @@ to the real claim. Android stays local-only until its own plan.
   rewriting the signed `wss://host` to `ws://127.0.0.1:<port>` only for a disposable catalog key, compiled out of
   release bundles (guard and unit test in PR 6, bundle check in PR 7). (i) codec arm: Wire-adjacent, a plan 224
   STOP. (ii) hosted wss loopback with a trusted cert: flaky. The claim says "realm, key, path, replica as signed".
-- **OD-9 Ordinary-build CSP.** Recommend (i) in Design G.
+- **OD-9 Ordinary-build CSP.** Recommend (i), desktop-only override, Android verified local-only (Design G).
+- **OD-10 Who performs the mandatory re-observation pull (rule 3; second round on this class, so a decision).**
+  (a) Native pulls itself with a Rust carrier client in the protected boundary: the barrier is attested and a
+  compromised webview cannot skip it. It needs a WSS client (`tokio-tungstenite` plus rustls; neither is a
+  dependency today, `src-tauri/Cargo.toml`), the carrier handshake, nonce signing, frontier/pull framing and the
+  Wire decode: a port of the client half of `carrier.ts` (2,653 lines, `CarrierWebSocketClient` at `:862`) and
+  `codec.ts` parts, estimated 1,500-2,500 lines of Rust plus an ordinary-CSP-free network path (native dials, so
+  OD-9 shrinks) and a new network surface in custody code; carrier-adjacent, rule 3, its own PR 4b between PRs 3
+  and 5. (b) The webview pulls; native enforces shape and generation binding only. Against a compromised webview
+  re-observation is not enforced, and a withheld revoke can be installed until the next native reclassification.
+  Written nonclaim, honest-shell tier. (c) Webview pulls but the first install is gated on a second signal sound
+  without a Rust client: the evidence page itself is exported by the operator at a stated time and native refuses
+  a page whose exporter timestamp is older than a root-confirmed bound; this bounds staleness of the page, not
+  of the pulled frames, and does not stop frame resubmission, so it reduces but does not close the gap.
+  **Recommend (b) for this plan, with (a) as a filed follow-up row**: the only attacker (a compromised webview)
+  can already author and sign through the existing native signer on the user's behalf and dial anywhere its CSP
+  allows, so (a) closes one gap in a surface that stays open; (a) costs a second protocol client in custody
+  code. If you want the claim to hold against a compromised webview, choose (a) and accept PR 4b.
 
 ## Build PRs (ordered; file sets disjoint)
 
@@ -258,9 +280,9 @@ unless absolute from the repo root.
 | 2 | Rust canonical encoder and envelope verifier | new `src-tauri/src/catalog_eval/{mod,canonical,envelope}.rs`, `src-tauri/tests/catalog_eval_vectors.rs`, new vector files under `clients/lattice-client/test/vectors/catalog/` | OD-6 | Yes, second review |
 | 3 | Rust catalog evaluator | new `src-tauri/src/catalog_eval/{authority,trust,entries}.rs`, extend `tests/catalog_eval_vectors.rs` | PR 2 | Yes, second review |
 | 4 | Operator exporter | new `apps/lattice_carrier_server/lib/lattice_carrier_server/operator/catalog_evidence.ex`, new `apps/lattice_carrier_server/lib/mix/tasks/treehouse.catalog_evidence.ex`, tests, runbook section | fixtures; real input after 224 PRs 4-5 | No |
-| 5 | Native owner | new `src-tauri/src/catalog_owner.rs`; `src-tauri/src/{lib,preview}.rs`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `test/product_contract.mjs`, `src-tauri/tests/catalog_owner.rs` | PRs 1-3; OD-7 | Yes, second review |
-| 6 | Shell import, probe, connect and refuse | `src/treehouse_host.ts`, new `src/catalog_install.ts`, `src/CatalogPanel.vue`, `src/treehouse_workflow.ts` (catalog actions), `src/App.vue`, tests, OD-8 mapper and its guard | PRs 4-5; OD-8 | No (voluntary second review) |
-| 7 | Ordinary CSP and hosted packaged gates | `src-tauri/tauri.conf.json`, `.github/workflows/flagship.yml`, new `test/packaged_catalog.ts`, `package.json`, `test/enrollment_ci_contract.mjs`, bundle-variant check | PR 6; OD-8, OD-9 | Yes (`.github/workflows`), second review |
+| 5 | Native owner | new `src-tauri/src/catalog_owner.rs`; `src-tauri/src/{lib,preview}.rs`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `test/product_contract.mjs`, `src-tauri/tests/catalog_owner.rs` | PRs 1-3; OD-7, OD-10 | Yes, second review |
+| 6 | Shell import, probe, connect and refuse | `src/treehouse_host.ts`, new `src/catalog_install.ts`, `src/CatalogPanel.vue`, `src/treehouse_workflow.ts` (catalog actions), `src/App.vue`, tests, OD-8 mapper and its guard | PRs 4-5; OD-8, OD-10 | No (voluntary second review) |
+| 7 | Ordinary CSP and hosted packaged gates | new desktop-only `src-tauri/tauri.macos.conf.json`, `product_contract.mjs`, `.github/workflows/flagship.yml`, new `test/packaged_catalog.ts`, `package.json`, `test/enrollment_ci_contract.mjs`, bundle-variant check | PR 6; OD-8, OD-9, OD-10 | Yes (`.github/workflows`), second review |
 
 PR 5 edits `preview.rs` after PR 1 (disjoint hunks; PR 1 merges first).
 
@@ -284,13 +306,14 @@ PR 5 edits `preview.rs` after PR 1 (disjoint hunks; PR 1 merges first).
   revoke turns the head into a refusal; replica/root/genesis mismatch drops the route; 13 retained entries open at
   most four sockets; no hand-typed fallback; mapper absent from the release variant. Tier: unit and contract.
 - PR 7: hosted `treehouse_packaged_macos_enrollment` and the ordinary packaged job green on the exact tip: import,
-  probe, commit, restart, routes persist, tampered page and pre-pull accept refused; ordinary app shows no CSP
-  violation for a `wss://` dial. Tier: packaged macOS, disposable key, OD-8 mapping; no production, mobile or R21a claim.
+  probe, commit, restart, routes persist, tampered page and pre-pull accept refused; ordinary desktop app shows no CSP
+  violation for a `wss://` dial, and the merged Android config's `connect-src` equals the local-only ordinary
+  value (Android gate unchanged and green). Tier: packaged macOS, disposable key, OD-8 mapping; no production, mobile or R21a claim.
 - Each PR: hosted green on the exact tip (rule 2).
 
 ## Done criteria
 
-Part 1 (finishable after OD-6 to OD-9):
+Part 1 (finishable after OD-6 to OD-10):
 - [ ] PRs 1-7 merged on green exact tips; each claims only its tier (rule 1).
 - [ ] Every Refusals atom has a test in the PR that enforces it; every refusal leaves the retained record unchanged.
 - [ ] Row 245 updated (one line); rows filed for OD-6 follow-ups and hand-off of lapsed-reference rechecks (row 244).
@@ -308,7 +331,9 @@ routes. Unchecked until the ceremony report, plan 224 PRs 4-5 and row 254 exist.
 - A probe grant used for anything but one pull-only attempt, or a route used for feed, sync or relay before a
   committed generation-valid receipt.
 - A third review round on the same finding class (rule 3): operator design question.
-- A loopback `ws://` reaching a release bundle.
+- A loopback `ws://` reaching a release bundle, or a widened `connect-src` in the shared or Android config.
+- Resolving OD-10 by adding caller-attested pull status that native treats as proof, or choosing (a) without PR 4b
+  reviewed as carrier-adjacent.
 
 **Non-goals:** member first install (R13); creating bounded Threads in the app (row 254); a catalog read message,
 server push or origin file; key rotation or replacement (R11c); R21a origin mapping; mobile custody; freshness
@@ -316,8 +341,8 @@ claims; route replacement (row 198 D3); superseding a lapsed reference (row 244)
 
 ## Review dispositions
 
-Codex Sol review: 1 fixed (OD-6 now (a); (b) candidate-only, PRs 2-3). 2 fixed (Design C barrier, grant bound to
-head, routes, generation; fabrication nonclaim stated). 3 fixed (blocked gives `[]`). 4 fixed (OD-7 marker plus
+Codex Sol review: 1 fixed (OD-6 now (a); (b) candidate-only, PRs 2-3). 2 escalated to OD-10 (rule 3); Design C
+keeps the generation-bound structural barrier and states the (b) nonclaim. 3 fixed (blocked gives `[]`). 4 fixed (OD-7 marker plus
 migration). 5 fixed (writers under one lock, stored `R`, race gate). 6 fixed (generation-scoped receipts).
 7 fixed (conflict check inside commit; `shadowed_by_catalog`). 8 fixed (Design G, PR 7). 9 fixed (Design E
 fixtures). 10 fixed (PR 5 files, remote-origin denial). 11 fixed (inventory vs selection). 12 fixed (grant vs
@@ -330,3 +355,4 @@ refused). 6 fixed (digest-bound token). 7 fixed (`already_pinned`). 8 fixed (nat
 evidence). 9 fixed (unique head, rollback test). 10 fixed (reclassification). 11 fixed (shadowing, whole-install
 conflict). 12 fixed (claim text). 13 fixed (Design C.3 wording). 14 fixed (mapper guard in PR 6). 15 accepted
 (voluntary second review on PR 6). No finding was rejected outright; options rejected are named above.
+Codex confirm pass: P2 Android CSP fixed (OD-9 desktop-only override, Android check in the PR 7 gate).
