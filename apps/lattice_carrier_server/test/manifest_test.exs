@@ -356,6 +356,83 @@ defmodule LatticeCarrierServer.ManifestTest do
              Manifest.load(duplicate_ports)
   end
 
+  @route "/r/" <> Base.url_encode64(:crypto.hash(:sha256, "manifest-route"), padding: false)
+  @other_route "/r/" <>
+                 Base.url_encode64(:crypto.hash(:sha256, "manifest-route-2"), padding: false)
+
+  # A second instance on the same identity file (OD-1) over its own log.
+  defp sibling(tmp_dir, instance, extra) do
+    log = Path.join(tmp_dir, "sibling.log")
+    assert :ok = "replica:carrier-manifest:sibling" |> Lattice.Log.new() |> Lattice.Log.dump(log)
+
+    Map.merge(
+      %{instance | "name" => "township-pilot-2", "log_file" => log},
+      extra
+    )
+  end
+
+  @tag :tmp_dir
+  test "a valid route is parsed and rides in the listener options", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    path = manifest_with(tmp_dir, Map.put(instance, "route", @route))
+
+    assert {:ok, %Manifest{instances: [parsed]}} = Manifest.load(path)
+    assert parsed.route == @route
+    assert parsed.listener == [ip: {127, 0, 0, 1}, port: 0, route: @route]
+
+    absent = manifest_with(tmp_dir, instance)
+    assert {:ok, %Manifest{instances: [plain]}} = Manifest.load(absent)
+    assert plain.route == nil
+    assert plain.listener == [ip: {127, 0, 0, 1}, port: 0]
+  end
+
+  @tag :tmp_dir
+  test "a route of the wrong shape refuses symbolically", %{tmp_dir: tmp_dir, instance: instance} do
+    for bad <- [
+          "/carrier",
+          "r/" <> "x",
+          "/r/short",
+          "/r/",
+          @route <> "/",
+          "/r/" <> String.duplicate("!", 43),
+          7,
+          %{}
+        ] do
+      path = manifest_with(tmp_dir, Map.put(instance, "route", bad))
+
+      assert {:error, {:invalid_manifest, {:invalid_route, {:instance, 1}}}} =
+               Manifest.load(path)
+    end
+  end
+
+  @tag :tmp_dir
+  test "two instances cannot share one route", %{tmp_dir: tmp_dir, instance: instance} do
+    first = Map.put(instance, "route", @route)
+    second = sibling(tmp_dir, instance, %{"route" => @route})
+
+    path = write_manifest(tmp_dir, %{"version" => 1, "instances" => [first, second]})
+    assert {:error, {:invalid_manifest, :duplicate_route}} = Manifest.load(path)
+
+    distinct = Map.put(second, "route", @other_route)
+    ok = write_manifest(tmp_dir, %{"version" => 1, "instances" => [first, distinct]})
+    assert {:ok, %Manifest{instances: [_, _]}} = Manifest.load(ok)
+  end
+
+  @tag :tmp_dir
+  test "two instances may share one identity file and load the same key (OD-1)", %{
+    tmp_dir: tmp_dir,
+    instance: instance
+  } do
+    shared = sibling(tmp_dir, instance, %{"route" => @other_route})
+    path = write_manifest(tmp_dir, %{"version" => 1, "instances" => [instance, shared]})
+
+    assert {:ok, %Manifest{instances: [first, second]}} = Manifest.load(path)
+    assert first.identity_file == second.identity_file
+    assert first.pub == second.pub
+  end
+
   @tag :tmp_dir
   test "two instances sharing one log_file refuse even with distinct names and ports", %{
     tmp_dir: tmp_dir,

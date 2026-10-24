@@ -11,10 +11,10 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
   test "signed independent child and exact frozen reference stage without rewriting served log",
        f do
     assert {:ok, record} =
-             Staging.prepare(f.root, nil, f.request, f.artifacts)
+             Staging.prepare(f.root, nil, f.request, f.artifacts, f.ceremony_dir)
 
     assert record["phase"] == "carrier_pending"
-    assert record["service"]["identity_file"] == Path.join(f.root, "child-service.identity")
+    assert record["service"]["identity_file"] == f.service_identity
     assert Journal.service_identity_current?(record["service"])
     assert File.read!(f.active_log) == f.active_bytes
 
@@ -27,7 +27,7 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
     assert {:ok, journal} = Journal.read(f.root)
 
     assert {:ok, ^record} =
-             Staging.prepare(f.root, journal, f.request, f.artifacts)
+             Staging.prepare(f.root, journal, f.request, f.artifacts, f.ceremony_dir)
 
     assert {:ok, ^journal} = Journal.read(f.root)
     assert File.read!(f.active_log) == f.active_bytes
@@ -37,7 +37,13 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
     [child | rest] = f.artifacts
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.prepare(f.root, nil, f.request, [%{child | replica: "wrong"} | rest])
+             Staging.prepare(
+               f.root,
+               nil,
+               f.request,
+               [%{child | replica: "wrong"} | rest],
+               f.ceremony_dir
+             )
 
     assert {:ok, nil} = Journal.read(f.root)
     assert File.read!(f.active_log) == f.active_bytes
@@ -47,7 +53,7 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
     File.write!(f.request.active_manifest, File.read!(f.request.active_manifest) <> "\n")
 
     assert {:error, :unsupported_or_stale_operator_intent} =
-             Staging.prepare(f.root, nil, f.request, f.artifacts)
+             Staging.prepare(f.root, nil, f.request, f.artifacts, f.ceremony_dir)
 
     refute File.exists?(Path.join(f.root, "attempt-" <> Journal.digest(f.request.attempt)))
     assert File.read!(f.active_log) == f.active_bytes
@@ -65,7 +71,7 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
       end)
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.prepare(f.root, nil, f.request, artifacts)
+             Staging.prepare(f.root, nil, f.request, artifacts, f.ceremony_dir)
 
     assert {:ok, nil} = Journal.read(f.root)
     assert File.read!(f.active_log) == f.active_bytes
@@ -73,14 +79,14 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
 
   test "extra retained artifact refuses omission rather than cleaning it up", f do
     assert {:ok, _} =
-             Staging.prepare(f.root, nil, f.request, f.artifacts)
+             Staging.prepare(f.root, nil, f.request, f.artifacts, f.ceremony_dir)
 
     {:ok, journal} = Journal.read(f.root)
     extra = Path.join([f.root, "attempt-" <> Journal.digest(f.request.attempt), "unexpected"])
     File.write!(extra, "preserve")
 
     assert {:error, {:operator_refused, "ambiguous_staging_inventory"}} =
-             Staging.prepare(f.root, journal, f.request, f.artifacts)
+             Staging.prepare(f.root, journal, f.request, f.artifacts, f.ceremony_dir)
 
     assert File.read!(extra) == "preserve"
     assert {:ok, ^journal} = Journal.read(f.root)
@@ -89,7 +95,7 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
 
   test "truncated immutable artifact never gets overwritten on retry", f do
     assert {:ok, _} =
-             Staging.prepare(f.root, nil, f.request, f.artifacts)
+             Staging.prepare(f.root, nil, f.request, f.artifacts, f.ceremony_dir)
 
     {:ok, journal} = Journal.read(f.root)
     [artifact | _] = f.artifacts
@@ -97,7 +103,7 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
     File.write!(path, "truncated")
 
     assert {:error, {:operator_refused, "immutable_artifact_conflict"}} =
-             Staging.prepare(f.root, journal, f.request, f.artifacts)
+             Staging.prepare(f.root, journal, f.request, f.artifacts, f.ceremony_dir)
 
     assert File.read!(path) == "truncated"
     assert {:ok, ^journal} = Journal.read(f.root)
@@ -108,7 +114,13 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
     [child | rest] = f.artifacts
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.prepare(f.root, nil, f.request, [%{child | op_id: f.reference.id} | rest])
+             Staging.prepare(
+               f.root,
+               nil,
+               f.request,
+               [%{child | op_id: f.reference.id} | rest],
+               f.ceremony_dir
+             )
 
     assert {:ok, nil} = Journal.read(f.root)
     assert File.read!(f.active_log) == f.active_bytes
@@ -131,7 +143,7 @@ defmodule LatticeCarrierServer.Operator.StagingTest do
       end)
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.prepare(f.root, nil, f.request, artifacts)
+             Staging.prepare(f.root, nil, f.request, artifacts, f.ceremony_dir)
 
     assert {:ok, nil} = Journal.read(f.root)
     assert File.read!(f.active_log) == f.active_bytes

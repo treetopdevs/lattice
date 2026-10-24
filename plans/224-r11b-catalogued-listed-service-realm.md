@@ -16,7 +16,7 @@
 
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
 the inputs in "Depends on" exist. PR 1 (Design 1) landed in PR #155; PR 3 (Design 3) landed in PR #158.
-PR 2 is unblocked (OD-1 to OD-5 decided as recommended, D-39); PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
+PR 2 (Design 2, OD-1 and OD-5 as decided in D-39) is built in PR #160; PRs 4-5 wait on the ceremony report; PR 6 needs its own plan (row 245).
 
 ## Header
 

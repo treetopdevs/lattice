@@ -28,21 +28,23 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     Map.merge(f, %{retained: retained, manifest: manifest})
   end
 
+  defp bound(f), do: %{record: f.binding.record, realm: f.binding_realm}
+
   test "actual bounded child, profile, grant inventory and signed reference replay", f do
-    assert {:ok, _service} = Staging.inspect_staged(f.retained, f.manifest)
+    assert {:ok, _service} = Staging.inspect_staged(f.retained, f.manifest, bound(f))
     refute File.exists?(Journal.path(f.root))
   end
 
   test "staging binds the admitted service identity file, realm, key and digest", f do
-    identity_file = Path.join(f.root, "child-service.identity")
-    # The fixture's child-service file holds sha256("child-service") as its seed.
-    pub = Lattice.Identity.from_seed("child-service", "child-service").pub
+    identity_file = f.service_identity
+    # One shared service identity file serves the Space and the child (OD-1).
+    pub = f.service_pub
 
-    assert {:ok, service} = Staging.inspect_staged(f.retained, f.manifest)
+    assert {:ok, service} = Staging.inspect_staged(f.retained, f.manifest, bound(f))
 
     assert service == %{
              "identity_file" => identity_file,
-             "realm" => "child-service",
+             "realm" => f.binding_realm,
              "pub" => Base.encode64(pub),
              "sha256" => Journal.digest(File.read!(identity_file))
            }
@@ -51,7 +53,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   end
 
   test "a service identity rotated after staging no longer verifies", f do
-    {:ok, service} = Staging.inspect_staged(f.retained, f.manifest)
+    {:ok, service} = Staging.inspect_staged(f.retained, f.manifest, bound(f))
 
     File.write!(
       service["identity_file"],
@@ -62,7 +64,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   end
 
   test "a same-key rewrite of the identity file no longer matches the bound digest", f do
-    {:ok, service} = Staging.inspect_staged(f.retained, f.manifest)
+    {:ok, service} = Staging.inspect_staged(f.retained, f.manifest, bound(f))
     # Same seed, different bytes (upper-case hex): the key still matches, but
     # the reviewed file is not the one on disk any more.
     File.write!(service["identity_file"], String.upcase(File.read!(service["identity_file"])))
@@ -75,21 +77,21 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
   # mode and owner. Staging refuses what the owner would, instead of binding a
   # candidate that can never commit.
   test "a symlinked service identity file refuses", f do
-    real = Path.join(f.root, "child-service.identity")
+    real = f.service_identity
     link = Path.join(f.root, "linked-service.identity")
     File.ln_s!(real, link)
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(with_identity_path(f, link), f.manifest)
+             Staging.inspect_staged(with_identity_path(f, link), f.manifest, bound(f))
   end
 
   test "a hard-linked service identity file refuses", f do
-    real = Path.join(f.root, "child-service.identity")
+    real = f.service_identity
     link = Path.join(f.root, "hardlinked-service.identity")
     File.ln!(real, link)
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(with_identity_path(f, link), f.manifest)
+             Staging.inspect_staged(with_identity_path(f, link), f.manifest, bound(f))
   end
 
   test "a service identity under a group-writable directory refuses", f do
@@ -97,11 +99,11 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     File.mkdir!(shared)
     File.chmod!(shared, 0o775)
     path = Path.join(shared, "service.identity")
-    File.cp!(Path.join(f.root, "child-service.identity"), path)
+    File.cp!(f.service_identity, path)
     File.chmod!(path, 0o600)
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(with_identity_path(f, path), f.manifest)
+             Staging.inspect_staged(with_identity_path(f, path), f.manifest, bound(f))
   end
 
   test "missing reviewed profile, creation or grant introduction refuses", f do
@@ -112,7 +114,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
       invalid = %{child | review: Map.put(child.review, key, absent)}
 
       assert {:error, :invalid_staged_signed_artifact} =
-               Staging.inspect_staged([invalid | rest], f.manifest)
+               Staging.inspect_staged([invalid | rest], f.manifest, bound(f))
     end
 
     [grant] = child.review["grants"]
@@ -123,14 +125,14 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     }
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged([invalid | rest], f.manifest)
+             Staging.inspect_staged([invalid | rest], f.manifest, bound(f))
 
     # An honored active grant omitted from the review is an inexact inventory,
     # refused on the artifact itself rather than only through the roster.
     omitted = %{child | review: Map.put(child.review, "grants", [])}
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged([omitted | rest], f.manifest)
+             Staging.inspect_staged([omitted | rest], f.manifest, bound(f))
   end
 
   test "signed semantically refused child command refuses the bundle", f do
@@ -148,7 +150,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     invalid = %{child | bytes: bytes, digest: Journal.digest(bytes)}
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged([invalid | rest], f.manifest)
+             Staging.inspect_staged([invalid | rest], f.manifest, bound(f))
   end
 
   test "signed reference with unknown dependencies is a refusal, never an exception", f do
@@ -169,7 +171,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
       end)
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged(artifacts, f.manifest)
+             Staging.inspect_staged(artifacts, f.manifest, bound(f))
   end
 
   test "a complete child without its bounded pin and a revoked grant both refuse", f do
@@ -187,7 +189,8 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     assert {:error, :invalid_staged_signed_artifact} =
              Staging.inspect_staged(
                [%{child | bytes: revoked_bytes, digest: Journal.digest(revoked_bytes)} | rest],
-               f.manifest
+               f.manifest,
+               bound(f)
              )
 
     kept = Map.take(original.ops, [child.op_id, child.review["creation"]])
@@ -197,7 +200,8 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     assert {:error, :invalid_staged_signed_artifact} =
              Staging.inspect_staged(
                [%{child | bytes: incomplete, digest: Journal.digest(incomplete)} | rest],
-               f.manifest
+               f.manifest,
+               bound(f)
              )
   end
 
@@ -214,7 +218,8 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     assert {:error, :invalid_staged_signed_artifact} =
              Staging.inspect_staged(
                [%{child | bytes: bytes, digest: Journal.digest(bytes)} | rest],
-               f.manifest
+               f.manifest,
+               bound(f)
              )
   end
 
@@ -233,7 +238,8 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     assert {:error, :invalid_staged_signed_artifact} =
              Staging.inspect_staged(
                [%{child | bytes: bytes, digest: Journal.digest(bytes)} | rest],
-               f.manifest
+               f.manifest,
+               bound(f)
              )
   end
 
@@ -252,7 +258,8 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     assert {:error, :invalid_staged_signed_artifact} =
              Staging.inspect_staged(
                [%{child | bytes: bytes, digest: Journal.digest(bytes)} | rest],
-               f.manifest
+               f.manifest,
+               bound(f)
              )
   end
 
@@ -260,7 +267,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     [child | _] = f.retained
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged(f.retained ++ [child], f.manifest)
+             Staging.inspect_staged(f.retained ++ [child], f.manifest, bound(f))
   end
 
   test "a reviewed profile pin carrying unreviewed beacon witnesses refuses", _f do
@@ -278,7 +285,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
       )
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged(hostile.retained, hostile.manifest)
+             Staging.inspect_staged(hostile.retained, hostile.manifest, bound(hostile))
   end
 
   test "a reviewed profile pin widening the beacon epoch step refuses", _f do
@@ -287,13 +294,14 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     hostile = staged(pin_beacon: {:max_epoch_step, 65_535})
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged(hostile.retained, hostile.manifest)
+             Staging.inspect_staged(hostile.retained, hostile.manifest, bound(hostile))
   end
 
   test "the reviewed witness set is accepted in any signed order", _f do
     reordered = staged(pin_beacon: :reordered_witnesses)
 
-    assert {:ok, _service} = Staging.inspect_staged(reordered.retained, reordered.manifest)
+    assert {:ok, _service} =
+             Staging.inspect_staged(reordered.retained, reordered.manifest, bound(reordered))
   end
 
   test "an epoch-beacon policy on the child root genesis refuses", _f do
@@ -311,17 +319,17 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
       )
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged(hostile.retained, hostile.manifest)
+             Staging.inspect_staged(hostile.retained, hostile.manifest, bound(hostile))
   end
 
-  test "candidate cannot open relay ingress on the admitted child", f do
+  test "candidate cannot open relay ingress beyond the reviewed realms", f do
     candidate = candidate_json(f)
     [old, child] = candidate["instances"]
     child = Map.put(child, "relay_realms", ["member"])
     retained = replace_candidate(f, Map.put(candidate, "instances", [old, child]))
 
-    assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, f.manifest)
+    assert {:error, :relay_realms_unreviewed} =
+             Staging.inspect_staged(retained, f.manifest, bound(f))
   end
 
   test "candidate requires the independently rooted child as a bootstrap peer", f do
@@ -331,33 +339,34 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     retained = replace_candidate(f, Map.put(candidate, "instances", [old, child]))
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, f.manifest)
+             Staging.inspect_staged(retained, f.manifest, bound(f))
   end
 
   test "a candidate whose child root reuses the active Space root refuses", _f do
     hostile = staged(child_creator: :reuse_space_root)
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(hostile.retained, hostile.manifest)
+             Staging.inspect_staged(hostile.retained, hostile.manifest, bound(hostile))
   end
 
   test "a candidate whose child root reuses the admitted carrier service key refuses", _f do
     hostile = staged(child_creator: :reuse_carrier_service_key)
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(hostile.retained, hostile.manifest)
+             Staging.inspect_staged(hostile.retained, hostile.manifest, bound(hostile))
   end
 
   test "a second, non-root Space member stages honestly", _f do
     two = staged(second_member: true)
 
-    assert {:ok, _service} = Staging.inspect_staged(two.retained, two.manifest)
+    assert {:ok, _service} = Staging.inspect_staged(two.retained, two.manifest, bound(two))
   end
 
   test "a Space whose root is not a roster member stages honestly", _f do
     rootless = staged(second_member: true, root_member: false)
 
-    assert {:ok, _service} = Staging.inspect_staged(rootless.retained, rootless.manifest)
+    assert {:ok, _service} =
+             Staging.inspect_staged(rootless.retained, rootless.manifest, bound(rootless))
   end
 
   test "a candidate whose carrier service key is the Space root's refuses", _f do
@@ -366,7 +375,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     retained = with_service_identity(rootless, Lattice.Sim.identity(rootless.space, "creator"))
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, rootless.manifest)
+             Staging.inspect_staged(retained, rootless.manifest, bound(rootless))
   end
 
   test "a candidate whose carrier service key is a non-root member's refuses", _f do
@@ -374,7 +383,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     retained = with_service_identity(two, Lattice.Sim.identity(two.space, "member2"))
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, two.manifest)
+             Staging.inspect_staged(retained, two.manifest, bound(two))
   end
 
   test "a child replica already served by an active instance refuses", f do
@@ -394,6 +403,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     served =
       active_record
       |> Map.put("name", "served-child")
+      |> Map.delete("route")
       |> Map.put("log_file", served_log)
       |> Map.put("identity_file", served_identity)
       |> put_in(["listener", "port"], 41_003)
@@ -412,14 +422,14 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     retained = replace_candidate(f, Map.update!(candidate, "instances", &[served | &1]))
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, active)
+             Staging.inspect_staged(retained, active, bound(f))
   end
 
   test "a Space reference already present in active history is not carrier pending", f do
     :ok = Log.dump(f.updated_log, f.active_log)
 
     assert {:error, :invalid_staged_signed_artifact} =
-             Staging.inspect_staged(f.retained, f.manifest)
+             Staging.inspect_staged(f.retained, f.manifest, bound(f))
   end
 
   test "candidate cannot change an active instance configuration", f do
@@ -429,7 +439,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     retained = replace_candidate(f, Map.put(candidate, "instances", [changed, child]))
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, f.manifest)
+             Staging.inspect_staged(retained, f.manifest, bound(f))
   end
 
   test "duplicate active histories for the referenced Space are ambiguous", f do
@@ -449,6 +459,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     duplicate =
       active_record
       |> Map.put("name", "duplicate-space")
+      |> Map.delete("route")
       |> Map.put("log_file", duplicate_log)
       |> Map.put("identity_file", duplicate_identity)
       |> put_in(["listener", "port"], 41_002)
@@ -467,7 +478,7 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
     retained = replace_candidate(f, Map.update!(candidate, "instances", &[duplicate | &1]))
 
     assert {:error, :invalid_candidate_manifest} =
-             Staging.inspect_staged(retained, ambiguous)
+             Staging.inspect_staged(retained, ambiguous, bound(f))
   end
 
   # Points the admitted child instance at an identity file holding `identity`'s seed.
@@ -477,7 +488,10 @@ defmodule LatticeCarrierServer.Operator.SemanticStagingTest do
 
     replace_candidate(
       f,
-      Map.put(candidate, "instances", [old, Map.put(child, "identity_file", path)])
+      Map.put(candidate, "instances", [
+        Map.put(old, "identity_file", path),
+        Map.put(child, "identity_file", path)
+      ])
     )
   end
 
