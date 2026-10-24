@@ -65,12 +65,16 @@ its ancestors to make existing staging tests pass.
 
 ## Ceremony and bootstrap order
 
-Before offline invitations, the operator prepares the existing verified catalog/service
-ceremony public binding. The founder uses the ordinary root command path to author the
-honored `catalog_bootstrap_v1` from that binding, confirming service key, catalog key and
-origin. PR B must supply this control if absent; a fabricated bootstrap id is forbidden.
-Then issue/review/accept the invitation, admit/grant, export final histories, and import
-against the same ceremony. No relay route is installed by this public binding step.
+Before offline invitations, use the existing ordinary path in
+`docs/treehouse_catalog_signer_custody.md` §5.4: create and continuation-pin the bounded
+Space, export its public frames, then operator `binding-payload` prepares
+`binding-payload.json` and `binding-review.txt` using the catalog/service custody inputs.
+The founder uses existing Catalog binding Review/Sign controls, confirming every
+public field. Export again; operator `verify-binding` and `report` establish the
+verified ceremony against the honored bootstrap. Only then issue/review/accept the
+offline invitation, admit/grant, export final histories, and import against that same
+ceremony. A fabricated bootstrap id is forbidden; no relay route is installed here.
+PR B composes these existing controls rather than introducing another bootstrap path.
 Fixture ceremonies supply every input in tests; real ceremony adoption stays a field gate.
 
 ## Contract amendment A: explicit initial reference mode
