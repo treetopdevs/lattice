@@ -10,7 +10,7 @@ const cases = JSON.parse(readFileSync(new URL("./replica_grammar_cases.json", im
   thread: boolean;
   note: string;
 }[];
-assert(cases.length >= 40);
+assert(cases.length >= 50);
 for (const c of cases) {
   assert.equal(isProfileReplica("space", c.value), c.space, `space: ${c.note}`);
   assert.equal(isProfileReplica("thread", c.value), c.thread, `thread: ${c.note}`);

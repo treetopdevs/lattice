@@ -102,8 +102,8 @@ fn token(value: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
-/// Row 232: the bounded-continuation Space grammar, `<nonce>#authority:bounded-continuation-v1#root:<tag>`.
-/// A Space replica is exactly the legacy grammar OR this one; Threads stay legacy-only. The shell's
+/// Row 232 and plan 245 Design E: the bounded-continuation grammar, `<nonce>#authority:bounded-continuation-v1#root:<tag>`.
+/// A Space or Thread replica is exactly the legacy grammar OR this one of its own kind. The shell's
 /// `isProfileReplica` (treehouse_routes.ts) states the same two grammars.
 const BOUNDED_MARK: &str = "#authority:bounded-continuation-v1#root:";
 /// A 43-character token is canonical base64url for 32 bytes only when its last character has two zero low bits (one of AEIMQUYcgkosw048).

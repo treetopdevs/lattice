@@ -1,9 +1,24 @@
 import assert from "node:assert/strict";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { carrierDelegationsFromFrames, authorTreehouseCommand, treehouseCommandDecoders, continuationFamily } from "@treetopdevs/lattice-client";
+import {
+  carrierDelegationsFromFrames,
+  authorTreehouseCommand,
+  treehouseCommandDecoders,
+  continuationFamily,
+  authorCarrierDelegation,
+  authorCarrierOp,
+  verifyCarrierOp,
+} from "@treetopdevs/lattice-client";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
-import { authorTownshipGenesis, bindTownshipReplica } from "../../lattice-client/src/township";
-import { TreehouseWorkflow } from "../src/treehouse_workflow";
+import {
+  authorTownshipGenesis,
+  bindTownshipReplica,
+  townshipGenesisBody,
+  townshipReplicaCommitment,
+  townshipReplicaRootTag,
+} from "../../lattice-client/src/township";
+import { TreehouseWorkflow, strictVerifier } from "../src/treehouse_workflow";
+import { isProfileReplica } from "../src/treehouse_routes";
 import { parseState } from "../src/treehouse_state";
 import type { PreviewNative, Draft } from "../src/treehouse_state";
 
@@ -81,19 +96,21 @@ const title = await authorTreehouseCommand({
   command: { command: "create_thread", title: "Bounded notes" },
 });
 const spaceCap = carrierDelegationsFromFrames([space.frames[0]!])[0]!.id;
-const reference = await authorTreehouseCommand({
-  product: "Treehouse.Space",
-  replica: space.replica,
-  signer,
-  deps: [space.frames[space.frames.length - 1]!.id],
-  capId: spaceCap,
-  command: { command: "create_thread", title: "Bounded notes", threadReplica: bounded },
-});
-const withBounded = (replica: string, frames: CarrierOpFrame[]) => {
+const referenceTo = (threadReplica: string) =>
+  authorTreehouseCommand({
+    product: "Treehouse.Space",
+    replica: space.replica,
+    signer,
+    deps: [space.frames[space.frames.length - 1]!.id],
+    capId: spaceCap,
+    command: { command: "create_thread", title: "Bounded notes", threadReplica },
+  });
+const reference = await referenceTo(bounded);
+const withBounded = (replica: string, frames: CarrierOpFrame[], ref: CarrierOpFrame = reference) => {
   const record = parseState(native.record);
   const sp = record.profiles[0]!;
   record.profiles = [
-    { ...sp, frames: [...sp.frames, reference], outbox: [...sp.outbox, reference.id] },
+    { ...sp, frames: [...sp.frames, ref], outbox: [...sp.outbox, ref.id] },
     { product: "Treehouse.Thread", replica, frames, outbox: frames.map((f) => f.id), acked: [] },
   ];
   record.active = replica;
@@ -122,12 +139,55 @@ for (const bad of [
   const frames = [genesis, title].map((f) => ({ ...f, replica: bad }));
   await assert.rejects(fresh(withBounded(bad, frames)), /invalid_profile_replica/, bad);
 }
-// A well-formed bounded name whose tag does not commit to the genesis author is refused by the root commitment check.
-const foreignTag = tag.slice(0, -1) === "" ? tag : (tag[0] === "A" ? "C" : "A") + tag.slice(1);
-const foreign = bounded.slice(0, bounded.lastIndexOf("#root:") + 6) + foreignTag;
+// A well-formed, correctly signed bounded Thread whose #root: tag commits to a different key than the one that
+// signed its genesis and frames. Every op ID (and the Space's reference) is rebuilt for that name, so every frame
+// verifies and only the root commitment check can refuse it. authorTownshipGenesis refuses a mismatched signer,
+// so the genesis is built from the same parts it uses.
+const otherKey = ed25519.getPublicKey(crypto.getRandomValues(new Uint8Array(32)));
+const foreign = await bindTownshipReplica(`replica:treehouse:thread:${nonce}#authority:bounded-continuation-v1`, otherKey);
+assert.notEqual(foreign, bounded);
+assert.equal(townshipReplicaCommitment(foreign), await townshipReplicaRootTag(otherKey));
+assert.notEqual(townshipReplicaCommitment(foreign), await townshipReplicaRootTag(signer.publicKey));
 assert.equal(continuationFamily(foreign), "thread");
-await assert.rejects(
-  fresh(withBounded(foreign, [genesis, title].map((f) => ({ ...f, replica: foreign })))),
-  /wrong_profile_root|invalid_retained_history/,
-);
-console.log("PASS near-miss and foreign-tag bounded Thread profiles are refused at load");
+assert.ok(isProfileReplica("thread", foreign));
+const foreignDelegation = await authorCarrierDelegation({
+  replica: foreign,
+  audiencePubkey: signer.publicKey,
+  parentId: null,
+  live: true,
+  signer,
+  ops: [...treehouseCommandDecoders("Treehouse.Thread").keys()],
+  roles: ["moderator"],
+});
+const foreignGenesis = await authorCarrierOp({
+  replica: foreign,
+  deps: [],
+  kind: "authority",
+  body: townshipGenesisBody(foreignDelegation, {}),
+  cap: ["nil"],
+  signer,
+});
+const foreignTitle = await authorTreehouseCommand({
+  product: "Treehouse.Thread",
+  replica: foreign,
+  signer,
+  deps: [foreignGenesis.id],
+  capId: carrierDelegationsFromFrames([foreignGenesis])[0]!.id,
+  command: { command: "create_thread", title: "Bounded notes" },
+});
+const foreignFrames = [foreignGenesis, foreignTitle];
+for (const frame of foreignFrames) {
+  assert.equal(frame.replica, foreign);
+  assert.equal((await verifyCarrierOp(frame, strictVerifier)).valid, true);
+}
+const foreignReference = await referenceTo(foreign);
+assert.equal((await verifyCarrierOp(foreignReference, strictVerifier)).valid, true);
+let refusal: unknown = null;
+try {
+  await fresh(withBounded(foreign, foreignFrames, foreignReference));
+} catch (error) {
+  refusal = error;
+}
+assert.ok(refusal instanceof Error, "a foreign-root bounded Thread must not load");
+assert.equal(refusal.message, "wrong_profile_root");
+console.log("PASS near-miss and foreign-root bounded Thread profiles are refused at load");

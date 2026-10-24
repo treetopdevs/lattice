@@ -90,25 +90,25 @@
     "note": "bounded empty root"
   },
   {
-    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
     "space": false,
     "thread": false,
     "note": "bounded short root"
   },
   {
-    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
     "space": false,
     "thread": false,
     "note": "bounded short nonce"
   },
   {
-    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
     "space": false,
     "thread": false,
     "note": "bounded long nonce"
   },
   {
-    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
     "space": false,
     "thread": false,
     "note": "bounded long root"
@@ -204,7 +204,7 @@
     "note": "bounded thread version v2"
   },
   {
-    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
     "space": false,
     "thread": false,
     "note": "bounded thread short root"
@@ -274,5 +274,77 @@
     "space": false,
     "thread": false,
     "note": "bounded thread duplicate root marker"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v0#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread older version v0"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA#authority:bounded-continuation-v1",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread segment after root"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread empty root"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread short nonce (42, canonical tails)"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread long nonce (44, canonical tails)"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread long root (44, canonical tail)"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread empty authority segment"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1 #root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread space in segment"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+A#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread bad nonce alphabet"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA\n",
+    "space": false,
+    "thread": false,
+    "note": "legacy thread trailing newline"
+  },
+  {
+    "value": "xreplica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread leading junk"
+  },
+  {
+    "value": "replica:treehouse:THREAD:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread kind case"
   }
 ]
