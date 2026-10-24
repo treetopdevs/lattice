@@ -24,6 +24,7 @@ import {
   townshipReplicaCommitment,
   treehouseContinuationPin,
   treehouseSpaceFamily,
+  continuationFamily,
   townshipReplicaRootTag,
   TREEHOUSE_LITE_THREAD_CAP,
   treehouseCommandDecoders,
@@ -255,14 +256,18 @@ export class TreehouseWorkflow {
     publicKey: string,
   ): Promise<Observation> {
     const kind = profile.product === "Treehouse.Space" ? "space" : "thread";
-    // Row 232: exactly the legacy grammar OR the bounded Space grammar (see treehouse_routes.ts).
+    // Row 232 and plan 245 Design E: exactly the legacy grammar OR the bounded grammar of this kind (see treehouse_routes.ts).
     if (!isProfileReplica(kind, profile.replica))
       throw new Error("invalid_profile_replica");
-    if (
-      profile.replica.includes("#authority:") &&
-      treehouseSpaceFamily(profile.replica) !== "bounded"
-    )
-      throw new Error("invalid_profile_replica");
+    // Row 258: the authority judge's family must be this profile's own kind. A bounded Space keeps the
+    // `treehouseSpaceFamily` check; a bounded Thread is judged by `continuationFamily` ("thread"), never as a Space.
+    if (profile.replica.includes("#authority:")) {
+      const sound =
+        kind === "space"
+          ? treehouseSpaceFamily(profile.replica) === "bounded"
+          : continuationFamily(profile.replica) === "thread";
+      if (!sound) throw new Error("invalid_profile_replica");
+    }
     const ids = new Set<string>();
     for (const frame of profile.frames) {
       if (frame.replica !== profile.replica || ids.has(frame.id))

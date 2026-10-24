@@ -102,8 +102,8 @@ fn token(value: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
-/// Row 232: the bounded-continuation Space grammar, `<nonce>#authority:bounded-continuation-v1#root:<tag>`.
-/// A Space replica is exactly the legacy grammar OR this one; Threads stay legacy-only. The shell's
+/// Row 232 and plan 245 Design E: the bounded-continuation grammar, `<nonce>#authority:bounded-continuation-v1#root:<tag>`.
+/// A Space or Thread replica is exactly the legacy grammar OR this one of its own kind. The shell's
 /// `isProfileReplica` (treehouse_routes.ts) states the same two grammars.
 const BOUNDED_MARK: &str = "#authority:bounded-continuation-v1#root:";
 /// A 43-character token is canonical base64url for 32 bytes only when its last character has two zero low bits (one of AEIMQUYcgkosw048).
@@ -130,18 +130,17 @@ fn canonical_token(value: &str) -> bool {
         )
 }
 /// `tail` is what follows `replica:treehouse:<kind>:`.
-fn replica_tail(tail: &str, space: bool) -> bool {
+fn replica_tail(tail: &str) -> bool {
     tail.split_once("#root:")
         .is_some_and(|(nonce, root)| token(nonce) && token(root))
-        || (space
-            && tail
-                .split_once(BOUNDED_MARK)
-                .is_some_and(|(nonce, root)| canonical_token(nonce) && canonical_token(root)))
+        || tail
+            .split_once(BOUNDED_MARK)
+            .is_some_and(|(nonce, root)| canonical_token(nonce) && canonical_token(root))
 }
 fn replica(value: &str, kind: &str) -> bool {
     value
         .strip_prefix(&format!("replica:treehouse:{kind}:"))
-        .is_some_and(|tail| replica_tail(tail, kind == "space"))
+        .is_some_and(replica_tail)
 }
 fn public_key_text(value: &str) -> bool {
     BASE64
@@ -251,16 +250,16 @@ pub fn valid_profile_replica(value: &str, kind: &str) -> bool {
 pub fn valid_route_replica(value: &str) -> bool {
     route_replica(value)
 }
-/// `replica:treehouse:thread:<43>#root:<43>`, `replica:treehouse:space:<43>#root:<43>` or the bounded
-/// `replica:treehouse:space:<43>#authority:bounded-continuation-v1#root:<43>`, as the shell's
-/// SPACE_REPLICA/THREAD_REPLICA.
+/// `replica:treehouse:<kind>:<43>#root:<43>` or the bounded
+/// `replica:treehouse:<kind>:<43>#authority:bounded-continuation-v1#root:<43>` for a Space or a Thread, as the
+/// shell's SPACE_REPLICA/THREAD_REPLICA (plan 245 Design E).
 fn route_replica(value: &str) -> bool {
     if let Some(rest) = value.strip_prefix("replica:treehouse:space:") {
-        return replica_tail(rest, true);
+        return replica_tail(rest);
     }
     value
         .strip_prefix("replica:treehouse:thread:")
-        .is_some_and(|rest| replica_tail(rest, false))
+        .is_some_and(replica_tail)
 }
 /// wss to any host, or ws to a loopback host only; no credentials and no fragment (`validRouteUrl`).
 fn route_url(value: &str) -> bool {
