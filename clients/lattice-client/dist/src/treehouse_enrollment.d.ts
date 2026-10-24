@@ -110,6 +110,8 @@ export declare function authorTreehouseAdmitAndGrant(input: {
     frames: readonly CarrierOpFrame[];
     threadFrames: Readonly<Record<string, readonly CarrierOpFrame[]>>;
     acceptance: TreehouseAcceptanceArtifact;
+    /** Per-Thread authorized signers (for example child roots); defaults to the participant signer. */
+    threadSigners?: Readonly<Record<string, CarrierOpSigner>>;
 }): Promise<{
     admit: CarrierOpFrame | null;
     grants: TreehouseThreadGrant[];

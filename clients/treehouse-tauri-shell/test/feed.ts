@@ -983,7 +983,7 @@ class ScriptedServer {
   assert.deepEqual(ScriptedServer.constructed, []);
 
   // A route that is not in the saved relay is refused even when it validates.
-  const stranger: RelayRoute = { ...route, replica: route.replica.replace(/.$/, route.replica.endsWith("A") ? "B" : "A") };
+  const stranger: RelayRoute = { ...route, replica: route.replica.replace(/.$/, route.replica.endsWith("A") ? "E" : "A") };
   await assert.rejects(connector.connect(stranger, "founder"), /unknown_route_replica/);
   assert.deepEqual(ScriptedServer.constructed, []);
 

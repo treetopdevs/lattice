@@ -1,4 +1,4 @@
-// Bounded-family Treehouse Space creation, the root's empty-delegation continuation pin,
+// Bounded-family Treehouse Space/Thread creation, the root's empty-delegation continuation pin,
 // and the catalog bootstrap binding. Reuses the existing authority arms only (decision D4):
 // nothing here adds a TypeScript authority rule. A "pinned" continuation is only that.
 import { ed25519 } from "@noble/curves/ed25519.js";
@@ -76,6 +76,59 @@ export async function prepareTreehouseBoundedSpaceCreation(input) {
     }
     return { replica: genesis.replica, profile: "bounded_root_only", status: treehouseSpaceInitialization(ops),
         pending: [genesis, created].filter((frame) => !ids.has(frame.id)) };
+}
+/** Prepare a bounded Thread with an independent root and reviewed continuation/beacon pin.
+ * The root signer and profile are supplied by the custody/setup owner; this helper creates no keys.
+ * The caller persists these frames and the separately signed Space reference together.
+ */
+export async function prepareTreehouseBoundedThreadCreation(input) {
+    const match = /^replica:treehouse:thread:([A-Za-z0-9_-]{43})$/.exec(input.replica);
+    const nonce = match?.[1];
+    if (match?.[0] !== input.replica || nonce === undefined || canonicalBase64Bytes(`${nonce.replaceAll("-", "+").replaceAll("_", "/")}=`, 32) === null) {
+        throw new Error("invalid_replica");
+    }
+    const root = keyB64(input.signer.publicKey);
+    if (canonicalBase64Bytes(keyB64(input.spaceRoot), 32) === null)
+        throw new Error("invalid_space_root");
+    if (root === keyB64(input.spaceRoot))
+        throw new Error("thread_root_reused");
+    const profile = normalizeContinuationProfile({ mode: "bounded_continuation", version: 1, product: "treehouse",
+        kind: "thread", role: "moderator", nominee: keyB64(input.nominee), witnesses: input.witnesses.map(keyB64),
+        threshold: input.threshold, maxLeaseEpochs: input.maxLeaseEpochs });
+    const term = profile === null ? null : continuationProfileToCarrierTerm(profile);
+    if (profile === null || term === null)
+        throw new Error("invalid_continuation_profile");
+    if (profile.nominee === root)
+        throw new Error("nominee_is_root");
+    if (profile.witnesses.includes(root))
+        throw new Error("witness_is_root");
+    if (profile.witnesses.includes(profile.nominee))
+        throw new Error("witness_is_nominee");
+    const genesis = await authorTownshipGenesis({
+        replica: await bindTownshipReplica(input.replica + AUTHORITY_SEGMENT, input.signer.publicKey),
+        signer: input.signer, ops: [...treehouseCommandDecoders("Treehouse.Thread").keys()],
+        roles: ["moderator"], policies: {},
+    });
+    const created = await authorTreehouseCommand({
+        product: "Treehouse.Thread", replica: genesis.replica, signer: input.signer,
+        deps: [genesis.id], capId: carrierDelegationsFromFrames([genesis])[0].id,
+        command: { command: "create_thread", title: input.title },
+    });
+    const empty = await authorCarrierDelegation({ replica: genesis.replica, audiencePubkey: input.signer.publicKey,
+        parentId: null, ops: [], roles: [], live: false, signer: input.signer });
+    const beacon = ["map", [
+            [["atom", "mode"], ["atom", "witnessed"]], [["atom", "version"], ["int", 1]],
+            [["atom", "witnesses"], ["list", profile.witnesses.map((key) => ["bin", key])]],
+            [["atom", "threshold"], ["int", profile.threshold]], [["atom", "max_epoch_step"], ["int", 1]],
+        ]];
+    const policies = ["map", [
+            [["atom", "__continuation__"], term], [["atom", "__beacon__"], beacon],
+        ]];
+    const pin = await authorCarrierOp({ replica: genesis.replica, deps: [created.id], kind: "authority",
+        signer: input.signer, cap: ["nil"],
+        body: ["tuple", [["atom", "genesis"], ["delegation", empty], policies]],
+    });
+    return { replica: genesis.replica, pending: [genesis, created, pin] };
 }
 async function verifiedHistory(replica, input) {
     try {

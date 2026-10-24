@@ -50,6 +50,7 @@ Prepare reviewable amendments before collecting any required sign-off. Planning 
 | Founder authority | Bounded successor, surviving renewal issuer, leased removable founder grants and pre-authorized catalog replacement | R02 probes and explicit contract, implemented in R04 |
 | Witness establishment | Adopted software candidate: 2-of-3 independently controlled eligible keys, separate fixed purposes and per-replica pinning | R02/R17a software decision closed; R36/R17c prove selected keys and ceremonies |
 | Epoch and renewal operations | Adopted software candidate: L=7 inclusive epochs, warning in final two, renewal E5/E10, step 1 and at most two separately signed catch-up steps | R14/R17 measure field cadence before profile enablement |
+| Assisted ordinary desktop experiment | User adopted plan 261 D1–D6 on 2026-10-24: initial two-member provisioning, signed catalog trust, bounded storage; may precede replacement/recovery | Scoped experiment only; full R13, G2 and community-pilot gates remain |
 | Social continuity | Group-scoped old/new-key attestation plus new-key possession, followed by ordinary explicit admission | R19a; exact threshold/conflict/vocabulary decisions precede R19b |
 | Expansion | Keep the observed pilot cohort first; inclusive 150 is only a proposed later target, requiring amendment of Plan 177's “under 150” | R35a, before R33; does not block core chat |
 
@@ -83,6 +84,7 @@ Rows are the authoritative dependency graph. Commas mean all prerequisites. “N
 | R12 | Empty local app / product | L | Medium | R01a, R05, R06, R10 | Packaged offline preview; no member grants | IN PROGRESS |
 | R13 | Enrollment and sync / product | L | High | R01b, R08, R11c, R12 | Packaged two-app join/heal; wrong-input and four-socket tests; R13-lite evidence does not close this row | PLANNED |
 | R13-lite | Hand-configured-route enrollment and sync / product | L | High | R01b, R08, R10, R12 (not R11) | Packaged two-instance invite, join, post, converge, restart, converge, Sim-equal, hard CI job | DONE |
+| R13-desktop-design | [Two ordinary desktop apps over the real relay](../261-two-ordinary-desktop-apps-real-relay.md) / product + carrier | XL | High | Plans 224/245; ceremony, two Macs | Ordinary two-app WSS chat, offline heal and restart proof | IN PROGRESS (2026-10-24; D1–D6 adopted; slice A library/proof built; native child-key custody remains) |
 | R14 | Profiles, roles, removal, renewal / product + authority | XL | High | R13, R04, R36 | Packaged enroll-then-pin, per-replica readiness and renewal | PLANNED |
 | R15 | Measured rollover / product | L | Medium | R14 | Packaged archival saga, finite-capacity stop, retained readability; bounded relay workload and pagination latency | PLANNED |
 | R16 | Member reseed, AF-1 / recovery | M | High | R06, R11c, R15 | Packaged new-identity relay reseed from surviving member evidence | PLANNED |

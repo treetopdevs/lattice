@@ -20,6 +20,23 @@ export declare function prepareTreehouseBoundedSpaceCreation(input: {
     status: TreehouseInitialization;
     pending: CarrierOpFrame[];
 }>;
+/** Prepare a bounded Thread with an independent root and reviewed continuation/beacon pin.
+ * The root signer and profile are supplied by the custody/setup owner; this helper creates no keys.
+ * The caller persists these frames and the separately signed Space reference together.
+ */
+export declare function prepareTreehouseBoundedThreadCreation(input: {
+    replica: string;
+    title: string;
+    signer: CarrierOpSigner;
+    spaceRoot: string | Uint8Array;
+    nominee: string | Uint8Array;
+    witnesses: (string | Uint8Array)[];
+    threshold: number;
+    maxLeaseEpochs: number;
+}): Promise<{
+    replica: string;
+    pending: CarrierOpFrame[];
+}>;
 export type TreehouseContinuationPin = {
     configured: false;
 } | {

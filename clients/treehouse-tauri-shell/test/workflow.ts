@@ -815,3 +815,41 @@ console.log("PASS member post and edit under the exact-audience grant; founder r
   await unchanged(revokedRoot, () => reopened.admitAndGrant(acceptanceText), /no_capability/);
 }
 console.log("PASS workflow snapshot: identity per saved state, founder and member facts, reuse-path refusal, revoked root");
+
+// Slice A: a verified bounded Thread with an independent root can be retained/reopened.
+// The ordinary create action stays legacy until native child-root custody is implemented.
+{
+  const { prepareTreehouseBoundedThreadCreation } = await import("@treetopdevs/lattice-client");
+  const stored = new MemoryNative();
+  const holder = new TreehouseWorkflow(stored);
+  await holder.open();
+  await holder.createSpace("Independent child");
+  const childSeed = new Uint8Array(32).fill(93);
+  const childSigner = { publicKey: ed25519.getPublicKey(childSeed), sign: (bytes: Uint8Array) => ed25519.sign(bytes, childSeed) };
+  const prepared = await prepareTreehouseBoundedThreadCreation({
+    replica: `replica:treehouse:thread:${Buffer.alloc(32, 94).toString("base64url")}`,
+    title: "Bounded child", signer: childSigner, spaceRoot: holder.state.publicKey!,
+    nominee: ed25519.getPublicKey(new Uint8Array(32).fill(95)),
+    witnesses: [96, 97, 98].map((n) => ed25519.getPublicKey(new Uint8Array(32).fill(n))),
+    threshold: 2, maxLeaseEpochs: 7,
+  });
+  const record = structuredClone(holder.state);
+  const space = record.profiles[0]!;
+  const capId = carrierDelegationsFromFrames(space.frames)[0]!.id;
+  const reference = await authorTreehouseCommand({ product: "Treehouse.Space", replica: space.replica,
+    deps: [space.frames[space.frames.length - 1]!.id], capId,
+    signer: { publicKey: ed25519.getPublicKey(stored.seed!), sign: (bytes) => stored.sign(bytes) },
+    command: { command: "create_thread", title: "Bounded child", threadReplica: prepared.replica } });
+  space.frames.push(reference);
+  space.outbox.push(reference.id);
+  record.profiles.push({ product: "Treehouse.Thread", replica: prepared.replica, frames: prepared.pending, outbox: [], acked: [] });
+  record.active = prepared.replica;
+  record.revision++;
+  assert(await stored.commit(holder.state.revision, JSON.stringify(record)));
+  const reopened = new TreehouseWorkflow(stored);
+  await reopened.open();
+  assert.equal(reopened.views.get(prepared.replica)!.state.title, "Bounded child");
+  assert.deepEqual(reopened.state.profiles[1]!.frames, prepared.pending);
+  assert.equal(stored.creates, 1, "profile reload never creates a replacement key");
+}
+console.log("PASS independently rooted bounded Thread survives verified workflow reload");
