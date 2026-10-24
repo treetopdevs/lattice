@@ -1,0 +1,284 @@
+# Plan 262: offline enrollment and guarded initial provisioning
+
+## Status, dependencies and execution boundary
+
+DRAFT design, 2026-10-24. No implementation or runtime proof is supplied by this plan.
+Prepared from fresh main `e8f5c285ed3508f93efaea8279819012d72b41cb`; plan number 262
+was free in that tip's plan index and tree. PR #165 is a required code dependency:
+its ordinary bounded creation, independent child custody, founder membership/grant,
+and restart behavior must merge with their required checks before build work begins.
+Refresh main and inspect PR #165's final implementation; do not assume its earlier tip.
+
+Priority P1; effort XL across three bounded PRs below; risk HIGH. This amends an
+operator publication contract, changes the Python/BEAM journal twins and introduces
+untrusted public evidence import. It changes no authority rule or carrier Wire message.
+Read AGENTS.md and plans/README.md first. The unified roadmap remains the execution
+ledger; this is its self-contained design. The coordinator records decision D-46 in
+the existing HTML decision log after PR #165 merges; do not append that log in parallel.
+
+Software build/acceptance uses disposable fixture identities, ceremony directories,
+local path-backed logs and loopback carriers. No real credentials, host, human witness
+or operator ceremony report is required for those PRs. A real WSS field run separately
+needs the real verified ceremony, service identity/host mapping, two Macs and operator
+access. Missing field inputs must not stop fixture implementation or be called proof.
+
+## Deliverable and full product target
+
+Deliver a supported initial path from two ordinary app identities through offline
+invitation/acceptance, founder admission and grants, a verified provisioning bundle,
+and public operator staging of the resulting bounded Thread. Finish listing integration
+without writing the already-honored reference a second time once plan 224 PRs 4-5 exist.
+
+This advances, but does not replace, the complete two-app goal: ordinary native trust
+installation on both apps, signed catalog routes, real pinned WSS, both people posting,
+offline heal, app/relay restart persistence and clean restore evidence. Plan 245 and
+plan 261's remaining trust/network slices still own that work. No realm helper, pure
+codec, candidate review or fixture service alone closes this plan's behavioral gates.
+
+Scope: first publication of one new bounded Space and one bounded Thread, founder plus
+one other participant, local operator provisioning, no live roster change or migration.
+Later Thread creation in an already-catalogued group still needs the pending-reference
+saga; initial adoption must not silently become a general already-published exception.
+
+## Why the current contracts cannot compose
+
+PR #165's ordinary creation atomically retains the child genesis/title/profile,
+Space reference, founder invitation/admission and exact-audience posting grant. Later
+invitation/admission history causally depends on that reference.
+
+`Staging.verify_reference/2` in
+`apps/lattice_carrier_server/lib/lattice_carrier_server/operator/staging.ex` currently
+requires the reference absent from the served Space log, then hypothetically accepts
+it. `inspect_staged/4` also requires the child unserved and verifies its profile/grants.
+Thus importing the final app Space log fails staging; removing just the reference
+breaks causal closure. `space_export.ts` exports frames, not a `Log.dump` file, and the
+native Space writer accepts only that specific format. Current `issueInvitation`
+requires configured routes; `acceptInvitation` requires held histories and confirmed
+routes. None is the required pre-access offline exchange.
+
+Chosen design: guarded initial-only adoption of the same already-honored signed
+reference. Rejected alternative: pre-enroll an empty Thread scope, split a closed
+pre-reference frontier, then reorder creation and grant all roster members before
+listing. That alternative undoes PR #165's atomic creation, changes what recipients
+accept, and still needs a new app/operator saga. Do not remove the reference or forge
+its ancestors to make existing staging tests pass.
+
+## Contract amendment A: explicit initial reference mode
+
+Amend `docs/research/treehouse_catalog_lifecycle.md` §5 and plan 224 Designs 2/4/5 in
+the implementation PR, before enabling the new path. Preserve all normal publication
+and recovery semantics. These are proposed contract changes, not statements that the
+current implementation already accepts them.
+
+Reference artifact review becomes exactly one of:
+
+- `null`: existing pending reference; it MUST remain absent from the active Space.
+- `{"mode":"initial_existing"}`: exact closed initial-adoption variant below.
+
+No inferred mode, extra fields, fallback after a refusal, caller-supplied authority
+verdict, new phase or new carrier message. Existing version-1 records with null review
+retain byte-identical canonical serialization. Older readers safely refuse the new
+variant; never silently strip it. Extend kind-aware review validation/serialization
+in both Journal and `scripts/treehouse_operator_mutation.py`, with parity vectors.
+The mode remains bound to immutable artifact bytes/digests, attempt and journal CAS.
+
+`initial_existing` requires ALL of the following at public staging:
+
+1. Verified CatalogStore has no committed head, pending envelope or prior committed
+   catalog/receipt history. Check durable store state; request `catalog_head: null` is
+   not proof. Corrupt, missing receipted or reset-looking store state refuses.
+2. Exactly one active bound Space history and one previously unserved candidate child.
+   Initial Space references identify exactly this one Thread. No second initial child,
+   route alias, already-served child or replacement of any previous entry is admitted.
+3. The exact reference op, including signature and canonical signed payload, is present
+   and honored in the served Space and equals the reviewed artifact/id. It references
+   the candidate child's exact verified replica and creation. A similar command, changed
+   title/id/ancestor set, unhonored reference or alternate signature artifact refuses.
+4. Existing genesis/root commitments, independent child root, continuation and matching
+   beacon profile, unique honored root bootstrap, ceremony binding, service key/realm,
+   route and manifest checks remain mandatory. Do not weaken them for app-produced logs.
+5. Both actual participants are admitted in the current Space roster; child grants are
+   the exact current usable roster inventory, including the founder. No transport
+   allowlisting substitutes for semantic admission or per-Thread capability authority.
+6. Existing owner locking, captured active-log digests, manifest checks, immutable
+   artifacts, crash recovery and stale-attempt guards bind the observation. Recheck
+   membership/profile/binding at activation/readiness rather than trusting importer text.
+
+`catalogued` keeps the existing first-catalog chain, signature, carried-entry and
+actual route-probe rules. Its hypothetical reference check must distinguish the two
+modes: append the absent pending op, or re-observe the exact existing op. It must not
+create a duplicate or treat an existing reference as proof of an available route.
+
+`listed` retains the guarded holder/courier boundary. The initial branch re-observes
+the exact honored reference, current roster/grants, bootstrap, attempt and catalog
+entry from the holder's current log; it performs NO new Space op write. Only then may
+the owner record the existing listed observation/receipt. Retrying uses the same
+reference/catalog id, returns the same receipt and adds zero ops. Normal pending mode
+still writes its original signed reference once. A caller boolean or cached journal
+observation cannot authorize the no-write branch. Listing guards run for every entry,
+including carried entries, before any irreversible action.
+
+## Contract amendment B: offline evidence, not installed trust
+
+Introduce closed canonical JSON format `treehouse-offline-invitation-v1` with exactly:
+`format, product, space, spaceRoot, bootstrapId, invitationId, recipient, profiles`.
+Product is `treehouse`. Profiles are exactly one Space and one Thread, each containing
+only `product, replica, frames`. Derive Thread scope from honored Space references and
+the invitation; do not accept duplicated scope, roles, routes, readiness, trust verdicts,
+private keys, app state, drafts, outbox or acknowledgement fields.
+
+Input is bounded before allocation: maximum 2 MiB encoded bytes and 4,000 total frames;
+fatal UTF-8 decoding; duplicate/unknown keys and non-canonical JSON refused. Export
+rebuilds canonical wire terms using the existing signing encoder, not hand-written
+JSON reconstruction. Re-encoding after closed decode must equal the canonical input;
+this must reject duplicate keys rather than preserving a parser's last value.
+
+Every frame independently verifies signature/id, replica and complete dependencies.
+Repeated frame ids, identical or conflicting, are refused instead of silently collapsed. Check the committed root, canonical bounded family and creation
+for both histories, then use the existing Authority/materialization judgments for
+honored invitation, recipient, current scope and unique root bootstrap. Keep authentic
+quarantined frames; never drop them to manufacture a valid history. Required claims
+must be honored; the child must meet staging's existing clean-authority requirement.
+
+The review displays group/Thread, recipient, roots and a grouped SHA-256 fingerprint
+of a domain-separated canonical tuple `(space, spaceRoot, bootstrapId)`. The joiner
+must explicitly compare it through an independent channel; a fingerprint carried only
+inside the same file is not confirmation. Cancel signs nothing. Review binds captured
+exact bytes, identity and state generation; changes/reopen require a fresh review.
+
+The joiner signs the existing recipient-bound acceptance only after this review.
+Candidate histories remain outside installed PreviewState profiles/routes. Reimport
+and repeated acceptance reuse the native identity and signed invitation; no new key or
+implicit member/trust state. A crash may require reimport/review of public evidence,
+not regeneration. Retain the existing identity/trust-missing recovery semantics:
+no `verified_fresh` assertion, trust sentinel, installation receipt or catalog pin is
+created by this flow. Native first-member trust owner and migration remain plan 245/
+plan 261 work; this honest-shell review is not a native semantic-verification claim.
+
+Founder issuance must work without a relay configuration. Supply the verified held
+replica inventory to the pure invitation helper as scope availability, never fabricated
+endpoint routes. Reuse an existing honored current-scope invitation. The existing
+admit-and-grant helper must use the appropriate independently owned child signer and
+atomically persist member admission plus exact-audience child grants. Replay is a no-op;
+revoked/expired grants and removed-member replay retain their existing refusals.
+
+## Contract amendment C: verified provisioning bundle and import
+
+After admission, export `treehouse-initial-provisioning-v1`: exactly
+`format, product, space, spaceRoot, bootstrapId, referenceId, profiles`. The profiles
+are the final signed Space and Thread histories; all other facts are derived, not
+trusted booleans. Apply the same byte/frame/UTF-8/closed-shape/canonical rules. Compute
+projected initial app profile size including metadata before accepting its capacity;
+the existing 1 MiB workflow limit is not expanded by this file format. An eventual
+native trust install must recalculate its own actual merged size before committing.
+
+Add a supported operator importer, separate from live-log mutation. Inputs are the
+public bundle, local verified ceremony directory, and explicit operator-controlled
+manifest/service-identity paths. The service seed never enters a bundle or app export.
+Authenticate full histories and ceremony binding; derive reference, profile ids,
+grant introductions/recipients, roots, expected service realm/key and peer maps.
+
+Write only a new private output attempt directory, with verified Log dumps, canonical
+reference artifact and derived review inventory. Never overwrite a served log,
+manifest, existing artifact or user file; refuse symlinks/aliases, conflicting outputs
+and ambiguous partial attempts. Seal a completion index only after all outputs are
+durable and re-read/verified. An interrupted partial directory is not ready input;
+retry verifies exact existing material or refuses, never silently replaces it.
+
+Produce Space and child artifacts that the real `Staging.prepare/5` consumes. The
+active initial manifest serves the imported Space; the candidate adds the unserved
+child. References already visible in the Space confer no catalog route availability.
+No test-only fixture bypass, renamed JSON-as-Log.dump file or direct live-holder edit.
+
+Derive `treehouse-client:<canonical unpadded base64url native public key>` consistently
+in app and operator peer generation. It is an authenticated-key label, not authority.
+Keep service realm distinct. Preserve existing saved legacy realm/routes and refuse
+conflicting attempted installation; no silent migration or Wire change. The realm
+helper is part of this behavioral path, not a standalone completion milestone.
+
+## Owning files and bounded implementation order
+
+Build each PR in a fresh worktree from current main after its prerequisites merge.
+A single PR must not claim work still assigned to another PR below.
+
+Operator modules live under `apps/lattice_carrier_server/lib/lattice_carrier_server/operator/`;
+the import task lives under `apps/lattice_carrier_server/lib/mix/tasks/`. Client codec:
+`clients/lattice-client/src/treehouse_offline_enrollment.ts`. Ordinary UI/workflow:
+`clients/treehouse-tauri-shell/src/{OfflineEnrollmentPanel.vue,App.vue,treehouse_workflow.ts,native_adapter.ts}`.
+Native public exporters live under that shell's `src-tauri/src/`; update its lib/build/
+capability command allowlists explicitly. Keep `space_export`'s current format closed.
+
+| PR | Coherent outcome | Owning files / prerequisite |
+| --- | --- | --- |
+| A | Verified initial app bundle reaches real guarded operator staging | New `operator/initial_provisioning.ex` and Mix import task; `operator/{staging,journal}.ex`, Python owner twin, operator tests; lifecycle §5 and plan 224 amendments. Requires merged PR #165; starts on ordinary workflow fixture exports. |
+| B | Two ordinary identities complete supported offline invite/accept/admit/export and feed A | New client `treehouse_offline_enrollment.ts`; shell workflow, offline panel, App/native adapter/public export writer and command ACLs; deterministic realm and bundle tests. Requires A and PR #165; no saved-route or network prerequisite. |
+| C | Actual catalog/listing uses initial mode without a second reference write | Plan 224 `ReleaseCatalog`/`ReleaseListing`, holder guard, operator integration tests and catalog evidence exporter integration. Requires actual plan 224 PRs 4-5 implementation; no fake owner/courier may substitute. |
+
+A's smallest proof unit is an exported ordinary bounded artifact plus second-participant
+acceptance/grants, strict import, and successful public non-root Linux staging. B then
+replaces test-only exchange orchestration with the supported ordinary app controls.
+Do not stop A at a parser or B at a realm helper. C is NOT DONE until the real listing
+entry point passes the no-second-write gate; file it explicitly if those modules are
+not yet implemented. Fixtures need no absent external credentials in any build PR.
+
+Future paths under `clients/treehouse-tauri-shell/src-tauri/src` or authority/carrier/
+workflow boundaries require the second independent review mandated by README rule 3.
+Use the user-requested agy Argon 4 High review, with Sonnet 5.5 High only if unavailable.
+Record dispositions in the PR, one line each. Do not pin prose or source text in tests.
+
+## Required proof and commands
+
+Prepare Node clients per AGENTS.md; use Node 22. On this Mac invoke Mix through asdf,
+with the OTP 28/Elixir 1.19 bin PATH prefix for child processes. On Linux use the
+`elixir:1.19.5-otp-28` toolchain. Native builds need Cargo on PATH.
+
+Each code PR: `mix verify`, focused client/shell typecheck and tests, ordinary frontend
+build, focused/full relevant Cargo tests, and exact-tip hosted workflow gate. Run both
+per-app Sobelow boundaries for affected HTTP surfaces; do not substitute umbrella
+Sobelow. Keep local, packaged, Linux, physical and field claims separate.
+
+Behavioral gates (no fixtures that bypass the named production boundary):
+
+1. Canonical round-trip and TS/Elixir parity: same signed ids/payloads/signatures,
+   fingerprint and realm mapping; one-byte-over limits, duplicate keys/frames,
+   bad signatures, missing deps, wrong roots/bootstrap/recipient/profile and extra
+   secret/route/state fields refuse without mutation.
+2. Two distinct ordinary native identities: begin join, issue offline invitation with
+   no relay saved, review/cancel/confirm, sign acceptance, founder admit/grant, export.
+   Restart/reimport preserves identities and ops; swapped recipient/evidence or stale
+   review refuses; failed final persistence publishes neither partial admission nor grant.
+3. Non-root Linux, umask 022, from `apps/lattice_carrier_server`: import actual app-
+   authored artifacts and call public `Staging.prepare/5`, not only a pure verifier.
+   Both peers must match the exact roster/grants; no service/root key reuse. Retain
+   existing pending-mode refusal for a present reference and canonical journal bytes.
+4. Initial mode negatives: prior committed/pending/receipted catalog, served child,
+   extra initial reference, different valid reference, unhonored reference, roster or
+   bootstrap drift, changed service/manifest and stale attempt all refuse atomically.
+   Python/BEAM journal variants must agree through restore and a two-process race.
+5. Real `catalogued` then public `ReleaseListing.publish`: crash/retry before/after
+   receipt commit leaves the same op set and one catalog/reference id. Count holder
+   ops and compare exact canonical frames before/after initial listing: zero new Space
+   writes. A changed current reference/roster/bootstrap refuses even if a prior probe
+   or journal record was valid. Normal pending listing still writes once.
+6. Hosted ordinary packaged macOS controls exercise the file exchange and actual native
+   identity path. Test keys/loopback mapping cannot stand in for this claim. No network
+   dial or native trust-install receipt is caused by reviewing/importing a candidate.
+
+## Rollout, stops and completion
+
+Land/rebase PR #165 first. Keep old pending mode default and byte-compatible. New
+reference mode is explicit and first-publication only; deploy matching Python and
+BEAM readers together. No automatic conversion of old journals, catalog deletion,
+trust reset, key regeneration or recreation of an already-listed reference.
+
+STOP and revise the design if initial admission requires weakening authority, accepting
+an unverified bootstrap/service, trusting a webview installation verdict, opening relay
+access to an unadmitted identity, dropping causal dependencies, or bypassing the actual
+Linux owner/staging boundary. Also stop if a new mode requires undeclared Wire/schema
+changes or if initial adoption is being generalized to an existing catalog/roster.
+
+Software completion requires A/B behavioral proofs and C's real listing gate; report
+any still-missing prerequisite as unfinished, not a passing fixture substitute. The
+full two-app WSS target additionally needs native member/catalog trust installation,
+ordinary networking and actual host/Keychain/restore evidence. This plan does not mark
+R13, G2, R21b, permission renewal, founder-loss recovery or the community pilot DONE.
