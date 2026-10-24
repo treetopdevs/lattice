@@ -29,13 +29,13 @@ const BOUNDED_REPLICA = {
 // rest as unsupported); the legacy grammar keeps accepting any 43-character token.
 const CANONICAL_TAIL = /[AEIMQUYcgkosw048]$/;
 const boundedReplica = (kind: "space" | "thread", replica: string): boolean => {
-  if (!BOUNDED_REPLICA[kind].test(replica)) return false;
+  if (BOUNDED_REPLICA[kind].exec(replica)?.[0] !== replica) return false;
   const nonce = replica.slice(`replica:treehouse:${kind}:`.length).split("#")[0]!;
   const root = replica.slice(replica.lastIndexOf("#root:") + "#root:".length);
   return CANONICAL_TAIL.test(nonce) && CANONICAL_TAIL.test(root);
 };
 const profileReplica = (kind: "space" | "thread") => ({
-  test: (replica: string) => LEGACY_REPLICA[kind].test(replica) || boundedReplica(kind, replica),
+  test: (replica: string) => LEGACY_REPLICA[kind].exec(replica)?.[0] === replica || boundedReplica(kind, replica),
 });
 const SPACE_REPLICA = profileReplica("space");
 const THREAD_REPLICA = profileReplica("thread");

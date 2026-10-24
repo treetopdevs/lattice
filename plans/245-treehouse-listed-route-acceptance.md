@@ -20,7 +20,7 @@ run) needs the inputs under "Depends on" and is not a build PR.
 PR 1 landed (bounded Thread grammar, TS/Rust parity, kind-aware `verifyProfile` for row 258; PR TBD).
 
 2026-10-24 integration: plan 261 implements bounded Thread grammar, independent native child-key
-custody and ordinary desktop creation locally (rows 254/258). Rebase PR 1 on that implementation;
+custody and ordinary desktop creation locally (row 254), retaining merged PR #164 / row 258. Rebase later PRs on that implementation;
 its packaged/staging gates remain open. This is an authorized grammar/custody change for the drift
 check, not a catalog-trust implementation. Root/member installation remains unimplemented.
 
