@@ -52,7 +52,11 @@ After restart, call `InitialProvisioning.load_staging(output, ceremony)` to reco
 those inputs from the sealed public `bundle.json`. It rechecks the immutable files,
 service binding and original operations retained in the current Space. It permits
 append-only Space growth and the known activated manifest. It does not write files
-or assert readiness; staging and activation still recheck current authority. Use
+or assert readiness; staging and activation still recheck current authority.
+Resume from the current journal phase. The returned original request is for the
+initial staging phase; after activation, proceed with readiness rather than staging
+again. A concurrent live-file replacement may cause a read refusal; retry the
+read-only loader after that write completes. Use
 `prepare/1` only for an exact import retry, not to repair live files.
 
 `initial_existing` is an explicit observation of an already-honored reference.
@@ -61,7 +65,7 @@ an empty catalog store under its owner lock. Activation/readiness re-observe the
 reference and grants. Initial import and unserved staging require clean, closed child
 history. Live rechecks retain quarantined authentic operations without letting them
 change effective grants; reviewed authority, profile and reference drift still refuse.
-The reference title must match the child creation title. Catalog/listing refuse this mode until their actual guarded
+In initial mode, the reference title must match the child creation title. Catalog/listing refuse this mode until their actual guarded
 consumers support it; never manually advance the journal to bypass that stop.
 
 A prior controlled-boot marker prevents creating another fresh import in that

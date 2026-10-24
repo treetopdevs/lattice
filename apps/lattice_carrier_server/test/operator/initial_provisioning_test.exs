@@ -328,6 +328,59 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
     assert {:ok, ^journal} = Journal.read(f.fixture.root)
   end
 
+  test "initial readiness tolerates quarantined traffic retained by the live relay", f do
+    assert {:ok, imported} = InitialProvisioning.prepare(f.opts)
+    boot_import!(f.fixture.root, imported)
+
+    assert {:ok, _} =
+             Staging.prepare(
+               f.fixture.root,
+               nil,
+               imported.request,
+               imported.artifacts,
+               f.fixture.ceremony_dir
+             )
+
+    activated = activate_import!(f.fixture.root, imported, f.fixture.ceremony_dir)
+    assert :ok = Application.stop(:lattice_carrier_server)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+    child = Sim.log(f.fixture.child, "creator")
+    stranger = Lattice.Identity.from_seed("noise", "live-relay-noise")
+
+    noise =
+      Lattice.Op.new(
+        stranger,
+        child.replica,
+        Lattice.Log.frontier(child),
+        :command,
+        {:post, ["noise"]}
+      )
+
+    root = Sim.identity(f.fixture.child, "creator")
+
+    assert {:ok, _} =
+             LatticeCarrierServer.Holder.relay(
+               LatticeCarrierServer.Holder.via("thread"),
+               InitialProvisioning.client_realm(root.pub),
+               noise
+             )
+
+    child_path = Enum.find(activated["artifacts"], &(&1["kind"] == "log"))["path"]
+    assert {:ok, %{log: retained}} = Lattice.Log.restore_verified(child_path)
+    assert retained.ops[noise.id] == noise
+    assert Map.has_key?(Lattice.Authority.analyze(Treehouse.Thread, retained).reasons, noise.id)
+
+    assert {:ok, ready} =
+             LatticeCarrierServer.Operator.ReleaseReadiness.confirm(
+               f.fixture.root,
+               activated,
+               probe!(f.fixture.root),
+               f.fixture.ceremony_dir
+             )
+
+    assert ready["phase"] == "ready"
+  end
+
   test "initial readiness refuses authentic child revocation without changing its receipt", f do
     assert {:ok, imported} = InitialProvisioning.prepare(f.opts)
     boot_import!(f.fixture.root, imported)
