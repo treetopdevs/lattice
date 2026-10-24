@@ -71,8 +71,9 @@ Space, export its public frames, then operator `binding-payload` prepares
 `binding-payload.json` and `binding-review.txt` using the catalog/service custody inputs.
 The founder uses existing Catalog binding Review/Sign controls, confirming every
 public field. Export again; operator `verify-binding` and `report` establish the
-verified ceremony against the honored bootstrap. Only then issue/review/accept the
-offline invitation, admit/grant, export final histories, and import against that same
+verified ceremony against the honored bootstrap. Create the bounded Thread with
+its explicit continuity setup, then issue/review/accept the offline invitation,
+admit/grant, export final histories, and import against that same
 ceremony. A fabricated bootstrap id is forbidden; no relay route is installed here.
 PR B composes these existing controls rather than introducing another bootstrap path.
 Fixture ceremonies supply every input in tests; real ceremony adoption stays a field gate.
@@ -280,6 +281,10 @@ build, focused/full relevant Cargo tests, and exact-tip hosted workflow gate. Ru
 per-app Sobelow boundaries for affected HTTP surfaces; do not substitute umbrella
 Sobelow. Keep local, packaged, Linux, physical and field claims separate.
 
+PR A owns BEAM decoding plus actual ordinary-workflow export parity vectors; PR B
+adds reciprocal parity against its supported TS offline codec. Neither substitutes
+hand-authored signing terms for the ordinary workflow source.
+
 Behavioral gates (no fixtures that bypass the named production boundary):
 
 1. Canonical round-trip and TS/Elixir parity: same signed ids/payloads/signatures,
@@ -298,7 +303,8 @@ Behavioral gates (no fixtures that bypass the named production boundary):
    extra initial reference, different valid reference, unhonored reference, roster or
    bootstrap drift, changed service/manifest and stale attempt all refuse atomically.
    Python/BEAM journal variants must agree through restore and a two-process race,
-   including duplicate-recipient and noncanonical-public-key refusals at their owning
+   including activation/readiness rechecks at their existing public entry points,
+   duplicate-recipient and noncanonical-public-key refusals at their owning
    validation boundary; do not assume Journal alone performs staging review.
 5. Real `catalogued` then public `ReleaseListing.publish`: crash/retry before/after
    receipt commit leaves the same op set and one catalog/reference id. Count holder
