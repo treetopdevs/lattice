@@ -57,6 +57,12 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
   test "missing completion marker preserves partial output and refuses retry", f do
     assert {:ok, imported} = InitialProvisioning.prepare(f.opts)
     File.rm!(imported.index)
+    File.rm!(imported.active_manifest)
+    assert {:error, _} = LatticeCarrierServer.Manifest.load(imported.active_manifest)
+
+    assert {:error, _} =
+             LatticeCarrierServer.Manifest.load(Path.join(f.output, "initial.manifest.data"))
+
     before = snapshot(f.output)
     assert {:error, :initial_provisioning_refused} = InitialProvisioning.prepare(f.opts)
     assert snapshot(f.output) == before
@@ -194,6 +200,23 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
              Staging.prepare(f.fixture.root, nil, imported.request, imported.artifacts, ceremony)
 
     assert record["phase"] == "carrier_pending"
+  end
+
+  test "operator command imports with public output and never starts a deployment", f do
+    args =
+      ["treehouse.initial_provisioning"] ++
+        Enum.flat_map(f.opts, fn {key, value} ->
+          ["--" <> (key |> Atom.to_string() |> String.replace("_", "-")), value]
+        end)
+
+    {output, status} = System.cmd(System.find_executable("mix"), args, stderr_to_stdout: true)
+    assert status == 0, output
+    result = output |> String.trim() |> String.split("\n") |> List.last() |> Jason.decode!()
+    assert result["claim"] == "verified_offline_import"
+    assert File.exists?(result["index"])
+    refute String.contains?(output, File.read!(f.fixture.service_identity))
+    assert {:ok, nil} = Journal.read(f.fixture.root)
+    refute File.exists?(Path.join(f.fixture.root, "operator-incarnation"))
   end
 
   test "a previous controlled boot marker prevents creating another initial output", f do

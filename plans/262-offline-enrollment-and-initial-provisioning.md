@@ -222,8 +222,9 @@ marker refuses new imports rather than being erased. An exact completed retry on
 rechecks and syncs existing files. Write a new private output directory with verified Log dumps, canonical
 reference artifact and derived review inventory. Never overwrite a served log,
 manifest, existing artifact or user file; refuse symlinks/aliases, conflicting outputs
-and ambiguous partial attempts. Seal a completion index only after all outputs are
-durable and re-read/verified. An interrupted partial directory is not ready input;
+and ambiguous partial attempts. Seal a completion index after data and a nonbootable manifest blueprint are
+durable and re-read/verified; only then exclusively publish/sync the bootable initial
+manifest. Before sealing there is no bootable initial-manifest entry point. An interrupted partial directory is not ready input;
 retry verifies exact existing material or refuses, never silently replaces it.
 
 Produce Space and child artifacts that the real `Staging.prepare/5` consumes. The

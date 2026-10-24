@@ -74,6 +74,19 @@ defmodule LatticeCarrierServer.Manifest do
     end
   end
 
+  @doc "Read-only inspection of unpublished manifest bytes; this does not make a deployment bootable."
+  @spec review_bytes(binary(), Path.t()) :: {:ok, t()} | {:error, term()}
+  def review_bytes(bytes, future_path) when is_binary(bytes) and byte_size(bytes) <= 1_048_576 do
+    expanded = Path.expand(future_path)
+
+    with {:ok, decoded} <- decode_manifest(bytes),
+         {:ok, manifest} <- parse(decoded, Path.dirname(expanded), expanded) do
+      {:ok, %{manifest | sha256: :crypto.hash(:sha256, bytes)}}
+    end
+  end
+
+  def review_bytes(_, _), do: {:error, :manifest_corrupt}
+
   defp validate_manifest_integrity(path) do
     with {:ok, effective_uid} <- effective_uid(),
          :ok <- manifest_file_permissions(path, effective_uid),

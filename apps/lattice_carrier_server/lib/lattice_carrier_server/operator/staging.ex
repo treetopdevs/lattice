@@ -387,10 +387,19 @@ defmodule LatticeCarrierServer.Operator.Staging do
   end
 
   defp verify_child(artifact) do
-    r = artifact.review
-
     with {:ok, %{log: log, sha256: digest}} <- Log.restore_verified(artifact.path),
          true <- digest == artifact.digest and log.replica == artifact.replica,
+         :ok <- verify_child_log(log, artifact),
+         do: {:ok, log}
+  end
+
+  @doc "Verify the same closed child authority and beacon contract before import or staging."
+  @spec verify_child_log(Log.t(), map()) :: :ok | {:error, atom()}
+  def verify_child_log(log, artifact) do
+    r = artifact.review
+
+    with :ok <- Log.verify_authenticity(log),
+         true <- log.replica == artifact.replica,
          %Op{kind: :authority, body: {:genesis, _, root}, author: author} <-
            log.ops[artifact.op_id],
          # The reviewed profile pin is the candidate's only policy source; a
@@ -424,10 +433,12 @@ defmodule LatticeCarrierServer.Operator.Staging do
          # one would otherwise sail through every check above; it is refused
          # here explicitly rather than folded into the closed inventory.
          false <- Authority.tombstoned?(log) do
-      {:ok, log}
+      :ok
     else
       _ -> {:error, :invalid_staged_signed_artifact}
     end
+  rescue
+    _ -> {:error, :invalid_staged_signed_artifact}
   end
 
   # `profile_id` digests only the continuation profile, but any root-authored
@@ -772,13 +783,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
     end
   end
 
-  defp initial_child_current?(child, log) do
-    analysis = Authority.analyze(Treehouse.Thread, log)
-    reviewed = reviewed_grants(child.review)
-
-    analysis.reasons == %{} and reviewed == honored_grants(log, analysis) and
-      authority_closed?(log, child, reviewed) and not Authority.tombstoned?(log)
-  end
+  defp initial_child_current?(child, log), do: verify_child_log(log, child) == :ok
 
   defp staged_child(child) do
     replica = child["replica"]

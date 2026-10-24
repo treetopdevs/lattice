@@ -87,6 +87,32 @@ defmodule LatticeCarrierServer.Operator.InitialBundleTest do
     end
   end
 
+  test "revoked historical child authority cannot become a sealed import", f do
+    {changed, grant} =
+      Sim.grant(f.fixture[:child], "creator", "nominee", ops: [:post], expires_epoch: 7)
+
+    {changed, _} = Sim.revoke(changed, "creator", grant.id)
+    child = Sim.log(changed, "creator")
+    assert Lattice.Authority.analyze(Treehouse.Thread, child).reasons == %{}
+    {:ok, verified} = InitialBundle.decode(f.bytes)
+
+    bytes =
+      InitialBundle.encode(verified.space, child, verified.bootstrap.id, verified.reference.id)
+
+    assert {:error, :invalid_initial_bundle} = InitialBundle.decode(bytes)
+  end
+
+  test "a pin with an unreviewed beacon policy refuses before import", _f do
+    {:ok, hostile} = Fixture.new(second_member: true, pin_beacon: {:max_epoch_step, 65535})
+    child = Sim.log(hostile[:child], "creator")
+    {:ok, %{bootstraps: [bootstrap]}} = Treehouse.CatalogBootstrap.observe(hostile[:updated_log])
+
+    bytes =
+      InitialBundle.encode(hostile[:updated_log], child, bootstrap.id, hostile[:reference].id)
+
+    assert {:error, :invalid_initial_bundle} = InitialBundle.decode(bytes)
+  end
+
   test "load refuses a symlink and preserves its public source", f do
     root = f.fixture[:root]
     source = Path.join(root, "bundle.json")

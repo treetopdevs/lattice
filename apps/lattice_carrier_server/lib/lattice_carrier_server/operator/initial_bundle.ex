@@ -171,6 +171,7 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
              review: %{"mode" => "initial_existing"}
            }
          },
+         :ok <- Staging.verify_child_log(child, Map.put(bundle.child, :op_id, genesis.id)),
          {:ok, _} <- ReferenceMode.observe(bundle, space, child) do
       {:ok,
        %{roster: roster, reference: reference, child_genesis: genesis.id, child_review: review}}

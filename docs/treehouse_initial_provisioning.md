@@ -33,8 +33,9 @@ choose and verify real listener/proxy mappings separately before a field run.
 
 Successful output contains verified Space/Thread log dumps, the signed reference,
 derived grant review, a Space-only initial manifest, a candidate manifest, and
-`complete.json`. Files and their directory are synced before the completion marker,
-which is synced last. A completed retry rechecks every file and syncs existing
+`complete.json`. The manifest blueprint is not bootable JSON. All sealed data is verified and synced
+before `complete.json`; only after that marker is durable does the importer publish
+the bootable initial manifest through an exclusive write and sync. A completed retry rechecks every file and syncs existing
 material. Partial, changed, extra, symlinked or hard-linked output refuses and is
 preserved. Use a new reviewed attempt rather than deleting recovery evidence.
 

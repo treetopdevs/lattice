@@ -33,7 +33,7 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
          {:ok, material} <-
            material(bundle, binding, paths, ports, Journal.digest(identity_bytes)),
          :ok <-
-           persist(paths.output, material.files, material.index, fn ->
+           persist(paths.output, material.files, material.index, material.boot, fn ->
              reread(material, binding, bundle, paths)
            end) do
       {:ok,
@@ -204,7 +204,7 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
     files = %{
       "space.log" => space_bytes,
       "thread.log" => child_bytes,
-      "initial.manifest.json" => active,
+      "initial.manifest.data" => "treehouse-unpublished-manifest-v1\n" <> active,
       "candidate.manifest.json" => candidate,
       "reference.json" => reference,
       "review.json" => InitialBundle.canonical(bundle.child_review)
@@ -213,6 +213,7 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
     index =
       InitialBundle.canonical(%{
         "format" => "treehouse-initial-import-index-v1",
+        "bootManifestSha256" => Journal.digest(active),
         "bundleSha256" => Journal.digest(bundle.bytes),
         "bootstrapId" => binding.bootstrap_id,
         "identitySha256" => identity_sha,
@@ -221,7 +222,22 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
         "files" => Map.new(files, fn {name, bytes} -> {name, Journal.digest(bytes)} end)
       })
 
-    {:ok, %{files: files, index: index, request: request, artifacts: artifacts}}
+    service = %{
+      "identity_file" => paths.identity,
+      "realm" => binding.realm,
+      "pub" => Base.encode64(binding.record.service_key),
+      "sha256" => identity_sha
+    }
+
+    {:ok,
+     %{
+       files: files,
+       index: index,
+       boot: active,
+       service: service,
+       request: request,
+       artifacts: artifacts
+     }}
   end
 
   defp instance(name, log_path, log, roster, identity_file, realm, port) do
@@ -253,7 +269,7 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
     }
   end
 
-  defp persist(output, files, index, verify) do
+  defp persist(output, files, index, boot, verify) do
     case File.mkdir(output) do
       :ok ->
         with :ok <- File.chmod(output, 0o700),
@@ -272,16 +288,26 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
                  :output_write_failed
                ),
              :ok <- Posix.sync_directory(output),
+             {:ok, _} <-
+               Paths.create_private(
+                 Path.join(output, "initial.manifest.json"),
+                 fn -> boot end,
+                 :output_exists,
+                 :output_write_failed
+               ),
+             :ok <- Posix.sync_directory(output),
              do: :ok
 
       {:error, :eexist} ->
         with :ok <- private_directory(output),
              {:ok, names} <- File.ls(output),
-             true <- Enum.sort(names) == Enum.sort([@index | Map.keys(files)]),
+             true <-
+               Enum.sort(names) == Enum.sort([@index, "initial.manifest.json" | Map.keys(files)]),
              :ok <- exact_file(Path.join(output, @index), index),
+             :ok <- exact_file(Path.join(output, "initial.manifest.json"), boot),
              :ok <- check_files(output, files),
              :ok <- verify.(),
-             :ok <- sync_completed(output, [@index | Map.keys(files)]),
+             :ok <- sync_completed(output, [@index, "initial.manifest.json" | Map.keys(files)]),
              do: :ok
 
       _ ->
@@ -347,11 +373,12 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
          true <- space == bundle.space,
          {:ok, %{log: child}} <- Log.restore_verified(Path.join(paths.output, "thread.log")),
          true <- child == bundle.child,
-         {:ok, manifest} <- Manifest.load(material.request.active_manifest),
+         {:ok, manifest} <- Manifest.review_bytes(material.boot, material.request.active_manifest),
          [instance] <- manifest.instances,
          true <- instance.pub == binding.record.service_key and instance.realm == binding.realm,
          {:ok, rebound} <- CatalogBinding.load_log(paths.ceremony, space),
          true <- rebound.bootstrap_id == binding.bootstrap_id,
+         true <- Journal.service_identity_current?(material.service),
          do: :ok
   end
 end
