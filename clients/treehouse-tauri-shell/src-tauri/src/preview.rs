@@ -573,7 +573,12 @@ fn parse(raw: Option<&str>) -> Result<Record, String> {
             || (i.kind == "join" && i.name != JOIN_INTENT_NAME)
             || !token(&i.nonce)
             || i.setup.as_ref().is_some_and(|setup| {
-                i.kind != "thread" || !canonical_token(&i.nonce) || !setup.valid()
+                i.kind != "thread"
+                    || !canonical_token(&i.nonce)
+                    || !setup.valid()
+                    || r.public_key.as_ref().is_some_and(|owner| {
+                        &setup.nominee == owner || setup.witnesses.contains(owner)
+                    })
             })
         {
             return Err("invalid_creation_intent".into());
@@ -1072,6 +1077,42 @@ impl PreviewStore {
                 return Err("creation_intent_changed".into());
             }
         }
+        // Explicitly discard only an unpublished local setup whose bound key is lost.
+        // The public binding remains, so this nonce cannot generate a replacement key.
+        let mut abandon_thread = false;
+        if let Some(intent) = old
+            .intent
+            .as_ref()
+            .filter(|intent| intent.kind == "thread" && intent.setup.is_some())
+        {
+            if next_record.intent.is_none() {
+                let mut only_clear = old.clone();
+                only_clear.revision = next_record.revision;
+                only_clear.intent = None;
+                if serde_json::to_value(&only_clear).map_err(storage_error)?
+                    == serde_json::to_value(&next_record).map_err(storage_error)?
+                {
+                    let (alias, binding, _) = self.thread_context(&intent.nonce)?;
+                    let bound = self.db.kv_get(&binding).map_err(storage_error)?.is_some();
+                    let missing = self
+                        .keys
+                        .load_seed(&alias)
+                        .map_err(|_| "key_store_unavailable")?
+                        .is_none();
+                    let prefix = format!("replica:treehouse:thread:{}#", intent.nonce);
+                    if !bound
+                        || !missing
+                        || old
+                            .profiles
+                            .iter()
+                            .any(|profile| profile.replica.starts_with(&prefix))
+                    {
+                        return Err("thread_abandon_not_allowed".into());
+                    }
+                    abandon_thread = true;
+                }
+            }
+        }
         if old.intent.as_ref().is_some_and(|i| i.kind == "join") {
             // The join intent is spent by the commit that persists the key: the identity is
             // present, the intent is gone and no profile exists yet (the first dependency-closed
@@ -1085,6 +1126,7 @@ impl PreviewStore {
             }
         } else if let Some(pending) = &old.intent {
             if next_record.intent.is_none()
+                && !abandon_thread
                 && !next_record.profiles.iter().any(|p| {
                     (p.replica.starts_with(&format!(
                         "replica:treehouse:{}:{}#root:",
@@ -1105,7 +1147,7 @@ impl PreviewStore {
             .as_ref()
             .filter(|intent| intent.kind == "thread" && intent.setup.is_some())
         {
-            if next_record.intent.is_none() {
+            if next_record.intent.is_none() && !abandon_thread {
                 let (alias, binding, _) = self.thread_context(&intent.nonce)?;
                 let expected = self
                     .db

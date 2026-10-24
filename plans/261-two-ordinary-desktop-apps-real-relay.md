@@ -29,7 +29,7 @@ The unified roadmap remains the execution ledger; this document supplies its des
 | Ordinary UI | `src/App.vue` requires both enrollment and dev-trace flags | Supported desktop enrollment UI and production WSS config |
 | Transport admission | `apps/lattice_carrier_server/lib/lattice_carrier_server/operator/staging.ex`: `peers_exact`, `relays_reviewed` | Initial provisioning includes the admitted second identity before activation |
 | Member permissions | `clients/lattice-client/src/treehouse_enrollment.ts` authors admission and exact-audience grants | Prove those helpers against bounded histories; grants are currently authored without an explicit lease |
-| Thread creation | Workflow creates a bounded Space but a legacy Thread | Bounded Thread authoring, kind-aware replay and persistence (254, 258) |
+| Thread creation | Ordinary workflow creates independently rooted bounded Spaces/Threads | Hosted packaged, initial staging and field proof (254); grammar closed by #164 (258) |
 | Catalog trust | Elixir/TS evaluators; plan 245 native design | Native implementation; plan 245 first install is root-only |
 | Capacity | `src/treehouse_state.ts`: all profiles in a 1 MiB record | Shared import/evaluation/persistence budget (257) |
 
@@ -39,8 +39,7 @@ The local service-identity record describes an operations event, not a deployed 
 
 ## Recommended decisions
 
-D1–D6 below were adopted by the user's 2026-10-24 instruction to proceed. The native
-custody implementation described in the slice-A follow-up remains work, not evidence.
+D1–D6 below were adopted by the user's 2026-10-24 instruction to proceed. Native custody is implemented locally; hosted packaged, initial staging and actual Keychain evidence remain open.
 
 ### D1: close the initial admission circle offline
 

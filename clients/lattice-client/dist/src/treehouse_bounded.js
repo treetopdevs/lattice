@@ -98,6 +98,10 @@ export async function prepareTreehouseBoundedThreadCreation(input) {
     const term = profile === null ? null : continuationProfileToCarrierTerm(profile);
     if (profile === null || term === null)
         throw new Error("invalid_continuation_profile");
+    if (profile.nominee === keyB64(input.spaceRoot))
+        throw new Error("nominee_is_space_root");
+    if (profile.witnesses.includes(keyB64(input.spaceRoot)))
+        throw new Error("witness_is_space_root");
     if (profile.nominee === root)
         throw new Error("nominee_is_root");
     if (profile.witnesses.includes(root))

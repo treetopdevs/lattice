@@ -3,12 +3,14 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
 import { parseState } from "../src/treehouse_state";
 import { FaultNative } from "./support/fault_native";
-import { resolveContinuationProfileFromFrames, carrierDelegationsFromFrames, authorTownshipRevocation } from "@treetopdevs/lattice-client";
+import { resolveContinuationProfileFromFrames, carrierDelegationsFromFrames, authorTownshipRevocation, encodeTreehouseJoinRequest, decodeTreehouseOffer, signTreehouseAcceptance, encodeTreehouseAcceptance, memberCapability } from "@treetopdevs/lattice-client";
 
 const pub = (n: number) => Buffer.from(ed25519.getPublicKey(new Uint8Array(32).fill(n))).toString("base64");
 const setup = { nominee: pub(101), witnesses: [102, 103, 104].map(pub), threshold: 2, maxLeaseEpochs: 7 };
 class BoundedNative extends FaultNative {
   children = new Map<string, Uint8Array>();
+  bindings = new Set<string>();
+  outOfScope = new Set<string>();
   created = 0;
   failAfterKey = false;
   failAfterWrite = false;
@@ -16,14 +18,16 @@ class BoundedNative extends FaultNative {
     const state = parseState(this.record);
     let seed = this.children.get(nonce);
     if (!seed) {
+      if (this.bindings.has(nonce)) throw Error("thread_key_missing");
       if (state.profiles.some((p) => p.replica.startsWith(`replica:treehouse:thread:${nonce}#`))) throw Error("thread_key_missing");
       if (state.intent?.nonce !== nonce || !state.intent.setup) throw Error("thread_key_unbound");
-      seed = crypto.getRandomValues(new Uint8Array(32)); this.children.set(nonce, seed); this.created++;
+      seed = crypto.getRandomValues(new Uint8Array(32)); this.children.set(nonce, seed); this.bindings.add(nonce); this.created++;
     }
     if (this.failAfterKey) this.failCommit = true;
     return Buffer.from(ed25519.getPublicKey(seed)).toString("base64");
   }
   async threadIdentity(nonce: string) {
+    if (this.outOfScope.has(nonce)) throw Error("thread_key_not_in_scope");
     const held = parseState(this.record).profiles.some((p) => p.replica.startsWith(`replica:treehouse:thread:${nonce}#`));
     if (!held) throw Error("thread_key_unbound");
     if (!this.children.has(nonce)) throw Error("thread_key_missing");
@@ -36,6 +40,10 @@ class BoundedNative extends FaultNative {
     return ed25519.sign(bytes, seed);
   }
   async commit(expected: number, next: string) {
+    const old = parseState(this.record), candidate = parseState(next);
+    if (old.intent?.setup && !candidate.intent && candidate.profiles.length === old.profiles.length) {
+      if (!this.bindings.has(old.intent.nonce) || this.children.has(old.intent.nonce)) throw Error("thread_abandon_not_allowed");
+    }
     const committed = await super.commit(expected, next);
     if (committed && this.failAfterWrite && parseState(next).intent === null) throw Error("uncertain_write");
     return committed;
@@ -45,6 +53,9 @@ const native = new BoundedNative();
 let app = new TreehouseWorkflow(native);
 await app.open(); await app.createSpace("Canopy");
 const before = native.record;
+await assert.rejects(() => app.createThread("Owner nominee", { ...setup, nominee: app.state.publicKey! }), /invalid_thread_setup/);
+await assert.rejects(() => app.createThread("Owner witness", { ...setup, witnesses: [app.state.publicKey!, pub(103)] }), /invalid_thread_setup/);
+assert.equal(native.record, before);
 await assert.rejects(() => app.createThread("Too many witnesses", { ...setup, witnesses: Array.from({ length: 17 }, (_, i) => pub(120 + i)) }), /invalid_thread_setup/);
 assert.equal(native.record, before);
 assert.equal(native.created, 0);
@@ -74,17 +85,20 @@ assert.deepEqual(app.views.get(app.state.profiles[0]!.replica)!.state.members, [
 await app.command(child.replica, { command: "post", text: "Participant post" });
 const post = app.state.profiles[1]!.frames.at(-1)!;
 assert.equal(post.author, app.state.publicKey);
-if (process.env.TREEHOUSE_BOUNDED_CREATION_ARTIFACT) {
+async function exportArtifact(current: TreehouseWorkflow, path: string | undefined) {
+  if (!path) return;
   const { writeFileSync } = await import("node:fs");
-  writeFileSync(process.env.TREEHOUSE_BOUNDED_CREATION_ARTIFACT, JSON.stringify({
-    version: 1, product: "treehouse", readiness: "recovery_not_ready", publicKey: app.state.publicKey,
-    profiles: app.state.profiles.map((profile) => {
-      const view = app.views.get(profile.replica)!;
+  writeFileSync(path, JSON.stringify({
+    version: 1, product: "treehouse", readiness: "recovery_not_ready", publicKey: current.state.publicKey,
+    profiles: current.state.profiles.map((profile) => {
+      const view = current.views.get(profile.replica)!;
       return { ...profile, expect: { state: view.state, posts: view.posts, order: view.order,
         quarantine: [...view.quarantineReasons].sort(), operationCount: view.operationCount } };
     }),
   }));
 }
+await exportArtifact(app, process.env.TREEHOUSE_BOUNDED_CREATION_ARTIFACT);
+
 const persisted = native.record;
 app = new TreehouseWorkflow(native); await app.open();
 assert.equal(native.record, persisted, "reopen does not write history");
@@ -136,6 +150,8 @@ assert.equal(capNative.record, beforeFourth);
 assert.equal(capNative.created, 3);
 const malformed = { ...parseState(capNative.record), intent: { kind: "thread", name: "Bad", nonce: "A".repeat(43), setup: null } };
 assert.throws(() => parseState(JSON.stringify(malformed)), /invalid_creation_intent/);
+const noncanonical = { ...parseState(capNative.record), intent: { kind: "thread", name: "Bad", nonce: "A".repeat(42) + "B", setup } };
+assert.throws(() => parseState(JSON.stringify(noncanonical)), /invalid_creation_intent/);
 const firstCapChild = capApp.state.profiles[1]!;
 const firstCapNonce = firstCapChild.replica.split(":")[3]!.split("#")[0]!;
 const childRoot = await capNative.threadIdentity(firstCapNonce);
@@ -152,6 +168,71 @@ await assert.rejects(() => noRoot.command(firstCapChild.replica, { command: "arc
 const maxNative = new BoundedNative(); const maxApp = new TreehouseWorkflow(maxNative);
 await maxApp.open(); await maxApp.createSpace("Maximum setup");
 const sizeBefore = Buffer.byteLength(maxNative.record!);
-await maxApp.createThread("x".repeat(16_384), { ...setup, witnesses: Array.from({ length: 16 }, (_, i) => pub(120 + i)) });
+await maxApp.createThread("\u0000".repeat(16_384), { ...setup, threshold: 16, witnesses: Array.from({ length: 16 }, (_, i) => pub(120 + i)) });
 assert(Buffer.byteLength(maxNative.record!) - sizeBefore < 131_072, "maximum title/profile fits the reserved creation transaction");
 console.log("PASS bounded workflow: atomic creation, independent custody, exact retry, restart, participant posting, root moderation and missing-key refusal");
+
+// Abandoning a lost, never-committed child keeps old Threads writable and never reuses its binding.
+const lostNative = new BoundedNative(); let lostApp = new TreehouseWorkflow(lostNative);
+await lostApp.open(); await lostApp.createSpace("Recoverable setup"); await lostApp.createThread("Retained", setup);
+const retained = structuredClone(lostApp.state.profiles);
+lostNative.failAfterKey = true;
+await assert.rejects(() => lostApp.createThread("Lost", setup), /disk_write_refused/);
+const lostNonce = lostApp.state.intent!.nonce;
+lostNative.failAfterKey = false; lostNative.failCommit = false;
+await assert.rejects(() => lostApp.abandonThreadCreation(), /thread_abandon_not_allowed/);
+lostNative.children.delete(lostNonce);
+lostApp = new TreehouseWorkflow(lostNative); await lostApp.open();
+await assert.rejects(() => lostApp.resumeCreation(), /thread_key_missing/);
+await lostApp.abandonThreadCreation();
+assert.equal(lostApp.state.intent, null);
+assert.deepEqual(lostApp.state.profiles, retained);
+assert(lostNative.bindings.has(lostNonce));
+await lostApp.command(retained[1]!.replica, { command: "post", text: "Existing Thread still works" });
+assert.equal(lostNative.created, 2);
+
+// Later participants receive direct child-root grants, independent of the founder's posting grant.
+const grantNative = new BoundedNative(); const grantApp = new TreehouseWorkflow(grantNative);
+await grantApp.open(); await grantApp.createSpace("Independent grants"); await grantApp.createThread("General", setup);
+const [grantSpace, grantChild] = grantApp.state.profiles;
+await grantApp.configureRoutes(JSON.stringify({ localRealm: "founder", routes: [grantSpace!, grantChild!].map((p, i) => ({
+  replica: p.replica, url: `wss://relay.example.test/r/${i}`, expectedPeerRealm: "service", expectedPeerPubkey: pub(170),
+})) }));
+const memberSeed = new Uint8Array(32).fill(171);
+const memberSigner = { publicKey: ed25519.getPublicKey(memberSeed), sign: (bytes: Uint8Array) => ed25519.sign(bytes, memberSeed) };
+const memberKey = Buffer.from(memberSigner.publicKey).toString("base64");
+const offer = decodeTreehouseOffer(await grantApp.issueInvitation(encodeTreehouseJoinRequest({ publicKey: memberKey }), "member"));
+const accepted = await signTreehouseAcceptance({ replica: grantSpace!.replica, frames: grantApp.state.profiles[0]!.frames,
+  invitationId: offer.invitationId, signer: memberSigner });
+await grantApp.admitAndGrant(encodeTreehouseAcceptance(accepted));
+let grantedFrames = grantApp.state.profiles[1]!.frames;
+const childRootKey = grantedFrames[0]!.author;
+const memberGrant = carrierDelegationsFromFrames(grantedFrames).find((d) => d.audience === memberKey)!;
+const rootGrant = carrierDelegationsFromFrames(grantedFrames).find((d) => d.parent_id === null && d.ops.includes("post"))!;
+assert.equal(memberGrant.issuer, childRootKey); assert.equal(memberGrant.parent_id, rootGrant.id);
+const founderGrant = carrierDelegationsFromFrames(grantedFrames).find((d) => d.audience === grantApp.state.publicKey)!;
+const grantNonce = grantChild!.replica.split(":")[3]!.split("#")[0]!;
+const revokedFounder = await authorTownshipRevocation({ replica: grantChild!.replica,
+  signer: { publicKey: Buffer.from(childRootKey, "base64"), sign: (bytes) => grantNative.signThread(grantNonce, bytes) },
+  deps: [grantedFrames.at(-1)!.id], delegationId: founderGrant.id });
+grantedFrames = [...grantedFrames, revokedFounder];
+assert(memberCapability(grantedFrames, memberKey, grantChild!.replica, { product: "Treehouse.Thread", command: "post" }));
+// Membership invitations cover every honored Thread; adding a Thread makes old scope stale.
+await grantApp.createThread("After invitation", setup);
+const laterNonce = grantApp.state.profiles[2]!.replica.split(":")[3]!.split("#")[0]!;
+grantNative.children.delete(laterNonce);
+const staleApp = new TreehouseWorkflow(grantNative); await staleApp.open();
+const staleRecord = grantNative.record;
+await assert.rejects(() => staleApp.admitAndGrant(encodeTreehouseAcceptance(accepted)), /stale_scope/);
+assert.equal(grantNative.record, staleRecord, "stale invitation cannot alter any history or outbox");
+grantNative.outOfScope.add(grantNonce);
+const restored = new TreehouseWorkflow(grantNative); await restored.open();
+assert.equal(restored.threadKeyIssue(grantChild!.replica), "thread_key_mismatch");
+assert.equal(restored.views.get(grantChild!.replica)!.state.title, "General");
+console.log("PASS lost-key abandonment, direct child-root member grants, and out-of-scope read-only recovery");
+
+await exportArtifact(maxApp, process.env.TREEHOUSE_BOUNDED_MAX_ARTIFACT);
+const minNative = new BoundedNative(); const minApp = new TreehouseWorkflow(minNative);
+await minApp.open(); await minApp.createSpace("Minimum setup");
+await minApp.createThread("One witness", { ...setup, witnesses: [pub(102)], threshold: 1 });
+await exportArtifact(minApp, process.env.TREEHOUSE_BOUNDED_MIN_ARTIFACT);

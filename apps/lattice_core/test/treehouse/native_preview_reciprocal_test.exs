@@ -36,18 +36,39 @@ defmodule Treehouse.NativePreviewReciprocalTest do
         "treehouse-bounded-preview-#{System.unique_integer([:positive])}.json"
       )
 
-    on_exit(fn -> File.rm(artifact) end)
+    on_exit(fn -> Enum.each([artifact, artifact <> "-max", artifact <> "-min"], &File.rm/1) end)
 
     {output, status} =
       System.cmd(Path.join(client, "node_modules/.bin/tsx"), ["test/bounded_creation.ts"],
         cd: client,
-        env: [{"TREEHOUSE_BOUNDED_CREATION_ARTIFACT", artifact}],
+        env: [
+          {"TREEHOUSE_BOUNDED_CREATION_ARTIFACT", artifact},
+          {"TREEHOUSE_BOUNDED_MAX_ARTIFACT", artifact <> "-max"},
+          {"TREEHOUSE_BOUNDED_MIN_ARTIFACT", artifact <> "-min"}
+        ],
         stderr_to_stdout: true
       )
 
     assert status == 0, output
     captured = artifact |> File.read!() |> Jason.decode!()
     assert :ok = Treehouse.NativePreviewOracle.verify!(captured)
+
+    for path <- [artifact <> "-max", artifact <> "-min"] do
+      assert :ok =
+               path |> File.read!() |> Jason.decode!() |> Treehouse.NativePreviewOracle.verify!()
+    end
+
+    [owner_profile, child_profile] = captured["profiles"]
+
+    ungranted =
+      put_in(captured["profiles"], [
+        owner_profile,
+        Map.put(child_profile, "frames", Enum.take(child_profile["frames"], 3))
+      ])
+
+    failure = assert_raise MatchError, fn -> Treehouse.NativePreviewOracle.verify!(ungranted) end
+    assert failure.term == false
+
     [space, child] = captured["profiles"]
     assert hd(space["frames"])["author"] != hd(child["frames"])["author"]
     assert String.contains?(child["replica"], "#authority:bounded-continuation-v1")

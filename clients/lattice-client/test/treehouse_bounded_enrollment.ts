@@ -32,6 +32,7 @@ if (selected.ok) {
   assert.equal(selected.profileGenesis, thread.pending[2]!.id);
 }
 for (const invalid of [
+  { nominee: root.publicKey }, { witnesses: [root.publicKey, signer(88).publicKey] },
   { nominee: child.publicKey }, { witnesses: [child.publicKey, signer(88).publicKey] },
   { witnesses: [threadInput.nominee, signer(88).publicKey] }, { threshold: 4 },
 ]) await assert.rejects(() => prepareTreehouseBoundedThreadCreation({ ...threadInput, ...invalid }));

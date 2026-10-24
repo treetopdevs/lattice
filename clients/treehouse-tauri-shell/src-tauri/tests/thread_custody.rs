@@ -299,3 +299,91 @@ fn oversized_setup_and_capacity_fail_before_key_creation_or_intent_progress() {
         Err("thread_key_unbound".into())
     );
 }
+
+#[test]
+fn lost_pending_child_can_be_explicitly_abandoned_without_losing_history_or_binding() {
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(Keys::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys.clone()).unwrap();
+    let r = pending(&mut store);
+    store.initialize_thread(&"A".repeat(43)).unwrap();
+    let mut cleared = r.clone();
+    cleared["revision"] = json!(4);
+    cleared["intent"] = Value::Null;
+    assert_eq!(
+        store.commit(3, &cleared.to_string()),
+        Err("thread_abandon_not_allowed".into())
+    );
+    keys.seeds.lock().unwrap().remove(&alias(&r));
+    let mut altered = cleared.clone();
+    altered["profiles"][0]["frames"][0]["sig"] = json!("changed");
+    assert!(store.commit(3, &altered.to_string()).is_err());
+    assert!(store.commit(3, &cleared.to_string()).unwrap());
+    assert_eq!(store.open().unwrap().record.unwrap(), cleared.to_string());
+    assert!(
+        store.sign("YQ==").is_ok(),
+        "the participant identity still works"
+    );
+    let mut reuse = cleared;
+    reuse["revision"] = json!(5);
+    reuse["intent"] = r["intent"].clone();
+    assert!(store.commit(4, &reuse.to_string()).unwrap());
+    assert_eq!(
+        store.initialize_thread(&"A".repeat(43)),
+        Err("thread_key_missing".into())
+    );
+    assert_eq!(
+        keys.writes.load(Ordering::SeqCst),
+        2,
+        "abandoned nonce never gets a new key"
+    );
+}
+
+#[test]
+fn real_typescript_authoring_uses_native_op_and_v2_v3_delegation_signatures() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+    let dir = tempfile::tempdir().unwrap();
+    let keys = Arc::new(Keys::default());
+    let mut store = PreviewStore::at_directory(dir.path(), keys).unwrap();
+    let r = pending(&mut store);
+    let child_public = store.initialize_thread(&"A".repeat(43)).unwrap();
+    let client = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lattice-client");
+    let mut child = Command::new(client.join("node_modules/.bin/tsx"))
+        .arg(client.join("test/support/native_thread_signing.ts"))
+        .arg(&child_public)
+        .arg(r["publicKey"].as_str().unwrap())
+        .arg("A".repeat(43))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("prepare lattice-client npm dependencies before native reciprocal tests");
+    let mut sink = child.stdin.take().unwrap();
+    let lines = BufReader::new(child.stdout.take().unwrap());
+    let mut domains = std::collections::HashSet::new();
+    let mut done = false;
+    let mut signed = 0;
+    for line in lines.lines() {
+        let message: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        if let Some(encoded) = message["sign"].as_str() {
+            let bytes = BASE64.decode(encoded).unwrap();
+            domains.insert(bytes[0]);
+            let signature = store.sign_thread(&"A".repeat(43), encoded).unwrap();
+            writeln!(sink, "{signature}").unwrap();
+            sink.flush().unwrap();
+            signed += 1;
+        } else {
+            assert_eq!(message["done"], true);
+            assert_eq!(message["frames"].as_array().unwrap().len(), 4);
+            done = true;
+        }
+    }
+    assert!(child.wait().unwrap().success());
+    assert!(done);
+    assert!(signed >= 7);
+    assert_eq!(
+        domains,
+        std::collections::HashSet::from([0x87, 0x88, 0x89]),
+        "real op-v2, delegation-v2 and delegation-v3 bytes all pass the native scope filter"
+    );
+}

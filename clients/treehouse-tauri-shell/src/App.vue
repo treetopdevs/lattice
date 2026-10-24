@@ -138,7 +138,10 @@ function describe(error: unknown): string {
       "Keep this draft under 16 KiB to save it in the local preview.",
     invalid_name: "Enter a name before creating.",
     not_bounded_space: "This older group cannot use bounded Thread setup. Use a new group in a separate profile.",
-    invalid_thread_setup: "Enter a nominee, up to 16 distinct witness public keys, a witness threshold, and a lease limit.",
+    invalid_public_key: "A public key is malformed. Check that each witness line contains a complete public key.",
+    thread_key_unavailable: "A Thread root key is unavailable, so new member permissions cannot be signed. Saved history remains available.",
+    thread_abandon_not_allowed: "This setup cannot be discarded as a lost-key setup. Resume it if its key is still available.",
+    invalid_thread_setup: "Enter a nominee and up to 16 distinct witness public keys separate from your own identity, a witness threshold, and a lease limit.",
     existing_thread_grant_unavailable: "Your posting permission in an existing Thread is unavailable. Resolve that permission before adding another Thread.",
     thread_custody_unavailable: "This app build cannot store a separate Thread key. Update the desktop app before creating.",
     thread_key_missing: "This Thread's root key is missing. It has not been replaced; saved history remains available.",
@@ -439,6 +442,10 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         <section v-else class="notice">
           <p>Thread setup is incomplete.</p>
           <button :disabled="busy" @click="resume">Finish local setup</button>
+          <template v-if="state.intent.kind === 'thread' && state.intent.setup">
+            <p>If this unfinished setup lost its key, you can discard only the setup. The key will not be replaced; existing history stays saved.</p>
+            <button :disabled="busy || !workflow.keyAvailable" @click="run(async () => { await workflow.abandonThreadCreation(); refresh(); })">Discard unfinished setup with lost key</button>
+          </template>
         </section>
         <div class="rail-bottom">
           <p>
