@@ -28,7 +28,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <body>
 <main>
 <h1>Backlog Run Decisions</h1>
-<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-21 landed as PRs #133-#160. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
+<p class="lead">Running record of every non-trivial decision made while the coordinator session drove the planned-plans backlog toward working app prototypes, starting 2026-10-17 from main <code>5c48916c1</code>; slices 1-22 landed as PRs #133-#162. Each slice ran in its own worktree from the latest tip, with a workflow, commit, PR, Auto-fix and a Codex Sol 6.1 xhigh adversarial review. Newest entries last.</p>
 
 <h2 id="slices">Slices</h2>
 <div class="table-wrap">
@@ -56,6 +56,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <tr><td>19</td><td>Plan 224 build PR 1 (ingress): <code>Operator.CatalogBinding.load</code> with bounded closed readers, the op-id fork rule and a report cross-check; row 249 filed</td><td><code>claude/backlog-slice-19-ec666d</code> / <a href="https://github.com/treetopdevs/lattice/pull/155">#155</a></td><td>Merged as <code>1557d5c0a</code> after frozen tip <code>4744b522f</code> run 39364267461 went green on attempt 2. Attempt 1 failed only an apt step, when packages.microsoft.com returned 403 after all tests had passed. Codex: file-race findings fixed over two rounds (swap, then hard link), then the branch was frozen (D-38). CodeRabbit's <code>mtime</code> suggestion is row 250.</td></tr>
 <tr><td>20</td><td>Plan 224 build PR 3: journal contract and append-only catalog store (Design 3); the store enforces its own chain rule; row 251 filed</td><td><code>claude/awesome-dubinsky-b1248d</code> / <a href="https://github.com/treetopdevs/lattice/pull/158">#158</a></td><td>Merged as <code>f17c01cde</code> after tip <code>7fd9726b6</code> run 39978398009 went green. Two local reviews (Claude crash-safety: 1 P1, 3 P2, 4 P3; Codex) were fixed before the PR. Two bot rounds, then frozen under D-38. A later CodeRabbit Major (D-38 exception) was fixed: the store accepted an envelope that did not extend its head.</td></tr>
 <tr><td>21</td><td>Plan 224 build PR 2: carrier service realm, routes, relay realms per OD-5 and a probe on every route (Design 2); rows 252-253 filed</td><td><code>claude/backlog-slice-21-0c6e31</code> / <a href="https://github.com/treetopdevs/lattice/pull/160">#160</a></td><td>Merged as <code>8d1028c18</code> after tip <code>d0539a874</code> run 40044456733 went green. Local reviews: Claude authentication-boundary review (no P1/P2, three P3 fixed) and Codex, then a confirm pass. Bot round 1: duplicate-key trusted-peer aliases and committed catalog routes. Bot round 2: the admitted child must be a Treehouse replica. Frozen under D-38, then one exception fix (D-42).</td></tr>
+<tr><td>22</td><td>Plan 245: client acceptance of a listed route (plan 224 PR 6), seven build PRs, operator decisions OD-6 to OD-10; row 254 for the bounded-Thread gap</td><td><code>claude/backlog-slice-22-pr6-plan</code> / <a href="https://github.com/treetopdevs/lattice/pull/162">#162</a></td><td>Drafted in the coordinator session, because the app cannot start a session from Remote Control. Two local reviews (Codex Sol xhigh: 14 findings, 6 P1; Claude custody: 15, 3 P1) were all addressed. A Codex confirm pass closed 8 of 9 P1s and escalated the pull barrier to OD-10. Two bot rounds were fixed, then the branch froze; round 3 was deferred to rows (D-43).</td></tr>
 </tbody>
 </table>
 </div>
@@ -473,6 +474,28 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>This is a missing refusal, so it was fixed on the frozen branch. <code>check_bound</code> refuses <code>:service_binding_mismatch</code> when two instances serve one replica. Each instance serves one log, so this also covers differing roots, in staging, activation and readiness.</dd>
 <dt>Deferred</dt><dd>A second Codex finding said the staging catalog check runs before the owner lock. The owner already refuses <code>stale_catalog_head</code> under its lock when an envelope is pending, so the earlier check is defense in depth, not a gap. No row was filed.</dd>
 <dt>State</dt><dd>Plan 224 PRs 1, 2 and 3 are built and merged. PRs 4 (<code>catalogued</code>) and 5 (<code>listed</code>) wait on the operator's ceremony report, and PR 6 (client acceptance) needs its own plan (row 245).</dd>
+</dl>
+</article>
+
+<article id="d43">
+<h2><span>D-43</span>Slice 22 (plan 245): run in the coordinator session; round 3 deferred to rows</h2>
+<dl>
+<dt>When</dt><dd>2026-10-24</dd>
+<dt>How</dt><dd>The desktop app refuses to start a session from a Remote Control message, so the coordinator ran slice 22 itself. A subagent drafted plan 245. Codex Sol xhigh and a Claude custody review each reviewed it, the subagent revised it, and a Codex confirm pass checked the revision.</dd>
+<dt>Design calls</dt><dd>Part 1 is seven build PRs finishable on fixtures with disposable keys; Part 2, the operator run, is parked under rule 8. Review dispositions live in the PR description (rule 4). The pull barrier, still open after two rounds, became operator decision OD-10 (rule 3). OD-9's CSP change was made desktop-only after Codex showed that Android shares the config.</dd>
+<dt>Deferred</dt><dd>Bot round 3 on frozen #162 raised six build-time requirements. They are filed as rows against their build PRs: <code>mergeSync</code> catalog authorization; a client-realm source when no relay config exists, which may need an operator decision; workflow store capacity; PR 1's validator family check; feed reconfigure on a selection change; and row 245's effort.</dd>
+</dl>
+</article>
+
+<article id="d44">
+<h2><span>D-44</span>Operator decisions OD-6 to OD-10: all accepted as recommended</h2>
+<dl>
+<dt>When</dt><dd>2026-10-24, decided by the user as operator</dd>
+<dt>OD-6</dt><dd>(a) Acceptance is verified by a Rust evaluator inside the protected native boundary, a third twin with reciprocal vectors (plan 245 PRs 2 and 3). (b) was rejected because it promotes the webview's verdict.</dd>
+<dt>OD-7</dt><dd>(a) as amended. <code>initialize()</code> writes an independent initialised marker under <code>identity_lock</code>, then the sentinel, then the identity last. A missing or corrupt trust record beside the marker is <code>trust_recovery_required</code>, with no recreation. Identities that predate the build get a one-time confirmed migration (a nonclaim).</dd>
+<dt>OD-8</dt><dd>(iii) The test-profile loopback origin is a dev-trace-only origin mapper for disposable keys, compiled out of ordinary bundles.</dd>
+<dt>OD-9</dt><dd>(i) as a desktop-only override: <code>wss:</code> is added to <code>connect-src</code> in a macOS-only config. The shared and Android configs stay local-only, and PR 7 checks this.</dd>
+<dt>OD-10</dt><dd>(b) The webview performs the re-observation pull, and native enforces shape and generation binding. Against a compromised webview, re-observation is not enforced, and a withheld revoke can be installed until the next native reclassification; that is a written nonclaim at honest-shell tier. (a), native pulls with a Rust carrier client, is a filed follow-up.</dd>
 </dl>
 </article>
 
