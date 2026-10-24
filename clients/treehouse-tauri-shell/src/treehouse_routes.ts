@@ -10,26 +10,35 @@ import type { RelayConfig, RelayRoute } from "./treehouse_state";
 // nothing from lattice-mobile-core. Plan 186 decision 7: the validators now live in the kit's
 // createRouteValidators factory; this module supplies the Treehouse alphabet table and replica names.
 
-// Row 232: a Space replica is exactly the legacy grammar OR the bounded-continuation grammar
-// (`...:<nonce>#authority:bounded-continuation-v1#root:<tag>`); a Thread replica stays legacy-only.
-// preview.rs `replica()` and `route_replica()` state the same two grammars and must stay in step.
-const LEGACY_SPACE_REPLICA = /^replica:treehouse:space:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/;
-const BOUNDED_SPACE_REPLICA =
-  /^replica:treehouse:space:[A-Za-z0-9_-]{43}#authority:bounded-continuation-v1#root:[A-Za-z0-9_-]{43}$/;
+// Row 232 and plan 245 Design E: a profile replica is exactly the legacy grammar OR the bounded-continuation grammar
+// (`...:<nonce>#authority:bounded-continuation-v1#root:<tag>`), for a Space and for a Thread alike. The tag's commitment
+// to the root key is judged by the authority fold, not here.
+// preview.rs `replica()` and `route_replica()` state the same grammars and must stay in step.
+const LEGACY_REPLICA = {
+  space: /^replica:treehouse:space:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/,
+  thread: /^replica:treehouse:thread:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/,
+};
+const BOUNDED_REPLICA = {
+  space:
+    /^replica:treehouse:space:[A-Za-z0-9_-]{43}#authority:bounded-continuation-v1#root:[A-Za-z0-9_-]{43}$/,
+  thread:
+    /^replica:treehouse:thread:[A-Za-z0-9_-]{43}#authority:bounded-continuation-v1#root:[A-Za-z0-9_-]{43}$/,
+};
 // A 43-character base64url token is canonical for 32 bytes only when its last character carries two zero
 // low bits (one of A E I M Q U Y c g k o s w 0 4 8). The bounded grammar requires that of both tokens (the authority judge refuses the
 // rest as unsupported); the legacy grammar keeps accepting any 43-character token.
 const CANONICAL_TAIL = /[AEIMQUYcgkosw048]$/;
-const boundedSpaceReplica = (replica: string): boolean => {
-  if (!BOUNDED_SPACE_REPLICA.test(replica)) return false;
-  const nonce = replica.slice("replica:treehouse:space:".length).split("#")[0]!;
+const boundedReplica = (kind: "space" | "thread", replica: string): boolean => {
+  if (!BOUNDED_REPLICA[kind].test(replica)) return false;
+  const nonce = replica.slice(`replica:treehouse:${kind}:`.length).split("#")[0]!;
   const root = replica.slice(replica.lastIndexOf("#root:") + "#root:".length);
   return CANONICAL_TAIL.test(nonce) && CANONICAL_TAIL.test(root);
 };
-const SPACE_REPLICA = {
-  test: (replica: string) => LEGACY_SPACE_REPLICA.test(replica) || boundedSpaceReplica(replica),
-};
-const THREAD_REPLICA = /^replica:treehouse:thread:[A-Za-z0-9_-]{43}#root:[A-Za-z0-9_-]{43}$/;
+const profileReplica = (kind: "space" | "thread") => ({
+  test: (replica: string) => LEGACY_REPLICA[kind].test(replica) || boundedReplica(kind, replica),
+});
+const SPACE_REPLICA = profileReplica("space");
+const THREAD_REPLICA = profileReplica("thread");
 /** True when `replica` is exactly the grammar of a persisted profile of that kind. */
 export const isProfileReplica = (kind: "space" | "thread", replica: string): boolean =>
   kind === "space" ? SPACE_REPLICA.test(replica) : THREAD_REPLICA.test(replica);

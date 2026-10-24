@@ -56,7 +56,7 @@ fn rust_and_typescript_agree_on_every_case() {
     }
 }
 
-// Row 232: the persisted-profile and route replica grammars (legacy OR bounded Space) agree with the shell.
+// Row 232: the persisted-profile and route replica grammars (legacy OR bounded, Space or Thread) agree with the shell.
 const REPLICA_CASES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../test/replica_grammar_cases.json"
@@ -74,7 +74,7 @@ struct ReplicaCase {
 fn rust_and_typescript_agree_on_every_replica_grammar_case() {
     use treehouse_tauri_shell::preview::{valid_profile_replica, valid_route_replica};
     let cases: Vec<ReplicaCase> = serde_json::from_str(REPLICA_CASES).expect("replica cases parse");
-    assert!(cases.len() >= 25);
+    assert!(cases.len() >= 40);
     for case in &cases {
         assert_eq!(valid_profile_replica(&case.value, "space"), case.space, "{}", case.note);
         assert_eq!(valid_profile_replica(&case.value, "thread"), case.thread, "{}", case.note);

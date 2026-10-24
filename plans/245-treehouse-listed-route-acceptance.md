@@ -17,6 +17,7 @@ Design written 2026-10-23 (slice 22) against main bb40921f6; revised the same da
 reviews (dispositions in PR #162, rule 4). Parked under rule 8 for the final operator acceptance only. Part 1
 (PRs 1-7, fixtures and disposable keys) can start for PRs 1-5: OD-6 to OD-10 were decided as recommended (D-44). PR 6 also waits on row 256's client-realm decision. Part 2 (the operator's own
 run) needs the inputs under "Depends on" and is not a build PR.
+PR 1 landed (bounded Thread grammar, TS/Rust parity, kind-aware `verifyProfile` for row 258; PR TBD).
 
 ## Header
 

@@ -33,7 +33,7 @@
     "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
     "space": false,
     "thread": false,
-    "note": "bounded thread is not supported"
+    "note": "bounded thread with a non-canonical root tag (ends B) stays refused"
   },
   {
     "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v2#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
@@ -184,5 +184,95 @@
     "space": false,
     "thread": false,
     "note": "empty"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": true,
+    "note": "bounded thread, canonical nonce and root tag"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread nonce not canonical base64url"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v2#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread version v2"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread short root"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA\n",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread trailing newline"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread trailing second tail"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread duplicate authority marker"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB#authority:bounded-continuation-v1",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread authority after legacy root"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread without root"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#AUTHORITY:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread authority case"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1-extra#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread suffix on the version"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB+A",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread bad root alphabet"
+  },
+  {
+    "value": "replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA",
+    "space": true,
+    "thread": false,
+    "note": "kind swap: bounded space is not a thread"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "space": false,
+    "thread": false,
+    "note": "legacy thread duplicate root marker"
+  },
+  {
+    "value": "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA#root:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "space": false,
+    "thread": false,
+    "note": "bounded thread duplicate root marker"
   }
 ]
