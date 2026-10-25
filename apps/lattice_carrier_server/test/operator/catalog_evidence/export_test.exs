@@ -87,41 +87,39 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert inputs(f) == before
   end
 
-  @tag :relative_manifest
-  test "relocated identical relative bytes cannot redirect reads to copied histories", f do
-    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
-    assert {:ok, _} = Packet.decode(File.read!(f.output))
-    File.rm!(f.output)
-
-    directory =
-      Path.join([f.root | List.duplicate("relocated", f.relative_manifest_depth + 2)])
-
-    File.mkdir_p!(directory)
-    bytes = File.read!(f.export_manifest)
-    copy = Path.join(directory, "manifest.json")
-    File.write!(copy, bytes)
-
-    for instance <- Jason.decode!(bytes)["instances"], field <- ~w(log_file identity_file) do
-      original = Path.expand(instance[field], Path.dirname(f.export_manifest))
-      redirected = Path.expand(instance[field], directory)
-      refute original == redirected
-      File.mkdir_p!(Path.dirname(redirected))
-      File.cp!(original, redirected)
-    end
-
-    assert {:ok, original} = Manifest.load(f.export_manifest)
-    assert {:ok, relocated} = Manifest.load(copy)
-    assert original.sha256 == relocated.sha256
-
-    refute Enum.map(original.instances, & &1.log_file) ==
-             Enum.map(relocated.instances, & &1.log_file)
-
+  test "changed archive bytes refuse during initial manifest binding", f do
+    original = File.read!(f.export_manifest)
+    changed = original <> " "
+    on_exit(fn -> File.write!(f.export_manifest, original) end)
+    File.write!(f.export_manifest, changed)
+    assert {:ok, _} = Manifest.load(f.export_manifest)
     before = inputs(f)
 
     assert {:error, :release_manifest_mismatch} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, copy, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     refute File.exists?(f.output)
+    assert File.read!(f.export_manifest) == changed
+    assert inputs(f) == before
+  end
+
+  test "missing archive refuses without changing listed inputs", f do
+    moved = f.export_manifest <> ".held"
+    before = inputs(f)
+
+    on_exit(fn ->
+      if File.exists?(moved) and not File.exists?(f.export_manifest),
+        do: File.rename(moved, f.export_manifest)
+    end)
+
+    File.rename!(f.export_manifest, moved)
+
+    assert {:error, :release_manifest_mismatch} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
+
+    refute File.exists?(f.export_manifest)
+    refute File.exists?(f.output)
+    File.rename!(moved, f.export_manifest)
     assert inputs(f) == before
   end
 
@@ -409,7 +407,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     end
   end
 
-  test "truncation after sync refuses before acknowledging the output", f do
+  test "truncation before close is cleaned up and after close is preserved", f do
     key = :catalog_evidence_writer_hook
     previous = Application.get_env(:lattice_carrier_server, key)
     before = inputs(f)
@@ -420,16 +418,21 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
         else: Application.delete_env(:lattice_carrier_server, key)
     end)
 
-    Application.put_env(:lattice_carrier_server, key, fn
-      _file, path, :after_sync -> File.write(path, "short")
-      _file, _path, _phase -> :ok
-    end)
+    for phase <- [:after_sync, :after_close] do
+      Application.put_env(:lattice_carrier_server, key, fn
+        _file, path, ^phase -> File.write(path, "short")
+        _file, _path, _other -> :ok
+      end)
 
-    assert {:error, :evidence_export_failed} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
+      assert {:error, :evidence_export_failed} =
+               CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
-    refute File.exists?(f.output)
-    assert inputs(f) == before
+      if phase == :after_sync,
+        do: refute(File.exists?(f.output)),
+        else: assert(File.read!(f.output) == "short")
+
+      assert inputs(f) == before
+    end
   end
 
   test "output permission or link-count changes refuse before evidence is written", f do

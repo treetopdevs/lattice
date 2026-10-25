@@ -260,17 +260,22 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   end
 
   defp write_opened(file, path, bytes) do
-    with {:ok, info} <- :file.read_file_info(file) do
-      write_verified(file, path, bytes, File.Stat.from_record(info))
-    else
-      _ -> {:error, :evidence_export_failed}
+    case :file.read_file_info(file) do
+      {:ok, info} ->
+        write_verified(file, path, bytes, File.Stat.from_record(info))
+
+      _ ->
+        File.close(file)
+        {:error, :evidence_export_failed}
     end
   rescue
-    _ -> {:error, :evidence_export_failed}
+    _ ->
+      File.close(file)
+      {:error, :evidence_export_failed}
   catch
-    _, _ -> {:error, :evidence_export_failed}
-  after
-    File.close(file)
+    _, _ ->
+      File.close(file)
+      {:error, :evidence_export_failed}
   end
 
   defp write_verified(file, path, bytes, created) do
