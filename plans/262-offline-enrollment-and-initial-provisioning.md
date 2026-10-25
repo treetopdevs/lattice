@@ -2,14 +2,21 @@
 
 ## Status, dependencies and execution boundary
 
-IN PROGRESS, 2026-10-24. Design adopted; PR A is being built privately. No completed
-provisioning, ordinary offline exchange or listing proof is claimed.
+IN PROGRESS, 2026-10-24. PR A is in review as #166; importer, phase guards and local
+Linux staging/activation/readiness gates pass. Hosted, offline UI and listing gates remain.
 Prepared from fresh main `e8f5c285ed3508f93efaea8279819012d72b41cb`; plan number 262
 was free in that tip's plan index and tree. PR #165 is a required code dependency:
 its ordinary bounded creation, independent child custody, founder membership/grant,
 and restart behavior must merge with required checks before publishing implementation.
 Isolated build work may use the reviewed dependency tip while its gates run. Refresh
 and rebase onto main after #165 merges, then rerun affected checks before publication.
+
+Plan stamp: design base `e8f5c285ed3508f93efaea8279819012d72b41cb`, reviewed PR A base
+`a297e1ddfe72076f337ef2fd0ce03c2fe07696a6`. Review drift before applying the plan:
+
+```sh
+git diff a297e1ddfe72076f337ef2fd0ce03c2fe07696a6 -- apps/lattice_carrier_server/lib/lattice_carrier_server/operator scripts/treehouse_operator_mutation.py
+```
 
 Priority P1; effort XL across three bounded PRs below; risk HIGH. This amends an
 operator publication contract, changes the Python/BEAM journal twins and introduces
@@ -349,3 +356,9 @@ append-only Space growth or activation; import retry itself still compares every
 byte. CLI listener ports are explicit and nonzero. Parent/child titles agree; service
 keys cannot be members and a tombstoned Space cannot be imported. Postwrite rereads
 and preservation/refusal of incomplete output are intentional safety boundaries.
+
+Offline import cannot discover another OS process's deployment under a different
+operator root. The runtime comparison is same-VM only; the boot marker scopes only
+the supplied operator root. Operators must preserve the actual root and independently
+ensure the selected service identity is not reused by another deployment. Import
+creates offline files; it does not grant exclusive deployment ownership or readiness.

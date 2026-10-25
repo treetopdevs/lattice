@@ -73,3 +73,9 @@ operator root. It is not a liveness detector or permission to reset state. Total
 deletion of the store, journal, history and marker is indistinguishable from first
 use locally; preserving these files is an operator trust assumption. Existing
 clients retain their independent catalog fork/rollback checks.
+
+The offline command cannot discover a relay running in another OS process under a
+different operator root. Its runtime check is same-VM only, and its boot marker covers
+only the selected root. Preserve the real operator root and independently ensure the
+service identity is not reused elsewhere. Import does not establish exclusive
+cross-process deployment ownership or relay readiness.
