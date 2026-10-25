@@ -49,8 +49,10 @@ Shared input counts at every logical occurrence; cycles cannot grow a JS walk.
 Fresh actual public APIs compare unknown kinds, exact push sizes 64,000/64,001,
 partial and forged variants, and depth 64/65/66. Direct BEAM/TS budget tests prove
 actual maxima and one over for nodes, UTF-8 bytes and JSON depth without creating
-sixty-seven million input cells. Focused resource/matrix tests pass. Full gates
-and independent protected reviews for this checkpoint are running.
+sixty-seven million input cells. Focused resource/matrix tests and both independent
+protected reviews pass. A strict-lint nesting repair preserves the predicates and
+is independently confirmed. The final full Mix check, client build/catalog suites,
+desktop checks and both boundary scans pass after that repair.
 
 These checkpoints do not complete the broader matrix below. Full independent producer boundary coverage, complete history/page aggregate limits
 and stored/reopen behavior
