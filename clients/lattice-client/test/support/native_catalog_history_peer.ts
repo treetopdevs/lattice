@@ -1,3 +1,4 @@
+import { WIRE_VOCABULARY } from "../../src/wire_vocabulary";
 import assert from "node:assert/strict";
 import {commandCases,judgeCommands} from "./native_catalog_command_peer";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -124,6 +125,8 @@ if (process.argv[2] === "produce") {
 } else if (process.argv[2] === "command-gates") {
   const input=JSON.parse(readFileSync(0,"utf8"));
   console.log(JSON.stringify({results:await Promise.all(input.histories.map(judgeCommands))}));
+} else if (process.argv[2] === "reader-vocabulary") {
+  console.log(JSON.stringify({names:WIRE_VOCABULARY}));
 } else if (process.argv[2] === "strict-portability") {
   const input = JSON.parse(readFileSync(0,"utf8")) as {histories: History[]};
   console.log(JSON.stringify({portable:input.histories.map(h => {

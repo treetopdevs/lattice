@@ -64,6 +64,13 @@ fn reader_matches_actual_ts_strict_contexts_without_claiming_semantic_honor() {
         true,
     );
     add(
+        "wire name beyond cutoff vocabulary",
+        "command",
+        atom("abort_election"),
+        json!(["nil"]),
+        true,
+    );
+    add(
         "unknown atom",
         "command",
         atom("unadopted_reader_atom"),
@@ -181,6 +188,29 @@ fn reader_matches_actual_ts_strict_contexts_without_claiming_semantic_honor() {
         let bytes = serde_json::to_vec(frame).unwrap();
         assert!(frame::verify(&bytes).is_ok(), "authentic {name}");
         assert_eq!(ReadableFrame::verify(&bytes).is_ok(), *want, "{name}");
+    }
+    let vocabulary: Value = serde_json::from_slice(&catalog_peer::output(
+        "ts",
+        "reader-vocabulary",
+        None,
+        64 * 1024 * 1024,
+    ))
+    .unwrap();
+    assert!(vocabulary["names"].as_array().unwrap().len() > 139);
+    for name in vocabulary["names"].as_array().unwrap() {
+        cases.push((
+            "actual full wire vocabulary",
+            signed("command", json!(["atom", name]), json!(["nil"])),
+            true,
+        ));
+        let mut delegation = base.clone();
+        delegation["ops"] = json!([name]);
+        delegation["roles"] = json!([name]);
+        cases.push((
+            "actual delegation wire vocabulary",
+            signed("command", json!(["delegation", delegation]), json!(["nil"])),
+            true,
+        ));
     }
     for runtime in ["beam", "ts"] {
         let fresh: Value = serde_json::from_slice(&catalog_peer::output(

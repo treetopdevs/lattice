@@ -224,7 +224,7 @@ fn inspect(raw: &Value, replica: &str, accepted: bool) -> Result<Option<Record>,
     }))
 }
 
-pub(super) fn known_atom(name: &str) -> bool {
+fn known_atom(name: &str) -> bool {
     static SET: LazyLock<BTreeSet<&str>> = LazyLock::new(|| ATOMS.split_whitespace().collect());
     SET.contains(name)
 }
