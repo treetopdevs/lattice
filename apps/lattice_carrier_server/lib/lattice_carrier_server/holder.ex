@@ -65,6 +65,20 @@ defmodule LatticeCarrierServer.Holder do
     GenServer.call(holder, {:relay, peer_realm, op}, relay_call_timeout_ms())
   end
 
+  @doc "Prove the local courier's persistence path without replacing the served log."
+  @spec prove_durability(GenServer.server()) :: :ok | {:error, atom()}
+  def prove_durability(holder),
+    do: GenServer.call(holder, :prove_courier_durability, relay_call_timeout_ms())
+
+  @doc "Read a bounded local snapshot for an operator's external authority review."
+  @spec courier_snapshot(GenServer.server()) :: {:ok, map()} | {:error, atom()}
+  def courier_snapshot(holder), do: GenServer.call(holder, :courier_snapshot)
+
+  @doc "Deliver the exact externally reviewed candidate only while its snapshot still matches."
+  @spec courier(GenServer.server(), Op.t(), map()) :: {:ok, map()} | {:error, term()}
+  def courier(holder, op, token),
+    do: GenServer.call(holder, {:courier, op, token}, relay_call_timeout_ms())
+
   @spec state_report(GenServer.server()) :: {:ok, map()} | {:error, :read_only}
   def state_report(holder), do: GenServer.call(holder, :state_report)
 
@@ -105,6 +119,8 @@ defmodule LatticeCarrierServer.Holder do
          log: log,
          source: source,
          durability: durability,
+         persistence_fenced: false,
+         courier_durability_proven: match?({:path, _}, source) and relay_realms != [],
          state_reporter: Keyword.get(opts, :state_reporter),
          relay_realms: MapSet.new(relay_realms),
          subscribers: %{}
@@ -139,6 +155,9 @@ defmodule LatticeCarrierServer.Holder do
   def handle_call(:session_context, _from, state) do
     {:reply, {state.identity, state.log.replica}, state}
   end
+
+  def handle_call(:ready?, _from, %{persistence_fenced: true} = state),
+    do: {:reply, {:error, :persistence_ambiguous}, state}
 
   def handle_call(:ready?, _from, state) do
     {:reply, :ok, state}
@@ -197,6 +216,51 @@ defmodule LatticeCarrierServer.Holder do
     end
   end
 
+  def handle_call({:drain_release, _owner}, _from, %{persistence_fenced: true} = state),
+    do: {:reply, {:error, :persistence_ambiguous}, state}
+
+  def handle_call(:prove_courier_durability, _from, state) do
+    with :ok <- courier_open(state),
+         :ok <- prove_courier_path(state) do
+      {:reply, :ok, %{state | courier_durability_proven: true}}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(:courier_snapshot, _from, state) do
+    with :ok <- courier_open(state),
+         true <- state.courier_durability_proven,
+         {:ok, token} <- snapshot_token(state) do
+      {:reply, {:ok, %{log: state.log, token: token}}, state}
+    else
+      false -> {:reply, {:error, :durability_not_proven}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:courier, op, token}, _from, state) do
+    with :ok <- courier_open(state),
+         true <- state.courier_durability_proven,
+         {:ok, current} <- snapshot_token(state),
+         :ok <- match_review(token, current, op),
+         {:ok, candidate, report, outcome} <- courier_candidate(state.log, op),
+         {:ok, digest} <- courier_digest(candidate),
+         true <- digest == token.candidate_digest do
+      case persist_relay(candidate, report, state) do
+        {:reply, {:ok, _}, next} ->
+          receipt = %{reference_id: op.id, outcome: outcome, frontier: Log.frontier(candidate)}
+          {:reply, {:ok, receipt}, next}
+
+        refusal ->
+          refusal
+      end
+    else
+      false -> {:reply, {:error, :invalid_courier_review}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call({:drain_release, owner}, _from, state) do
     if state.release_owner == owner and not ReleaseGate.accepting?(owner),
       do:
@@ -215,6 +279,83 @@ defmodule LatticeCarrierServer.Holder do
 
   def handle_call({:relay, peer_realm, op}, _from, state),
     do: relay_owned(peer_realm, op, state)
+
+  defp courier_open(%{persistence_fenced: true}), do: {:error, :persistence_ambiguous}
+  defp courier_open(%{release_owner: nil}), do: {:error, :unguarded_courier}
+  defp courier_open(%{source: {:log, _}}), do: {:error, :unsupported_courier_source}
+
+  defp courier_open(state) do
+    if ReleaseGate.accepting?(state.release_owner), do: :ok, else: {:error, :release_closed}
+  end
+
+  defp prove_courier_path(%{courier_durability_proven: true}), do: :ok
+
+  defp prove_courier_path(%{source: {:path, path}, durability: durability}) do
+    result =
+      bounded_persistence(fn -> Durability.rehearse_target_isolated(durability, path) end, path)
+
+    if result == :ok, do: :ok, else: {:error, :durability_unsupported}
+  end
+
+  defp snapshot_token(state) do
+    with {:ok, digest} <- courier_digest(state.log) do
+      {:ok,
+       %{
+         owner: state.release_owner,
+         source: state.source,
+         replica: state.log.replica,
+         digest: digest
+       }}
+    end
+  end
+
+  defp courier_digest(log) do
+    if map_size(log.ops) + length(log.quarantine) <= 4_000 do
+      bytes = :erlang.term_to_iovec(log, [:deterministic])
+
+      if IO.iodata_length(bytes) <= 16 * 1024 * 1024,
+        do: {:ok, :crypto.hash(:sha256, bytes)},
+        else: {:error, :courier_history_budget}
+    else
+      {:error, :courier_history_budget}
+    end
+  end
+
+  defp match_review(token, current, %Op{} = op) when is_map(token) do
+    cond do
+      Map.drop(token, [:op_id, :candidate_digest]) != current ->
+        {:error, :stale_served_history}
+
+      map_size(token) != 6 or token[:op_id] != op.id or not Op.valid?(op) ->
+        {:error, :invalid_courier_review}
+
+      not is_binary(token[:candidate_digest]) or byte_size(token.candidate_digest) != 32 ->
+        {:error, :invalid_courier_review}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp match_review(_, _, _), do: {:error, :invalid_courier_review}
+
+  defp courier_candidate(log, op) do
+    {candidate, report} = Sync.deliver(log, [op])
+
+    cond do
+      Map.get(log.ops, op.id) == op ->
+        {:ok, log, report, :present}
+
+      Map.get(candidate.ops, op.id) == op and report.accepted == [op.id] ->
+        {:ok, candidate, report, :delivered}
+
+      true ->
+        {:error, :courier_delivery_refused}
+    end
+  end
+
+  defp relay_owned(_realm, _op, %{persistence_fenced: true} = state),
+    do: {:reply, {:error, :persistence_ambiguous}, state}
 
   defp relay_owned(peer_realm, op, state) do
     if MapSet.member?(state.relay_realms, peer_realm) do
@@ -383,15 +524,24 @@ defmodule LatticeCarrierServer.Holder do
         state = %{state | log: log, subscribers: subscribers}
         {:reply, {:ok, report}, state}
 
+      {:error, reason, disposition} ->
+        persistence_refusal(reason, disposition, state)
+
       {:error, reason} ->
-        {:reply, {:error, {:persistence_failed, reason}}, state}
+        persistence_refusal(reason, :ambiguous, state)
     end
   end
 
+  defp persistence_refusal(reason, :unchanged, state),
+    do: {:reply, {:error, {:persistence_failed, reason}}, state}
+
+  defp persistence_refusal(reason, _disposition, state),
+    do: {:reply, {:error, {:persistence_failed, reason}}, %{state | persistence_fenced: true}}
+
   defp bounded_atomic_dump(log, path, durability) do
-    task =
-      Task.async(fn ->
-        try do
+    bounded_persistence(
+      fn ->
+        result =
           Durability.with_target_lock(path, fn ->
             with {:ok, temp_path} <- Durability.secure_temp(path) do
               try do
@@ -401,25 +551,73 @@ defmodule LatticeCarrierServer.Holder do
               end
             end
           end)
-        catch
-          kind, reason -> {:error, {:persistence_exception, kind, reason}}
+
+        case result do
+          {:error, reason} -> {:error, reason, :unchanged}
+          other -> other
         end
+      end,
+      path
+    )
+  end
+
+  defp bounded_persistence(fun, path) do
+    caller = self()
+    ref = make_ref()
+
+    {pid, monitor} =
+      spawn_monitor(fn ->
+        worker = self()
+        spawn(fn -> watch_persistence_owner(caller, worker) end)
+
+        result =
+          try do
+            fun.()
+          catch
+            kind, reason -> {:error, {:persistence_exception, kind, reason}, :ambiguous}
+          end
+
+        send(caller, {ref, result})
       end)
 
-    {result, timed_out?} =
-      case Task.yield(task, persistence_timeout_ms()) ||
-             Task.shutdown(task, :brutal_kill) do
-        {:ok, task_result} -> {task_result, false}
-        _timeout_or_error -> {{:error, :persistence_timeout}, true}
-      end
+    receive do
+      {^ref, result} ->
+        Process.demonitor(monitor, [:flush])
+        result
 
-    if timed_out? do
-      _ = Durability.bounded_cleanup_orphaned_temps(path, @orphan_cleanup_timeout_ms)
+      {:DOWN, ^monitor, :process, ^pid, reason} ->
+        {:error, {:persistence_worker_exit, reason}, :ambiguous}
+    after
+      persistence_timeout_ms() ->
+        Process.exit(pid, :kill)
+
+        receive do
+          {:DOWN, ^monitor, :process, ^pid, _} -> :ok
+        after
+          250 -> Process.demonitor(monitor, [:flush])
+        end
+
+        receive do
+          {^ref, _} -> :ok
+        after
+          0 -> :ok
+        end
+
+        _ = Durability.bounded_cleanup_orphaned_temps(path, @orphan_cleanup_timeout_ms)
+        {:error, :persistence_timeout, :ambiguous}
     end
+  end
 
-    result
-  catch
-    kind, reason -> {:error, {:persistence_exception, kind, reason}}
+  # The worker is unlinked so its failure cannot kill the holder. Its guardian
+  # still terminates it if the holder dies during a filesystem operation.
+  defp watch_persistence_owner(owner, worker) do
+    owner_monitor = Process.monitor(owner)
+    worker_monitor = Process.monitor(worker)
+
+    receive do
+      {:DOWN, ^owner_monitor, :process, ^owner, _} -> Process.exit(worker, :kill)
+      {:DOWN, ^worker_monitor, :process, ^worker, _} -> :ok
+    end
   end
 
   # Persist-before-ack: write, sync the file, atomically rename, then sync
@@ -429,9 +627,13 @@ defmodule LatticeCarrierServer.Holder do
          :ok <- Log.dump(log, temp_path),
          :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
          :ok <- durability.sync_file(temp_path),
-         :ok <- durability.rename(temp_path, path),
-         :ok <- durability.sync_directory(Path.dirname(path)) do
-      :ok
+         :ok <- durability.rename(temp_path, path) do
+      case durability.sync_directory(Path.dirname(path)) do
+        :ok -> :ok
+        {:error, reason} -> {:error, reason, :ambiguous}
+      end
+    else
+      {:error, reason} -> {:error, reason, :unchanged}
     end
   end
 

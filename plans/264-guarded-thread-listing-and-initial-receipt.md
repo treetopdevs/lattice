@@ -2,6 +2,9 @@
 
 ## Status and dependency
 
+IN PROGRESS: independent holder APIs and focused persistence tests are implemented
+privately. Catalog integration, complete crash/refusal evidence and reviews remain.
+
 Prepared 2026-10-24 from main `187cc3d8a77242cbca0fa1d6916af10fc1d6ef0c`.
 This is plan 224 PR 5. The independent holder snapshot/CAS and persistence tests may
 start privately from current main while catalog publication PR #168 (plan 263) verifies.
