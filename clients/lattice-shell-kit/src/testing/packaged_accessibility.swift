@@ -28,7 +28,8 @@ if args[2]=="choose-file", args.count==4 {
  key(5,[.maskCommand,.maskShift]);usleep(400000)
  let board=NSPasteboard.general;board.clearContents()
  guard board.setString(args[3],forType:.string) else {exit(4)}
- key(9,.maskCommand);usleep(200000);key(36);usleep(400000);key(36)
+ key(9,.maskCommand);usleep(200000);key(36)
+ // The caller waits for and presses the enabled Open button after path resolution.
 } else if args[2]=="dump" {
  let data=try JSONSerialization.data(withJSONObject:nodes.map(output),options:[.prettyPrinted,.sortedKeys]);print(String(data:data,encoding:.utf8)!)
 } else {

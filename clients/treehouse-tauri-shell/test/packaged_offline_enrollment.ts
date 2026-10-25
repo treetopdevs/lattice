@@ -98,10 +98,16 @@ try {
   await stop();
   joinSecurity("list-keychains", "-d", "user", "-s", joinKeychain); joinSecurity("default-keychain", "-d", "user", "-s", joinKeychain);
   await launch(joinHome); assert.equal(state(joinHome).publicKey, joiner.publicKey, "ordinary restart retains its Keychain identity");
-  await driver().press("Open invitation file"); execFileSync(helper, [String(child!.pid), "choose-file", invitationPath]);
+  await driver().press("Open invitation file");
+  await driver().waitFor("native Open panel", nodes => nodes.some(node => node.role === "AXWindow" && node.title === "Open"));
+  execFileSync(helper, [String(child!.pid), "choose-file", invitationPath]);
+  await driver().press("Open");
   await driver().waitFor("group review", nodes => nodes.some(node => node.title === "Review offline invitation" || node.description === "Review offline invitation"));
   await driver().press("Cancel"); assert.equal(state(joinHome).profiles.length, 0);
-  await driver().press("Open invitation file"); execFileSync(helper, [String(child!.pid), "choose-file", invitationPath]);
+  await driver().press("Open invitation file");
+  await driver().waitFor("native Open panel", nodes => nodes.some(node => node.role === "AXWindow" && node.title === "Open"));
+  execFileSync(helper, [String(child!.pid), "choose-file", invitationPath]);
+  await driver().press("Open");
   const beforeWrongCode = JSON.stringify(state(joinHome));
   const wrongCode = (displayedFingerprint[0] === "0" ? "1" : "0") + displayedFingerprint.slice(1);
   await driver().put("Fingerprint received from the founder", wrongCode); await driver().press("Sign acceptance");
