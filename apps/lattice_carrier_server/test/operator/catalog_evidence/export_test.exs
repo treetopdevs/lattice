@@ -79,6 +79,21 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert Bitwise.band(File.stat!(expanded).mode, 0o777) == 0o600
   end
 
+  test "resolved ceremony ancestors remain protected from evidence output", f do
+    link = f.output <> ".ceremony-parent"
+    File.ln_s!(Path.dirname(f.ceremony_dir), link)
+    ceremony = Path.join(link, Path.basename(f.ceremony_dir))
+    output = Path.join(f.ceremony_dir, "must-not-export.json")
+    before = inputs(f)
+    on_exit(fn -> File.rm(link) end)
+
+    assert {:error, :unsafe_export_location} =
+             CatalogEvidence.export(f.root, ceremony, f.manifest, output)
+
+    refute File.exists?(output)
+    assert inputs(f) == before
+  end
+
   @tag :initial
   test "initial existing reference exports without rewriting source inputs", f do
     before = inputs(f)

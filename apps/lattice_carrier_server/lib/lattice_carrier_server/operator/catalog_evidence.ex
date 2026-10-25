@@ -10,7 +10,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   alias LatticeCarrierServer.{Durability, Manifest}
   alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogStore, Journal}
   alias LatticeCarrierServer.Operator.CatalogEvidence.Packet
-  alias LatticeCarrierServer.Operator.CatalogCeremony.Atoms
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{Atoms, Paths}
   @max_source 64 * 1024 * 1024
   @test_hooks_enabled Mix.env() == :test
 
@@ -222,10 +222,12 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     output = Path.expand(output)
 
     protected =
-      [Path.expand(root), Path.expand(ceremony), Path.expand(manifest)] ++
-        Enum.flat_map(instances, &[Path.expand(&1.log_file), Path.expand(&1.identity_file)])
+      ([root, ceremony, manifest] ++
+         Enum.flat_map(instances, &[&1.log_file, &1.identity_file]))
+      |> Enum.map(&Paths.real/1)
 
-    blocked = Enum.any?(protected, &(output == &1 or String.starts_with?(output, &1 <> "/")))
+    resolved = Paths.real(output)
+    blocked = Enum.any?(protected, &(resolved == &1 or String.starts_with?(resolved, &1 <> "/")))
 
     with false <- blocked,
          :ok <- Journal.secure_root(Path.dirname(output)),
