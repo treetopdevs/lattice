@@ -17,8 +17,8 @@ plan. Portable cutoff observation is also implemented as a second checkpoint:
 real BEAM/TS owners agree on exact canonical bytes and refusal precedence, including
 retained structural rejections. All local checkpoint gates and independent review pass. The branch is refreshed
 onto the codec's minimal parity correction with its cutoff implementation unchanged.
-Earlier checkpoint hosted checks are green; the new bounded-role checkpoint and
-requested external review remain open. Full authority,
+Earlier checkpoint hosted checks, including bounded roles, are green; requested
+external review remains open. Full authority,
 incoming/stored history integration and retained-trust logic are still unfinished. The full authority/evaluator and parity matrix below remain mandatory.
 
 A third checkpoint adds the static delegation component: signature/id consistency,
@@ -59,6 +59,17 @@ multiplicity. Plan 268 owns its separate BEAM/TS correction and protected review
 Do not silently fix either oracle inside this port. Native expected-claim parity
 must follow the corrected baseline only after that correction is reviewed/adopted;
 the current checkpoint deliberately matches the current owners.
+
+A fifth checkpoint adds all current Space/Thread command effect-field/role grammar
+and the pre-application-policy gate: capability scope/validity/audience/grant scope,
+introduction visibility, role grants, revocation, expiry and causal holder freshness.
+Its opaque result explicitly reports `ApplicationPolicyRequired`, never final honor.
+Fresh actual runtime cases exercise all refusal branches and effect metadata, with
+reversed delivery and Rust-authored input consumed by both owners. Full checks and
+independent review are in progress. Incoming TS structural normalization, application
+policy, CRDT projection and retained catalog trust remain mandatory unfinished work.
+Plan 268's candidate correction is in separate draft PR 173; this port continues
+using its current reviewed-source baseline until that correction is adopted.
 
 ## Outcome and immutable contracts
 

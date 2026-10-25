@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { commandCases, judgeCommands } from "./native_catalog_command_peer";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -109,6 +110,13 @@ else if (process.argv[2] === "consume") {
         assert.deepEqual(history.frontier, actual.frontier);
     }
     console.log(JSON.stringify({ histories: input.histories.length }));
+}
+else if (process.argv[2] === "command-cases") {
+    console.log(JSON.stringify({ histories: await commandCases() }));
+}
+else if (process.argv[2] === "command-gates") {
+    const input = JSON.parse(readFileSync(0, "utf8"));
+    console.log(JSON.stringify({ results: await Promise.all(input.histories.map(judgeCommands)) }));
 }
 else if (process.argv[2] === "strict-portability") {
     const input = JSON.parse(readFileSync(0, "utf8"));

@@ -88,6 +88,49 @@ case System.argv() do
 
     IO.puts(Jason.encode!(%{histories: length(input["histories"])}))
 
+  ["command-gates"] ->
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    results =
+      Enum.map(input["histories"], fn history ->
+        {:ok, ops} = Wire.decode_ops(history["frames"])
+        true = Enum.all?(ops, &Op.valid?/1)
+        log = Log.from_ops(history["replica"], Map.new(ops, &{&1.id, &1}))
+        :ok = Log.verify_authenticity(log)
+
+        module =
+          if String.starts_with?(log.replica, "replica:treehouse:space:"),
+            do: Treehouse.Space,
+            else: Treehouse.Thread
+
+        Code.ensure_loaded!(module)
+        analysis = Lattice.Authority.analyze(module, log)
+
+        Map.new(Enum.filter(ops, &(&1.kind == :command)), fn op ->
+          effects =
+            case op.body do
+              {command, args} when is_atom(command) and is_list(args) ->
+                case Lattice.Replica.command_effects(module, command, args) do
+                  {:ok, effects} -> effects
+                  {:error, _} -> nil
+                end
+
+              _ ->
+                nil
+            end
+
+          fields = effects && Enum.map(effects, fn {field, _} -> field end)
+
+          roles =
+            fields &&
+              Enum.map(fields, &module.authority_role/1) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+          {op.id, %{reason: analysis.reasons[op.id], fields: fields, roles: roles}}
+        end)
+      end)
+
+    IO.puts(Jason.encode!(%{results: results}))
+
   ["authority-cases"] ->
     dir =
       Path.join(

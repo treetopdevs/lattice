@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct Acquire {
     op_id: String,
     holder: Vec<u8>,
-    delegation_id: String,
+    pub(super) delegation_id: String,
     at_tick: u64,
 }
 impl Acquire {
@@ -40,7 +40,7 @@ impl Timeline {
 }
 #[derive(Debug)]
 pub struct AuthorityEvidence<'a> {
-    static_delegations: StaticDelegations<'a>,
+    pub(super) static_delegations: StaticDelegations<'a>,
     beacons: Vec<(String, u64)>,
     timelines: BTreeMap<String, Timeline>,
     reasons: BTreeMap<String, &'static str>,
