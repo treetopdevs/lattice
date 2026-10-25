@@ -28,7 +28,10 @@ route verdicts. Raw tuple collection follows the BEAM component; the final incom
 semantic normalization and portability gate remain mandatory, including TypeScript's
 existing refusal of nonportable high logical ticks. No source oracle is changed.
 Fresh BEAM/TS histories and Rust-authored chain/revoke cases exercise the actual
-runtime owners. Expanded checks and review of this checkpoint are in progress.
+runtime owners. Expanded ordinary/dev-trace native, client build, shell typecheck/tests, full mix
+check and both boundary scans pass. Standards review has no actionable finding;
+the spec finding on authentic malformed tuples is fixed and independently confirmed.
+Requested external review remains unavailable; the full evaluator remains unfinished.
 
 ## Outcome and immutable contracts
 
