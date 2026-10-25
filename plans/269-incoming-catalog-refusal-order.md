@@ -1,277 +1,129 @@
-# Plan 269: incoming catalog history refusal order
+# Plan 269: incoming catalog observation and refusal order
 
 ## Status and scope
 
-IN PROGRESS. Main-history phase order, aggregate budgets and two-producer recovery
-are implemented locally. Incoming cutoff-proof refusal parity still needs a live
-audit, followed by final external/integration/hosted gates and native adoption.
+IN PROGRESS. Main-history ordering, observation bounds and retained recovery are implemented; complete-proof context, capacity controls and final signoff remain open.
 
-Fresh public installation calls proved BEAM/TS disagreement before
-semantic projection. Execute the correction separately from the native evaluator, from
-verified current main, with protected-boundary reviews. Plan 267 must not silently
-choose one existing runtime's result and claim parity. No external identity,
-operator ceremony, device, host or secret is needed.
+This plan aligns the BEAM and TypeScript catalog owners before the native evaluator
+adopts their behavior. Raw authentication returns header metadata, not admitted
+operations, authority, installed routes or freshness. The native evaluator remains
+a separate implementation under plan 267.
 
-The first implementation checkpoint authenticates all accepted incoming frames
-before missing-dependency/refusal decisions, using inert canonical name wrappers
-and returning only header metadata. Existing wire admission remains unchanged.
-Fresh TS cases and fresh BEAM-authored unknown-name inputs agree on demonstrated
-signature, vocabulary, duplicate, scope and pending-id outcomes. The focused trust,
-reciprocal and wire suites pass. Spec review found duplicate map keys could be
-collapsed before authentication; observation-only map/set canonical duplicate
-checks and decimal spelling checks now refuse such aliases. Fresh controls and
-malformed aliases agree through both actual APIs; both reviewers confirm the fix.
-Client build, desktop checks, ordinary/tracing native suites, client catalog and
-canonical suites, full Mix check and both boundary scans pass after corrections.
-The checkpoint is independently reviewed; required external adversarial review
-and the complete phase matrix remain open.
+## Implementation checkpoints
 
-The next checkpoint aligns closed accepted-frame header/version validation before
-fetch in both owners and checks rejected-record identity, duplicate ids and genuine
-signature mislabeling before missing accepted ancestors are reported. Fresh
-header and rejected-record RED cases reproduce the prior disagreements; the
-expanded reciprocal matrix now passes with explicit expected decisions and both
-delivery orders. Spec review exposed a pre-existing prepare/evaluate disagreement:
-TS evaluation checked rejected evidence before fetch while preparation did not.
-The common contract now authenticates accepted input, validates rejected integrity
-and portability, then reports missing accepted ancestors. A legitimate installed
-baseline and both actual public APIs are exercised for each fresh producer.
-Malformed evaluation-page history shapes remain `malformed_catalog` consistently;
-raw preparation errors retain `invalid_verified_history`. Both reviewers confirm
-the correction. Final full Mix check, client build/catalog suites, desktop checks
-and both boundary scans pass. A transient courier timeout in the earlier full run
-passed all focused courier tests and the final complete umbrella rerun.
+- Authenticate accepted raw frames before fetch; keep unknown names inert and ordinary wire admission separate.
+- Check whole-page history shape/family before merge, then rejected integrity/portability before missing accepted ancestors.
+- Separate domain depth 65 observation from domain depth 64 admission; include all map and delegation JSON wrappers.
+- Bound frame, history, page, saved and proposed evidence; preserve accepted watermarks and sticky blocks during recovery.
+- Reject lossy strings, noncanonical Base64, oversized integers and coercible delegation primitives before canonical allocation.
+- Keep raw frame subtrees JSON-only; translate only explicit typed metadata fields for public-size accounting.
 
-A resource checkpoint now distinguishes depth-64 wire admission from depth-65
-raw observation in both owners. Correctly signed depth-65 evidence authenticates
-but remains unsupported at complete portability, while forged evidence is invalid.
-Depth-66 accepted input exceeds observation bounds and cannot become pending.
-Separate raw budget guards bound 67,108,864 logical JSON nodes and UTF-8 string
-bytes, plus per-frame JSON container depth 199 (three map wrappers per domain level,
-plus the frame and flat delegation leaf). They prove no wire shape or authority.
-Shared input counts at every logical occurrence; cycles cannot grow a JS walk.
+## Incoming main-history contract
 
-Fresh actual public APIs compare unknown kinds, exact push sizes 64,000/64,001,
-partial and forged variants, and depth 64/65/66. Direct BEAM/TS budget tests prove
-actual maxima and one over for nodes, UTF-8 bytes and JSON depth without creating
-sixty-seven million input cells. Focused resource/matrix tests and both independent
-protected reviews pass. A strict-lint nesting repair preserves the predicates and
-is independently confirmed. The final full Mix check, client build/catalog suites,
-desktop checks and both boundary scans pass after that repair. Hosted browser
-compilation exposed a missing copied shared-module dependency; adding the raw
-bounds helper to that explicit source list passes local browser formatting,
-unit tests and the real warnings-as-errors/Vite build. Refreshed hosted checks
-remain required; no older gate is credited to this integration repair.
+1. Validate closed page/history/rejected-record shapes, replica text and bounded
+   Treehouse family across the whole page before merging or authenticating it.
+2. Validate accepted headers, version, replica, ids and dependency text. Authenticate
+   every canonicalizable accepted frame before any missing-ancestor refusal.
+   Unadopted names remain binary data or inert canonical wrappers; never intern them.
+3. Validate rejected identity, replica, duplicates and signature classification.
+   Genuine signed evidence cannot be relabeled as bad signature, and rejected
+   records cannot close accepted dependencies. Invalid outranks unsupported across
+   histories; both outrank missing accepted ancestors.
+4. Report sorted unique missing ids, independently of delivery order. Merge retained
+   and incremental incoming frames before calculating missing ancestors.
+5. Apply complete cutoff portability and the strict product reader before semantic
+   projection. Unsupported or forged evidence cannot become authority or a route.
 
-A coordinating codec review also exposed that the earlier list-only JSON wrapper
-budget could clip valid deep maps. Fresh expected-success depth-64 map tests
-reproduced that defect even though both owners previously agreed on rejection.
-The per-frame bound now derives from the worst supported map/delegation shape.
-A separate RED found the catalog mirror charged a flat delegation leaf at zero
-remaining generic depth despite ordinary Wire accepting it; the mirror now matches
-that unchanged Wire rule. Map-depth and flat-leaf boundary cases pass through both
-actual APIs, with the depth-64 delegation case independently decoded by Wire.
-Both independent reviewers confirm these follow-up fixes; full final gates remain.
+Canonical ids, signature bytes, closed vocabulary and normal wire decoding remain
+unchanged. Observation may refuse noncanonical representations that normal decoding
+historically accepts; it must agree between owners before fetch.
 
-These checkpoints do not complete the broader matrix below. Full independent producer boundary coverage, complete history/page aggregate limits
-still need explicit full parity proof before completion and native adoption. The saved diagnostic evidence is
-marked as captured before this correction; its old verdicts are not an oracle.
+## Observation bounds and scalar rules
 
-A recovery checkpoint uses fresh independent TypeScript and BEAM producers and both
-actual owners to
-accept revision 1 with two routes, freeze on a genuine catalog fork, and reopen
-serialized snapshots. Incoming boundary failures preserve accepted watermarks,
-exact retained frames and rejection records, and sticky blocks. Corrupt stored
-signatures, unsupported stored depth and inconsistent watermarks require recovery
-even when incoming evidence could repair them. Review tightened explicit successful
-reopen assertions and exact evidence preservation. Both producer directions pass;
-both independent reviewers confirm the sources. Final full gates remain open. The first
-full refresh passed all tests but strict lint found one nested test helper; the
-test orchestration is now split into shallow assertion helpers. Final focused
-recovery tests and strict lint pass after that cleanup; final combined gates remain.
+| Context | Bound |
+| --- | --- |
+| Ordinary wire domain depth | 64 composites |
+| Raw observation domain depth | 65 composites |
+| Raw frame JSON container depth | 199: three wrappers per map level, frame and flat delegation leaf |
+| Public history JSON container depth | 203: raw frame plus history/rejected wrappers |
+| Page or retained-state JSON container depth | 205: raw frame plus proof/history/rejected wrappers |
+| Logical nodes and UTF-8 string bytes | 67,108,864 each, shared within the checked envelope |
+| Ordinary push frame | 64,000 bytes; observation does not make overflow portable |
 
-The first requested external review used the authorized Sonnet High fallback after
-Argon returned quota exhaustion. It found a real mixed-history scope/authentication
-phase disagreement. A fresh RED reproduces TS invalid-history before wrong scope;
-the correction applies step 1 as a whole-page shape/family preflight before merge
-and authentication in both owners. Both delivery orders now have explicit expected
-scope refusals. The suggested saved-ancestor issue is not present: BEAM already
-merges saved and incoming evidence before missing detection. A new genuine
-suffix-only depth-64 delivery regression checks this in both producer directions.
-Both independent reviewers confirm these source changes; all five focused tests
-and strict lint pass. Refreshed full gates remain; no earlier full check is credited
-to this correction. Aggregate and remaining matrix work stays open.
+Count shared input at every logical occurrence. Cycles must not grow a JS walk.
+Frame checks, history-batch checks, whole incoming pages, saved snapshots and
+proposed snapshots are distinct boundaries. Proof histories, artifacts and metadata
+count toward the envelope budget.
 
-A history-aggregate checkpoint shares 67,108,864 logical nodes and UTF-8 string
-bytes across accepted/rejected evidence and all replicas in each incoming batch
-and merged retained union. Public history metadata counts; BEAM normalizes only
-its known history/rejection wrapper keys to the public spelling. The JSON bound
-is 203, adding four rejected-record/history wrappers to the 199-frame context.
-Frame domain/crypto/admission rules remain separate. Exact shared string and node
-maxima/one-over tests and maximum rejected wrapper tests exercise actual budgets.
-Fresh signed two-frame evidence at the 64 MiB history string maximum reaches
-unsupported portability in both public APIs/owners; one byte over is invalid,
-and a forged at-limit signature is invalid. The initial aggregate checkpoint was TS-produced; whole-envelope coverage and
-independent BEAM production are addressed below. Transport preallocation remains
-a separate ownership boundary. Both protected reviews found no contract defect;
-a redundant repeated BEAM walk was removed following standards feedback and
-independently confirmed. All 12 focused BEAM/reciprocal tests, six direct TS
-budget tests, client build and strict lint pass. Final full gates remain open.
+Public accounting uses explicit wrapper spellings and Base64 for the reviewed root
+byte field. Frame and rejected-frame subtrees remain JSON-only; metadata translation
+must not reinterpret their values. These guards establish neither wire validity nor
+bounds before transport parsing or SDK cloning.
 
-The external fix confirmation requested stronger controls. Solo forged and wrong-
-scope histories now have explicit refusals. A new independently signed suffix has
-a nonempty saved dependency, is absent from the base, yields exact pending ids
-when isolated, and is retained exactly after successful incremental delivery.
-Both fresh producer directions pass these stronger controls. No earlier vacuous
-zero-dependency control is credited as proof of saved-ancestor closure.
+Strings must be well-formed before encoding. Integer scalars must be canonical
+uint64 values; decimal text is at most 20 digits and is checked before BigInt.
+Delegation primitives must retain their declared types. Observation requires
+canonical Base64 for decoded byte fields, while ordinary wire behavior is preserved.
+Absent/null unleased expiry remains supported.
 
-A whole-envelope checkpoint now bounds incoming pages, retained snapshots and
-proposed next snapshots at the same node/string budgets, including cutoff-proof
-histories, artifacts and metadata. Six proof/rejected wrappers produce JSON depth
-205. BEAM lazily counts typed wrapper keys in their public camel-case spelling,
-atom values as names and the sole reviewed root byte field as Base64. Binary wire
-keys and names remain data; no normalized history copy or atom interning occurs.
-Saved overflow requires recovery before incoming processing; incoming scope still
-precedes budget classification. Proposed overflow cannot be issued for persistence.
+## Retained recovery and capacity
 
-Fresh independent BEAM and TS producers sign exact history and page maxima and
-one-over variants. Both actual owners/APIs pin reasons for genuine, forged,
-main/proof split and oversized saved-proof cases, accounting for page-wrapper
-bytes separately from the history-only budget. Independent producer tests pass.
-Protected reviews confirm the implementation. Additional tests pin headline
-reasons/ids, malformed aliases, duplicate signed-dependency aliases versus changed
-sets, shape-neighbor precedence and post-consumer no-atom-interning. Genuinely
-signed unknown delegation-role names, including nested and missing-parent forms,
-are checked from both producers, with their inner signatures independently verified.
-All fifteen focused tests, eight direct TS budget tests, client build and strict
-lint pass; the three delegation-name tests pass again after the signature controls.
+Validate saved state independently before incoming evidence. Incoming data cannot
+repair corrupt saved signatures, unsupported saved terms or inconsistent watermarks.
+A blocked installation must not become unblocked. Preserve exact retained frames,
+rejected records and accepted watermarks across refusal and serialized reopen.
 
-Before source signoff, audit incoming cutoff-proof refusal parity with fresh small
-unsupported/forged/partial proof histories. Static inspection found that BEAM
-`merge_proofs!` maps unreadable incoming proof histories to `recovery_incomplete`,
-where TS `mergeProofs` currently forwards the cutoff observer's reason. Fresh actual public calls now reproduce it: both accept the valid proof, while
-unsupported/forged/partial proofs yield `recovery_incomplete` in BEAM and cutoff
-or integrity reasons in TS. Public disposable inputs/results are saved in
-`docs/research/evidence/treehouse-proof-context-2026-10-25.json`, not used as a
-test oracle. Define the complete-proof context contract, add fresh regressions
-and review the necessary correction before native adoption.
-Bounds before transport parsing or SDK cloning are not established by these guards.
+A rejection is non-advancing and is never evidence of current freshness. Native
+adoption must close eligibility for the rejected observation; it cannot reuse an
+older route candidate as current. This includes a blocking witness that cannot fit
+the retained profile. Define and test the capacity/freeze behavior explicitly rather
+than treating a plain reject as a persisted block. Smaller native storage limits do
+not prove this adapter obligation or a migration path.
 
-PR review found three additional boundary defects and reconfirmed the already-fixed
-worst-map depth issue. Live TS RED tests authenticated lone-surrogate aliases as
-pending and attempted two oversized decimal conversions before refusal. Lossless
-string checks now precede encoding; uint64 scalar checks precede BigInt in raw
-terms and the shared encoder, including delegation-epoch paths. Flat delegation
-primitives cannot coerce strings/booleans/lists into different signed values.
-Observation-only Base64 round trips cover body bytes and nested issuer, audience
-and signature fields. Ordinary Wire admission keeps its existing behavior.
+## Open complete-proof contract
 
-The requested direct Sonnet High review completed with verified first-party model
-usage and zero tool calls after the AGY connector quota failed. Its raw/typed mode
-finding is addressed: frames and rejected-frame subtrees stay JSON-only; only
-explicit known metadata keys receive public spelling. Capacity and discriminator
-findings remain open: valid near-limit saved/proposed state and freeze-capacity
-behavior need explicit tests/disposition before source signoff. No old candidate
-or rejection proves current freshness; native adoption must fail closed on a rejected
-observation, including when a blocking witness cannot fit the retained profile.
-The current native store's smaller snapshot cap and the absence of native installed
-catalog trust do not constitute those future adapter tests or a migration claim.
+Cutoff-proof histories claim a complete immutable point rather than an incremental
+main-history page. The owners currently differ for small unsupported, forged and
+partial proof histories: BEAM reports `recovery_incomplete`; TS forwards observer
+errors. Malformed outer proof/cutoff shape and unreadable nested history also need
+explicitly distinguished outcomes.
 
-## Reproduced problem
+Regenerate fresh public inputs through both actual APIs before choosing the common
+contract. Preserve refusal, signature checking, cutoff identity, history-subset
+checks, stored recovery and sticky state. Do not select one owner silently.
 
-The same fresh valid Space bootstrap history produces `propose` in both owners.
-For a correctly signed command containing an unknown wire atom and a withheld
-ancestor, TS returns `trust_pending` with that ancestor; BEAM returns
-`unsupported_cutoff`. Replacing only its signature with zero bytes changes TS to
-`invalid_verified_history`, while BEAM still returns `unsupported_cutoff`.
-Both refuse the hostile input. The defect is inconsistent refusal and fetch
-behavior, not evidence of unauthorized acceptance or a custody compromise.
+The public diagnostic inputs in
+`docs/research/evidence/treehouse-proof-context-2026-10-25.json` document the issue;
+tests must not consume their saved verdicts.
 
-Public disposable frames and actual results are saved at
-`docs/research/evidence/treehouse-incoming-refusal-order-2026-10-25.json`.
-They contain no private keys. Regenerate live inputs for implementation tests;
-never use saved verdicts when either runtime prerequisite is absent.
+## Remaining work in order
 
-Reproduce with `catalog_incoming_order_probe.ts` in the client test-support
-folder, piping its JSON to a temporary file, then pass that file to
-`scripts/treehouse_catalog_incoming_order_probe.exs` under the test environment.
-The TS producer signs fresh inputs and calls its actual public API; the BEAM
-consumer calls its actual public API. These are diagnostic probes, not tests
-asserting that disagreement is desirable or a substitute for the RED regression.
+1. Add independent fresh producer regressions for complete-proof context, including
+   valid, unsupported, forged, partial and malformed proof histories; correct the
+   common contract without changing authority or canonical bytes.
+2. Add discriminating valid saved/proposed envelope controls at the actual cap and
+   one over. Use valid authenticated histories and matching proofs, not corruption
+   that would already fail without a budget guard. Cover a page and saved state
+   individually under the cap whose proposed union exceeds it.
+3. Resolve the freeze-capacity obligation and require native rejection/freshness
+   tests before route installation. Verify that no retained evidence is silently
+   evicted and that rejection never clears a prior block.
+4. Finish review feedback, integrate the corrected exporter foundation and current
+   main, and preserve both planning workstreams and unrelated checkout changes.
+5. Run final required checks and protected/adversarial reviews; resolve findings and
+   obtain exact-tip hosted proof before merging. Keep native adoption separate.
 
-Before correction, TS `observeHistory` authenticated raw accepted frames before missing-dependency
-collection, then derived cutoff and invoked the strict product reader. BEAM
-`scan_frame` invoked closed vocabulary decoding before signature classification;
-`scan_history` returned unsupported before `build_scanned_history` collected missing
-ancestors. Thus the original BEAM scanner could not distinguish the two signed cases above.
+## Validation requirements
 
-## Recommended contract
+Prepare the client and shell prerequisites using the root Agent Guide and invoke
+local Mix through the asdf shim. Required validation includes client build and
+generated-output checks, relevant catalog/canonical/continuation and desktop suites,
+full `mix check`, both HTTP-boundary Sobelow scans, and applicable ordinary/tracing
+native reciprocal checks after integration.
 
-Retain the intended authentication-before-fetch rule. Define and test a common
-incoming-history phase contract before porting it to native:
-
-1. Validate closed outer history/rejected-record shapes, replica text, and exact
-   bounded Treehouse family. Pin malformed and wrong-scope reasons explicitly.
-2. Validate accepted frame headers, exact replica and unique ids. Authenticate
-   every canonicalizable accepted frame before reporting missing ancestors,
-   including frames naming unadopted vocabulary. Keep such names inert strings
-   or existing canonical atom wrappers; never create imported VM atoms, semantic
-   ops, grants or authority evidence from them. A forged partial frame is invalid.
-3. Validate rejected structural integrity and portability without allowing rejected
-   records to close accepted dependencies. Genuine signed evidence cannot be
-   relabeled bad-signature evidence, even when its vocabulary is unsupported.
-   Invalid evidence takes precedence over unsupported evidence across histories.
-4. Collect missing accepted ancestors only after accepted authentication and
-   rejected-evidence validation. Preserve sorted unique pending ids and delivery
-   independence. Then apply the complete portable cutoff and strict product-reader
-   checks before semantic projection. Unknown vocabulary remains unsupported and
-   cannot become authority, a route or an installed decision.
-5. Keep stored-recovery error mapping and sticky state unchanged unless a fresh
-   reciprocal counterexample proves a necessary explicit amendment. Incoming
-   refusals must not erase accepted watermarks or reset a blocked installation.
-
-The accepted-frame counterexample recommends preserving TS's current phase order,
-not moving TS signature checks behind vocabulary admission to match BEAM. Do not
-change canonical bytes, ids, signatures, cutoff format, wire admission vocabulary
-or reason vocabulary. A raw authentication helper must be independently bounded
-and must not become a new semantic wire decoder or listener.
-
-## Ordered implementation
-
-1. Add fresh BEAM and TS producers for valid Space and Thread histories and the
-   demonstrated signed/forged unknown partial frames. Have both actual public
-   installation/evaluation APIs consume each producer's evidence. Prove the RED
-   disagreement, with a valid baseline control and both delivery orders.
-2. Extend the phase matrix before selecting an implementation: unknown kind and
-   nested atom/delegation names; malformed/noncanonical terms and headers; wrong
-   replica/family; duplicate ids; multiple missing ids; known valid/forged partial
-   frames; portable-size overflow; malformed, forged and genuine rejected records;
-   genuine/rejected same id; and mixed accepted/rejected integrity failures.
-   Pin exact reason and pending ids. Record any further owner discrepancy in this
-   plan and resolve the phase contract, rather than filtering it out of peers.
-3. Implement bounded raw canonical authentication at the necessary BEAM boundary,
-   without unbounded atom interning. Reuse canonical encoding safely; do not copy
-   a second crypto implementation. Adjust TS only where the explicit matrix
-   establishes a contract correction, preserving the demonstrated signature rule.
-4. Add exact depth/node/frame/aggregate boundaries and missing-plus-forgery cases.
-   Check no signature, vocabulary, shape, consent or authority predicate weakens.
-   Exercise retained recovery and reopen to prove state does not disappear.
-5. Run client preparation/build and relevant fresh reciprocal suites, full Mix
-   check, ordinary/tracing native regression suites where applicable, shell
-   checks and both boundary scans. Run formatting and generated-output checks.
-6. Obtain independent protected spec/standards and requested Argon/Sonnet
-   adversarial review, resolve findings and pass one exact-tip hosted gate.
-   Keep source correction and native adoption independently reviewable.
-7. After the corrected source baseline is reviewed and adopted, integrate the
-   native incoming seam and compare complete decisions/reasons/pending ids.
-   This correction does not finish semantic projection, application policy,
-   catalog graph trust or plan 267.
-
-## Completion evidence
-
-Both fresh producers' inputs yield identical phase/refusal results in both actual
-owners, including exact sorted pending ids and delivery reversal. Authentic
-complete baselines still install/propose as before; no unsupported or forged
-frame gains semantics. Existing canonical/cutoff vectors, retained state and
-bounds remain intact. Final review and exact-tip hosted evidence live in the PR
-and running decision log, not as prose pins in tests.
+Both producer directions must use real public APIs and fail if a runtime prerequisite
+is missing. Include valid controls, exact reasons/pending ids, delivery reversal,
+wrong scope/replica, malformed headers/scalars, unknown nested names, duplicate ids,
+rejected-evidence integrity, exact depth/frame/node/string limits, and retained
+recovery. Verify imported names remain uninterned after consumption. Budget tests
+alone must not be described as authentication or authority proof.

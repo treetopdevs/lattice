@@ -67,7 +67,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <h2 id="decisions">Decisions</h2>
 
 <article id="d1">
-<h2><span>D-01</span>Slice sessions run on Opus 5.5; the coordinator stays on Fable</h2>
+<h2><span>D-01</span> Slice sessions run on Opus 5.5; the coordinator stays on Fable</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, before slice 1</dd>
 <dt>Context</dt><dd>Usage at start: 5-hour window 58% (resets in 49 min), weekly all-models 83%, weekly Fable 96% (both weekly windows reset in 3 d 14 h). The user asked to run to 100% and reset.</dd>
@@ -78,7 +78,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d2">
-<h2><span>D-02</span>"All the apps" means the Treehouse shell; Township and Toolshed stay frozen</h2>
+<h2><span>D-02</span> "All the apps" means the Treehouse shell; Township and Toolshed stay frozen</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, before slice 1</dd>
 <dt>Context</dt><dd>Working policy rule 10 (plans/README.md) freezes Township and Toolshed until R26. The unified roadmap is the only execution ledger (rule 12).</dd>
@@ -87,7 +87,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d3">
-<h2><span>D-03</span>This record lives in the repo and is committed at checkpoints, not on main directly</h2>
+<h2><span>D-03</span> This record lives in the repo and is committed at checkpoints, not on main directly</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17</dd>
 <dt>Decision</dt><dd>Path <code>plans/decisions-2026-10-17-backlog-run.html</code>. It was kept untracked in the main checkout through slice 7, then landed in its own small PR at the user's request on 2026-10-18. After that, the coordinator batches new entries into periodic ledger PRs; slices never edit it.</dd>
@@ -95,7 +95,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d4">
-<h2><span>D-04</span>Unmerged leftover branches are inputs to slice planning, not automatic work</h2>
+<h2><span>D-04</span> Unmerged leftover branches are inputs to slice planning, not automatic work</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17</dd>
 <dt>Context</dt><dd><code>claude/r11b-activation-crash-windows</code> (2 commits, 9 files, no PR: activation bound to the controlled boot, lost-commit reconciliation) and <code>claude/packaged-sqlite-busy-retry</code> (3 commits, superseded by merged PR #119) sit unmerged.</dd>
@@ -104,7 +104,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d5">
-<h2><span>D-05</span>The coordinator merges a slice PR once its exact tip is green and its review threads are closed</h2>
+<h2><span>D-05</span> The coordinator merges a slice PR once its exact tip is green and its review threads are closed</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, after slice 1</dd>
 <dt>Context</dt><dd>Each slice is cut "from the latest tip". Leaving PRs open would cut every later slice from the same stale main and stack conflicts.</dd>
@@ -113,7 +113,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d6">
-<h2><span>D-06</span>Slice 1 decisions (rows 199/200)</h2>
+<h2><span>D-06</span> Slice 1 decisions (rows 199/200)</h2>
 <dl>
 <dt>Scope</dt><dd>Rows 199 and 200 together, no plan file; the D3 snapshot is cached on the identity of the saved state plus key availability.</dd>
 <dt>Gating</dt><dd>Configure routes, Issue invitation, Admit and grant and Save edit now require live authority as well as a key; the matching actions check the same facts.</dd>
@@ -124,7 +124,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d7">
-<h2><span>D-07</span>Slice 2 decisions (R11b, row 216)</h2>
+<h2><span>D-07</span> Slice 2 decisions (R11b, row 216)</h2>
 <dl>
 <dt>Scope</dt><dd>Salvaged <code>claude/r11b-activation-crash-windows</code> and closed PR #126 residuals 1 and 2; residuals 3-5 filed as rows 217-219. Roadmap R11b moves PLANNED to IN PROGRESS; <code>ready</code>/<code>catalogued</code>/<code>listed</code> and R11c stay open.</dd>
 <dt>Review</dt><dd>Two reviews ran although the paths are outside rule 3, following PR #126's precedent for operator contract changes.</dd>
@@ -134,7 +134,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d8">
-<h2><span>D-08</span>Overlap slices when their file sets are disjoint</h2>
+<h2><span>D-08</span> Overlap slices when their file sets are disjoint</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, while PR #134's hosted CI ran</dd>
 <dt>Decision</dt><dd>Start the next slice before the previous PR merges when the next slice stays out of the previous PR's files (here <code>apps/lattice_carrier_server</code>, <code>config/runtime.exs</code>, the operator script). Both may touch <code>plans/README.md</code> index rows, which merge line-by-line. The later PR is synced with main before its own merge.</dd>
@@ -143,7 +143,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d9">
-<h2><span>D-09</span>New slices start only on a user turn</h2>
+<h2><span>D-09</span> New slices start only on a user turn</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, after slice 2 reported</dd>
 <dt>Context</dt><dd>The desktop app refuses to start a session on a turn that a session report triggered. The coordinator can verify and merge on those turns, but it cannot dispatch the next slice.</dd>
@@ -152,7 +152,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d10">
-<h2><span>D-10</span>Slice 3 decisions (rows 207, 210, plan 186)</h2>
+<h2><span>D-10</span> Slice 3 decisions (rows 207, 210, plan 186)</h2>
 <dl>
 <dt>207</dt><dd>Overturns the PR #127 "by design" ruling: an unrepresentable call result is answered with a 2-tuple <code>{:response, ref}</code> inbox op, and <code>await/3</code> returns <code>{:error, :unrepresentable_result}</code>. The wire vocabulary is unchanged.</dd>
 <dt>210</dt><dd>The cutoff atom set is derived at compile time from <code>CatalogCutoff</code>; the source-regex pin is replaced by a behavioural probe and a runtime vocabulary check (rule 6).</dd>
@@ -163,7 +163,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d11">
-<h2><span>D-11</span>Index status cells for merged slices are corrected in one closing ledger PR</h2>
+<h2><span>D-11</span> Index status cells for merged slices are corrected in one closing ledger PR</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, after slice 2 noted row 216 still reads IN PROGRESS with the PR cited as open</dd>
 <dt>Decision</dt><dd>Rather than a follow-up PR per row, stale status cells (row 216 and any later ones) land together with this decisions record in one ledger PR at the end of the run, or earlier if a slice's own diff touches the same rows.</dd>
@@ -171,7 +171,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d12">
-<h2><span>D-12</span>PR #135's red runs are treated as flakes and rerun, not reverted</h2>
+<h2><span>D-12</span> PR #135's red runs are treated as flakes and rerun, not reverted</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, after #135 landed</dd>
 <dt>Evidence</dt><dd>Tip run 39064519203 failed only the packaged macOS enrollment job ("timed out waiting for the founder to receive the joiner post by hint"). Main run 39064793571 on the same tree passed that job and failed only the Android emulator launch, because Google's system-image download returned "File not found". #135 touched only <code>lattice_core</code> Registry/CatalogTrust code and plans.</dd>
@@ -180,7 +180,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d13">
-<h2><span>D-13</span>Slice 4 decisions (plan 186 PR 1)</h2>
+<h2><span>D-13</span> Slice 4 decisions (plan 186 PR 1)</h2>
 <dl>
 <dt>Peer only</dt><dd><code>lattice-client</code> is a kit <code>peerDependency</code>, not also a dev dependency: a kit-local copy under <code>--preserve-symlinks</code> split <code>instanceof</code>. The kit typechecks through a tsconfig <code>paths</code> entry, and <code>.npmrc</code> sets <code>legacy-peer-deps</code>.</dd>
 <dt>Subpath</dt><dd>BEAM helpers ship on a node-only <code>./testing/beam</code> subpath, so pinned enrollment scripts stay unchanged.</dd>
@@ -191,7 +191,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d14">
-<h2><span>D-14</span>After the weekly reset, slices inherit the coordinator's model</h2>
+<h2><span>D-14</span> After the weekly reset, slices inherit the coordinator's model</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, during slice 4: weekly Fable 6%, all-models 8%, 5-hour 31%</dd>
 <dt>Decision</dt><dd>D-01's Opus override is dropped. Slices now inherit the coordinator's model, which the user set to Opus 5.5 with /model. The run continues until a window reaches 100%, then the coordinator sends a notification.</dd>
@@ -199,7 +199,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d15">
-<h2><span>D-15</span>Row 221: re-pin <code>packaged:enrollment</code> to <code>tsx --preserve-symlinks</code></h2>
+<h2><span>D-15</span> Row 221: re-pin <code>packaged:enrollment</code> to <code>tsx --preserve-symlinks</code></h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, after slice 5 stopped plan 186 PR 2 at commit 1 on this operator question</dd>
 <dt>Options</dt><dd>(a) re-pin the script in <code>enrollment_ci_contract.mjs</code> with a documented procedure; (b) inject lattice-client values into the kit (plan 186 decision 4c); (c) set <code>NODE_PRESERVE_SYMLINKS=1</code> in the job env.</dd>
@@ -209,7 +209,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d16">
-<h2><span>D-16</span>Slice hand-over notes are an input to every later brief</h2>
+<h2><span>D-16</span> Slice hand-over notes are an input to every later brief</h2>
 <dl>
 <dt>When</dt><dd>2026-10-17, at the user's prompt, during slice 6</dd>
 <dt>Context</dt><dd>Each slice leaves a hand-over note in the app's shared notes folder for this session group (slices 2 to 5 so far). The coordinator had not been reading them. They match the PR bodies but add toolchain traps.</dd>
@@ -219,7 +219,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d17">
-<h2><span>D-17</span>Slice 6 decisions (plan 186 PR 2, row 221)</h2>
+<h2><span>D-17</span> Slice 6 decisions (plan 186 PR 2, row 221)</h2>
 <dl>
 <dt>Subpath</dt><dd>Carrier modules export on <code>./sync</code>; the <code>.</code> barrel stays routes-only so unflagged tsx tests still resolve.</dd>
 <dt>Port</dt><dd>The signer and both route validators are members of the two-interface port rather than a third interface. Space-first ordering is an <code>isAnchor</code> predicate, plus <code>holdsAnchorProfile</code> for the feed's Space pre-sync.</dd>
@@ -232,7 +232,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d18">
-<h2><span>D-18</span>After plan 186: the enrollment path, with the record landed separately</h2>
+<h2><span>D-18</span> After plan 186: the enrollment path, with the record landed separately</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18, after slice 7; usage weekly all-models 47%, Fable 6%</dd>
 <dt>Options offered</dt><dd>(1) R11b remainder toward R11c and R13; (2) test and CI hygiene, rows 222, 202 and 201; (3) design rows 187-189; (4) the parity ladder, rows 211-215; (5) land this record.</dd>
@@ -241,7 +241,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d19">
-<h2><span>D-19</span>Slice 8 decisions, and the enrollment path's rule 8 wall</h2>
+<h2><span>D-19</span> Slice 8 decisions, and the enrollment path's rule 8 wall</h2>
 <dl>
 <dt>217</dt><dd>Activation re-reviews the roster from the sealed Space log and refuses <code>:roster_drift_since_staging</code>, with no journal schema change. A later drift, between activation and restart, is a distinct atom in the <code>ready</code> phase.</dd>
 <dt>218</dt><dd>The owner appends each replaced journal to a reserved, private <code>operator-journal-history.jsonl</code>. A torn tail is cut back to whole lines, and a failed write refuses. Unbounded growth is row 225.</dd>
@@ -252,7 +252,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d20">
-<h2><span>D-20</span>Plan 223's probe key: a roster member's transport identity, never a root or service key</h2>
+<h2><span>D-20</span> Plan 223's probe key: a roster member's transport identity, never a root or service key</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18, before slice 9</dd>
 <dt>Context</dt><dd>Plan 223 STOPs if the operator holds no key in the admitted instance's <code>trusted_peers</code> for the readiness frontier pull. The set is <code>{child log root} ∪ roster</code>.</dd>
@@ -261,7 +261,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d21">
-<h2><span>D-21</span>Row 223 parked: no operator-held key may authenticate the readiness probe</h2>
+<h2><span>D-21</span> Row 223 parked: no operator-held key may authenticate the readiness probe</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18, slice 9</dd>
 <dt>Finding</dt><dd>The admitted instance's <code>trusted_peers</code> is pinned to exactly <code>{child log root} ∪ roster</code> (<code>staging.ex:409</code>), and the carrier admits only realms in that map (<code>web_socket.ex:112</code>). D-20 bars the root and service keys. Member keys are device-held, and the catalog lifecycle research says the operator does not sign as a member. A dedicated probe realm is plan 223 STOP 2; widening the exact-peer check is STOP 3.</dd>
@@ -270,7 +270,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d22">
-<h2><span>D-22</span>Operator decision: row 223 takes option (a), a read-only operator probe realm</h2>
+<h2><span>D-22</span> Operator decision: row 223 takes option (a), a read-only operator probe realm</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18, decided by the user as operator</dd>
 <dt>Decision</dt><dd>The readiness frontier pull authenticates through a read-only operator probe realm on the carrier server, usable for frontier and missing-op pulls only. Plan 223 is refreshed and the phase is built as slice 10. This supersedes D-20's roster-member requirement for the probe, and lifts plan 223 STOP 2 and 3 for this purpose only.</dd>
@@ -279,7 +279,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d23">
-<h2><span>D-23</span>Row 202 and Dependabot run in parallel with slice 10; Township security bumps are allowed</h2>
+<h2><span>D-23</span> Row 202 and Dependabot run in parallel with slice 10; Township security bumps are allowed</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18</dd>
 <dt>Ordering</dt><dd>The user said row 202 and Dependabot come "then", after slice 10. Their files share nothing with the carrier server, so they run as slice 11 alongside it (D-08). Slice 10 still merges on its own gate.</dd>
@@ -289,7 +289,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d24">
-<h2><span>D-24</span>Dependabot #13 (glib) dismissed as not used; a <code>lattice_stress</code> restart timeout is a flake</h2>
+<h2><span>D-24</span> Dependabot #13 (glib) dismissed as not used; a <code>lattice_stress</code> restart timeout is a flake</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18, slice 11</dd>
 <dt>glib</dt><dd>No upgrade path exists: wry 0.57, tao 0.37, tauri 2.12 and webkit2gtk 2.0 all require gtk/glib ^0.18, and glib 0.20 ships only on gtk4-rs. <code>VariantStrIter</code> is built only by <code>Variant::array_iter_str</code>, which nothing in the lockfile or <code>src-tauri</code> calls, and glib is built only for Linux. The coordinator dismissed alert #13 as <code>not_used</code> with that reason. It can be reopened when Tauri moves to GTK4.</dd>
@@ -299,7 +299,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d25">
-<h2><span>D-25</span>An intermittent witness test is a custody row, not a PR #143 fix; main's red run is infrastructure</h2>
+<h2><span>D-25</span> An intermittent witness test is a custody row, not a PR #143 fix; main's red run is infrastructure</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18</dd>
 <dt>Main</dt><dd>Run 39130135377 on <code>eaf8b844d</code> failed only the packaged macOS preview job. The causes were a TLS <code>alert_decode_error</code> on a fetch and an artifact upload that hit <code>ENOTFOUND</code>. Its failed jobs were rerun.</dd>
@@ -308,7 +308,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d26">
-<h2><span>D-26</span>Slice 10 decisions (probe realm and <code>ready</code>)</h2>
+<h2><span>D-26</span> Slice 10 decisions (probe realm and <code>ready</code>)</h2>
 <dl>
 <dt>Grant</dt><dd>The probe grant is ephemeral and single-use: one public key per instance, a 10 s lifetime, consumed by an exact-object ETS delete after the challenge verifies, and revoked in an <code>after</code> block. It adds no manifest field and no standing credential.</dd>
 <dt>Realm</dt><dd><code>lattice-operator-probe</code> is checked only after a <code>trusted_peers</code> miss. A probe session may send only <code>frontier</code> and <code>pull</code>, and everything else gets <code>read_only</code> without reaching the Holder. The session closes 30 s after authentication; a very large log can hit that cap, which fails closed and is row 226.</dd>
@@ -319,7 +319,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d27">
-<h2><span>D-27</span>Ledger 2: rows 227 and 228 filed; the enrollment path waits on the operator ceremony</h2>
+<h2><span>D-27</span> Ledger 2: rows 227 and 228 filed; the enrollment path waits on the operator ceremony</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18, after slice 10 (#144) merged</dd>
 <dt>Rows</dt><dd>Row 227, the witness drain ordering question from D-25, is filed and closed as verified: production already waits on the drain (Codex review of this PR). Row 228 collects the CI flakes that cost reruns in this run. Rows 201 and 223 are set DONE now that their PRs merged on green exact tips.</dd>
@@ -328,7 +328,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d28">
-<h2><span>D-28</span>Slice 12 decisions (row 228)</h2>
+<h2><span>D-28</span> Slice 12 decisions (row 228)</h2>
 <dl>
 <dt>Stress</dt><dd>The stress test's restart timeout was the <code>LatticeCore.Supervisor</code> intensity (3 restarts in 5 s) being exceeded by an Audit, LiveOps and DemoHub crash cascade. The <code>lattice_core</code> application then shut down, so a longer wait could never pass. Each test now restarts the app for a fresh budget, production intensity is unchanged, and the cascade is row 231.</dd>
 <dt>Android</dt><dd>The logcat names AppCompat's emoji2 initializer depending on the dying Play fonts provider. The manifest removes <code>EmojiCompatInitializer</code>, because the UI is a WebView. The smoke relaunches once, only on that exact kill line for the launched pid, and never after a crash marker.</dd>
@@ -339,7 +339,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d29">
-<h2><span>D-29</span>Slice 13 decisions, and the row 232 gap behind the ceremony</h2>
+<h2><span>D-29</span> Slice 13 decisions, and the row 232 gap behind the ceremony</h2>
 <dl>
 <dt>Crypto</dt><dd>The backup uses PBKDF2-HMAC-SHA256 (600,000 iterations) and AES-256-GCM, with a sorted-key header as AAD. Passphrases are printable ASCII only, so an independent Python recipe, which needs nothing from the repo, can recover the key.</dd>
 <dt>Custody</dt><dd>The tool refuses a terminal stdin for passphrases, because <code>System.cmd</code> <code>stty</code> has no controlling tty; the runbook reads them silently in the shell. It canonicalizes paths once, validates every ancestor's ownership, creates files raw <code>O_EXCL</code>, refuses disposable keys in real mode, never signs in real mode, and requires the restore drill on a second host. Erlang's lack of <code>fchmod</code> and <code>openat</code> is the accepted residual after two rounds.</dd>
@@ -349,7 +349,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d30">
-<h2><span>D-30</span>Slice 14 decisions (row 232)</h2>
+<h2><span>D-30</span> Slice 14 decisions (row 232)</h2>
 <dl>
 <dt>Family</dt><dd>New Spaces use <code>replica:treehouse:space:&lt;nonce&gt;#authority:bounded-continuation-v1#root:&lt;tag&gt;</code>, with genesis ops for the six preview commands plus <code>catalog_bootstrap_v1</code>, <code>attest_member_key_v1</code> and <code>replace_catalog_v1</code>. Threads stay legacy. Legacy Spaces still load, cannot be migrated in place, and are refused for the pin and the binding.</dd>
 <dt>Pin</dt><dd>The root pins continuation with a later empty-delegation genesis carrying the <code>__continuation__</code> profile. Review and confirmation are separate steps, the workflow signs its own frozen copy, and a second pin is refused.</dd>
@@ -360,7 +360,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d31">
-<h2><span>D-31</span>Operator decision: row 234 takes (a), the app exports a verified frame set for the ceremony</h2>
+<h2><span>D-31</span> Operator decision: row 234 takes (a), the app exports a verified frame set for the ceremony</h2>
 <dl>
 <dt>When</dt><dd>2026-10-18, decided by the user as operator</dd>
 <dt>Why</dt><dd>Waiting for a relay-connected ordinary build is circular: R13 needs R11c, R11c needs <code>catalogued</code>, and <code>catalogued</code> needs this binding. Signing the real binding in the dev-trace enrollment build would put production evidence on a test variant.</dd>
@@ -369,7 +369,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d32">
-<h2><span>D-32</span>PR #148: rule 3 stop on three repeating finding classes</h2>
+<h2><span>D-32</span> PR #148: rule 3 stop on three repeating finding classes</h2>
 <dl>
 <dt>When</dt><dd>2026-10-19, after the Codex bot's third review round on #148</dd>
 <dt>Classes</dt><dd>Bootstrap capability selection (grants the right, then not revoked); the continuation-pin exemption in retained history (allow it, then only the recognized shape); and panel review-state clearing (on persist, then on failed revalidation). Each class had two repair rounds.</dd>
@@ -378,7 +378,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d33">
-<h2><span>D-33</span>Ledger 3: row 224's inputs wait only on the operator; its build follows</h2>
+<h2><span>D-33</span> Ledger 3: row 224's inputs wait only on the operator; its build follows</h2>
 <dl>
 <dt>When</dt><dd>2026-10-19, after #149 merged</dd>
 <dt>State</dt><dd>Row 224's inputs now wait only on the operator's own run of <code>mix treehouse.catalog_ceremony</code>: the signer, the backup with its second-host restore, and the root's pin and signed binding through the ordinary app's export. That run's <code>verification-report.json</code> unblocks building row 224 itself. The <code>catalogued</code> and <code>listed</code> phases still need a plan and an implementation, including the carrier realm (plan 223, parked phases), because the ceremony makes nothing catalogued or listed. R11c and R13 follow only after those phases land.</dd>
@@ -388,7 +388,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d34">
-<h2><span>D-34</span>Slice 16 decisions (rows 235 and 237)</h2>
+<h2><span>D-34</span> Slice 16 decisions (rows 235 and 237)</h2>
 <dl>
 <dt>Accessors</dt><dd><code>Lattice.Authority.continuation_pins/1</code> and the TS <code>resolveContinuationPinsFromFrames</code> return the judge's own pin list after <code>verified_complete_log?</code>. They share a private prefix with <code>continuation_profile</code> and add no judgment arm, so D4 holds. These two read-only accessors are the only <code>authority.ex</code> and <code>authority.ts</code> changes.</dd>
 <dt>Bootstrap</dt><dd>The candidates are root-authored genesis delegations in canonical order. An ops/admin pre-filter stays, labelled advisory. It checks capability fields, not delegation signatures, so it reduces trial signatures but does not guarantee only one is spent. The trial op's quarantine verdict from the judge is the only decision.</dd>
@@ -398,7 +398,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d35">
-<h2><span>D-35</span>Slice 17 decisions (row 236)</h2>
+<h2><span>D-35</span> Slice 17 decisions (row 236)</h2>
 <dl>
 <dt>Placement</dt><dd>A new step in the ordinary <code>treehouse_packaged_macos</code> job, after the frame replay. It reuses the retained bounded Space and keychain key, where the device is root. The enrollment job and row 201's variant boundaries are untouched.</dd>
 <dt>Scope</dt><dd>It proves more than the export. It runs the whole app half of the row 224 binding: pin, export, payload, root review and sign, re-export, then <code>verify-binding</code>. It is a hosted rehearsal of the operator's ceremony with disposable keys.</dd>
@@ -408,7 +408,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d36">
-<h2><span>D-36</span>Ledger 4: rows 235 to 237 closed; the app half of the ceremony is rehearsed in hosted CI</h2>
+<h2><span>D-36</span> Ledger 4: rows 235 to 237 closed; the app half of the ceremony is rehearsed in hosted CI</h2>
 <dl>
 <dt>When</dt><dd>2026-10-19, after #152 merged</dd>
 <dt>Rows</dt><dd>Rows 235 and 237 are DONE with #151, and row 236 is DONE with #152's hosted pass. Row 238, quoted YAML keys on older pinned steps, is open.</dd>
@@ -417,7 +417,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d37">
-<h2><span>D-37</span>Slice 18 decisions (plan 224, design only)</h2>
+<h2><span>D-37</span> Slice 18 decisions (plan 224, design only)</h2>
 <dl>
 <dt>Meanings</dt><dd>The reviewed lifecycle contract wins over plan 223's sketch. <code>catalogued</code> signs and durably stores the next catalog after <code>ready</code>. <code>listed</code> publishes the staged signed <code>create_thread</code> reference into the served Space log.</dd>
 <dt>Realm</dt><dd>The carrier service realm is the server's own hello realm, derived from the root-signed binding and enforced in staging, activation and readiness. It needs no handshake, wire or <code>lattice/carrier/</code> change, and D1 holds.</dd>
@@ -428,7 +428,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d38">
-<h2><span>D-38</span>Design-plan and build PRs: freeze the branch after two bot rounds</h2>
+<h2><span>D-38</span> Design-plan and build PRs: freeze the branch after two bot rounds</h2>
 <dl>
 <dt>When</dt><dd>2026-10-19, during PR #154</dd>
 <dt>Context</dt><dd>Each fix push triggered another Codex and CodeRabbit bot round (on #154: 15, then 4, 5, 4 and 6 findings). None showed the design to be unsound.</dd>
@@ -437,7 +437,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d39">
-<h2><span>D-39</span>Operator decisions OD-1 to OD-5: all accepted as recommended</h2>
+<h2><span>D-39</span> Operator decisions OD-1 to OD-5: all accepted as recommended</h2>
 <dl>
 <dt>When</dt><dd>2026-10-19, decided by the user as operator</dd>
 <dt>OD-1</dt><dd>(A) The service key is the existing carrier instance identity file, shared by all Treehouse instances. It becomes binding-critical custody.</dd>
@@ -449,7 +449,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d40">
-<h2><span>D-40</span>Ledger 5: operator decisions recorded; plan 224 build under way</h2>
+<h2><span>D-40</span> Ledger 5: operator decisions recorded; plan 224 build under way</h2>
 <dl>
 <dt>When</dt><dd>2026-10-23, after #155 merged</dd>
 <dt>Rows</dt><dd>Rows 239 to 243 are DONE as decided in D-39. Row 250 holds CodeRabbit's deferred <code>mtime</code> hardening from #155. It needs same-uid write access in the 0700 ceremony directory, so it is not a forged-data path.</dd>
@@ -459,7 +459,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d41">
-<h2><span>D-41</span>Slice 20: the catalog store enforces its own chain rule (D-38 exception)</h2>
+<h2><span>D-41</span> Slice 20: the catalog store enforces its own chain rule (D-38 exception)</h2>
 <dl>
 <dt>When</dt><dd>2026-10-23, on frozen PR #158</dd>
 <dt>Finding</dt><dd>CodeRabbit showed <code>Lock.catalogued/6</code> checked an envelope's id, digest, Space and path, but not <code>revision</code> or <code>previous</code> against the committed head. A caller could store a second revision-0 chain, or an envelope not extending the head. Every later boot would then refuse until manual repair. No caller exists yet: PR 4, the only planned caller, is not built and is designed to check the chain before calling.</dd>
@@ -470,7 +470,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d42">
-<h2><span>D-42</span>Slice 21: staging refuses one replica served twice (D-38 exception)</h2>
+<h2><span>D-42</span> Slice 21: staging refuses one replica served twice (D-38 exception)</h2>
 <dl>
 <dt>When</dt><dd>2026-10-23/24, on frozen PR #160</dd>
 <dt>Finding</dt><dd>The Codex bot showed <code>check_bound</code> kept one authority root per replica. If two served Treehouse logs declared the same replica with different roots, one root dropped out of the service-key-reuse inventory, so a route's root could equal the service key. That is plan 224's STOP class. A bound replica commits to its root, so only a hand-configured, unbound legacy Thread served twice reaches it.</dd>
@@ -481,7 +481,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d43">
-<h2><span>D-43</span>Slice 22 (plan 245): run in the coordinator session; round 3 deferred to rows</h2>
+<h2><span>D-43</span> Slice 22 (plan 245): run in the coordinator session; round 3 deferred to rows</h2>
 <dl>
 <dt>When</dt><dd>2026-10-24</dd>
 <dt>How</dt><dd>The desktop app refuses to start a session from a Remote Control message, so the coordinator ran slice 22 itself. A subagent drafted plan 245. Codex Sol xhigh and a Claude custody review each reviewed it, the subagent revised it, and a Codex confirm pass checked the revision.</dd>
@@ -491,7 +491,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d44">
-<h2><span>D-44</span>Operator decisions OD-6 to OD-10: all accepted as recommended</h2>
+<h2><span>D-44</span> Operator decisions OD-6 to OD-10: all accepted as recommended</h2>
 <dl>
 <dt>When</dt><dd>2026-10-24, decided by the user as operator</dd>
 <dt>OD-6</dt><dd>(a) Acceptance is verified by a Rust evaluator inside the protected native boundary, a third twin with reciprocal vectors (plan 245 PRs 2 and 3). (b) was rejected because it promotes the webview's verdict.</dd>
@@ -504,7 +504,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d45">
-<h2><span>D-45</span>Ordinary desktop bounded creation: custody, scope and latest-tip integration</h2>
+<h2><span>D-45</span> Ordinary desktop bounded creation: custody, scope and latest-tip integration</h2>
 <dl>
 <dt>When</dt><dd>2026-10-24, plan 261 slice A; operator adopted D1–D6 and authorized implementation.</dd>
 <dt>Scope</dt><dd>Publish the two locally implemented slice-A commits from a fresh worktree based on current main, including merged PR #164. Preserve that PR's expanded grammar vectors, kind-aware authority checks, and DONE row 258. Do not touch the primary checkout's unrelated iOS/research work.</dd>
@@ -517,7 +517,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d46">
-<h2><span>D-46</span>Offline enrollment and guarded initial provisioning</h2>
+<h2><span>D-46</span> Offline enrollment and guarded initial provisioning</h2>
 <dl>
 <dt>Decision</dt><dd>Plan 262 preserves ordinary atomic Thread creation. Introduce an explicit initial_existing reference observation only for a first one-Space/one-Thread publication, with a verified empty catalog store under the mutation owner's lock. Pending mode retains absence semantics. Catalog/listing refuse the new mode until their actual guarded consumers exist.</dd>
 <dt>Trust and order</dt><dd>Use the existing Space pin/export, operator binding-payload, ordinary Catalog binding review/sign, re-export and verify-binding/report ceremony before the offline invitation. Confirm the recipient key independently on the founder side. The invitation carries Space evidence only; final provisioning carries both histories. Candidate review installs no trust or routes.</dd>
@@ -534,7 +534,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d47">
-<h2><span>D-47</span>Build catalog publication with the signer off the relay</h2>
+<h2><span>D-47</span> Build catalog publication with the signer off the relay</h2>
 <dl>
 <dt>When</dt><dd>2026-10-24, under the user's delegated backlog workflow; main ba7f23f49.</dd>
 <dt>Decision</dt><dd>Adopt plan 224 OD-2(b): the carrier prepares public evidence, an off-host custodian independently verifies it and signs, and the carrier rechecks before committing. Plan 263 covers the complete PR 4 transition, including carried entries, both reference modes and crash recovery.</dd>
@@ -556,7 +556,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </article>
 
 <article id="d48">
-<h2><span>D-48</span>Guard the final reference publication inside the holder</h2>
+<h2><span>D-48</span> Guard the final reference publication inside the holder</h2>
 <dl>
 <dt>When</dt><dd>2026-10-24, delegated backlog workflow; plan 264 from main 187cc3d8a while catalog PR #168 verifies.</dd>
 <dt>Dependency</dt><dd>Private independent holder work may start from current main while #168 verifies; catalog integration and dependent merge wait for its green merge. Holder/Durability are unchanged by the parent. Refresh from main before integration; the parent supplies catalogued publication, current-history review, signing status and the local command adapter.</dd>
@@ -575,16 +575,17 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </dl>
 </article>
 
-<section><h2><span>D-59</span>Stop native incoming integration at a proved owner disagreement</h2><dl><dt>Evidence</dt><dd>Fresh valid TS-authored Space bootstrap history proposes installation in both actual public owners. A correctly signed unknown-name frame with a missing ancestor returns trust_pending in TS but unsupported_cutoff in BEAM. Zeroing its signature returns invalid_verified_history in TS but still unsupported_cutoff in BEAM. Saved public frames contain no private keys. Both owners refuse hostile inputs; this is a refusal/fetch consistency defect, not an unauthorized acceptance claim.</dd><dt>Decision</dt><dd>Plan 269 owns a separate protected source correction from verified current main. Preserve raw authentication before fetch, keep unknown names inert, test the full phase matrix and existing bounds, then review/adopt before native integration. Do not silently pick one oracle or weaken TS authentication to match an earlier BEAM vocabulary failure.</dd><dt>Remaining</dt><dd>No production correction or native incoming integration is claimed. Plan 267 still needs semantic normalization, application policy, catalog graph evaluation and retained trust. Source and native adoption remain independently reviewable.</dd></dl></section>
-<section><h2><span>D-60</span>Authenticate accepted incoming evidence before fetch decisions</h2><dl><dt>Implementation</dt><dd>Reuse the existing canonical encoder, signature verifier and bounded wire-term decoder with a separate inert-name observation mode. Return only authenticated header metadata, never an admitted operation. A bounded iterative preflight limits observation nodes and string bytes without flattening a wide input. Authenticate all accepted frames before collecting sorted missing ancestors; ordinary closed wire decoding and cutoff checks still gate semantics. Stored-history handling is unchanged.</dd><dt>Evidence</dt><dd>The original focused regression failed on the signed unknown partial case before correction. Fresh TS cases and fresh BEAM-authored signed/forged unknown frames now agree, including pending ids and delivery reversal. Unknown names are not interned, and ordinary wire decoding still refuses them. Focused catalog trust, reciprocal and wire suites pass 60 tests and two properties. Spec review found normalization could hide duplicate canonical map keys before signature checking. Observation-only duplicate map/set and decimal spelling checks now refuse aliases before pending; eight focused regression/vocabulary tests pass and both reviewers confirm the correction. Client build, desktop checks, native ordinary148/0 and tracing159/0, TS catalog/canonical suites, final full Mix check and both boundary scans pass after the correction.</dd><dt>Remaining</dt><dd>Both protected reviews confirm the correction and all local checkpoint gates pass. Requested external adversarial review remains open under the existing provider quota windows. Plan 269 remains open for the broader malformed/header/kind/rejected-record/resource/recovery matrix before completion and native adoption. This is an accepted-frame integrity checkpoint, not completed catalog evaluation or installed trust.</dd></dl></section>
-<section><h2><span>D-61</span>Close raw headers before fetch and classify complete rejected evidence</h2><dl><dt>Decision</dt><dd>Fresh RED tests found TS ignored extra/wrong-version raw headers before returning pending, and BEAM reported unsupported for a genuine unknown-name frame mislabeled as bad signature. Both owners now reject malformed accepted header/version and empty accepted dependency text before fetch. After accepted authentication, BEAM validates rejected identity/replica/duplicates and refuses genuine signatures mislabeled as structural rejection before portability. Protected review then exposed that TS preparation and evaluation disagreed about rejected-evidence precedence. The final common order authenticates accepted evidence, validates rejected integrity/portability, then reports missing accepted ancestors. Incoming evaluation-page shape validation also matches TS; stored recovery keeps its own validation path. Empty rejected id text remains representable structural evidence; it is not promoted into accepted history.</dd><dt>Proof</dt><dd>The actual public APIs agree on the expanded fresh TS matrix and fresh BEAM input, explicit key outcomes, ordinary/reversed accepted and rejected delivery, genuine and forged records, same-id good/rejected retention and malformed record shapes. Both original disagreements failed before correction. The actual public preparation and evaluation APIs now run from a legitimate installed baseline for both fresh producers. The additional prepare/evaluate RED regression failed before correction; it now passes, as do all 19 courier tests when rerun after an earlier full-run timing failure. Both reviewers confirm the preparation/evaluation correction. Final full Mix check, client build/catalog suites, desktop checks and both boundary scans pass. The earlier courier timing failure also passes the final complete umbrella rerun.</dd><dt>Remaining</dt><dd>Plan 269 remains open for unknown kinds, full independent producer coverage, exact resources, stored/reopen parity, external adversarial review and native adoption. No native evaluator completion, installed route or field-session claim is introduced.</dd></dl></section>
-<section><h2><span>D-62</span>Authenticate refusal boundaries without widening wire admission</h2><dl><dt>Decision</dt><dd>Keep ordinary wire depth64 and push64000 unchanged. Separate raw observation permits domain depth65, JSON depth199 (3*65+4 for map wrappers and a flat delegation leaf), and at most67108864 logical nodes and UTF-8 string bytes before canonical allocation. Both owners use bounded iterative guards; JS rejects cycles and counts shared input at every occurrence. The guards prove resource budgets only. Raw positive metadata is still followed by incoming shape, cutoff and ordinary admission checks.</dd><dt>Proof</dt><dd>Fresh RED depth65 evidence exposed BEAM's earlier invalid-versus-unsupported mismatch. Both public APIs now agree on unknown kinds, exact64000/64001 push frames, genuine/forged partial/complete inputs and depth64/65/66. Direct maxima/one-over tests in BEAM and TS verify nodes, Unicode bytes and JSON depth using compact shared test input. Focused resource/matrix tests pass. Both protected reviews confirm the bounds and a strict-lint nesting extraction without changing predicates. Final full Mix check passes (core865 tests/26 properties and all umbrella suites); client build/catalog suites, desktop checks and both boundary scans pass. The preceding preparation/evaluation hosted gate passed; it is not credited to this new code. Hosted browser proof then found that the shared-source allowlist copied Wire without its new raw-bounds dependency. Adding that one module passes local browser formatting, eight BEAM tests, nine Node tests and the actual warnings-as-errors/Vite build. The next exact-tip gate includes this integration repair. Coordination of #170/#171/#173 moved to the side chat; this chat retains #174 then #172. Its codec review prompted an explicit maximum-map success test here, which caught list-only JSON-budget clipping. The bound now covers three wrappers per map plus a flat delegation leaf, and a catalog mirror off-by-one for a flat leaf at generic depth zero is corrected to match unchanged Wire. Fresh REDs and cross-runtime GREEN cases are recorded; both independent reviews confirm the follow-up fixes. A fresh TS producer now establishes accepted revision1 with two routes and a genuine frozen fork in both owners, then tests serialized reopen, boundary failures and corrupt stored signatures/depth/watermarks. Review strengthened exact successful reopen and full retained frame/rejection preservation; the seeded bad-signature record makes that check nonvacuous. Focused recovery passes. The full Mix refresh passed all tests; strict lint found one nested test helper, now extracted. The test orchestration now uses shallow assertion helpers; final focused recovery tests and strict lint pass. A combined final gate remains; client build/catalog suites, desktop tests and both scans pass. Fresh independent BEAM-produced revision1/fork/depth recovery inputs now pass through the actual TS client and shared BEAM assertions; both reviewers confirm this closes the producer-direction gap.</dd><dt>Remaining</dt><dd>Plan269 retains full independent producer boundaries, whole history/page aggregate proof, broader phase coverage beyond the demonstrated stored/reopen cases, requested external review and later native adoption. Disk exhaustion was resolved by deleting this task's ignored Rust incremental cache after confirming no Rust build was live; no source or recovery material was removed.</dd></dl></section>
-<section><h2>D-63 — External review: whole-page scope preflight</h2><dl><dt>Decision</dt><dd>Apply plan269 shape/family preflight across the entire incoming page before merge or authentication, preserving scope-first behavior for both public APIs and both owners. Argon High could not run due quota exhaustion; authorized Sonnet5.5High reviewed the immutable64abda checkpoint without tools.</dd><dt>Evidence</dt><dd>Sonnet identified a mixed scope/forgery discrepancy; a real TS RED confirms invalid-history instead of wrong-scope. The follow-up hoists both owners' shape/family checks before merge/authentication. Explicit expected scope refusals cover both orders. Its suggested missing-saved-ancestor bug is rejected by the actual BEAM merge-before-missing path, with a new suffix-only depth64 delivery control added to both producer directions. Both independent reviewers confirm the correction; five focused tests and strict lint pass. Refreshed full gates remain. The complete check at64abda passed; it is not credited to this follow-up.</dd><dt>Remaining</dt><dd>Whole-history/page aggregate proof, other external test-gap notes, broader independent producer boundaries, external fix confirmation, final combined and hosted gates, foundation integration and native adoption.</dd></dl></section>
-<section><h2>D-64 — Shared history observation budgets</h2><dl><dt>Decision</dt><dd>Share67108864 logical nodes and UTF-8 string bytes across accepted/rejected raw histories and replicas per incoming batch and merged retained union. Count public history wrapper strings; allow JSON203=199frame+4rejected/history wrappers. Keep domain, authenticity and admission checks independent. This is a pure-core replay budget, not a preparse allocation claim.</dd><dt>Evidence</dt><dd>Direct shared string/node maxima, one-over and deepest rejected wrappers are tested. A fresh TS producer signs two large frames: both actual owners and public APIs reach unsupported portability at the exact64MiB history string maximum, reject one byte over as invalid and reject a forged signature at the maximum. Spec review found no contract defect. Standards feedback removed repeated unchanged-input BEAM budget walks and independently confirmed all guards remain. Twelve focused BEAM/reciprocal tests, six direct TS budget tests, client build and strict lint pass. External Sonnet confirmed the scope correction; its residual incremental test concern was valid for the old TS zero-dependency case. New independently signed suffix controls in both producer directions prove nonempty saved dependency, exact isolated pending ids, absence from base and exact retention after successful merge.</dd><dt>Remaining</dt><dd>Independent BEAM aggregate producer, cutoff-proof/page metadata aggregation, broader phase matrix, transport/preclone bounds where owned, final full/external/hosted gates and native adoption. Earlier fullcheck4be94f passed but is not credited to this new source.</dd></dl></section>
-<section><h2>D-65 — Whole-envelope budgets and independent signed producers</h2><dl><dt>Decision</dt><dd>Apply64Mi logical-node/UTF8-string budgets to incoming pages, saved snapshots and proposed snapshots together, including proof histories, artifacts and metadata. Public JSON depth205=frame199+6 proof/rejected wrappers. Count BEAM typed metadata lazily using public camel-case names and Base64 for the reviewed32-byte root; raw binary wire names stay untouched. Incoming scope precedes budgets; saved overflow requires recovery; proposed overflow cannot be issued.</dd><dt>Evidence</dt><dd>Independent BEAM and TS producers sign exact history and page string maxima, one over and forged variants. Both actual public APIs and owners distinguish page-wrapper overhead, reject main/proof splitting and require recovery for oversized stored proofs before incoming repair. Two producer tests pass. Fifteen focused tests, eight direct TS bounds tests, client build and strict lint pass. Three delegation-name tests pass again after independently checking the inner signatures. Both protected reviews confirm source and producer tests. Headline reasons/pending IDs, malformed aliases, signed-dependency duplicate/changed-set cases and post-consumer atom non-interning are now pinned. No preparse/preclone allocation claim.</dd><dt>Remaining</dt><dd>Live incoming cutoff-proof refusal-context audit: static source maps unreadable proof histories to recovery_incomplete in BEAM but forwards observer reasons in TS. Reproduce before deciding a correction. Final full/external/integration/hosted gates and native evaluator adoption remain. The e3deec full check passed but is not credited to this new code.</dd></dl></section>
-<section><h2><span>D-56</span>Canonical dependency aliases cannot change continuation authority</h2><dl><dt>Decision</dt><dd>Implement plan 268 as a separate protected-core correction from current main. Both expected continuation-claim builders now sort and deduplicate the supplied header dependencies, matching the set bound by the op signature. Do not normalize signed witness claims or change canonical bytes, wire grammar, cutoff format, refusal vocabulary or any consent, scope, lease, quorum, epoch and predecessor check. The unfinished native evaluator is not imported into this PR; its later adoption follows review of this correction.</dd><dt>Proof</dt><dd>Fresh ordinary Treehouse.Space and Treehouse.Thread histories carry two independent dependencies and a new nominee. Before the correction, both runtimes reject duplicate headers despite identical signed identity and cutoff; the independent BEAM and TS tests reproduce RED. After the two-line correction, reordered/duplicate header variants and reversed delivery preserve holder, acquisition, reasons and exact cutoff bytes. A new unique dependency without re-signing still fails authenticity; re-signing without fresh witness consent refuses; an otherwise ordered but duplicate signed-claim dependency remains malformed. Actual BEAM and TS produce and consume each other's fresh signed histories, without saved-verdict fallback. Both independent protected-core reviews have no actionable finding at 00765f15f. Full mix check, all 17 client CI suites, shell typecheck/full tests and both boundary scans pass; the core includes 862 tests and 26 properties with zero failures. Requested fallback Claude Sonnet5.5 High adversarial review after quota reset found no P1/P2 defect in immutable implementation 00765f15f; Argon4 High remains quota-unavailable. Nonblocking wire-path coverage feedback is addressed with explicit BEAM encode/decode alias equality and dependency preservation assertions; TS already decodes every aliased frame. The three focused BEAM tests pass. Other claim builders and generic dependency consumers were not audited by this scoped correction. Prior exact-tip hosted run 40184918952 passed; the test-only refresh passes full Mix check and both boundary scans, with its new exact-tip hosted gate pending. Native adoption remains open; no deployment, native trust or field-session claim follows.</dd><dt>Merge and documentation correction</dt><dd>PR #173 merged as e4c04759760079270a81d146b3ccf07218633ffb after exact-tip run 40196864012 and browser 40196863987 passed at f79421cc7125c5093ff339a1e8d741a886b1bc3b. The tested tip is reachable and both trees equal 553108da9b87f6ab9275ae6dc5ea7e9d12ea5391. The coordinator batched its last thread query with merge and mistakenly merged before two new Minor documentation comments were resolved; no code finding was involved. Accept both: keep plan status limited to scope/open items and add the missing D-56 spaces, in the native foundation refresh. Review evidence stays in PR/index. Main chat retains #174/#172 ownership; the coordinating side handles #173/#170/#171 without parallel branch edits.</dd></dl></section>
-<section><h2><span>D-49</span>Native catalog authenticity before installation</h2><dl><dt>Decision</dt><dd>Start plan 245 build PR 2 as plan 265 from latest main while listing #169 verifies. This pure Rust codec has no dependency on a listed receipt, and no command or route installation is added. Keep operation authenticity separate from authority and retained trust.</dd><dt>Bounds</dt><dd>Use existing 128 KiB per-artifact and 64,000-byte frame caps, with depth 64 and 32,768 term nodes. Decimal strings preserve full uint64; numeric JSON retains JS safe integers. Existing BEAM/TS codecs are immutable parity oracles. No changes to Wire, canonical bytes, trust reasons, custody or CSP are authorized by this slice.</dd><dt>Review and evidence</dt><dd>Both producer directions and exact malformed/limit cases are required. Follow the requested Argon/Sonnet review and an independent native review. Provider quota failures are evidence of unavailability, never a clean verdict. No native installation, physical custody or public relay claim follows.</dd><dt>Independent review corrections</dt><dd>Spec review found two P2 gaps: tag-60003 shape/name/lease checks and JSON node accounting before allocation. Added delegation validation to public encoding and canonical reading, plus a shared 32,768-node JSON seed. Wrapper-aware JSON depth is bounded at 130 so valid depth-64 carrier terms are not clipped by the generic library default; canonical terms retain depth 64. Exact-limit regressions pass. Standards review found no actionable violation. Fresh Rust↔TS/BEAM executable peers pass in both directions, including freshly signed native frames/catalogs and eleven term cases. Added correctly signed malformed catalogs, exact byte/node/depth boundaries and weak-key refusals. All local gates passed: ordinary native 160, dev-trace native 171, shell tests/typecheck, full mix check and both boundary scans. The wrong-key test uses another valid curve key so its refusal exercises signature verification, not malformed-key decoding. Independent focused confirmation resolves both P2s. Requested external review of this new slice remains open under the already verified provider quotas; no verdict is credited. The dependent cutoff work proved a native-only parity mismatch for empty delegation text fields. Remove the parser's nonempty predicate, preserving its byte/type bounds, and add an eleventh Rust-authored term verified by both real codecs. All original ten cases remain. This is representable data, not an authority grant. The prior hosted gate was green; the correction needs its own refreshed exact-tip gate before merge.</dd><dt>Requested review and boundary corrections</dt><dd>Actual first-party Claude Sonnet 5.5 High reviewed the immutable codec after the recorded Argon quota refusal, using no tools. No P1; depth and wrapper P2s accepted: empty composites consume a domain level, JSON allows the three wrappers per nested map (bounded at 196), flat validated delegation metadata does not consume domain depth, and the signed operation array does not consume its body/cap budget. The canonical reader checks delegation primitives/name lists directly so metadata depth treatment cannot admit recursive malformed fields. Fresh Rust boundaries pass through actual BEAM and TS readers, including exact canonical bytes, depth 64/65 and well-formed forged signatures. The proposed vocabulary-admission P2 is rejected: TS verifyCarrierOp and canonical decoding deliberately separate signature authenticity from closed vocabulary admission. A signed off-list name authenticates but is not admitted in both actual peers; native authenticity installs no authority or route.</dd><dt>Nonblocking review dispositions</dt><dd>Well-formed signature tampering and real-peer negative boundary consumption are added; missing-HOME fallback no longer panics. Raw header/payload interpretation and stricter unreadable representations belong to the already scoped plan 267 product-reader/admission stage, not a change to core wire acceptance. AuthenticFrame retains signed payload/body/cap; that stage owns additional decoded headers. Retain strict Ed25519 verification and the existing weak-key regression without claiming exhaustive curve-edge parity. The optional serde_json feature changes no unrelated parser: only this bounded local seed disables the generic recursion limit. Test prerequisites must fail loudly; explicit vector regeneration remains opt-in. These P3 choices add no new authority, parser bypass or secret-bearing output.</dd><dt>Focused requested confirmation</dt><dd>Sonnet 5.5 High confirms the two depth/wrapper P2s resolved and finds no concrete P1/P2 in the fixes. It accepts the admission separation condition: public AuthenticFrame documentation and the index explicitly require plan 267 to enforce vocabulary/admission before authority; no wire-admission verdict is claimed here. The BEAM boundary crypto re-derivation is labeled a test-local command oracle, while Wire.decode_op supplies actual admission. UTF-name ordering outside the closed vocabulary is not a new interoperability guarantee. Reciprocal results check output counts and exact bytes, not saved verdicts. Source review did not execute tests. Full combined-source verification and final hosted gates remain required.</dd></dl></section>
-<section><h2>D-66 — Review fixes: lossless scalars before authentication</h2><dl><dt>Decision</dt><dd>Reject ill-formed UTF16/UTF8 before lossy encoding; bound canonical uint64 text before BigInt in both raw preflight and shared encoding, including delegation expiry. Validate flat primitive types before canonical coercion. Require canonical nested Base64 during observation while keeping ordinary Wire admission unchanged. Restrict typed-key translation to explicit metadata names; frames and rejected frame subtrees remain JSON-only.</dd><dt>Evidence</dt><dd>Four actual TS safety tests failed before correction: signed surrogate aliases became pending and an intercepted huge-decimal conversion ran twice. Five safety tests now pass, including direct encoder and expiry alternate paths, valid surrogate pairs and absent/null unleased controls. Fourteen focused BEAM/reciprocal tests and strict lint pass. Actual body/delegation pad-bit alias cases refuse before fetch; ordinary Wire decoding still accepts its legacy spelling. Both protected reviewers confirm the fixes. The earlier depth comment is fixed by the published199-frame bound. Main merged in50aa862cf and GitHub reports174mergeable; all source/planning intents retained.</dd><dt>External review and remaining</dt><dd>Direct installed ClaudeCLI completed immutable d4a065 review using firstParty claude-sonnet-5-5 High, zero tools; AGYquota failure itself is not a verdict. Its raw/typed boundary finding is fixed. Capacity/freeze obligations and discriminating valid saved/proposed limit tests remain open. A reject is non-advancing and never freshness evidence; native adoption must close route eligibility on the failed observation, even when evidence cannot fit. Incoming proof-context audit now has live mismatches (valid agrees; unreadable proofs differ). CodeRabbit is awaiting an included review, not a paid on-demand purchase. Final full/hosted/source closure and native evaluator remain.</dd></dl></section>
+<section><h2><span>D-59</span> Stop native incoming integration at a proved owner disagreement</h2><dl><dt>Evidence</dt><dd>Fresh valid TS-authored Space bootstrap history proposes installation in both actual public owners. A correctly signed unknown-name frame with a missing ancestor returns trust_pending in TS but unsupported_cutoff in BEAM. Zeroing its signature returns invalid_verified_history in TS but still unsupported_cutoff in BEAM. Saved public frames contain no private keys. Both owners refuse hostile inputs; this is a refusal/fetch consistency defect, not an unauthorized acceptance claim.</dd><dt>Decision</dt><dd>Plan 269 owns a separate protected source correction from verified current main. Preserve raw authentication before fetch, keep unknown names inert, test the full phase matrix and existing bounds, then review/adopt before native integration. Do not silently pick one oracle or weaken TS authentication to match an earlier BEAM vocabulary failure.</dd><dt>Remaining</dt><dd>No production correction or native incoming integration is claimed. Plan 267 still needs semantic normalization, application policy, catalog graph evaluation and retained trust. Source and native adoption remain independently reviewable.</dd></dl></section>
+<section><h2><span>D-60</span> Authenticate accepted incoming evidence before fetch decisions</h2><dl><dt>Implementation</dt><dd>Reuse the existing canonical encoder, signature verifier and bounded wire-term decoder with a separate inert-name observation mode. Return only authenticated header metadata, never an admitted operation. A bounded iterative preflight limits observation nodes and string bytes without flattening a wide input. Authenticate all accepted frames before collecting sorted missing ancestors; ordinary closed wire decoding and cutoff checks still gate semantics. Stored-history handling is unchanged.</dd><dt>Evidence</dt><dd>The original focused regression failed on the signed unknown partial case before correction. Fresh TS cases and fresh BEAM-authored signed/forged unknown frames now agree, including pending ids and delivery reversal. Unknown names are not interned, and ordinary wire decoding still refuses them. Focused catalog trust, reciprocal and wire suites pass 60 tests and two properties. Spec review found normalization could hide duplicate canonical map keys before signature checking. Observation-only duplicate map/set and decimal spelling checks now refuse aliases before pending; eight focused regression/vocabulary tests pass and both reviewers confirm the correction. Client build, desktop checks, native ordinary 148/0 and tracing 159/0, TS catalog/canonical suites, final full Mix check and both boundary scans pass after the correction.</dd><dt>Remaining</dt><dd>Both protected reviews confirm the correction and all local checkpoint gates pass. Requested external adversarial review remains open under the existing provider quota windows. Plan 269 remains open for the broader malformed/header/kind/rejected-record/resource/recovery matrix before completion and native adoption. This is an accepted-frame integrity checkpoint, not completed catalog evaluation or installed trust.</dd></dl></section>
+<section><h2><span>D-61</span> Close raw headers before fetch and classify complete rejected evidence</h2><dl><dt>Decision</dt><dd>Fresh RED tests found TS ignored extra/wrong-version raw headers before returning pending, and BEAM reported unsupported for a genuine unknown-name frame mislabeled as bad signature. Both owners now reject malformed accepted header/version and empty accepted dependency text before fetch. After accepted authentication, BEAM validates rejected identity/replica/duplicates and refuses genuine signatures mislabeled as structural rejection before portability. Protected review then exposed that TS preparation and evaluation disagreed about rejected-evidence precedence. The final common order authenticates accepted evidence, validates rejected integrity/portability, then reports missing accepted ancestors. Incoming evaluation-page shape validation also matches TS; stored recovery keeps its own validation path. Empty rejected id text remains representable structural evidence; it is not promoted into accepted history.</dd><dt>Proof</dt><dd>The actual public APIs agree on the expanded fresh TS matrix and fresh BEAM input, explicit key outcomes, ordinary/reversed accepted and rejected delivery, genuine and forged records, same-id good/rejected retention and malformed record shapes. Both original disagreements failed before correction. The actual public preparation and evaluation APIs now run from a legitimate installed baseline for both fresh producers. The additional prepare/evaluate RED regression failed before correction; it now passes, as do all 19 courier tests when rerun after an earlier full-run timing failure. Both reviewers confirm the preparation/evaluation correction. Final full Mix check, client build/catalog suites, desktop checks and both boundary scans pass. The earlier courier timing failure also passes the final complete umbrella rerun.</dd><dt>Remaining</dt><dd>Plan 269 remains open for unknown kinds, full independent producer coverage, exact resources, stored/reopen parity, external adversarial review and native adoption. No native evaluator completion, installed route or field-session claim is introduced.</dd></dl></section>
+<section><h2><span>D-62</span> Authenticate refusal boundaries without widening wire admission</h2><dl><dt>Decision</dt><dd>Keep ordinary wire depth 64 and push 64,000 unchanged. Separate raw observation permits domain depth 65, JSON depth 199 (3*65+4 for map wrappers and a flat delegation leaf), and at most 67,108,864 logical nodes and UTF-8 string bytes before canonical allocation. Both owners use bounded iterative guards; JS rejects cycles and counts shared input at every occurrence. The guards prove resource budgets only. Raw positive metadata is still followed by incoming shape, cutoff and ordinary admission checks.</dd><dt>Proof</dt><dd>Fresh RED depth 65 evidence exposed BEAM's earlier invalid-versus-unsupported mismatch. Both public APIs now agree on unknown kinds, exact 64,000 / 64,001 push frames, genuine/forged partial/complete inputs and depth 64/65/66. Direct maxima/one-over tests in BEAM and TS verify nodes, Unicode bytes and JSON depth using compact shared test input. Focused resource/matrix tests pass. Both protected reviews confirm the bounds and a strict-lint nesting extraction without changing predicates. Final full Mix check passes (core 865 tests/26 properties and all umbrella suites); client build/catalog suites, desktop checks and both boundary scans pass. The preceding preparation/evaluation hosted gate passed; it is not credited to this new code. Hosted browser proof then found that the shared-source allowlist copied Wire without its new raw-bounds dependency. Adding that one module passes local browser formatting, eight BEAM tests, nine Node tests and the actual warnings-as-errors/Vite build. The next exact-tip gate includes this integration repair. Coordination of #170/#171/#173 moved to the side chat; this chat retains #174 then #172. Its codec review prompted an explicit maximum-map success test here, which caught list-only JSON-budget clipping. The bound now covers three wrappers per map plus a flat delegation leaf, and a catalog mirror off-by-one for a flat leaf at generic depth zero is corrected to match unchanged Wire. Fresh REDs and cross-runtime GREEN cases are recorded; both independent reviews confirm the follow-up fixes. A fresh TS producer now establishes accepted revision 1 with two routes and a genuine frozen fork in both owners, then tests serialized reopen, boundary failures and corrupt stored signatures/depth/watermarks. Review strengthened exact successful reopen and full retained frame/rejection preservation; the seeded bad-signature record makes that check nonvacuous. Focused recovery passes. The full Mix refresh passed all tests; strict lint found one nested test helper, now extracted. The test orchestration now uses shallow assertion helpers; final focused recovery tests and strict lint pass. A combined final gate remains; client build/catalog suites, desktop tests and both scans pass. Fresh independent BEAM-produced revision 1/fork/depth recovery inputs now pass through the actual TS client and shared BEAM assertions; both reviewers confirm this closes the producer-direction gap.</dd><dt>Remaining</dt><dd>Plan 269 retains full independent producer boundaries, whole history/page aggregate proof, broader phase coverage beyond the demonstrated stored/reopen cases, requested external review and later native adoption. Disk exhaustion was resolved by deleting this task's ignored Rust incremental cache after confirming no Rust build was live; no source or recovery material was removed.</dd></dl></section>
+<section><h2><span>D-63</span> External review: whole-page scope preflight</h2><dl><dt>Decision</dt><dd>Apply plan 269 shape/family preflight across the entire incoming page before merge or authentication, preserving scope-first behavior for both public APIs and both owners. Argon High could not run due quota exhaustion; authorized Sonnet 5.5 High reviewed the immutable 64abda checkpoint without tools.</dd><dt>Evidence</dt><dd>Sonnet identified a mixed scope/forgery discrepancy; a real TS RED confirms invalid-history instead of wrong-scope. The follow-up hoists both owners' shape/family checks before merge/authentication. Explicit expected scope refusals cover both orders. Its suggested missing-saved-ancestor bug is rejected by the actual BEAM merge-before-missing path, with a new suffix-only depth 64 delivery control added to both producer directions. Both independent reviewers confirm the correction; five focused tests and strict lint pass. Refreshed full gates remain. The complete check at 64abda passed; it is not credited to this follow-up.</dd><dt>Remaining</dt><dd>Whole-history/page aggregate proof, other external test-gap notes, broader independent producer boundaries, external fix confirmation, final combined and hosted gates, foundation integration and native adoption.</dd></dl></section>
+<section><h2><span>D-64</span> Shared history observation budgets</h2><dl><dt>Decision</dt><dd>Share 67,108,864 logical nodes and UTF-8 string bytes across accepted/rejected raw histories and replicas per incoming batch and merged retained union. Count public history wrapper strings; allow JSON depth 203 = frame 199 + 4 history/rejected wrappers. Keep domain, authenticity and admission checks independent. This is a pure-core replay budget, not a preparse allocation claim.</dd><dt>Evidence</dt><dd>Direct shared string/node maxima, one-over and deepest rejected wrappers are tested. A fresh TS producer signs two large frames: both actual owners and public APIs reach unsupported portability at the exact 64 MiB history string maximum, reject one byte over as invalid and reject a forged signature at the maximum. Spec review found no contract defect. Standards feedback removed repeated unchanged-input BEAM budget walks and independently confirmed all guards remain. Twelve focused BEAM/reciprocal tests, six direct TS budget tests, client build and strict lint pass. External Sonnet confirmed the scope correction; its residual incremental test concern was valid for the old TS zero-dependency case. New independently signed suffix controls in both producer directions prove nonempty saved dependency, exact isolated pending ids, absence from base and exact retention after successful merge.</dd><dt>Remaining</dt><dd>Independent BEAM aggregate producer, cutoff-proof/page metadata aggregation, broader phase matrix, transport/preclone bounds where owned, final full/external/hosted gates and native adoption. Earlier full check at 4be94f passed but is not credited to this new source.</dd></dl></section>
+<section><h2><span>D-65</span> Whole-envelope budgets and independent signed producers</h2><dl><dt>Decision</dt><dd>Apply 64 Mi logical-node / 64 MiB UTF-8 string budgets to incoming pages, saved snapshots and proposed snapshots together, including proof histories, artifacts and metadata. Public JSON depth 205 = frame 199 + 6 proof/rejected wrappers. Count BEAM typed metadata lazily using public camel-case names and Base64 for the reviewed 32-byte root; raw binary wire names stay untouched. Incoming scope precedes budgets; saved overflow requires recovery; proposed overflow cannot be issued.</dd><dt>Evidence</dt><dd>Independent BEAM and TS producers sign exact history and page string maxima, one over and forged variants. Both actual public APIs and owners distinguish page-wrapper overhead, reject main/proof splitting and require recovery for oversized stored proofs before incoming repair. Two producer tests pass. Fifteen focused tests, eight direct TS bounds tests, client build and strict lint pass. Three delegation-name tests pass again after independently checking the inner signatures. Both protected reviews confirm source and producer tests. Headline reasons/pending IDs, malformed aliases, signed-dependency duplicate/changed-set cases and post-consumer atom non-interning are now pinned. No preparse/preclone allocation claim.</dd><dt>Remaining</dt><dd>Live incoming cutoff-proof refusal-context audit: static source maps unreadable proof histories to recovery_incomplete in BEAM but forwards observer reasons in TS. Reproduce before deciding a correction. Final full/external/integration/hosted gates and native evaluator adoption remain. The e3deec full check passed but is not credited to this new code.</dd></dl></section>
+<section><h2><span>D-66</span> Review fixes: lossless scalars before authentication</h2><dl><dt>Decision</dt><dd>Reject ill-formed UTF-16 / UTF-8 before lossy encoding; bound canonical uint64 text before BigInt in both raw preflight and shared encoding, including delegation expiry. Validate flat primitive types before canonical coercion. Require canonical nested Base64 during observation while keeping ordinary Wire admission unchanged. Restrict typed-key translation to explicit metadata names; frames and rejected frame subtrees remain JSON-only.</dd><dt>Evidence</dt><dd>Four actual TS safety tests failed before correction: signed surrogate aliases became pending and an intercepted huge-decimal conversion ran twice. Five safety tests now pass, including direct encoder and expiry alternate paths, valid surrogate pairs and absent/null unleased controls. Fourteen focused BEAM/reciprocal tests and strict lint pass. Actual body/delegation pad-bit alias cases refuse before fetch; ordinary Wire decoding still accepts its legacy spelling. Both protected reviewers confirm the fixes. The earlier depth comment is fixed by the published 199-container frame bound. Main merged in 50aa862cf and GitHub reports 174 mergeable; all source/planning intents retained.</dd><dt>External review and remaining</dt><dd>Direct installed Claude CLI completed immutable d4a065 review using the first-party Claude Sonnet 5.5 High model, zero tools; AGY quota failure itself is not a verdict. Its raw/typed boundary finding is fixed. Capacity/freeze obligations and discriminating valid saved/proposed limit tests remain open. A reject is non-advancing and never freshness evidence; native adoption must close route eligibility on the failed observation, even when evidence cannot fit. Incoming proof-context audit now has live mismatches (valid agrees; unreadable proofs differ). CodeRabbit is awaiting an included review, not a paid on-demand purchase. Final full/hosted/source closure and native evaluator remain.</dd></dl></section>
+<section><h2><span>D-56</span> Canonical dependency aliases cannot change continuation authority</h2><dl><dt>Decision</dt><dd>Implement plan 268 as a separate protected-core correction from current main. Both expected continuation-claim builders now sort and deduplicate the supplied header dependencies, matching the set bound by the op signature. Do not normalize signed witness claims or change canonical bytes, wire grammar, cutoff format, refusal vocabulary or any consent, scope, lease, quorum, epoch and predecessor check. The unfinished native evaluator is not imported into this PR; its later adoption follows review of this correction.</dd><dt>Proof</dt><dd>Fresh ordinary Treehouse.Space and Treehouse.Thread histories carry two independent dependencies and a new nominee. Before the correction, both runtimes reject duplicate headers despite identical signed identity and cutoff; the independent BEAM and TS tests reproduce RED. After the two-line correction, reordered/duplicate header variants and reversed delivery preserve holder, acquisition, reasons and exact cutoff bytes. A new unique dependency without re-signing still fails authenticity; re-signing without fresh witness consent refuses; an otherwise ordered but duplicate signed-claim dependency remains malformed. Actual BEAM and TS produce and consume each other's fresh signed histories, without saved-verdict fallback. Both independent protected-core reviews have no actionable finding at 00765f15f. Full mix check, all 17 client CI suites, shell typecheck/full tests and both boundary scans pass; the core includes 862 tests and 26 properties with zero failures. Requested fallback Claude Sonnet 5.5 High adversarial review after quota reset found no P1/P2 defect in immutable implementation 00765f15f; Argon 4 High remains quota-unavailable. Nonblocking wire-path coverage feedback is addressed with explicit BEAM encode/decode alias equality and dependency preservation assertions; TS already decodes every aliased frame. The three focused BEAM tests pass. Other claim builders and generic dependency consumers were not audited by this scoped correction. Prior exact-tip hosted run 40184918952 passed; the test-only refresh passes full Mix check and both boundary scans, with its new exact-tip hosted gate pending. Native adoption remains open; no deployment, native trust or field-session claim follows.</dd><dt>Merge and documentation correction</dt><dd>PR #173 merged as e4c04759760079270a81d146b3ccf07218633ffb after exact-tip run 40196864012 and browser 40196863987 passed at f79421cc7125c5093ff339a1e8d741a886b1bc3b. The tested tip is reachable and both trees equal 553108da9b87f6ab9275ae6dc5ea7e9d12ea5391. The coordinator batched its last thread query with merge and mistakenly merged before two new Minor documentation comments were resolved; no code finding was involved. Accept both: keep plan status limited to scope/open items and add the missing D-56 spaces, in the native foundation refresh. Review evidence stays in PR/index. Main chat retains #174/#172 ownership; the coordinating side handles #173/#170/#171 without parallel branch edits.</dd></dl></section>
+<section><h2><span>D-49</span> Native catalog authenticity before installation</h2><dl><dt>Decision</dt><dd>Start plan 245 build PR 2 as plan 265 from latest main while listing #169 verifies. This pure Rust codec has no dependency on a listed receipt, and no command or route installation is added. Keep operation authenticity separate from authority and retained trust.</dd><dt>Bounds</dt><dd>Use existing 128 KiB per-artifact and 64,000-byte frame caps, with depth 64 and 32,768 term nodes. Decimal strings preserve full uint64; numeric JSON retains JS safe integers. Existing BEAM/TS codecs are immutable parity oracles. No changes to Wire, canonical bytes, trust reasons, custody or CSP are authorized by this slice.</dd><dt>Review and evidence</dt><dd>Both producer directions and exact malformed/limit cases are required. Follow the requested Argon/Sonnet review and an independent native review. Provider quota failures are evidence of unavailability, never a clean verdict. No native installation, physical custody or public relay claim follows.</dd><dt>Independent review corrections</dt><dd>Spec review found two P2 gaps: tag-60003 shape/name/lease checks and JSON node accounting before allocation. Added delegation validation to public encoding and canonical reading, plus a shared 32,768-node JSON seed. Wrapper-aware JSON depth is bounded at 130 so valid depth-64 carrier terms are not clipped by the generic library default; canonical terms retain depth 64. Exact-limit regressions pass. Standards review found no actionable violation. Fresh Rust↔TS/BEAM executable peers pass in both directions, including freshly signed native frames/catalogs and eleven term cases. Added correctly signed malformed catalogs, exact byte/node/depth boundaries and weak-key refusals. All local gates passed: ordinary native 160, dev-trace native 171, shell tests/typecheck, full mix check and both boundary scans. The wrong-key test uses another valid curve key so its refusal exercises signature verification, not malformed-key decoding. Independent focused confirmation resolves both P2s. Requested external review of this new slice remains open under the already verified provider quotas; no verdict is credited. The dependent cutoff work proved a native-only parity mismatch for empty delegation text fields. Remove the parser's nonempty predicate, preserving its byte/type bounds, and add an eleventh Rust-authored term verified by both real codecs. All original ten cases remain. This is representable data, not an authority grant. The prior hosted gate was green; the correction needs its own refreshed exact-tip gate before merge.</dd><dt>Requested review and boundary corrections</dt><dd>Actual first-party Claude Sonnet 5.5 High reviewed the immutable codec after the recorded Argon quota refusal, using no tools. No P1; depth and wrapper P2s accepted: empty composites consume a domain level, JSON allows the three wrappers per nested map (bounded at 196), flat validated delegation metadata does not consume domain depth, and the signed operation array does not consume its body/cap budget. The canonical reader checks delegation primitives/name lists directly so metadata depth treatment cannot admit recursive malformed fields. Fresh Rust boundaries pass through actual BEAM and TS readers, including exact canonical bytes, depth 64/65 and well-formed forged signatures. The proposed vocabulary-admission P2 is rejected: TS verifyCarrierOp and canonical decoding deliberately separate signature authenticity from closed vocabulary admission. A signed off-list name authenticates but is not admitted in both actual peers; native authenticity installs no authority or route.</dd><dt>Nonblocking review dispositions</dt><dd>Well-formed signature tampering and real-peer negative boundary consumption are added; missing-HOME fallback no longer panics. Raw header/payload interpretation and stricter unreadable representations belong to the already scoped plan 267 product-reader/admission stage, not a change to core wire acceptance. AuthenticFrame retains signed payload/body/cap; that stage owns additional decoded headers. Retain strict Ed25519 verification and the existing weak-key regression without claiming exhaustive curve-edge parity. The optional serde_json feature changes no unrelated parser: only this bounded local seed disables the generic recursion limit. Test prerequisites must fail loudly; explicit vector regeneration remains opt-in. These P3 choices add no new authority, parser bypass or secret-bearing output.</dd><dt>Focused requested confirmation</dt><dd>Sonnet 5.5 High confirms the two depth/wrapper P2s resolved and finds no concrete P1/P2 in the fixes. It accepts the admission separation condition: public AuthenticFrame documentation and the index explicitly require plan 267 to enforce vocabulary/admission before authority; no wire-admission verdict is claimed here. The BEAM boundary crypto re-derivation is labeled a test-local command oracle, while Wire.decode_op supplies actual admission. UTF-name ordering outside the closed vocabulary is not a new interoperability guarantee. Reciprocal results check output counts and exact bytes, not saved verdicts. Source review did not execute tests. Full combined-source verification and final hosted gates remain required.</dd></dl></section>
+
 </main>
 </body>
 </html>
