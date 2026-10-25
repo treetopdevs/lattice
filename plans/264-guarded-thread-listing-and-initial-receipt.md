@@ -2,15 +2,14 @@
 
 ## Status and dependency
 
-IN PROGRESS: independent holder APIs and focused persistence tests are implemented
-privately. Catalog integration, complete crash/refusal evidence and reviews remain.
+IN PROGRESS: independent holder APIs and focused persistence tests are implemented.
+Catalog integration is unblocked by the verified green parent merge. Complete listing
+crash/refusal evidence, implementation reviews and required final gates remain.
 
-Prepared 2026-10-24 from then-current main.
-This is plan 224 PR 5. The independent holder snapshot/CAS and persistence tests may
-start privately from current main while catalog publication PR #168 (plan 263) verifies.
-Catalog integration and dependent merge wait for that parent to merge on its gates.
-After that merge, refresh this worktree from main and inspect actual parent APIs.
-Do not copy parent code, start from an unverified merge, or claim listing is built.
+Prepared 2026-10-24 from then-current main. This is plan 224 PR 5, now rebased onto
+merged catalog publication PR #168 (plan 263). Its exact tested tree and merge ancestry
+were verified before rebase; implementation files were preserved byte-for-byte.
+
 D-48 records the delegated decisions. The unified roadmap is the execution ledger.
 
 Software acceptance uses the parent's disposable real-mode ceremony and guarded Linux
@@ -199,12 +198,12 @@ record fields. Keep BEAM/Python parity behavioral, without source/prose pins.
 
 ## Implementation order
 
-1. Prepare Node/Mix dependencies and inspect current main. Independently implement/test
-   holder snapshot/CAS, persistence fencing and proof APIs against that main; these files
-   are unchanged by #168. Prove no new network action, with no precomputed honor flags.
-2. Before catalog integration, verify #168 merge ancestry/tree/gates and refresh main.
-   Reuse its actual ActivationFixture/publication APIs and preserve both plans/decisions
-   through rebase. No dependent merge or completion claim precedes the parent's gates.
+1. Prepare Node/Mix dependencies and inspect current main. Holder snapshot/CAS,
+   persistence fencing and proof APIs were built independently while #168 verified.
+   Prove no new network action, with no precomputed honor flags.
+2. Parent #168 merge ancestry/tree/gates and rebase are verified. Reuse its actual
+   ActivationFixture/publication APIs; preserve both plans and decisions. Complete
+   current Linux evidence and focused confirmations of the owner-lifetime fixes.
 3. Implement ReleaseListing with before/inside/after current-history checks and strict
    artifact/catalog linkage. Add both normal pending and initial-existing integration.
 4. Wire list into CatalogCli, update both validators only with the guarded initial
