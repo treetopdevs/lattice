@@ -99,7 +99,10 @@ fn authentic_dag_order_frontier_and_causality_ignore_delivery_order() {
     );
     assert_eq!(dag.frontier(), &[id(&frames[3])]);
     assert_eq!(dag.ancestors(&id(&frames[3])).unwrap().len(), 3);
-    assert_eq!(dag.concurrent(&id(&frames[1]), &id(&frames[2])), Some(true));
+    assert!(!dag
+        .ancestors(&id(&frames[2]))
+        .unwrap()
+        .contains(id(&frames[1]).as_str()));
     assert!(!dag
         .ancestors(&id(&frames[1]))
         .unwrap()
