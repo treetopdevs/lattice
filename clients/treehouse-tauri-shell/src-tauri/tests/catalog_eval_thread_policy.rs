@@ -46,7 +46,7 @@ fn signed(
         "author":STANDARD.encode(key.verifying_key().to_bytes()),"deps":deps,"kind":kind,
         "body":body,"cap":cap,"sig":STANDARD.encode(key.sign(&payload).to_bytes())})
 }
-fn rust_history() -> Value {
+fn rust_histories() -> Vec<Value> {
     let key = SigningKey::from_bytes(&[89; 32]);
     let public = key.verifying_key().to_bytes();
     let replica = format!(
@@ -125,8 +125,29 @@ fn rust_history() -> Value {
     );
     let archive = command(&edit, "archive_thread", vec![]);
     let archived_post = command(&archive, "post", vec![text("refused after archive")]);
-    json!({"name":"rust-authored-policy-and-fork","replica":replica,
-        "frames":[genesis,creation,post,malformed,refused,edit,fork,archive,archived_post]})
+    let concurrent_post = command(&creation, "post", vec![text("concurrent second post")]);
+    let concurrent_title = command(
+        &genesis,
+        "create_thread",
+        vec![text("Concurrent Rust title")],
+    );
+    let deeper_title = command(
+        &archived_post,
+        "create_thread",
+        vec![text("Deeper Rust title")],
+    );
+    let base = json!({"name":"rust-authored-policy-and-fork","replica":replica,
+        "frames":[genesis,creation,post,malformed,refused,edit,fork,archive,archived_post,concurrent_post]});
+    let mut title_fork = base.clone();
+    title_fork["name"] = json!("rust-concurrent-title");
+    title_fork["frames"]
+        .as_array_mut()
+        .unwrap()
+        .push(concurrent_title);
+    let mut deeper = title_fork.clone();
+    deeper["name"] = json!("rust-depth-wins-title");
+    deeper["frames"].as_array_mut().unwrap().push(deeper_title);
+    vec![base, title_fork, deeper]
 }
 
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
@@ -138,23 +159,25 @@ fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
     ))
     .expect("actual runtime result")
 }
-fn native(history: &Value) -> Value {
+fn checked(history: &Value) -> AuthenticDag {
     let frames: Vec<_> = history["frames"]
         .as_array()
         .unwrap()
         .iter()
         .map(|v| serde_json::to_vec(v).unwrap())
         .collect();
-    let dag = AuthenticDag::authenticate(
+    AuthenticDag::authenticate(
         history["replica"].as_str().unwrap(),
         &frames.iter().map(Vec::as_slice).collect::<Vec<_>>(),
     )
-    .unwrap();
-    json!(thread_policy::analyze(&dag).unwrap())
+    .unwrap()
+}
+fn native(history: &Value) -> Value {
+    json!(thread_policy::analyze(&checked(history)).unwrap())
 }
 
 #[test]
-fn causal_thread_application_policy_matches_both_actual_owners() {
+fn causal_thread_policy_and_projection_match_both_actual_owners() {
     let mut input = peer("ts", "thread-policy-cases", None);
     let produced = peer("beam", "produce", None);
     input["histories"].as_array_mut().unwrap().extend(
@@ -173,16 +196,56 @@ fn causal_thread_application_policy_matches_both_actual_owners() {
     input["histories"]
         .as_array_mut()
         .unwrap()
-        .push(rust_history());
+        .extend(rust_histories());
     let ts = peer("ts", "thread-policy", Some(&input));
     let beam = peer("beam", "thread-policy", Some(&input));
+    let ts_projection = peer("ts", "thread-projection", Some(&input));
+    let beam_projection = peer("beam", "thread-projection", Some(&input));
     let mut reasons = BTreeSet::new();
     let mut honored = 0;
+    let mut lifecycle_checked = 0;
     assert!(input["histories"].as_array().unwrap().len() >= 15);
     for (i, history) in input["histories"].as_array().unwrap().iter().enumerate() {
         let actual = native(history);
         assert_eq!(actual, ts["results"][i], "TS {}", history["name"]);
         assert_eq!(actual, beam["results"][i], "BEAM {}", history["name"]);
+        if let Some(reasons) = history.get("reasons") {
+            let dag = checked(history);
+            let authority =
+                treehouse_tauri_shell::catalog_eval::authority::AuthorityEvidence::analyze(&dag)
+                    .unwrap();
+            for frame in history["frames"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|f| f["kind"] == "tombstone")
+            {
+                let id = frame["id"].as_str().unwrap();
+                assert_eq!(
+                    json!(authority.reasons().get(id)),
+                    reasons[id],
+                    "native lifecycle {}",
+                    history["name"]
+                );
+                lifecycle_checked += 1;
+            }
+        }
+        let projection = json!(thread_policy::project(&checked(history)).unwrap());
+        if history["name"] == "rust-depth-wins-title" {
+            assert_eq!(projection["title"], "Deeper Rust title");
+            assert_eq!(projection["posts"].as_array().unwrap().len(), 2);
+            assert_eq!(projection["archived"], true);
+        }
+        assert_eq!(
+            projection, ts_projection["results"][i],
+            "TS projection {}",
+            history["name"]
+        );
+        assert_eq!(
+            projection, beam_projection["results"][i],
+            "BEAM projection {}",
+            history["name"]
+        );
         for reason in actual.as_object().unwrap().values() {
             if let Some(reason) = reason.as_str() {
                 reasons.insert(reason.to_owned());
@@ -198,6 +261,12 @@ fn causal_thread_application_policy_matches_both_actual_owners() {
             "delivery order {}",
             history["name"]
         );
+        assert_eq!(
+            projection,
+            json!(thread_policy::project(&checked(&reversed)).unwrap()),
+            "projection delivery order {}",
+            history["name"]
+        );
     }
     for reason in [
         "application_target_not_visible",
@@ -210,4 +279,8 @@ fn causal_thread_application_policy_matches_both_actual_owners() {
         assert!(reasons.contains(reason), "unexercised refusal {reason}");
     }
     assert!(honored > 20, "positive controls must actually be honored");
+    assert!(
+        lifecycle_checked >= 8,
+        "root/nonroot/no-root lifecycle controls must execute"
+    );
 }

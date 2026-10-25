@@ -47,6 +47,10 @@ export async function threadPolicyCases():Promise<CommandHistory[]> {
  const notPost=await command("root",[grant.id],"create_thread",[text("title")]);
  add("wrong-target",[genesis,grant,notPost,await command("root",[notPost.id],"author_tombstone",[text(notPost.id),text(notPost.id)])]);
  add("honored-authority-is-wrong-target",[genesis,grant,await command("root",[grant.id],"author_tombstone",[text(grant.id),text(grant.id)])]);
+ for(const [label,signer] of [["root",root],["nonroot",member]] as const){
+  const lifecycle=await authorCarrierOp({replica,signer,deps:[post.id],kind:"tombstone",body:["nil"],cap:["nil"]});
+  add(`${label}-lifecycle-target`,[...base,lifecycle,await command("root",[lifecycle.id],"author_edit",[text(post.id),text(lifecycle.id),text("lifecycle target")])]);
+ }
  for(const name of ["post","author_edit","author_tombstone","moderator_tombstone","archive_thread"]){
   const args=name==="post"?[text("after archive")]:name==="archive_thread"?[]:[text(post.id),text(post.id),...(name==="author_edit"?[text("after archive")]:[])];
   add(`archived-${name}`,[...base,archive,await command(name.startsWith("author")||name==="post"?"member":"root",[archive.id],name,args)]);

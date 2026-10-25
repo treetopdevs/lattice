@@ -88,7 +88,7 @@ case System.argv() do
 
     IO.puts(Jason.encode!(%{histories: length(input["histories"])}))
 
-  ["thread-policy"] ->
+  [mode] when mode in ["thread-policy", "thread-projection"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
 
     results =
@@ -97,7 +97,25 @@ case System.argv() do
         log = Log.from_ops(history["replica"], Map.new(ops, &{&1.id, &1}))
         :ok = Log.verify_authenticity(log)
         analysis = Lattice.Authority.analyze(Treehouse.Thread, log)
-        Map.new(Enum.filter(ops, &(&1.kind == :command)), &{&1.id, analysis.reasons[&1.id]})
+
+        reasons =
+          Map.new(Enum.filter(ops, &(&1.kind == :command)), &{&1.id, analysis.reasons[&1.id]})
+
+        if mode == "thread-policy" do
+          reasons
+        else
+          view = Treehouse.ReadModel.observe(Treehouse.Thread, log)
+
+          %{
+            commandReasons: reasons,
+            title: view.state.title,
+            moderation: view.state.moderation,
+            archived: view.state.archived,
+            moderator: view.holders[:moderator] && Base.encode64(view.holders[:moderator]),
+            posts:
+              Enum.map(view.posts, &%{id: &1.id, author: Base.encode64(&1.author), text: &1.text})
+          }
+        end
       end)
 
     IO.puts(Jason.encode!(%{results: results}))

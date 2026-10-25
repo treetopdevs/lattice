@@ -4,16 +4,18 @@
 
 IN PROGRESS. Authenticated DAGs, portable cutoffs, static delegation analysis,
 bounded roles/continuation, command pre-policy, strict product readability and
-causal Thread application policy are implemented. Semantic normalization, Space
-application policy, CRDT projection, catalog graph evaluation and retained trust remain unfinished.
+causal Thread application policy/projection are implemented. Remaining semantic
+normalization, Space policy/projection, catalog graph evaluation and retained trust
+remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
 
 Fresh Thread application-policy work exposes a source discrepancy for malformed
 edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.
 Separate plan 270 corrects the source behavior and literal leading U+FEFF text.
 Its independently reviewed source is now adopted, and the original reciprocal
-regression agrees without changing its expected result. Source final gates remain pending.
-Thread policy is a component, not full application/catalog or installed parity.
+regression agrees without changing its expected result. The separately reviewed lifecycle source correction is also adopted. Its final
+hosted gate remains pending.
+Thread policy/projection is a component, not full application/catalog or installed parity.
 
 ## Source adoption
 

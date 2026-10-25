@@ -1,7 +1,6 @@
 import { WIRE_VOCABULARY } from "../../src/wire_vocabulary";
 import assert from "node:assert/strict";
 import {commandCases,judgeCommands,threadPolicyCases} from "./native_catalog_command_peer";
-import {materialize} from "../../src/materialize";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +12,7 @@ import { canonicalBase64Bytes } from "../../src/codec";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { analyzeAuthority } from "../../src/authority";
 import { capabilityQuarantine, revokedAsOf } from "../../src/capability";
-import { treehouseSpaceSchema, treehouseThreadSchema } from "../../src/treehouse";
+import { treehouseSpaceSchema, treehouseThreadSchema, observeTreehouse } from "../../src/treehouse";
 import { canonicalOrder } from "../../src/dag";
 import { treehouseCommandDecoders } from "../../src/treehouse";
 
@@ -123,15 +122,19 @@ if (process.argv[2] === "produce") {
   console.log(JSON.stringify({histories: input.histories.length}));
  } else if (process.argv[2] === "thread-policy-cases") {
   const lineage=JSON.parse(execFileSync(process.execPath,["--import","tsx","test/support/thread_lineage_peer.ts"],{encoding:"utf8"}));
-  console.log(JSON.stringify({histories:[...await threadPolicyCases(),...lineage.cases]}));
- } else if (process.argv[2] === "thread-policy") {
+  const lifecycle=JSON.parse(execFileSync(process.execPath,["--import","tsx","test/support/lifecycle_quarantine_peer.ts"],{encoding:"utf8"}));
+  console.log(JSON.stringify({histories:[...await threadPolicyCases(),...lineage.cases,
+   ...lifecycle.histories.filter((h:History)=>h.replica.startsWith("replica:treehouse:thread:"))]}));
+ } else if (process.argv[2] === "thread-policy" || process.argv[2] === "thread-projection") {
   const input=JSON.parse(readFileSync(0,"utf8")) as {histories:History[]};
   const results=[];
   for(const h of input.histories){
    await graph(h);
    const ops=carrierOpsToSemanticOps(h.frames,{},treehouseCommandDecoders("Treehouse.Thread"));
-   const result=materialize(treehouseThreadSchema,ops);
-   results.push(Object.fromEntries(ops.filter(op=>op.kind==="command").map(op=>[op.id,result.quarantineReasons.get(op.id)??null])));
+   const result=observeTreehouse("Treehouse.Thread",ops);
+   const commandReasons=Object.fromEntries(ops.filter(op=>op.kind==="command").map(op=>[op.id,result.quarantineReasons.get(op.id)??null]));
+   results.push(process.argv[2]==="thread-policy"?commandReasons:{commandReasons,posts:result.posts,
+    title:result.state.title,moderation:result.state.moderation,archived:result.state.archived,moderator:result.state.moderator});
   }
   console.log(JSON.stringify({results}));
  } else if (process.argv[2] === "command-cases") {

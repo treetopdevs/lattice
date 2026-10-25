@@ -91,6 +91,9 @@ impl<'a> AuthorityEvidence<'a> {
         let mut pins = Vec::new();
         for id in dag.order() {
             let op = dag.frame(id).unwrap();
+            if op.kind() == "tombstone" && result.static_delegations.root() != Some(op.author()) {
+                result.reasons.insert(id.clone(), "unauthorized_tombstone");
+            }
             let Some(body) = authority_body(op) else {
                 continue;
             };
