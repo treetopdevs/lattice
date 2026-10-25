@@ -184,11 +184,6 @@ fn reader_matches_actual_ts_strict_contexts_without_claiming_semantic_honor() {
             );
         }
     }
-    for (name, frame, want) in &cases {
-        let bytes = serde_json::to_vec(frame).unwrap();
-        assert!(frame::verify(&bytes).is_ok(), "authentic {name}");
-        assert_eq!(ReadableFrame::verify(&bytes).is_ok(), *want, "{name}");
-    }
     let vocabulary: Value = serde_json::from_slice(&catalog_peer::output(
         "ts",
         "reader-vocabulary",
@@ -229,6 +224,11 @@ fn reader_matches_actual_ts_strict_contexts_without_claiming_semantic_honor() {
                 cases.push(("fresh product frame", frame.clone(), true));
             }
         }
+    }
+    for (name, frame, want) in &cases {
+        let bytes = serde_json::to_vec(frame).unwrap();
+        assert!(frame::verify(&bytes).is_ok(), "authentic {name}");
+        assert_eq!(ReadableFrame::verify(&bytes).is_ok(), *want, "{name}");
     }
     let input = json!({"histories":cases.iter().map(|(_,frame,_)|json!({"replica":frame["replica"],"frames":[frame]})).collect::<Vec<_>>()});
     let output = catalog_peer::output("ts", "strict-portability", Some(&input), 64 * 1024 * 1024);
