@@ -2,7 +2,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   @moduledoc """
   Export a checked listed host snapshot as public evidence, never installed trust.
 
-  The explicit manifest must match the immutable listed artifact. All logs and
+  The explicit manifest must match the listed artifact's location and bytes. All logs and
   catalogs are re-read before publishing. No application is started, no signature
   is made and no private identity or ceremony bytes are copied to the output.
   """
@@ -17,12 +17,13 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   @spec export(Path.t(), Path.t(), Path.t(), Path.t()) :: {:ok, Path.t()} | {:error, atom()}
   def export(root, ceremony, manifest_path, output) do
     Atoms.load()
+    manifest_path = Path.expand(manifest_path)
     output = Path.expand(output)
 
     with {:ok, raw} <- Journal.read(root),
          {:ok, %{"phase" => "listed"} = record} <- Journal.decode(raw),
          {:ok, manifest} <- load_manifest(manifest_path),
-         :ok <- manifest_bound(manifest, record),
+         :ok <- manifest_bound(manifest, record, manifest_path),
          {:ok, histories, captures} <- histories(manifest.instances),
          [reference] <- Enum.filter(record["artifacts"], &(&1["kind"] == "reference")),
          %Log{} = space <- histories[reference["replica"]],
@@ -69,10 +70,14 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     end
   end
 
-  defp manifest_bound(manifest, record) do
+  defp manifest_bound(manifest, record, manifest_path) do
     case Enum.filter(record["artifacts"], &(&1["kind"] == "manifest")) do
-      [%{"sha256" => digest}] ->
-        same(Base.encode16(manifest.sha256, case: :lower) == digest, :release_manifest_mismatch)
+      [%{"path" => expected_path, "sha256" => digest}] ->
+        same(
+          Path.expand(expected_path) == manifest_path and
+            Base.encode16(manifest.sha256, case: :lower) == digest,
+          :release_manifest_mismatch
+        )
 
       _ ->
         {:error, :release_manifest_mismatch}
@@ -241,17 +246,20 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
       {:ok, file} ->
         created =
           case :file.read_file_info(file) do
-            {:ok, info} -> File.Stat.from_record(info) |> file_node()
+            {:ok, info} -> File.Stat.from_record(info)
             _ -> nil
           end
 
         result =
           try do
-            with true <- created != nil,
+            with %File.Stat{} <- created,
+                 :ok <- output_bound(file, path, created, false),
                  :ok <- File.chmod(path, 0o600),
                  :ok <- before_write(file, path),
+                 :ok <- output_bound(file, path, created, true),
                  :ok <- IO.binwrite(file, bytes),
                  :ok <- :file.sync(file),
+                 :ok <- output_bound(file, path, created, true),
                  do: :ok
           rescue
             _ -> :error
@@ -261,7 +269,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
 
         closed = File.close(file)
 
-        if result == :ok and closed == :ok do
+        if result == :ok and closed == :ok and output_path_bound(path, created) == :ok do
           :ok
         else
           remove_created_file(path, created)
@@ -276,12 +284,36 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     end
   end
 
-  defp remove_created_file(path, created) do
+  defp output_bound(file, path, created, private?) do
+    with {:ok, info} <- :file.read_file_info(file),
+         {:ok, stat} <- File.lstat(path),
+         true <- output_matches?(File.Stat.from_record(info), created, private?),
+         true <- output_matches?(stat, created, private?),
+         do: :ok,
+         else: (_ -> :error)
+  end
+
+  defp output_path_bound(path, created) do
     case File.lstat(path) do
-      {:ok, stat} -> if file_node(stat) == created, do: File.rm(path)
+      {:ok, stat} -> if output_matches?(stat, created, true), do: :ok, else: :error
+      _ -> :error
+    end
+  end
+
+  defp output_matches?(stat, created, private?) do
+    stat.type == :regular and stat.links == 1 and stat.uid == created.uid and
+      file_node(stat) == file_node(created) and
+      (not private? or Bitwise.band(stat.mode, 0o7777) == 0o600)
+  end
+
+  defp remove_created_file(path, %File.Stat{} = created) do
+    case File.lstat(path) do
+      {:ok, stat} -> if file_node(stat) == file_node(created), do: File.rm(path)
       _ -> :ok
     end
   end
+
+  defp remove_created_file(_, _), do: :ok
 
   defp before_write(file, path) do
     if @test_hooks_enabled do

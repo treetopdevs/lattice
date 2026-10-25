@@ -61,6 +61,20 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert inputs(f) == before
   end
 
+  test "identical manifest bytes at another listed location refuse", f do
+    copy = Path.join(Path.dirname(f.manifest), "copied-manifest.json")
+    File.cp!(f.manifest, copy)
+    on_exit(fn -> File.rm(copy) end)
+    before = inputs(f)
+    assert File.read!(copy) == File.read!(f.manifest)
+
+    assert {:error, :release_manifest_mismatch} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, copy, f.output)
+
+    refute File.exists?(f.output)
+    assert inputs(f) == before
+  end
+
   test "symlink dot-dot input writes only the validated normalized destination", f do
     link = f.output <> ".alias"
     File.ln_s!(CatalogStore.path(f.root), link)
@@ -270,6 +284,58 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
 
     assert File.read!(f.output) == "another process owns this file"
     assert inputs(f) == before
+  end
+
+  test "replacement during a successful writer callback refuses and preserves it", f do
+    key = :catalog_evidence_writer_hook
+    previous = Application.get_env(:lattice_carrier_server, key)
+    moved = f.output <> ".original"
+    before = inputs(f)
+
+    on_exit(fn ->
+      File.rm(moved)
+
+      if previous,
+        do: Application.put_env(:lattice_carrier_server, key, previous),
+        else: Application.delete_env(:lattice_carrier_server, key)
+    end)
+
+    Application.put_env(:lattice_carrier_server, key, fn _file, path ->
+      File.rename!(path, moved)
+      File.write!(path, "preserve replacement")
+      :ok
+    end)
+
+    assert {:error, :evidence_export_failed} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+
+    assert File.read!(f.output) == "preserve replacement"
+    assert inputs(f) == before
+  end
+
+  test "output permission or link-count changes refuse before evidence is written", f do
+    key = :catalog_evidence_writer_hook
+    previous = Application.get_env(:lattice_carrier_server, key)
+    linked = f.output <> ".unexpected-link"
+
+    on_exit(fn ->
+      File.rm(linked)
+
+      if previous,
+        do: Application.put_env(:lattice_carrier_server, key, previous),
+        else: Application.delete_env(:lattice_carrier_server, key)
+    end)
+
+    for change <- [&File.chmod!(&1, 0o644), &File.ln!(&1, linked)] do
+      Application.put_env(:lattice_carrier_server, key, fn _file, path -> change.(path) end)
+
+      assert {:error, :evidence_export_failed} =
+               CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+
+      refute File.exists?(f.output)
+    end
+
+    assert File.read!(linked) == ""
   end
 
   test "the actual host exporter preserves size refusal for over-budget signed artifacts", f do

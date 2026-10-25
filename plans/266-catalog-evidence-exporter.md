@@ -2,15 +2,14 @@
 
 ## Status and dependency
 
-IN PROGRESS. Host reads, exclusive output and the standalone command are implemented.
-The requested external review exposed a normalized-output-path mismatch; its fix
-and a protected-root alias regression are implemented. Final current-tip Linux and
-hosted gates remain before completion.
+IN PROGRESS. Bounded host reads, exact manifest binding, exclusive output with
+descriptor identity checks and the standalone command are implemented. Final
+current-tip Linux and hosted gates remain before completion.
 
-The exporter remains functionally independent of native evaluation. For final
-combined-source verification, this branch is stacked explicitly on codec PR #170,
-which already contains merged #173. Merge only after that parent and this exact tip
-pass; retarget to main after parent merge. No pending source is copied or called merged.
+The exporter remains functionally independent of native evaluation. The native
+codec and core dependency-alias corrections are merged foundations. Verify the
+combined source against main and pass this exact tip before merging; the later
+native evaluator remains a separate gate.
 
 ## Outcome
 
@@ -31,7 +30,7 @@ remain parked separately; software gates use disposable real-mode fixtures.
 ## Public interfaces and decisions
 
 - `CatalogEvidence.export(root, ceremony_dir, manifest_path, output_path)` reads
-  a current `listed` journal and the exact manifest whose digest it records. The
+  a current `listed` journal and the exact manifest whose normalized path and digest it records. The
   explicit manifest argument makes the standalone command usable without starting
   another relay VM. It never accepts routes, a signer key or a caller verdict.
 - From `apps/lattice_carrier_server`, run
@@ -100,7 +99,12 @@ symlink refuses. The selected parent must be a real directory, matching the nati
 Space exporter. Require the output ancestor chain to satisfy the existing operator
 directory policy (owned by this user/root, no writable group/other or symlink
 ancestors), preventing aliases into protected inputs. Reject protected input
-targets/subtrees. Sync and close the file;
+targets/subtrees. Check that the descriptor and output pathname still identify
+the created regular file, with one link, the creator's owner and mode 0600,
+before writing and after syncing; check the pathname again after closing and
+before reporting success. A replaced or removed output refuses without deleting
+the replacement. This is a check at completion, not a guarantee against later
+mutation by another process. Sync and close the file;
 on failure remove only the file this call created, never another process's file.
 Output bytes repeat exactly for unchanged inputs. No journal, catalog, log, identity
 or ceremony artifact is mutated. Do not start a listener or add a network action.
