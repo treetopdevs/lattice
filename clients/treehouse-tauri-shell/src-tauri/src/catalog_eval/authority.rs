@@ -461,6 +461,8 @@ impl<'a> AuthorityEvidence<'a> {
         if expires < epoch || expires > epoch.saturating_add(pin.profile.width - 1).min(HORIZON) {
             return Err("continuation_scope_exceeded");
         }
+        let mut supplied_deps = op.supplied_deps().to_vec();
+        supplied_deps.sort();
         let expected = map(vec![
             ("version", Term::Integer(1)),
             ("product", Term::Atom("treehouse".into())),
@@ -479,7 +481,7 @@ impl<'a> AuthorityEvidence<'a> {
             ("author", Term::Binary(op.author().to_vec())),
             (
                 "deps",
-                Term::List(op.deps().iter().map(|id| bin(id)).collect()),
+                Term::List(supplied_deps.iter().map(|id| bin(id)).collect()),
             ),
             ("epoch", Term::Integer(epoch)),
             ("epoch_basis", Term::List(basis)),

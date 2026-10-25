@@ -44,6 +44,11 @@ semantic normalization, command/application policy and retained catalog trust ar
 still unfinished. Raw BEAM classification of a witnessed epoch above JS's exact
 horizon does not make that history portable: the final strict incoming boundary
 must preserve the existing TypeScript refusal without changing either oracle.
+A real-peer red regression also proved that normalized DAG dependencies alone lose
+continuation evidence: both owners refuse a duplicate supplied dependency even
+though its canonical op signature is valid. Retain the supplied list separately
+from the signed normalized set, and use its sorted form only for expected-claim
+comparison. Preserve that distinction through later raw-history persistence.
 
 ## Outcome and immutable contracts
 

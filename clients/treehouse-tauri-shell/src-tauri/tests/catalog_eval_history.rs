@@ -885,6 +885,16 @@ fn native_bounded_roles_and_continuation_match_actual_runtime_corpora() {
     );
     let authored = peer("ts", "authority-cases", None);
     for base in authored["histories"].as_array().unwrap() {
+        let mut aliased = base.clone();
+        let last = aliased["frames"]
+            .as_array_mut()
+            .unwrap()
+            .last_mut()
+            .unwrap();
+        let deps = last["deps"].as_array_mut().unwrap();
+        deps.push(deps[0].clone());
+        aliased["name"] = json!(format!("duplicate-header-dependency-{}", base["kind"]));
+        histories.push(aliased);
         for mutation in [
             "valid-new-lease",
             "wrong-epoch",

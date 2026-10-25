@@ -15,6 +15,7 @@ pub struct AuthenticFrame {
     payload: Vec<u8>,
     author: Vec<u8>,
     deps: Vec<String>,
+    supplied_deps: Vec<String>,
     kind: String,
     body: Term,
     cap: Term,
@@ -34,6 +35,12 @@ impl AuthenticFrame {
     }
     pub fn deps(&self) -> &[String] {
         &self.deps
+    }
+    // Signatures bind the normalized set, not list order or multiplicity.
+    // Existing continuation judges nevertheless compare sorted supplied deps;
+    // retain that header evidence separately without changing DAG closure.
+    pub(crate) fn supplied_deps(&self) -> &[String] {
+        &self.supplied_deps
     }
     pub fn kind(&self) -> &str {
         &self.kind
@@ -61,6 +68,12 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
         payload: inspected.payload,
         author: inspected.author,
         deps: inspected.deps,
+        supplied_deps: value["deps"]
+            .as_array()
+            .expect("inspected deps array")
+            .iter()
+            .map(|id| id.as_str().expect("inspected dependency text").to_owned())
+            .collect(),
         kind: inspected.kind,
         body: inspected.body,
         cap: inspected.cap,

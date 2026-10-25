@@ -1,4 +1,4 @@
-//! Pure native byte verification. This module grants no authority or installed routes.
+//! Pure native catalog evidence evaluation; no installed trust, custody or routes.
 pub mod canonical;
 pub mod cutoff;
 pub mod delegations;
