@@ -30,9 +30,9 @@ remain parked separately; software gates use disposable real-mode fixtures.
 ## Public interfaces and decisions
 
 - `CatalogEvidence.export(root, ceremony_dir, manifest_path, output_path)` reads
-  a current `listed` journal and a manifest matching the archived candidate's exact
-  bytes and resolved identity/log resources. The archived artifact path is not the
-  active configuration filename; copied bytes must not change resource resolution. The
+  a current `listed` journal and the exact archived manifest named by its unique
+  manifest artifact. Require both normalized path and digest. The archive is not
+  the active configuration filename; rejecting copies prevents resource relocation. The
   explicit manifest argument makes the standalone command usable without starting
   another relay VM. It never accepts routes, a signer key or a caller verdict.
 - From `apps/lattice_carrier_server`, run
@@ -55,9 +55,10 @@ remain parked separately; software gates use disposable real-mode fixtures.
 ## Construction and observation
 
 1. Read canonical journal bytes at listed; verify private root and exact artifact
-   metadata. Capture the named manifest and require its hash and resolved resource
-   view to equal the listed archived manifest artifact loaded in its original
-   staging context. Reuse Manifest loading and its existing service-identity
+   metadata. Read the unique archived manifest at its recorded normalized path;
+   reject another filename before parsing and require its hash to equal the listed
+   artifact. The staged archive context is the source of relative resource paths.
+   Reuse Manifest loading and its existing service-identity
    handling, without exporting any seed or invoking a signer.
 2. Read/authenticate every relevant log under its target lock with bounded reads.
    Derive the one Space from the receipt and verify its public ceremony using

@@ -41,12 +41,15 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
       )
 
     on_exit(fn -> File.rm(output) end)
-    Map.put(fixture, :output, output)
+    {:ok, raw} = Journal.read(fixture.root)
+    {:ok, record} = Journal.decode(raw)
+    [manifest] = Enum.filter(record["artifacts"], &(&1["kind"] == "manifest"))
+    Map.merge(fixture, %{output: output, export_manifest: manifest["path"]})
   end
 
   test "actual listed host snapshot exports and existing output is preserved", f do
     before = inputs(f)
-    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
     bytes = File.read!(f.output)
     assert {:ok, packet} = Packet.decode(bytes)
     assert packet.head == TransportCatalog.catalog_id(f.catalog)
@@ -55,30 +58,38 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert JSON.decode!(consumed)["snapshotBytes"] == packet.snapshot_bytes
 
     assert {:error, :evidence_output_exists} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     assert File.read!(f.output) == bytes
     assert inputs(f) == before
   end
 
-  test "a manifest copy with identical bytes and resolved resources is accepted", f do
-    copy = Path.join(Path.dirname(f.manifest), "copied-manifest.json")
-    File.cp!(f.manifest, copy)
+  test "only the recorded archive path accepts byte-identical manifest bytes", f do
+    copy = Path.join(Path.dirname(f.export_manifest), "copied-manifest.json")
+    File.cp!(f.export_manifest, copy)
     on_exit(fn -> File.rm(copy) end)
     before = inputs(f)
-    assert File.read!(copy) == File.read!(f.manifest)
-    assert {:ok, original} = Manifest.load(f.manifest)
+    assert File.read!(copy) == File.read!(f.export_manifest)
+    assert {:ok, original} = Manifest.load(f.export_manifest)
     assert {:ok, copied} = Manifest.load(copy)
     assert copied.sha256 == original.sha256
 
-    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, copy, f.output)
-    assert {:ok, _} = Packet.decode(File.read!(f.output))
+    assert {:error, :release_manifest_mismatch} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, copy, f.output)
+
+    refute f.manifest == f.export_manifest
+    assert File.read!(f.manifest) == File.read!(f.export_manifest)
+
+    assert {:error, :release_manifest_mismatch} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+
+    refute File.exists?(f.output)
     assert inputs(f) == before
   end
 
   @tag :relative_manifest
   test "relocated identical relative bytes cannot redirect reads to copied histories", f do
-    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
     assert {:ok, _} = Packet.decode(File.read!(f.output))
     File.rm!(f.output)
 
@@ -86,19 +97,19 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
       Path.join([f.root | List.duplicate("relocated", f.relative_manifest_depth + 2)])
 
     File.mkdir_p!(directory)
-    bytes = File.read!(f.manifest)
+    bytes = File.read!(f.export_manifest)
     copy = Path.join(directory, "manifest.json")
     File.write!(copy, bytes)
 
     for instance <- Jason.decode!(bytes)["instances"], field <- ~w(log_file identity_file) do
-      original = Path.expand(instance[field], Path.dirname(f.manifest))
+      original = Path.expand(instance[field], Path.dirname(f.export_manifest))
       redirected = Path.expand(instance[field], directory)
       refute original == redirected
       File.mkdir_p!(Path.dirname(redirected))
       File.cp!(original, redirected)
     end
 
-    assert {:ok, original} = Manifest.load(f.manifest)
+    assert {:ok, original} = Manifest.load(f.export_manifest)
     assert {:ok, relocated} = Manifest.load(copy)
     assert original.sha256 == relocated.sha256
 
@@ -115,8 +126,8 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
   end
 
   test "a normalized spelling of the listed manifest is accepted", f do
-    manifest = Path.dirname(f.manifest) <> "/./" <> Path.basename(f.manifest)
-    refute manifest == f.manifest
+    manifest = Path.dirname(f.export_manifest) <> "/./" <> Path.basename(f.export_manifest)
+    refute manifest == f.export_manifest
 
     assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, manifest, f.output)
     assert {:ok, _} = Packet.decode(File.read!(f.output))
@@ -133,7 +144,10 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
 
     assert expanded == f.output
     refute raw == expanded
-    assert {:ok, ^expanded} = CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, raw)
+
+    assert {:ok, ^expanded} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, raw)
+
     assert {:ok, _} = Packet.decode(File.read!(expanded))
     refute File.exists?(protected)
     assert inputs(f) == before
@@ -149,7 +163,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     on_exit(fn -> File.rm(link) end)
 
     assert {:error, :unsafe_export_location} =
-             CatalogEvidence.export(f.root, ceremony, f.manifest, output)
+             CatalogEvidence.export(f.root, ceremony, f.export_manifest, output)
 
     refute File.exists?(output)
     assert inputs(f) == before
@@ -158,7 +172,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
   @tag :initial
   test "initial existing reference exports without rewriting source inputs", f do
     before = inputs(f)
-    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
     assert {:ok, _} = Packet.decode(File.read!(f.output))
     assert inputs(f) == before
   end
@@ -170,7 +184,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
       "--ceremony",
       f.ceremony_dir,
       "--manifest",
-      f.manifest,
+      f.export_manifest,
       "--out",
       f.output
     ]
@@ -182,7 +196,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
              CatalogEvidence.export(
                f.root,
                f.ceremony_dir,
-               f.manifest,
+               f.export_manifest,
                Path.join(f.root, "new.json")
              )
 
@@ -192,7 +206,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
   @tag :unlisted
   test "a catalogued but unlisted record cannot be exported", f do
     assert {:error, :catalog_not_listed} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     refute File.exists?(f.output)
   end
@@ -204,14 +218,14 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     File.ln_s!(target, f.output)
 
     assert {:error, :evidence_output_exists} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     assert File.read!(target) == "preserved"
     File.rm!(f.output)
     File.ln!(target, f.output)
 
     assert {:error, :evidence_output_exists} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     assert File.read!(target) == "preserved"
     link = f.output <> ".dir"
@@ -222,7 +236,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
              CatalogEvidence.export(
                f.root,
                f.ceremony_dir,
-               f.manifest,
+               f.export_manifest,
                Path.join(link, "new.json")
              )
   end
@@ -255,7 +269,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     end)
 
     assert {:error, :evidence_source_changed} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     refute File.exists?(f.output)
     assert {:ok, %{log: log}} = Log.restore_verified(f.active_log)
@@ -279,13 +293,13 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
 
     [catalog] = Path.wildcard(Path.join(CatalogStore.path(f.root), "*.json"))
 
-    for path <- [Journal.path(f.root), f.manifest, catalog] do
+    for path <- [Journal.path(f.root), f.export_manifest, catalog] do
       original = File.read!(path)
       changed = original <> " "
       Application.put_env(:lattice_carrier_server, key, fn -> File.write!(path, changed) end)
 
       assert {:error, reason} =
-               CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+               CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
       assert is_atom(reason)
       refute File.exists?(f.output)
@@ -312,7 +326,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     end)
 
     assert {:error, :evidence_export_failed} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     refute File.exists?(f.output)
     assert inputs(f) == before
@@ -327,7 +341,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     end)
 
     assert {:error, :evidence_export_failed} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     assert File.read!(f.output) == "another process owns this file"
     assert inputs(f) == before
@@ -354,7 +368,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     end)
 
     assert {:error, :evidence_export_failed} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     assert File.read!(f.output) == "preserve replacement"
     assert inputs(f) == before
@@ -386,7 +400,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
       end)
 
       assert {:error, :evidence_export_failed} =
-               CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+               CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
       assert File.read!(f.output) == "preserve replacement"
       assert {:ok, _} = Packet.decode(File.read!(moved))
@@ -412,7 +426,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     end)
 
     assert {:error, :evidence_export_failed} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     refute File.exists?(f.output)
     assert inputs(f) == before
@@ -435,7 +449,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
       Application.put_env(:lattice_carrier_server, key, fn _file, path -> change.(path) end)
 
       assert {:error, :evidence_export_failed} =
-               CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+               CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
       refute File.exists?(f.output)
     end
@@ -475,7 +489,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     before = inputs(f)
 
     assert {:error, :evidence_page_too_large} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     assert inputs(f) == before
     refute File.exists?(f.output)
@@ -486,7 +500,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     File.write!(f.active_log, bytes)
 
     assert {:error, :evidence_page_too_large} =
-             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
     assert File.read!(f.active_log) == bytes
     refute File.exists?(f.output)
@@ -510,7 +524,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
           "--ceremony",
           f.ceremony_dir,
           "--manifest",
-          f.manifest,
+          f.export_manifest,
           "--out",
           f.output
         ],
@@ -550,5 +564,5 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
   defp inputs(f),
     do:
       {File.read!(f.active_log), elem(Journal.read(f.root), 1), File.read!(f.manifest),
-       File.read!(Journal.history_path(f.root))}
+       File.read!(f.export_manifest), File.read!(Journal.history_path(f.root))}
 end

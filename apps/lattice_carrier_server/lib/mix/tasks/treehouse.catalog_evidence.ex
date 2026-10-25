@@ -1,5 +1,11 @@
 defmodule Mix.Tasks.Treehouse.CatalogEvidence do
-  @moduledoc "Export a listed operator snapshot as public catalog evidence without starting a relay."
+  @moduledoc """
+  Export a listed operator snapshot as public catalog evidence without starting a relay.
+
+  `--manifest` must name the unique archived manifest artifact recorded in the
+  operator journal. This is not the running service's active configuration file.
+  Both the normalized archive path and its exact digest are checked.
+  """
   use Mix.Task
   alias LatticeCarrierServer.Operator.CatalogEvidence
   @shortdoc "Export public listed catalog evidence"

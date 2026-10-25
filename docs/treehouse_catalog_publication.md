@@ -170,14 +170,15 @@ AGENTS.md instead of plain `mix`:
 mix treehouse.catalog_evidence \
   --root /srv/treehouse/operator \
   --ceremony /srv/treehouse/ceremony \
-  --manifest /srv/treehouse/active/manifest.json \
+  --manifest /srv/treehouse/operator/attempt-ATTEMPT_DIGEST/MANIFEST_SHA \
   --out /srv/treehouse/transfer/catalog-evidence.json
 ```
 
-The manifest must match the exact bytes and resolved identity/log paths of the
-archived candidate recorded by the listed receipt. The archival filename is not
-the active configuration filename; relocating identical relative-path bytes must
-not redirect the exporter to copied histories. The command loads
+Use the unique manifest artifact's `path` from `operator-journal.json`, replacing
+the placeholder path above. This is the archived candidate, not the active
+configuration file. Both its normalized filename and exact digest must match the
+listed receipt; copies at another filename refuse even when their bytes match.
+This fixes the resource-resolution context for relative identity/log paths. The command loads
 configuration without starting another relay or listener, so it can run while the
 configured service is already bound. Its only write is the new output file. Choose an
 existing directory owned by the operator or root, with no writable group/other or

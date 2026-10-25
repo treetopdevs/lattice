@@ -2,7 +2,9 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   @moduledoc """
   Export a checked listed host snapshot as public evidence, never installed trust.
 
-  The explicit manifest must match the listed artifact's bytes and resolved resources. All logs and
+  The explicit manifest is the exact archived candidate named by the listed receipt.
+  Its normalized path and bytes must match; this is not the active configuration
+  filename. All logs and
   catalogs are re-read before publishing. No application is started, no signature
   is made and no private identity or ceremony bytes are copied to the output.
   """
@@ -22,8 +24,13 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
 
     with {:ok, raw} <- Journal.read(root),
          {:ok, %{"phase" => "listed"} = record} <- Journal.decode(raw),
+         {:ok, digest} <- listed_manifest_digest(record, manifest_path),
          {:ok, manifest} <- load_manifest(manifest_path),
-         :ok <- manifest_bound(manifest, record),
+         :ok <-
+           same(
+             Base.encode16(manifest.sha256, case: :lower) == digest,
+             :release_manifest_mismatch
+           ),
          {:ok, histories, captures} <- histories(manifest.instances),
          [reference] <- Enum.filter(record["artifacts"], &(&1["kind"] == "reference")),
          %Log{} = space <- histories[reference["replica"]],
@@ -70,15 +77,12 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     end
   end
 
-  defp manifest_bound(manifest, record) do
+  defp listed_manifest_digest(record, manifest_path) do
     case Enum.filter(record["artifacts"], &(&1["kind"] == "manifest")) do
       [%{"path" => expected_path, "sha256" => digest}] ->
-        with {:ok, archived} <- load_manifest(expected_path),
-             true <- Base.encode16(archived.sha256, case: :lower) == digest,
-             true <- manifest.sha256 == archived.sha256,
-             true <- public_instances(manifest) == public_instances(archived),
-             do: :ok,
-             else: (_ -> {:error, :release_manifest_mismatch})
+        if Path.expand(expected_path) == manifest_path,
+          do: {:ok, digest},
+          else: {:error, :release_manifest_mismatch}
 
       _ ->
         {:error, :release_manifest_mismatch}
