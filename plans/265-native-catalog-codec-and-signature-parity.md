@@ -2,14 +2,10 @@
 
 ## Status
 
-IN PROGRESS. Canonical/frame/catalog authenticity, bounded readers and executable
-Rust↔TS/BEAM peers are implemented. Independent review fixes are confirmed and
-prior local/hosted gates passed; an empty-text metadata parity correction now
-requires a refreshed exact-tip gate and requested external review remains. Implements plan 245 build PR 2,
-independently of the listing consumer. Rebased onto its verified merge; native
-implementation bytes were preserved.
-No native trust command,
-route installation, custody mutation, authority fold or network change is in scope.
+DONE. Canonical/frame/catalog authenticity, bounded readers, depth/container
+accounting and executable Rust↔TS/BEAM peers are implemented. This completes
+plan 245 build PR 2. Native authority, retained trust, custody mutation, route
+installation and network changes remain separate work.
 
 ## Outcome
 
@@ -42,6 +38,8 @@ the producer and independent consumers must execute, not merely compare checked-
    the full uint64 range. No floats, negative integers or lossy coercion.
 3. Verify operation payload/id and Ed25519 signature with closed frame fields. Preserve
    raw authenticated terms for the later fold; signature validity grants no authority.
+   Atom vocabulary/admission belongs to the later portability stage, as in the
+   existing TS signature verifier; an unknown signed name is not a bad signature.
 4. Normalize the closed catalog envelope and entry shape, enforce existing inventory
    constraints, derive existing signing bytes and catalog id, and verify against the
    explicitly supplied public key. Refuse rotation at the installation boundary later;
@@ -56,7 +54,10 @@ the producer and independent consumers must execute, not merely compare checked-
 Each decoded artifact is at most 128 KiB, matching plan 245's evidence artifact cap.
 Canonical term nesting is at most 64, nodes at most 32,768 and encoded bytes at most
 128 KiB. JSON separately caps all values and object keys at 32,768 nodes and
-wrapper-aware depth at 130; domain term depth remains 64. A local bounded seed
+wrapper-aware depth at 196 (three levels per map plus flat metadata wrappers);
+domain term depth remains 64, with empty composites consuming a level. Delegation
+metadata is a flat leaf. The signed operation array is a protocol wrapper and does
+not consume body/cap domain depth. A local bounded seed
 replaces the generic JSON reader depth of 128. Check lengths before allocation and
 output growth. Frame JSON retains the
 existing 64,000-byte carrier boundary. These are native verifier resource bounds,
@@ -68,7 +69,7 @@ assembly retains plan 245's 64 MiB transport and 32 MiB snapshot limits separate
 - Existing BEAM and TS catalog signing bytes/id agree with Rust for valid vectors.
 - Real signed operation histories verify; changed body, cap, deps, author, id or
   signature refuses. Delegation encoding and leased/unleased frames retain parity.
-- Duplicate, unknown, noncanonical, over-cap and wrong-key input fails before producing
+- Duplicate, unknown-tag/field, noncanonical, over-cap and wrong-key input fails before producing
   verified output. Boundary tests include uint64 max, safe-number overflow and Unicode.
 - Rust-authored canonical/signature output is consumed by the actual TS/BEAM codecs.
   The reciprocal corpus includes empty delegation id/replica/parent text. Both

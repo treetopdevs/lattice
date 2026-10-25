@@ -4,6 +4,8 @@ use serde_json::Value;
 
 pub const MAX_BYTES: usize = 128 * 1024;
 pub const MAX_DEPTH: usize = 64;
+// Three wrappers per map, then the frame and flat metadata leaf.
+pub const MAX_JSON_DEPTH: usize = MAX_DEPTH * 3 + 4;
 pub const MAX_NODES: usize = 32_768;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 pub type Result<T> = std::result::Result<T, &'static str>;
@@ -20,11 +22,6 @@ const ARTIFACT: Bounds = Bounds {
     bytes: MAX_BYTES,
     nodes: MAX_NODES,
     depth: MAX_DEPTH,
-};
-// Domain op payload adds one list wrapper around its separately checked terms.
-const OP_PAYLOAD: Bounds = Bounds {
-    depth: MAX_DEPTH + 1,
-    ..ARTIFACT
 };
 // A bounded source history may emit a larger canonical observation. This is an
 // internal transient budget; artifact and persisted/transport limits do not move.
@@ -130,6 +127,9 @@ fn parse(value: &Value, depth: usize, nodes: &mut usize, bounds: Bounds) -> Resu
             Term::Atom(name.to_owned())
         }
         "list" | "tuple" | "mapset" => {
+            if depth >= MAX_DEPTH {
+                return Err(INVALID);
+            }
             let values = argument.as_array().ok_or(INVALID)?;
             if values.len() > bounds.nodes {
                 return Err(INVALID);
@@ -145,6 +145,9 @@ fn parse(value: &Value, depth: usize, nodes: &mut usize, bounds: Bounds) -> Resu
             }
         }
         "map" => {
+            if depth >= MAX_DEPTH {
+                return Err(INVALID);
+            }
             let values = argument.as_array().ok_or(INVALID)?;
             if values.len() > bounds.nodes / 2 {
                 return Err(INVALID);
@@ -265,8 +268,20 @@ pub fn encode(term: &Term) -> Result<Vec<u8>> {
     encode_bounded(term, ARTIFACT)
 }
 
-pub(crate) fn encode_op(term: &Term) -> Result<Vec<u8>> {
-    encode_bounded(term, OP_PAYLOAD)
+pub(crate) fn encode_op_payload(fields: &[Term], observation: bool) -> Result<Vec<u8>> {
+    if fields.len() != 7 {
+        return Err(INVALID);
+    }
+    let mut writer = Writer {
+        bytes: Vec::new(),
+        nodes: 1,
+        bounds: if observation { OBSERVATION } else { ARTIFACT },
+    };
+    writer.major(4, fields.len() as u64)?;
+    for field in fields {
+        writer.term(field, 0)?;
+    }
+    Ok(writer.bytes)
 }
 pub(crate) fn encode_observation(term: &Term) -> Result<Vec<u8>> {
     encode_bounded(term, OBSERVATION)
@@ -323,7 +338,14 @@ impl Writer {
     }
     fn term(&mut self, term: &Term, depth: usize) -> Result<()> {
         self.nodes += 1;
-        if depth > self.bounds.depth || self.nodes > self.bounds.nodes {
+        if depth > self.bounds.depth
+            || self.nodes > self.bounds.nodes
+            || (depth == self.bounds.depth
+                && matches!(
+                    term,
+                    Term::List(_) | Term::Tuple(_) | Term::Set(_) | Term::Map(_)
+                ))
+        {
             return Err(INVALID);
         }
         match term {
@@ -347,7 +369,7 @@ impl Writer {
             Term::Delegation(values) => {
                 validate_delegation(values)?;
                 self.major(6, 60_003)?;
-                self.array(values, depth)
+                self.array(values, 0)
             }
             Term::Set(values) => {
                 let mut encoded = self.children(values.iter(), depth)?;
@@ -484,6 +506,9 @@ impl<'a> Reader<'a> {
                 Ok(Term::Binary(self.take(size)?.to_vec()))
             }
             4 | 5 => {
+                if depth >= MAX_DEPTH {
+                    return Err(INVALID);
+                }
                 let count = usize::try_from(argument).map_err(|_| INVALID)?;
                 let width = if major == 5 { 2 } else { 1 };
                 if count > (MAX_NODES - self.nodes) / width
@@ -524,6 +549,15 @@ impl<'a> Reader<'a> {
                 {
                     return Err(INVALID);
                 }
+                if argument == 60_003 {
+                    if !matches!(size, 9 | 10) {
+                        return Err(INVALID);
+                    }
+                    return self.delegation_fields(size).map(Term::Delegation);
+                }
+                if depth >= MAX_DEPTH {
+                    return Err(INVALID);
+                }
                 let mut values = Vec::with_capacity(size);
                 for _ in 0..size {
                     values.push(self.term(depth + 1)?);
@@ -531,12 +565,54 @@ impl<'a> Reader<'a> {
                 match argument {
                     60_001 => Ok(Term::Tuple(values)),
                     60_002 => Ok(Term::Set(values)),
-                    60_003 if matches!(values.len(), 9 | 10) => Ok(Term::Delegation(values)),
                     _ => Err(INVALID),
                 }
             }
             _ => Err(INVALID),
         }
+    }
+    fn delegation_fields(&mut self, size: usize) -> Result<Vec<Term>> {
+        let mut fields = Vec::with_capacity(size);
+        for index in 0..size {
+            let prefix = *self.bytes.get(self.offset).ok_or(INVALID)?;
+            if matches!(index, 5 | 6) {
+                if prefix >> 5 != 4 {
+                    return Err(INVALID);
+                }
+                self.offset += 1;
+                let count = usize::try_from(self.argument(prefix & 31)?).map_err(|_| INVALID)?;
+                self.nodes += 1;
+                if self.nodes > MAX_NODES
+                    || count > MAX_NODES - self.nodes
+                    || count > self.bytes.len() - self.offset
+                {
+                    return Err(INVALID);
+                }
+                let mut names = Vec::with_capacity(count);
+                for _ in 0..count {
+                    // Only flat atom leaves: never reset depth for arbitrary recursive terms.
+                    if self.bytes.get(self.offset..self.offset + 3) != Some(&[0xd9, 0xea, 0x60]) {
+                        return Err(INVALID);
+                    }
+                    names.push(self.term(0)?);
+                }
+                fields.push(Term::List(names));
+            } else {
+                let valid = match index {
+                    0 | 1 | 2 | 3 | 8 => prefix >> 5 == 2,
+                    4 => prefix == 0xf6 || prefix >> 5 == 2,
+                    7 => matches!(prefix, 0xf4 | 0xf5),
+                    9 => prefix >> 5 == 0,
+                    _ => false,
+                };
+                if !valid {
+                    return Err(INVALID);
+                }
+                fields.push(self.term(0)?);
+            }
+        }
+        validate_delegation(&fields)?;
+        Ok(fields)
     }
 }
 
@@ -548,7 +624,7 @@ fn preflight(value: &Value, bounds: Bounds) -> Result<()> {
     let mut text_bytes = 0usize;
     while let Some((value, depth)) = stack.pop() {
         nodes += 1;
-        if nodes > bounds.nodes * 4 || depth > MAX_DEPTH * 2 + 2 {
+        if nodes > bounds.nodes * 4 || depth > MAX_JSON_DEPTH {
             return Err(INVALID);
         }
         match value {

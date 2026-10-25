@@ -1,6 +1,6 @@
 //! Signature/hash authenticity only. A verified frame may still be unauthorized,
 //! quarantined, causally incomplete or outside the catalog's replica scope.
-use super::canonical::{base64, encode_observation, encode_op, observation_base64, Result, Term};
+use super::canonical::{base64, encode_op_payload, observation_base64, Result, Term};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use ed25519_dalek::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
@@ -37,8 +37,7 @@ impl AuthenticFrame {
         &self.deps
     }
     // Signatures bind the normalized set, not list order or multiplicity.
-    // Existing continuation judges nevertheless compare sorted supplied deps;
-    // retain that header evidence separately without changing DAG closure.
+    // Retain transport evidence separately; authority uses the normalized signed set.
     pub(crate) fn supplied_deps(&self) -> &[String] {
         &self.supplied_deps
     }
@@ -155,7 +154,7 @@ fn inspect_value_inner(value: &serde_json::Value, observation: bool) -> Result<I
     };
     let body = term(&value["body"])?;
     let cap = term(&value["cap"])?;
-    let payload_term = Term::List(vec![
+    let payload_fields = vec![
         Term::Binary(b"lattice-op-v2".to_vec()),
         Term::Binary(replica.as_bytes().to_vec()),
         Term::Binary(author.clone()),
@@ -167,12 +166,8 @@ fn inspect_value_inner(value: &serde_json::Value, observation: bool) -> Result<I
         Term::Atom(kind.to_owned()),
         body.clone(),
         cap.clone(),
-    ]);
-    let payload = if observation {
-        encode_observation(&payload_term)?
-    } else {
-        encode_op(&payload_term)?
-    };
+    ];
+    let payload = encode_op_payload(&payload_fields, observation)?;
     Ok(InspectedFrame {
         id: id.to_owned(),
         replica: replica.to_owned(),

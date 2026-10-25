@@ -2,88 +2,33 @@
 
 ## Status and dependency
 
-IN PROGRESS: implements plan 245 build PR 3. The worktree starts at the latest
-committed codec PR #170 tip, which contains the current main. This is an explicit
-pending dependency, not merged implementation or a native trust claim. Keep later
-PRs based on the codec branch until its required external review and merge finish;
-then rebase onto the verified main and run the exact-tip gate.
+IN PROGRESS. Six native components are implemented: authenticated DAG, portable
+cutoffs, static delegation analysis, bounded roles/continuation, command pre-policy
+and strict product readability. Semantic normalization, full application policy,
+CRDT projection, catalog graph evaluation and retained trust remain unfinished.
+No component checkpoint completes this plan or grants installed trust/freshness.
 
-The first implementation checkpoint is an authenticated DAG for the later fold;
-it is implemented, locally checked and independently reviewed.
-It supplies signature/hash verification, causal closure, deterministic order and
-read-only ancestor queries. It deliberately cannot report authority, membership,
-a catalog decision or a route. Completing that checkpoint does not complete this
-plan. Portable cutoff observation is also implemented as a second checkpoint:
-real BEAM/TS owners agree on exact canonical bytes and refusal precedence, including
-retained structural rejections. All local checkpoint gates and independent review pass. The branch is refreshed
-onto the codec's minimal parity correction with its cutoff implementation unchanged.
-Earlier checkpoint hosted checks, including bounded roles, are green; requested
-external review remains open. Full authority,
-incoming/stored history integration and retained-trust logic are still unfinished. The full authority/evaluator and parity matrix below remain mandatory.
+## Source adoption
 
-A third checkpoint adds the static delegation component: signature/id consistency,
-root commitments, iterative chain attenuation, introduction-specific refusals,
-conditional succession roots and causal revocation. Its private state is built only
-from an authenticated DAG. It exposes neither active capabilities nor command or
-route verdicts. Raw tuple collection follows the BEAM component; the final incoming
-semantic normalization and portability gate remain mandatory, including TypeScript's
-existing refusal of nonportable high logical ticks. No source oracle is changed.
-Fresh BEAM/TS histories and Rust-authored chain/revoke cases exercise the actual
-runtime owners. Expanded ordinary/dev-trace native, client build, shell typecheck/tests, full mix
-check and both boundary scans pass. Standards review has no actionable finding;
-the spec finding on authentic malformed tuples is fixed and independently confirmed.
-Requested external review remains unavailable; the full evaluator remains unfinished.
+The codec, exporter and continuation alias foundations are merged. The evaluator
+now integrates the frozen incoming-owner correction as an explicit dependency;
+its final gate/merge must complete before native signoff. Preserve the codec's
+wrapper-aware JSON depth, domain/empty-composite boundaries, flat delegation leaf
+and operation protocol-wrapper accounting alongside the evaluator's observation
+extensions. Run all component and reciprocal regressions after integration.
 
-A fourth checkpoint ports bounded role acquisition/transfer, heartbeats, root and
-witnessed beacons, finite continuation profile selection, independently derived
-witness claims, continuation scope/quorum/current-predecessor checks and causal
-lease expiry. It is tested against freshly generated current BEAM/TS continuation
-corpora, both delivery orders, and fresh Rust-authored renewals, witness refusals
-and expiry-boundary histories consumed by both runtimes. Full ordinary/dev-trace native, client build, shell typecheck/tests, full mix
-check and both boundary scans pass after the alias correction. Independent reviews
-and focused alias confirmation have no remaining findings. Refreshed hosted and
-requested external review remain open. The result remains raw authority evidence;
-semantic normalization, command/application policy and retained catalog trust are
-still unfinished. Raw BEAM classification of a witnessed epoch above JS's exact
-horizon does not make that history portable: the final strict incoming boundary
-must preserve the existing TypeScript refusal without changing either oracle.
-A real-peer red regression also proved that normalized DAG dependencies alone lose
-continuation evidence: both owners refuse a duplicate supplied dependency even
-though its canonical op signature is valid. Retain the supplied list separately
-from the signed normalized set, and use its sorted form only for expected-claim
-comparison. Preserve that distinction through later raw-history persistence.
+Authority compares unsigned header dependencies as the normalized signed set,
+matching the adopted owner correction. Do not normalize signed witness claims or
+relax consent, quorum, scope, epoch, predecessor or lease checks. Preserve supplied
+header data as transport evidence without giving its multiplicity semantic force.
 
-The alias experiment also proved an existing-owner consistency defect: the same
-signed operation and cutoff can select different holders under unsigned header
-multiplicity. Plan 268 owns its separate BEAM/TS correction and protected reviews.
-Do not silently fix either oracle inside this port. Native expected-claim parity
-must follow the corrected baseline only after that correction is reviewed/adopted;
-the current checkpoint deliberately matches the current owners.
-
-A fifth checkpoint adds all current Space/Thread command effect-field/role grammar
-and the pre-application-policy gate: capability scope/validity/audience/grant scope,
-introduction visibility, role grants, revocation, expiry and causal holder freshness.
-Its opaque result explicitly reports `ApplicationPolicyRequired`, never final honor.
-Fresh actual runtime cases exercise all refusal branches and effect metadata, with
-reversed delivery and Rust-authored input consumed by both owners. Ordinary native
-177/0, tracing 188/0, client build, desktop checks, full Mix check and both boundary
-scans pass. Independent spec review found no mismatch; standards review confirmed
-the shared runtime-launch helper correction. Incoming TS structural normalization, application
-policy, CRDT projection and retained catalog trust remain mandatory unfinished work.
-Plan 268's candidate correction is in separate draft PR 173; this port continues
-using its current reviewed-source baseline until that correction is adopted.
-
-A sixth checkpoint adds an authenticated product-reader portability proof. It
-preserves raw number/text and absent/null distinctions, checks the full carrier vocabulary,
-and mirrors strict integers plus legacy beacon, genesis beacon metadata and
-witnessed certificate/claim contexts. Fresh BEAM/TS products and Rust-authored
-boundary frames are checked by the actual TS strict reader. It reports readability
-only; semantic normalization, application policy and catalog decisions remain
-unfinished. Initial focused execution passes. Spec review found and corrected a narrower
-cutoff-vocabulary reuse; all current wire names now exercise both readers.
-Both reviewers confirm the correction. Client build, desktop checks, full Mix
-check and both boundary scans pass. Final ordinary native 178/0 and tracing 189/0
-pass after the review corrections.
+The native incoming boundary must adopt the current common owner contract:
+authentication before fetch, pre-merge validation, signed-identity coalescing,
+contextual complete-proof refusals, independent saved recovery and bounded state.
+Every rejection must close current eligibility, including capacity exhaustion or a
+freeze witness that cannot fit. Never reuse an earlier candidate as fresh, evict
+retained evidence silently, or claim a rejection durably persisted a block.
+No installation or dial is allowed before these adapter tests pass.
 
 ## Outcome and immutable contracts
 
@@ -138,7 +83,7 @@ existing depth/node limits. Bound complete-input parsing before allocation witho
 clipping evaluator-valid maximum-size history. Frame-set authentication accounts
 for encoded frame bytes and array separators before allocating verified state.
 Whole-page parsing and persisted snapshot checks remain separate later seams.
-Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-136 bounds;
+Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.
 This accommodates aggregate cutoff records without widening public artifact bounds.

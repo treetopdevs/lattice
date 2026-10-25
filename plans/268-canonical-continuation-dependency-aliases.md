@@ -2,7 +2,12 @@
 
 ## Status and scope
 
-PLANNED. A protocol consistency defect was proved while implementing the native
+DONE for the protected BEAM/TS correction. Both expected-claim builders normalize
+header dependencies; reciprocal Space/Thread alias, wire-decode and refusal tests
+cover the change. Native evaluator adoption remains separate work in plan 267.
+Execution evidence and review dispositions are in the PR description and index.
+
+A protocol consistency defect was proved while implementing the native
 bounded authority fold. This is a separate correction to the existing BEAM/TS
 owners, not permission to change an oracle inside the native port. Execute it in
 a fresh worktree from current main, preserve unrelated changes, and obtain the

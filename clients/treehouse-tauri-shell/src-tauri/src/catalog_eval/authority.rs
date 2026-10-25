@@ -463,6 +463,7 @@ impl<'a> AuthorityEvidence<'a> {
         }
         let mut supplied_deps = op.supplied_deps().to_vec();
         supplied_deps.sort();
+        supplied_deps.dedup();
         let expected = map(vec![
             ("version", Term::Integer(1)),
             ("product", Term::Atom("treehouse".into())),

@@ -19,6 +19,8 @@ defmodule Lattice.Carrier.Wire do
   alias Lattice.Authority.Delegation
   alias Lattice.Canonical
   alias Lattice.Canonical.Atom, as: CanonicalAtom
+  alias Lattice.Carrier.RawObservationBounds
+  alias Lattice.Carrier.Uint64
   alias Lattice.Carrier.WireVocabulary
   alias Lattice.Op
 
@@ -26,6 +28,7 @@ defmodule Lattice.Carrier.Wire do
   @max_json_safe_integer 9_007_199_254_740_991
   @max_canonical_integer 18_446_744_073_709_551_615
   @max_decode_depth 64
+  @max_observation_depth 65
   @op_kinds [:command, :authority, :inbox, :tombstone]
 
   @spec version() :: pos_integer()
@@ -118,6 +121,57 @@ defmodule Lattice.Carrier.Wire do
   defp listed_name?(value) when is_atom(value), do: WireVocabulary.known?(Atom.to_string(value))
   defp listed_name?(%CanonicalAtom{name: name}), do: WireVocabulary.known?(name)
   defp listed_name?(_value), do: false
+
+  @doc """
+  Authenticate raw public history without admitting an operation.
+
+  Unknown names remain canonical atom-name wrappers. Only header metadata is
+  returned; callers must still use closed wire decoding before semantics. The
+  observation has bounded nodes/string bytes and a depth-65 observation limit.
+  Ordinary wire admission retains its separate depth-64 limit.
+  """
+  @spec authenticate_observation(term()) :: {:ok, map()} | {:error, :malformed_op}
+  def authenticate_observation(frame) do
+    with true <- RawObservationBounds.within?(frame),
+         true <- is_map(frame) and map_size(frame) == 9,
+         %{
+           "v" => 1,
+           "id" => id,
+           "replica" => replica,
+           "author" => author64,
+           "deps" => deps,
+           "kind" => kind,
+           "body" => body,
+           "cap" => cap,
+           "sig" => sig64
+         } <- frame,
+         true <- is_binary(id) and is_binary(replica) and is_binary(kind),
+         true <- is_list(deps) and Enum.all?(deps, &is_binary/1),
+         {:ok, author} <- Base.decode64(author64),
+         true <- byte_size(author) == 32 and Base.encode64(author) == author64,
+         {:ok, sig} <- Base.decode64(sig64),
+         true <- byte_size(sig) == 64 and Base.encode64(sig) == sig64,
+         {:ok, body} <- decode_term(body, @max_observation_depth, :observation),
+         {:ok, cap} <- decode_term(cap, @max_observation_depth, :observation),
+         true <- Canonical.signable?(body) and Canonical.signable?(cap),
+         true <-
+           Op.valid?(%Op{
+             id: id,
+             replica: replica,
+             author: author,
+             deps: deps,
+             kind: %CanonicalAtom{name: kind},
+             body: body,
+             cap: cap,
+             sig: sig
+           }) do
+      {:ok, %{id: id, replica: replica, deps: deps}}
+    else
+      _ -> {:error, :malformed_op}
+    end
+  rescue
+    _ -> {:error, :malformed_op}
+  end
 
   @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
   def decode_op(%{
@@ -313,6 +367,13 @@ defmodule Lattice.Carrier.Wire do
        when is_integer(value) and value >= 0 and value <= @max_json_safe_integer,
        do: {:ok, value}
 
+  defp decode_term(["int", value], _depth, :observation) when is_binary(value) do
+    case Uint64.parse_text(value) do
+      {:ok, integer} -> {:ok, integer}
+      :error -> {:error, :malformed_term}
+    end
+  end
+
   defp decode_term(["int", value], _depth, _mode) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int >= 0 and int <= @max_canonical_integer -> {:ok, int}
@@ -320,8 +381,8 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  defp decode_term(["bin", value], _depth, _mode) when is_binary(value) do
-    case Base.decode64(value) do
+  defp decode_term(["bin", value], _depth, mode) when is_binary(value) do
+    case decode_base64(value, mode) do
       {:ok, bin} -> {:ok, bin}
       :error -> {:error, :malformed_term}
     end
@@ -335,6 +396,16 @@ defmodule Lattice.Carrier.Wire do
 
   defp decode_term(["tuple", values], depth, mode) when is_list(values) and depth > 0 do
     with {:ok, values} <- decode_list(values, depth - 1, mode), do: {:ok, List.to_tuple(values)}
+  end
+
+  defp decode_term(["mapset", values], depth, :observation) when is_list(values) and depth > 0 do
+    with {:ok, values} <- decode_list(values, depth - 1, :observation),
+         encoded = Enum.map(values, &Canonical.term/1),
+         true <- MapSet.size(MapSet.new(encoded)) == length(encoded) do
+      {:ok, MapSet.new(values)}
+    else
+      _ -> {:error, :malformed_term}
+    end
   end
 
   defp decode_term(["mapset", values], depth, mode) when is_list(values) and depth > 0 do
@@ -356,6 +427,27 @@ defmodule Lattice.Carrier.Wire do
   defp reduce_decode([value | rest], acc, depth, mode) do
     with {:ok, value} <- decode_term(value, depth, mode),
          do: reduce_decode(rest, [value | acc], depth, mode)
+  end
+
+  defp decode_map(pairs, depth, :observation) do
+    Enum.reduce_while(pairs, {:ok, %{}, MapSet.new()}, fn
+      [k, v], {:ok, acc, seen} ->
+        with {:ok, k} <- decode_term(k, depth, :observation),
+             {:ok, v} <- decode_term(v, depth, :observation),
+             bytes = Canonical.term(k),
+             false <- MapSet.member?(seen, bytes) do
+          {:cont, {:ok, Map.put(acc, k, v), MapSet.put(seen, bytes)}}
+        else
+          _ -> {:halt, {:error, :malformed_term}}
+        end
+
+      _, _ ->
+        {:halt, {:error, :malformed_term}}
+    end)
+    |> case do
+      {:ok, map, _seen} -> {:ok, map}
+      error -> error
+    end
   end
 
   defp decode_map(pairs, depth, mode) do
@@ -412,12 +504,13 @@ defmodule Lattice.Carrier.Wire do
     parent_id = Map.get(frame, "parent_id")
 
     with true <- is_nil(parent_id) or is_binary(parent_id),
-         {:ok, issuer} <- Base.decode64(issuer_b64),
-         {:ok, audience} <- Base.decode64(audience_b64),
-         {:ok, sig} <- Base.decode64(sig_b64),
+         {:ok, issuer} <- decode_base64(issuer_b64, mode),
+         {:ok, audience} <- decode_base64(audience_b64, mode),
+         {:ok, sig} <- decode_base64(sig_b64, mode),
          {:ok, ops} <- decode_atoms(ops, mode),
          {:ok, roles} <- decode_atoms(roles, mode),
-         {:ok, expires_epoch} <- decode_expires_epoch(Map.get(frame, "expires_epoch")) do
+         {:ok, expires_epoch} <- decode_expires_epoch(Map.get(frame, "expires_epoch")),
+         true <- observation_delegation_shape?(frame, issuer, audience, sig, expires_epoch, mode) do
       {:ok,
        %Delegation{
          id: id,
@@ -437,6 +530,29 @@ defmodule Lattice.Carrier.Wire do
   end
 
   defp decode_delegation(_, _mode), do: {:error, :malformed_term}
+
+  defp observation_delegation_shape?(frame, issuer, audience, sig, expires_epoch, :observation) do
+    required = ~w(id replica issuer audience sig parent_id live ops roles)
+    keys = Map.keys(frame)
+
+    Enum.all?(required, &Map.has_key?(frame, &1)) and
+      Enum.all?(keys, &(&1 in ["expires_epoch" | required])) and byte_size(issuer) == 32 and
+      byte_size(audience) == 32 and
+      byte_size(sig) == 64 and (is_nil(expires_epoch) or expires_epoch <= @max_json_safe_integer)
+  end
+
+  defp observation_delegation_shape?(_frame, _issuer, _audience, _sig, _expiry, _mode), do: true
+
+  defp decode_base64(value, :observation) do
+    with {:ok, decoded} <- Base.decode64(value),
+         true <- Base.encode64(decoded) == value do
+      {:ok, decoded}
+    else
+      _ -> :error
+    end
+  end
+
+  defp decode_base64(value, _mode), do: Base.decode64(value)
 
   defp decode_expires_epoch(nil), do: {:ok, nil}
 
@@ -483,6 +599,8 @@ defmodule Lattice.Carrier.Wire do
       do: {:ok, String.to_atom(name)},
       else: {:error, :unknown_atom}
   end
+
+  defp decode_atom(name, :observation) when is_binary(name), do: {:ok, %CanonicalAtom{name: name}}
 
   defp decode_atom(name, :value), do: existing_atom(name)
   defp decode_atom(_name, _mode), do: {:error, :unknown_atom}

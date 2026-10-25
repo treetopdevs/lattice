@@ -1,3 +1,4 @@
+import { parseCanonicalUint64 } from "./uint64";
 import { isWireVocabularyName } from "./wire_vocabulary";
 export const canonicalSuite = "lattice-cbor-v1";
 const textEncoder = new TextEncoder();
@@ -539,16 +540,7 @@ function encodeUint(value) {
     return major(0, parsed);
 }
 function parseUint(value) {
-    if (typeof value === "number") {
-        if (!Number.isSafeInteger(value) || value < 0) {
-            throw new Error(`unsupported canonical integer: ${value}`);
-        }
-        return BigInt(value);
-    }
-    if (!/^(0|[1-9][0-9]*)$/.test(value)) {
-        throw new Error(`unsupported canonical integer: ${value}`);
-    }
-    return BigInt(value);
+    return parseCanonicalUint64(value);
 }
 function major(majorType, n) {
     if (n < 0n || n > uint64Max)

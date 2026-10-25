@@ -8,7 +8,7 @@ defmodule Treehouse.CatalogTrust do
 
   alias Lattice.{Authority, Canonical, Identity, Log, Op}
   alias Lattice.Authority.{Continuation, ContinuationCertificate}
-  alias Lattice.Carrier.Wire
+  alias Lattice.Carrier.{RawObservationBounds, Uint64, Wire}
   alias Treehouse.{CatalogBootstrap, CatalogCutoff, CatalogEntries, Space, TransportCatalog}
 
   @history_fields [:replica, :frames, :rejected]
@@ -80,7 +80,6 @@ defmodule Treehouse.CatalogTrust do
   @max_artifacts 1_024
   @max_artifact_bytes 131_072
   @max_total_bytes 16 * 1_024 * 1_024
-  @max_canonical_integer 18_446_744_073_709_551_615
 
   # The retained-cutoff grammar is fixed and derived at compile time from the one
   # owner, `Treehouse.CatalogCutoff`. Checking names before Wire decoding makes a
@@ -152,7 +151,13 @@ defmodule Treehouse.CatalogTrust do
       original = original_context.state
       expected = validate_token!(input.expected)
       validate_page!(input.incoming)
+      preflight_incoming!(input.incoming.histories)
 
+      unless RawObservationBounds.within_evidence?(input.incoming),
+        do: refuse(:invalid_verified_history)
+
+      authenticate_incoming_headers!(input.incoming.histories)
+      validate_incoming_rejected!(input.incoming.histories)
       union = merge_histories!(original.histories, input.incoming.histories)
       %{logs: histories, raws: raw_histories} = histories!(union, :incoming)
 
@@ -406,6 +411,7 @@ defmodule Treehouse.CatalogTrust do
 
   defp validate_original!(state) do
     state = validate_state_shape!(state)
+    unless RawObservationBounds.within_evidence?(state), do: refuse(:trust_recovery_required)
     %{logs: histories} = histories!(state.histories, :stored)
 
     {bootstrap, bootstrap_ids, replacement} =
@@ -1378,8 +1384,19 @@ defmodule Treehouse.CatalogTrust do
   defp histories!(raws, source) when is_list(raws) do
     if not proper_list?(raws), do: refuse(history_reason(source))
 
+    if source == :incoming do
+      preflight_incoming!(raws)
+    else
+      unless Enum.all?(raws, &history_shape?/1) and
+               Enum.all?(raws, &match?({:bounded, _}, Continuation.family(&1.replica))) and
+               RawObservationBounds.within_histories?(raws),
+             do: refuse(history_reason(source))
+    end
+
     duplicates = raws |> Enum.map(&Map.get(&1, :replica)) |> duplicate?()
     if duplicates, do: refuse(history_reason(source))
+
+    if source == :incoming, do: authenticate_incoming!(raws)
 
     scans = Enum.map(raws, &scan_history(&1))
 
@@ -1408,6 +1425,93 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp histories!(_raws, source), do: refuse(history_reason(source))
+
+  # Raw signature proof is not wire admission. Check every accepted frame before
+  # returning a fetch request, even when vocabulary decoding would refuse it.
+  defp preflight_incoming!(raws) do
+    Enum.each(raws, fn history ->
+      unless history_shape?(history), do: refuse(:invalid_verified_history)
+    end)
+
+    Enum.each(raws, fn history ->
+      unless Continuation.family(history.replica) in [{:bounded, :space}, {:bounded, :thread}],
+        do: refuse(:wrong_catalog_scope)
+    end)
+
+    unless RawObservationBounds.within_histories?(raws), do: refuse(:invalid_verified_history)
+  end
+
+  defp authenticate_incoming!(raws) do
+    checked = authenticate_incoming_headers!(raws)
+
+    missing =
+      checked
+      |> Enum.flat_map(fn {frames, ids} ->
+        Enum.flat_map(frames, fn frame -> Enum.reject(frame.deps, &MapSet.member?(ids, &1)) end)
+      end)
+      |> sorted()
+
+    validate_incoming_rejected!(raws)
+    if missing != [], do: refuse(:trust_pending, missing)
+  end
+
+  defp authenticate_incoming_headers!(raws) do
+    Enum.map(raws, fn history ->
+      frames = Enum.map(history.frames, &authenticate_incoming_frame!(&1, history.replica))
+
+      ids = Enum.map(frames, & &1.id)
+      if duplicate?(ids), do: refuse(:invalid_verified_history)
+      {frames, MapSet.new(ids)}
+    end)
+  end
+
+  defp validate_incoming_rejected!(raws) do
+    rejected = Enum.map(raws, &scan_incoming_rejected/1)
+    if Enum.any?(rejected, &match?({:invalid, _}, &1)), do: refuse(:invalid_verified_history)
+    if Enum.any?(rejected, &match?({:unsupported, _}, &1)), do: refuse(:unsupported_cutoff)
+  end
+
+  defp authenticate_incoming_frame!(frame, replica) do
+    case Wire.authenticate_observation(frame) do
+      {:ok, %{replica: ^replica} = proof} ->
+        if Enum.all?(proof.deps, &text?/1), do: proof, else: refuse(:invalid_verified_history)
+
+      _ ->
+        refuse(:invalid_verified_history)
+    end
+  end
+
+  defp history_shape?(history) do
+    fields?(history, @history_fields) and text?(history.replica) and
+      proper_list?(history.frames) and proper_list?(history.rejected) and
+      Enum.all?(history.rejected, fn record ->
+        fields?(record, [:frame, :reason]) and record.reason == :bad_signature
+      end)
+  end
+
+  defp scan_incoming_rejected(history) do
+    {records, _ids} =
+      Enum.map_reduce(history.rejected, MapSet.new(), fn record, ids ->
+        frame = record.frame
+
+        valid =
+          is_map(frame) and is_binary(frame["id"]) and frame["replica"] == history.replica and
+            not MapSet.member?(ids, frame["id"])
+
+        result =
+          if not valid or match?({:ok, _}, Wire.authenticate_observation(frame)),
+            do: {:invalid, history.replica},
+            else: scan_rejected(record, history.replica)
+
+        {result, if(valid, do: MapSet.put(ids, frame["id"]), else: ids)}
+      end)
+
+    cond do
+      Enum.any?(records, &match?({:invalid, _}, &1)) -> {:invalid, history.replica}
+      Enum.any?(records, &match?({:unsupported, _}, &1)) -> {:unsupported, history.replica}
+      true -> build_scanned_history(history.replica, [], records)
+    end
+  end
 
   defp scan_history(history) do
     with true <- fields?(history, @history_fields),
@@ -1576,8 +1680,20 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp equivalent_frame?(left, right) do
-    left == right
+    with {:ok, left_op} <- Wire.decode_op(left),
+         {:ok, right_op} <- Wire.decode_op(right) do
+      equivalent_op?(left_op, right_op)
+    else
+      _ -> false
+    end
   end
+
+  defp equivalent_op?(%Op{} = left, %Op{} = right) do
+    left.id == right.id and left.sig == right.sig and
+      Op.canonical_encoding(left) == Op.canonical_encoding(right)
+  end
+
+  defp equivalent_op?(_, _), do: false
 
   defp reviewed_bootstrap!(review, log, initial?) do
     {:ok, observed} = CatalogBootstrap.observe(log)
@@ -1933,6 +2049,8 @@ defmodule Treehouse.CatalogTrust do
     if length(page.catalogs) + length(page.rotations) > 32,
       do: refuse(:control_history_limit)
 
+    if not Enum.all?(page.histories, &history_shape?/1), do: refuse(:malformed_catalog)
+
     if not Enum.all?(page.catalogs ++ page.rotations, &is_binary/1),
       do: refuse(:malformed_catalog)
   end
@@ -1972,14 +2090,19 @@ defmodule Treehouse.CatalogTrust do
   defp ensure_history_subset!(proof, current, digest) do
     current_ops = Log.ops(current)
 
-    if Enum.any?(Log.ops(proof), fn {id, op} -> current_ops[id] != op end),
+    if Enum.any?(Log.ops(proof), fn {id, op} -> not equivalent_op?(current_ops[id], op) end),
       do: refuse(:recovery_incomplete, [digest])
 
-    rejected = MapSet.new(Log.quarantine(current), &{&1.op, &1.reason})
+    rejected = Map.new(Log.quarantine(current), &{&1.op.id, &1})
 
-    if Enum.any?(Log.quarantine(proof), &(not MapSet.member?(rejected, {&1.op, &1.reason}))),
+    if Enum.any?(Log.quarantine(proof), &(not equivalent_rejected?(&1, rejected[&1.op.id]))),
       do: refuse(:recovery_incomplete, [digest])
   end
+
+  defp equivalent_rejected?(entry, %{reason: reason, op: op}),
+    do: entry.reason == reason and equivalent_op?(entry.op, op)
+
+  defp equivalent_rejected?(_, _), do: false
 
   defp inventory_extends?(before, next_entries) do
     Enum.all?(before, fn entry ->
@@ -2034,7 +2157,7 @@ defmodule Treehouse.CatalogTrust do
       Enum.all?(values, &closed_wire_term?(&1, depth - 1)) and
         canonical_wire_terms_unique?(values)
 
-  defp closed_wire_term?(["delegation", value], depth) when is_map(value) and depth > 0 do
+  defp closed_wire_term?(["delegation", value], depth) when is_map(value) and depth >= 0 do
     required = ~w(id replica issuer audience parent_id ops roles live sig)
 
     closed_delegation_keys?(value, required) and closed_delegation_identity?(value) and
@@ -2051,13 +2174,9 @@ defmodule Treehouse.CatalogTrust do
   defp closed_wire_term?(["int", value], _depth) when is_integer(value), do: safe?(value)
 
   defp closed_wire_term?(["int", value], _depth) when is_binary(value) do
-    case Integer.parse(value) do
-      {integer, ""} ->
-        integer > @max_safe_integer and integer <= @max_canonical_integer and
-          Integer.to_string(integer) == value
-
-      _ ->
-        false
+    case Uint64.parse_text(value) do
+      {:ok, integer} -> integer > @max_safe_integer
+      :error -> false
     end
   end
 
@@ -2124,6 +2243,8 @@ defmodule Treehouse.CatalogTrust do
          catalog_heads,
          routes
        ) do
+    unless RawObservationBounds.within_evidence?(next), do: refuse(:invalid_verified_history)
+
     %{
       kind: kind,
       expected: expected,

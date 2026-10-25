@@ -67,6 +67,27 @@ defmodule Lattice2.LogAuthenticityTest do
     end
   end
 
+  test "bounded byte ingress preserves file restore semantics without writing", %{
+    log: log,
+    path: path
+  } do
+    bytes = Log.dump_bytes(log)
+    assert {:ok, observed} = Log.restore_verified_bytes(bytes)
+    assert observed.log == log
+
+    assert {:ok, %{log: ^log}} =
+             Log.restore_verified_bytes(
+               :erlang.term_to_binary({:lattice_log_dump_v1, log}, [:compressed])
+             )
+
+    File.write!(path, bytes)
+    assert {:ok, ^observed} = Log.restore_verified(path)
+    assert File.read!(path) == bytes
+    assert {:error, :invalid_log} = Log.restore_verified_bytes(nil)
+    assert {:error, :invalid_log} = Log.restore_verified(nil)
+    assert {:error, _} = Log.restore_verified_bytes("not a dump")
+  end
+
   test "verified restore fingerprints captured legacy bytes without rewriting them", context do
     %{log: log, path: path} = context
     bytes = :erlang.term_to_binary({:lattice_log_dump_v1, log})

@@ -1,12 +1,14 @@
 //! Bounded JSON with duplicate-name refusal. Artifacts reject negative/floating
 //! numbers; raw observations preserve them only for later refusal classification.
-use super::canonical::{Result, MAX_BYTES, MAX_DEPTH, MAX_NODES, MAX_OBSERVATION_INPUT};
+use super::canonical::{
+    Result, MAX_BYTES, MAX_DEPTH, MAX_JSON_DEPTH, MAX_NODES, MAX_OBSERVATION_INPUT,
+};
 use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 use std::fmt;
 
 pub fn parse(bytes: &[u8]) -> Result<Value> {
-    parse_bounded(bytes, MAX_BYTES, MAX_NODES, MAX_DEPTH * 2 + 2, false)
+    parse_bounded(bytes, MAX_BYTES, MAX_NODES, MAX_JSON_DEPTH, false)
 }
 
 pub(crate) fn parse_observation(bytes: &[u8]) -> Result<Value> {
@@ -14,7 +16,7 @@ pub(crate) fn parse_observation(bytes: &[u8]) -> Result<Value> {
         bytes,
         MAX_OBSERVATION_INPUT,
         MAX_OBSERVATION_INPUT,
-        MAX_DEPTH * 2 + 8,
+        (MAX_DEPTH + 1) * 3 + 10,
         true,
     )
 }

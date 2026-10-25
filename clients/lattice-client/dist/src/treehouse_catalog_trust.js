@@ -1,3 +1,4 @@
+import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
 // This module proposes decisions over an adapter-owned complete snapshot. It
 // performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
 // installation receipt. The expected token is reflected for the trusted adapter
@@ -75,7 +76,7 @@ export async function evaluateTreehouseCatalogTrust(input) {
         const checked = await evaluateSnapshot({ installed: original, expected: { trustRevision: 0, historyGeneration: 0 },
             incoming: { catalogs: [], rotations: [], histories: [], cutoffProofs: [] } }, true);
         if (checked.kind === "reject")
-            throw new Refusal("trust_recovery_required", checked.detail);
+            fail("trust_recovery_required");
         if (candidate === undefined)
             throw candidateError;
         return await evaluateSnapshot({ installed: original, ...candidate }, false);
@@ -94,7 +95,17 @@ async function evaluateSnapshot(value, originalOnly) {
         if (!stateValid(value.installed))
             fail("trust_recovery_required");
         const original = value.installed;
+        for (const raw of value.incoming.histories) {
+            const family = continuationFamily(raw.replica);
+            if (family !== "space" && family !== "thread")
+                fail("wrong_catalog_scope");
+        }
+        if (!withinCatalogRawEvidenceBounds(value.incoming))
+            fail("invalid_verified_history");
         const next = structuredClone(original);
+        for (const raw of value.incoming.histories)
+            await authenticateFrames(raw);
+        await validateRejectedHistories(value.incoming.histories);
         const histories = await mergeHistories(original.histories, value.incoming.histories);
         validateStoredClosure(original);
         next.histories = [...histories.values()].map((h) => h.raw).sort((a, b) => compareUtf8(a.replica, b.replica));
@@ -319,7 +330,7 @@ async function evaluateSnapshot(value, originalOnly) {
         }
         if (originalOnly) {
             await validateStoredBlock(original, next.blocked, catalogs, bindings, histories);
-            if (original.cutoffProofs.length !== next.cutoffProofs.length)
+            if (!equal(original.cutoffProofs, next.cutoffProofs))
                 fail("trust_recovery_required");
             return issue("unchanged", value.expected, original, original.blocked?.reason ?? null, replacement, bootstrapIds, heads, catalogHeads, []);
         }
@@ -391,6 +402,8 @@ function rejection(error) {
     return error instanceof Refusal ? { kind: "reject", reason: error.reason, detail: error.info } : { kind: "reject", reason: "malformed_catalog", detail: detail() };
 }
 function issue(kind, expected, next, reason, replacementConfigured, bootstrapIds, bindingHeads, catalogHeads, routes) {
+    if (!withinCatalogRawEvidenceBounds(next))
+        fail("invalid_verified_history");
     const result = { kind, expected, next, reason, replacementConfigured, observed: { bootstrapIds, bindingHeads, catalogHeads },
         detail: detail(next.blocked?.opIds, null, next.blocked?.pendingProofIds), routes };
     decisions.set(result, { routes: structuredClone(routes), blocked: next.blocked?.reason ?? null });
@@ -487,7 +500,7 @@ function stateValid(v) {
         Array.isArray(w.frontier) && w.frontier.every(idValid) && Array.isArray(w.opIds) && w.opIds.every(idValid)) ||
         !v.blocked.triggers.every((t) => closed(t, ["kind", "id", "digest", "bytes"]) && (t.kind === "catalog" || t.kind === "rotation") && idValid(t.id) && idValid(t.digest) && safe(t.bytes))))
         return false;
-    return true;
+    return withinCatalogRawEvidenceBounds(v);
 }
 function validateStoredClosure(state) {
     for (const history of state.histories) {
@@ -649,7 +662,10 @@ async function observeHistory(raw) {
     const family = continuationFamily(raw.replica);
     if (family !== "space" && family !== "thread")
         fail("wrong_catalog_scope");
+    if (!withinCatalogRawHistoriesBounds([raw]))
+        fail("invalid_verified_history");
     const missing = await authenticateFrames(raw);
+    await validateRejectedHistories([raw]);
     if (missing.length > 0)
         fail("trust_pending", missing);
     const ids = new Set(raw.frames.map((f) => f.id));
@@ -680,24 +696,61 @@ async function authenticateFrames(raw) {
     // Authentication before a fetch refusal prevents forged partial input being
     // mislabeled as a harmless missing page. Full portable validation follows.
     for (const value of raw.frames) {
-        const f = value;
-        try {
-            if (!text(f.id) || f.replica !== raw.replica || ids.has(f.id) || !Array.isArray(f.deps) || !f.deps.every(text))
-                fail("invalid_verified_history");
-            const bytes = canonicalBytesForCarrierOp(f), key = canonicalBase64Bytes(f.author, 32), sig = canonicalBase64Bytes(f.sig, 64);
-            if (key === null || sig === null || await canonicalHash(bytes) !== f.id || !ed25519.verify(sig, bytes, key, { zip215: false }))
-                fail("invalid_verified_history");
-            ids.add(f.id);
-        }
-        catch (error) {
-            if (error instanceof Refusal)
-                throw error;
+        const proof = await authenticatedRawHeader(value, raw.replica);
+        if (proof === null || ids.has(proof.id) || !proof.deps.every(text))
             fail("invalid_verified_history");
-        }
+        ids.add(proof.id);
     }
     return sorted(raw.frames.flatMap((f) => f.deps.filter((id) => !ids.has(id))));
 }
+async function authenticatedRawHeader(value, replica) {
+    try {
+        if (!closed(value, ["v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig"]) || value.v !== 1 ||
+            !text(value.id) || value.replica !== replica || typeof value.kind !== "string" || !Array.isArray(value.deps) || !value.deps.every((v) => typeof v === "string") ||
+            !withinCatalogRawObservationBounds(value))
+            return null;
+        const frame = value;
+        const bytes = canonicalBytesForCarrierOp(frame), key = canonicalBase64Bytes(frame.author, 32), sig = canonicalBase64Bytes(frame.sig, 64);
+        if (key === null || sig === null || await canonicalHash(bytes) !== frame.id || !ed25519.verify(sig, bytes, key, { zip215: false }))
+            return null;
+        return { id: frame.id, deps: frame.deps };
+    }
+    catch {
+        return null;
+    }
+}
+async function validateRejectedHistories(histories) {
+    let unsupported = false;
+    for (const raw of histories) {
+        for (const record of raw.rejected)
+            if (await authenticatedRawHeader(record.frame, raw.replica) !== null)
+                fail("invalid_verified_history");
+        const checked = await deriveTreehouseCatalogCutoff({ ...raw, frames: [] });
+        if (!checked.ok && checked.reason === "invalid_verified_history")
+            fail(checked.reason);
+        if (!checked.ok)
+            unsupported = true;
+    }
+    if (unsupported)
+        fail("unsupported_cutoff");
+}
 async function mergeHistories(saved, incoming) {
+    // Page shape and family precede merging and cryptographic classification.
+    for (const list of [saved, incoming])
+        for (const raw of list) {
+            if (!historyValid(raw))
+                fail("invalid_verified_history");
+        }
+    for (const list of [saved, incoming])
+        for (const raw of list) {
+            const family = continuationFamily(raw.replica);
+            if (family !== "space" && family !== "thread")
+                fail("wrong_catalog_scope");
+        }
+    for (const list of [saved, incoming]) {
+        if (!withinCatalogRawHistoriesBounds(list))
+            fail("invalid_verified_history");
+    }
     const map = new Map();
     for (const list of [saved, incoming]) {
         const seen = new Set();
@@ -721,7 +774,7 @@ async function mergeHistories(saved, incoming) {
                         duplicates.add(f.id);
                         const old = by.get(f.id);
                         if (old !== undefined && fingerprint(frame(old)) !== fingerprint(f))
-                            fail("invalid_verified_history");
+                            fail("invalid_verified_history", [f.id]);
                         by.set(f.id, old ?? item);
                     }
                 }
@@ -731,18 +784,12 @@ async function mergeHistories(saved, incoming) {
                 rejected: merge(prior.rejected, history.rejected, (v) => v.frame) });
         }
     }
+    if (!withinCatalogRawHistoriesBounds([...map.values()]))
+        fail("invalid_verified_history");
     const missing = [];
-    let unsupported = false;
-    for (const raw of map.values()) {
+    for (const raw of map.values())
         missing.push(...await authenticateFrames(raw));
-        const rejected = await deriveTreehouseCatalogCutoff({ ...raw, frames: [] });
-        if (!rejected.ok && rejected.reason === "invalid_verified_history")
-            fail(rejected.reason);
-        if (!rejected.ok)
-            unsupported = true;
-    }
-    if (unsupported)
-        fail("unsupported_cutoff");
+    await validateRejectedHistories(map.values());
     if (missing.length > 0)
         fail("trust_pending", missing);
     const observed = new Map();
@@ -750,6 +797,7 @@ async function mergeHistories(saved, incoming) {
         observed.set(id, await observeHistory(raw));
     return observed;
 }
+// Compare the signed payload and signature while retaining the first raw values.
 function fingerprint(f) { return `${f.id}:${hash(canonicalBytesForCarrierOp(f))}:${f.sig}`; }
 function hash(bytes) {
     const digest = sha256(bytes);
@@ -850,19 +898,28 @@ function entryProof(entry, histories, space) {
 }
 async function mergeProofs(saved, incoming, histories) {
     const proofs = new Map();
+    const membership = new Map();
     for (const proof of [...saved, ...incoming]) {
-        if (!closed(proof, ["cutoff", "history"]) || normalizeCatalogCutoff(proof.cutoff) === null || !historyValid(proof.history))
+        if (!closed(proof, ["cutoff", "history"]) || normalizeCatalogCutoff(proof.cutoff) === null)
             fail("malformed_catalog");
+        // A proof claims a complete immutable point; it cannot solicit incremental ancestors.
+        if (!historyValid(proof.history) || !["space", "thread"].includes(continuationFamily(proof.history.replica)))
+            fail("recovery_incomplete");
         const observed = await deriveTreehouseCatalogCutoff(proof.history);
         if (!observed.ok)
-            fail(observed.reason);
+            fail("recovery_incomplete");
         if (!equal(observed.cutoff, proof.cutoff))
             fail("recovery_incomplete", [proof.cutoff.logDigest]);
         const current = histories.get(proof.history.replica);
         if (current === undefined)
             fail("recovery_incomplete", [proof.cutoff.logDigest]);
-        const present = new Set(current.raw.frames.map((f) => fingerprint(f)));
-        const rejected = new Set(current.raw.rejected.map((r) => fingerprint(r.frame)));
+        let members = membership.get(proof.history.replica);
+        if (members === undefined) {
+            members = { present: new Set(current.raw.frames.map((f) => fingerprint(f))),
+                rejected: new Set(current.raw.rejected.map((r) => fingerprint(r.frame))) };
+            membership.set(proof.history.replica, members);
+        }
+        const { present, rejected } = members;
         if (proof.history.frames.some((f) => !present.has(fingerprint(f))) || proof.history.rejected.some((r) => !rejected.has(fingerprint(r.frame))))
             fail("recovery_incomplete", [proof.cutoff.logDigest]);
         const key = `${proof.cutoff.replica}:${proof.cutoff.logDigest}`;
