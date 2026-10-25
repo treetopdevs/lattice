@@ -106,7 +106,13 @@ try {
   writeFileSync(join(evidence, "result.json"), JSON.stringify({ status: "PASS", variant: "ordinary", founder: founder.publicKey, joiner: joiner.publicKey,
     identitySource: "independent OS Keychain contexts; no injected seeds", profilesInstalledOnJoiner: 0, relayConfigured: false }, null, 2));
 } finally {
-  await stop(); security("list-keychains", "-d", "user", "-s", ...priorSearch); security("default-keychain", "-d", "user", "-s", priorDefault);
-  if (existsSync(joinKeychain)) security("delete-keychain", joinKeychain);
-  writeFileSync(join(evidence, "app.log"), logs.join(""));
+  const failures: unknown[] = [];
+  for (const cleanup of [
+    async () => stop(),
+    async () => { security("list-keychains", "-d", "user", "-s", ...priorSearch); },
+    async () => { security("default-keychain", "-d", "user", "-s", priorDefault); },
+    async () => { if (existsSync(joinKeychain)) security("delete-keychain", joinKeychain); },
+    async () => { writeFileSync(join(evidence, "app.log"), logs.join("")); },
+  ]) { try { await cleanup(); } catch (error) { failures.push(error); } }
+  if (failures.length) throw new AggregateError(failures, "Packaged-test cleanup failed; every restoration was attempted");
 }
