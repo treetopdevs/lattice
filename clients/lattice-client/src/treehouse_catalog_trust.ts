@@ -1,4 +1,4 @@
-import { withinCatalogRawObservationBounds } from "./treehouse_catalog_raw_bounds";
+import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds } from "./treehouse_catalog_raw_bounds";
 import type { CatalogCutoff } from "./treehouse_catalog_codec";
 
 // This module proposes decisions over an adapter-owned complete snapshot. It
@@ -575,6 +575,7 @@ async function observeHistory(raw: TreehouseCatalogRawHistory): Promise<Observed
   if (!historyValid(raw)) fail("invalid_verified_history");
   const family = continuationFamily(raw.replica);
   if (family !== "space" && family !== "thread") fail("wrong_catalog_scope");
+  if (!withinCatalogRawHistoriesBounds([raw])) fail("invalid_verified_history");
   const missing = await authenticateFrames(raw);
   await validateRejectedHistories([raw]);
   if (missing.length > 0) fail("trust_pending", missing);
@@ -634,6 +635,9 @@ async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], inco
     const family = continuationFamily(raw.replica);
     if (family !== "space" && family !== "thread") fail("wrong_catalog_scope");
   }
+  for (const list of [saved, incoming]) {
+    if (!withinCatalogRawHistoriesBounds(list)) fail("invalid_verified_history");
+  }
   const map = new Map<string, TreehouseCatalogRawHistory>();
   for (const list of [saved, incoming]) {
     const seen = new Set<string>();
@@ -661,6 +665,7 @@ async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], inco
         rejected: merge(prior.rejected, history.rejected, (v) => v.frame as CarrierOpFrame)});
     }
   }
+  if (!withinCatalogRawHistoriesBounds([...map.values()])) fail("invalid_verified_history");
   const missing: string[] = [];
   for (const raw of map.values()) missing.push(...await authenticateFrames(raw));
   await validateRejectedHistories(map.values());

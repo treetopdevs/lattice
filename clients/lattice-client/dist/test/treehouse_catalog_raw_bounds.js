@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withinCatalogRawObservationBounds as bounded } from "../src/treehouse_catalog_raw_bounds";
+import { withinCatalogRawObservationBounds as bounded, withinCatalogRawHistoriesBounds as historiesBounded } from "../src/treehouse_catalog_raw_bounds";
 // This seam proves only resource budgets. These intentionally unsigned objects
 // cannot pass the separate closed-header/authentication gate.
 test("raw string budget is exact in UTF-8 bytes, including metadata", () => {
@@ -42,4 +42,27 @@ test("raw JSON depth and cycles cannot grow a traversal stack without bound", ()
     const cycle = [];
     cycle.push(cycle);
     assert.equal(bounded({ body: cycle, cap: ["nil"] }), false);
+});
+test("history string budget is shared across frames and replicas at the exact maximum", () => {
+    const available = 64 * 1024 * 1024 - 2 * Buffer.byteLength("replicaframesrejectedr1bodycapatomnil");
+    const frame = { body: ["atom", "z".repeat(available / 2)], cap: ["nil"] };
+    const histories = [{ replica: "r1", frames: [frame], rejected: [] }, { replica: "r2", frames: [frame], rejected: [] }];
+    assert.equal(bounded(frame), true);
+    assert.equal(historiesBounded(histories), true);
+    histories[1].frames = [{ body: ["atom", "z".repeat(available / 2) + "z"], cap: ["nil"] }];
+    assert.equal(bounded(histories[1].frames[0]), true);
+    assert.equal(historiesBounded(histories), false);
+});
+test("history depth preserves the maximum rejected-frame wrapper context", () => {
+    const nested = (depth) => { let v = 0; for (let i = 0; i < depth; i++)
+        v = [v]; return v; };
+    const history = (depth) => [{ replica: "r", frames: [], rejected: [{ frame: { padding: nested(depth) }, reason: "bad_signature" }] }];
+    assert.equal(historiesBounded(history(198)), true);
+    assert.equal(historiesBounded(history(199)), false);
+});
+test("history node budget counts shared occurrences at the actual maximum", () => {
+    const history = (nodes) => [{ replica: "r", frames: [{ body: ["nil"], cap: ["nil"], padding: forest(nodes) }], rejected: [] }];
+    // History wrappers and all non-padding nodes consume sixteen nodes.
+    assert.equal(historiesBounded(history(64 * 1024 * 1024 - 16)), true);
+    assert.equal(historiesBounded(history(64 * 1024 * 1024 - 15)), false);
 });

@@ -98,6 +98,29 @@ Both independent reviewers confirm these source changes; all five focused tests
 and strict lint pass. Refreshed full gates remain; no earlier full check is credited
 to this correction. Aggregate and remaining matrix work stays open.
 
+A history-aggregate checkpoint shares 67,108,864 logical nodes and UTF-8 string
+bytes across accepted/rejected evidence and all replicas in each incoming batch
+and merged retained union. Public history metadata counts; BEAM normalizes only
+its known history/rejection wrapper keys to the public spelling. The JSON bound
+is 203, adding four rejected-record/history wrappers to the 199-frame context.
+Frame domain/crypto/admission rules remain separate. Exact shared string and node
+maxima/one-over tests and maximum rejected wrapper tests exercise actual budgets.
+Fresh signed two-frame evidence at the 64 MiB history string maximum reaches
+unsupported portability in both public APIs/owners; one byte over is invalid,
+and a forged at-limit signature is invalid. This is TS-produced aggregate evidence;
+an independent BEAM producer, proof-history/page metadata aggregation and transport
+preallocation limits remain open. Both protected reviews found no contract defect;
+a redundant repeated BEAM walk was removed following standards feedback and
+independently confirmed. All 12 focused BEAM/reciprocal tests, six direct TS
+budget tests, client build and strict lint pass. Final full gates remain open.
+
+The external fix confirmation requested stronger controls. Solo forged and wrong-
+scope histories now have explicit refusals. A new independently signed suffix has
+a nonempty saved dependency, is absent from the base, yields exact pending ids
+when isolated, and is retained exactly after successful incremental delivery.
+Both fresh producer directions pass these stronger controls. No earlier vacuous
+zero-dependency control is credited as proof of saved-ancestor closure.
+
 ## Reproduced problem
 
 The same fresh valid Space bootstrap history produces `propose` in both owners.

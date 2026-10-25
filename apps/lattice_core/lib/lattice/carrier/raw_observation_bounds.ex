@@ -15,6 +15,28 @@ defmodule Lattice.Carrier.RawObservationBounds do
   def within?(value),
     do: observation_bound?([{:value, value, @max_json_depth}], 67_108_864, 67_108_864)
 
+  @doc "Bound all public history evidence together before cryptographic replay."
+  @spec within_histories?(term()) :: boolean()
+  def within_histories?(histories) when is_list(histories) do
+    public = Enum.map(histories, &public_history/1)
+    observation_bound?([{:value, public, @max_json_depth + 4}], 67_108_864, 67_108_864)
+  rescue
+    _ -> false
+  end
+
+  def within_histories?(_), do: false
+
+  defp public_history(history) do
+    %{
+      "replica" => history.replica,
+      "frames" => history.frames,
+      "rejected" =>
+        Enum.map(history.rejected, fn record ->
+          %{"frame" => record.frame, "reason" => Atom.to_string(record.reason)}
+        end)
+    }
+  end
+
   defp observation_bound?(_pending, nodes, bytes) when nodes < 0 or bytes < 0, do: false
   defp observation_bound?([], _nodes, _bytes), do: true
 

@@ -111,7 +111,8 @@ defmodule Treehouse.CatalogIncomingRecoveryTest do
 
     for {name, histories} <- [
           {"scope-forged", [wrong, forged]},
-          {"forged-scope", [forged, wrong]}
+          {"forged-scope", [forged, wrong]},
+          {"scope-only", [wrong]}
         ] do
       decision = evaluate(base, page(histories))
       assert decision.kind == :reject
@@ -119,14 +120,36 @@ defmodule Treehouse.CatalogIncomingRecoveryTest do
       assert summary(decision) == expected[name]
     end
 
-    complete =
-      Enum.find(bundle["cases"], &String.contains?(&1["name"], "depth-64"))["history"]
-      |> history()
+    forged_only = evaluate(base, page([forged]))
+    assert forged_only.kind == :reject
+    assert forged_only.reason == :invalid_verified_history
+    assert forged_only.detail.ids == []
+    assert summary(forged_only) == expected["forged-only"]
+    suffix = bundle["incrementalFrame"]
+    deps = suffix["deps"] |> Enum.uniq() |> Enum.sort()
+    retained = Enum.find(base.histories, &(&1.replica == suffix["replica"]))
+    assert deps != []
+    refute Enum.any?(retained.frames, &(&1["id"] == suffix["id"]))
+    assert Enum.all?(deps, fn id -> Enum.any?(retained.frames, &(&1["id"] == id)) end)
+    suffix_history = %{replica: suffix["replica"], frames: [suffix], rejected: []}
 
-    incremental = %{complete | frames: [List.last(complete.frames)], rejected: []}
-    decision = evaluate(base, page([incremental]))
+    isolated =
+      CatalogTrust.prepare_installation(%{
+        review: base.review,
+        history: suffix_history,
+        store: %{kind: :verified_fresh, expected: @expected}
+      })
+
+    assert isolated.kind == :reject
+    assert isolated.reason == :trust_pending
+    assert isolated.detail.ids == deps
+    assert summary(isolated) == expected["isolated-suffix"]
+    decision = evaluate(base, page([suffix_history]))
     assert decision.kind == :propose
+    assert decision.reason == nil
+    assert decision.detail.ids == []
     assert decision.next.accepted == base.accepted
+    assert suffix in Enum.find(decision.next.histories, &(&1.replica == suffix["replica"])).frames
     assert summary(decision) == expected["incremental"]
   end
 
@@ -225,6 +248,9 @@ defmodule Treehouse.CatalogIncomingRecoveryTest do
         |> CatalogTrustVectors.artifact_json(),
       forkHistory: %{space | frames: space.frames ++ [Wire.encode_op(fork)]},
       deepFrame: frames[65],
+      incrementalFrame:
+        Op.new(f.space.root, f.space.replica, [hd(Log.frontier(f.space_log))], :command, nil)
+        |> Wire.encode_op(),
       cases: cases
     }
   end

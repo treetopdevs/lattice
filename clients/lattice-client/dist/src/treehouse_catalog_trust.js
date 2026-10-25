@@ -1,4 +1,4 @@
-import { withinCatalogRawObservationBounds } from "./treehouse_catalog_raw_bounds";
+import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds } from "./treehouse_catalog_raw_bounds";
 // This module proposes decisions over an adapter-owned complete snapshot. It
 // performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
 // installation receipt. The expected token is reflected for the trusted adapter
@@ -650,6 +650,8 @@ async function observeHistory(raw) {
     const family = continuationFamily(raw.replica);
     if (family !== "space" && family !== "thread")
         fail("wrong_catalog_scope");
+    if (!withinCatalogRawHistoriesBounds([raw]))
+        fail("invalid_verified_history");
     const missing = await authenticateFrames(raw);
     await validateRejectedHistories([raw]);
     if (missing.length > 0)
@@ -733,6 +735,10 @@ async function mergeHistories(saved, incoming) {
             if (family !== "space" && family !== "thread")
                 fail("wrong_catalog_scope");
         }
+    for (const list of [saved, incoming]) {
+        if (!withinCatalogRawHistoriesBounds(list))
+            fail("invalid_verified_history");
+    }
     const map = new Map();
     for (const list of [saved, incoming]) {
         const seen = new Set();
@@ -766,6 +772,8 @@ async function mergeHistories(saved, incoming) {
                 rejected: merge(prior.rejected, history.rejected, (v) => v.frame) });
         }
     }
+    if (!withinCatalogRawHistoriesBounds([...map.values()]))
+        fail("invalid_verified_history");
     const missing = [];
     for (const raw of map.values())
         missing.push(...await authenticateFrames(raw));

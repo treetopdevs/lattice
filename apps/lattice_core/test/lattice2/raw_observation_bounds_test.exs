@@ -44,6 +44,47 @@ defmodule Lattice.RawObservationBoundsTest do
            })
   end
 
+  test "history string budget is shared across frames and replicas at the exact maximum" do
+    available = 67_108_864 - 2 * byte_size("replicaframesrejectedr1bodycapatomnil")
+    frame = %{"body" => ["atom", :binary.copy("z", div(available, 2))], "cap" => ["nil"]}
+    one = %{replica: "r1", frames: [frame], rejected: []}
+    two = %{one | replica: "r2"}
+    assert RawObservationBounds.within?(frame)
+    assert RawObservationBounds.within_histories?([one, two])
+    extra = put_in(frame["body"], ["atom", :binary.copy("z", div(available, 2)) <> "z"])
+    assert RawObservationBounds.within?(extra)
+    refute RawObservationBounds.within_histories?([one, %{two | frames: [extra]}])
+  end
+
+  test "history depth preserves the maximum rejected-frame wrapper context" do
+    for {depth, expected} <- [{198, true}, {199, false}] do
+      nested = Enum.reduce(1..depth, 0, fn _, value -> [value] end)
+
+      history = %{
+        replica: "r",
+        frames: [],
+        rejected: [%{frame: %{"padding" => nested}, reason: :bad_signature}]
+      }
+
+      assert RawObservationBounds.within_histories?([history]) == expected
+    end
+  end
+
+  test "history node budget counts shared occurrences at the actual maximum" do
+    history = fn nodes ->
+      [
+        %{
+          replica: "r",
+          frames: [%{"body" => ["nil"], "cap" => ["nil"], "padding" => forest(nodes)}],
+          rejected: []
+        }
+      ]
+    end
+
+    assert RawObservationBounds.within_histories?(history.(67_108_864 - 16))
+    refute RawObservationBounds.within_histories?(history.(67_108_864 - 15))
+  end
+
   # Compact immutable sharing exercises the real maximum without allocating
   # sixty-seven million input cells. The production walk must count occurrences.
   defp forest(nodes) do

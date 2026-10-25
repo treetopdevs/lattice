@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {trustFixture,fixtureId,signedCatalog} from "./export_treehouse_catalog_trust";
+import {authorCarrierOpUnchecked} from "./unchecked_author";
+import type {CarrierOpFrame} from "../../src/carrier";
 import {boundaryCases} from "./catalog_incoming_boundary_cases";
 import {authorTreehouseCommand} from "../../src/treehouse";
 import {transportCatalogId} from "../../src/treehouse_catalog_codec";
 import {prepareTreehouseCatalogInstallation,evaluateTreehouseCatalogTrust} from "../../src/treehouse_catalog_trust";
 import type {InstalledTreehouseCatalogTrustV1,TreehouseCatalogEvidencePage,TreehouseCatalogRawHistory,TreehouseCatalogTrustDecision} from "../../src/treehouse_catalog_trust";
 const expected={trustRevision:0,historyGeneration:0};
-interface Bundle {review:InstalledTreehouseCatalogTrustV1["review"];histories:TreehouseCatalogRawHistory[];catalogJson:string;advancedCatalogJson:string;forkHistory:TreehouseCatalogRawHistory;deepFrame:unknown;cases:{name:string;history:TreehouseCatalogRawHistory}[];}
+interface Bundle {review:InstalledTreehouseCatalogTrustV1["review"];histories:TreehouseCatalogRawHistory[];catalogJson:string;advancedCatalogJson:string;forkHistory:TreehouseCatalogRawHistory;deepFrame:unknown;incrementalFrame:CarrierOpFrame;cases:{name:string;history:TreehouseCatalogRawHistory}[];}
 const page=(histories:TreehouseCatalogRawHistory[]=[]):TreehouseCatalogEvidencePage=>({catalogs:[],rotations:[],histories,cutoffProofs:[]});
 async function produce():Promise<Bundle>{
  const f=await trustFixture(1);
@@ -17,7 +19,7 @@ async function produce():Promise<Bundle>{
  const names=new Set(["depth-64-complete","depth-65-complete","depth-66-partial","push-64000-complete","push-64001-complete","forged-depth-65-partial"]);
  const inputs=(await boundaryCases(f)).filter(([name])=>names.has(name));
  assert.equal(inputs.length,names.size);
- return {review:f.review,histories:f.histories,catalogJson:f.catalogJson,advancedCatalogJson:await signedCatalog({...f.catalog,revision:1,previous:transportCatalogId(f.catalog)},f.catalogSigner),forkHistory:{...f.histories[0]!,frames:[...f.histories[0]!.frames,fork]},deepFrame:inputs.find(([name])=>name==="depth-65-complete")![1].at(-1),cases:inputs.map(([name,frames])=>({name,history:{replica:f.space.replica,frames,rejected:[]}}))};
+ return {review:f.review,histories:f.histories,catalogJson:f.catalogJson,advancedCatalogJson:await signedCatalog({...f.catalog,revision:1,previous:transportCatalogId(f.catalog)},f.catalogSigner),forkHistory:{...f.histories[0]!,frames:[...f.histories[0]!.frames,fork]},incrementalFrame:await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[f.histories[0]!.frames.at(-1)!.id],kind:"command",body:["nil"],cap:["nil"]}),deepFrame:inputs.find(([name])=>name==="depth-65-complete")![1].at(-1),cases:inputs.map(([name,frames])=>({name,history:{replica:f.space.replica,frames,rejected:[]}}))};
 }
 function summary(d:TreehouseCatalogTrustDecision){
  const state=d.kind==="reject"?null:d.next;
@@ -33,14 +35,24 @@ async function run(bundle:Bundle){
  const observations=[];
  const wrong:TreehouseCatalogRawHistory={replica:"not-a-treehouse-family",frames:[],rejected:[]};
  const forged:TreehouseCatalogRawHistory={replica:bundle.review.space,frames:[{...(bundle.deepFrame as object),sig:Buffer.alloc(64).toString("base64")}],rejected:[]};
- for(const [name,histories] of [["scope-forged",[wrong,forged]],["forged-scope",[forged,wrong]]] as const){
+ for(const [name,histories] of [["scope-forged",[wrong,forged]],["forged-scope",[forged,wrong]],["scope-only",[wrong]]] as const){
   const decision=await evaluateTreehouseCatalogTrust({installed:first.next,expected,incoming:page([...histories])});
   assert.equal(decision.kind,"reject");assert.equal(decision.reason,"wrong_catalog_scope");
   observations.push({name,decision:summary(decision)});
  }
- const complete=bundle.cases.find(c=>c.name.includes("depth-64"))!.history;
- const incremental=await evaluateTreehouseCatalogTrust({installed:first.next,expected,incoming:page([{...complete,frames:[complete.frames.at(-1)!],rejected:[]}])});
- assert.equal(incremental.kind,"propose");assert.deepEqual(incremental.next.accepted,first.next.accepted);
+ const forgedOnly=await evaluateTreehouseCatalogTrust({installed:first.next,expected,incoming:page([forged])});
+ assert.equal(forgedOnly.kind,"reject");assert.equal(forgedOnly.reason,"invalid_verified_history");assert.deepEqual(forgedOnly.detail.ids,[]);
+ observations.push({name:"forged-only",decision:summary(forgedOnly)});
+ const suffix=bundle.incrementalFrame, deps=[...new Set(suffix.deps)].sort();
+ assert.ok(deps.length>0);assert.ok(!first.next.histories.some(h=>h.frames.some(f=>(f as CarrierOpFrame).id===suffix.id)));
+ assert.ok(deps.every(id=>first.next.histories.find(h=>h.replica===suffix.replica)!.frames.some(f=>(f as CarrierOpFrame).id===id)));
+ const suffixHistory:TreehouseCatalogRawHistory={replica:suffix.replica,frames:[suffix],rejected:[]};
+ const isolated=await prepareTreehouseCatalogInstallation({review:bundle.review,history:suffixHistory,store:{kind:"verified_fresh",expected}});
+ assert.equal(isolated.kind,"reject");assert.equal(isolated.reason,"trust_pending");assert.deepEqual(isolated.detail.ids,deps);
+ observations.push({name:"isolated-suffix",decision:summary(isolated)});
+ const incremental=await evaluateTreehouseCatalogTrust({installed:first.next,expected,incoming:page([suffixHistory])});
+ assert.equal(incremental.kind,"propose");assert.equal(incremental.reason,null);assert.deepEqual(incremental.detail.ids,[]);assert.deepEqual(incremental.next.accepted,first.next.accepted);
+ assert.deepEqual(incremental.next.histories.find(h=>h.replica===suffix.replica)!.frames.find(f=>(f as CarrierOpFrame).id===suffix.id),suffix);
  observations.push({name:"incremental",decision:summary(incremental)});
  for(const [label,original] of [["accepted",first.next],["blocked",frozen.next]] as const){
   const base:InstalledTreehouseCatalogTrustV1=JSON.parse(JSON.stringify(original));

@@ -21,7 +21,7 @@ function* pairs(value) {
         yield pair[1];
     }
 }
-export function withinCatalogRawObservationBounds(frame) {
+function withinJsonBounds(frame, maxDepth) {
     try {
         let nodes = 0, bytes = 0;
         const pending = [{ values: [frame].values() }];
@@ -45,7 +45,7 @@ export function withinCatalogRawObservationBounds(frame) {
                     return false;
             }
             else if (value !== null && typeof value === "object") {
-                if (pending.length > MAX_JSON_DEPTH || active.has(value))
+                if (pending.length > maxDepth || active.has(value))
                     return false;
                 active.add(value);
                 pending.push({ values: Array.isArray(value) ? value.values() : fields(value), owner: value });
@@ -53,6 +53,22 @@ export function withinCatalogRawObservationBounds(frame) {
             else if (value !== null && typeof value !== "number" && typeof value !== "boolean")
                 return false;
         }
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+// Histories are public JSON-shaped values. Three wrappers precede accepted
+// frames; rejected records add one more. Count every occurrence, including
+// repeated/shared frames, before any cryptographic replay.
+export function withinCatalogRawHistoriesBounds(histories) {
+    return withinJsonBounds(histories, MAX_JSON_DEPTH + 4);
+}
+export function withinCatalogRawObservationBounds(frame) {
+    if (!withinJsonBounds(frame, MAX_JSON_DEPTH))
+        return false;
+    try {
         const raw = frame;
         const terms = [{ values: [raw.body, raw.cap].values(), depth: MAX_DEPTH }];
         while (terms.length > 0) {

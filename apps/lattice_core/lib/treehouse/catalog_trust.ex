@@ -8,7 +8,7 @@ defmodule Treehouse.CatalogTrust do
 
   alias Lattice.{Authority, Canonical, Identity, Log, Op}
   alias Lattice.Authority.{Continuation, ContinuationCertificate}
-  alias Lattice.Carrier.Wire
+  alias Lattice.Carrier.{RawObservationBounds, Wire}
   alias Treehouse.{CatalogBootstrap, CatalogCutoff, CatalogEntries, Space, TransportCatalog}
 
   @history_fields [:replica, :frames, :rejected]
@@ -1379,6 +1379,13 @@ defmodule Treehouse.CatalogTrust do
   defp histories!(raws, source) when is_list(raws) do
     if not proper_list?(raws), do: refuse(history_reason(source))
 
+    if source == :incoming do
+      preflight_incoming!(raws)
+    else
+      unless Enum.all?(raws, &history_shape?/1) and RawObservationBounds.within_histories?(raws),
+        do: refuse(history_reason(source))
+    end
+
     duplicates = raws |> Enum.map(&Map.get(&1, :replica)) |> duplicate?()
     if duplicates, do: refuse(history_reason(source))
 
@@ -1423,11 +1430,11 @@ defmodule Treehouse.CatalogTrust do
       unless Continuation.family(history.replica) in [{:bounded, :space}, {:bounded, :thread}],
         do: refuse(:wrong_catalog_scope)
     end)
+
+    unless RawObservationBounds.within_histories?(raws), do: refuse(:invalid_verified_history)
   end
 
   defp authenticate_incoming!(raws) do
-    preflight_incoming!(raws)
-
     checked =
       Enum.map(raws, fn history ->
         frames = Enum.map(history.frames, &authenticate_incoming_frame!(&1, history.replica))
