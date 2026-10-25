@@ -1,13 +1,31 @@
+import {readFileSync} from "node:fs";
 // Fresh public input and actual TS installation results; no saved verdict fallback.
 import {trustFixture,fixtureId} from './export_treehouse_catalog_trust';
 import {authorCarrierOpUnchecked} from './unchecked_author';
 import {prepareTreehouseCatalogInstallation} from '../../src/treehouse_catalog_trust';
 const f=await trustFixture(0);
 const frame=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[fixtureId('incoming-missing')],kind:'command',body:['atom','outside_wire_vocabulary'],cap:['nil']});
+const known=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[fixtureId('incoming-missing-2'),fixtureId('incoming-missing')],kind:'command',body:['atom','post'],cap:['nil']});
+const completeUnknown=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[],kind:'command',body:['atom','outside_wire_vocabulary'],cap:['nil']});
+const nested=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[fixtureId('incoming-missing')],kind:'command',body:['map',[[['atom','post'],['tuple',[['atom','outside_wire_vocabulary']]]]]],cap:['nil']});
 const cases=[];
-for(const [name,frames] of [['fresh-complete',f.histories[0]!.frames],['signed-unknown-and-missing',[frame]],['forged-unknown-and-missing',[{...frame,sig:Buffer.alloc(64).toString('base64')}]]] as const){
- const history={replica:f.space.replica,frames,rejected:[]};
- const result=await prepareTreehouseCatalogInstallation({review:f.review,history,store:{kind:'verified_fresh',expected:{trustRevision:0,historyGeneration:0}}});
+const inputs:[string,unknown[]][]=[
+ ['fresh-complete',f.histories[0]!.frames],
+ ['signed-unknown-and-missing',[frame]],
+ ['forged-unknown-and-missing',[{...frame,sig:Buffer.alloc(64).toString('base64')}]],
+ ['signed-known-and-multiple-missing',[known]],
+ ['forged-known-and-multiple-missing',[{...known,sig:Buffer.alloc(64).toString('base64')}]],
+ ['signed-unknown-complete',[completeUnknown]],
+ ['forged-unknown-complete',[{...completeUnknown,sig:Buffer.alloc(64).toString('base64')}]],
+ ['nested-unknown-and-missing',[nested]],
+ ['duplicate-unknown-id',[frame,frame]],
+ ['partial-with-later-forgery',[known,{...frame,sig:Buffer.alloc(64).toString('base64')}]],
+ ['partial-with-earlier-forgery',[{...frame,sig:Buffer.alloc(64).toString('base64')},known]],
+ ['partial-wrong-replica',[{...frame,replica:'other-replica'}]],
+];
+const input=process.argv[2]==="--consume" ? JSON.parse(readFileSync(process.argv[3]!,"utf8")) : {review:f.review,cases:inputs.map(([name,frames])=>({name,history:{replica:f.space.replica,frames,rejected:[]}}))};
+for(const {name,history} of input.cases){
+ const result=await prepareTreehouseCatalogInstallation({review:input.review,history,store:{kind:'verified_fresh',expected:{trustRevision:0,historyGeneration:0}}});
  cases.push({name,history,ts:{kind:result.kind,reason:result.reason,detail:result.detail}});
 }
-console.log(JSON.stringify({review:f.review,cases}));
+console.log(JSON.stringify({review:input.review,cases}));

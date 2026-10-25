@@ -119,6 +119,90 @@ defmodule Lattice.Carrier.Wire do
   defp listed_name?(%CanonicalAtom{name: name}), do: WireVocabulary.known?(name)
   defp listed_name?(_value), do: false
 
+  @doc """
+  Authenticate raw public history without admitting an operation.
+
+  Unknown names remain canonical atom-name wrappers. Only header metadata is
+  returned; callers must still use closed wire decoding before semantics. The
+  observation has bounded nodes/string bytes and the existing term depth limit.
+  """
+  @spec authenticate_observation(term()) :: {:ok, map()} | {:error, :malformed_op}
+  def authenticate_observation(frame) do
+    with true <- observation_bound?([{:value, frame}], 67_108_864, 67_108_864),
+         true <- is_map(frame) and map_size(frame) == 9,
+         %{
+           "v" => 1,
+           "id" => id,
+           "replica" => replica,
+           "author" => author64,
+           "deps" => deps,
+           "kind" => kind,
+           "body" => body,
+           "cap" => cap,
+           "sig" => sig64
+         } <- frame,
+         true <- is_binary(id) and is_binary(replica) and is_binary(kind),
+         true <- is_list(deps) and Enum.all?(deps, &is_binary/1),
+         {:ok, author} <- Base.decode64(author64),
+         true <- byte_size(author) == 32 and Base.encode64(author) == author64,
+         {:ok, sig} <- Base.decode64(sig64),
+         true <- byte_size(sig) == 64 and Base.encode64(sig) == sig64,
+         {:ok, body} <- decode_term(body, @max_decode_depth, :observation),
+         {:ok, cap} <- decode_term(cap, @max_decode_depth, :observation),
+         true <- Canonical.signable?(body) and Canonical.signable?(cap),
+         true <-
+           Op.valid?(%Op{
+             id: id,
+             replica: replica,
+             author: author,
+             deps: deps,
+             kind: %CanonicalAtom{name: kind},
+             body: body,
+             cap: cap,
+             sig: sig
+           }) do
+      {:ok, %{id: id, replica: replica, deps: deps}}
+    else
+      _ -> {:error, :malformed_op}
+    end
+  rescue
+    _ -> {:error, :malformed_op}
+  end
+
+  defp observation_bound?(_pending, nodes, bytes) when nodes < 0 or bytes < 0, do: false
+  defp observation_bound?([], _nodes, _bytes), do: true
+
+  defp observation_bound?([{:value, value} | rest], nodes, bytes) when is_binary(value),
+    do: observation_bound?(rest, nodes - 1, bytes - byte_size(value))
+
+  defp observation_bound?([{:value, value} | rest], nodes, bytes) when is_list(value),
+    do: observation_bound?([{:list, value} | rest], nodes - 1, bytes)
+
+  defp observation_bound?([{:value, value} | rest], nodes, bytes) when is_map(value),
+    do: observation_bound?([{:map, :maps.iterator(value)} | rest], nodes - 1, bytes)
+
+  defp observation_bound?([{:value, value} | rest], nodes, bytes)
+       when is_number(value) or is_boolean(value) or is_nil(value),
+       do: observation_bound?(rest, nodes - 1, bytes)
+
+  defp observation_bound?([{:list, []} | rest], nodes, bytes),
+    do: observation_bound?(rest, nodes, bytes)
+
+  defp observation_bound?([{:list, [head | tail]} | rest], nodes, bytes),
+    do: observation_bound?([{:value, head}, {:list, tail} | rest], nodes, bytes)
+
+  defp observation_bound?([{:map, iterator} | rest], nodes, bytes) do
+    case :maps.next(iterator) do
+      :none ->
+        observation_bound?(rest, nodes, bytes)
+
+      {key, value, next} ->
+        observation_bound?([{:value, key}, {:value, value}, {:map, next} | rest], nodes, bytes)
+    end
+  end
+
+  defp observation_bound?(_pending, _nodes, _bytes), do: false
+
   @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
   def decode_op(%{
         "v" => @version,
@@ -313,6 +397,12 @@ defmodule Lattice.Carrier.Wire do
        when is_integer(value) and value >= 0 and value <= @max_json_safe_integer,
        do: {:ok, value}
 
+  defp decode_term(["int", value], depth, :observation) when is_binary(value) do
+    if byte_size(value) <= 20 and Regex.match?(~r/^(0|[1-9][0-9]*)$/, value),
+      do: decode_term(["int", value], depth, :value),
+      else: {:error, :malformed_term}
+  end
+
   defp decode_term(["int", value], _depth, _mode) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} when int >= 0 and int <= @max_canonical_integer -> {:ok, int}
@@ -483,6 +573,8 @@ defmodule Lattice.Carrier.Wire do
       do: {:ok, String.to_atom(name)},
       else: {:error, :unknown_atom}
   end
+
+  defp decode_atom(name, :observation) when is_binary(name), do: {:ok, %CanonicalAtom{name: name}}
 
   defp decode_atom(name, :value), do: existing_atom(name)
   defp decode_atom(_name, _mode), do: {:error, :unknown_atom}

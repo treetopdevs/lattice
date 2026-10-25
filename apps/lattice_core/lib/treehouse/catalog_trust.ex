@@ -1381,6 +1381,8 @@ defmodule Treehouse.CatalogTrust do
     duplicates = raws |> Enum.map(&Map.get(&1, :replica)) |> duplicate?()
     if duplicates, do: refuse(history_reason(source))
 
+    if source == :incoming, do: authenticate_incoming!(raws)
+
     scans = Enum.map(raws, &scan_history(&1))
 
     cond do
@@ -1408,6 +1410,44 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp histories!(_raws, source), do: refuse(history_reason(source))
+
+  # Raw signature proof is not wire admission. Check every accepted frame before
+  # returning a fetch request, even when vocabulary decoding would refuse it.
+  defp authenticate_incoming!(raws) do
+    checked =
+      Enum.map(raws, fn history ->
+        unless fields?(history, @history_fields) and text?(history.replica) and
+                 proper_list?(history.frames) and proper_list?(history.rejected) and
+                 Enum.all?(history.rejected, fn r ->
+                   fields?(r, [:frame, :reason]) and r.reason == :bad_signature
+                 end),
+               do: refuse(:invalid_verified_history)
+
+        unless Continuation.family(history.replica) in [{:bounded, :space}, {:bounded, :thread}],
+          do: refuse(:wrong_catalog_scope)
+
+        frames =
+          Enum.map(history.frames, fn frame ->
+            case Wire.authenticate_observation(frame) do
+              {:ok, %{replica: replica} = proof} when replica == history.replica -> proof
+              _ -> refuse(:invalid_verified_history)
+            end
+          end)
+
+        ids = Enum.map(frames, & &1.id)
+        if duplicate?(ids), do: refuse(:invalid_verified_history)
+        {frames, MapSet.new(ids)}
+      end)
+
+    missing =
+      checked
+      |> Enum.flat_map(fn {frames, ids} ->
+        Enum.flat_map(frames, fn frame -> Enum.reject(frame.deps, &MapSet.member?(ids, &1)) end)
+      end)
+      |> sorted()
+
+    if missing != [], do: refuse(:trust_pending, missing)
+  end
 
   defp scan_history(history) do
     with true <- fields?(history, @history_fields),

@@ -2,11 +2,24 @@
 
 ## Status and scope
 
-PLANNED. Fresh public installation calls prove BEAM/TS disagree before semantic
-projection. Execute the correction separately from the native evaluator, from
+IN PROGRESS. Fresh public installation calls proved BEAM/TS disagreement before
+semantic projection. Execute the correction separately from the native evaluator, from
 verified current main, with protected-boundary reviews. Plan 267 must not silently
 choose one existing runtime's result and claim parity. No external identity,
 operator ceremony, device, host or secret is needed.
+
+The first implementation checkpoint authenticates all accepted incoming frames
+before missing-dependency/refusal decisions, using inert canonical name wrappers
+and returning only header metadata. Existing wire admission remains unchanged.
+Fresh TS cases and fresh BEAM-authored unknown-name inputs agree on demonstrated
+signature, vocabulary, duplicate, scope and pending-id outcomes. The focused trust,
+reciprocal and wire suites pass. Full checks and protected reviews are running.
+
+This checkpoint does not complete the broader phase matrix below. In particular,
+malformed/extra-header precedence, unknown kinds, rejected-record combinations,
+exact resource boundaries and stored/reopen behavior need explicit full parity
+proof before completion and native adoption. The saved diagnostic evidence is
+marked as captured before this correction; its old verdicts are not an oracle.
 
 ## Reproduced problem
 
