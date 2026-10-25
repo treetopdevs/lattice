@@ -24,6 +24,15 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       disposition: :pin_exact_observed_bootstrap
     }
 
+    baseline = raw["baselineHistory"]
+
+    %{kind: :propose, next: installed} =
+      CatalogTrust.prepare_installation(%{
+        review: review,
+        history: %{replica: baseline["replica"], frames: baseline["frames"], rejected: []},
+        store: %{kind: :verified_fresh, expected: %{trust_revision: 0, history_generation: 0}}
+      })
+
     for c <- raw["cases"],
         frames <- [c["history"]["frames"], Enum.reverse(c["history"]["frames"])],
         raw_rejected <- [c["history"]["rejected"], Enum.reverse(c["history"]["rejected"])] do
@@ -41,7 +50,7 @@ defmodule Treehouse.CatalogIncomingOrderTest do
         "forged-unknown-rejected" => {"reject", "unsupported_cutoff"},
         "empty-id-rejected" => {"reject", "unsupported_cutoff"},
         "forged-same-id-rejected" => {"propose", nil},
-        "partial-with-genuine-rejected" => {"reject", "trust_pending"},
+        "partial-with-genuine-rejected" => {"reject", "invalid_verified_history"},
         "extra-rejected-record-field" => {"reject", "invalid_verified_history"},
         "mixed-rejected-integrity" => {"reject", "invalid_verified_history"}
       }
@@ -62,6 +71,22 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       assert Atom.to_string(actual.kind) == c["ts"]["kind"], c["name"]
       assert if(actual.reason, do: Atom.to_string(actual.reason)) == c["ts"]["reason"], c["name"]
       assert actual.detail.ids == c["ts"]["detail"]["ids"], c["name"]
+
+      evaluated =
+        CatalogTrust.evaluate(%{
+          installed: installed,
+          expected: %{trust_revision: 0, history_generation: 0},
+          incoming: %{catalogs: [], rotations: [], histories: [history], cutoff_proofs: []}
+        })
+
+      assert Atom.to_string(evaluated.kind) == c["tsEvaluation"]["kind"],
+             "evaluation #{c["name"]}"
+
+      assert if(evaluated.reason, do: Atom.to_string(evaluated.reason)) ==
+               c["tsEvaluation"]["reason"],
+             "evaluation #{c["name"]}"
+
+      assert evaluated.detail.ids == c["tsEvaluation"]["detail"]["ids"], "evaluation #{c["name"]}"
     end
   end
 
@@ -112,8 +137,62 @@ defmodule Treehouse.CatalogIncomingOrderTest do
         end
       )
 
+    baseline_history = CatalogTrustVectors.raw_history(f.space_log)
+
+    cases =
+      cases ++
+        [
+          %{
+            name: "beam-genuine-rejected",
+            history: %{
+              baseline_history
+              | rejected: [%{"frame" => frame, "reason" => "bad_signature"}]
+            }
+          },
+          %{
+            name: "beam-forged-rejected",
+            history: %{
+              baseline_history
+              | rejected: [
+                  %{
+                    "frame" => Map.put(frame, "sig", Base.encode64(<<0::512>>)),
+                    "reason" => "bad_signature"
+                  }
+                ]
+            }
+          },
+          %{
+            name: "beam-good-and-rejected-same-id",
+            history: %{
+              baseline_history
+              | rejected: [
+                  %{
+                    "frame" =>
+                      Map.put(hd(baseline_history.frames), "sig", Base.encode64(<<0::512>>)),
+                    "reason" => "bad_signature"
+                  }
+                ]
+            }
+          }
+        ]
+
+    %{kind: :propose, next: installed} =
+      CatalogTrust.prepare_installation(%{
+        review: r,
+        history: baseline_history,
+        store: %{kind: :verified_fresh, expected: %{trust_revision: 0, history_generation: 0}}
+      })
+
     path = Path.join(dir, "fresh-beam.json")
-    File.write!(path, Jason.encode!(%{review: review, cases: cases}))
+
+    File.write!(
+      path,
+      Jason.encode!(%{
+        review: review,
+        baselineHistory: CatalogTrustVectors.raw_history(f.space_log),
+        cases: cases
+      })
+    )
 
     {json, 0} =
       System.cmd(
@@ -125,15 +204,31 @@ defmodule Treehouse.CatalogIncomingOrderTest do
     results = Jason.decode!(json)["cases"]
 
     for {input, result} <- Enum.zip(cases, results) do
+      history = %{input.history | rejected: Enum.map(input.history.rejected, &decode_rejected/1)}
+
       actual =
         CatalogTrust.prepare_installation(%{
           review: r,
-          history: input.history,
+          history: history,
           store: %{kind: :verified_fresh, expected: %{trust_revision: 0, history_generation: 0}}
         })
 
       assert if(actual.reason, do: Atom.to_string(actual.reason)) == result["ts"]["reason"]
       assert actual.detail.ids == result["ts"]["detail"]["ids"]
+
+      evaluated =
+        CatalogTrust.evaluate(%{
+          installed: installed,
+          expected: %{trust_revision: 0, history_generation: 0},
+          incoming: %{catalogs: [], rotations: [], histories: [history], cutoff_proofs: []}
+        })
+
+      assert Atom.to_string(evaluated.kind) == result["tsEvaluation"]["kind"]
+
+      assert if(evaluated.reason, do: Atom.to_string(evaluated.reason)) ==
+               result["tsEvaluation"]["reason"]
+
+      assert evaluated.detail.ids == result["tsEvaluation"]["detail"]["ids"]
     end
   end
 

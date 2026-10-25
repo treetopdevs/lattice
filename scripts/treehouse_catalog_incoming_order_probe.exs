@@ -1,4 +1,4 @@
-# Consume fresh public inputs through the actual BEAM installation API.
+# Consume fresh public inputs through both actual BEAM catalog APIs.
 [path] = System.argv()
 raw = Jason.decode!(File.read!(path))
 r = raw["review"]
@@ -13,34 +13,54 @@ review = %{
   disposition: :pin_exact_observed_bootstrap
 }
 
+expected = %{trust_revision: 0, history_generation: 0}
+
+decode = fn h ->
+  rejected =
+    Enum.map(h["rejected"], fn
+      record when is_map(record) ->
+        Map.new(record, fn
+          {"frame", value} -> {:frame, value}
+          {"reason", "bad_signature"} -> {:reason, :bad_signature}
+          {"reason", _} -> {:reason, :invalid_reason}
+          pair -> pair
+        end)
+
+      value ->
+        value
+    end)
+
+  %{replica: h["replica"], frames: h["frames"], rejected: rejected}
+end
+
+%{kind: :propose, next: installed} =
+  Treehouse.CatalogTrust.prepare_installation(%{
+    review: review,
+    history: decode.(raw["baselineHistory"]),
+    store: %{kind: :verified_fresh, expected: expected}
+  })
+
 cases =
   Enum.map(raw["cases"], fn c ->
-    h = c["history"]
+    history = decode.(c["history"])
 
-    result =
+    prepared =
       Treehouse.CatalogTrust.prepare_installation(%{
         review: review,
-        history: %{
-          replica: h["replica"],
-          frames: h["frames"],
-          rejected:
-            Enum.map(h["rejected"], fn
-              record when is_map(record) ->
-                Map.new(record, fn
-                  {"frame", value} -> {:frame, value}
-                  {"reason", "bad_signature"} -> {:reason, :bad_signature}
-                  {"reason", _} -> {:reason, :invalid_reason}
-                  pair -> pair
-                end)
-
-              value ->
-                value
-            end)
-        },
-        store: %{kind: :verified_fresh, expected: %{trust_revision: 0, history_generation: 0}}
+        history: history,
+        store: %{kind: :verified_fresh, expected: expected}
       })
 
-    Map.put(c, "beam", Map.take(result, [:kind, :reason, :detail]))
+    evaluated =
+      Treehouse.CatalogTrust.evaluate(%{
+        installed: installed,
+        expected: expected,
+        incoming: %{catalogs: [], rotations: [], histories: [history], cutoff_proofs: []}
+      })
+
+    c
+    |> Map.put("beam", Map.take(prepared, [:kind, :reason, :detail]))
+    |> Map.put("beamEvaluation", Map.take(evaluated, [:kind, :reason, :detail]))
   end)
 
 IO.puts(Jason.encode!(Map.put(raw, "cases", cases), pretty: true))

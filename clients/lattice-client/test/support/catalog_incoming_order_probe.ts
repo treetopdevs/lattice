@@ -2,7 +2,7 @@ import {readFileSync} from "node:fs";
 // Fresh public input and actual TS installation results; no saved verdict fallback.
 import {trustFixture,fixtureId} from './export_treehouse_catalog_trust';
 import {authorCarrierOpUnchecked} from './unchecked_author';
-import {prepareTreehouseCatalogInstallation} from '../../src/treehouse_catalog_trust';
+import {prepareTreehouseCatalogInstallation,evaluateTreehouseCatalogTrust} from '../../src/treehouse_catalog_trust';
 const f=await trustFixture(0);
 const frame=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[fixtureId('incoming-missing')],kind:'command',body:['atom','outside_wire_vocabulary'],cap:['nil']});
 const known=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[fixtureId('incoming-missing-2'),fixtureId('incoming-missing')],kind:'command',body:['atom','post'],cap:['nil']});
@@ -50,9 +50,12 @@ const inputs:[string,unknown[],unknown[]?][]=[
  ['partial-with-earlier-forgery',[{...frame,sig:Buffer.alloc(64).toString('base64')},known]],
  ['partial-wrong-replica',[{...frame,replica:'other-replica'}]],
 ];
-const input=process.argv[2]==="--consume" ? JSON.parse(readFileSync(process.argv[3]!,"utf8")) : {review:f.review,cases:inputs.map(([name,frames,rejected=[]])=>({name,history:{replica:f.space.replica,frames,rejected}}))};
+const input=process.argv[2]==="--consume" ? JSON.parse(readFileSync(process.argv[3]!,"utf8")) : {review:f.review,baselineHistory:f.histories[0]!,cases:inputs.map(([name,frames,rejected=[]])=>({name,history:{replica:f.space.replica,frames,rejected}}))};
+const baseline=await prepareTreehouseCatalogInstallation({review:input.review,history:input.baselineHistory,store:{kind:'verified_fresh',expected:{trustRevision:0,historyGeneration:0}}});
+if(baseline.kind!=="propose") throw new Error("actual valid installed baseline is required");
 for(const {name,history} of input.cases){
  const result=await prepareTreehouseCatalogInstallation({review:input.review,history,store:{kind:'verified_fresh',expected:{trustRevision:0,historyGeneration:0}}});
- cases.push({name,history,ts:{kind:result.kind,reason:result.reason,detail:result.detail}});
+ const evaluated=await evaluateTreehouseCatalogTrust({installed:baseline.next,expected:{trustRevision:0,historyGeneration:0},incoming:{catalogs:[],rotations:[],histories:[history],cutoffProofs:[]}});
+ cases.push({name,history,ts:{kind:result.kind,reason:result.reason,detail:result.detail},tsEvaluation:{kind:evaluated.kind,reason:evaluated.reason,detail:evaluated.detail}});
 }
-console.log(JSON.stringify({review:input.review,cases}));
+console.log(JSON.stringify({review:input.review,baselineHistory:input.baselineHistory,cases}));

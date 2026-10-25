@@ -24,13 +24,20 @@ and the complete phase matrix remain open.
 
 The next checkpoint aligns closed accepted-frame header/version validation before
 fetch in both owners and checks rejected-record identity, duplicate ids and genuine
-signature mislabeling after accepted completeness, before portability. Fresh
+signature mislabeling before missing accepted ancestors are reported. Fresh
 header and rejected-record RED cases reproduce the prior disagreements; the
 expanded reciprocal matrix now passes with explicit expected decisions and both
-delivery orders. Full checks and protected reviews for this checkpoint are running.
+delivery orders. Spec review exposed a pre-existing prepare/evaluate disagreement:
+TS evaluation checked rejected evidence before fetch while preparation did not.
+The common contract now authenticates accepted input, validates rejected integrity
+and portability, then reports missing accepted ancestors. A legitimate installed
+baseline and both actual public APIs are exercised for each fresh producer.
+Malformed evaluation-page history shapes remain `malformed_catalog` consistently;
+raw preparation errors retain `invalid_verified_history`. Full checks and focused
+review confirmation run after this correction.
 
 These checkpoints do not complete the broader matrix below. Unknown kinds, full
-independent producer coverage, exact resource boundaries and stored/reopen behavior
+independent producer boundary coverage, exact resource limits and stored/reopen behavior
 still need explicit full parity proof before completion and native adoption. The saved diagnostic evidence is
 marked as captured before this correction; its old verdicts are not an oracle.
 
@@ -56,11 +63,11 @@ The TS producer signs fresh inputs and calls its actual public API; the BEAM
 consumer calls its actual public API. These are diagnostic probes, not tests
 asserting that disagreement is desirable or a substitute for the RED regression.
 
-TS `observeHistory` authenticates raw accepted frames before missing-dependency
-collection, then derives cutoff and invokes the strict product reader. BEAM
-`scan_frame` invokes closed vocabulary decoding before signature classification;
-`scan_history` returns unsupported before `build_scanned_history` collects missing
-ancestors. Thus the BEAM scanner cannot distinguish the two signed cases above.
+Before correction, TS `observeHistory` authenticated raw accepted frames before missing-dependency
+collection, then derived cutoff and invoked the strict product reader. BEAM
+`scan_frame` invoked closed vocabulary decoding before signature classification;
+`scan_history` returned unsupported before `build_scanned_history` collected missing
+ancestors. Thus the original BEAM scanner could not distinguish the two signed cases above.
 
 ## Recommended contract
 
@@ -74,12 +81,15 @@ incoming-history phase contract before porting it to native:
    including frames naming unadopted vocabulary. Keep such names inert strings
    or existing canonical atom wrappers; never create imported VM atoms, semantic
    ops, grants or authority evidence from them. A forged partial frame is invalid.
-3. Collect missing accepted ancestors only after the complete accepted integrity
-   scan. Rejected records never close accepted dependencies. Preserve sorted
-   unique pending ids and delivery independence.
-4. Apply portable cutoff/rejected-evidence integrity and strict product-reader
-   checks before semantic projection. Unknown vocabulary stays unsupported and
-   cannot become authority, a route or a retained installed decision.
+3. Validate rejected structural integrity and portability without allowing rejected
+   records to close accepted dependencies. Genuine signed evidence cannot be
+   relabeled bad-signature evidence, even when its vocabulary is unsupported.
+   Invalid evidence takes precedence over unsupported evidence across histories.
+4. Collect missing accepted ancestors only after accepted authentication and
+   rejected-evidence validation. Preserve sorted unique pending ids and delivery
+   independence. Then apply the complete portable cutoff and strict product-reader
+   checks before semantic projection. Unknown vocabulary remains unsupported and
+   cannot become authority, a route or an installed decision.
 5. Keep stored-recovery error mapping and sticky state unchanged unless a fresh
    reciprocal counterexample proves a necessary explicit amendment. Incoming
    refusals must not erase accepted watermarks or reset a blocked installation.

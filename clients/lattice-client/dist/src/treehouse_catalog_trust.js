@@ -650,6 +650,7 @@ async function observeHistory(raw) {
     if (family !== "space" && family !== "thread")
         fail("wrong_catalog_scope");
     const missing = await authenticateFrames(raw);
+    await validateRejectedHistories([raw]);
     if (missing.length > 0)
         fail("trust_pending", missing);
     const ids = new Set(raw.frames.map((f) => f.id));
@@ -698,6 +699,18 @@ async function authenticateFrames(raw) {
     }
     return sorted(raw.frames.flatMap((f) => f.deps.filter((id) => !ids.has(id))));
 }
+async function validateRejectedHistories(histories) {
+    let unsupported = false;
+    for (const raw of histories) {
+        const checked = await deriveTreehouseCatalogCutoff({ ...raw, frames: [] });
+        if (!checked.ok && checked.reason === "invalid_verified_history")
+            fail(checked.reason);
+        if (!checked.ok)
+            unsupported = true;
+    }
+    if (unsupported)
+        fail("unsupported_cutoff");
+}
 async function mergeHistories(saved, incoming) {
     const map = new Map();
     for (const list of [saved, incoming]) {
@@ -733,17 +746,9 @@ async function mergeHistories(saved, incoming) {
         }
     }
     const missing = [];
-    let unsupported = false;
-    for (const raw of map.values()) {
+    for (const raw of map.values())
         missing.push(...await authenticateFrames(raw));
-        const rejected = await deriveTreehouseCatalogCutoff({ ...raw, frames: [] });
-        if (!rejected.ok && rejected.reason === "invalid_verified_history")
-            fail(rejected.reason);
-        if (!rejected.ok)
-            unsupported = true;
-    }
-    if (unsupported)
-        fail("unsupported_cutoff");
+    await validateRejectedHistories(map.values());
     if (missing.length > 0)
         fail("trust_pending", missing);
     const observed = new Map();

@@ -1416,12 +1416,7 @@ defmodule Treehouse.CatalogTrust do
   defp authenticate_incoming!(raws) do
     checked =
       Enum.map(raws, fn history ->
-        unless fields?(history, @history_fields) and text?(history.replica) and
-                 proper_list?(history.frames) and proper_list?(history.rejected) and
-                 Enum.all?(history.rejected, fn r ->
-                   fields?(r, [:frame, :reason]) and r.reason == :bad_signature
-                 end),
-               do: refuse(:invalid_verified_history)
+        unless history_shape?(history), do: refuse(:invalid_verified_history)
 
         unless Continuation.family(history.replica) in [{:bounded, :space}, {:bounded, :thread}],
           do: refuse(:wrong_catalog_scope)
@@ -1446,24 +1441,42 @@ defmodule Treehouse.CatalogTrust do
       end)
       |> sorted()
 
+    rejected = Enum.map(raws, &scan_incoming_rejected/1)
+    if Enum.any?(rejected, &match?({:invalid, _}, &1)), do: refuse(:invalid_verified_history)
+    if Enum.any?(rejected, &match?({:unsupported, _}, &1)), do: refuse(:unsupported_cutoff)
     if missing != [], do: refuse(:trust_pending, missing)
+  end
 
-    # Complete input cannot relabel genuine evidence as a structural refusal.
-    # This remains after missing accepted ancestors, matching cutoff ordering.
-    Enum.each(raws, fn history ->
-      Enum.reduce(history.rejected, MapSet.new(), fn record, ids ->
+  defp history_shape?(history) do
+    fields?(history, @history_fields) and text?(history.replica) and
+      proper_list?(history.frames) and proper_list?(history.rejected) and
+      Enum.all?(history.rejected, fn record ->
+        fields?(record, [:frame, :reason]) and record.reason == :bad_signature
+      end)
+  end
+
+  defp scan_incoming_rejected(history) do
+    {records, _ids} =
+      Enum.map_reduce(history.rejected, MapSet.new(), fn record, ids ->
         frame = record.frame
 
-        unless is_map(frame) and is_binary(frame["id"]) and frame["replica"] == history.replica and
-                 not MapSet.member?(ids, frame["id"]),
-               do: refuse(:invalid_verified_history)
+        valid =
+          is_map(frame) and is_binary(frame["id"]) and frame["replica"] == history.replica and
+            not MapSet.member?(ids, frame["id"])
 
-        if match?({:ok, _}, Wire.authenticate_observation(frame)),
-          do: refuse(:invalid_verified_history)
+        result =
+          if not valid or match?({:ok, _}, Wire.authenticate_observation(frame)),
+            do: {:invalid, history.replica},
+            else: scan_rejected(record, history.replica)
 
-        MapSet.put(ids, frame["id"])
+        {result, if(valid, do: MapSet.put(ids, frame["id"]), else: ids)}
       end)
-    end)
+
+    cond do
+      Enum.any?(records, &match?({:invalid, _}, &1)) -> {:invalid, history.replica}
+      Enum.any?(records, &match?({:unsupported, _}, &1)) -> {:unsupported, history.replica}
+      true -> build_scanned_history(history.replica, [], records)
+    end
   end
 
   defp scan_history(history) do
@@ -1989,6 +2002,8 @@ defmodule Treehouse.CatalogTrust do
 
     if length(page.catalogs) + length(page.rotations) > 32,
       do: refuse(:control_history_limit)
+
+    if not Enum.all?(page.histories, &history_shape?/1), do: refuse(:malformed_catalog)
 
     if not Enum.all?(page.catalogs ++ page.rotations, &is_binary/1),
       do: refuse(:malformed_catalog)

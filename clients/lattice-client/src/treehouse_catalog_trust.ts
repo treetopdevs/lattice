@@ -575,6 +575,7 @@ async function observeHistory(raw: TreehouseCatalogRawHistory): Promise<Observed
   const family = continuationFamily(raw.replica);
   if (family !== "space" && family !== "thread") fail("wrong_catalog_scope");
   const missing = await authenticateFrames(raw);
+  await validateRejectedHistories([raw]);
   if (missing.length > 0) fail("trust_pending", missing);
   const ids = new Set(raw.frames.map((f) => (f as CarrierOpFrame).id));
   const cutoff = await deriveTreehouseCatalogCutoff(raw);
@@ -607,6 +608,15 @@ async function authenticateFrames(raw: TreehouseCatalogRawHistory): Promise<stri
   }
   return sorted(raw.frames.flatMap((f) => (f as CarrierOpFrame).deps.filter((id) => !ids.has(id))));
 }
+async function validateRejectedHistories(histories: Iterable<TreehouseCatalogRawHistory>): Promise<void> {
+  let unsupported = false;
+  for (const raw of histories) {
+    const checked = await deriveTreehouseCatalogCutoff({...raw, frames: []});
+    if (!checked.ok && checked.reason === "invalid_verified_history") fail(checked.reason);
+    if (!checked.ok) unsupported = true;
+  }
+  if (unsupported) fail("unsupported_cutoff");
+}
 async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], incoming: readonly TreehouseCatalogRawHistory[]): Promise<Map<string, ObservedHistory>> {
   const map = new Map<string, TreehouseCatalogRawHistory>();
   for (const list of [saved, incoming]) {
@@ -636,14 +646,8 @@ async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], inco
     }
   }
   const missing: string[] = [];
-  let unsupported = false;
-  for (const raw of map.values()) {
-    missing.push(...await authenticateFrames(raw));
-    const rejected = await deriveTreehouseCatalogCutoff({...raw, frames: []});
-    if (!rejected.ok && rejected.reason === "invalid_verified_history") fail(rejected.reason);
-    if (!rejected.ok) unsupported = true;
-  }
-  if (unsupported) fail("unsupported_cutoff");
+  for (const raw of map.values()) missing.push(...await authenticateFrames(raw));
+  await validateRejectedHistories(map.values());
   if (missing.length > 0) fail("trust_pending", missing);
   const observed = new Map<string, ObservedHistory>();
   for (const [id, raw] of map) observed.set(id, await observeHistory(raw));
