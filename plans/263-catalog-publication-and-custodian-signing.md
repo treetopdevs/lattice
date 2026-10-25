@@ -7,7 +7,8 @@ Implementation packet prepared 2026-10-24 from main
 Implements plan 224 PR 4 in full: prepare, independent custodian verification/signing,
 commit, and crash-safe `catalogued` publication. Shared read-only release review is
 implemented, together with authenticated public histories and the signing package
-verifier. Custodian ledger, CLI and publication construction/commit remain.
+verifier. Custodian ledger/signing APIs now have replay, refusal and kill-boundary
+tests; CLI and publication construction/commit remain. Custody review is in progress.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 
 Software acceptance uses disposable keys and real-mode ceremony fixtures, the production

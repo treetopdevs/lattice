@@ -1,6 +1,7 @@
 defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
   use ExUnit.Case, async: false
   alias Lattice.{Authority, Log, Sim}
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{SignCatalog, SigningLedger}
 
   alias LatticeCarrierServer.Operator.{
     CatalogBinding,
@@ -161,6 +162,222 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
 
     assert {:error, :invalid_catalog_package} =
              CatalogSigningPackage.decode(:binary.copy(" ", 64 * 1024 * 1024 + 1))
+  end
+
+  test "custodian initializes before signing and replays exact durable bytes without reading the key",
+       f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+
+    assert {:error, :catalog_confirmation_mismatch} =
+             SignCatalog.sign(bytes, dir, "/absent", "wrong")
+
+    refute File.exists?(Path.join(dir, "catalog-signing"))
+    assert {:error, :catalog_ledger_uninitialized} = SignCatalog.status(bytes, dir)
+    assert {:ok, genesis} = SignCatalog.init(bytes, dir)
+    assert genesis.head["revision"] == nil
+    signer = CeremonyFixture.signer_template().signer
+    assert {:ok, envelope} = SignCatalog.sign(bytes, dir, signer, package.digest)
+
+    assert :ok =
+             Treehouse.TransportCatalog.verify_catalog_json(
+               envelope,
+               package.binding.record.catalog_key
+             )
+
+    assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
+    assert {:ok, status} = SignCatalog.status(bytes, dir)
+    assert status.head["revision"] == 0
+    assert length(status.chain) == 1
+    assert {:ok, _} = SignCatalog.init(bytes, dir)
+  end
+
+  test "a competing valid catalog cannot reuse a signed revision", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, _} = SignCatalog.init(bytes, dir)
+
+    assert {:ok, _} =
+             SignCatalog.sign(
+               bytes,
+               dir,
+               CeremonyFixture.signer_template().signer,
+               package.digest
+             )
+
+    changed = %{
+      f.catalog
+      | entries:
+          Enum.map(f.catalog.entries, fn e ->
+            if e.kind == :thread,
+              do: %{
+                e
+                | route:
+                    "/r/" <>
+                      Base.url_encode64(:crypto.hash(:sha256, "different-route"), padding: false)
+              },
+              else: e
+          end)
+    }
+
+    {:ok, other} = encode(%{f | catalog: changed})
+
+    assert {:error, :catalog_ledger_fork} =
+             SignCatalog.sign(other, dir, "/absent", CatalogSigningPackage.digest(changed))
+  end
+
+  test "a pending immutable envelope completes its interrupted first head without a seed", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, genesis} = SignCatalog.init(bytes, dir)
+
+    {:ok, envelope} =
+      SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)
+
+    # Recreate the durable boundary: envelope published, head still genesis.
+    head = Path.join([dir, "catalog-signing", "head.json"])
+    File.write!(head, genesis.head_bytes)
+    assert {:ok, state} = SigningLedger.status(dir, package.binding)
+    assert state.pending.bytes == envelope
+    assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
+    File.rm!(head)
+    assert {:error, :catalog_ledger_corrupt} = SignCatalog.status(bytes, dir)
+  end
+
+  test "a concurrent lock holder prevents a second signer from entering", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, _} = SignCatalog.init(bytes, dir)
+    parent = self()
+
+    task =
+      Task.async(fn ->
+        SigningLedger.transact(dir, package.binding, "open", fn state ->
+          send(parent, :holding_ledger)
+
+          receive do
+            :release_ledger -> :ok
+          end
+
+          {:ok, state.head_bytes, nil, :released}
+        end)
+      end)
+
+    assert_receive :holding_ledger, 5000
+    assert {:error, :catalog_ledger_busy} = SignCatalog.status(bytes, dir)
+    send(task.pid, :release_ledger)
+    assert {:ok, :released} = Task.await(task)
+    assert {:ok, _} = SignCatalog.status(bytes, dir)
+  end
+
+  test "owner death after envelope and head sync recovers exact bytes without a seed", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, genesis} = SignCatalog.init(bytes, dir)
+
+    {:ok, envelope} =
+      SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)
+
+    {:ok, signed} = SignCatalog.status(bytes, dir)
+    ledger = Path.join(dir, "catalog-signing")
+    envelope_name = Base.encode16(:crypto.hash(:sha256, envelope), case: :lower) <> ".json"
+    helper = Path.expand("../../../../scripts/treehouse_catalog_signing_owner.py", __DIR__)
+    python = System.find_executable("python3")
+
+    script = ~S"""
+    import importlib.util,io,json,os,signal,sys
+    sys.dont_write_bytecode=True
+    helper,ceremony,stage,plan,command=sys.argv[1:]
+    spec=importlib.util.spec_from_file_location("owner",helper)
+    owner=importlib.util.module_from_spec(spec);spec.loader.exec_module(owner)
+    original=owner.write
+    def kill_after_write(root,name,data,replace=False):
+        original(root,name,data,replace)
+        if (stage=="envelope" and name!="head.json") or (stage=="head" and name=="head.json"):
+            os.kill(os.getpid(),signal.SIGKILL)
+    owner.write=kill_after_write
+    sys.argv=[helper,ceremony]
+    sys.stdin=io.TextIOWrapper(io.BytesIO((plan+"\n"+command+"\n").encode()))
+    owner.main()
+    """
+
+    for stage <- ["envelope", "head"] do
+      File.write!(Path.join(ledger, "head.json"), genesis.head_bytes)
+      File.rm!(Path.join(ledger, envelope_name))
+
+      plan =
+        Jason.encode!(%{
+          action: "open",
+          binding: package.binding.bootstrap_id,
+          key: Base.encode64(package.binding.record.catalog_key)
+        })
+
+      command = Jason.encode!(%{head: signed.head_bytes, envelope: envelope})
+
+      {output, status} =
+        System.cmd(python, ["-c", script, helper, dir, stage, plan, command],
+          stderr_to_stdout: true
+        )
+
+      assert status != 0
+      refute String.contains?(output, ~s("ok":true))
+      assert File.exists?(Path.join(ledger, envelope_name)), output
+      assert File.read!(Path.join(ledger, envelope_name)) == envelope
+      assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
+      assert {:ok, recovered} = SignCatalog.status(bytes, dir)
+      assert recovered.head_bytes == signed.head_bytes
+      assert length(recovered.chain) == 1
+    end
+  end
+
+  test "deleted committed envelope or a hard-linked head refuses without repairing custody", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, _} = SignCatalog.init(bytes, dir)
+
+    {:ok, envelope} =
+      SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)
+
+    head = Path.join([dir, "catalog-signing", "head.json"])
+    alias_path = Path.join(dir, "head-alias")
+    File.ln!(head, alias_path)
+    assert {:error, :unsafe_catalog_ledger} = SignCatalog.status(bytes, dir)
+    File.rm!(alias_path)
+
+    stored =
+      Path.join([
+        dir,
+        "catalog-signing",
+        Base.encode16(:crypto.hash(:sha256, envelope), case: :lower) <> ".json"
+      ])
+
+    File.rm!(stored)
+    assert {:error, :catalog_ledger_corrupt} = SignCatalog.status(bytes, dir)
+    assert {:error, :catalog_ledger_corrupt} = SignCatalog.init(bytes, dir)
+    refute File.exists?(stored)
+  end
+
+  test "a wrong seed never advances the initialized signing head", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    keys = Path.join(Path.dirname(dir), "wrong-keys")
+    File.mkdir!(keys)
+    File.chmod!(keys, 0o700)
+    wrong = Path.join(keys, "wrong-catalog.seed")
+    File.write!(wrong, Base.encode16(:crypto.strong_rand_bytes(32), case: :lower))
+    File.chmod!(wrong, 0o600)
+    assert {:error, :signer_key_mismatch} = SignCatalog.sign(bytes, dir, wrong, package.digest)
+    assert {:ok, state} = SignCatalog.status(bytes, dir)
+    assert state.head_bytes == genesis.head_bytes
+    assert state.chain == []
   end
 
   defp encode(f),
