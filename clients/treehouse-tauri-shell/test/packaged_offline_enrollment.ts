@@ -161,5 +161,10 @@ try {
     async () => { if (existsSync(joinKeychain)) joinSecurity("delete-keychain", joinKeychain); },
     async () => { writeFileSync(join(evidence, "app.log"), logs.join("")); },
   ]) { try { await cleanup(); } catch (error) { failures.push(error); } }
-  if (failures.length) throw new AggregateError(failures, "Packaged-test cleanup failed; every restoration was attempted");
+  if (failures.length) {
+    // Keep the original assertion/UI error, and never print security command
+    // error objects: they may include the ephemeral Keychain password argv.
+    console.error(`Packaged-test cleanup failed in ${failures.length} step(s); every restoration was attempted.`);
+    process.exitCode = 1;
+  }
 }
