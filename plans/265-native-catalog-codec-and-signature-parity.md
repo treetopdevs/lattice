@@ -2,8 +2,11 @@
 
 ## Status
 
-IN PROGRESS. Implements plan 245 build PR 2, independently of the pending listing
-consumer. Base is current main including catalog publication. No native trust command,
+IN PROGRESS. Canonical/frame/catalog authenticity, bounded readers and executable
+Rust↔TS/BEAM peers are implemented. Independent review fixes are confirmed; full
+checks and requested external review remain. Implements plan 245 build PR 2,
+independently of the pending listing consumer. Base includes catalog publication.
+No native trust command,
 route installation, custody mutation, authority fold or network change is in scope.
 
 ## Outcome
@@ -50,7 +53,10 @@ the producer and independent consumers must execute, not merely compare checked-
 
 Each decoded artifact is at most 128 KiB, matching plan 245's evidence artifact cap.
 Canonical term nesting is at most 64, nodes at most 32,768 and encoded bytes at most
-128 KiB. Check lengths before allocation and output growth. Frame JSON retains the
+128 KiB. JSON separately caps all values and object keys at 32,768 nodes and
+wrapper-aware depth at 130; domain term depth remains 64. A local bounded seed
+replaces the generic JSON reader depth of 128. Check lengths before allocation and
+output growth. Frame JSON retains the
 existing 64,000-byte carrier boundary. These are native verifier resource bounds,
 not new producer encodings or changes to core authority semantics. Later whole-page
 assembly retains plan 245's 64 MiB transport and 32 MiB snapshot limits separately.

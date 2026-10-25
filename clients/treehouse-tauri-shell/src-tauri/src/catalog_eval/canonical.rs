@@ -280,6 +280,7 @@ impl Writer {
                 self.array(values, depth)
             }
             Term::Delegation(values) => {
+                validate_delegation(values)?;
                 self.major(6, 60_003)?;
                 self.array(values, depth)
             }
@@ -481,7 +482,7 @@ fn preflight(value: &Value) -> Result<()> {
     let mut text_bytes = 0usize;
     while let Some((value, depth)) = stack.pop() {
         nodes += 1;
-        if nodes > MAX_NODES * 4 || depth > MAX_DEPTH * 2 {
+        if nodes > MAX_NODES * 4 || depth > MAX_DEPTH * 2 + 2 {
             return Err(INVALID);
         }
         match value {
@@ -508,6 +509,51 @@ fn preflight(value: &Value) -> Result<()> {
         if text_bytes > MAX_BYTES {
             return Err(INVALID);
         }
+    }
+    Ok(())
+}
+
+fn validate_delegation(fields: &[Term]) -> Result<()> {
+    if !matches!(fields.len(), 9 | 10) {
+        return Err(INVALID);
+    }
+    for index in [0, 1] {
+        match &fields[index] {
+            Term::Binary(bytes) if std::str::from_utf8(bytes).is_ok() => {}
+            _ => return Err(INVALID),
+        }
+    }
+    for (index, length) in [(2, 32), (3, 32), (8, 64)] {
+        if !matches!(&fields[index], Term::Binary(bytes) if bytes.len() == length) {
+            return Err(INVALID);
+        }
+    }
+    match &fields[4] {
+        Term::Nil => {}
+        Term::Binary(bytes) if std::str::from_utf8(bytes).is_ok() => {}
+        _ => return Err(INVALID),
+    }
+    for index in [5, 6] {
+        let Term::List(names) = &fields[index] else {
+            return Err(INVALID);
+        };
+        let mut previous: Option<&str> = None;
+        for name in names {
+            let Term::Atom(name) = name else {
+                return Err(INVALID);
+            };
+            if previous.is_some_and(|p| p >= name.as_str()) {
+                return Err(INVALID);
+            }
+            previous = Some(name);
+        }
+    }
+    if !matches!(fields[7], Term::Bool(_)) {
+        return Err(INVALID);
+    }
+    if fields.len() == 10 && !matches!(fields[9], Term::Integer(epoch) if epoch <= MAX_SAFE_INTEGER)
+    {
+        return Err(INVALID);
     }
     Ok(())
 }
