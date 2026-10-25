@@ -10,3 +10,5 @@ pub mod json;
 pub mod authority;
 pub mod commands;
 mod evidence_terms;
+
+pub mod reader;
