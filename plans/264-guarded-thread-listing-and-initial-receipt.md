@@ -5,7 +5,7 @@
 IN PROGRESS: independent holder APIs and focused persistence tests are implemented
 privately. Catalog integration, complete crash/refusal evidence and reviews remain.
 
-Prepared 2026-10-24 from main `187cc3d8a77242cbca0fa1d6916af10fc1d6ef0c`.
+Prepared 2026-10-24 from then-current main.
 This is plan 224 PR 5. The independent holder snapshot/CAS and persistence tests may
 start privately from current main while catalog publication PR #168 (plan 263) verifies.
 Catalog integration and dependent merge wait for that parent to merge on its gates.
@@ -123,7 +123,13 @@ Its timeout stays within the existing relay persistence/cleanup/slack budget, an
 normal bounded duration must fit ReleaseQuiesce's default five-second drain window.
 Close the gate during blocked persistence in tests: drain captures the completed exact
 log or fails closed, never commits an incomplete capture. A caller timeout is ambiguous,
-not proof of no effect. No newly detached persistence task may outlive cancellation.
+not proof of no effect. Request cancellation within a bound, retain the monitor and
+release-owned write lease until actual worker completion/death, and keep replacement
+writers fenced if termination is unknown. Register the worker before effects, tied to
+its live holder; reauthorize the exact lease after acquiring the target lock immediately
+before filesystem work. An old owner cannot authorize a delayed worker after replacement.
+Target-lock startup checks cannot cross a still-active old filesystem effect. Retain
+single-OS-process log ownership and stop the old VM before another process uses its paths.
 
 Read-only path holders explicitly call a separate bounded `prove_durability` before
 requesting a snapshot token. Reuse `Durability.rehearse_target_isolated` in the actual
@@ -132,6 +138,9 @@ and exclude rehearsal from the courier's critical-call budget. Failure leaves pr
 false, the target untouched and the holder alive. In-memory/unowned/unsupported paths
 refuse atoms. Presence-only initial listing never runs target-replacing rehearsal.
 
+The release owner retains sticky per-holder fences and monitors write workers in its
+existing lease set. Holder child replacement in the same release cannot clear a fence.
+Owner or unacknowledged worker death fences its route before replacement admission.
 The shared writer records stage disposition internally while preserving public error
 shapes. A known completed pre-rename failure stays retryable. Every timeout, post-rename
 failure or unknown disposition transitions the live holder from OPEN to FENCED before

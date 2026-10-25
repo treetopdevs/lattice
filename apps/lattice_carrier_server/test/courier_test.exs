@@ -228,6 +228,159 @@ defmodule LatticeCarrierServer.CourierTest do
     refute Process.alive?(worker)
   end
 
+  @tag :tmp_dir
+  test "a permanent holder restart cannot clear its release-owned fence", context do
+    path = Path.join(context.tmp_dir, "permanent.log")
+    :ok = Log.new(@replica) |> Log.dump(path)
+    name = {:global, make_ref()}
+    identity = Identity.from_seed("author", "permanent-courier")
+
+    opts = [
+      name: name,
+      identity: identity,
+      source: {:path, path},
+      relay_realms: [],
+      durability: FaultSequence,
+      release_owner: context.owner,
+      release_route: "permanent"
+    ]
+
+    {:ok, supervisor} =
+      Supervisor.start_link([{Holder, opts}],
+        strategy: :one_for_one,
+        max_restarts: 1,
+        max_seconds: 5
+      )
+
+    Process.unlink(supervisor)
+
+    on_exit(fn ->
+      FaultSequence.clear(context.tmp_dir)
+      if Process.alive?(supervisor), do: Supervisor.stop(supervisor)
+    end)
+
+    [{_, holder, _, _}] = Supervisor.which_children(supervisor)
+    :ok = Holder.prove_durability(holder)
+    {:ok, snapshot} = Holder.courier_snapshot(holder)
+    op = Op.new(identity, @replica, [], :command, {:post, "survives child restart"})
+    FaultSequence.arm(context.tmp_dir, :after)
+
+    assert {:error, {:persistence_failed, :injected_after}} =
+             Holder.courier(holder, op, reviewed(snapshot, op))
+
+    before = File.read!(path)
+    monitor = Process.monitor(supervisor)
+    Process.exit(holder, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^supervisor, _}, 1_000
+
+    assert {:error, :persistence_ambiguous} =
+             ReleaseGate.acquire(context.owner, {:holder, "permanent"})
+
+    assert :global.whereis_name(elem(name, 1)) == :undefined
+    assert File.read!(path) == before
+  end
+
+  @tag :tmp_dir
+  test "a live unresolved writer keeps its lease and blocks replacement after owner death",
+       context do
+    {holder, path, _} = holder(context)
+    observer = self()
+
+    {worker, monitor} =
+      spawn_monitor(fn ->
+        {:ok, lease} =
+          ReleaseGate.acquire(context.owner, {:holder_write, {:holder, "route"}, holder})
+
+        send(observer, :writer_registered)
+
+        receive do
+          :finish -> ReleaseGate.finish(context.owner, lease)
+        end
+      end)
+
+    assert_receive :writer_registered
+    owner_monitor = Process.monitor(holder)
+    Process.exit(holder, :kill)
+    assert_receive {:DOWN, ^owner_monitor, :process, ^holder, _}
+
+    assert {:error, :persistence_ambiguous} =
+             ReleaseGate.acquire(context.owner, {:holder, "route"})
+
+    assert Process.alive?(worker)
+    send(worker, :finish)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
+
+    assert {:error, :persistence_ambiguous} =
+             ReleaseGate.acquire(context.owner, {:holder, "route"})
+
+    assert {:ok, %{log: disk}} = Log.restore_verified(path)
+    assert MapSet.size(Log.op_ids(disk)) == 0
+  end
+
+  @tag :tmp_dir
+  test "a writer cannot begin after its holder died even before guardian setup", context do
+    {holder, _, _} = holder(context)
+    monitor = Process.monitor(holder)
+    Process.exit(holder, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^holder, _}
+
+    assert {:error, :release_identity_changed} =
+             ReleaseGate.acquire(context.owner, {:holder_write, {:holder, "route"}, holder})
+  end
+
+  @tag :tmp_dir
+  test "closing the gate waits for an admitted writer before a valid drain snapshot", context do
+    {holder, path, author} = holder(context, durability: FaultSequence)
+    :ok = Holder.prove_durability(holder)
+    {:ok, snapshot} = Holder.courier_snapshot(holder)
+    op = Op.new(author, @replica, [], :command, {:post, "close during write"})
+    FaultSequence.arm(context.tmp_dir, {:hang, self()})
+    on_exit(fn -> FaultSequence.clear(context.tmp_dir) end)
+    task = Task.async(fn -> Holder.courier(holder, op, reviewed(snapshot, op)) end)
+    assert_receive {:sync_blocked, worker}, 1_000
+    assert {:ok, closing} = ReleaseGate.close(context.owner, "attempt", %{})
+    assert map_size(closing.leases) == 1
+    send(worker, :continue)
+    assert {:ok, %{outcome: :delivered}} = Task.await(task)
+    assert {:ok, drained} = ReleaseGate.snapshot(context.owner, "attempt")
+    assert map_size(drained.leases) == 0
+    assert {:ok, held} = GenServer.call(holder, {:drain_release, context.owner})
+    assert {:ok, %{log: disk}} = Log.restore_verified(path)
+    assert held.log == disk
+    assert disk.ops[op.id] == op
+  end
+
+  @tag :tmp_dir
+  test "an old admitted worker cannot start effects after release-owner replacement", context do
+    {holder, path, _} = holder(context)
+    before = File.read!(path)
+    observer = self()
+
+    {worker, monitor} =
+      spawn_monitor(fn ->
+        {:ok, lease} =
+          ReleaseGate.acquire(context.owner, {:holder_write, {:holder, "route"}, holder})
+
+        send(observer, :admitted)
+
+        receive do
+          :resume ->
+            result = ReleaseGate.authorize_write(context.owner, lease)
+            if result == :ok, do: File.write!(path, "must never write")
+            send(observer, {:old_worker_result, result})
+        end
+      end)
+
+    assert_receive :admitted
+    :ok = stop_supervised(ReleaseGate)
+    start_supervised!({ReleaseGate, latch: :atomics.new(1, [])})
+    refute ReleaseGate.owner() == context.owner
+    send(worker, :resume)
+    assert_receive {:old_worker_result, {:error, :release_closed}}
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
+    assert File.read!(path) == before
+  end
+
   defp holder(context, options \\ []) do
     path = Path.join(context.tmp_dir, "matter.log")
     assert :ok = Log.new(@replica) |> Log.dump(path)
@@ -259,11 +412,10 @@ defmodule LatticeCarrierServer.CourierTest do
   defp reviewed(snapshot, op) do
     {candidate, _report} = Sync.deliver(snapshot.log, [op])
 
-    snapshot.token
-    |> Map.put(:op_id, op.id)
-    |> Map.put(
-      :candidate_digest,
-      :crypto.hash(:sha256, :erlang.term_to_binary(candidate, [:deterministic]))
-    )
+    %{
+      snapshot: snapshot.token,
+      op_id: op.id,
+      candidate_digest: :crypto.hash(:sha256, :erlang.term_to_binary(candidate, [:deterministic]))
+    }
   end
 end
