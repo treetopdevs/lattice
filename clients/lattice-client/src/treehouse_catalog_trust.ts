@@ -126,7 +126,7 @@ export async function evaluateTreehouseCatalogTrust(input: {
     catch (error) { candidateError = error; }
     const checked = await evaluateSnapshot({installed: original, expected: {trustRevision: 0, historyGeneration: 0},
       incoming: {catalogs: [], rotations: [], histories: [], cutoffProofs: []}}, true);
-    if (checked.kind === "reject") throw new Refusal("trust_recovery_required", checked.detail);
+    if (checked.kind === "reject") fail("trust_recovery_required");
     if (candidate === undefined) throw candidateError;
     return await evaluateSnapshot({installed: original, ...candidate}, false);
   } catch (error) { return rejection(error); }
@@ -749,9 +749,11 @@ function entryProof(entry: CatalogEntry, histories: Map<string, ObservedHistory>
 async function mergeProofs(saved: readonly TreehouseCatalogCutoffProof[], incoming: readonly TreehouseCatalogCutoffProof[], histories: Map<string, ObservedHistory>): Promise<TreehouseCatalogCutoffProof[]> {
   const proofs = new Map<string, TreehouseCatalogCutoffProof>();
   for (const proof of [...saved, ...incoming]) {
-    if (!closed(proof, ["cutoff", "history"]) || normalizeCatalogCutoff(proof.cutoff) === null || !historyValid(proof.history)) fail("malformed_catalog");
+    if (!closed(proof, ["cutoff", "history"]) || normalizeCatalogCutoff(proof.cutoff) === null) fail("malformed_catalog");
+    // A proof claims a complete immutable point; it cannot solicit incremental ancestors.
+    if (!historyValid(proof.history)) fail("recovery_incomplete");
     const observed = await deriveTreehouseCatalogCutoff(proof.history);
-    if (!observed.ok) fail(observed.reason);
+    if (!observed.ok) fail("recovery_incomplete");
     if (!equal(observed.cutoff, proof.cutoff)) fail("recovery_incomplete", [proof.cutoff.logDigest]);
     const current = histories.get(proof.history.replica);
     if (current === undefined) fail("recovery_incomplete", [proof.cutoff.logDigest]);

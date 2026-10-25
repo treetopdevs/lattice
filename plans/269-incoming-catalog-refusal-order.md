@@ -80,27 +80,24 @@ the retained profile. Define and test the capacity/freeze behavior explicitly ra
 than treating a plain reject as a persisted block. Smaller native storage limits do
 not prove this adapter obligation or a migration path.
 
-## Open complete-proof contract
+## Complete-proof contract
 
 Cutoff-proof histories claim a complete immutable point rather than an incremental
-main-history page. The owners currently differ for small unsupported, forged and
-partial proof histories: BEAM reports `recovery_incomplete`; TS forwards observer
-errors. Malformed outer proof/cutoff shape and unreadable nested history also need
-explicitly distinguished outcomes.
+main-history page. Invalid closed outer proof/cutoff shape is `malformed_catalog`.
+An unreadable nested history, including unsupported vocabulary, a bad signature,
+missing ancestors or malformed nested shape, is `recovery_incomplete` without fetch
+ids. A readable proof whose cutoff or membership does not match reports
+`recovery_incomplete` with the claimed digest. Corrupt saved proofs require
+`trust_recovery_required` without fetch ids before incoming data and cannot be repaired by it.
 
-Regenerate fresh public inputs through both actual APIs before choosing the common
-contract. Preserve refusal, signature checking, cutoff identity, history-subset
-checks, stored recovery and sticky state. Do not select one owner silently.
-
-The public diagnostic inputs in
-`docs/research/evidence/treehouse-proof-context-2026-10-25.json` document the issue;
-tests must not consume their saved verdicts.
+This contextual refusal does not relax authentication, portability, cutoff identity
+or history-subset checks. A complete proof cannot ask the caller to fetch ancestors
+as though it were an incremental page. Main-history reasons remain unchanged.
 
 ## Remaining work in order
 
-1. Add independent fresh producer regressions for complete-proof context, including
-   valid, unsupported, forged, partial and malformed proof histories; correct the
-   common contract without changing authority or canonical bytes.
+1. Verify the common complete-proof contract with independent fresh producers,
+   valid and corrupt saved-state controls, without changing authority or canonical bytes.
 2. Add discriminating valid saved/proposed envelope controls at the actual cap and
    one over. Use valid authenticated histories and matching proofs, not corruption
    that would already fail without a budget guard. Cover a page and saved state
