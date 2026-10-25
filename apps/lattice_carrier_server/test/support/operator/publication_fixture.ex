@@ -34,7 +34,12 @@ defmodule LatticeCarrierServer.Operator.PublicationFixture do
       Application.ensure_all_started(:lattice_carrier_server)
     end)
 
-    {:ok, data} = Fixture.new(second_member: context[:initial] == true)
+    {:ok, data} =
+      Fixture.new(
+        second_member: context[:initial] == true,
+        listener_ports: context[:listener_ports] || [0, 0]
+      )
+
     f = Map.new(data)
 
     f =

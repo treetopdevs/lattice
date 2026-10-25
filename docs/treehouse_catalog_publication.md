@@ -157,3 +157,69 @@ this deliberately permits a bounded JSON transient rather than a streaming forma
 budget refusals; inspect the documented byte/frame limits rather than assuming corruption.
 An entry-count overflow is the distinct `catalog_capacity` refusal. A carried instance
 missing from a hand-altered deployment is refused, never omitted from a catalog.
+
+## Export public catalog evidence after listing
+
+Once guarded listing has produced a `listed` receipt, export the complete committed
+catalog chain and actual Space/Thread histories for offline candidate evaluation.
+Run the command from `apps/lattice_carrier_server` with the project's configured
+Elixir/OTP toolchain. On the local development machine, use the asdf shim from
+AGENTS.md instead of plain `mix`:
+
+```sh
+mix treehouse.catalog_evidence \
+  --root /srv/treehouse/operator \
+  --ceremony /srv/treehouse/ceremony \
+  --manifest /srv/treehouse/operator/attempt-ATTEMPT_DIGEST/MANIFEST_SHA \
+  --out /srv/treehouse/transfer/catalog-evidence.json
+```
+
+Use the unique manifest artifact's `path` from `operator-journal.json`, replacing
+the placeholder path above. This is the archived candidate, not the active
+configuration file. Both its normalized filename and exact digest must match the
+listed receipt; copies at another filename refuse even when their bytes match.
+The publication owner already requires absolute identity/log paths; exact archive
+identity is checked independently. The command loads
+configuration without starting another relay or listener, so it can run while the
+configured service is already bound. Its only write is the new output file. Choose an
+existing directory owned by the operator or root, with no writable group/other or
+symlink ancestors, outside the operator and ceremony roots and all protected inputs.
+An existing output file or link refuses; choose a new filename for each export.
+The reported output path is the normalized path actually checked and written, and
+contents are written only after its new file is private (0600). Descriptor and
+pathname identity, owner, link count, mode and expected size are checked before
+success, with parent/protected-location rechecks after creation and before success.
+A replaced output refuses without deleting the replacement. A partial file can
+remain after process/power loss or if inode ownership cannot be proved during error
+cleanup. Preserve that unknown file and choose a new name; an export error is not
+proof that no file was created. This transfer artifact is not a durable publication
+receipt and installs no catalog trust.
+
+`LATTICE_CARRIER_MANIFEST`, if already set for the running service, is distinct from
+the archive supplied to `--manifest`. Exporting does not attest that the running
+service currently loaded these configuration bytes.
+
+The closed `lattice-catalog-evidence-page-v1` file preserves exact signed catalog JSON
+strings and complete authenticated frame histories. It includes no private seed,
+service identity file, signer, user consent or installed trust. The encoder runs the
+existing catalog evaluator and refuses a fork, gap, missing history, authority lapse,
+pending publication or changed source. A successful export establishes only a checked
+candidate over the bytes observed on this host. It does not establish current network
+availability, freshness, participant membership or authority to activate routes.
+
+Limits remain 128 KiB per artifact, 1,024 artifacts/16 MiB total, 32 artifacts per page,
+a 32 MiB retained snapshot and a 64 MiB transport file. Every frame must fit a
+64,000-byte push envelope. Native dump reads are bounded at 64 MiB across sources;
+a compressed dump's declared expanded size counts against that budget before decoding.
+The export-only catalog reader uses Python 3 (the existing operator prerequisite)
+to enumerate at most 2,048 directory entries before reading envelopes. This permits
+one interrupted-publication link per retained artifact; excessive temporary debris
+refuses with the same size reason. Resolve it through operator recovery rather than
+having the exporter delete anything.
+Refusals never truncate authentic history. Preserve inputs, resolve the named refusal
+and retry to a new output filename. A failed write cleans up its own partial file
+while its descriptor is held. A close or final acknowledgement failure preserves
+the uncertain public file; it never removes a replacement owned by another writer.
+
+Import and native trust installation are later app work. Do not edit the ordinary
+app's database or infer an installed route from a successful file export.
