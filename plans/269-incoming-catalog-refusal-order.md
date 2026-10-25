@@ -52,7 +52,11 @@ actual maxima and one over for nodes, UTF-8 bytes and JSON depth without creatin
 sixty-seven million input cells. Focused resource/matrix tests and both independent
 protected reviews pass. A strict-lint nesting repair preserves the predicates and
 is independently confirmed. The final full Mix check, client build/catalog suites,
-desktop checks and both boundary scans pass after that repair.
+desktop checks and both boundary scans pass after that repair. Hosted browser
+compilation exposed a missing copied shared-module dependency; adding the raw
+bounds helper to that explicit source list passes local browser formatting,
+unit tests and the real warnings-as-errors/Vite build. Refreshed hosted checks
+remain required; no older gate is credited to this integration repair.
 
 These checkpoints do not complete the broader matrix below. Full independent producer boundary coverage, complete history/page aggregate limits
 and stored/reopen behavior
