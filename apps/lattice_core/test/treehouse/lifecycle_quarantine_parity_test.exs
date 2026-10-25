@@ -12,7 +12,7 @@ defmodule Treehouse.LifecycleQuarantineParityTest do
       )
 
     histories = Jason.decode!(output)["histories"]
-    assert length(histories) == 12
+    assert length(histories) == 16
 
     for h <- histories, frames <- [h["frames"], Enum.reverse(h["frames"])] do
       {:ok, ops} = Wire.decode_ops(frames)
@@ -25,6 +25,10 @@ defmodule Treehouse.LifecycleQuarantineParityTest do
           else: Treehouse.Thread
 
       reasons = reasons(module, log)
+
+      for %Op{kind: :authority, body: {:grant, _}, id: id} <- ops do
+        assert reasons[id] == nil
+      end
 
       for op <- ops, op.kind == :tombstone do
         expected =
@@ -58,21 +62,31 @@ defmodule Treehouse.LifecycleQuarantineParityTest do
         {sim, lifecycle} = Sim.append(sim, realm, :tombstone, nil)
         sim = Sim.sync_all(sim)
 
-        sim =
+        {sim, descendant} =
           if kind == "thread" do
-            {next, _} =
-              Sim.command(sim, "root", :author_edit, [post.id, lifecycle.id, "wrong type"])
-
-            next
+            Sim.command(sim, "root", :author_edit, [post.id, lifecycle.id, "wrong type"])
           else
-            sim
+            {sim, nil}
           end
 
         log = Sim.log(sim, "root")
+        assert String.contains?(log.replica, "#root:")
+        actual = reasons(module, log)
+
+        assert actual[lifecycle.id] ==
+                 if(realm == "root", do: nil, else: "unauthorized_tombstone")
+
+        if descendant do
+          assert actual[descendant.id] ==
+                   if(realm == "root",
+                     do: "application_wrong_target",
+                     else: "application_target_quarantined"
+                   )
+        end
+
         frames = Enum.map(Log.topo_ops(log), &Wire.encode_op/1)
 
-        {%{name: "beam-#{kind}-#{realm}", replica: log.replica, frames: frames},
-         reasons(module, log)}
+        {%{name: "beam-#{kind}-#{realm}", replica: log.replica, frames: frames}, actual}
       end
 
     inputs = Enum.flat_map(histories, fn {h, _} -> [h, %{h | frames: Enum.reverse(h.frames)}] end)

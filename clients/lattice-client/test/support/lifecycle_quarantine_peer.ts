@@ -9,7 +9,7 @@ import {materialize} from "../../src/materialize";
 import {bindTownshipReplica} from "../../src/township";
 import {ed25519} from "@noble/curves/ed25519.js";
 
-interface History {name:string;replica:string;frames:CarrierOpFrame[];}
+interface History {name:string;replica:string;frames:CarrierOpFrame[];realmByPubkey?:Record<string,string>;}
 async function judge(h:History){
  const ids=new Set(h.frames.map(f=>f.id));assert.equal(ids.size,h.frames.length);
  for(const raw of h.frames){
@@ -17,7 +17,7 @@ async function judge(h:History){
   assert.equal((await verifyCarrierOp(f,{verify:async(key,bytes,sig)=>ed25519.verify(sig,bytes,Buffer.from(key,"base64"),{zip215:false})})).valid,true);
  }
  const space=h.replica.startsWith("replica:treehouse:space:");
- const ops=carrierOpsToSemanticOps(h.frames,{},treehouseCommandDecoders(space?"Treehouse.Space":"Treehouse.Thread"));
+ const ops=carrierOpsToSemanticOps(h.frames,h.realmByPubkey??{},treehouseCommandDecoders(space?"Treehouse.Space":"Treehouse.Thread"));
  const result=materialize(space?treehouseSpaceSchema:treehouseThreadSchema,ops);
  return Object.fromEntries(ops.map(op=>[op.id,result.quarantineReasons.get(op.id)??null]));
 }
@@ -40,6 +40,8 @@ for(const kind of ["space","thread"] as const){
    const frames=[genesis,post,lifecycle];
    if(kind==="thread")frames.push(await authorCarrierOp({replica,signer:root,deps:[lifecycle.id],kind:"command",cap:text(cap.id),body:["tuple",[["atom","author_edit"],["list",[text(post.id),text(lifecycle.id),text("wrong type")]]]]}));
    histories.push({name:`${kind}-${label}-${cite?"cap":"no-cap"}`,replica,frames});
+   if(!cite)histories.push({name:`${kind}-${label}-aliased-identities`,replica,frames,
+    realmByPubkey:{[Buffer.from(root.publicKey).toString("base64")]:"same-alias",[Buffer.from(member.publicKey).toString("base64")]:"same-alias"}});
   }
  }
  const noRoot=await authorCarrierOp({replica,signer:root,deps:[],kind:"tombstone",body:["nil"],cap:["nil"]});
