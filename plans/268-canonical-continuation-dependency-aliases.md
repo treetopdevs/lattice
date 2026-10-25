@@ -2,15 +2,10 @@
 
 ## Status and scope
 
-IN PROGRESS. Both expected-claim builders now normalize header dependencies.
-Fresh reciprocal Space/Thread alias and refusal tests pass after independent RED
-failures in BEAM and TS. Full mix check, all 17 local client CI suites, shell
-typecheck/tests and both boundary scans pass. Both independent protected-core
-reviews have no actionable findings. Requested fallback Sonnet5.5 High adversarial
-review found no P1/P2 defect in the unchanged implementation. The preceding exact
-hosted gate passed. A direct BEAM alias wire-decode assertion now passes focused
-checks; refreshed full Mix check and both boundary scans also pass. The final
-hosted gate and later native adoption remain open.
+DONE for the protected BEAM/TS correction. Both expected-claim builders normalize
+header dependencies; reciprocal Space/Thread alias, wire-decode and refusal tests
+cover the change. Native evaluator adoption remains separate work in plan 267.
+Execution evidence and review dispositions are in the PR description and index.
 
 A protocol consistency defect was proved while implementing the native
 bounded authority fold. This is a separate correction to the existing BEAM/TS
