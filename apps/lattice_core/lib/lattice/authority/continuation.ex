@@ -162,7 +162,7 @@ defmodule Lattice.Authority.Continuation do
          successor: d.audience,
          delegation_id: d.id,
          author: op.author,
-         deps: Enum.sort(op.deps),
+         deps: op.deps |> Enum.uniq() |> Enum.sort(),
          epoch: epoch,
          epoch_basis: basis
        }}

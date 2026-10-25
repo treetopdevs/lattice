@@ -1442,7 +1442,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonyTest do
              cli(["report", "--signer", f.signer, "--ceremony", f.ceremony])
 
     assert Cli.commands() ==
-             ~w(backup binding-payload dry-run generate import report verify-backup verify-binding)
+             ~w(backup binding-payload catalog-status dry-run generate import init-ledger report review-catalog sign-catalog verify-backup verify-binding)
   end
 
   test "every command's output and artifacts hold no seed or passphrase", f do

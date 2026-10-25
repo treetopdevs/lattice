@@ -27,6 +27,15 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
   @spec acquire(owner(), term()) :: {:ok, reference()} | {:error, atom()}
   def acquire({pid, incarnation}, key), do: call(pid, {:acquire, incarnation, key})
 
+  @doc "Recheck an admitted write worker after it acquired its target lock."
+  @spec authorize_write(owner(), reference()) :: :ok | {:error, atom()}
+  def authorize_write({pid, incarnation}, lease),
+    do: call(pid, {:authorize_write, incarnation, lease})
+
+  @doc "Fence a holder's mutations for this entire release incarnation."
+  @spec fence_writes(owner(), term()) :: :ok | {:error, atom()}
+  def fence_writes({pid, incarnation}, key), do: call(pid, {:fence_writes, incarnation, key})
+
   @spec complete(owner(), reference(), term(), pid()) :: :ok | {:error, atom()}
   def complete({pid, incarnation}, lease, key, target),
     do: call(pid, {:complete, incarnation, lease, key, target})
@@ -86,6 +95,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
        attempt: nil,
        expected: nil,
        leases: %{},
+       write_fences: MapSet.new(),
        identities: %{},
        epoch: 0,
        receipt: nil,
@@ -97,13 +107,39 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
   def handle_call(:owner, _from, state), do: {:reply, {self(), state.incarnation}, state}
 
   def handle_call({:acquire, incarnation, key}, {caller, _}, state) do
-    if incarnation == state.incarnation and state.phase == :accepting do
+    with true <- incarnation == state.incarnation and state.phase == :accepting,
+         :ok <- write_admission(state, key) do
       state = forget_dead_identities(state)
       lease = make_ref()
       monitor = Process.monitor(caller)
 
       {:reply, {:ok, lease},
        %{state | leases: Map.put(state.leases, lease, {caller, monitor, key})}}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+      _ -> {:reply, {:error, :release_closed}, state}
+    end
+  end
+
+  def handle_call({:authorize_write, incarnation, lease}, {caller, _}, state) do
+    result =
+      case state.leases[lease] do
+        {^caller, _, {:holder_write, key, holder}}
+        when incarnation == state.incarnation and state.phase in [:accepting, :quiescing] ->
+          if Process.alive?(holder) and not MapSet.member?(state.write_fences, key),
+            do: :ok,
+            else: {:error, :persistence_ambiguous}
+
+        _ ->
+          {:error, :release_closed}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call({:fence_writes, incarnation, key}, _from, state) do
+    if incarnation == state.incarnation do
+      {:reply, :ok, fence_key(state, key)}
     else
       {:reply, {:error, :release_closed}, state}
     end
@@ -250,7 +286,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
          state.receipt == observation and live?(state), state}
 
   @impl true
-  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    state = fence_lost_writer_owner(state, pid)
+
     owned? =
       Enum.any?(state.leases, fn {_, {_, monitor, _}} -> monitor == ref end) or
         Enum.any?(state.identities, fn {_, {_, monitor}} -> monitor == ref end) or
@@ -286,6 +324,52 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
   # Anything else is not addressed to this gate; crashing on it would restart
   # every route for no reason.
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp write_admission(state, {:holder_write, key, holder}) do
+    cond do
+      MapSet.member?(state.write_fences, key) ->
+        {:error, :persistence_ambiguous}
+
+      not Process.alive?(holder) ->
+        {:error, :release_identity_changed}
+
+      true ->
+        case state.identities[key] do
+          {^holder, _} -> :ok
+          _ -> {:error, :release_identity_changed}
+        end
+    end
+  end
+
+  defp write_admission(state, {:holder, _} = key) do
+    pending =
+      Enum.any?(state.leases, fn
+        {_, {_, _, {:holder_write, ^key, _}}} -> true
+        _ -> false
+      end)
+
+    if MapSet.member?(state.write_fences, key) or pending,
+      do: {:error, :persistence_ambiguous},
+      else: :ok
+  end
+
+  defp write_admission(_state, _key), do: :ok
+
+  defp fence_key(state, key) do
+    if MapSet.member?(state.write_fences, key),
+      do: state,
+      else: %{state | write_fences: MapSet.put(state.write_fences, key), epoch: state.epoch + 1}
+  end
+
+  defp fence_lost_writer_owner(state, pid) do
+    Enum.reduce(state.leases, state, fn
+      {_, {worker, _, {:holder_write, key, holder}}}, current when pid in [worker, holder] ->
+        fence_key(current, key)
+
+      _, current ->
+        current
+    end)
+  end
 
   defp forget_dead_identities(state) do
     identities =
@@ -335,18 +419,28 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
     %{state | phase: :invalid, receipt: nil}
   end
 
-  defp view(state),
-    do:
-      Map.take(state, [
-        :incarnation,
-        :phase,
-        :attempt,
-        :expected,
-        :leases,
-        :identities,
-        :epoch,
-        :receipt
-      ])
+  # Public snapshots describe startup/identity stability. In-flight writes are
+  # serialized by Holder's drain call, and commit separately requires ALL leases
+  # empty. Keeping volatile write leases out of this view preserves that barrier.
+  defp view(state) do
+    state
+    |> Map.take([
+      :incarnation,
+      :phase,
+      :attempt,
+      :expected,
+      :leases,
+      :identities,
+      :epoch,
+      :receipt
+    ])
+    |> Map.update!(:leases, fn leases ->
+      Map.reject(leases, fn
+        {_, {_, _, {:holder_write, _, _}}} -> true
+        _ -> false
+      end)
+    end)
+  end
 
   defp call(pid, message) do
     GenServer.call(pid, message)

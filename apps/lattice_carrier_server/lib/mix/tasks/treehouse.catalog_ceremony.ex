@@ -13,9 +13,13 @@ defmodule Mix.Tasks.Treehouse.CatalogCeremony do
       mix treehouse.catalog_ceremony report --ceremony DIR --custodian NAME \\
         --passphrase-holder NAME --rotation-owner NAME
       mix treehouse.catalog_ceremony dry-run --ceremony DIR
+      mix treehouse.catalog_ceremony review-catalog --ceremony DIR --package PATH
+      mix treehouse.catalog_ceremony init-ledger --ceremony DIR --space-log PATH --out STATUS
+      mix treehouse.catalog_ceremony catalog-status --ceremony DIR --package PATH --out STATUS
+      mix treehouse.catalog_ceremony sign-catalog --ceremony DIR --package PATH --signer KEY --confirm-catalog DIGEST --out ENVELOPE
 
   Run from the repository root. The task never starts the carrier application
-  and signs nothing. Secret paths are always explicit; the backup passphrase is
+  and signs only through explicit digest-confirmed sign-catalog. Secret paths are always explicit; the backup passphrase is
   read from stdin only (twice for `backup`, once for `verify-backup`), and only
   when stdin is a pipe or file: a terminal is refused, because echo cannot be
   turned off reliably from inside the VM (the runbook pipes it in from a silent

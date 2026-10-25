@@ -8,10 +8,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
     CeremonyFixture,
     Fixture,
     Journal,
-    ReleaseActivation,
-    ReleaseQuiesce,
     ReleaseReadiness,
-    ReleaseStopSeal,
     Staging
   }
 
@@ -57,6 +54,62 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
     assert {:ok, raw} = Journal.read(f.root)
     assert raw == Journal.encode(ready)
     assert String.ends_with?(File.read!(Journal.history_path(f.root)), activated <> "\n")
+    no_grants!()
+  end
+
+  test "publication review probes a ready release without advancing its receipt", f do
+    activated = activated!(f)
+    restart!()
+    assert {:ok, ready} = ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
+    {:ok, raw} = Journal.read(f.root)
+    history = File.read!(Journal.history_path(f.root))
+
+    assert {:ok, observation} =
+             ReleaseReadiness.review(f.root, raw, f.probe, f.ceremony_dir, "ready")
+
+    assert observation.record == ready
+    assert observation.deployment.incarnation == Runtime.deployment().incarnation
+    assert length(observation.current.pairs) == 2
+    assert {:ok, ^raw} = Journal.read(f.root)
+    assert File.read!(Journal.history_path(f.root)) == history
+    no_grants!()
+
+    for phase <- ["activated", "carrier_pending", "listed", nil] do
+      assert {:error, :stale_operator_intent} =
+               ReleaseReadiness.review(f.root, raw, f.probe, f.ceremony_dir, phase)
+    end
+
+    assert {:error, :stale_operator_intent} =
+             ReleaseReadiness.review(f.root, activated, f.probe, f.ceremony_dir, "ready")
+  end
+
+  test "publication returns the authenticated history reread after route probes", f do
+    activated = activated!(f)
+    restart!()
+    assert {:ok, _} = ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
+    {:ok, raw} = Journal.read(f.root)
+    late = Identity.from_seed("late", "publication-review-late")
+
+    {space, invitation} =
+      Sim.command(f.space, "creator", :issue_invitation, [Base.encode64(late.pub), []])
+
+    refute Sim.quarantined(space, "creator", invitation.id)
+
+    hook!(fn route ->
+      if route == f.space_route do
+        assert {:ok, _} = Holder.relay(Holder.via("space"), "member", invitation)
+      end
+    end)
+
+    assert {:ok, observation} =
+             ReleaseReadiness.review(f.root, raw, f.probe, f.ceremony_dir, "ready")
+
+    {_instance, observed} =
+      Enum.find(observation.current.pairs, fn {_instance, log} -> log.replica == space.replica end)
+
+    assert observed.ops[invitation.id] == invitation
+    assert invitation.id in observation.frontiers[space.replica]
+    assert {:ok, ^raw} = Journal.read(f.root)
     no_grants!()
   end
 
@@ -343,39 +396,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
   # --- helpers ---------------------------------------------------------------
 
   # Stage is done in setup; seal and activate this boot, as the activation tests do.
-  defp activated!(f) do
-    Application.put_env(:lattice_carrier_server, :manifest, f.manifest)
-    Application.put_env(:lattice_carrier_server, :operator_root, f.root)
-    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
-    deployment = Runtime.deployment()
-    {:ok, manifest} = Manifest.load(f.manifest)
-    replicas = Map.new(manifest.instances, &{&1.name, Log.restore_verified(&1.log_file)})
-
-    expected = %{
-      manifest_path: deployment.manifest_path,
-      manifest_digest: deployment.manifest_digest,
-      instances:
-        Enum.map(deployment.instances, fn instance ->
-          {:ok, %{log: log}} = replicas[instance.name]
-          instance |> Map.take([:name, :realm, :pub, :log_file]) |> Map.put(:replica, log.replica)
-        end)
-    }
-
-    assert {:ok, receipt} = ReleaseQuiesce.drain(f.request.attempt, expected)
-    assert {:ok, observation} = ReleaseStopSeal.stop_and_seal(deployment.owner, receipt)
-
-    assert {:ok, _} =
-             ReleaseActivation.activate(
-               f.root,
-               f.journal,
-               deployment.owner,
-               observation,
-               f.ceremony_dir
-             )
-
-    {:ok, activated} = Journal.read(f.root)
-    activated
-  end
+  defp activated!(f), do: LatticeCarrierServer.Operator.ActivationFixture.activated!(f)
 
   defp target!(f, name, route) do
     {:ok, manifest} = Manifest.load(f.manifest)
@@ -412,10 +433,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
     assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
   end
 
-  defp restart! do
-    assert :ok = Application.stop(:lattice_carrier_server)
-    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
-  end
+  defp restart!, do: LatticeCarrierServer.Operator.ActivationFixture.restart!()
 
   defp admitted!(f) do
     # Every Treehouse instance shares the bound service key; the admitted one

@@ -10,13 +10,13 @@
 >
 > **Drift check (run first)**: `git log --oneline 1cebccd03..HEAD -- scripts/treehouse_operator_mutation.py
 > apps/lattice_carrier_server/lib apps/lattice_core/lib/treehouse clients/lattice-client/src/treehouse_catalog_*.ts`.
-> A new journal phase, owner plan kind, manifest field or catalog trust refusal since 1cebccd03 is a STOP.
+> For PR 4, plan 263 rebases this drift check to 187cc3d8a; unexplained later phase/owner/manifest/trust changes require reconciliation.
 
 ## Status
 
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
 the inputs in "Depends on" exist. PR 1 (Design 1) landed in PR #155; PR 3 (Design 3) landed in PR #158.
-PR 2 (Design 2, OD-1 and OD-5 as decided in D-39) is built in PR #160; PRs 4-5 wait on the ceremony report; PR 6 is plan 245.
+PR 2 landed in #160. Software PR 4 landed in #168 (plan 263, disposable fixtures); PR 5 is plan 264. Operational PRs 4-5 need the real ceremony report. PR 6 is plan 245.
 
 ## Header
 
@@ -200,7 +200,7 @@ envelope may exist, else `stale_catalog_head`.
   with `Signer.read_seed` plus the `Paths.signer` ancestor checks, requires its public key to equal
   the root-signed `record.catalog_key` (`signer_key_mismatch`), wraps it in `Secret` and signs inside
   the call. This is the slice 13 sketch; it puts the signer on the network-facing host.
-- (b) `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file)` runs the checks below and
+- (b) `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file, custodian_status)` runs the checks below and
   writes `catalog-unsigned.json` (canonical `C` and `sha256` of `catalog_bytes(C)`). The custodian
   runs a new ceremony command `sign-catalog`. It keeps a custodian-side record of the last signed
   revision, id and envelope bytes (envelope written and fsynced before the record advances). It
@@ -209,7 +209,7 @@ envelope may exist, else `stale_catalog_head`.
   re-runs `CatalogEntries.observe/2` over the custodian's Space and Thread exports plus that frame,
   as the carrier's step 6 does;
   it prints a review sheet with the binding id and, per new entry, replica, root, route and
-  reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file,
+  reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file, package_file,
   envelope_file)` re-runs every check, requires `envelope.catalog == C` exactly, and verifies the
   signature with the binding `catalog_key`.
 
@@ -245,24 +245,23 @@ catalog_head=id, artifacts=old + [catalog artifact])`; `attempt`, `incarnation` 
 not the derived one, bytes digest differs, manifest digest differs); `stale_operator_incarnation`;
 `unsafe_operator_file`; `immutable_artifact_conflict`. The owner cannot verify Ed25519; it binds
 bytes to digest and trusts the BEAM for the signature. Like `ready`, `catalogued` is an observation at
-the checked frontiers; a later roster or authority change is caught by `listed`'s in-holder guard.
+the checked frontiers; a later roster or authority change is caught by `listed`'s reviewed snapshot token.
 
 ## Design 5: `listed`
 
-`ReleaseListing.publish(root, expected, ceremony_dir)`:
+`ReleaseListing.publish(root, expected, ceremony_dir, probe_file)` (plan 264):
 
 1. As `catalogued` step 1, with phase `catalogued`; `CatalogBinding.load/2` again.
 2. The stored envelope's digest equals the artifact, it verifies, its id equals `catalog_head` and
    the committed head (`:stale_catalog_head`), and its new Thread entry's `reference` equals the
    staged reference op id (`:catalog_reference_mismatch`).
-3. Courier (OD-3 a), one call into the Space holder: `Holder.courier(holder, frame, guard)`. The frame
-   is the journal's `reference` artifact bytes, re-hashed against its `op_id` and `sha256`; callers
-   pass no other bytes. Inside the holder call, so no relay interleaves, `guard` runs on the
-   holder's current log: the roster equals the staged grant recipients (`:roster_drift_since_catalog`)
-   and `Authority.analyze(Space, log + frame)` honors the frame (`:reference_not_honored`). Only then
-   is the frame delivered and durably persisted before acknowledgement. An already present frame
-   skips delivery but still passes the guard. `courier/3` is not reachable from `web_socket.ex` or
-   `relay_realms`, and ignores the instance's relay setting.
+3. Courier (OD-3 a): bounded pure review outside the holder judges its exact snapshot and
+   Sync candidate, including staged roster, honored reference and binding. The frame is the
+   journal's exact signed artifact; callers supply no substitute. Call
+   `Holder.courier(holder, frame, reviewed_token)`: inside the holder, snapshot/CAS and candidate
+   digest must still match before durable delivery. No arbitrary guard callback runs there.
+   A present frame skips delivery but repeats current review. This supersedes the legacy
+   in-holder guard design. Courier is local-only; it adds no WebSocket or relay-realm action.
 4. `CatalogEntries.observe/2` over the served logs of every entry, with no hypothetical frames,
    returns `{:ok, _}`: `:catalog_invalid`. This is the client's own acceptance test. `listed`, like
    `ready`, is a dated observation at that frontier: a concurrent op that arrives later and
@@ -275,7 +274,7 @@ refusals as for `ready` with old phase `catalogued`. The record is the local rec
 rebuilds `C`, and commits it; under (a) Ed25519 is deterministic (RFC 8032), so bytes are equal.
 (ii) Journal replaced, reply lost: the caller re-reads the journal; `catalogued`/`listed` with the
 same catalog id is done; any other input refuses `stale_operator_intent`. (iii) Frame delivered,
-journal still `catalogued`: step 3 finds it present and passing the guard, and writes `listed`.
+journal still `catalogued`: step 3 finds it present and passing current review, and writes `listed`.
 
 **A reference that lapses before `listed`** refuses `:reference_not_honored` and leaves its entry
 pending (no route is granted, §5). The contract's "superseding attempt with a new reference" conflicts
