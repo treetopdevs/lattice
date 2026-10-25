@@ -4,6 +4,7 @@ use super::{
     commands::{CommandPreflight, PrePolicyDecision},
     evidence_terms::text,
     history::AuthenticDag,
+    projection::{heights, latest, Stamp},
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,19 +63,12 @@ fn fold(
     decisions
 }
 
-type Stamp<'a> = (usize, &'a str);
-fn latest<'a>(slot: &mut Option<(Stamp<'a>, &'a str)>, stamp: Stamp<'a>, value: &'a str) {
-    if slot.as_ref().is_none_or(|(previous, _)| stamp > *previous) {
-        *slot = Some((stamp, value));
-    }
-}
-
 /// Reduce honored Thread effects with the source CRDT order. Edits preserve the
 /// original post identity and position; deletions remove presentation only.
 pub fn project(dag: &AuthenticDag) -> Result<ThreadProjection, &'static str> {
     let preflight = preflight(dag)?;
     let decisions = fold(dag, &preflight);
-    let mut depths = BTreeMap::new();
+    let depths = heights(dag);
     let mut posts = BTreeMap::new();
     let mut edits: BTreeMap<&str, Option<(Stamp<'_>, &str)>> = BTreeMap::new();
     let mut deleted = BTreeSet::new();
@@ -82,14 +76,7 @@ pub fn project(dag: &AuthenticDag) -> Result<ThreadProjection, &'static str> {
     let mut moderation = None;
     let mut archived = false;
     for id in dag.order() {
-        let frame = dag.frame(id).expect("authenticated order");
-        let depth = frame
-            .deps()
-            .iter()
-            .map(|id| depths[id.as_str()])
-            .max()
-            .map_or(0, |depth: usize| depth + 1);
-        depths.insert(id.as_str(), depth);
+        let depth = depths[id.as_str()];
         if decisions.get(id) != Some(&None) {
             continue;
         }

@@ -1,6 +1,7 @@
 import { WIRE_VOCABULARY } from "../../src/wire_vocabulary";
 import assert from "node:assert/strict";
 import {commandCases,judgeCommands,threadPolicyCases} from "./native_catalog_command_peer";
+import {semanticCorpus} from "./export_member_continuity_semantics";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,7 +13,7 @@ import { canonicalBase64Bytes } from "../../src/codec";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { analyzeAuthority } from "../../src/authority";
 import { capabilityQuarantine, revokedAsOf } from "../../src/capability";
-import { treehouseSpaceSchema, treehouseThreadSchema, observeTreehouse } from "../../src/treehouse";
+import { treehouseSpaceSchema, treehouseThreadSchema, observeTreehouse, treehouseSpaceInitialization } from "../../src/treehouse";
 import { canonicalOrder } from "../../src/dag";
 import { treehouseCommandDecoders } from "../../src/treehouse";
 
@@ -120,6 +121,21 @@ if (process.argv[2] === "produce") {
     assert.deepEqual(history.frontier, actual.frontier);
   }
   console.log(JSON.stringify({histories: input.histories.length}));
+ } else if (process.argv[2] === "space-policy-cases") {
+  const semantic=await semanticCorpus();
+  console.log(JSON.stringify({histories:[...semantic.cases,...(await commandCases()).filter(h=>h.replica.startsWith("replica:treehouse:space:"))]}));
+ } else if ((process.argv[2] === "space-policy" || process.argv[2] === "space-projection")) {
+  const input=JSON.parse(readFileSync(0,"utf8")) as {histories:History[]};
+  const results=[];
+  for(const h of input.histories){
+   await graph(h);
+   const ops=carrierOpsToSemanticOps(h.frames,{},treehouseCommandDecoders("Treehouse.Space"));
+   const result=observeTreehouse("Treehouse.Space",ops);
+   const commandReasons=Object.fromEntries(ops.filter(op=>op.kind==="command").map(op=>[op.id,result.quarantineReasons.get(op.id)??null]));
+   const {admin,moderator,...state}=result.state;
+   results.push(process.argv[2]==="space-policy"?commandReasons:{commandReasons,state,holders:{admin,moderator},initialization:treehouseSpaceInitialization(ops)});
+  }
+  console.log(JSON.stringify({results}));
  } else if (process.argv[2] === "thread-policy-cases") {
   const lineage=JSON.parse(execFileSync(process.execPath,["--import","tsx","test/support/thread_lineage_peer.ts"],{encoding:"utf8"}));
   const lifecycle=JSON.parse(execFileSync(process.execPath,["--import","tsx","test/support/lifecycle_quarantine_peer.ts"],{encoding:"utf8"}));

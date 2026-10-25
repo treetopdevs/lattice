@@ -12,5 +12,10 @@ pub mod authority;
 pub mod commands;
 mod evidence_terms;
 
+mod bootstrap;
+pub mod member_certificate;
+mod projection;
 pub mod reader;
+pub mod space_policy;
+pub mod space_projection;
 pub mod thread_policy;

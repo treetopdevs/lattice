@@ -44,6 +44,7 @@ pub struct AuthorityEvidence<'a> {
     beacons: Vec<(String, u64)>,
     timelines: BTreeMap<String, Timeline>,
     reasons: BTreeMap<String, &'static str>,
+    pins: Vec<Pin>,
 }
 #[derive(Clone)]
 struct Policy {
@@ -51,7 +52,7 @@ struct Policy {
     threshold: u64,
     step: u64,
 }
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct Profile {
     term: Term,
     kind: String,
@@ -61,6 +62,7 @@ struct Profile {
     threshold: u64,
     width: u64,
 }
+#[derive(Debug)]
 struct Pin {
     op_id: String,
     profile: Profile,
@@ -80,6 +82,7 @@ impl<'a> AuthorityEvidence<'a> {
         };
         let mut result = Self {
             reasons: static_delegations.reasons().clone(),
+            pins: Vec::new(),
             static_delegations,
             beacons: Vec::new(),
             timelines: roles
@@ -289,6 +292,7 @@ impl<'a> AuthorityEvidence<'a> {
                 }
             }
         }
+        result.pins = pins;
         Ok(result)
     }
     fn valid_intro(&self, op: &AuthenticFrame, d: &Delegation) -> bool {
@@ -515,6 +519,20 @@ impl<'a> AuthorityEvidence<'a> {
     }
     pub fn reasons(&self) -> &BTreeMap<String, &'static str> {
         &self.reasons
+    }
+    pub(super) fn binding_at(&self, op_id: &str) -> Option<(&[u8], &str, String, &str)> {
+        let visible = self.static_delegations.dag.ancestors(op_id)?;
+        let pin = self
+            .pins
+            .iter()
+            .rev()
+            .find(|pin| visible.contains(pin.op_id.as_str()))?;
+        Some((
+            self.static_delegations.root()?,
+            &pin.op_id,
+            digest("lattice-continuation-profile-v1", &pin.profile.term)?,
+            &pin.profile.kind,
+        ))
     }
     /// Only the causal expiry component, never a complete command verdict.
     pub fn expired_as_of(&self, op_id: &str, delegation_id: &str) -> Option<bool> {

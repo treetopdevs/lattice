@@ -88,6 +88,41 @@ case System.argv() do
 
     IO.puts(Jason.encode!(%{histories: length(input["histories"])}))
 
+  ["space-policy-cases"] ->
+    IO.puts(Jason.encode!(%{histories: Treehouse.MemberContinuitySemanticVectors.corpus().cases}))
+
+  [mode] when mode in ["space-policy", "space-projection"] ->
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    results =
+      Enum.map(input["histories"], fn h ->
+        {:ok, ops} = Wire.decode_ops(h["frames"])
+        log = Log.from_ops(h["replica"], Map.new(ops, &{&1.id, &1}))
+        :ok = Log.verify_authenticity(log)
+        analysis = Lattice.Authority.analyze(Treehouse.Space, log)
+
+        reasons =
+          Map.new(Enum.filter(ops, &(&1.kind == :command)), &{&1.id, analysis.reasons[&1.id]})
+
+        if mode == "space-policy" do
+          reasons
+        else
+          view = Treehouse.ReadModel.observe(Treehouse.Space, log)
+
+          %{
+            commandReasons: reasons,
+            state: view.state,
+            initialization: view.initialization,
+            holders:
+              Map.new(view.holders, fn {role, holder} ->
+                {role, holder && Base.encode64(holder)}
+              end)
+          }
+        end
+      end)
+
+    IO.puts(Jason.encode!(%{results: results}))
+
   [mode] when mode in ["thread-policy", "thread-projection"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
 

@@ -4,9 +4,9 @@
 
 IN PROGRESS. Authenticated DAGs, portable cutoffs, static delegation analysis,
 bounded roles/continuation, command pre-policy, strict product readability and
-causal Thread application policy/projection are implemented. Remaining semantic
-normalization, Space policy/projection, catalog graph evaluation and retained trust
-remain unfinished.
+causal Thread application policy/projection are implemented. Space application policy/projection and member-certificate consent checks are now
+implemented as a component. Catalog graph evaluation, retained trust and the full
+incoming/resource integration remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
 
 Fresh Thread application-policy work exposes a source discrepancy for malformed
@@ -14,7 +14,7 @@ edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.
 Separate plan 270 corrects the source behavior and literal leading U+FEFF text.
 Its independently reviewed source is now adopted, and the original reciprocal
 regression agrees without changing its expected result. The separately reviewed lifecycle source correction is also adopted. Its final
-hosted gate remains pending.
+hosted gates are green at source tip 8342c5b7b.
 Thread policy/projection is a component, not full application/catalog or installed parity.
 
 ## Source adoption
@@ -31,7 +31,9 @@ extensions. Run all component and reciprocal regressions after integration.
 Authority compares unsigned header dependencies as the normalized signed set,
 matching the adopted owner correction. Do not normalize signed witness claims or
 relax consent, quorum, scope, epoch, predecessor or lease checks. Preserve supplied
-header data as transport evidence without giving its multiplicity semantic force.
+header data as transport evidence. Member-continuity consent separately requires
+its claim dependency list to equal the exact supplied envelope list in both owners;
+retain that existing application predicate rather than normalize signed claims.
 
 The native incoming boundary must adopt the current common owner contract:
 authentication before fetch, pre-merge validation, signed-identity coalescing,
