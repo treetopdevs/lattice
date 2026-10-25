@@ -3,6 +3,7 @@ use base64::{
     Engine,
 };
 use ed25519_dalek::{Signer, SigningKey};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -195,6 +196,10 @@ fn long_authentic_chain_preserves_its_causal_past_without_recursive_stack_growth
     assert_eq!(dag.ancestors(&previous[0]).unwrap().len(), 4095);
 }
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
+    static PEER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = PEER_LOCK
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     let mut command = if runtime == "beam" {
         let shim = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".asdf/shims/mix");
         let mut command = Command::new(if shim.is_file() { shim } else { "mix".into() });
@@ -240,7 +245,23 @@ fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    serde_json::from_slice(&output.stdout).expect("actual peer JSON")
+    // Test-only corpus contains deliberate depth-65 terms plus a case wrapper,
+    // beyond serde's generic depth128. Production entry points retain their
+    // separate seeded depth/node bounds; this local peer output is byte bounded.
+    assert!(
+        output.stdout.len() <= 256 * 1024 * 1024,
+        "peer corpus budget"
+    );
+    let mut decoder = serde_json::Deserializer::from_slice(&output.stdout);
+    decoder.disable_recursion_limit();
+    let value = Value::deserialize(&mut decoder).unwrap_or_else(|error| {
+        panic!(
+            "actual {runtime} {mode} peer JSON: {error}: {}",
+            String::from_utf8_lossy(&output.stdout[..output.stdout.len().min(192)])
+        )
+    });
+    decoder.end().unwrap();
+    value
 }
 #[test]
 fn fresh_beam_and_ts_histories_are_authenticated_in_rust_and_both_consume_rust_graphs() {
@@ -260,4 +281,143 @@ fn fresh_beam_and_ts_histories_are_authenticated_in_rust_and_both_consume_rust_g
     for runtime in ["beam", "ts"] {
         assert_eq!(peer(runtime, "consume", Some(&produced))["histories"], 1);
     }
+}
+
+#[test]
+fn native_codec_preserves_empty_delegation_text_fields_without_authorizing_them() {
+    for runtime in ["beam", "ts"] {
+        let produced = peer(runtime, "produce", None);
+        for item in produced["terms"].as_array().unwrap() {
+            let term = Term::from_carrier(&item["term"]).unwrap();
+            assert_eq!(
+                STANDARD.encode(encode(&term).unwrap()),
+                item["bytes"],
+                "{runtime}"
+            );
+        }
+    }
+}
+
+fn observe_cutoff(input: &Value) -> Value {
+    use treehouse_tauri_shell::catalog_eval::cutoff;
+    match cutoff::derive(&serde_json::to_vec(input).unwrap()) {
+        Ok(observed) => json!({"ok":true, "cutoff":{"replica":observed.replica(),
+            "frontier":observed.frontier(), "logDigest":observed.log_digest()},
+            "canonicalBytes":STANDARD.encode(observed.canonical_bytes())}),
+        Err(error) => json!({"ok":false, "reason":error.reason}),
+    }
+}
+fn compare_cutoff(input: &Value, expected: &Value, label: &str) {
+    let observed = observe_cutoff(input);
+    assert_eq!(observed["ok"], expected["ok"], "{label}: {observed}");
+    if expected["ok"] == true {
+        assert_eq!(observed["cutoff"], expected["cutoff"], "{label}");
+        assert!(
+            observed["canonicalBytes"] == expected["canonicalBytes"],
+            "{label}: exact canonical bytes mismatch"
+        );
+    } else {
+        assert_eq!(observed["reason"], expected["reason"], "{label}");
+    }
+}
+#[test]
+fn committed_cutoff_vectors_preserve_exact_accepted_and_structural_rejection_bytes() {
+    let vectors: Value = serde_json::from_slice(
+        &std::fs::read(root().join(
+            "clients/lattice-client/test/vectors/catalog/cutoff_default_pre_member_continuity.json",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    for case in vectors["vectors"].as_array().unwrap() {
+        let input = json!({"replica":case["replica"], "frames":case["frames"], "rejected":case["rejected"]});
+        compare_cutoff(&input, &case["result"], case["name"].as_str().unwrap());
+    }
+}
+#[test]
+fn fresh_cutoff_producers_cover_portability_authentication_and_exact_push_boundaries() {
+    let mut names = std::collections::BTreeSet::new();
+    for runtime in ["beam", "ts"] {
+        let produced = peer(runtime, "cutoffs", None);
+        for case in produced["cases"].as_array().unwrap() {
+            let name = case["name"].as_str().unwrap();
+            names.insert(name.to_owned());
+            compare_cutoff(&case["input"], &case["result"], name);
+            let mut reverse = case["input"].clone();
+            reverse["frames"].as_array_mut().unwrap().reverse();
+            reverse["rejected"].as_array_mut().unwrap().reverse();
+            compare_cutoff(&reverse, &case["result"], &format!("{name} reversed"));
+            if name == "ts-depth64" {
+                let bytes = serde_json::to_vec(&case["input"]["frames"][0]).unwrap();
+                assert!(treehouse_tauri_shell::catalog_eval::frame::verify(&bytes).is_ok());
+            }
+            if name == "ts-cutoff-larger-than-an-artifact" || name == "beam-large-observation" {
+                let bytes = STANDARD
+                    .decode(case["result"]["canonicalBytes"].as_str().unwrap())
+                    .unwrap();
+                assert!(bytes.len() > 128 * 1024);
+                assert!(
+                    treehouse_tauri_shell::catalog_eval::canonical::decode(&bytes).is_err(),
+                    "aggregate observation must not widen the artifact reader"
+                );
+            }
+        }
+    }
+    for name in [
+        "ts-exact-push-limit",
+        "ts-one-push-byte-over",
+        "ts-forged-oversize-still-invalid",
+        "ts-depth64",
+        "ts-depth65-unsupported",
+        "ts-all-139-portable-atoms",
+        "beam-rejected-same-id-arbitrary-header",
+    ] {
+        assert!(names.contains(name), "actual producer must exercise {name}");
+    }
+    let frames = fixture();
+    let mut rejected = frames[3].clone();
+    rejected["sig"] = json!(STANDARD.encode([0; 64]));
+    let input = json!({"replica":replica(), "frames":frames,
+        "rejected":[{"frame":rejected, "reason":"bad_signature"}]});
+    let result = observe_cutoff(&input);
+    assert_eq!(result["ok"], true);
+    let produced = json!({"cases":[{"input":input, "result":result}]});
+    for runtime in ["beam", "ts"] {
+        assert_eq!(
+            peer(runtime, "consume-cutoffs", Some(&produced))["cases"],
+            1
+        );
+    }
+}
+#[test]
+fn cutoff_json_is_closed_and_the_complete_source_bound_does_not_become_an_artifact_bound() {
+    use treehouse_tauri_shell::catalog_eval::cutoff;
+    let empty = json!({"replica":replica(), "frames":[], "rejected":[]});
+    let bytes = serde_json::to_vec(&empty).unwrap();
+    let baseline = cutoff::derive(&bytes).unwrap();
+    let mut full = bytes.clone();
+    full.resize(64 * 1024 * 1024, b' ');
+    let exact = cutoff::derive(&full).unwrap();
+    assert_eq!(exact.canonical_bytes(), baseline.canonical_bytes());
+    full.push(b' ');
+    assert_eq!(
+        cutoff::derive(&full).unwrap_err().reason,
+        "unsupported_cutoff"
+    );
+    assert!(treehouse_tauri_shell::catalog_eval::json::parse(&full).is_err());
+    assert!(treehouse_tauri_shell::catalog_eval::canonical::base64("", Some(usize::MAX)).is_err());
+    let duplicate = format!(
+        "{{\"replica\":\"wrong\",{}",
+        String::from_utf8(bytes).unwrap().strip_prefix('{').unwrap()
+    );
+    assert_eq!(
+        cutoff::derive(duplicate.as_bytes()).unwrap_err().reason,
+        "invalid_verified_history"
+    );
+    let mut unknown = empty.clone();
+    unknown["installed"] = json!(true);
+    assert_eq!(
+        observe_cutoff(&unknown)["reason"],
+        "invalid_verified_history"
+    );
 }

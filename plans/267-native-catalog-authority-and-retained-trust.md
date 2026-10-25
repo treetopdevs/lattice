@@ -13,7 +13,10 @@ it is implemented, locally checked and independently reviewed.
 It supplies signature/hash verification, causal closure, deterministic order and
 read-only ancestor queries. It deliberately cannot report authority, membership,
 a catalog decision or a route. Completing that checkpoint does not complete this
-plan. The full authority/evaluator and parity matrix below remain mandatory.
+plan. Portable cutoff observation is also implemented as a second checkpoint:
+real BEAM/TS owners agree on exact canonical bytes and refusal precedence, including
+retained structural rejections. Full local final gates and checkpoint review are
+still pending. The full authority/evaluator and parity matrix below remain mandatory.
 
 ## Outcome and immutable contracts
 
@@ -68,6 +71,14 @@ existing depth/node limits. Bound complete-input parsing before allocation witho
 clipping evaluator-valid maximum-size history. Frame-set authentication accounts
 for encoded frame bytes and array separators before allocating verified state.
 Whole-page parsing and persisted snapshot checks remain separate later seams.
+Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-136 bounds;
+it can retain malformed scalar types only to classify a refusal. A separate internal
+canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.
+This accommodates aggregate cutoff records without widening public artifact bounds.
+Operation payload encoding permits one wrapper level above its depth-64 domain terms.
+Fresh depth-limit and large signed-observation peers must prove byte parity. Empty
+delegation text is representable data in both existing codecs; retain it for later
+authority refusal instead of confusing shape with a semantic grant.
 
 Tests must include fork delivery in both orders, rollback, blocked/pending states,
 authorized and refused rotations, revoked and beacon-lapsed references, reserved

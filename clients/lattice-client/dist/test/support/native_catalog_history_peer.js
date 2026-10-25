@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { trustFixture } from "./export_treehouse_catalog_trust";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "../../src/carrier";
-import { verifyCarrierOp } from "../../src/codec";
+import { verifyCarrierOp, canonicalBytesForCarrierTerm, authorCarrierOp } from "../../src/codec";
 import { canonicalBase64Bytes } from "../../src/codec";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalOrder } from "../../src/dag";
 import { treehouseCommandDecoders } from "../../src/treehouse";
+import { cutoffFixture } from "./export_treehouse_catalog_cutoff";
+import { authorCarrierOpUnchecked } from "./unchecked_author";
+import { deriveTreehouseCatalogCutoff } from "../../src/treehouse_catalog_cutoff";
 async function graph(history) {
     for (const frame of history.frames) {
         const result = await verifyCarrierOp(decodeCarrierOpFrame(frame), { verify: async (key, bytes, signature) => ed25519.verify(signature, bytes, canonicalBase64Bytes(key, 32), { zip215: false }) });
@@ -23,9 +26,74 @@ async function graph(history) {
     return { replica: history.replica, frames: history.frames, order,
         frontier: [...ids].filter(id => !referenced.has(id)).sort() };
 }
+async function cutoffCases() {
+    const f = await cutoffFixture();
+    const base = { name: "ts-complete", replica: f.replica, frames: f.frames, rejected: [] };
+    const cases = [base,
+        { ...base, name: "ts-rejected-same-id-and-arbitrary-header", rejected: [
+                { frame: f.forged, reason: "bad_signature" }, { frame: f.supplied, reason: "bad_signature" }
+            ] },
+        { ...base, name: "ts-genuine-cannot-be-rejected", rejected: [{ frame: f.genuine, reason: "bad_signature" }] },
+        { ...base, name: "ts-missing-closure", frames: f.frames.slice(1) },
+        { ...base, name: "ts-duplicate-accepted", frames: [...f.frames, f.genuine] },
+        { ...base, name: "ts-corrupt-accepted", frames: [...f.frames.slice(0, -1), f.forged] },
+    ];
+    const atoms = JSON.parse(readFileSync(new URL("../vectors/catalog/cutoff_atoms_with_member_continuity_v1.json", import.meta.url), "utf8"));
+    const vocabulary = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [f.genuine.id], kind: "command", cap: ["nil"],
+        body: ["list", atoms.map((name) => ["atom", name])] });
+    cases.push({ ...base, name: "ts-all-139-portable-atoms", frames: [...f.frames, vocabulary] });
+    const unknown = await authorCarrierOpUnchecked({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"],
+        body: ["atom", "cutoff_unknown_evidence_v99"] });
+    cases.push({ ...base, name: "ts-unknown-authentic", frames: [unknown] }, { ...base, name: "ts-unknown-forged", frames: [{ ...unknown, sig: "" }] }, { ...base, name: "ts-unknown-genuine-rejected", frames: [], rejected: [{ frame: unknown, reason: "bad_signature" }] }, { ...base, name: "ts-unknown-forgery-unsupported", frames: [], rejected: [{ frame: { ...unknown, sig: "" }, reason: "bad_signature" }] });
+    let deep = ["nil"];
+    for (let i = 0; i < 64; i++)
+        deep = ["list", [deep]];
+    const depth64 = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: deep });
+    const depth65 = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["list", [deep]] });
+    cases.push({ ...base, name: "ts-depth64", frames: [depth64] }, { ...base, name: "ts-depth65-unsupported", frames: [depth65] }, { ...base, name: "ts-bad-key-precedes-unsupported", frames: [{ ...depth65, author: "" }] }, { ...base, name: "ts-malformed-body-precedes-cap-depth", frames: [{ ...depth65, body: ["atom", 9], cap: ["list", [deep]] }] }, { ...base, name: "ts-malformed-rejected-scalar", frames: [], rejected: [{ frame: { ...f.forged, body: ["int", -1] }, reason: "bad_signature" }] });
+    const large = await Promise.all(Array.from({ length: 32 }, (_, index) => authorCarrierOp({ replica: f.replica, signer: f.signer,
+        deps: [f.genuine.id], kind: "command", cap: ["nil"], body: ["bin", Buffer.from(`${index}:` + "x".repeat(8192)).toString("base64")] })));
+    cases.push({ ...base, name: "ts-cutoff-larger-than-an-artifact", frames: [...f.frames, ...large] });
+    const huge = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"],
+        body: ["bin", Buffer.alloc(512 * 1024, 120).toString("base64")] });
+    const hugeForgery = { ...huge, sig: Buffer.alloc(64).toString("base64") };
+    const emptyDelegation = ["delegation", { id: "", replica: "", parent_id: "",
+            issuer: Buffer.alloc(32, 7).toString("base64"), audience: Buffer.alloc(32, 7).toString("base64"),
+            ops: [], roles: [], live: true, sig: Buffer.alloc(64).toString("base64") }];
+    const emptyFrame = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: emptyDelegation });
+    cases.push({ ...base, name: "ts-broad-observation-authenticates-before-portability", frames: [huge] }, { ...base, name: "ts-broad-observation-forgery-invalid", frames: [hugeForgery] }, { ...base, name: "ts-broad-observation-genuine-not-rejected", frames: [], rejected: [{ frame: huge, reason: "bad_signature" }] }, { ...base, name: "ts-broad-observation-rejected-unportable", frames: [], rejected: [{ frame: hugeForgery, reason: "bad_signature" }] }, { ...base, name: "ts-empty-delegation-fields-remain-raw-evidence", frames: [emptyFrame] });
+    let exact = false;
+    for (let padding = 0; padding < 4 && !exact; padding++) {
+        const replica = f.replica + "x".repeat(padding);
+        const make = (size) => authorCarrierOp({ replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["bin", Buffer.alloc(size, 120).toString("base64")] });
+        let low = 0, high = 50_000;
+        while (low < high) {
+            const middle = Math.ceil((low + high) / 2);
+            const frame = await make(middle);
+            if (Buffer.byteLength(JSON.stringify({ type: "push", ops: [frame] })) <= 64_000)
+                low = middle;
+            else
+                high = middle - 1;
+        }
+        const frame = await make(low);
+        if (Buffer.byteLength(JSON.stringify({ type: "push", ops: [frame] })) !== 64_000)
+            continue;
+        exact = true;
+        const tooLarge = await authorCarrierOp({ replica: replica + "x", signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: frame.body });
+        assert.equal(Buffer.byteLength(JSON.stringify({ type: "push", ops: [tooLarge] })), 64_001);
+        cases.push({ name: "ts-exact-push-limit", replica, frames: [frame], rejected: [] }, { name: "ts-one-push-byte-over", replica: replica + "x", frames: [tooLarge], rejected: [] }, { name: "ts-forged-oversize-still-invalid", replica: replica + "x", frames: [{ ...tooLarge, sig: Buffer.alloc(64).toString("base64") }], rejected: [] });
+    }
+    assert.ok(exact, "find genuine exact push-byte boundary");
+    return { cases: await Promise.all(cases.map(async ({ name, ...input }) => ({ name, input, result: await deriveTreehouseCatalogCutoff(input) }))) };
+}
+const serialize = (value) => JSON.stringify(value, (_key, item) => item instanceof Uint8Array ? Buffer.from(item).toString("base64") : item);
 if (process.argv[2] === "produce") {
     const fixture = await trustFixture();
-    console.log(JSON.stringify({ histories: await Promise.all(fixture.histories.map(graph)) }));
+    const term = ["delegation", { id: "", replica: "", parent_id: "",
+            issuer: Buffer.alloc(32, 7).toString("base64"), audience: Buffer.alloc(32, 7).toString("base64"),
+            ops: [], roles: [], live: true, sig: Buffer.alloc(64).toString("base64") }];
+    console.log(JSON.stringify({ histories: await Promise.all(fixture.histories.map(graph)),
+        terms: [{ term, bytes: Buffer.from(canonicalBytesForCarrierTerm(term)).toString("base64") }] }));
 }
 else if (process.argv[2] === "consume") {
     const input = JSON.parse(readFileSync(0, "utf8"));
@@ -36,5 +104,20 @@ else if (process.argv[2] === "consume") {
     }
     console.log(JSON.stringify({ histories: input.histories.length }));
 }
+else if (process.argv[2] === "cutoffs") {
+    console.log(serialize(await cutoffCases()));
+}
+else if (process.argv[2] === "consume-cutoffs") {
+    const input = JSON.parse(readFileSync(0, "utf8"));
+    for (const item of input.cases) {
+        const result = await deriveTreehouseCatalogCutoff(item.input);
+        assert.equal(result.ok, true);
+        if (result.ok) {
+            assert.deepEqual(result.cutoff, item.result.cutoff);
+            assert.equal(Buffer.from(result.canonicalBytes).toString("base64"), item.result.canonicalBytes);
+        }
+    }
+    console.log(JSON.stringify({ cases: input.cases.length }));
+}
 else
-    throw new Error("expected produce or consume");
+    throw new Error("expected a native history peer mode");
