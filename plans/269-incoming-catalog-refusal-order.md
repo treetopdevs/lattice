@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-IN PROGRESS. Main-history ordering, observation bounds and retained recovery are implemented; complete-proof context, capacity controls and final signoff remain open.
+IN PROGRESS. Main-history and complete-proof ordering, observation bounds and retained recovery are implemented; shared scalar validation, capacity controls and final signoff remain open.
 
 This plan aligns the BEAM and TypeScript catalog owners before the native evaluator
 adopts their behavior. Raw authentication returns header metadata, not admitted
@@ -96,6 +96,9 @@ as though it were an incremental page. Main-history reasons remain unchanged.
 
 ## Remaining work in order
 
+0. Resolve the shared scalar-validation design across main, rejected and proof readers.
+   Every decimal conversion needs a lexical uint64 bound before allocation, and
+   BEAM delegation observation needs the same closed key set as TypeScript.
 1. Verify the common complete-proof contract with independent fresh producers,
    valid and corrupt saved-state controls, without changing authority or canonical bytes.
 2. Add discriminating valid saved/proposed envelope controls at the actual cap and

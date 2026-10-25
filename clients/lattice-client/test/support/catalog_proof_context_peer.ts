@@ -6,16 +6,17 @@ import {prepareTreehouseCatalogInstallation,evaluateTreehouseCatalogTrust} from 
 import type {TreehouseCatalogRawHistory,TreehouseCatalogBootstrapReview,TreehouseCatalogCutoffProof} from "../../src/treehouse_catalog_trust";
 import {deriveTreehouseCatalogCutoff} from "../../src/treehouse_catalog_cutoff";
 const expected={trustRevision:0,historyGeneration:0};
-type Bundle={review:TreehouseCatalogBootstrapReview;histories:TreehouseCatalogRawHistory[];catalogJson:string;wrongDigest:string;cutoff:TreehouseCatalogCutoffProof["cutoff"];cases:{name:string;history:unknown;cutoff?:TreehouseCatalogCutoffProof["cutoff"]}[]};
+type Bundle={review:TreehouseCatalogBootstrapReview;histories:TreehouseCatalogRawHistory[];catalogJson:string;unknownName:string;wrongDigest:string;cutoff:TreehouseCatalogCutoffProof["cutoff"];cases:{name:string;history:unknown;cutoff?:TreehouseCatalogCutoffProof["cutoff"]}[]};
 async function produce():Promise<Bundle>{
  const f=await trustFixture(1),history=f.histories[0]!;
- const unknown=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[],kind:"command",body:["atom","proof_future_name"],cap:["nil"]});
+ const unknownName=`proof_future_${process.pid}_${Date.now()}`;
+ const unknown=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[],kind:"command",body:["atom",unknownName],cap:["nil"]});
  const partial=await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[fixtureId("proof-missing")],kind:"command",body:["atom","post"],cap:["nil"]});
  const prefix={...history,frames:history.frames.slice(0,-1)},absent={...history,frames:[...history.frames,await authorCarrierOpUnchecked({replica:f.space.replica,signer:f.root,deps:[],kind:"command",body:["nil"],cap:["nil"]})]};
  const prefixCutoff=await deriveTreehouseCatalogCutoff(prefix),absentCutoff=await deriveTreehouseCatalogCutoff(absent);
  assert.equal(prefixCutoff.ok,true);assert.equal(absentCutoff.ok,true);
  if(!prefixCutoff.ok||!absentCutoff.ok)throw new Error("producer must create portable proof controls");
- return {review:f.review,histories:f.histories,catalogJson:f.catalogJson,wrongDigest:fixtureId("proof-wrong-digest"),cutoff:f.cutoffProofs.find(p=>p.cutoff.replica===f.review.space)!.cutoff,cases:[
+ return {review:f.review,histories:f.histories,catalogJson:f.catalogJson,unknownName,wrongDigest:fixtureId("proof-wrong-digest"),cutoff:f.cutoffProofs.find(p=>p.cutoff.replica===f.review.space)!.cutoff,cases:[
   {name:"valid",history},{name:"valid-prefix",history:prefix,cutoff:prefixCutoff.cutoff},{name:"absent-member",history:absent,cutoff:absentCutoff.cutoff},{name:"unsupported",history:{...history,frames:[...history.frames,unknown]}},
   {name:"forged",history:{...history,frames:[...history.frames,{...unknown,sig:Buffer.alloc(64).toString("base64")}]}},
   {name:"partial",history:{...history,frames:[partial]}},{name:"malformed-history",history:{replica:history.replica,frames:[]}},

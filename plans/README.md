@@ -444,7 +444,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 264 | [Guarded Thread listing and initial receipt](264-guarded-thread-listing-and-initial-receipt.md) | P1 | L | 263 / PR #168 merged | DONE (#169; exact-tip hosted gate passed; merge tree matches; native trust and field gates remain) |
 | 265 | [Native catalog codec and signature parity](265-native-catalog-codec-and-signature-parity.md) | P1 | L | 245 PR 1 / #164 | DONE (#170; exact-tip CI and requested/independent reviews passed; no installed trust) |
 | 268 | [Canonical continuation dependency aliases](268-canonical-continuation-dependency-aliases.md) | P1 | M | Separate protected-core correction before native evaluator closure | DONE (#173; exact-tip run 40196864012 and browser proof pass; merge tree matches; native adoption belongs to 267) |
-| 269 | [Incoming catalog refusal order](269-incoming-catalog-refusal-order.md) | P1 | L | Protected source review; pending evaluator PR 172 | IN PROGRESS: merge conflicts and four Codex findings fixed; focused/client checks pass; proof-context/capacity closure and final review/gates remain. |
+| 269 | [Incoming catalog refusal order](269-incoming-catalog-refusal-order.md) | P1 | L | Protected source review; pending evaluator PR 172 | IN PROGRESS: main/proof ordering implemented; shared scalar design, valid capacity controls, native fail-closed adoption and final review/gates remain. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

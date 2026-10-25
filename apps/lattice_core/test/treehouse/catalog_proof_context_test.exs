@@ -36,6 +36,7 @@ defmodule Treehouse.CatalogProofContextTest do
 
   defp check_bundle(raw) do
     b = raw["bundle"]
+    assert_raise ArgumentError, fn -> String.to_existing_atom(b["unknownName"]) end
     r = b["review"]
 
     review = %{
@@ -137,14 +138,21 @@ defmodule Treehouse.CatalogProofContextTest do
                  )
       end
     end
+
+    assert_raise ArgumentError, fn -> String.to_existing_atom(b["unknownName"]) end
   end
 
   defp beam_bundle do
     f = CatalogTrustVectors.fixture(1)
     h = hd(f.histories)
 
+    unknown_name = "proof_future_#{System.unique_integer([:positive])}"
+
     unknown =
-      Op.new(f.space.root, f.space.replica, [], :command, :proof_future_name) |> Wire.encode_op()
+      Op.new(f.space.root, f.space.replica, [], :command, %Lattice.Canonical.Atom{
+        name: unknown_name
+      })
+      |> Wire.encode_op()
 
     partial =
       Op.new(
@@ -179,6 +187,7 @@ defmodule Treehouse.CatalogProofContextTest do
       },
       histories: f.histories,
       catalogJson: f.catalog_json,
+      unknownName: unknown_name,
       wrongDigest: CatalogTrustVectors.id("proof-wrong-digest"),
       cutoff: %{
         replica: proof.cutoff.replica,
