@@ -68,7 +68,7 @@ async function admit() {
         <ul><li v-for="thread in review.threadTitles" :key="thread.replica">{{ thread.title }}</li></ul>
         <p>Group root: <code>{{ review.spaceRoot }}</code></p>
         <p>Recipient: <code>{{ review.recipient }}</code></p>
-        <p>Group fingerprint: <code>{{ review.fingerprint }}</code></p>
+        <p>Enter the group code the founder sent through a separate channel. Treehouse checks it against this signed group before signing.</p>
         <label>Fingerprint received from the founder<input v-model="fingerprintConfirmed" :disabled="busy" autocomplete="off" /></label>
         <button :disabled="busy || !fingerprintConfirmed" @click="accept">Sign acceptance</button>
         <button :disabled="busy" @click="cancel">Cancel</button>
@@ -86,7 +86,8 @@ async function admit() {
         <button :disabled="busy || !recipientConfirmed" @click="issue">Sign invitation</button>
         <button :disabled="busy" @click="cancel">Cancel</button>
       </section>
-      <p v-if="founderFingerprint">Tell the person this group fingerprint through a separate channel: <code>{{ founderFingerprint }}</code></p>
+      <label v-if="founderFingerprint">Group fingerprint to share<textarea :value="founderFingerprint" readonly aria-label="Group fingerprint to share" rows="2" /></label>
+      <p v-if="founderFingerprint">Send this code to the person through a separate channel.</p>
       <label v-if="invitation">Signed invitation JSON<textarea :value="invitation" readonly aria-label="Signed offline invitation" /></label>
       <label v-if="invitation">Invitation file name<input v-model="exportName" :disabled="busy" /></label>
       <button v-if="invitation" :disabled="busy" @click="props.run(async () => { status = await workflow.exportOfflineInvitation(exportName, invitation); })">Save invitation file</button>

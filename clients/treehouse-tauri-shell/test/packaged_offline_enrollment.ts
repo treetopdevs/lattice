@@ -8,7 +8,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { createAxDriver, PACKAGED_ACCESSIBILITY_SWIFT, readKv } from "@treetopdevs/lattice-shell-kit/testing/packaged";
 import type { AxDriver } from "@treetopdevs/lattice-shell-kit/testing/packaged";
 import { parseState } from "../src/treehouse_state";
-import { treehouseCatalogBootstrapsFromFrames } from "@treetopdevs/lattice-client";
+import { carrierOpsToSemanticOps, observeTreehouse, treehouseCommandDecoders, treehouseCatalogBootstrapsFromFrames } from "@treetopdevs/lattice-client";
 import { assertPackagedBundleVariant } from "./support/packaged_bundle_variant";
 
 // Host-level isolation only, no app seam or seeded key. Refuse real user accounts.
@@ -49,11 +49,15 @@ async function launch(home: string) {
   child.stdout!.on("data", data => logs.push(String(data))); child.stderr!.on("data", data => logs.push(String(data)));
   ax = createAxDriver({ attempts: 150, exec: (args, input) => execFileSync(helper, [String(child!.pid), ...args], { input, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }) });
 }
+async function waitText(text: string) {
+  await driver().waitFor(text, nodes => nodes.some(node => [node.value, node.title, node.description].some(value => value.includes(text))));
+}
 async function save(name: string, outputName: string, action: string) {
   const path = join(homedir(), "Downloads", outputName);
   assert(!existsSync(path), "a packaged export must create a fresh file, never reuse prior evidence");
   await driver().put(name, outputName); await driver().press(action);
-  await driver().waitFor(`file ${outputName}`, () => existsSync(path)); return path;
+  await waitText(path);
+  assert(existsSync(path)); return path;
 }
 const tag = `${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
 try {
@@ -80,6 +84,8 @@ try {
   await launch(homedir());
   await driver().put("Person's join request", request); await driver().press("Review recipient key");
   await driver().waitFor("recipient key", nodes => nodes.some(node => node.value.includes(joiner.publicKey!) || node.title.includes(joiner.publicKey!)));
+  const displayedFingerprint = await driver().readWhenPresent("Group fingerprint to share");
+  assert.equal(displayedFingerprint, expectedFingerprint, "founder's displayed code matches independent retained history");
   await driver().press("I compared this key with the person through a separate channel."); await driver().press("Sign invitation");
   const invitationPath = await save("Invitation file name", `th-${tag}-offline-invitation.json`, "Save invitation file");
   const invitation = readFileSync(invitationPath, "utf8"); writeFileSync(join(evidence, "invitation.json"), invitation);
@@ -90,17 +96,31 @@ try {
   await driver().waitFor("group review", nodes => nodes.some(node => node.title === "Review offline invitation" || node.description === "Review offline invitation"));
   await driver().press("Cancel"); assert.equal(state(joinHome).profiles.length, 0);
   await driver().press("Open invitation file"); execFileSync(helper, [String(child!.pid), "choose-file", invitationPath]);
-  await driver().waitFor("fingerprint matches independent founder history", nodes => nodes.some(node => [node.value, node.title, node.description].some(text => text.includes(expectedFingerprint))));
-  await driver().put("Fingerprint received from the founder", expectedFingerprint); await driver().press("Sign acceptance");
+  const beforeWrongCode = JSON.stringify(state(joinHome));
+  const wrongCode = (displayedFingerprint[0] === "0" ? "1" : "0") + displayedFingerprint.slice(1);
+  await driver().put("Fingerprint received from the founder", wrongCode); await driver().press("Sign acceptance");
+  await waitText("That fingerprint does not match this group.");
+  assert.equal(JSON.stringify(state(joinHome)), beforeWrongCode);
+  assert(!(await driver().dump()).some(node => node.title === "Signed acceptance" || node.description === "Signed acceptance"));
+  await driver().put("Fingerprint received from the founder", displayedFingerprint); await driver().press("Sign acceptance");
   const acceptance = await driver().readWhenPresent("Signed acceptance");
   assert.equal(state(joinHome).profiles.length, 0); assert.equal(state(joinHome).relay, null); await stop();
   security("list-keychains", "-d", "user", "-s", ...priorSearch); security("default-keychain", "-d", "user", "-s", priorDefault);
   await launch(homedir()); assert.equal(state(homedir()).publicKey, founder.publicKey);
   await driver().put("Person's signed acceptance", acceptance); await driver().press("Admit and grant Thread access");
+  await waitText("Admission and Thread permissions saved together.");
+  const afterAdmission = state(homedir());
+  const admittedSpace = afterAdmission.profiles.find(profile => profile.product === "Treehouse.Space")!;
+  const members = observeTreehouse("Treehouse.Space", carrierOpsToSemanticOps(admittedSpace.frames, {}, treehouseCommandDecoders("Treehouse.Space"))).state.members as string[];
+  assert.deepEqual([...members].sort(), [founder.publicKey, joiner.publicKey].sort());
+  const childGrants = (frames: typeof space.frames) => carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Thread")).filter(op => op.authority?.type === "grant").length;
+  assert.equal(childGrants(afterAdmission.profiles.find(profile => profile.product === "Treehouse.Thread")!.frames),
+    childGrants(founder.profiles.find(profile => profile.product === "Treehouse.Thread")!.frames) + 1);
   const path = await save("Operator bundle file name", `th-${tag}-initial.json`, "Save initial operator bundle");
   const bytes = readFileSync(path, "utf8"); writeFileSync(join(evidence, "initial-bundle.json"), bytes);
   const doc = JSON.parse(bytes); assert.equal(doc.format, "treehouse-initial-provisioning-v1");
   const before = JSON.stringify(state(homedir())); await driver().press("Admit and grant Thread access");
+  await waitText("This acceptance is already admitted with its Thread permissions.");
   assert.equal(JSON.stringify(state(homedir())), before, "acceptance replay does not add operations");
   await stop(); await launch(homedir()); assert.equal(state(homedir()).publicKey, founder.publicKey);
   writeFileSync(join(evidence, "result.json"), JSON.stringify({ status: "PASS", variant: "ordinary", founder: founder.publicKey, joiner: joiner.publicKey,

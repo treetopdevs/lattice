@@ -185,8 +185,9 @@ must be honored; final child provisioning requires zero quarantined frames under
 staging's existing clean-authority rule. Retaining an authentic quarantined child
 frame therefore preserves a refusal, not a promise that the bundle can stage.
 
-The review displays group/Thread, recipient, roots and a grouped SHA-256 fingerprint
-of a domain-separated canonical tuple `(space, spaceRoot, bootstrapId)`. The joiner
+The review displays group/Thread, recipient and roots. The founder displays a grouped
+SHA-256 fingerprint of a domain-separated canonical tuple `(space, spaceRoot, bootstrapId)`.
+The joiner does not get a candidate-fed code to copy back into confirmation. The joiner
 must explicitly compare it through an independent channel; a fingerprint carried only
 inside the same file is not confirmation. The founder displays the same group code;
 the joiner enters the independently received value (case/spacing normalized), rather
