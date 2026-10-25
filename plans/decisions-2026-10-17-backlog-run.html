@@ -574,6 +574,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </dl>
 </article>
 
+<section><h2><span>D-49</span>Native catalog authenticity before installation</h2><dl><dt>Decision</dt><dd>Start plan 245 build PR 2 as plan 265 from latest main while listing #169 verifies. This pure Rust codec has no dependency on a listed receipt, and no command or route installation is added. Keep operation authenticity separate from authority and retained trust.</dd><dt>Bounds</dt><dd>Use existing 128 KiB per-artifact and 64,000-byte frame caps, with depth 64 and 32,768 term nodes. Decimal strings preserve full uint64; numeric JSON retains JS safe integers. Existing BEAM/TS codecs are immutable parity oracles. No changes to Wire, canonical bytes, trust reasons, custody or CSP are authorized by this slice.</dd><dt>Review and evidence</dt><dd>Both producer directions and exact malformed/limit cases are required. Follow the requested Argon/Sonnet review and an independent native review. Provider quota failures are evidence of unavailability, never a clean verdict. No native installation, physical custody or public relay claim follows.</dd></dl></section>
 </main>
 </body>
 </html>
