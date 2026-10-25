@@ -2,16 +2,15 @@
 
 ## Status and dependency
 
-IN PROGRESS: implement plan 245 build PR 4 independently of its Rust evaluator.
-The fresh worktree started from main with catalog publication and is now rebased
-onto the verified listing merge for its real release/publication fixture.
-No pending-parent implementation is copied or silently treated as merged.
-Host reads, exclusive output and the standalone command are implemented. Focused
-Linux tests exercise actual listed fixtures and the TS evaluator. A genuine signed
-fixture reaches both the exact artifact and retained-snapshot limits. Full local
-checks, actual-owner Linux coverage and independent review are complete. Requested
-external review is unavailable under provider quota; hosted PR verification remains
-open. Keep draft and do not claim software completion or installed trust.
+IN PROGRESS. Host reads, exclusive output and the standalone command are implemented.
+The requested external review exposed a normalized-output-path mismatch; its fix
+and a protected-root alias regression are implemented. Final current-tip Linux and
+hosted gates remain before completion.
+
+The exporter remains functionally independent of native evaluation. For final
+combined-source verification, this branch is stacked explicitly on codec PR #170,
+which already contains merged #173. Merge only after that parent and this exact tip
+pass; retarget to main after parent merge. No pending source is copied or called merged.
 
 ## Outcome
 

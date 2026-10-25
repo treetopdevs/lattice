@@ -180,6 +180,12 @@ configured service is already bound. Its only write is the new output file. Choo
 existing directory owned by the operator or root, with no writable group/other or
 symlink ancestors, outside the operator and ceremony roots and all protected inputs.
 An existing output file or link refuses; choose a new filename for each export.
+The reported output path is the normalized path actually checked and written, and
+contents are written only after its new file is private (0600). A partial file can
+remain after process/power loss or if inode ownership cannot be proved during error
+cleanup. Preserve that unknown file and choose a new name; an export error is not
+proof that no file was created. This transfer artifact is not a durable publication
+receipt and installs no catalog trust.
 
 The closed `lattice-catalog-evidence-page-v1` file preserves exact signed catalog JSON
 strings and complete authenticated frame histories. It includes no private seed,
