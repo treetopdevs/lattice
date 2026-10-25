@@ -1,4 +1,4 @@
-import {canonicalUint64Scalar,canonicalHighUint64Text} from "./uint64";
+import { canonicalUint64Scalar, canonicalHighUint64Text } from "./uint64";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, canonicalHash } from "./codec";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";

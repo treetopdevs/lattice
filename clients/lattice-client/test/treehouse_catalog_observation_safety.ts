@@ -97,3 +97,13 @@ test("rejected records and complete proofs bound decimals before BigInt",async()
   assert.equal(oversized,0);
  }finally{globalThis.BigInt=original;}
 });
+
+test("shared uint64 boundaries separate lexical safety from high-text portability",async()=>{
+ const {canonicalUint64Text,canonicalUint64Scalar,canonicalHighUint64Text,parseCanonicalUint64}=await import("../src/uint64");
+ for(const value of ["0","1","9007199254740991","9007199254740992","18446744073709551615"]){assert.equal(canonicalUint64Text(value),true);assert.equal(parseCanonicalUint64(value),BigInt(value));}
+ for(const value of ["","00","01","1\n","+1","-1","18446744073709551616","9".repeat(21),"9".repeat(1_048_576)]){assert.equal(canonicalUint64Text(value),false);assert.throws(()=>parseCanonicalUint64(value),/unsupported canonical integer/);}
+ assert.equal(canonicalHighUint64Text("9007199254740991"),false);assert.equal(canonicalHighUint64Text("9007199254740992"),true);
+ assert.equal(canonicalHighUint64Text("18446744073709551615"),true);assert.equal(canonicalHighUint64Text("18446744073709551616"),false);
+ assert.equal(canonicalUint64Scalar(-0),true);assert.equal(parseCanonicalUint64(-0),0n);
+ for(const value of [-1,1.5,Number.MAX_SAFE_INTEGER+1,NaN,Infinity,null,true,[],{}])assert.equal(canonicalUint64Scalar(value),false);
+});

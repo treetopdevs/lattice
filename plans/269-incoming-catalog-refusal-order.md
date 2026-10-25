@@ -31,7 +31,11 @@ a separate implementation under plan 267.
    histories; both outrank missing accepted ancestors.
 4. Report sorted unique missing ids, independently of delivery order. Merge retained
    and incremental incoming frames before calculating missing ancestors.
-5. Apply complete cutoff portability and the strict product reader before semantic
+5. A retained/incoming id conflict requires equal parsed raw frame values, not
+   merely equal canonical signatures. Object-key order is irrelevant; changed
+   arrays or scalar representations refuse with `invalid_verified_history` and
+   the conflicting id. Complete proof membership uses the same exact raw values.
+6. Apply complete cutoff portability and the strict product reader before semantic
    projection. Unsupported or forged evidence cannot become authority or a route.
 
 Canonical ids, signature bytes, closed vocabulary and normal wire decoding remain
@@ -102,7 +106,7 @@ as though it were an incremental page. Main-history reasons remain unchanged.
 ## Remaining work in order
 
 0. Verify shared scalar validation across main, rejected and proof readers.
-   Every decimal conversion needs a lexical uint64 bound before allocation, and
+   Every catalog-reader decimal conversion needs a lexical uint64 bound before allocation, and
    both delegation observers require the closed key set. Reader-specific admission
    and numeric representation rules remain separate from allocation safety.
 1. Verify the common complete-proof contract with independent fresh producers,

@@ -2018,7 +2018,7 @@ function parseCarrierInteger(value) {
         throw new Error("malformed integer term");
     }
     const parsed = BigInt(value);
-    if (parsed > uint64Max || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
         throw new Error("unsupported integer precision");
     }
     return Number(parsed);

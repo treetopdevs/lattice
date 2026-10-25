@@ -661,7 +661,7 @@ async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], inco
             if (duplicates.has(f.id)) fail("invalid_verified_history");
             duplicates.add(f.id);
             const old = by.get(f.id);
-            if (old !== undefined && fingerprint(frame(old)) !== fingerprint(f)) fail("invalid_verified_history");
+            if (old !== undefined && fingerprint(frame(old)) !== fingerprint(f)) fail("invalid_verified_history", [f.id]);
             by.set(f.id, old ?? item);
           }
         }
@@ -680,7 +680,8 @@ async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], inco
   for (const [id, raw] of map) observed.set(id, await observeHistory(raw));
   return observed;
 }
-function fingerprint(f: CarrierOpFrame): string { return `${f.id}:${hash(canonicalBytesForCarrierOp(f))}:${f.sig}`; }
+// Retention and proof membership compare exact raw values, not merely the signed quotient.
+function fingerprint(f: CarrierOpFrame): string { return JSON.stringify(stable(f)); }
 function hash(bytes: Uint8Array): string {
   const digest = sha256(bytes);
   let binary = ""; for (const n of digest) binary += String.fromCharCode(n);

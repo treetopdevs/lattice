@@ -1,4 +1,4 @@
-import {parseCanonicalUint64} from "./uint64";
+import { parseCanonicalUint64 } from "./uint64";
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
 import { isWireVocabularyName } from "./wire_vocabulary";

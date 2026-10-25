@@ -1,4 +1,4 @@
-import {canonicalUint64Scalar} from "./uint64";
+import { canonicalUint64Scalar } from "./uint64";
 // Raw observation is wider than wire admission (64 generic composites), so a
 // signed depth-65 refusal can still be authenticated. Neither result is authority.
 const MAX_NODES = 64 * 1024 * 1024;

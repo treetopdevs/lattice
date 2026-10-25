@@ -1,4 +1,4 @@
-import {canonicalUint64Text,canonicalHighUint64Text} from "./uint64";
+import { canonicalUint64Text, canonicalHighUint64Text } from "./uint64";
 import type {
   AuthorityDelegationEvidence,
   AuthorityEvidence,
@@ -2623,7 +2623,7 @@ function parseCarrierInteger(value: number | string): number {
     throw new Error("malformed integer term");
   }
   const parsed = BigInt(value);
-  if (parsed > uint64Max || parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+  if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new Error("unsupported integer precision");
   }
   return Number(parsed);

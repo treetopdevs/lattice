@@ -771,7 +771,7 @@ async function mergeHistories(saved, incoming) {
                         duplicates.add(f.id);
                         const old = by.get(f.id);
                         if (old !== undefined && fingerprint(frame(old)) !== fingerprint(f))
-                            fail("invalid_verified_history");
+                            fail("invalid_verified_history", [f.id]);
                         by.set(f.id, old ?? item);
                     }
                 }
@@ -794,7 +794,8 @@ async function mergeHistories(saved, incoming) {
         observed.set(id, await observeHistory(raw));
     return observed;
 }
-function fingerprint(f) { return `${f.id}:${hash(canonicalBytesForCarrierOp(f))}:${f.sig}`; }
+// Retention and proof membership compare exact raw values, not merely the signed quotient.
+function fingerprint(f) { return JSON.stringify(stable(f)); }
 function hash(bytes) {
     const digest = sha256(bytes);
     let binary = "";
