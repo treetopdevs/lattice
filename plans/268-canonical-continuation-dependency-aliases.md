@@ -9,7 +9,8 @@ typecheck/tests and both boundary scans pass. Both independent protected-core
 reviews have no actionable findings. Requested fallback Sonnet5.5 High adversarial
 review found no P1/P2 defect in the unchanged implementation. The preceding exact
 hosted gate passed. A direct BEAM alias wire-decode assertion now passes focused
-checks; refreshed final verification and later native adoption remain open.
+checks; refreshed full Mix check and both boundary scans also pass. The final
+hosted gate and later native adoption remain open.
 
 A protocol consistency defect was proved while implementing the native
 bounded authority fold. This is a separate correction to the existing BEAM/TS
