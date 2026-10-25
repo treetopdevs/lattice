@@ -3,7 +3,6 @@
 use super::canonical::{base64, encode, Result, Term};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use ed25519_dalek::{Signature, VerifyingKey};
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 pub const MAX_FRAME_BYTES: usize = 64_000;
