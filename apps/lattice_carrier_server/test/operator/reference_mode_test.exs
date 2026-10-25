@@ -60,7 +60,9 @@ defmodule LatticeCarrierServer.Operator.ReferenceModeTest do
         original.replica,
         original.deps,
         :command,
-        {:create_thread, [initial.child.replica, "Competing title"]}, cap: original.cap)
+        {:create_thread, [initial.child.replica, "Competing title"]},
+        cap: original.cap
+      )
 
     assert {:ok, space} = Log.accept(f.present, competing)
 
