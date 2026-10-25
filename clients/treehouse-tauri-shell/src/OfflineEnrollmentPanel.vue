@@ -7,6 +7,7 @@ const props = defineProps<{
   workflow: TreehouseWorkflow; state: PreviewState; busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
 }>();
+const invitationFile = ref<HTMLInputElement | null>(null);
 const joinRequest = ref(""), recipientRequest = ref(""), recipient = ref("");
 const recipientConfirmed = ref(false), fingerprintConfirmed = ref("");
 const founderFingerprint = ref(""), joinConfirmed = ref(false);
@@ -62,7 +63,8 @@ async function admit() {
       <button :disabled="busy || Boolean(state.intent) || !joinConfirmed" @click="begin">Prepare join request</button>
       <label v-if="joinRequest">Your join request<textarea :value="joinRequest" readonly aria-label="Your join request" /></label>
       <p v-if="state.publicKey">Your public key: <code>{{ state.publicKey }}</code></p>
-      <label>Open invitation file<input type="file" accept=".json,application/json" :disabled="busy || !state.publicKey" @change="readInvitation" /></label>
+      <input ref="invitationFile" type="file" accept=".json,application/json" hidden :disabled="busy || !state.publicKey" @change="readInvitation" />
+      <button :disabled="busy || !state.publicKey" @click="invitationFile?.click()">Open invitation file</button>
       <section v-if="review" aria-label="Review offline invitation">
         <h3>{{ review.name }}</h3>
         <ul><li v-for="thread in review.threadTitles" :key="thread.replica">{{ thread.title }}</li></ul>

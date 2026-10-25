@@ -2,17 +2,19 @@
 
 ## Status, dependencies and execution boundary
 
-IN PROGRESS, 2026-10-24. PR A #166 is in review. PR B implements ordinary offline
-controls, shared codecs and native export; its stacked draft will exercise the required
-packaged gate. Local suites pass; hosted proof, review confirmation and listing remain.
-Prepared from fresh main `e8f5c285ed3508f93efaea8279819012d72b41cb`; plan number 262
-was free in that tip's plan index and tree. PR #165 is a required code dependency:
-its ordinary bounded creation, independent child custody, founder membership/grant,
-and restart behavior merged in #165 with required checks. PR B was started from fresh
-main a297e1ddf and rebased onto PR A tip 81bb82f6. A stacked draft may exercise hosted
-CI against that explicit dependency while #166 finishes. Merge neither dependent
-work nor claim completion before the parent is green; rebase onto merged main and
-rerun affected checks before marking PR B ready.
+IN PROGRESS, 2026-10-24. PR A #166 merged as ba7f23f49 after exact-tip run
+40146178153 passed; merge tree equals tested 81bb82f6. PR B #167 is a draft against
+main with ordinary offline controls, shared codecs and native export. Local suites
+pass; packaged proof and listing remain open. Its first hosted run found a Keychain
+HOME-domain setup mismatch; the next created distinct identities and signed/exported
+the invitation, then exposed an unlabeled native file-control accessibility target.
+Use an explicit visible picker button, and require the final exact-tip packaged gate.
+
+The design was prepared from main e8f5c285ed3508f93efaea8279819012d72b41cb. PR #165
+merged bounded creation and native custody. PR B started from fresh main a297e1ddf,
+built privately on the explicit PR A dependency, and now refreshes from merged main.
+A stacked draft collected software evidence while the parent finished; no dependent
+work is merged or called complete before its parent and its own required gates pass.
 
 Plan stamp: design base `e8f5c285ed3508f93efaea8279819012d72b41cb`, reviewed PR A base
 `a297e1ddfe72076f337ef2fd0ce03c2fe07696a6`. Review drift before applying the plan:
