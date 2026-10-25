@@ -39,3 +39,5 @@ export { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust, res
 export * from "./treehouse_member_continuity_codec";
 // Authenticated complete-history continuity APIs; attestation grants no membership or rights.
 export { observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, assembleMemberContinuityFromFrames } from "./treehouse_member_continuity";
+export * from "./treehouse_public_frames";
+export * from "./treehouse_offline_enrollment";

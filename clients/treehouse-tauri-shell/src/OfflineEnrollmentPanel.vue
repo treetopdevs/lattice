@@ -13,7 +13,7 @@ const recipientConfirmed = ref(false), fingerprintConfirmed = ref(false);
 const exportName = ref("treehouse-invitation.json"), bundleName = ref("treehouse-initial.json");
 const invitation = ref(""), acceptance = ref(""), acceptanceInput = ref(""), status = ref("");
 const review = ref<OfflineInvitationReview | null>(null);
-const canInvite = computed(() => props.workflow.snapshot().canIssueInvitation);
+const canInvite = computed(() => { void props.state; return props.workflow.snapshot().canIssueInvitation; });
 const joining = computed(() => props.state.profiles.length === 0);
 function cancel() {
   props.workflow.cancelOfflineReview(); recipient.value = ""; review.value = null;

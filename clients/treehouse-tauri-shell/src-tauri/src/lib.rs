@@ -167,6 +167,7 @@ mod application_boundary_tests {
             "treehouse_initialize_thread",
             "treehouse_thread_identity",
             "treehouse_sign_thread",
+            "treehouse_export_public_evidence",
             witness_public::WITNESS_IDENTITY,
             witness_public::WITNESS_PREPARE_CREATION,
             witness_public::WITNESS_GENERATE,
@@ -269,6 +270,7 @@ mod application_boundary_tests {
                 "treehouse_initialize_thread",
                 "treehouse_thread_identity",
                 "treehouse_sign_thread",
+                "treehouse_export_public_evidence",
             ] {
                 assert!(authority
                     .resolve_access(command, "main", "main", &tauri::ipc::Origin::Local)
