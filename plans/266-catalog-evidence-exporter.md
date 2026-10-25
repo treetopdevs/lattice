@@ -85,7 +85,13 @@ Measure actual encoded bytes, including escaping. Each frame must fit the existi
 64,000-byte push envelope, matching the publication profile and native client;
 maximum-capacity fixtures use legitimate bounded frames rather than oversized ops.
 Bound source reads and allocations
-before loading an oversized native dump. Do not lower the accepted evaluator-valid
+before loading an oversized native dump. The export-only store reader uses the
+operator's existing Python 3 prerequisite for streaming directory enumeration,
+stopping at 2,048 names (enough for every retained artifact and its interrupted
+publication link). It checks count and total file sizes before decoding, and
+charges actual bounded reads during traversal. The general store verifier's API
+and policy remain unchanged. Over-budget sources return evidence_page_too_large.
+Do not lower the accepted evaluator-valid
 capacity to make an easy test pass; prove the maximum-capacity case explicitly.
 
 Create a new regular output file exclusively; an existing file, hard link or

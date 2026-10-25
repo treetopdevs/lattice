@@ -239,6 +239,44 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert inputs(f) == before
   end
 
+  test "the actual host exporter preserves size refusal for over-budget signed artifacts", f do
+    # Begin with the real listed host fixture. Add a valid signed continuation
+    # chain as an over-budget source fault; no synthetic listed receipt is used.
+    {:ok, secret, key} =
+      LatticeCarrierServer.Operator.CatalogCeremony.Signer.read_seed(
+        LatticeCarrierServer.Operator.CeremonyFixture.signer_template().signer
+      )
+
+    assert key == f.binding.record.catalog_key
+
+    Enum.reduce(1..128, TransportCatalog.catalog_id(f.catalog), fn revision, previous ->
+      catalog = %{f.catalog | revision: revision, previous: previous}
+
+      signature =
+        :crypto.sign(:eddsa, :none, TransportCatalog.catalog_bytes(catalog), [
+          LatticeCarrierServer.Secret.unwrap(secret),
+          :ed25519
+        ])
+
+      envelope = %{catalog: catalog, signature: signature}
+      assert :ok = TransportCatalog.verify_catalog(envelope, key)
+      raw = envelope |> Lattice.Carrier.Wire.encode_value() |> JSON.encode!()
+      bytes = raw <> String.duplicate(" ", 131_072 - byte_size(raw))
+      path = CatalogStore.file_path(f.root, Journal.digest(bytes))
+      File.write!(path, bytes)
+      File.chmod!(path, 0o600)
+      TransportCatalog.catalog_id(catalog)
+    end)
+
+    before = inputs(f)
+
+    assert {:error, :evidence_page_too_large} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+
+    assert inputs(f) == before
+    refute File.exists?(f.output)
+  end
+
   test "compressed source allocation is bounded before decoding", f do
     bytes = <<131, 80, 67_108_864::unsigned-big-32, 0>>
     File.write!(f.active_log, bytes)

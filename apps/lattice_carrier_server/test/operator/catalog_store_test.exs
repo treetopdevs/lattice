@@ -165,6 +165,67 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
              CatalogStore.committed_documents(root, signer("other").pub)
   end
 
+  test "bounded committed reader accepts the exact artifact budget and refuses aggregate overflow",
+       %{root: root} do
+    {envelopes, last} =
+      Enum.map_reduce(0..127, nil, fn revision, previous ->
+        item = envelope(revision, previous)
+        bytes = item.bytes <> String.duplicate(" ", 131_072 - byte_size(item.bytes))
+        item = %{item | bytes: bytes, sha256: Journal.digest(bytes)}
+        {item, item}
+      end)
+
+    store(root, envelopes)
+
+    history(
+      root,
+      Enum.map(Enum.drop(envelopes, -1), &Journal.encode(record(root, "catalogued", [&1])))
+    )
+
+    journal(root, "catalogued", [last])
+    assert {:ok, documents} = CatalogStore.committed_documents(root, signer().pub)
+    assert documents.head == last.id
+    assert Enum.reduce(documents.documents, 0, &(byte_size(&1.bytes) + &2)) == 16 * 1024 * 1024
+    assert Enum.map(documents.documents, & &1.bytes) == Enum.map(envelopes, & &1.bytes)
+
+    extra = envelope(128, last)
+    store(root, [extra])
+
+    assert {:error, :evidence_page_too_large} =
+             CatalogStore.committed_documents(root, signer().pub)
+  end
+
+  test "catalog count is bounded before decoding and directory enumeration is bounded", %{
+    root: root
+  } do
+    store(root, [])
+
+    for index <- 0..1024 do
+      put(
+        root,
+        String.pad_leading(String.downcase(Integer.to_string(index, 16)), 64, "0") <> ".json",
+        "not decoded"
+      )
+    end
+
+    assert {:error, :evidence_page_too_large} =
+             CatalogStore.committed_documents(root, signer().pub)
+
+    File.rm_rf!(CatalogStore.path(root))
+    store(root, [])
+
+    for index <- 0..2048 do
+      put(
+        root,
+        ".tmp." <> String.pad_leading(String.downcase(Integer.to_string(index, 16)), 32, "0"),
+        ""
+      )
+    end
+
+    assert {:error, :evidence_page_too_large} =
+             CatalogStore.committed_documents(root, signer().pub)
+  end
+
   test "a killed temp write leaves the store readable", %{root: root} do
     zero = envelope(0, nil)
     store(root, [zero])

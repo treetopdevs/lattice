@@ -193,6 +193,11 @@ Limits remain 128 KiB per artifact, 1,024 artifacts/16 MiB total, 32 artifacts p
 a 32 MiB retained snapshot and a 64 MiB transport file. Every frame must fit a
 64,000-byte push envelope. Native dump reads are bounded at 64 MiB across sources;
 a compressed dump's declared expanded size counts against that budget before decoding.
+The export-only catalog reader uses Python 3 (the existing operator prerequisite)
+to enumerate at most 2,048 directory entries before reading envelopes. This permits
+one interrupted-publication link per retained artifact; excessive temporary debris
+refuses with the same size reason. Resolve it through operator recovery rather than
+having the exporter delete anything.
 Refusals never truncate authentic history. Preserve inputs, resolve the named refusal
 and retry to a new output filename. A failed write cleans up only its own partial file;
 it does not remove a replacement owned by another writer.
