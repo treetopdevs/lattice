@@ -161,7 +161,9 @@ impl<'a> StaticDelegations<'a> {
                 _ => continue,
             };
             let Some(d) = Delegation::decode(term) else {
-                return Err("invalid_verified_history");
+                // Authentic semantic malformations are retained by the DAG.
+                // The raw static collector only introduces Delegation terms.
+                continue;
             };
             if name == "genesis" {
                 genesis.insert(d.id.clone());
@@ -246,12 +248,15 @@ impl<'a> StaticDelegations<'a> {
             if name != "revoke" {
                 continue;
             }
-            let Some(target) = text(target) else {
-                return Err("invalid_verified_history");
-            };
-            let d = records.get(target).and_then(|r| r.delegation.as_ref());
+            let target = text(target);
+            let d = target
+                .and_then(|target| records.get(target))
+                .and_then(|r| r.delegation.as_ref());
             if d.is_some_and(|d| op.author() == d.issuer || root.as_deref() == Some(op.author())) {
-                revokes.push((id.clone(), target.to_owned()));
+                revokes.push((
+                    id.clone(),
+                    target.expect("authorized target exists").to_owned(),
+                ));
             } else {
                 reasons.insert(id.clone(), "unauthorized_revoke");
             }

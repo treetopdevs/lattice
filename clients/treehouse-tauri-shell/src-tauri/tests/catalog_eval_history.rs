@@ -774,3 +774,47 @@ fn native_static_delegations_match_real_beam_and_ts_with_causal_revocation() {
         .values()
         .any(|reason| *reason == "unauthorized_revoke"));
 }
+
+#[test]
+fn authentic_semantic_malformations_do_not_erase_static_evidence() {
+    use treehouse_tauri_shell::catalog_eval::delegations::StaticDelegations;
+    let replica = replica();
+    let root = signer();
+    let d = delegation_term(&root, &root, &replica, None, &["post"], None);
+    let genesis = authority_frame(&root, &replica, &[], genesis_body(d.clone()));
+    let bad_grant = authority_frame(
+        &root,
+        &replica,
+        &[id(&genesis)],
+        authority_body("grant", Term::Nil),
+    );
+    let bad_revoke = authority_frame(
+        &root,
+        &replica,
+        &[id(&bad_grant)],
+        authority_body("revoke", Term::Atom("post".into())),
+    );
+    let frames = vec![genesis, bad_grant, bad_revoke.clone()];
+    let dag = checked(&replica, &frames).unwrap();
+    let analysis = StaticDelegations::analyze(&dag).unwrap();
+    assert_eq!(analysis.records().len(), 1);
+    assert_eq!(
+        analysis.root(),
+        Some(root.verifying_key().as_bytes().as_slice())
+    );
+    assert_eq!(
+        analysis.reasons().get(&id(&bad_revoke)),
+        Some(&"unauthorized_revoke")
+    );
+    let native = static_summary(&dag, &[]);
+    let input = json!({"replica":replica,"frames":frames,"queries":[],"delegationIds":[delegation_id(&d)],"reasonIds":[id(&bad_revoke)]});
+    let beam = peer("beam", "delegations", Some(&input));
+    assert_eq!(native["root"], beam["root"]);
+    assert_eq!(native["active"], beam["active"]);
+    assert_eq!(native["reasons"], beam["reasons"]);
+    // The existing TS semantic decoder is a later stage, with its own malformed
+    // operation reasons. Compare preserved root/collection, not a final verdict.
+    let ts = peer("ts", "delegations", Some(&input));
+    assert_eq!(native["root"], ts["root"]);
+    assert_eq!(native["records"], ts["records"]);
+}
