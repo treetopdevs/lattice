@@ -71,6 +71,7 @@ defmodule Treehouse.CatalogIncomingRecoveryTest do
     assert frozen.reason == :catalog_fork
     assert frozen.next.accepted == first.next.accepted
     expected = Map.new(raw["observations"], &{&1["name"], &1["decision"]})
+    assert_page_preflight(first.next, b, expected)
 
     for {label, original} <- [{"accepted", first.next}, {"blocked", frozen.next}] do
       base = original |> :erlang.term_to_binary() |> :erlang.binary_to_term([:safe])
@@ -97,6 +98,36 @@ defmodule Treehouse.CatalogIncomingRecoveryTest do
         end
       end
     end
+  end
+
+  defp assert_page_preflight(base, bundle, expected) do
+    wrong = %{replica: "not-a-treehouse-family", frames: [], rejected: []}
+
+    forged = %{
+      replica: base.review.space,
+      frames: [Map.put(bundle["deepFrame"], "sig", Base.encode64(<<0::512>>))],
+      rejected: []
+    }
+
+    for {name, histories} <- [
+          {"scope-forged", [wrong, forged]},
+          {"forged-scope", [forged, wrong]}
+        ] do
+      decision = evaluate(base, page(histories))
+      assert decision.kind == :reject
+      assert decision.reason == :wrong_catalog_scope
+      assert summary(decision) == expected[name]
+    end
+
+    complete =
+      Enum.find(bundle["cases"], &String.contains?(&1["name"], "depth-64"))["history"]
+      |> history()
+
+    incremental = %{complete | frames: [List.last(complete.frames)], rejected: []}
+    decision = evaluate(base, page([incremental]))
+    assert decision.kind == :propose
+    assert decision.next.accepted == base.accepted
+    assert summary(decision) == expected["incremental"]
   end
 
   defp assert_case(base, incoming, name, label, expected) do

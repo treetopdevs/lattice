@@ -152,6 +152,7 @@ defmodule Treehouse.CatalogTrust do
       original = original_context.state
       expected = validate_token!(input.expected)
       validate_page!(input.incoming)
+      preflight_incoming!(input.incoming.histories)
 
       union = merge_histories!(original.histories, input.incoming.histories)
       %{logs: histories, raws: raw_histories} = histories!(union, :incoming)
@@ -1413,14 +1414,22 @@ defmodule Treehouse.CatalogTrust do
 
   # Raw signature proof is not wire admission. Check every accepted frame before
   # returning a fetch request, even when vocabulary decoding would refuse it.
+  defp preflight_incoming!(raws) do
+    Enum.each(raws, fn history ->
+      unless history_shape?(history), do: refuse(:invalid_verified_history)
+    end)
+
+    Enum.each(raws, fn history ->
+      unless Continuation.family(history.replica) in [{:bounded, :space}, {:bounded, :thread}],
+        do: refuse(:wrong_catalog_scope)
+    end)
+  end
+
   defp authenticate_incoming!(raws) do
+    preflight_incoming!(raws)
+
     checked =
       Enum.map(raws, fn history ->
-        unless history_shape?(history), do: refuse(:invalid_verified_history)
-
-        unless Continuation.family(history.replica) in [{:bounded, :space}, {:bounded, :thread}],
-          do: refuse(:wrong_catalog_scope)
-
         frames = Enum.map(history.frames, &authenticate_incoming_frame!(&1, history.replica))
 
         ids = Enum.map(frames, & &1.id)

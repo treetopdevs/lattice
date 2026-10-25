@@ -86,6 +86,18 @@ full refresh passed all tests but strict lint found one nested test helper; the
 test orchestration is now split into shallow assertion helpers. Final focused
 recovery tests and strict lint pass after that cleanup; final combined gates remain.
 
+The first requested external review used the authorized Sonnet High fallback after
+Argon returned quota exhaustion. It found a real mixed-history scope/authentication
+phase disagreement. A fresh RED reproduces TS invalid-history before wrong scope;
+the correction applies step 1 as a whole-page shape/family preflight before merge
+and authentication in both owners. Both delivery orders now have explicit expected
+scope refusals. The suggested saved-ancestor issue is not present: BEAM already
+merges saved and incoming evidence before missing detection. A new genuine
+suffix-only depth-64 delivery regression checks this in both producer directions.
+Both independent reviewers confirm these source changes; all five focused tests
+and strict lint pass. Refreshed full gates remain; no earlier full check is credited
+to this correction. Aggregate and remaining matrix work stays open.
+
 ## Reproduced problem
 
 The same fresh valid Space bootstrap history produces `propose` in both owners.

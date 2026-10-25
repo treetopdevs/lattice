@@ -721,6 +721,18 @@ async function validateRejectedHistories(histories) {
         fail("unsupported_cutoff");
 }
 async function mergeHistories(saved, incoming) {
+    // Page shape and family precede merging and cryptographic classification.
+    for (const list of [saved, incoming])
+        for (const raw of list) {
+            if (!historyValid(raw))
+                fail("invalid_verified_history");
+        }
+    for (const list of [saved, incoming])
+        for (const raw of list) {
+            const family = continuationFamily(raw.replica);
+            if (family !== "space" && family !== "thread")
+                fail("wrong_catalog_scope");
+        }
     const map = new Map();
     for (const list of [saved, incoming]) {
         const seen = new Set();

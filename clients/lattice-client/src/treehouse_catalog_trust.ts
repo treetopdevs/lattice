@@ -626,6 +626,14 @@ async function validateRejectedHistories(histories: Iterable<TreehouseCatalogRaw
   if (unsupported) fail("unsupported_cutoff");
 }
 async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], incoming: readonly TreehouseCatalogRawHistory[]): Promise<Map<string, ObservedHistory>> {
+  // Page shape and family precede merging and cryptographic classification.
+  for (const list of [saved, incoming]) for (const raw of list) {
+    if (!historyValid(raw)) fail("invalid_verified_history");
+  }
+  for (const list of [saved, incoming]) for (const raw of list) {
+    const family = continuationFamily(raw.replica);
+    if (family !== "space" && family !== "thread") fail("wrong_catalog_scope");
+  }
   const map = new Map<string, TreehouseCatalogRawHistory>();
   for (const list of [saved, incoming]) {
     const seen = new Set<string>();

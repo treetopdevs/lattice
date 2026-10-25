@@ -31,6 +31,17 @@ async function run(bundle:Bundle){
  const frozen=await evaluateTreehouseCatalogTrust({installed:first.next,expected,incoming:page([bundle.forkHistory])});
  assert.equal(frozen.kind,"retain_blocked");assert.equal(frozen.reason,"catalog_fork");assert.deepEqual(frozen.next.accepted,first.next.accepted);
  const observations=[];
+ const wrong:TreehouseCatalogRawHistory={replica:"not-a-treehouse-family",frames:[],rejected:[]};
+ const forged:TreehouseCatalogRawHistory={replica:bundle.review.space,frames:[{...(bundle.deepFrame as object),sig:Buffer.alloc(64).toString("base64")}],rejected:[]};
+ for(const [name,histories] of [["scope-forged",[wrong,forged]],["forged-scope",[forged,wrong]]] as const){
+  const decision=await evaluateTreehouseCatalogTrust({installed:first.next,expected,incoming:page([...histories])});
+  assert.equal(decision.kind,"reject");assert.equal(decision.reason,"wrong_catalog_scope");
+  observations.push({name,decision:summary(decision)});
+ }
+ const complete=bundle.cases.find(c=>c.name.includes("depth-64"))!.history;
+ const incremental=await evaluateTreehouseCatalogTrust({installed:first.next,expected,incoming:page([{...complete,frames:[complete.frames.at(-1)!],rejected:[]}])});
+ assert.equal(incremental.kind,"propose");assert.deepEqual(incremental.next.accepted,first.next.accepted);
+ observations.push({name:"incremental",decision:summary(incremental)});
  for(const [label,original] of [["accepted",first.next],["blocked",frozen.next]] as const){
   const base:InstalledTreehouseCatalogTrustV1=JSON.parse(JSON.stringify(original));
   const before=JSON.stringify(base);
