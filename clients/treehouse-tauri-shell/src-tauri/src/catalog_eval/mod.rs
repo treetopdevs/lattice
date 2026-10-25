@@ -2,4 +2,5 @@
 pub mod canonical;
 pub mod envelope;
 pub mod frame;
+pub mod history;
 pub mod json;

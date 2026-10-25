@@ -13,6 +13,9 @@ pub struct AuthenticFrame {
     id: String,
     replica: String,
     payload: Vec<u8>,
+    author: Vec<u8>,
+    deps: Vec<String>,
+    kind: String,
     body: Term,
     cap: Term,
 }
@@ -25,6 +28,15 @@ impl AuthenticFrame {
     }
     pub fn payload(&self) -> &[u8] {
         &self.payload
+    }
+    pub fn author(&self) -> &[u8] {
+        &self.author
+    }
+    pub fn deps(&self) -> &[String] {
+        &self.deps
+    }
+    pub fn kind(&self) -> &str {
+        &self.kind
     }
     pub fn body(&self) -> &Term {
         &self.body
@@ -94,6 +106,9 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
         id: id.to_owned(),
         replica: replica.to_owned(),
         payload,
+        author,
+        deps: deps.into_iter().map(str::to_owned).collect(),
+        kind: kind.to_owned(),
         body,
         cap,
     })
