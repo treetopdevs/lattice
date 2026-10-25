@@ -16,6 +16,43 @@ const atom = (name) => ["atom", name];
 const text = (value) => ["bin", Buffer.from(value).toString("base64")];
 const body = (name, args) => ["tuple", [atom(name), ["list", args]]];
 const b64 = (key) => Buffer.from(key).toString("base64");
+export async function threadPolicyCases() {
+    const root = fixtureSigner("native-thread-policy-root"), member = fixtureSigner("native-thread-policy-member");
+    const replica = await bindTownshipReplica(`replica:treehouse:thread:${fixtureId("native-thread-policy")}#authority:bounded-continuation-v1`, root.publicKey);
+    const names = [...treehouseCommandDecoders("Treehouse.Thread").keys()];
+    const cap = await authorCarrierDelegation({ replica, signer: root, audiencePubkey: root.publicKey, ops: names, roles: ["moderator"], live: true });
+    const genesis = await authorCarrierOp({ replica, signer: root, deps: [], kind: "authority", cap: ["nil"], body: ["tuple", [atom("genesis"), ["delegation", cap], ["map", []]]] });
+    const memberCap = await authorCarrierDelegation({ replica, signer: root, audiencePubkey: member.publicKey, parentId: cap.id, ops: names, roles: [], live: false });
+    const grant = await authorCarrierOp({ replica, signer: root, deps: [genesis.id], kind: "authority", cap: ["nil"], body: ["tuple", [atom("grant"), ["delegation", memberCap]]] });
+    const command = (who, deps, name, args) => authorCarrierOp({ replica, signer: who === "root" ? root : member, deps, kind: "command", body: body(name, args), cap: text(who === "root" ? cap.id : memberCap.id) });
+    const post = await command("member", [grant.id], "post", [text("original")]);
+    const edit = await command("member", [post.id], "author_edit", [text(post.id), text(post.id), text("edited")]);
+    const tombstone = await command("member", [edit.id], "author_tombstone", [text(post.id), text(edit.id)]);
+    const archive = await command("root", [post.id], "archive_thread", []);
+    const base = [genesis, grant, post];
+    const cases = [];
+    const add = (name, frames) => cases.push({ name, replica, frames });
+    add("lineage", [...base, edit, await command("member", [edit.id], "author_edit", [text(post.id), text(edit.id), text("latest")])]);
+    add("tombstone-cannot-revive", [...base, edit, tombstone, await command("member", [tombstone.id], "author_edit", [text(post.id), text(edit.id), text("revived")])]);
+    add("missing-target", [...base, await command("member", [post.id], "author_edit", [text(post.id), text("absent"), text("missing")])]);
+    add("concurrent-target", [...base, edit, await command("member", [post.id], "author_edit", [text(post.id), text(edit.id), text("not visible")])]);
+    const wrong = await command("root", [post.id], "author_edit", [text(post.id), text(post.id), text("wrong author")]);
+    add("quarantined-lineage", [...base, wrong, await command("member", [wrong.id], "author_edit", [text(post.id), text(wrong.id), text("launder")])]);
+    const malformed = await command("member", [post.id], "author_edit", [text(post.id), text("absent"), ["int", 7]]);
+    add("malformed-lineage", [...base, malformed, await command("member", [malformed.id], "author_edit", [text(post.id), text(malformed.id), text("malformed prior")])]);
+    const notPost = await command("root", [grant.id], "create_thread", [text("title")]);
+    add("wrong-target", [genesis, grant, notPost, await command("root", [notPost.id], "author_tombstone", [text(notPost.id), text(notPost.id)])]);
+    add("honored-authority-is-wrong-target", [genesis, grant, await command("root", [grant.id], "author_tombstone", [text(grant.id), text(grant.id)])]);
+    for (const name of ["post", "author_edit", "author_tombstone", "moderator_tombstone", "archive_thread"]) {
+        const args = name === "post" ? [text("after archive")] : name === "archive_thread" ? [] : [text(post.id), text(post.id), ...(name === "author_edit" ? [text("after archive")] : [])];
+        add(`archived-${name}`, [...base, archive, await command(name.startsWith("author") || name === "post" ? "member" : "root", [archive.id], name, args)]);
+    }
+    add("concurrent-archive", [...base, archive, edit]);
+    add("wrong-author-before-archive", [...base, archive, await command("root", [archive.id], "author_edit", [text(post.id), text(post.id), text("wrong author")])]);
+    add("missing-before-archive", [...base, archive, await command("member", [archive.id], "author_edit", [text(post.id), text("absent"), text("missing")])]);
+    add("moderator-repeat-tombstone", [...base, edit, tombstone, await command("root", [tombstone.id], "moderator_tombstone", [text(post.id), text(edit.id)])]);
+    return cases;
+}
 export async function commandCases() {
     const cases = [];
     for (const kind of ["space", "thread"]) {

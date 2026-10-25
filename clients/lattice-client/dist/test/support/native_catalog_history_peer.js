@@ -1,6 +1,7 @@
 import { WIRE_VOCABULARY } from "../../src/wire_vocabulary";
 import assert from "node:assert/strict";
-import { commandCases, judgeCommands } from "./native_catalog_command_peer";
+import { commandCases, judgeCommands, threadPolicyCases } from "./native_catalog_command_peer";
+import { materialize } from "../../src/materialize";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -111,6 +112,21 @@ else if (process.argv[2] === "consume") {
         assert.deepEqual(history.frontier, actual.frontier);
     }
     console.log(JSON.stringify({ histories: input.histories.length }));
+}
+else if (process.argv[2] === "thread-policy-cases") {
+    const lineage = JSON.parse(execFileSync(process.execPath, ["--import", "tsx", "test/support/thread_lineage_peer.ts"], { encoding: "utf8" }));
+    console.log(JSON.stringify({ histories: [...await threadPolicyCases(), ...lineage.cases] }));
+}
+else if (process.argv[2] === "thread-policy") {
+    const input = JSON.parse(readFileSync(0, "utf8"));
+    const results = [];
+    for (const h of input.histories) {
+        await graph(h);
+        const ops = carrierOpsToSemanticOps(h.frames, {}, treehouseCommandDecoders("Treehouse.Thread"));
+        const result = materialize(treehouseThreadSchema, ops);
+        results.push(Object.fromEntries(ops.filter(op => op.kind === "command").map(op => [op.id, result.quarantineReasons.get(op.id) ?? null])));
+    }
+    console.log(JSON.stringify({ results }));
 }
 else if (process.argv[2] === "command-cases") {
     console.log(JSON.stringify({ histories: await commandCases() }));

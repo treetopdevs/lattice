@@ -5,7 +5,7 @@ use super::{
     authority::AuthorityEvidence,
     canonical::{base64, Term},
     delegations::Validation,
-    evidence_terms::{binary, text},
+    evidence_terms::text,
     frame::AuthenticFrame,
     history::AuthenticDag,
 };
@@ -100,13 +100,13 @@ impl<'a> Command<'a> {
                     && matches!(&args[1],Term::List(v) if v.iter().all(|v|text(v).is_some()))
             }
             "remove_member" => text(&args[0]).is_some_and(|s| base64(s, Some(32)).is_ok()),
-            // The raw BEAM effects guard treats lineage ids as binary. Their
-            // causal target and the TS structural/value boundary are later gates.
+            // Product lineage ids must be UTF-8 text. Causal target and
+            // application-policy checks still happen after this syntax gate.
             "author_edit" => {
-                binary(&args[0]).is_some() && binary(&args[1]).is_some() && text(&args[2]).is_some()
+                text(&args[0]).is_some() && text(&args[1]).is_some() && text(&args[2]).is_some()
             }
             "author_tombstone" | "moderator_tombstone" => {
-                binary(&args[0]).is_some() && binary(&args[1]).is_some()
+                text(&args[0]).is_some() && text(&args[1]).is_some()
             }
             "create_thread" if product == Product::Space => {
                 text(&args[0]).is_some_and(|s| !s.is_empty()) && text(&args[1]).is_some()

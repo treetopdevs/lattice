@@ -2,17 +2,26 @@
 
 ## Status and dependency
 
-IN PROGRESS. Six native components are implemented: authenticated DAG, portable
-cutoffs, static delegation analysis, bounded roles/continuation, command pre-policy
-and strict product readability. Semantic normalization, full application policy,
-CRDT projection, catalog graph evaluation and retained trust remain unfinished.
+IN PROGRESS. Authenticated DAGs, portable cutoffs, static delegation analysis,
+bounded roles/continuation, command pre-policy, strict product readability and
+causal Thread application policy are implemented. Semantic normalization, Space
+application policy, CRDT projection, catalog graph evaluation and retained trust remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
+
+Fresh Thread application-policy work exposes a source discrepancy for malformed
+edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.
+Separate plan 270 corrects the source behavior and literal leading U+FEFF text.
+Its independently reviewed source is now adopted, and the original reciprocal
+regression agrees without changing its expected result. Source final gates remain pending.
+Thread policy is a component, not full application/catalog or installed parity.
 
 ## Source adoption
 
 The codec, exporter and continuation alias foundations are merged. The evaluator
 now integrates the frozen incoming-owner correction as an explicit dependency;
-its final gate/merge must complete before native signoff. Preserve the codec's
+its final gate/merge must complete before native signoff. The separately reviewed
+Treehouse text/lineage correction is adopted as an explicit source dependency.
+Preserve the codec's
 wrapper-aware JSON depth, domain/empty-composite boundaries, flat delegation leaf
 and operation protocol-wrapper accounting alongside the evaluator's observation
 extensions. Run all component and reciprocal regressions after integration.
@@ -87,7 +96,7 @@ Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.
 This accommodates aggregate cutoff records without widening public artifact bounds.
-Operation payload encoding permits one wrapper level above its depth-64 domain terms.
+Operation payload encoding excludes the fixed wrapper from the depth-64 domain.
 Fresh depth-limit and large signed-observation peers must prove byte parity. Empty
 delegation text is representable data in both existing codecs; retain it for later
 authority refusal instead of confusing shape with a semantic grant.

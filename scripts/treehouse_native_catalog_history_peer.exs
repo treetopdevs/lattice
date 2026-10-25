@@ -88,6 +88,20 @@ case System.argv() do
 
     IO.puts(Jason.encode!(%{histories: length(input["histories"])}))
 
+  ["thread-policy"] ->
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    results =
+      Enum.map(input["histories"], fn history ->
+        {:ok, ops} = Wire.decode_ops(history["frames"])
+        log = Log.from_ops(history["replica"], Map.new(ops, &{&1.id, &1}))
+        :ok = Log.verify_authenticity(log)
+        analysis = Lattice.Authority.analyze(Treehouse.Thread, log)
+        Map.new(Enum.filter(ops, &(&1.kind == :command)), &{&1.id, analysis.reasons[&1.id]})
+      end)
+
+    IO.puts(Jason.encode!(%{results: results}))
+
   ["command-gates"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
 
