@@ -99,6 +99,9 @@ export function withinCatalogRawObservationBounds(frame) {
                 if (values === null || typeof values !== "object" || Array.isArray(values))
                     return false;
                 const d = values;
+                const required = ["id", "replica", "issuer", "audience", "sig", "parent_id", "live", "ops", "roles"];
+                if (!required.every(key => Object.hasOwn(d, key)) || Object.keys(d).some(key => !required.includes(key) && key !== "expires_epoch"))
+                    return false;
                 if (!["id", "replica", "issuer", "audience", "sig"].every(key => typeof d[key] === "string") ||
                     (d.parent_id !== null && typeof d.parent_id !== "string") || typeof d.live !== "boolean" ||
                     !Array.isArray(d.ops) || !d.ops.every(v => typeof v === "string") || !Array.isArray(d.roles) || !d.roles.every(v => typeof v === "string"))

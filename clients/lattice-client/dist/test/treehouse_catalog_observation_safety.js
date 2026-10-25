@@ -91,7 +91,7 @@ test("flat delegation primitives cannot be coerced into a different signed repre
             assert.equal(d.kind, "reject");
             assert.equal(d.reason, "trust_pending");
         }
-    const bad = [{ ...typed, body: ["delegation", { ...letters, roles: "post" }] }, { ...typed, body: ["delegation", { ...letters, live: "true" }] }, { ...epoch, body: ["delegation", { ...leased, expires_epoch: "0" }] }, { ...base, body: ["delegation", absentParent] }];
+    const bad = [{ ...base, body: ["delegation", { ...f.space.delegation, extra: "unsigned" }] }, { ...typed, body: ["delegation", { ...letters, roles: "post" }] }, { ...typed, body: ["delegation", { ...letters, live: "true" }] }, { ...epoch, body: ["delegation", { ...leased, expires_epoch: "0" }] }, { ...base, body: ["delegation", absentParent] }];
     for (const value of bad)
         for (const d of await decisions(value)) {
             assert.equal(d.kind, "reject");
