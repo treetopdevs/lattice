@@ -1,3 +1,4 @@
+import {verifyEd25519} from "@treetopdevs/lattice-client";
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { chmodSync, writeFileSync } from "node:fs";
@@ -147,10 +148,10 @@ export interface RelayObserver {
  */
 export function createRelayObserver(seed: Uint8Array, routes: Record<string, ObservedRoute>): RelayObserver {
   const verifier = {
-    verify: (pubkey: Uint8Array, bytes: Uint8Array, sig: Uint8Array) => ed25519.verify(sig, bytes, pubkey, { zip215: false }),
+    verify: (pubkey: Uint8Array, bytes: Uint8Array, sig: Uint8Array) => verifyEd25519(sig, bytes, pubkey),
   };
   const frameVerifier = {
-    verify: async (pub: string, bytes: Uint8Array, sig: Uint8Array) => ed25519.verify(sig, bytes, fromBase64(pub), { zip215: false }),
+    verify: async (pub: string, bytes: Uint8Array, sig: Uint8Array) => verifyEd25519(sig, bytes, fromBase64(pub)),
   };
   async function observe<T>(label: string, use: (client: Awaited<ReturnType<typeof connectCarrierWebSocket>>) => Promise<T>) {
     const route = routes[label];

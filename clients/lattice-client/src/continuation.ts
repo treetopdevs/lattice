@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
 import type { CarrierTerm } from "./carrier";
@@ -164,8 +164,8 @@ export function verifyContinuationCertificate(certificate: unknown, expected: un
     let previous: string | null = null;
     for (const entry of normalized.signatures) {
       if (!allowed.has(entry.witness) || previous !== null && comparePublicKeys(previous, entry.witness) >= 0 ||
-        !ed25519.verify(canonicalBase64Bytes(entry.signature, 64)!, payload,
-          canonicalBase64Bytes(entry.witness, 32)!, { zip215: false })) return false;
+        !verifyEd25519(canonicalBase64Bytes(entry.signature, 64)!, payload,
+          canonicalBase64Bytes(entry.witness, 32)!)) return false;
       previous = entry.witness;
     }
     return true;

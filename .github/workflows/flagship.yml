@@ -269,6 +269,12 @@ jobs:
       - name: Build client before reciprocal preview test
         working-directory: clients/lattice-client
         run: npm run build
+      - name: Shared mobile signature and handoff contracts
+        working-directory: clients/lattice-mobile-core
+        run: |
+          npm ci
+          npm run build
+          npm test
       # Plan 186 / row 220: the shell kit has no build (exports point at .ts source) and its
       # lattice-client peer is not installed (legacy-peer-deps), so only typecheck and the boundary check run.
       - name: Install shell kit dependencies

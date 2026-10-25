@@ -1,5 +1,5 @@
+import {verifyEd25519} from "./signature";
 import { canonicalUint64Scalar, canonicalHighUint64Text } from "./uint64";
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, canonicalHash } from "./codec";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
 import { compareUtf8 } from "./op";
@@ -224,7 +224,7 @@ async function inspectFrame(raw: unknown, replica: string, accepted: boolean): P
   catch { return accepted ? "invalid" : "unsupported"; }
   const hashMatches = await canonicalHash(bytes) === raw.id;
   let signatureMatches = false;
-  try { signatureMatches = sig.length === 64 && ed25519.verify(sig, bytes, author, { zip215: false }); } catch { /* invalid signature is retained evidence */ }
+  try { signatureMatches = sig.length === 64 && verifyEd25519(sig, bytes, author); } catch { /* invalid signature is retained evidence */ }
   if ((hashMatches && signatureMatches) !== accepted) return "invalid";
   // Check representable authenticity before a portability refusal can hide it.
   portable = portable && ["command", "authority", "inbox", "tombstone"].includes(raw.kind) &&

@@ -62,7 +62,7 @@ case System.argv() do
               ])
 
             Base.url_encode64(:crypto.hash(:sha256, payload), padding: false) == raw["id"] and
-              :crypto.verify(:eddsa, :none, payload, Base.decode64!(raw["sig"]), [key, :ed25519])
+              Lattice.Identity.verify(key, payload, Base.decode64!(raw["sig"]))
           else
             _ -> false
           end

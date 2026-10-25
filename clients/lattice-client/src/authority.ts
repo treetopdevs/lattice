@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
   canonicalBase64Bytes,
@@ -100,7 +100,7 @@ async function verifiedContinuationContext(input: {replica: string; frames: read
   for (const frame of decoded) {
     const verified = await verifyCarrierOp(frame, {verify: async (author, bytes, signature) => {
       const key = canonicalBase64Bytes(author, 32);
-      return key !== null && ed25519.verify(signature, bytes, key, {zip215: false});
+      return key !== null && verifyEd25519(signature, bytes, key);
     }});
     if (!verified.valid) return {ok: false, reason: "invalid_verified_history"};
   }
@@ -1204,11 +1204,10 @@ export function verifyWitnessedSuccessionCertificate(
   const payload = canonicalBytesForWitnessedSuccessionClaim(certificate.claim);
   try {
     if (!certificate.signatures.every((entry) =>
-      ed25519.verify(
+      verifyEd25519(
         canonicalBase64Bytes(entry.signature)!,
         payload,
         canonicalBase64Bytes(entry.witness, 32)!,
-        { zip215: false },
       )
     )) {
       return invalidWitnessed("invalid_recovery_signature");
@@ -1761,11 +1760,10 @@ function verifyBeaconCertificate(
   try {
     const payload = canonicalBytesForWitnessedBeaconClaim(certificate.claim);
     return signatures.every((entry) =>
-      ed25519.verify(
+      verifyEd25519(
         canonicalBase64Bytes(entry.signature, 64)!,
         payload,
         canonicalBase64Bytes(entry.witness, 32)!,
-        { zip215: false },
       ),
     );
   } catch {
@@ -1981,7 +1979,7 @@ function delegationSelfConsistent(delegation: AuthorityDelegationEvidence): bool
       signature !== null &&
       issuer !== null &&
       bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
-      ed25519.verify(signature, canonicalBytes, issuer, { zip215: false })
+      verifyEd25519(signature, canonicalBytes, issuer)
     );
   } catch {
     return false;

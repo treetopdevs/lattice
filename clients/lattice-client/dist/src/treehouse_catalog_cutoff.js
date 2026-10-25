@@ -1,5 +1,5 @@
+import { verifyEd25519 } from "./signature";
 import { canonicalUint64Scalar, canonicalHighUint64Text } from "./uint64";
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, canonicalHash } from "./codec";
 import { compareUtf8 } from "./op";
 // Cutoff-only vocabulary adopted 2026-09-06; identical to the BEAM observation.
@@ -236,7 +236,7 @@ async function inspectFrame(raw, replica, accepted) {
     const hashMatches = await canonicalHash(bytes) === raw.id;
     let signatureMatches = false;
     try {
-        signatureMatches = sig.length === 64 && ed25519.verify(sig, bytes, author, { zip215: false });
+        signatureMatches = sig.length === 64 && verifyEd25519(sig, bytes, author);
     }
     catch { /* invalid signature is retained evidence */ }
     if ((hashMatches && signatureMatches) !== accepted)

@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
 import type { CarrierTerm, DecodedTerm } from "./carrier";
@@ -211,8 +211,8 @@ export function verifyCatalogEnvelope(value: unknown, expectedCatalogKey: unknow
   try {
     const envelope = normalizeCatalogEnvelope(value);
     const key = canonicalBase64Bytes(expectedCatalogKey, 32);
-    return envelope !== null && key !== null && ed25519.verify(canonicalBase64Bytes(envelope.signature, 64)!,
-      canonicalBytesForTransportCatalog(envelope.catalog), key, { zip215: false });
+    return envelope !== null && key !== null && verifyEd25519(canonicalBase64Bytes(envelope.signature, 64)!,
+      canonicalBytesForTransportCatalog(envelope.catalog), key);
   } catch { return false; }
 }
 /** Old-key approval and new-key possession only; the caller independently resolves parent/head trust. */
@@ -221,9 +221,9 @@ export function verifyCatalogRotationEnvelope(value: unknown, expectedOldKey: un
     const envelope = normalizeCatalogRotationEnvelope(value);
     const oldKey = canonicalBase64Bytes(expectedOldKey, 32);
     if (envelope === null || oldKey === null || expectedOldKey === envelope.rotation.newCatalogKey) return false;
-    return ed25519.verify(canonicalBase64Bytes(envelope.oldSignature, 64)!, canonicalBytesForCatalogRotation(envelope.rotation), oldKey, { zip215: false }) &&
-      ed25519.verify(canonicalBase64Bytes(envelope.newSignature, 64)!, canonicalBytesForCatalogRotationPossession(envelope.rotation),
-        canonicalBase64Bytes(envelope.rotation.newCatalogKey, 32)!, { zip215: false });
+    return verifyEd25519(canonicalBase64Bytes(envelope.oldSignature, 64)!, canonicalBytesForCatalogRotation(envelope.rotation), oldKey) &&
+      verifyEd25519(canonicalBase64Bytes(envelope.newSignature, 64)!, canonicalBytesForCatalogRotationPossession(envelope.rotation),
+        canonicalBase64Bytes(envelope.rotation.newCatalogKey, 32)!);
   } catch { return false; }
 }
 

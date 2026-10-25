@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import type { CarrierOpSigner } from "./codec";
 import { canonicalBase64Bytes } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
@@ -390,7 +390,7 @@ export async function authorTreehouseAdmitAndGrant(input: {
   const invitation = ops.find((op) => op.id === acceptance.invitationId)!;
   const signature = canonicalBase64Bytes(acceptance.acceptance, 64), key = canonicalBase64Bytes(acceptance.recipient, 32);
   let signed = false;
-  try { signed = signature !== null && key !== null && ed25519.verify(signature, treehouseInvitationAcceptanceBytes(input.replica, invitation), key, { zip215: false }); } catch { signed = false; }
+  try { signed = signature !== null && key !== null && verifyEd25519(signature, treehouseInvitationAcceptanceBytes(input.replica, invitation), key); } catch { signed = false; }
   if (!signed) throw new Error("invalid_acceptance");
 
   const plans = review.threads.map((replica) => {
