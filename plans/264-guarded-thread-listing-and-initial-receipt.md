@@ -38,8 +38,8 @@ Current-parent inspection adds two persistence constraints. Read-only holders sk
 startup write rehearsal, so an append-capable courier must prove persistence through an
 isolated sibling rehearsal; it must never rewrite the actual initial Space as a probe.
 The existing persistence error path retains old memory even when rename has landed.
-Fence subsequent holder mutations after any ambiguous persistence failure until verified
-restart/reconciliation, so a different relay cannot overwrite that authentic disk history.
+Fence subsequent holder mutations after any ambiguous persistence failure until a
+controlled release restart restores and verifies the served file, so a different relay cannot overwrite that authentic disk history.
 Test failure after rename followed by a different relay, not only redelivery of the same op.
 
 ## Supported operator API and command
@@ -94,7 +94,8 @@ The privileged BEAM operator is already inside the local trust boundary.
    authenticity and runs current roster, root/bootstrap/binding and catalog authority
    checks on that SAME candidate. Use previously verified closed public ceremony data;
    do not use a different path-based Space observation or invent carried references.
-   Pure review can have its own bounded worker; its crash/hang never blocks the holder.
+   Pure review uses a monitored unlinked bounded worker; its crash/hang never blocks the
+   holder or kills the operator RPC process.
 3. For pending absent, require the exact staged signed op to be accepted and honored.
    For pending present, require exact equality and current honor. For initial-existing,
    require already-present exact honor and the parent's one-Thread provenance/title/
@@ -120,11 +121,22 @@ Close the gate during blocked persistence in tests: drain captures the completed
 log or fails closed, never commits an incomplete capture. A caller timeout is ambiguous,
 not proof of no effect. No newly detached persistence task may outlive cancellation.
 
-Read-only path holders must explicitly acquire isolated proven durability before an
-append. In-memory/unowned/unsupported paths refuse with atoms without crashing. An
-initial presence-only path never runs target-replacing rehearsal. On shared persistence
-error/timeout, fence ALL subsequent mutations until verified holder restart/reconciliation;
-never dump an old snapshot over a possibly newer file. Do not promote an unsynced candidate
+Read-only path holders explicitly call a separate bounded `prove_durability` before
+requesting a snapshot token. Reuse `Durability.rehearse_target_isolated` in the actual
+target directory with cleaned siblings, cache success per holder incarnation/source,
+and exclude rehearsal from the courier's critical-call budget. Failure leaves proof
+false, the target untouched and the holder alive. In-memory/unowned/unsupported paths
+refuse atoms. Presence-only initial listing never runs target-replacing rehearsal.
+
+The shared writer records stage disposition internally while preserving public error
+shapes. A known completed pre-rename failure stays retryable. Every timeout, post-rename
+failure or unknown disposition transitions the live holder from OPEN to FENCED before
+reply. FENCED refuses relay, courier, new review snapshots and drain capture with atoms;
+readiness cannot claim a writable healthy holder. No local reset/unfence API exists.
+Exit only through controlled release restart, verified file restore and normal durability
+proof in a new incarnation. A pre-rename failure must never be classified from an errno
+alone. Test before/after rename and a hung directory sync, then a different relay and
+drain; neither may overwrite/capture stale memory. Do not promote an unsynced candidate
 into a successful receipt. The final observation must authenticate the served carrier
 history and establish equality with disk, including quarantine where relevant, not merely
 observe a file ahead of the live holder. Unknown/late effects remain fenced.
