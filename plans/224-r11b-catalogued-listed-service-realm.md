@@ -16,7 +16,7 @@
 
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
 the inputs in "Depends on" exist. PR 1 (Design 1) landed in PR #155; PR 3 (Design 3) landed in PR #158.
-PR 2 landed in #160. Plan 263 implements PR 4 on disposable ceremony fixtures (D-47); operational PRs 4-5 still need the real ceremony report. PR 6 is plan 245.
+PR 2 landed in #160. Software PR 4 landed in #168 (plan 263, disposable fixtures); PR 5 is plan 264. Operational PRs 4-5 need the real ceremony report. PR 6 is plan 245.
 
 ## Header
 
@@ -249,7 +249,7 @@ the checked frontiers; a later roster or authority change is caught by `listed`'
 
 ## Design 5: `listed`
 
-`ReleaseListing.publish(root, expected, ceremony_dir)`:
+`ReleaseListing.publish(root, expected, ceremony_dir, probe_file)` (plan 264):
 
 1. As `catalogued` step 1, with phase `catalogued`; `CatalogBinding.load/2` again.
 2. The stored envelope's digest equals the artifact, it verifies, its id equals `catalog_head` and

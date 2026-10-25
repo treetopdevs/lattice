@@ -555,6 +555,17 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </dl>
 </article>
 
+<article id="d48">
+<h2><span>D-48</span>Guard the final reference publication inside the holder</h2>
+<dl>
+<dt>When</dt><dd>2026-10-24, delegated backlog workflow; plan 264 from main 187cc3d8a while catalog PR #168 verifies.</dd>
+<dt>Dependency</dt><dd>Plan only until #168 merges on its gates. Refresh from main then; the parent supplies catalogued publication, current-history review, signing status and the local command adapter.</dd>
+<dt>Decision</dt><dd>Adopt plan 224 OD-3(a): one local holder call judges current Space authority and roster, then delivers only the exact staged client-signed reference through existing durability. No network courier action or server signing. Preserve release-drain fencing. Initial-existing requires exact honored presence and zero Space writes.</dd>
+<dt>API</dt><dd>Add an explicit probe file to ReleaseListing.publish/4 and reuse the parent's authenticated phase-catalogued review. Use existing local RPC/console command data; start no new listener. Re-observe every carried entry before the existing owner records listed.</dd>
+<dt>Recovery</dt><dd>Exact retry after a delivered frame or lost journal reply rechecks current honor and yields one op/receipt. A lapsed immutable reference keeps its slot; row 244 replacement is not silently implemented. Physical custody, native trust and public relay chat remain separate.</dd>
+</dl>
+</article>
+
 </main>
 </body>
 </html>
