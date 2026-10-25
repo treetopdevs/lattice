@@ -17,6 +17,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   @spec export(Path.t(), Path.t(), Path.t(), Path.t()) :: {:ok, Path.t()} | {:error, atom()}
   def export(root, ceremony, manifest_path, output) do
     Atoms.load()
+    output = Path.expand(output)
 
     with {:ok, raw} <- Journal.read(root),
          {:ok, %{"phase" => "listed"} = record} <- Journal.decode(raw),
@@ -47,8 +48,9 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
              public_instances(current) == public_instances(manifest),
          {:ok, ^store} <- CatalogStore.committed_documents(root, binding.record.catalog_key),
          :ok <- unchanged(captures),
+         :ok <- output_location(output, root, ceremony, manifest_path, manifest.instances),
          :ok <- write_new(output, bytes) do
-      {:ok, Path.expand(output)}
+      {:ok, output}
     else
       {:ok, %{"phase" => _}} -> {:error, :catalog_not_listed}
       {:error, reason} when is_atom(reason) -> {:error, reason}
@@ -244,6 +246,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
         result =
           try do
             with true <- created != nil,
+                 :ok <- File.chmod(path, 0o600),
                  :ok <- before_write(file, path),
                  :ok <- IO.binwrite(file, bytes),
                  :ok <- :file.sync(file),

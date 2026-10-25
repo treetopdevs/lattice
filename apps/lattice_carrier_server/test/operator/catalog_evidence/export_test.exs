@@ -61,6 +61,24 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert inputs(f) == before
   end
 
+  test "symlink dot-dot input writes only the validated normalized destination", f do
+    link = f.output <> ".alias"
+    File.ln_s!(CatalogStore.path(f.root), link)
+    raw = link <> "/../" <> Path.basename(f.output)
+    expanded = Path.expand(raw)
+    protected = Path.join(f.root, Path.basename(f.output))
+    before = inputs(f)
+    on_exit(fn -> File.rm(link) end)
+
+    assert expanded == f.output
+    refute raw == expanded
+    assert {:ok, ^expanded} = CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, raw)
+    assert {:ok, _} = Packet.decode(File.read!(expanded))
+    refute File.exists?(protected)
+    assert inputs(f) == before
+    assert Bitwise.band(File.stat!(expanded).mode, 0o777) == 0o600
+  end
+
   @tag :initial
   test "initial existing reference exports without rewriting source inputs", f do
     before = inputs(f)
