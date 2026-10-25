@@ -418,9 +418,17 @@ defmodule LatticeCarrierServer.FaultScenario do
   end
 
   defp code_paths do
+    runtime = [
+      Path.expand(to_string(:code.root_dir())),
+      :code.lib_dir(:elixir) |> to_string() |> Path.dirname() |> Path.expand()
+    ]
+
     :code.get_path()
     |> Enum.map(&(List.to_string(&1) |> Path.expand()))
     |> Enum.filter(&File.dir?/1)
+    |> Enum.reject(fn path ->
+      Enum.any?(runtime, &(path == &1 or String.starts_with?(path, &1 <> "/")))
+    end)
   end
 
   defp elixir_bin do
