@@ -73,6 +73,18 @@ policy, CRDT projection and retained catalog trust remain mandatory unfinished w
 Plan 268's candidate correction is in separate draft PR 173; this port continues
 using its current reviewed-source baseline until that correction is adopted.
 
+A sixth checkpoint adds an authenticated product-reader portability proof. It
+preserves raw number/text and absent/null distinctions, checks the full carrier vocabulary,
+and mirrors strict integers plus legacy beacon, genesis beacon metadata and
+witnessed certificate/claim contexts. Fresh BEAM/TS products and Rust-authored
+boundary frames are checked by the actual TS strict reader. It reports readability
+only; semantic normalization, application policy and catalog decisions remain
+unfinished. Initial focused execution passes. Spec review found and corrected a narrower
+cutoff-vocabulary reuse; all current wire names now exercise both readers.
+Both reviewers confirm the correction. Client build, desktop checks, full Mix
+check and both boundary scans pass. Final ordinary native 178/0 and tracing 189/0
+pass after the review corrections.
+
 ## Outcome and immutable contracts
 
 Rust independently evaluates the complete raw evidence and retained catalog state
