@@ -14,14 +14,13 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SpaceExport do
   # Every refusal is one opaque `:invalid_space_export`.
 
   alias Lattice.{Authority, Log, Op}
-  alias Lattice.Carrier.Wire
+  alias LatticeCarrierServer.Operator.PublicHistory
   alias LatticeCarrierServer.Operator.CatalogCeremony.Atoms
 
   @format "lattice-space-frames-export-v1"
   @max_bytes 16 * 1024 * 1024
   @max_frames 4000
   @top_keys ~w(format frames root space)
-  @frame_keys ~w(author body cap deps id kind replica sig v)
 
   @spec load(Path.t()) :: {:ok, Log.t()} | {:error, :invalid_space_export}
   def load(path) do
@@ -30,9 +29,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SpaceExport do
     with {:ok, bytes} <- read(path),
          {:ok, %{} = doc} <- JSON.decode(bytes),
          {:ok, space, root, frames} <- shape(doc),
-         {:ok, ops} <- ops(space, frames),
-         log = Log.from_ops(space, Map.new(ops, &{&1.id, &1})),
-         :ok <- Log.verify_authenticity(log),
+         {:ok, log} <- PublicHistory.decode(space, frames),
          :ok <- root_matches(log, root),
          true <- encode(log, root) == bytes do
       {:ok, log}
@@ -48,11 +45,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SpaceExport do
   @doc "The exact export bytes for a log and its declared root public key."
   @spec encode(Log.t(), binary()) :: binary()
   def encode(%Log{replica: space, ops: ops}, root) when is_binary(root) do
-    frames =
-      ops
-      |> Map.values()
-      |> Enum.sort_by(& &1.id)
-      |> Enum.map(&Wire.encode_op/1)
+    frames = PublicHistory.frames(%Log{replica: space, ops: ops})
 
     json(%{
       "format" => @format,
@@ -86,29 +79,6 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SpaceExport do
     end
   end
 
-  defp ops(space, frames) do
-    decoded =
-      Enum.reduce_while(frames, {:ok, []}, fn frame, {:ok, acc} ->
-        with %{} <- frame,
-             true <- Enum.sort(Map.keys(frame)) == @frame_keys,
-             {:ok, %Op{replica: ^space} = op} <- Wire.decode_op(frame),
-             true <- Wire.encode_op(op) == frame do
-          {:cont, {:ok, [op | acc]}}
-        else
-          _ -> {:halt, :error}
-        end
-      end)
-
-    with {:ok, reversed} <- decoded,
-         ops = Enum.reverse(reversed),
-         ids = Enum.map(ops, & &1.id),
-         true <- ids == Enum.sort(ids) and ids == Enum.uniq(ids) do
-      {:ok, ops}
-    else
-      _ -> :error
-    end
-  end
-
   # A profile root, when the Space has one, must be the declared root, and the
   # declared root must have authored a dependency-free authority op (its genesis).
   # Competing geneses by other authors are retained by the app and quarantined by
@@ -126,16 +96,5 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SpaceExport do
     if profile_ok and root in geneses, do: :ok, else: :error
   end
 
-  # Compact JSON, object keys sorted recursively; no whitespace.
-  defp json(%{} = map) do
-    body =
-      map
-      |> Enum.sort_by(fn {k, _} -> k end)
-      |> Enum.map_join(",", fn {k, v} -> JSON.encode!(k) <> ":" <> json(v) end)
-
-    "{" <> body <> "}"
-  end
-
-  defp json(list) when is_list(list), do: "[" <> Enum.map_join(list, ",", &json/1) <> "]"
-  defp json(value), do: JSON.encode!(value)
+  defp json(value), do: PublicHistory.canonical(value)
 end

@@ -7,7 +7,7 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
   """
   alias Lattice.{Authority, Log, Op}
   alias Lattice.Carrier.Wire
-  alias LatticeCarrierServer.Operator.{ReferenceMode, Staging}
+  alias LatticeCarrierServer.Operator.{PublicHistory, ReferenceMode, Staging}
   alias LatticeCarrierServer.Operator.CatalogCeremony.Atoms
   alias Treehouse.CatalogBootstrap
 
@@ -17,7 +17,6 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
   @history_bytes 1_048_576
   @keys ~w(bootstrapId format product profiles referenceId space spaceRoot)
   @profile_keys ~w(frames product replica)
-  @frame_keys ~w(author body cap deps id kind replica sig v)
   @member_ops MapSet.new([:post, :author_edit, :author_tombstone])
 
   @spec load(Path.t()) :: {:ok, map()} | {:error, :invalid_initial_bundle}
@@ -88,25 +87,13 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
 
   @doc "Compact canonical JSON for the closed public evidence formats."
   @spec canonical(term()) :: binary()
-  def canonical(map) when is_map(map) do
-    "{" <>
-      (map
-       |> Enum.sort_by(&elem(&1, 0))
-       |> Enum.map_join(",", fn {key, value} ->
-         JSON.encode!(key) <> ":" <> canonical(value)
-       end)) <> "}"
-  end
-
-  def canonical(list) when is_list(list), do: "[" <> Enum.map_join(list, ",", &canonical/1) <> "]"
-  def canonical(value), do: JSON.encode!(value)
+  def canonical(value), do: PublicHistory.canonical(value)
 
   defp profile(doc, product, kind, role) when is_map(doc) do
     with true <- Enum.sort(Map.keys(doc)) == @profile_keys and doc["product"] == product,
          replica when is_binary(replica) <- doc["replica"],
          frames when is_list(frames) and length(frames) in 1..@max_frames <- doc["frames"],
-         {:ok, ops} <- decode_frames(frames, replica),
-         log = Log.from_ops(replica, Map.new(ops, &{&1.id, &1})),
-         :ok <- Log.verify_authenticity(log),
+         {:ok, log} <- PublicHistory.decode(replica, frames, push_bytes: 64_000),
          {:ok, selected} <- Authority.continuation_profile(log),
          true <-
            selected.profile.product == :treehouse and selected.profile.kind == kind and
@@ -118,28 +105,6 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
   end
 
   defp profile(_, _, _, _), do: :error
-
-  defp decode_frames(frames, replica) do
-    Enum.reduce_while(frames, {:ok, []}, fn frame, {:ok, acc} ->
-      with true <- is_map(frame) and Enum.sort(Map.keys(frame)) == @frame_keys,
-           true <- byte_size(canonical(%{"type" => "push", "ops" => [frame]})) <= 64_000,
-           {:ok, %Op{replica: ^replica} = op} <- Wire.decode_op(frame),
-           true <- Wire.encode_op(op) == frame do
-        {:cont, {:ok, [op | acc]}}
-      else
-        _ -> {:halt, :error}
-      end
-    end)
-    |> case do
-      {:ok, reversed} ->
-        ops = Enum.reverse(reversed)
-        ids = Enum.map(ops, & &1.id)
-        if ids == Enum.sort(ids) and ids == Enum.uniq(ids), do: {:ok, ops}, else: :error
-
-      _ ->
-        :error
-    end
-  end
 
   defp inventory(space, child, reference_id) do
     root = Authority.root(child)
@@ -200,7 +165,7 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
     %{
       "product" => product,
       "replica" => log.replica,
-      "frames" => log.ops |> Map.values() |> Enum.sort_by(& &1.id) |> Enum.map(&Wire.encode_op/1)
+      "frames" => PublicHistory.frames(log)
     }
   end
 
