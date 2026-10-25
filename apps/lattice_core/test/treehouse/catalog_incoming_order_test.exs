@@ -25,8 +25,32 @@ defmodule Treehouse.CatalogIncomingOrderTest do
     }
 
     for c <- raw["cases"],
-        frames <- [c["history"]["frames"], Enum.reverse(c["history"]["frames"])] do
-      history = %{replica: c["history"]["replica"], frames: frames, rejected: []}
+        frames <- [c["history"]["frames"], Enum.reverse(c["history"]["frames"])],
+        raw_rejected <- [c["history"]["rejected"], Enum.reverse(c["history"]["rejected"])] do
+      if c["name"] in [
+           "extra-header-and-missing",
+           "wrong-version-and-missing",
+           "missing-version-and-missing"
+         ] do
+        assert c["ts"]["reason"] == "invalid_verified_history"
+        assert c["ts"]["detail"]["ids"] == []
+      end
+
+      expected = %{
+        "genuine-unknown-mislabeled-rejected" => {"reject", "invalid_verified_history"},
+        "forged-unknown-rejected" => {"reject", "unsupported_cutoff"},
+        "empty-id-rejected" => {"reject", "unsupported_cutoff"},
+        "forged-same-id-rejected" => {"propose", nil},
+        "partial-with-genuine-rejected" => {"reject", "trust_pending"},
+        "extra-rejected-record-field" => {"reject", "invalid_verified_history"},
+        "mixed-rejected-integrity" => {"reject", "invalid_verified_history"}
+      }
+
+      if Map.has_key?(expected, c["name"]),
+        do: assert({c["ts"]["kind"], c["ts"]["reason"]} == expected[c["name"]])
+
+      rejected = Enum.map(raw_rejected, &decode_rejected/1)
+      history = %{replica: c["history"]["replica"], frames: frames, rejected: rejected}
 
       actual =
         CatalogTrust.prepare_installation(%{
@@ -70,9 +94,19 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       disposition: "pin_exact_observed_bootstrap"
     }
 
+    empty_dep =
+      Op.new(f.space.root, f.space.replica, [""], :command, %Canonical.Atom{name: name})
+      |> Wire.encode_op()
+
+    assert {:error, :malformed_op} = Wire.authenticate_observation(empty_dep)
+
     cases =
       Enum.map(
-        [{"signed", frame}, {"forged", Map.put(frame, "sig", Base.encode64(<<0::512>>))}],
+        [
+          {"signed", frame},
+          {"forged", Map.put(frame, "sig", Base.encode64(<<0::512>>))},
+          {"empty-dependency", empty_dep}
+        ],
         fn {name, value} ->
           %{name: name, history: %{replica: f.space.replica, frames: [value], rejected: []}}
         end
@@ -98,8 +132,19 @@ defmodule Treehouse.CatalogIncomingOrderTest do
           store: %{kind: :verified_fresh, expected: %{trust_revision: 0, history_generation: 0}}
         })
 
-      assert Atom.to_string(actual.reason) == result["ts"]["reason"]
+      assert if(actual.reason, do: Atom.to_string(actual.reason)) == result["ts"]["reason"]
       assert actual.detail.ids == result["ts"]["detail"]["ids"]
     end
   end
+
+  defp decode_rejected(record) when is_map(record) do
+    Map.new(record, fn
+      {"frame", value} -> {:frame, value}
+      {"reason", "bad_signature"} -> {:reason, :bad_signature}
+      {"reason", _} -> {:reason, :invalid_reason}
+      pair -> pair
+    end)
+  end
+
+  defp decode_rejected(record), do: record
 end

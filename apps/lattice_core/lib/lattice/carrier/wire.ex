@@ -142,7 +142,7 @@ defmodule Lattice.Carrier.Wire do
            "sig" => sig64
          } <- frame,
          true <- is_binary(id) and is_binary(replica) and is_binary(kind),
-         true <- is_list(deps) and Enum.all?(deps, &is_binary/1),
+         true <- is_list(deps) and Enum.all?(deps, &(is_binary(&1) and byte_size(&1) > 0)),
          {:ok, author} <- Base.decode64(author64),
          true <- byte_size(author) == 32 and Base.encode64(author) == author64,
          {:ok, sig} <- Base.decode64(sig64),

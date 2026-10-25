@@ -598,7 +598,8 @@ async function authenticateFrames(raw: TreehouseCatalogRawHistory): Promise<stri
   for (const value of raw.frames) {
     const f = value as CarrierOpFrame;
     try {
-      if (!text(f.id) || f.replica !== raw.replica || ids.has(f.id) || !Array.isArray(f.deps) || !f.deps.every(text)) fail("invalid_verified_history");
+      if (!closed(f, ["v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig"]) || f.v !== 1 ||
+          !text(f.id) || f.replica !== raw.replica || ids.has(f.id) || !Array.isArray(f.deps) || !f.deps.every(text)) fail("invalid_verified_history");
       const bytes = canonicalBytesForCarrierOp(f), key = canonicalBase64Bytes(f.author, 32), sig = canonicalBase64Bytes(f.sig, 64);
       if (key === null || sig === null || await canonicalHash(bytes) !== f.id || !ed25519.verify(sig, bytes, key, {zip215: false})) fail("invalid_verified_history");
       ids.add(f.id);

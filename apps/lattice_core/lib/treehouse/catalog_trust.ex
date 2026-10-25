@@ -1447,6 +1447,23 @@ defmodule Treehouse.CatalogTrust do
       |> sorted()
 
     if missing != [], do: refuse(:trust_pending, missing)
+
+    # Complete input cannot relabel genuine evidence as a structural refusal.
+    # This remains after missing accepted ancestors, matching cutoff ordering.
+    Enum.each(raws, fn history ->
+      Enum.reduce(history.rejected, MapSet.new(), fn record, ids ->
+        frame = record.frame
+
+        unless is_map(frame) and is_binary(frame["id"]) and frame["replica"] == history.replica and
+                 not MapSet.member?(ids, frame["id"]),
+               do: refuse(:invalid_verified_history)
+
+        if match?({:ok, _}, Wire.authenticate_observation(frame)),
+          do: refuse(:invalid_verified_history)
+
+        MapSet.put(ids, frame["id"])
+      end)
+    end)
   end
 
   defp scan_history(history) do

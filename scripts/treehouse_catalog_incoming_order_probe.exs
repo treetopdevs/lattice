@@ -20,7 +20,23 @@ cases =
     result =
       Treehouse.CatalogTrust.prepare_installation(%{
         review: review,
-        history: %{replica: h["replica"], frames: h["frames"], rejected: []},
+        history: %{
+          replica: h["replica"],
+          frames: h["frames"],
+          rejected:
+            Enum.map(h["rejected"], fn
+              record when is_map(record) ->
+                Map.new(record, fn
+                  {"frame", value} -> {:frame, value}
+                  {"reason", "bad_signature"} -> {:reason, :bad_signature}
+                  {"reason", _} -> {:reason, :invalid_reason}
+                  pair -> pair
+                end)
+
+              value ->
+                value
+            end)
+        },
         store: %{kind: :verified_fresh, expected: %{trust_revision: 0, history_generation: 0}}
       })
 

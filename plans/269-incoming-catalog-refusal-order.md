@@ -22,10 +22,16 @@ canonical suites, full Mix check and both boundary scans pass after corrections.
 The checkpoint is independently reviewed; required external adversarial review
 and the complete phase matrix remain open.
 
-This checkpoint does not complete the broader phase matrix below. In particular,
-malformed/extra-header precedence, unknown kinds, rejected-record combinations,
-exact resource boundaries and stored/reopen behavior need explicit full parity
-proof before completion and native adoption. The saved diagnostic evidence is
+The next checkpoint aligns closed accepted-frame header/version validation before
+fetch in both owners and checks rejected-record identity, duplicate ids and genuine
+signature mislabeling after accepted completeness, before portability. Fresh
+header and rejected-record RED cases reproduce the prior disagreements; the
+expanded reciprocal matrix now passes with explicit expected decisions and both
+delivery orders. Full checks and protected reviews for this checkpoint are running.
+
+These checkpoints do not complete the broader matrix below. Unknown kinds, full
+independent producer coverage, exact resource boundaries and stored/reopen behavior
+still need explicit full parity proof before completion and native adoption. The saved diagnostic evidence is
 marked as captured before this correction; its old verdicts are not an oracle.
 
 ## Reproduced problem

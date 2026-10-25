@@ -14,6 +14,22 @@ const integer = await authorCarrierOpUnchecked({ replica: f.space.replica, signe
 const cases = [];
 const inputs = [
     ['fresh-complete', f.histories[0].frames],
+    ['extra-rejected-record-field', [known], [{ frame: completeUnknown, reason: 'bad_signature', extra: true }]],
+    ['missing-rejected-frame', [known], [{ reason: 'bad_signature' }]],
+    ['nonobject-rejected-record', [known], [null]],
+    ['mixed-rejected-integrity', f.histories[0].frames, [{ frame: { ...completeUnknown, sig: Buffer.alloc(64).toString('base64') }, reason: 'bad_signature' }, { frame: f.histories[0].frames[0], reason: 'bad_signature' }]],
+    ['genuine-unknown-mislabeled-rejected', f.histories[0].frames, [{ frame: completeUnknown, reason: 'bad_signature' }]],
+    ['wrong-replica-unknown-rejected', f.histories[0].frames, [{ frame: { ...completeUnknown, replica: 'other-replica', sig: Buffer.alloc(64).toString('base64') }, reason: 'bad_signature' }]],
+    ['empty-id-rejected', f.histories[0].frames, [{ frame: { ...completeUnknown, id: '', sig: Buffer.alloc(64).toString('base64') }, reason: 'bad_signature' }]],
+    ['duplicate-rejected-id', f.histories[0].frames, [{ frame: { ...completeUnknown, sig: Buffer.alloc(64).toString('base64') }, reason: 'bad_signature' }, { frame: { ...completeUnknown, sig: Buffer.alloc(64).toString('base64') }, reason: 'bad_signature' }]],
+    ['forged-unknown-rejected', f.histories[0].frames, [{ frame: { ...completeUnknown, sig: Buffer.alloc(64).toString('base64') }, reason: 'bad_signature' }]],
+    ['genuine-known-mislabeled-rejected', f.histories[0].frames, [{ frame: f.histories[0].frames[0], reason: 'bad_signature' }]],
+    ['forged-same-id-rejected', f.histories[0].frames, [{ frame: { ...f.histories[0].frames[0], sig: Buffer.alloc(64).toString('base64') }, reason: 'bad_signature' }]],
+    ['partial-with-genuine-rejected', [known], [{ frame: completeUnknown, reason: 'bad_signature' }]],
+    ['partial-with-bad-rejected-reason', [known], [{ frame: completeUnknown, reason: 'other' }]],
+    ['extra-header-and-missing', [{ ...known, extra: true }]],
+    ['wrong-version-and-missing', [{ ...known, v: 2 }]],
+    ['missing-version-and-missing', [Object.fromEntries(Object.entries(known).filter(([k]) => k !== "v"))]],
     ['unique-map-control', [mapped]],
     ['unique-mapset-control', [set]],
     ['canonical-integer-control', [integer]],
@@ -32,7 +48,7 @@ const inputs = [
     ['partial-with-earlier-forgery', [{ ...frame, sig: Buffer.alloc(64).toString('base64') }, known]],
     ['partial-wrong-replica', [{ ...frame, replica: 'other-replica' }]],
 ];
-const input = process.argv[2] === "--consume" ? JSON.parse(readFileSync(process.argv[3], "utf8")) : { review: f.review, cases: inputs.map(([name, frames]) => ({ name, history: { replica: f.space.replica, frames, rejected: [] } })) };
+const input = process.argv[2] === "--consume" ? JSON.parse(readFileSync(process.argv[3], "utf8")) : { review: f.review, cases: inputs.map(([name, frames, rejected = []]) => ({ name, history: { replica: f.space.replica, frames, rejected } })) };
 for (const { name, history } of input.cases) {
     const result = await prepareTreehouseCatalogInstallation({ review: input.review, history, store: { kind: 'verified_fresh', expected: { trustRevision: 0, historyGeneration: 0 } } });
     cases.push({ name, history, ts: { kind: result.kind, reason: result.reason, detail: result.detail } });
