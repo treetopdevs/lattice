@@ -2,12 +2,10 @@
 
 ## Status
 
-IN PROGRESS. Canonical/frame/catalog authenticity, bounded readers and executable
-Rust↔TS/BEAM peers are implemented. Native depth/container and wrapper accounting
-corrections and reciprocal boundary tests are implemented; final verification and
-focused external confirmation remain. Implements plan 245 build PR 2.
-No native trust command, route installation, custody mutation, authority fold or
-network change is in scope.
+DONE. Canonical/frame/catalog authenticity, bounded readers, depth/container
+accounting and executable Rust↔TS/BEAM peers are implemented. This completes
+plan 245 build PR 2. Native authority, retained trust, custody mutation, route
+installation and network changes remain separate work.
 
 ## Outcome
 
