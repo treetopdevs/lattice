@@ -649,6 +649,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Native gate</dt><dd>A rejection supplies no route candidate and does not advance trust. Native plan 267 must close current eligibility on every rejection, including capacity exhaustion or a freeze witness that cannot fit; it cannot reuse an earlier candidate as fresh or claim that a plain rejection durably persisted a block. This remains required before any installation/dial, not an installed-native claim here.</dd>
 </dl></section>
 
+<section id="d78"><h2><span>D-78</span> Stop malformed edits at the product semantic boundary</h2><dl>
+<dt>Observed discrepancy</dt><dd>Fresh signed Thread histories produced during plan 267 application-policy work show BEAM following an earlier malformed edit's raw predecessor, while TypeScript refuses to decode that command and stops traversal. A later edit therefore receives different missing-target versus quarantined-target reasons.</dd>
+<dt>Decision</dt><dd>Implement a separate source correction under plan 270 before native adoption. Require UTF-8 lineage ids in edit/tombstone effects and follow only structurally valid product edits; retain malformed signed operations and their malformed_command refusals. Do not stop traversal merely because an otherwise valid edit is unauthorized, and do not change encoding, signatures or successful command outcomes. The standing goal delegates this bounded implementation decision.</dd>
+<dt>Evidence and gate</dt><dd>The native reciprocal test failed against the actual BEAM owner while agreeing with actual TypeScript. Add independent fresh signed producer controls, exact reason-map and reverse-delivery comparisons, full local gates, independent and requested adversarial review, and an exact-tip hosted gate. This is not final native parity or installed trust.</dd>
+</dl></section>
 </main>
 </body>
 </html>

@@ -33,11 +33,15 @@ defmodule Treehouse.Thread do
 
   command(:archive_thread, [], do: [{:archived, {:write, true}}])
 
-  defp edit(post, target, text) when is_binary(post) and is_binary(target),
-    do: [{:posts, {:edit, post, text!(text)}}]
+  defp edit(post, target, text) when is_binary(post) and is_binary(target) do
+    text!(target)
+    [{:posts, {:edit, text!(post), text!(text)}}]
+  end
 
-  defp tombstone(post, target) when is_binary(post) and is_binary(target),
-    do: [{:posts, {:delete, post}}]
+  defp tombstone(post, target) when is_binary(post) and is_binary(target) do
+    text!(target)
+    [{:posts, {:delete, text!(post)}}]
+  end
 
   defp text!(text) when is_binary(text) do
     if String.valid?(text), do: text, else: raise(ArgumentError, "Treehouse text must be UTF-8")
@@ -84,14 +88,24 @@ defmodule Treehouse.Thread do
       seen = MapSet.put(seen, target)
 
       case ops[target] do
-        %Op{kind: :command, body: {:author_edit, [^post, previous, _]}} ->
-          lineage_targets(previous, post, ops, seen)
+        %Op{kind: :command, body: {:author_edit, [^post, previous, _] = args}} ->
+          # A malformed signed command stays in history, but its arguments did
+          # not become product semantics. Match the strict product decoder before
+          # following its predecessor; authorization is judged separately below.
+          if valid_edit_arguments?(args) do
+            lineage_targets(previous, post, ops, seen)
+          else
+            seen
+          end
 
         _ ->
           seen
       end
     end
   end
+
+  defp valid_edit_arguments?(args),
+    do: match?({:ok, _}, Lattice.Replica.command_effects(__MODULE__, :author_edit, args))
 
   defp valid_lineage?(targets, post, replica, ops) do
     match?(%Op{replica: ^replica, kind: :command, body: {:post, [_]}}, ops[post]) and
