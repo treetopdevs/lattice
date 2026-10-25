@@ -316,7 +316,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
 
   @tag initial: true
   test "a second catalog carries every entry and extends the independently signed chain", f do
-    {first, package_path, envelope_path, _} = signed!(f)
+    {first, package_path, envelope_path, first_envelope} = signed!(f)
 
     assert {:ok, first_record} =
              ReleaseCatalog.commit(
@@ -345,6 +345,18 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
     assert map_size(package.histories) == 3
     signer = LatticeCarrierServer.Operator.CeremonyFixture.signer_template().signer
     {:ok, envelope} = SignCatalog.sign(prepared.package, f.ceremony_dir, signer, package.digest)
+
+    assert {:ok, ^first_envelope} =
+             SignCatalog.sign(
+               first.package,
+               f.ceremony_dir,
+               "/absent",
+               CatalogSigningPackage.digest(first.catalog)
+             )
+
+    assert {:ok, after_replay} = SigningLedger.status(f.ceremony_dir, f.binding)
+    assert after_replay.head["revision"] == 1
+    assert length(after_replay.chain) == 2
     package_path = Path.join(f.root, "second-package.json")
     envelope_path = Path.join(f.root, "second-envelope.json")
     File.write!(package_path, prepared.package)
@@ -510,6 +522,95 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
 
     assert {:ok, f.ready} == Journal.read(f.root)
     refute File.exists?(CatalogStore.path(f.root))
+  end
+
+  test "actual owner death after catalog link recovers through guarded commit", f do
+    owner_crash!(f, "link")
+  end
+
+  test "actual owner death after journal replacement returns the existing receipt", f do
+    owner_crash!(f, "journal")
+  end
+
+  defp owner_crash!(f, stage) do
+    {prepared, package_path, envelope_path, envelope} = signed!(f)
+    {:ok, ready_record} = Journal.decode(f.ready)
+    sha = Journal.digest(envelope)
+    id = Treehouse.TransportCatalog.catalog_id(prepared.catalog)
+
+    artifact = %{
+      "kind" => "catalog",
+      "op_id" => id,
+      "path" => CatalogStore.file_path(f.root, sha),
+      "replica" => prepared.catalog.space,
+      "review" => nil,
+      "sha256" => sha
+    }
+
+    record =
+      ready_record
+      |> Map.put("phase", "catalogued")
+      |> Map.put("catalog_head", id)
+      |> Map.update!("artifacts", &(&1 ++ [artifact]))
+
+    deployment = LatticeCarrierServer.Runtime.deployment()
+
+    plan = %{
+      version: 1,
+      kind: "catalogued",
+      expected: f.ready,
+      record: Journal.encode(record),
+      attempt: ready_record["attempt"],
+      checks: [
+        %{
+          path: deployment.manifest_path,
+          sha256: Base.encode16(deployment.manifest_digest, case: :lower)
+        }
+      ],
+      artifacts: [%{sha256: sha, bytes: Base.encode64(envelope)}],
+      incarnation: deployment.incarnation
+    }
+
+    helper = Path.expand("../../../../scripts/treehouse_operator_mutation.py", __DIR__)
+    runner = Path.expand("../support/operator/catalog_mutation_fault_runner.py", __DIR__)
+
+    {output, status} =
+      System.cmd(
+        System.find_executable("python3"),
+        [runner, helper, f.root, stage, Jason.encode!(plan)], stderr_to_stdout: true)
+
+    assert status != 0
+    refute String.contains?(output, ~s("ok":true))
+    assert File.exists?(CatalogStore.file_path(f.root, sha)), output
+
+    assert {:ok, ^record} =
+             ReleaseCatalog.commit(
+               f.root,
+               f.ready,
+               f.ceremony_dir,
+               f.probe,
+               package_path,
+               envelope_path
+             )
+
+    {:ok, after_retry} = Journal.read(f.root)
+    history = File.read!(Journal.history_path(f.root))
+
+    assert {:ok, ^record} =
+             ReleaseCatalog.commit(
+               f.root,
+               f.ready,
+               f.ceremony_dir,
+               f.probe,
+               package_path,
+               envelope_path
+             )
+
+    assert {:ok, ^after_retry} = Journal.read(f.root)
+    assert File.read!(Journal.history_path(f.root)) == history
+
+    assert {:ok, %{head: ^id, pending: nil}} =
+             CatalogStore.verify(f.root, f.binding.record.catalog_key)
   end
 
   defp next_release!(f, expected, head, number) do

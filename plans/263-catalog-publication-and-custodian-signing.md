@@ -64,7 +64,7 @@ Existing files are below `apps/lattice_carrier_server/lib/lattice_carrier_server
    with that status, checked inside the owner-held inspection.
    No journal/store mutation or private signing occurs. CLI writes a new exclusive
    output file; same bytes may replay, conflicting output refuses.
-3. Add `CatalogCeremony.SignCatalog.review/1` and `.sign/1`, exposed by ceremony CLI
+3. Add `CatalogCeremony.SignCatalog.review/2` and `.sign/4`, exposed by ceremony CLI
    commands `review-catalog` and `sign-catalog`. Review never reads the seed. Signing
    requires the exact reviewed catalog digest as explicit confirmation and independently
    validates the package and custodian's own verified ceremony binding/report.

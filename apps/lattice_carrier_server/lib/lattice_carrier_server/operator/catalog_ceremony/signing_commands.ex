@@ -30,12 +30,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
   end
 
   @spec status(keyword()) :: {:ok, map()} | {:error, atom()}
-  def status(opts), do: status_command(opts, &SignCatalog.status/2)
-
-  defp status_command(opts, command) do
+  def status(opts) do
     with {:ok, bytes} <- package(opts),
          {:ok, package} <- SignCatalog.review(bytes, opts[:ceremony]),
-         {:ok, state} <- command.(bytes, opts[:ceremony]),
+         {:ok, state} <- SignCatalog.status(bytes, opts[:ceremony]),
          text = SigningLedger.export_status(state, package.binding),
          :ok <- PublicArtifact.write(opts[:out], text) do
       {:ok,

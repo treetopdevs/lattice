@@ -70,7 +70,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
          :ok <- extends_snapshot(package.histories, review.current.pairs),
          :ok <- pending_current(store, envelopes, catalog),
          {:ok, _} <- CatalogSigningPackage.review(rebuilt.package, ceremony),
-         {:ok, next} <- publish(root, expected, actual, review, catalog, envelope_bytes) do
+         {:ok, next} <- publish(root, expected, review, catalog, envelope_bytes) do
       {:ok, next}
     else
       {:error, reason} when is_atom(reason) -> {:error, reason}
@@ -108,14 +108,13 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
   defp publish(
          _root,
          _expected,
-         _actual,
          %{record: %{"phase" => "catalogued"} = record},
          _catalog,
          _bytes
        ),
        do: {:ok, record}
 
-  defp publish(root, expected, _actual, review, catalog, bytes) do
+  defp publish(root, expected, review, catalog, bytes) do
     next =
       review.record
       |> Map.put("phase", "catalogued")

@@ -342,6 +342,8 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
       assert {:ok, recovered} = SignCatalog.status(bytes, dir)
       assert recovered.head_bytes == signed.head_bytes
       assert length(recovered.chain) == 1
+      assert File.stat!(Path.join(ledger, envelope_name)).links == 1
+      refute Enum.any?(File.ls!(ledger), &String.starts_with?(&1, ".tmp-"))
     end
   end
 
@@ -560,6 +562,272 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
              )
 
     refute File.exists?(Path.join(f.fixture[:ceremony_dir], "catalog-signing"))
+  end
+
+  test "initialization kills before and after the genesis link remain retryable", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+
+    for scenario <- ["init_before_link", "init_after_link"] do
+      # Each crash gets a new public ceremony copy and a new ledger, all disposable.
+      fresh = Path.join(Path.dirname(dir), scenario)
+      File.cp_r!(dir, fresh)
+      File.chmod!(fresh, 0o700)
+
+      plan = %{
+        action: "init",
+        binding: package.binding.bootstrap_id,
+        key: Base.encode64(package.binding.record.catalog_key)
+      }
+
+      {output, status} = owner_fault(fresh, scenario, plan, %{})
+      assert status != 0
+      refute String.contains?(output, ~s("ok":true))
+      assert {:ok, state} = SignCatalog.init(bytes, fresh)
+      assert state.chain == []
+      assert state.head["revision"] == nil
+      assert Enum.sort(File.ls!(Path.join(fresh, "catalog-signing"))) == ["head.json", "lock"]
+    end
+  end
+
+  test "callback expiry refuses, but disarmed writes may finish after that deadline", f do
+    {bytes, package, genesis, signed, envelope} = signing_boundary!(f)
+    dir = f.fixture[:ceremony_dir]
+
+    plan = %{
+      action: "open",
+      binding: package.binding.bootstrap_id,
+      key: Base.encode64(package.binding.record.catalog_key)
+    }
+
+    command = %{head: signed.head_bytes, envelope: envelope}
+    reset_boundary!(dir, genesis, envelope)
+    {output, status} = owner_fault(dir, "alarm", plan, command)
+    assert status != 0
+    assert String.contains?(output, "catalog_ledger_timeout")
+    assert {:ok, unchanged} = SignCatalog.status(bytes, dir)
+    assert unchanged.head_bytes == genesis.head_bytes
+    assert unchanged.chain == []
+    {output, 0} = owner_fault(dir, "delayed_write", plan, command)
+    assert String.contains?(output, ~s("ok":true))
+    assert {:ok, after_write} = SignCatalog.status(bytes, dir)
+    assert after_write.head_bytes == signed.head_bytes
+  end
+
+  test "output loss during writes does not imply that a signature was not persisted", f do
+    {bytes, package, genesis, signed, envelope} = signing_boundary!(f)
+    dir = f.fixture[:ceremony_dir]
+    reset_boundary!(dir, genesis, envelope)
+
+    plan = %{
+      action: "open",
+      binding: package.binding.bootstrap_id,
+      key: Base.encode64(package.binding.record.catalog_key)
+    }
+
+    {output, status} =
+      owner_fault(dir, "stdout_loss", plan, %{head: signed.head_bytes, envelope: envelope})
+
+    assert status != 0
+    refute String.contains?(output, ~s("ok":true))
+    assert {:ok, after_loss} = SignCatalog.status(bytes, dir)
+    assert after_loss.head_bytes == signed.head_bytes
+    assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
+  end
+
+  test "envelope directory sync precedes head replacement and Darwin requests full flushes", f do
+    {bytes, package, genesis, signed, envelope} = signing_boundary!(f)
+    dir = f.fixture[:ceremony_dir]
+
+    plan = %{
+      action: "open",
+      binding: package.binding.bootstrap_id,
+      key: Base.encode64(package.binding.record.catalog_key)
+    }
+
+    for scenario <- ["ordering", "darwin_dispatch"] do
+      reset_boundary!(dir, genesis, envelope)
+
+      {output, 0} =
+        owner_fault(dir, scenario, plan, %{head: signed.head_bytes, envelope: envelope})
+
+      events =
+        output
+        |> String.split("\n")
+        |> Enum.find(&String.starts_with?(&1, "TEST_EVENTS="))
+        |> String.replace_prefix("TEST_EVENTS=", "")
+        |> Jason.decode!()
+
+      linked =
+        Enum.find_index(events, fn [kind, name] -> kind == "link" and name != "head.json" end)
+
+      replaced = Enum.find_index(events, &(&1 == ["replace", "head.json"]))
+      assert is_integer(linked) and is_integer(replaced) and linked < replaced
+
+      assert events
+             |> Enum.slice((linked + 1)..(replaced - 1))
+             |> Enum.any?(fn [kind, _] -> kind == "directory_done" end)
+
+      if scenario == "darwin_dispatch" do
+        assert ["fullfsync", "file"] in events
+        assert ["fullfsync", "dir"] in events
+      end
+
+      assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
+    end
+  end
+
+  test "simultaneous identical signing converges on one immutable envelope", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, _} = SignCatalog.init(bytes, dir)
+    signer = CeremonyFixture.signer_template().signer
+    results = simultaneous(fn _ -> SignCatalog.sign(bytes, dir, signer, package.digest) end)
+    envelopes = for {:ok, envelope} <- results, do: envelope
+    assert length(envelopes) >= 1
+    assert length(Enum.uniq(envelopes)) == 1
+    assert Enum.all?(results, &(match?({:ok, _}, &1) or &1 == {:error, :catalog_ledger_busy}))
+    [envelope | _] = envelopes
+    assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
+    assert {:ok, state} = SignCatalog.status(bytes, dir)
+    assert length(state.chain) == 1
+  end
+
+  test "simultaneous competing catalogs have exactly one signed winner", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, _} = SignCatalog.init(bytes, dir)
+
+    changed = %{
+      f.catalog
+      | entries:
+          Enum.map(f.catalog.entries, fn entry ->
+            if entry.kind == :thread,
+              do: %{
+                entry
+                | route:
+                    "/r/" <>
+                      Base.url_encode64(:crypto.hash(:sha256, "racing-route"), padding: false)
+              },
+              else: entry
+          end)
+    }
+
+    {:ok, other} = encode(%{f | catalog: changed})
+    candidates = [{bytes, package.digest}, {other, CatalogSigningPackage.digest(changed)}]
+    signer = CeremonyFixture.signer_template().signer
+
+    results =
+      simultaneous(fn index ->
+        {candidate, digest} = Enum.at(candidates, index)
+        SignCatalog.sign(candidate, dir, signer, digest)
+      end)
+
+    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+
+    assert Enum.any?(
+             results,
+             &(&1 in [{:error, :catalog_ledger_busy}, {:error, :catalog_ledger_fork}])
+           )
+
+    assert {:ok, state} = SignCatalog.status(bytes, dir)
+    assert length(state.chain) == 1
+
+    for {candidate, digest} <- candidates do
+      case CatalogSigningPackage.review(candidate, dir) do
+        {:ok, %{catalog: catalog}} ->
+          if catalog == hd(state.chain).catalog do
+            assert {:ok, _} = SignCatalog.sign(candidate, dir, "/absent", digest)
+          else
+            assert {:error, :catalog_ledger_fork} =
+                     SignCatalog.sign(candidate, dir, "/absent", digest)
+          end
+      end
+    end
+  end
+
+  defp simultaneous(fun) do
+    tasks =
+      for index <- 0..1,
+          do:
+            Task.async(fn ->
+              receive do
+                :sign_now -> fun.(index)
+              end
+            end)
+
+    Enum.each(tasks, &send(&1.pid, :sign_now))
+    Enum.map(tasks, &Task.await(&1, 10_000))
+  end
+
+  test "helper death before ACK cannot release the BEAM callback value", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    parent = self()
+
+    task =
+      Task.async(fn ->
+        SigningLedger.transact(dir, package.binding, "open", fn state ->
+          send(parent, :waiting_for_helper_ack)
+
+          receive do
+            :finish_callback -> :ok
+          end
+
+          {:ok, state.head_bytes, nil, :must_not_escape_without_ack}
+        end)
+      end)
+
+    assert_receive :waiting_for_helper_ack, 5000
+    {:links, links} = Process.info(task.pid, :links)
+    [port] = Enum.filter(links, &is_port/1)
+    assert Port.info(port, :connected) == {:connected, task.pid}
+    {:os_pid, pid} = Port.info(port, :os_pid)
+    assert is_integer(pid) and pid > 0
+    {_, 0} = System.cmd("kill", ["-KILL", Integer.to_string(pid)])
+    send(task.pid, :finish_callback)
+    assert {:error, _} = Task.await(task, 10_000)
+    assert {:ok, state} = SignCatalog.status(bytes, dir)
+    assert state.head_bytes == genesis.head_bytes
+    assert state.chain == []
+  end
+
+  defp signing_boundary!(f) do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, genesis} = SignCatalog.init(bytes, dir)
+
+    {:ok, envelope} =
+      SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)
+
+    {:ok, signed} = SignCatalog.status(bytes, dir)
+    {bytes, package, genesis, signed, envelope}
+  end
+
+  defp reset_boundary!(dir, genesis, envelope) do
+    ledger = Path.join(dir, "catalog-signing")
+    File.write!(Path.join(ledger, "head.json"), genesis.head_bytes)
+
+    File.rm!(
+      Path.join(ledger, Base.encode16(:crypto.hash(:sha256, envelope), case: :lower) <> ".json")
+    )
+  end
+
+  defp owner_fault(dir, scenario, plan, command) do
+    helper = Path.expand("../../../../scripts/treehouse_catalog_signing_owner.py", __DIR__)
+    runner = Path.expand("../support/operator/signing_fault_runner.py", __DIR__)
+
+    System.cmd(
+      System.find_executable("python3"),
+      [runner, helper, dir, scenario, Jason.encode!(plan), Jason.encode!(command)],
+      stderr_to_stdout: true
+    )
   end
 
   defp encode(f),
