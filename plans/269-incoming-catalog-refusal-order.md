@@ -33,8 +33,10 @@ The common contract now authenticates accepted input, validates rejected integri
 and portability, then reports missing accepted ancestors. A legitimate installed
 baseline and both actual public APIs are exercised for each fresh producer.
 Malformed evaluation-page history shapes remain `malformed_catalog` consistently;
-raw preparation errors retain `invalid_verified_history`. Full checks and focused
-review confirmation run after this correction.
+raw preparation errors retain `invalid_verified_history`. Both reviewers confirm
+the correction. Final full Mix check, client build/catalog suites, desktop checks
+and both boundary scans pass. A transient courier timeout in the earlier full run
+passed all focused courier tests and the final complete umbrella rerun.
 
 These checkpoints do not complete the broader matrix below. Unknown kinds, full
 independent producer boundary coverage, exact resource limits and stored/reopen behavior

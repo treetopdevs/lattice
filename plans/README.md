@@ -442,7 +442,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 262 | [Offline enrollment and guarded initial provisioning](262-offline-enrollment-and-initial-provisioning.md) | P1 | XL | PR #165; plan 224 PRs 4-5 for listing | IN PROGRESS (#166 and #167 merged on green exact tips; ordinary offline exchange and operator import proved; listing, native trust and field session remain) |
 | 263 | [Catalog publication with off-host custodian](263-catalog-publication-and-custodian-signing.md) | P1 | L | 224 PRs 1–3; 262 A | DONE (#168; run 40157925199 at 0e4dc87d; merge tree matches; fixture software evidence, actual operator ceremony separate) |
 | 264 | [Guarded Thread listing and initial receipt](264-guarded-thread-listing-and-initial-receipt.md) | P1 | L | 263 / PR #168 merged | IN PROGRESS: full local check and 483 Linux tests pass; all reviews resolved; final full-API crash cases verifying; hosted gates open. |
-| 269 | [Incoming catalog refusal order](269-incoming-catalog-refusal-order.md) | P1 | L | Protected source review; pending evaluator PR 172 | IN PROGRESS: accepted incoming signatures precede pending results; focused reciprocal tests pass. Broader phase/resource/recovery matrix and reviews remain. |
+| 269 | [Incoming catalog refusal order](269-incoming-catalog-refusal-order.md) | P1 | L | Protected source review; pending evaluator PR 172 | IN PROGRESS: preparation/evaluation refusal phases align; full local checks and protected reviews pass. Resource/recovery matrix, external review and native adoption remain. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
