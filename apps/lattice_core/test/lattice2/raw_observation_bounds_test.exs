@@ -118,6 +118,31 @@ defmodule Lattice.RawObservationBoundsTest do
     end
   end
 
+  test "public wrappers never reinterpret non-JSON frame data" do
+    for frame <- [%{"body" => :boom}, %{body: ["nil"]}, %{"body" => %{"nested" => :boom}}] do
+      history = %{replica: "r", frames: [frame], rejected: []}
+      refute RawObservationBounds.within_histories?([history])
+      refute RawObservationBounds.within_evidence?(%{histories: [history]})
+
+      refute RawObservationBounds.within_evidence?(%{
+               cutoff_proofs: [
+                 %{
+                   history: %{
+                     history
+                     | frames: [],
+                       rejected: [%{frame: frame, reason: :bad_signature}]
+                   }
+                 }
+               ]
+             })
+    end
+
+    refute RawObservationBounds.within?(%{
+             "body" => ["atom", <<0xED, 0xA0, 0x80>>],
+             "cap" => ["nil"]
+           })
+  end
+
   # Compact immutable sharing exercises the real maximum without allocating
   # sixty-seven million input cells. The production walk must count occurrences.
   defp forest(nodes) do

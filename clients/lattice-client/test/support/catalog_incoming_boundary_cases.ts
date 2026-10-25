@@ -32,6 +32,13 @@ export async function boundaryCases(f: Fixture): Promise<ProbeInput[]> {
   const delegatedBytes=canonicalBytesForCarrierDelegation(unknownDelegation);
   assert.equal(await canonicalHash(delegatedBytes),unknownDelegation.id);
   assert.ok(ed25519.verify(Buffer.from(unknownDelegation.sig,"base64"),delegatedBytes,f.root.publicKey,{zip215:false}));
+  const alias64=(value:string)=>{
+    const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",at=value.indexOf("=")-1;
+    assert.ok(at>=0);
+    const alias=value.slice(0,at)+alphabet[alphabet.indexOf(value[at]!)+1]+value.slice(at+1);
+    assert.deepEqual(Buffer.from(alias,"base64"),Buffer.from(value,"base64"));
+    return alias;
+  };
   const results: ProbeInput[] = [];
   for (const deps of [[], [missing]]) {
     const suffix = deps.length === 0 ? "complete" : "partial";
@@ -39,6 +46,17 @@ export async function boundaryCases(f: Fixture): Promise<ProbeInput[]> {
     results.push([`unknown-delegation-${suffix}`,[...f.histories[0]!.frames,delegatedUnknown]]);
     results.push([`forged-unknown-delegation-${suffix}`,[...f.histories[0]!.frames,{...delegatedUnknown,sig:Buffer.alloc(64).toString("base64")}]]);
 
+    const binary=await raw("command",["bin","Zg=="],deps);
+    results.push([`canonical-bin-${suffix}`,[...f.histories[0]!.frames,binary]]);
+    results.push([`padbits-bin-${suffix}`,[...f.histories[0]!.frames,{...binary,body:["bin","Zh=="]}]]);
+    const flat=await raw("command",["delegation",f.space.delegation],deps);
+    results.push([`canonical-delegation-bytes-${suffix}`,[...f.histories[0]!.frames,flat]]);
+    const missingParent={...f.space.delegation} as Partial<typeof f.space.delegation>;delete missingParent.parent_id;
+    results.push([`missing-delegation-parent-${suffix}`,[...f.histories[0]!.frames,{...flat,body:["delegation",missingParent]}]]);
+
+    for(const field of ["issuer","audience","sig"] as const){
+      results.push([`padbits-delegation-${field}-${suffix}`,[...f.histories[0]!.frames,{...flat,body:["delegation",{...f.space.delegation,[field]:alias64(f.space.delegation[field])}]}]]);
+    }
     const nil = await raw("command", ["nil"], deps);
     results.push([`malformed-scalar-arity-${suffix}`,[...f.histories[0]!.frames,{...nil,body:["nil",0]}]]);
     const unknown = await raw("future_incoming_kind", ["nil"], deps);

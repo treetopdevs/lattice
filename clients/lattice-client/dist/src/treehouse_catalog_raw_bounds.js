@@ -38,7 +38,7 @@ function withinJsonBounds(frame, maxDepth) {
                 return false;
             const value = next.value;
             if (typeof value === "string") {
-                if (value.length > MAX_STRING_BYTES - bytes)
+                if (/[\uD800-\uDFFF]/u.test(value) || value.length > MAX_STRING_BYTES - bytes)
                     return false;
                 bytes += encoder.encode(value).length;
                 if (bytes > MAX_STRING_BYTES)
@@ -86,6 +86,27 @@ export function withinCatalogRawObservationBounds(frame) {
             const [tag, values] = next.value;
             if (next.value.length !== (tag === "nil" ? 1 : 2))
                 return false;
+            if (tag === "int") {
+                if (typeof values === "number") {
+                    if (!Number.isSafeInteger(values) || values < 0)
+                        return false;
+                }
+                else if (typeof values !== "string" || values.length === 0 || values.length > 20 || /[^0-9]/.test(values) ||
+                    (values.length > 1 && values[0] === "0") || (values.length === 20 && values > "18446744073709551615"))
+                    return false;
+            }
+            if (tag === "delegation") {
+                if (values === null || typeof values !== "object" || Array.isArray(values))
+                    return false;
+                const d = values;
+                if (!["id", "replica", "issuer", "audience", "sig"].every(key => typeof d[key] === "string") ||
+                    (d.parent_id !== null && typeof d.parent_id !== "string") || typeof d.live !== "boolean" ||
+                    !Array.isArray(d.ops) || !d.ops.every(v => typeof v === "string") || !Array.isArray(d.roles) || !d.roles.every(v => typeof v === "string"))
+                    return false;
+                if (d.expires_epoch !== undefined && d.expires_epoch !== null &&
+                    (typeof d.expires_epoch !== "number" || !Number.isSafeInteger(d.expires_epoch) || d.expires_epoch < 0))
+                    return false;
+            }
             if (tag === "bool" && typeof values !== "boolean")
                 return false;
             if ((tag === "atom" || tag === "bin") && typeof values !== "string")

@@ -545,8 +545,10 @@ function parseUint(value) {
         }
         return BigInt(value);
     }
-    if (!/^(0|[1-9][0-9]*)$/.test(value)) {
-        throw new Error(`unsupported canonical integer: ${value}`);
+    // Reject impossible uint64 scalars before BigInt, including delegation epochs.
+    if (typeof value !== "string" || value.length === 0 || value.length > 20 || /[^0-9]/.test(value) ||
+        (value.length > 1 && value[0] === "0") || (value.length === 20 && value > "18446744073709551615")) {
+        throw new Error("unsupported canonical integer");
     }
     return BigInt(value);
 }

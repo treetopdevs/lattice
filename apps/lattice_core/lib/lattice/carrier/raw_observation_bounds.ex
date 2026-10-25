@@ -9,6 +9,16 @@ defmodule Lattice.Carrier.RawObservationBounds do
 
   # Three JSON containers per map; frame plus flat delegation add four.
   @max_json_depth 65 * 3 + 4
+  @public_keys %{
+    bootstrap_id: "bootstrapId",
+    observed_bootstrap_ids: "observedBootstrapIds",
+    cutoff_proofs: "cutoffProofs",
+    log_digest: "logDigest",
+    bootstrap_ids: "bootstrapIds",
+    op_ids: "opIds",
+    pending_proof_ids: "pendingProofIds",
+    authority_witnesses: "authorityWitnesses"
+  }
   @budget 67_108_864
 
   @spec within?(term()) :: boolean()
@@ -35,7 +45,9 @@ defmodule Lattice.Carrier.RawObservationBounds do
 
   defp observation_bound?([{:value, value, _depth} | rest], nodes, bytes, mode)
        when is_binary(value),
-       do: observation_bound?(rest, nodes - 1, bytes - byte_size(value), mode)
+       do:
+         String.valid?(value) and
+           observation_bound?(rest, nodes - 1, bytes - byte_size(value), mode)
 
   defp observation_bound?([{:value, value, depth} | rest], nodes, bytes, mode)
        when is_list(value) and depth > 0,
@@ -65,6 +77,18 @@ defmodule Lattice.Carrier.RawObservationBounds do
            :public
          )
 
+  defp observation_bound?([{:raw_json, value, depth} | rest], nodes, bytes, :public),
+    do:
+      observation_bound?(
+        [{:value, value, depth}, {:resume_mode, :public} | rest],
+        nodes,
+        bytes,
+        :json
+      )
+
+  defp observation_bound?([{:resume_mode, mode} | rest], nodes, bytes, _previous),
+    do: observation_bound?(rest, nodes, bytes, mode)
+
   defp observation_bound?([{:list, [], _depth} | rest], nodes, bytes, mode),
     do: observation_bound?(rest, nodes, bytes, mode)
 
@@ -78,10 +102,12 @@ defmodule Lattice.Carrier.RawObservationBounds do
         observation_bound?(rest, nodes, bytes, mode)
 
       {key, value, next} ->
+        raw? = mode == :public and key in [:frames, :frame]
         {key, value} = public_pair(key, value, mode)
+        entry = if raw?, do: {:raw_json, value, depth}, else: {:value, value, depth}
 
         observation_bound?(
-          [{:value, key, depth}, {:value, value, depth}, {:map, next, depth} | rest],
+          [{:value, key, depth}, entry, {:map, next, depth} | rest],
           nodes,
           bytes,
           mode
@@ -99,8 +125,7 @@ defmodule Lattice.Carrier.RawObservationBounds do
     do: {"spaceRoot", Base.encode64(value)}
 
   defp public_pair(key, value, :public) when is_atom(key) do
-    [head | tail] = String.split(Atom.to_string(key), "_")
-    {head <> Enum.map_join(tail, &String.capitalize/1), value}
+    {Map.get(@public_keys, key, Atom.to_string(key)), value}
   end
 
   defp public_pair(key, value, :public), do: {key, value}

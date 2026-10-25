@@ -149,11 +149,33 @@ lint pass; the three delegation-name tests pass again after the signature contro
 Before source signoff, audit incoming cutoff-proof refusal parity with fresh small
 unsupported/forged/partial proof histories. Static inspection found that BEAM
 `merge_proofs!` maps unreadable incoming proof histories to `recovery_incomplete`,
-where TS `mergeProofs` currently forwards the cutoff observer's reason. This is a
-suspected existing owner disagreement, not yet a reproduced counterexample; do not
-choose one result silently. Prove it through both APIs, define the complete-proof
-context contract, then review any necessary correction before native adoption.
+where TS `mergeProofs` currently forwards the cutoff observer's reason. Fresh actual public calls now reproduce it: both accept the valid proof, while
+unsupported/forged/partial proofs yield `recovery_incomplete` in BEAM and cutoff
+or integrity reasons in TS. Public disposable inputs/results are saved in
+`docs/research/evidence/treehouse-proof-context-2026-10-25.json`, not used as a
+test oracle. Define the complete-proof context contract, add fresh regressions
+and review the necessary correction before native adoption.
 Bounds before transport parsing or SDK cloning are not established by these guards.
+
+PR review found three additional boundary defects and reconfirmed the already-fixed
+worst-map depth issue. Live TS RED tests authenticated lone-surrogate aliases as
+pending and attempted two oversized decimal conversions before refusal. Lossless
+string checks now precede encoding; uint64 scalar checks precede BigInt in raw
+terms and the shared encoder, including delegation-epoch paths. Flat delegation
+primitives cannot coerce strings/booleans/lists into different signed values.
+Observation-only Base64 round trips cover body bytes and nested issuer, audience
+and signature fields. Ordinary Wire admission keeps its existing behavior.
+
+The requested direct Sonnet High review completed with verified first-party model
+usage and zero tool calls after the AGY connector quota failed. Its raw/typed mode
+finding is addressed: frames and rejected-frame subtrees stay JSON-only; only
+explicit known metadata keys receive public spelling. Capacity and discriminator
+findings remain open: valid near-limit saved/proposed state and freeze-capacity
+behavior need explicit tests/disposition before source signoff. No old candidate
+or rejection proves current freshness; native adoption must fail closed on a rejected
+observation, including when a blocking witness cannot fit the retained profile.
+The current native store's smaller snapshot cap and the absence of native installed
+catalog trust do not constitute those future adapter tests or a migration claim.
 
 ## Reproduced problem
 

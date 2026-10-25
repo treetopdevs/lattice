@@ -1,0 +1,2146 @@
+{
+  "capturedBeforeProofContextCorrection": true,
+  "sourceHead": "d4a06571f17083415117ab82da3eac2ffef853ca",
+  "baseline": {
+    "acceptedRevision": 0,
+    "routes": 2
+  },
+  "review": {
+    "version": 1,
+    "product": "treehouse",
+    "space": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+    "spaceRoot": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+    "bootstrapId": "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg",
+    "observedBootstrapIds": [
+      "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg"
+    ],
+    "disposition": "pin_exact_observed_bootstrap"
+  },
+  "histories": [
+    {
+      "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+      "frames": [
+        {
+          "v": 1,
+          "id": "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic",
+          "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+          "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+          "deps": [],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                  "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                  "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                  "parent_id": null,
+                  "ops": [
+                    "catalog_bootstrap_v1",
+                    "create_space",
+                    "create_thread",
+                    "replace_catalog_v1"
+                  ],
+                  "roles": [
+                    "admin",
+                    "moderator"
+                  ],
+                  "live": true,
+                  "id": "ssC7wH6Rj4l2asfnigPvfAsHBzHuwetMYflRdtlAows",
+                  "sig": "HSK65l48a0T3o6Z66T2CLOQzA1BUtVj9KVltIPDoMCHYnoWuQJg9XVd0DWND+W86i6lNv+ublEfI6J9HVyM2DA=="
+                }
+              ],
+              [
+                "map",
+                []
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "HqU4KSAbfkCN5o7Ly9JfXCHsKEQhZaxZ33wEAxig1KOWNTtYASZXq7SwoBVp1d77LQmXlRVKB9rCZvuzXmtvDg=="
+        },
+        {
+          "v": 1,
+          "id": "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA",
+          "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+          "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+          "deps": [
+            "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic"
+          ],
+          "kind": "command",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "create_space"
+              ],
+              [
+                "list",
+                [
+                  [
+                    "bin",
+                    "UmV0YWluZWQgY2Fub3B5"
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "bin",
+            "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+          ],
+          "sig": "Uaxx05YwBpk+ngIq6rEYPE8az18N22CJctM//i4inCY5EiCTBsnBSzW4qq4+Jgil3pVbjXgUcrb+1a3E1eucDQ=="
+        },
+        {
+          "v": 1,
+          "id": "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4",
+          "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+          "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+          "deps": [
+            "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                  "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                  "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                  "parent_id": null,
+                  "ops": [],
+                  "roles": [],
+                  "live": false,
+                  "id": "8hqIpEExC8a5ZLOePzkgaLCWwTCK12dgc_wE6417HdM",
+                  "sig": "d87yzAMQdALIbcfo42xjttx411tyw1TcSvgXsQS4y2H3Z/plYfDqBkaBslgdeCy9skYN0Xq0AFCDPc3LbfqWCQ=="
+                }
+              ],
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "__continuation__"
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "mode"
+                          ],
+                          [
+                            "atom",
+                            "bounded_continuation"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "product"
+                          ],
+                          [
+                            "atom",
+                            "treehouse"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "kind"
+                          ],
+                          [
+                            "atom",
+                            "space"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "role"
+                          ],
+                          [
+                            "atom",
+                            "admin"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "nominee"
+                          ],
+                          [
+                            "bin",
+                            "g2GMGyZ0O2u1O9NXzN6no9pzVnvcKgWZ3C7SDYrlzy4="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "witnesses"
+                          ],
+                          [
+                            "list",
+                            [
+                              [
+                                "bin",
+                                "FeWw7l0Ud0CYEuVydDe52zpIDLaZF3WablY3XyILtik="
+                              ],
+                              [
+                                "bin",
+                                "U9f8YQ+mH49w9MDrxhGVvWP0LWiGRuQIRMwjqv6TRiE="
+                              ],
+                              [
+                                "bin",
+                                "zqqhWd1sReYGqqzakwUxvn7cDXj+o8CjNFoh+AFoBJw="
+                              ]
+                            ]
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "threshold"
+                          ],
+                          [
+                            "int",
+                            2
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "max_lease_epochs"
+                          ],
+                          [
+                            "int",
+                            7
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "hXtGfSIoblR4pprLjvIH8Um20jTWstsMf2KCwfFz8dYfjUPCMGUaWOpuVoOkPTQ2Ai2GiwDAe9Ub7fL1BDyUCQ=="
+        },
+        {
+          "v": 1,
+          "id": "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg",
+          "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+          "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+          "deps": [
+            "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4"
+          ],
+          "kind": "command",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "catalog_bootstrap_v1"
+              ],
+              [
+                "list",
+                [
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "version"
+                        ],
+                        [
+                          "int",
+                          1
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "product"
+                        ],
+                        [
+                          "atom",
+                          "treehouse"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "space"
+                        ],
+                        [
+                          "bin",
+                          "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ZW9GQUVadmk1UVF4LTF5TEFPVzFZejVHeXkwWWVJU1hzQTJjV2UzQ2NyTSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpGaVRUY2hnMWR2c3FiRFpJc1U4MmVWUzhURjJqQTlBYnlpOEZIX1U4Y0pr"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "space_root"
+                        ],
+                        [
+                          "bin",
+                          "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "profile_genesis"
+                        ],
+                        [
+                          "bin",
+                          "VUNBdzUwM3Z5aTluMXZPOHZPYXZXTS0wd0hDSVZucC03enBQaFBzQ2lLNA=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "profile_id"
+                        ],
+                        [
+                          "bin",
+                          "cnM2NGVQdk5saHFPejhBTkJmb2dSVXN4M0NkTmRRUjNjdjMtaG56UjJlbw=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "replacement_rule"
+                        ],
+                        [
+                          "atom",
+                          "bounded_space_admin_v1"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "catalog_key"
+                        ],
+                        [
+                          "bin",
+                          "ET9pZhAYgj5TyWAlfsPTv4XeQKoVSTanRM0tBcFdqiU="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_id"
+                        ],
+                        [
+                          "bin",
+                          "dXEydTVHNGVOYUszTUgzNnc0akYxbWlianpvaFFVaEM0WmZhc29YVFFlWQ=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_key"
+                        ],
+                        [
+                          "bin",
+                          "xphn5w72sqYAuCiZBoPpyjMhWNfTJfIKXN8JEuXVxys="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "origin"
+                        ],
+                        [
+                          "bin",
+                          "d3NzOi8vdHJ1c3QtcmVsYXkuaW52YWxpZA=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "nonce"
+                        ],
+                        [
+                          "bin",
+                          "ZTlWcmZGc1UwXzZaOEtOdjktWU90UU9QTG9mWUU2Y3dia1NTRU5YUzBQQQ=="
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "bin",
+            "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+          ],
+          "sig": "4oR8zKC7FL7RyDrkfcxaVxpNujLduE7XBUtBPxlgDjsQyumKXu2h0C5pwhBD7Y6F3l62AjfTM70yGdNLlwe4Cw=="
+        },
+        {
+          "v": 1,
+          "id": "FouDI9d61M3U2JQ0OmXtKr0aGECyoa9mztXP3vi4vTw",
+          "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+          "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+          "deps": [
+            "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg"
+          ],
+          "kind": "command",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "create_thread"
+              ],
+              [
+                "list",
+                [
+                  [
+                    "bin",
+                    "cmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlo1TE9ZSGdVd0w5Y3hWMnlzbG9qdGFSVkxfVzlYZnhra05CT1czWi04dG8jYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6MXdfSVFZUlIxR3RYTWE5NXBkd0xhWDVCU2dPSE5kU0VsV25GOVVpTDRRRQ=="
+                  ],
+                  [
+                    "bin",
+                    "VGhyZWFkIDA="
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "bin",
+            "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+          ],
+          "sig": "6TyMFBt4VTCzvPxoZUVP0DDH1ChFG3wbQ9/xjXxaaU3RQ1/OFB9ScTJNCBzsC5bbcCFwZyAjafPIWSzdlDIoCg=="
+        }
+      ],
+      "rejected": []
+    },
+    {
+      "replica": "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE",
+      "frames": [
+        {
+          "v": 1,
+          "id": "SlPtJSYtOpUuXmeYL28T6PE29SQAh3znTcPjD8Z27gk",
+          "replica": "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE",
+          "author": "+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=",
+          "deps": [],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE",
+                  "issuer": "+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=",
+                  "audience": "+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=",
+                  "parent_id": null,
+                  "ops": [
+                    "archive_thread",
+                    "create_thread",
+                    "post"
+                  ],
+                  "roles": [
+                    "moderator"
+                  ],
+                  "live": true,
+                  "id": "d73ap1PXcXLDoXzYJTKurwaHLZ0_sX-z3Q0lKPrFW-I",
+                  "sig": "gV6GpSuwlGCa253ljzEL/tTfjNdRbXgGbnM6+ATCn8MvIdRSP5jWsP3iq0UVY/UCVMAgdD8+uoUN0l8cYANsAw=="
+                }
+              ],
+              [
+                "map",
+                []
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "JQfPu6oRZBqkiFNHyVkz7FPFFSWci/eBsiSyhE/4vyCOA2wzjzkTx1qXN8Dsdjr0fGdvZ4IXdvmZ8sGGxBqPBg=="
+        },
+        {
+          "v": 1,
+          "id": "weNmomsGVRjPfjhD2HzN1GhWjRqdsMVhMEEEJSllZNE",
+          "replica": "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE",
+          "author": "+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=",
+          "deps": [
+            "SlPtJSYtOpUuXmeYL28T6PE29SQAh3znTcPjD8Z27gk"
+          ],
+          "kind": "command",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "create_thread"
+              ],
+              [
+                "list",
+                [
+                  [
+                    "bin",
+                    "dGhyZWFkLTA="
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "bin",
+            "ZDczYXAxUFhjWExEb1h6WUpUS3Vyd2FITFowX3NYLXozUTBsS1ByRlctSQ=="
+          ],
+          "sig": "OxS3hMW2YgxVkvRbVh1c+PjTkf/MLnxWKvGjyFLpZjPCZDsBWepq/6xeQdN0aSXJePTQaf6bEV3IR9+ZKSsRAQ=="
+        },
+        {
+          "v": 1,
+          "id": "LC5Vmq-gocwLJZ-gMRksN8kvbU7eL8CatMxD9Gl-n4Y",
+          "replica": "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE",
+          "author": "+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=",
+          "deps": [
+            "weNmomsGVRjPfjhD2HzN1GhWjRqdsMVhMEEEJSllZNE"
+          ],
+          "kind": "authority",
+          "body": [
+            "tuple",
+            [
+              [
+                "atom",
+                "genesis"
+              ],
+              [
+                "delegation",
+                {
+                  "replica": "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE",
+                  "issuer": "+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=",
+                  "audience": "+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=",
+                  "parent_id": null,
+                  "ops": [],
+                  "roles": [],
+                  "live": false,
+                  "id": "sBwAfcsZCCCg_vw45tfYdB2O_NKnhlRA0zQJB_fhZ8k",
+                  "sig": "rB9dz3qUQoqVNfnqR4E6O7szSubDl4spPjZb1sv71bJauqf6s8DQwO2VrEvxmrcoAdirElPD8aIAAJrLqTDZBQ=="
+                }
+              ],
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "__continuation__"
+                    ],
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "mode"
+                          ],
+                          [
+                            "atom",
+                            "bounded_continuation"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "product"
+                          ],
+                          [
+                            "atom",
+                            "treehouse"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "kind"
+                          ],
+                          [
+                            "atom",
+                            "thread"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "role"
+                          ],
+                          [
+                            "atom",
+                            "moderator"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "nominee"
+                          ],
+                          [
+                            "bin",
+                            "g2GMGyZ0O2u1O9NXzN6no9pzVnvcKgWZ3C7SDYrlzy4="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "witnesses"
+                          ],
+                          [
+                            "list",
+                            [
+                              [
+                                "bin",
+                                "FeWw7l0Ud0CYEuVydDe52zpIDLaZF3WablY3XyILtik="
+                              ],
+                              [
+                                "bin",
+                                "U9f8YQ+mH49w9MDrxhGVvWP0LWiGRuQIRMwjqv6TRiE="
+                              ],
+                              [
+                                "bin",
+                                "zqqhWd1sReYGqqzakwUxvn7cDXj+o8CjNFoh+AFoBJw="
+                              ]
+                            ]
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "threshold"
+                          ],
+                          [
+                            "int",
+                            2
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "max_lease_epochs"
+                          ],
+                          [
+                            "int",
+                            7
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ],
+          "cap": [
+            "nil"
+          ],
+          "sig": "vMLod5w/5Y5qLeHDS8TKRg9NdVMnGVB3FSvNfSfM/4UXhh56VrDq/cXMWE3ynl+mF5G6wfcetYumxXvHw3GkDQ=="
+        }
+      ],
+      "rejected": []
+    }
+  ],
+  "catalogJson": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ZW9GQUVadmk1UVF4LTF5TEFPVzFZejVHeXkwWWVJU1hzQTJjV2UzQ2NyTSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpGaVRUY2hnMWR2c3FiRFpJc1U4MmVWUzhURjJqQTlBYnlpOEZIX1U4Y0pr\"]],[[\"atom\",\"bootstrap\"],[\"bin\",\"QzBSSm11ZTJVVkhtbzZEbV9LdUFMQTYtc1pPTlRJQkhZNHNsMndzNk15Zw==\"]],[[\"atom\",\"binding\"],[\"bin\",\"QzBSSm11ZTJVVkhtbzZEbV9LdUFMQTYtc1pPTlRJQkhZNHNsMndzNk15Zw==\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ZW9GQUVadmk1UVF4LTF5TEFPVzFZejVHeXkwWWVJU1hzQTJjV2UzQ2NyTSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpGaVRUY2hnMWR2c3FiRFpJc1U4MmVWUzhURjJqQTlBYnlpOEZIX1U4Y0pr\"]],[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"root\"],[\"bin\",\"ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=\"]],[[\"atom\",\"genesis\"],[\"bin\",\"cHRsUDFiT1JjVndsdFNYTkhHcXg2TzNuSzB3RFplblBTajJOQnBndTVJYw==\"]],[[\"atom\",\"creation\"],[\"bin\",\"ZTUwSWFJSkF2TzZKWWNvMTd5RVk3bWN0c0xtRFRTLXpuQlVEdjc5cDRHQQ==\"]],[[\"atom\",\"reference\"],[\"bin\",\"QzBSSm11ZTJVVkhtbzZEbV9LdUFMQTYtc1pPTlRJQkhZNHNsMndzNk15Zw==\"]],[[\"atom\",\"route\"],[\"bin\",\"L3Iva0pmbDVpN1hKYllNY3pqUFlnTU52YzdNeG9rU2I3MlEtanJfYm5QUUpzUQ==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"dXEydTVHNGVOYUszTUgzNnc0akYxbWlianpvaFFVaEM0WmZhc29YVFFlWQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"xphn5w72sqYAuCiZBoPpyjMhWNfTJfIKXN8JEuXVxys=\"]]]],[\"map\",[[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlo1TE9ZSGdVd0w5Y3hWMnlzbG9qdGFSVkxfVzlYZnhra05CT1czWi04dG8jYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6MXdfSVFZUlIxR3RYTWE5NXBkd0xhWDVCU2dPSE5kU0VsV25GOVVpTDRRRQ==\"]],[[\"atom\",\"kind\"],[\"atom\",\"thread\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_thread_v1\"]],[[\"atom\",\"root\"],[\"bin\",\"+RYLEOZaCi9aq2Kc1Ag5Y/3j4cI28i3pTOC+m2RMDMI=\"]],[[\"atom\",\"genesis\"],[\"bin\",\"U2xQdEpTWXRPcFV1WG1lWUwyOFQ2UEUyOVNRQWgzem5UY1BqRDhaMjdnaw==\"]],[[\"atom\",\"creation\"],[\"bin\",\"d2VObW9tc0dWUmpQZmpoRDJIek4xR2hXalJxZHNNVmhNRUVFSlNsbFpORQ==\"]],[[\"atom\",\"reference\"],[\"bin\",\"Rm91REk5ZDYxTTNVMkpRME9tWHRLcjBhR0VDeW9hOW16dFhQM3ZpNHZUdw==\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvY1ltS1F6ZDhNT1lBM3pqQV9IVUI1NjNfRlllWFBnMHNLY0NrZkt4TU1nVQ==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"dXEydTVHNGVOYUszTUgzNnc0akYxbWlianpvaFFVaEM0WmZhc29YVFFlWQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"xphn5w72sqYAuCiZBoPpyjMhWNfTJfIKXN8JEuXVxys=\"]]]]]]]]]],[[\"atom\",\"signature\"],[\"bin\",\"y4LQA+D6GnUdUw4lCaNaiSQ/t9Udhzx3HdpkA73Fw7UIOxnaJSI0m7euIh4rTobieT0YPACmwRBv8F8ssnN/Cw==\"]]]]",
+  "cutoff": {
+    "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+    "frontier": [
+      "FouDI9d61M3U2JQ0OmXtKr0aGECyoa9mztXP3vi4vTw"
+    ],
+    "logDigest": "9rcRlvrCCJZ398HDVSSygx0nmUA54qvNsoQm-TXEc5A"
+  },
+  "cases": [
+    {
+      "name": "valid",
+      "history": {
+        "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+        "frames": [
+          {
+            "v": 1,
+            "id": "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [],
+            "kind": "authority",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "genesis"
+                ],
+                [
+                  "delegation",
+                  {
+                    "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                    "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "parent_id": null,
+                    "ops": [
+                      "catalog_bootstrap_v1",
+                      "create_space",
+                      "create_thread",
+                      "replace_catalog_v1"
+                    ],
+                    "roles": [
+                      "admin",
+                      "moderator"
+                    ],
+                    "live": true,
+                    "id": "ssC7wH6Rj4l2asfnigPvfAsHBzHuwetMYflRdtlAows",
+                    "sig": "HSK65l48a0T3o6Z66T2CLOQzA1BUtVj9KVltIPDoMCHYnoWuQJg9XVd0DWND+W86i6lNv+ublEfI6J9HVyM2DA=="
+                  }
+                ],
+                [
+                  "map",
+                  []
+                ]
+              ]
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "HqU4KSAbfkCN5o7Ly9JfXCHsKEQhZaxZ33wEAxig1KOWNTtYASZXq7SwoBVp1d77LQmXlRVKB9rCZvuzXmtvDg=="
+          },
+          {
+            "v": 1,
+            "id": "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "create_space"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "UmV0YWluZWQgY2Fub3B5"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "Uaxx05YwBpk+ngIq6rEYPE8az18N22CJctM//i4inCY5EiCTBsnBSzW4qq4+Jgil3pVbjXgUcrb+1a3E1eucDQ=="
+          },
+          {
+            "v": 1,
+            "id": "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA"
+            ],
+            "kind": "authority",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "genesis"
+                ],
+                [
+                  "delegation",
+                  {
+                    "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                    "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "parent_id": null,
+                    "ops": [],
+                    "roles": [],
+                    "live": false,
+                    "id": "8hqIpEExC8a5ZLOePzkgaLCWwTCK12dgc_wE6417HdM",
+                    "sig": "d87yzAMQdALIbcfo42xjttx411tyw1TcSvgXsQS4y2H3Z/plYfDqBkaBslgdeCy9skYN0Xq0AFCDPc3LbfqWCQ=="
+                  }
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "__continuation__"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "mode"
+                            ],
+                            [
+                              "atom",
+                              "bounded_continuation"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "product"
+                            ],
+                            [
+                              "atom",
+                              "treehouse"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "kind"
+                            ],
+                            [
+                              "atom",
+                              "space"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "role"
+                            ],
+                            [
+                              "atom",
+                              "admin"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "nominee"
+                            ],
+                            [
+                              "bin",
+                              "g2GMGyZ0O2u1O9NXzN6no9pzVnvcKgWZ3C7SDYrlzy4="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "witnesses"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "FeWw7l0Ud0CYEuVydDe52zpIDLaZF3WablY3XyILtik="
+                                ],
+                                [
+                                  "bin",
+                                  "U9f8YQ+mH49w9MDrxhGVvWP0LWiGRuQIRMwjqv6TRiE="
+                                ],
+                                [
+                                  "bin",
+                                  "zqqhWd1sReYGqqzakwUxvn7cDXj+o8CjNFoh+AFoBJw="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "threshold"
+                            ],
+                            [
+                              "int",
+                              2
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "max_lease_epochs"
+                            ],
+                            [
+                              "int",
+                              7
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "hXtGfSIoblR4pprLjvIH8Um20jTWstsMf2KCwfFz8dYfjUPCMGUaWOpuVoOkPTQ2Ai2GiwDAe9Ub7fL1BDyUCQ=="
+          },
+          {
+            "v": 1,
+            "id": "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "catalog_bootstrap_v1"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "product"
+                          ],
+                          [
+                            "atom",
+                            "treehouse"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "space"
+                          ],
+                          [
+                            "bin",
+                            "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ZW9GQUVadmk1UVF4LTF5TEFPVzFZejVHeXkwWWVJU1hzQTJjV2UzQ2NyTSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpGaVRUY2hnMWR2c3FiRFpJc1U4MmVWUzhURjJqQTlBYnlpOEZIX1U4Y0pr"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "space_root"
+                          ],
+                          [
+                            "bin",
+                            "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "profile_genesis"
+                          ],
+                          [
+                            "bin",
+                            "VUNBdzUwM3Z5aTluMXZPOHZPYXZXTS0wd0hDSVZucC03enBQaFBzQ2lLNA=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "profile_id"
+                          ],
+                          [
+                            "bin",
+                            "cnM2NGVQdk5saHFPejhBTkJmb2dSVXN4M0NkTmRRUjNjdjMtaG56UjJlbw=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "replacement_rule"
+                          ],
+                          [
+                            "atom",
+                            "bounded_space_admin_v1"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "catalog_key"
+                          ],
+                          [
+                            "bin",
+                            "ET9pZhAYgj5TyWAlfsPTv4XeQKoVSTanRM0tBcFdqiU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "service_id"
+                          ],
+                          [
+                            "bin",
+                            "dXEydTVHNGVOYUszTUgzNnc0akYxbWlianpvaFFVaEM0WmZhc29YVFFlWQ=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "service_key"
+                          ],
+                          [
+                            "bin",
+                            "xphn5w72sqYAuCiZBoPpyjMhWNfTJfIKXN8JEuXVxys="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "origin"
+                          ],
+                          [
+                            "bin",
+                            "d3NzOi8vdHJ1c3QtcmVsYXkuaW52YWxpZA=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "nonce"
+                          ],
+                          [
+                            "bin",
+                            "ZTlWcmZGc1UwXzZaOEtOdjktWU90UU9QTG9mWUU2Y3dia1NTRU5YUzBQQQ=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "4oR8zKC7FL7RyDrkfcxaVxpNujLduE7XBUtBPxlgDjsQyumKXu2h0C5pwhBD7Y6F3l62AjfTM70yGdNLlwe4Cw=="
+          },
+          {
+            "v": 1,
+            "id": "FouDI9d61M3U2JQ0OmXtKr0aGECyoa9mztXP3vi4vTw",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "create_thread"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlo1TE9ZSGdVd0w5Y3hWMnlzbG9qdGFSVkxfVzlYZnhra05CT1czWi04dG8jYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6MXdfSVFZUlIxR3RYTWE5NXBkd0xhWDVCU2dPSE5kU0VsV25GOVVpTDRRRQ=="
+                    ],
+                    [
+                      "bin",
+                      "VGhyZWFkIDA="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "6TyMFBt4VTCzvPxoZUVP0DDH1ChFG3wbQ9/xjXxaaU3RQ1/OFB9ScTJNCBzsC5bbcCFwZyAjafPIWSzdlDIoCg=="
+          }
+        ],
+        "rejected": []
+      }
+    },
+    {
+      "name": "unsupported",
+      "history": {
+        "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+        "frames": [
+          {
+            "v": 1,
+            "id": "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [],
+            "kind": "authority",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "genesis"
+                ],
+                [
+                  "delegation",
+                  {
+                    "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                    "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "parent_id": null,
+                    "ops": [
+                      "catalog_bootstrap_v1",
+                      "create_space",
+                      "create_thread",
+                      "replace_catalog_v1"
+                    ],
+                    "roles": [
+                      "admin",
+                      "moderator"
+                    ],
+                    "live": true,
+                    "id": "ssC7wH6Rj4l2asfnigPvfAsHBzHuwetMYflRdtlAows",
+                    "sig": "HSK65l48a0T3o6Z66T2CLOQzA1BUtVj9KVltIPDoMCHYnoWuQJg9XVd0DWND+W86i6lNv+ublEfI6J9HVyM2DA=="
+                  }
+                ],
+                [
+                  "map",
+                  []
+                ]
+              ]
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "HqU4KSAbfkCN5o7Ly9JfXCHsKEQhZaxZ33wEAxig1KOWNTtYASZXq7SwoBVp1d77LQmXlRVKB9rCZvuzXmtvDg=="
+          },
+          {
+            "v": 1,
+            "id": "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "create_space"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "UmV0YWluZWQgY2Fub3B5"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "Uaxx05YwBpk+ngIq6rEYPE8az18N22CJctM//i4inCY5EiCTBsnBSzW4qq4+Jgil3pVbjXgUcrb+1a3E1eucDQ=="
+          },
+          {
+            "v": 1,
+            "id": "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA"
+            ],
+            "kind": "authority",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "genesis"
+                ],
+                [
+                  "delegation",
+                  {
+                    "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                    "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "parent_id": null,
+                    "ops": [],
+                    "roles": [],
+                    "live": false,
+                    "id": "8hqIpEExC8a5ZLOePzkgaLCWwTCK12dgc_wE6417HdM",
+                    "sig": "d87yzAMQdALIbcfo42xjttx411tyw1TcSvgXsQS4y2H3Z/plYfDqBkaBslgdeCy9skYN0Xq0AFCDPc3LbfqWCQ=="
+                  }
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "__continuation__"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "mode"
+                            ],
+                            [
+                              "atom",
+                              "bounded_continuation"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "product"
+                            ],
+                            [
+                              "atom",
+                              "treehouse"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "kind"
+                            ],
+                            [
+                              "atom",
+                              "space"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "role"
+                            ],
+                            [
+                              "atom",
+                              "admin"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "nominee"
+                            ],
+                            [
+                              "bin",
+                              "g2GMGyZ0O2u1O9NXzN6no9pzVnvcKgWZ3C7SDYrlzy4="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "witnesses"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "FeWw7l0Ud0CYEuVydDe52zpIDLaZF3WablY3XyILtik="
+                                ],
+                                [
+                                  "bin",
+                                  "U9f8YQ+mH49w9MDrxhGVvWP0LWiGRuQIRMwjqv6TRiE="
+                                ],
+                                [
+                                  "bin",
+                                  "zqqhWd1sReYGqqzakwUxvn7cDXj+o8CjNFoh+AFoBJw="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "threshold"
+                            ],
+                            [
+                              "int",
+                              2
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "max_lease_epochs"
+                            ],
+                            [
+                              "int",
+                              7
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "hXtGfSIoblR4pprLjvIH8Um20jTWstsMf2KCwfFz8dYfjUPCMGUaWOpuVoOkPTQ2Ai2GiwDAe9Ub7fL1BDyUCQ=="
+          },
+          {
+            "v": 1,
+            "id": "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "catalog_bootstrap_v1"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "product"
+                          ],
+                          [
+                            "atom",
+                            "treehouse"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "space"
+                          ],
+                          [
+                            "bin",
+                            "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ZW9GQUVadmk1UVF4LTF5TEFPVzFZejVHeXkwWWVJU1hzQTJjV2UzQ2NyTSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpGaVRUY2hnMWR2c3FiRFpJc1U4MmVWUzhURjJqQTlBYnlpOEZIX1U4Y0pr"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "space_root"
+                          ],
+                          [
+                            "bin",
+                            "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "profile_genesis"
+                          ],
+                          [
+                            "bin",
+                            "VUNBdzUwM3Z5aTluMXZPOHZPYXZXTS0wd0hDSVZucC03enBQaFBzQ2lLNA=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "profile_id"
+                          ],
+                          [
+                            "bin",
+                            "cnM2NGVQdk5saHFPejhBTkJmb2dSVXN4M0NkTmRRUjNjdjMtaG56UjJlbw=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "replacement_rule"
+                          ],
+                          [
+                            "atom",
+                            "bounded_space_admin_v1"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "catalog_key"
+                          ],
+                          [
+                            "bin",
+                            "ET9pZhAYgj5TyWAlfsPTv4XeQKoVSTanRM0tBcFdqiU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "service_id"
+                          ],
+                          [
+                            "bin",
+                            "dXEydTVHNGVOYUszTUgzNnc0akYxbWlianpvaFFVaEM0WmZhc29YVFFlWQ=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "service_key"
+                          ],
+                          [
+                            "bin",
+                            "xphn5w72sqYAuCiZBoPpyjMhWNfTJfIKXN8JEuXVxys="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "origin"
+                          ],
+                          [
+                            "bin",
+                            "d3NzOi8vdHJ1c3QtcmVsYXkuaW52YWxpZA=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "nonce"
+                          ],
+                          [
+                            "bin",
+                            "ZTlWcmZGc1UwXzZaOEtOdjktWU90UU9QTG9mWUU2Y3dia1NTRU5YUzBQQQ=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "4oR8zKC7FL7RyDrkfcxaVxpNujLduE7XBUtBPxlgDjsQyumKXu2h0C5pwhBD7Y6F3l62AjfTM70yGdNLlwe4Cw=="
+          },
+          {
+            "v": 1,
+            "id": "FouDI9d61M3U2JQ0OmXtKr0aGECyoa9mztXP3vi4vTw",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "create_thread"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlo1TE9ZSGdVd0w5Y3hWMnlzbG9qdGFSVkxfVzlYZnhra05CT1czWi04dG8jYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6MXdfSVFZUlIxR3RYTWE5NXBkd0xhWDVCU2dPSE5kU0VsV25GOVVpTDRRRQ=="
+                    ],
+                    [
+                      "bin",
+                      "VGhyZWFkIDA="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "6TyMFBt4VTCzvPxoZUVP0DDH1ChFG3wbQ9/xjXxaaU3RQ1/OFB9ScTJNCBzsC5bbcCFwZyAjafPIWSzdlDIoCg=="
+          },
+          {
+            "v": 1,
+            "id": "yx7Dxg5Y0Cmyf4_ig6ozZYXDErDskutoZUC66k2YX6Y",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [],
+            "kind": "command",
+            "body": [
+              "atom",
+              "proof_future_name"
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "m+JN9CqyRL7nPUQigt1c8ZyntgNNsL7SAq9H5Up+5kwdF3RwOISHfx8LLnMQRGGulbIzFkqbk7H3xU+vh+8ICw=="
+          }
+        ],
+        "rejected": []
+      }
+    },
+    {
+      "name": "forged",
+      "history": {
+        "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+        "frames": [
+          {
+            "v": 1,
+            "id": "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [],
+            "kind": "authority",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "genesis"
+                ],
+                [
+                  "delegation",
+                  {
+                    "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                    "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "parent_id": null,
+                    "ops": [
+                      "catalog_bootstrap_v1",
+                      "create_space",
+                      "create_thread",
+                      "replace_catalog_v1"
+                    ],
+                    "roles": [
+                      "admin",
+                      "moderator"
+                    ],
+                    "live": true,
+                    "id": "ssC7wH6Rj4l2asfnigPvfAsHBzHuwetMYflRdtlAows",
+                    "sig": "HSK65l48a0T3o6Z66T2CLOQzA1BUtVj9KVltIPDoMCHYnoWuQJg9XVd0DWND+W86i6lNv+ublEfI6J9HVyM2DA=="
+                  }
+                ],
+                [
+                  "map",
+                  []
+                ]
+              ]
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "HqU4KSAbfkCN5o7Ly9JfXCHsKEQhZaxZ33wEAxig1KOWNTtYASZXq7SwoBVp1d77LQmXlRVKB9rCZvuzXmtvDg=="
+          },
+          {
+            "v": 1,
+            "id": "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "ptlP1bORcVwltSXNHGqx6O3nK0wDZenPSj2NBpgu5Ic"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "create_space"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "UmV0YWluZWQgY2Fub3B5"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "Uaxx05YwBpk+ngIq6rEYPE8az18N22CJctM//i4inCY5EiCTBsnBSzW4qq4+Jgil3pVbjXgUcrb+1a3E1eucDQ=="
+          },
+          {
+            "v": 1,
+            "id": "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "e50IaIJAvO6JYco17yEY7mctsLmDTS-znBUDv79p4GA"
+            ],
+            "kind": "authority",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "genesis"
+                ],
+                [
+                  "delegation",
+                  {
+                    "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+                    "issuer": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "audience": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+                    "parent_id": null,
+                    "ops": [],
+                    "roles": [],
+                    "live": false,
+                    "id": "8hqIpEExC8a5ZLOePzkgaLCWwTCK12dgc_wE6417HdM",
+                    "sig": "d87yzAMQdALIbcfo42xjttx411tyw1TcSvgXsQS4y2H3Z/plYfDqBkaBslgdeCy9skYN0Xq0AFCDPc3LbfqWCQ=="
+                  }
+                ],
+                [
+                  "map",
+                  [
+                    [
+                      [
+                        "atom",
+                        "__continuation__"
+                      ],
+                      [
+                        "map",
+                        [
+                          [
+                            [
+                              "atom",
+                              "mode"
+                            ],
+                            [
+                              "atom",
+                              "bounded_continuation"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "version"
+                            ],
+                            [
+                              "int",
+                              1
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "product"
+                            ],
+                            [
+                              "atom",
+                              "treehouse"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "kind"
+                            ],
+                            [
+                              "atom",
+                              "space"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "role"
+                            ],
+                            [
+                              "atom",
+                              "admin"
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "nominee"
+                            ],
+                            [
+                              "bin",
+                              "g2GMGyZ0O2u1O9NXzN6no9pzVnvcKgWZ3C7SDYrlzy4="
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "witnesses"
+                            ],
+                            [
+                              "list",
+                              [
+                                [
+                                  "bin",
+                                  "FeWw7l0Ud0CYEuVydDe52zpIDLaZF3WablY3XyILtik="
+                                ],
+                                [
+                                  "bin",
+                                  "U9f8YQ+mH49w9MDrxhGVvWP0LWiGRuQIRMwjqv6TRiE="
+                                ],
+                                [
+                                  "bin",
+                                  "zqqhWd1sReYGqqzakwUxvn7cDXj+o8CjNFoh+AFoBJw="
+                                ]
+                              ]
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "threshold"
+                            ],
+                            [
+                              "int",
+                              2
+                            ]
+                          ],
+                          [
+                            [
+                              "atom",
+                              "max_lease_epochs"
+                            ],
+                            [
+                              "int",
+                              7
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "hXtGfSIoblR4pprLjvIH8Um20jTWstsMf2KCwfFz8dYfjUPCMGUaWOpuVoOkPTQ2Ai2GiwDAe9Ub7fL1BDyUCQ=="
+          },
+          {
+            "v": 1,
+            "id": "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "UCAw503vyi9n1vO8vOavWM-0wHCIVnp-7zpPhPsCiK4"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "catalog_bootstrap_v1"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "map",
+                      [
+                        [
+                          [
+                            "atom",
+                            "version"
+                          ],
+                          [
+                            "int",
+                            1
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "product"
+                          ],
+                          [
+                            "atom",
+                            "treehouse"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "space"
+                          ],
+                          [
+                            "bin",
+                            "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6ZW9GQUVadmk1UVF4LTF5TEFPVzFZejVHeXkwWWVJU1hzQTJjV2UzQ2NyTSNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpGaVRUY2hnMWR2c3FiRFpJc1U4MmVWUzhURjJqQTlBYnlpOEZIX1U4Y0pr"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "space_root"
+                          ],
+                          [
+                            "bin",
+                            "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "profile_genesis"
+                          ],
+                          [
+                            "bin",
+                            "VUNBdzUwM3Z5aTluMXZPOHZPYXZXTS0wd0hDSVZucC03enBQaFBzQ2lLNA=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "profile_id"
+                          ],
+                          [
+                            "bin",
+                            "cnM2NGVQdk5saHFPejhBTkJmb2dSVXN4M0NkTmRRUjNjdjMtaG56UjJlbw=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "replacement_rule"
+                          ],
+                          [
+                            "atom",
+                            "bounded_space_admin_v1"
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "catalog_key"
+                          ],
+                          [
+                            "bin",
+                            "ET9pZhAYgj5TyWAlfsPTv4XeQKoVSTanRM0tBcFdqiU="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "service_id"
+                          ],
+                          [
+                            "bin",
+                            "dXEydTVHNGVOYUszTUgzNnc0akYxbWlianpvaFFVaEM0WmZhc29YVFFlWQ=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "service_key"
+                          ],
+                          [
+                            "bin",
+                            "xphn5w72sqYAuCiZBoPpyjMhWNfTJfIKXN8JEuXVxys="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "origin"
+                          ],
+                          [
+                            "bin",
+                            "d3NzOi8vdHJ1c3QtcmVsYXkuaW52YWxpZA=="
+                          ]
+                        ],
+                        [
+                          [
+                            "atom",
+                            "nonce"
+                          ],
+                          [
+                            "bin",
+                            "ZTlWcmZGc1UwXzZaOEtOdjktWU90UU9QTG9mWUU2Y3dia1NTRU5YUzBQQQ=="
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "4oR8zKC7FL7RyDrkfcxaVxpNujLduE7XBUtBPxlgDjsQyumKXu2h0C5pwhBD7Y6F3l62AjfTM70yGdNLlwe4Cw=="
+          },
+          {
+            "v": 1,
+            "id": "FouDI9d61M3U2JQ0OmXtKr0aGECyoa9mztXP3vi4vTw",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "C0RJmue2UVHmo6Dm_KuALA6-sZONTIBHY4sl2ws6Myg"
+            ],
+            "kind": "command",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "create_thread"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6dGhyZWFkOlo1TE9ZSGdVd0w5Y3hWMnlzbG9qdGFSVkxfVzlYZnhra05CT1czWi04dG8jYXV0aG9yaXR5OmJvdW5kZWQtY29udGludWF0aW9uLXYxI3Jvb3Q6MXdfSVFZUlIxR3RYTWE5NXBkd0xhWDVCU2dPSE5kU0VsV25GOVVpTDRRRQ=="
+                    ],
+                    [
+                      "bin",
+                      "VGhyZWFkIDA="
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "c3NDN3dINlJqNGwyYXNmbmlnUHZmQXNIQnpIdXdldE1ZZmxSZHRsQW93cw=="
+            ],
+            "sig": "6TyMFBt4VTCzvPxoZUVP0DDH1ChFG3wbQ9/xjXxaaU3RQ1/OFB9ScTJNCBzsC5bbcCFwZyAjafPIWSzdlDIoCg=="
+          },
+          {
+            "v": 1,
+            "id": "yx7Dxg5Y0Cmyf4_ig6ozZYXDErDskutoZUC66k2YX6Y",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [],
+            "kind": "command",
+            "body": [
+              "atom",
+              "proof_future_name"
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+          }
+        ],
+        "rejected": []
+      }
+    },
+    {
+      "name": "partial",
+      "history": {
+        "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+        "frames": [
+          {
+            "v": 1,
+            "id": "zuv7GxANnF5AH7FCKd_6qN4zOsykZgon845PrPzMl9A",
+            "replica": "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+            "author": "ocMypWDQts6vI5t5SL0KRhHOLcCrCm7iMEz+D3qSB3M=",
+            "deps": [
+              "LlEjw8wkQVOLczckL_e4PF4aDSfs6ef2VDo2qavONNA"
+            ],
+            "kind": "command",
+            "body": [
+              "atom",
+              "post"
+            ],
+            "cap": [
+              "nil"
+            ],
+            "sig": "/zWn59RE8vKZNdCO1Oz5yuS7cMf1zWvP9hXdLoUtH6Pdb2JYwg6kKbtgvJA9mo6mf76YJrrF17ziFebmFCaeDw=="
+          }
+        ],
+        "rejected": []
+      }
+    }
+  ],
+  "typescript": [
+    {
+      "name": "valid",
+      "kind": "propose",
+      "reason": null,
+      "ids": [],
+      "routes": [
+        "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+        "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE"
+      ],
+      "proofCount": 1
+    },
+    {
+      "name": "unsupported",
+      "kind": "reject",
+      "reason": "unsupported_cutoff",
+      "ids": [],
+      "routes": [],
+      "proofCount": null
+    },
+    {
+      "name": "forged",
+      "kind": "reject",
+      "reason": "invalid_verified_history",
+      "ids": [],
+      "routes": [],
+      "proofCount": null
+    },
+    {
+      "name": "partial",
+      "kind": "reject",
+      "reason": "invalid_verified_history",
+      "ids": [],
+      "routes": [],
+      "proofCount": null
+    }
+  ],
+  "beam": [
+    {
+      "name": "valid",
+      "reason": null,
+      "kind": "propose",
+      "routes": [
+        "replica:treehouse:space:eoFAEZvi5QQx-1yLAOW1Yz5Gyy0YeISXsA2cWe3CcrM#authority:bounded-continuation-v1#root:FiTTchg1dvsqbDZIsU82eVS8TF2jA9Abyi8FH_U8cJk",
+        "replica:treehouse:thread:Z5LOYHgUwL9cxV2yslojtaRVL_W9XfxkkNBOW3Z-8to#authority:bounded-continuation-v1#root:1w_IQYRR1GtXMa95pdwLaX5BSgOHNdSElWnF9UiL4QE"
+      ],
+      "ids": [],
+      "proofCount": 1
+    },
+    {
+      "name": "unsupported",
+      "reason": "recovery_incomplete",
+      "kind": "reject",
+      "routes": [],
+      "ids": [],
+      "proofCount": null
+    },
+    {
+      "name": "forged",
+      "reason": "recovery_incomplete",
+      "kind": "reject",
+      "routes": [],
+      "ids": [],
+      "proofCount": null
+    },
+    {
+      "name": "partial",
+      "reason": "recovery_incomplete",
+      "kind": "reject",
+      "routes": [],
+      "ids": [],
+      "proofCount": null
+    }
+  ],
+  "note": "Disposable public signed evidence and actual API output. Tests must regenerate fresh inputs; this is not a verdict oracle."
+}

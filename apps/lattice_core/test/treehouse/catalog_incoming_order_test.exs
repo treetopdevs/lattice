@@ -46,6 +46,18 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       end
 
       expected = %{
+        "missing-delegation-parent-partial" => {"reject", "invalid_verified_history"},
+        "missing-delegation-parent-complete" => {"reject", "invalid_verified_history"},
+        "canonical-bin-partial" => {"reject", "trust_pending"},
+        "canonical-delegation-bytes-partial" => {"reject", "trust_pending"},
+        "padbits-bin-partial" => {"reject", "invalid_verified_history"},
+        "padbits-bin-complete" => {"reject", "invalid_verified_history"},
+        "padbits-delegation-issuer-partial" => {"reject", "invalid_verified_history"},
+        "padbits-delegation-issuer-complete" => {"reject", "invalid_verified_history"},
+        "padbits-delegation-audience-partial" => {"reject", "invalid_verified_history"},
+        "padbits-delegation-audience-complete" => {"reject", "invalid_verified_history"},
+        "padbits-delegation-sig-partial" => {"reject", "invalid_verified_history"},
+        "padbits-delegation-sig-complete" => {"reject", "invalid_verified_history"},
         "unknown-delegation-complete" => {"reject", "unsupported_cutoff"},
         "unknown-delegation-partial" => {"reject", "trust_pending"},
         "forged-unknown-delegation-complete" => {"reject", "invalid_verified_history"},
@@ -119,6 +131,14 @@ defmodule Treehouse.CatalogIncomingOrderTest do
         assert {:error, :malformed_op} = Lattice.Carrier.Wire.decode_op(frame)
       end
 
+      if String.starts_with?(c["name"], "padbits-") do
+        alias_frame = List.last(c["history"]["frames"])
+        assert {:ok, _} = Lattice.Carrier.Wire.decode_op(alias_frame)
+
+        assert {:error, :malformed_op} =
+                 Lattice.Carrier.Wire.authenticate_observation(alias_frame)
+      end
+
       rejected = Enum.map(raw_rejected, &decode_rejected/1)
       history = %{replica: c["history"]["replica"], frames: frames, rejected: rejected}
 
@@ -168,7 +188,15 @@ defmodule Treehouse.CatalogIncomingOrderTest do
   @tag timeout: 180_000
   test "raw observation resource budgets are exact at their actual maxima" do
     {output, status} =
-      System.cmd("node", ["--import", "tsx", "--test", "test/treehouse_catalog_raw_bounds.ts"],
+      System.cmd(
+        "node",
+        [
+          "--import",
+          "tsx",
+          "--test",
+          "test/treehouse_catalog_raw_bounds.ts",
+          "test/treehouse_catalog_observation_safety.ts"
+        ],
         cd: @client
       )
 

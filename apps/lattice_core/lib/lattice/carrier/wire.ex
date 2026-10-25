@@ -379,8 +379,8 @@ defmodule Lattice.Carrier.Wire do
     end
   end
 
-  defp decode_term(["bin", value], _depth, _mode) when is_binary(value) do
-    case Base.decode64(value) do
+  defp decode_term(["bin", value], _depth, mode) when is_binary(value) do
+    case decode_base64(value, mode) do
       {:ok, bin} -> {:ok, bin}
       :error -> {:error, :malformed_term}
     end
@@ -502,12 +502,13 @@ defmodule Lattice.Carrier.Wire do
     parent_id = Map.get(frame, "parent_id")
 
     with true <- is_nil(parent_id) or is_binary(parent_id),
-         {:ok, issuer} <- Base.decode64(issuer_b64),
-         {:ok, audience} <- Base.decode64(audience_b64),
-         {:ok, sig} <- Base.decode64(sig_b64),
+         {:ok, issuer} <- decode_base64(issuer_b64, mode),
+         {:ok, audience} <- decode_base64(audience_b64, mode),
+         {:ok, sig} <- decode_base64(sig_b64, mode),
          {:ok, ops} <- decode_atoms(ops, mode),
          {:ok, roles} <- decode_atoms(roles, mode),
-         {:ok, expires_epoch} <- decode_expires_epoch(Map.get(frame, "expires_epoch")) do
+         {:ok, expires_epoch} <- decode_expires_epoch(Map.get(frame, "expires_epoch")),
+         true <- observation_delegation_shape?(frame, issuer, audience, sig, expires_epoch, mode) do
       {:ok,
        %Delegation{
          id: id,
@@ -527,6 +528,24 @@ defmodule Lattice.Carrier.Wire do
   end
 
   defp decode_delegation(_, _mode), do: {:error, :malformed_term}
+
+  defp observation_delegation_shape?(frame, issuer, audience, sig, expires_epoch, :observation) do
+    Map.has_key?(frame, "parent_id") and byte_size(issuer) == 32 and byte_size(audience) == 32 and
+      byte_size(sig) == 64 and (is_nil(expires_epoch) or expires_epoch <= @max_json_safe_integer)
+  end
+
+  defp observation_delegation_shape?(_frame, _issuer, _audience, _sig, _expiry, _mode), do: true
+
+  defp decode_base64(value, :observation) do
+    with {:ok, decoded} <- Base.decode64(value),
+         true <- Base.encode64(decoded) == value do
+      {:ok, decoded}
+    else
+      _ -> :error
+    end
+  end
+
+  defp decode_base64(value, _mode), do: Base.decode64(value)
 
   defp decode_expires_epoch(nil), do: {:ok, nil}
 
