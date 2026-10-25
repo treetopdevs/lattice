@@ -137,3 +137,23 @@ refuses `custodian_status_required`. Initial and still-pending staging retain th
 existing API. Status is revalidated under the staging owner's lock against the binding
 and requested committed head. This prevents accidental erasure of a reviewed pending
 signature; it cannot prove that a remote custodian has signed nothing since a snapshot.
+
+A later catalog can carry an earlier Thread only when its earlier reference is actually
+served and honored. It never treats that old reference as hypothetical. Complete listing
+(or genuine client publication of the exact signed reference) before another publication
+attempt. A still-absent carried reference makes prepare refuse and preserves the current
+journal/store; it is not repaired by inventing a second frame. The capacity rehearsal
+uses fixture-only client-signed relay deliveries between revisions, not a listed receipt.
+
+`catalogued` records checked frontiers. As in readiness confirmation, an op may arrive
+between the final observation and the owner's journal replacement; the receipt makes no
+continuous-current-authority claim. Guarded listing and native client evaluation must
+re-observe actual histories before relying on it.
+
+The public decoder bounds the entire JSON input at 64 MiB before parsing. Per-history
+frame/byte budgets are then checked before Wire decoding and cryptographic replay;
+this deliberately permits a bounded JSON transient rather than a streaming format.
+`invalid_catalog_package` includes malformed/authentication evidence and history/package
+budget refusals; inspect the documented byte/frame limits rather than assuming corruption.
+An entry-count overflow is the distinct `catalog_capacity` refusal. A carried instance
+missing from a hand-altered deployment is refused, never omitted from a catalog.

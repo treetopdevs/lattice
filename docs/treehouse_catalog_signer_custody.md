@@ -486,3 +486,9 @@ signing did not commit. Keep the package and retry exactly that catalog; consult
 signature even when no envelope reached the operator. Never treat an error as license
 to regenerate, reset or sign a competing catalog. The checkout helper and trusted
 Python/toolchain are part of this custody boundary; relocated releases are not supported.
+
+Keep `catalog-signing/` machine-managed. Do not open it in Finder or let a synchronizer
+add files: even a `.DS_Store` is outside its closed inventory and causes a refusal.
+Preserve unexpected files for explicit reconciliation; never reset the ledger to clear
+that refusal. Transfer only the exported package/envelope/status files in the parent
+transfer directory. Unknown ledger files are not silently ignored.

@@ -14,12 +14,6 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
   @spec review(binary(), Path.t()) :: {:ok, map()} | {:error, atom()}
   def review(bytes, ceremony), do: CatalogSigningPackage.review(bytes, ceremony)
 
-  @spec init(binary(), Path.t()) :: {:ok, map()} | {:error, atom()}
-  def init(bytes, ceremony) do
-    with {:ok, package} <- review(bytes, ceremony),
-         do: SigningLedger.init(ceremony, package.binding)
-  end
-
   @spec status(binary(), Path.t()) :: {:ok, map()} | {:error, atom()}
   def status(bytes, ceremony) do
     with {:ok, package} <- review(bytes, ceremony),

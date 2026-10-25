@@ -84,6 +84,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackage do
     with {:ok, package} <- decode(bytes),
          {:ok, binding} <-
            CatalogBinding.load_log(ceremony_dir, package.histories[package.catalog.space]),
+         true <- binding.record.space == package.catalog.space,
          true <- binding.bootstrap_id == package.catalog.bootstrap,
          true <- binding.bootstrap_id == package.catalog.binding do
       {:ok, Map.put(package, :binding, binding)}

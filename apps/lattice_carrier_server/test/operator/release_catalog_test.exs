@@ -79,9 +79,22 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
     {:ok, _} = ReleaseReadiness.confirm(f.root, activated, probe, f.ceremony_dir)
     {:ok, ready} = Journal.read(f.root)
     {:ok, binding} = CatalogBinding.load(f.ceremony_dir, f.active_log)
-    {:ok, genesis} = SigningLedger.init(f.ceremony_dir, binding)
     status_path = Path.join(f.root, "custodian-status.json")
-    File.write!(status_path, SigningLedger.export_status(genesis, binding))
+    # The first status is created from the custodian's own verified Space log,
+    # before any signing package exists: no bootstrap cycle is possible.
+    ExUnit.CaptureIO.capture_io(fn ->
+      assert :ok =
+               LatticeCarrierServer.Operator.CatalogCeremony.Cli.run([
+                 "init-ledger",
+                 "--ceremony",
+                 f.ceremony_dir,
+                 "--space-log",
+                 f.active_log,
+                 "--out",
+                 status_path
+               ])
+    end)
+
     {:ok, Map.merge(f, %{ready: ready, binding: binding, status_path: status_path})}
   end
 
@@ -615,12 +628,44 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
              CatalogStore.verify(f.root, f.binding.record.catalog_key)
   end
 
+  test "a carried reference that has not been published keeps the next catalog pending", f do
+    {_prepared, package_path, envelope_path, _} = signed!(f)
+
+    assert {:ok, record} =
+             ReleaseCatalog.commit(
+               f.root,
+               f.ready,
+               f.ceremony_dir,
+               f.probe,
+               package_path,
+               envelope_path
+             )
+
+    {:ok, actual} = Journal.read(f.root)
+    # No courier or fixture relay publishes the first reference in this test.
+    next = next_release!(f, actual, record["catalog_head"], 2)
+    {:ok, status} = SigningLedger.status(f.ceremony_dir, f.binding)
+    path = Path.join(f.root, "status-with-unlisted-reference.json")
+    File.write!(path, SigningLedger.export_status(status, f.binding))
+
+    assert {:error, :invalid_catalog_package} =
+             ReleaseCatalog.prepare(f.root, next.ready, f.ceremony_dir, f.probe, path)
+
+    assert {:ok, next.ready} == Journal.read(f.root)
+    assert {:ok, store} = CatalogStore.verify(f.root, f.binding.record.catalog_key)
+    assert store.head == record["catalog_head"]
+    assert map_size(store.envelopes) == 1
+  end
+
   defp next_release!(f, expected, head, number) do
     tag = "catalog-child-#{number}"
-    {:ok, donor_data} = Fixture.new(second_member: true, child_tag: tag)
+    {:ok, %{log: space_log}} = Lattice.Log.restore_verified(f.active_log)
+
+    {:ok, donor_data} =
+      Fixture.new(second_member: length(Staging.roster(space_log)) == 2, child_tag: tag)
+
     donor = Map.new(donor_data)
     child_artifact = Enum.find(donor.artifacts, &(&1.kind == :log))
-    {:ok, %{log: space_log}} = Lattice.Log.restore_verified(f.active_log)
     sim = %{f.space | logs: Map.put(f.space.logs, "creator", space_log)}
 
     {_sim, reference} =

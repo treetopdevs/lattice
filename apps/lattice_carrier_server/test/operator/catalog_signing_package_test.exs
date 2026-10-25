@@ -175,7 +175,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
 
     refute File.exists?(Path.join(dir, "catalog-signing"))
     assert {:error, :catalog_ledger_uninitialized} = SignCatalog.status(bytes, dir)
-    assert {:ok, genesis} = SignCatalog.init(bytes, dir)
+    assert {:ok, genesis} = initialize_ledger(bytes, dir)
     assert genesis.head["revision"] == nil
     signer = CeremonyFixture.signer_template().signer
     assert {:ok, envelope} = SignCatalog.sign(bytes, dir, signer, package.digest)
@@ -190,14 +190,14 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     assert {:ok, status} = SignCatalog.status(bytes, dir)
     assert status.head["revision"] == 0
     assert length(status.chain) == 1
-    assert {:ok, _} = SignCatalog.init(bytes, dir)
+    assert {:ok, _} = initialize_ledger(bytes, dir)
   end
 
   test "a competing valid catalog cannot reuse a signed revision", f do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, _} = SignCatalog.init(bytes, dir)
+    {:ok, _} = initialize_ledger(bytes, dir)
 
     assert {:ok, _} =
              SignCatalog.sign(
@@ -232,7 +232,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    {:ok, genesis} = initialize_ledger(bytes, dir)
 
     {:ok, envelope} =
       SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)
@@ -251,7 +251,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, _} = SignCatalog.init(bytes, dir)
+    {:ok, _} = initialize_ledger(bytes, dir)
     parent = self()
 
     task =
@@ -278,7 +278,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    {:ok, genesis} = initialize_ledger(bytes, dir)
 
     {:ok, envelope} =
       SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)
@@ -351,7 +351,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, _} = SignCatalog.init(bytes, dir)
+    {:ok, _} = initialize_ledger(bytes, dir)
 
     {:ok, envelope} =
       SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)
@@ -371,7 +371,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
 
     File.rm!(stored)
     assert {:error, :catalog_ledger_corrupt} = SignCatalog.status(bytes, dir)
-    assert {:error, :catalog_ledger_corrupt} = SignCatalog.init(bytes, dir)
+    assert {:error, :catalog_ledger_corrupt} = initialize_ledger(bytes, dir)
     refute File.exists?(stored)
   end
 
@@ -379,7 +379,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    {:ok, genesis} = initialize_ledger(bytes, dir)
     keys = Path.join(Path.dirname(dir), "wrong-keys")
     File.mkdir!(keys)
     File.chmod!(keys, 0o700)
@@ -475,7 +475,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    {:ok, genesis} = initialize_ledger(bytes, dir)
     parent = self()
 
     task =
@@ -494,7 +494,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     assert_receive :locked_before_delete, 5000
     lock = Path.join([dir, "catalog-signing", "lock"])
     File.rm!(lock)
-    assert {:error, :catalog_ledger_corrupt} = SignCatalog.init(bytes, dir)
+    assert {:error, :catalog_ledger_corrupt} = initialize_ledger(bytes, dir)
     refute File.exists?(lock)
     send(task.pid, :continue_after_delete)
     assert {:error, _} = Task.await(task)
@@ -505,7 +505,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    {:ok, genesis} = initialize_ledger(bytes, dir)
     parent = self()
 
     {pid, monitor} =
@@ -584,7 +584,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
       {output, status} = owner_fault(fresh, scenario, plan, %{})
       assert status != 0
       refute String.contains?(output, ~s("ok":true))
-      assert {:ok, state} = SignCatalog.init(bytes, fresh)
+      assert {:ok, state} = initialize_ledger(bytes, fresh)
       assert state.chain == []
       assert state.head["revision"] == nil
       assert Enum.sort(File.ls!(Path.join(fresh, "catalog-signing"))) == ["head.json", "lock"]
@@ -682,11 +682,11 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, _} = SignCatalog.init(bytes, dir)
+    {:ok, _} = initialize_ledger(bytes, dir)
     signer = CeremonyFixture.signer_template().signer
     results = simultaneous(fn _ -> SignCatalog.sign(bytes, dir, signer, package.digest) end)
     envelopes = for {:ok, envelope} <- results, do: envelope
-    assert length(envelopes) >= 1
+    assert envelopes != []
     assert length(Enum.uniq(envelopes)) == 1
     assert Enum.all?(results, &(match?({:ok, _}, &1) or &1 == {:error, :catalog_ledger_busy}))
     [envelope | _] = envelopes
@@ -699,7 +699,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, _} = SignCatalog.init(bytes, dir)
+    {:ok, _} = initialize_ledger(bytes, dir)
 
     changed = %{
       f.catalog
@@ -767,7 +767,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    {:ok, genesis} = initialize_ledger(bytes, dir)
     parent = self()
 
     task =
@@ -797,11 +797,16 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     assert state.chain == []
   end
 
+  defp initialize_ledger(bytes, ceremony) do
+    with {:ok, package} <- CatalogSigningPackage.review(bytes, ceremony),
+         do: SigningLedger.init(ceremony, package.binding)
+  end
+
   defp signing_boundary!(f) do
     {:ok, bytes} = encode(f)
     dir = f.fixture[:ceremony_dir]
     {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    {:ok, genesis} = initialize_ledger(bytes, dir)
 
     {:ok, envelope} =
       SignCatalog.sign(bytes, dir, CeremonyFixture.signer_template().signer, package.digest)

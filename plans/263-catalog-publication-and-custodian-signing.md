@@ -95,7 +95,8 @@ crypto or weakening their current closed formats. Existing formats remain byte c
 Resource contract: at most 13 histories, one per catalog entry; at most 4,000 frames and
 16 MiB canonical JSON per history (existing export limits), at most 64 MiB aggregate
 package bytes, at most 128 KiB metadata excluding history payloads, and existing 64,000
-byte per-frame push bound. Count before expensive decoding; fail before output/signature.
+byte per-frame push bound. Bound total bytes before JSON parsing; count histories/frames and history bytes after
+the bounded parse, before Wire/crypto replay. Fail before output/signature.
 The aggregate cap is a deliberate software resource limit, independent of the ordinary
 app's 1 MiB store limit; it supports carried entries and does not claim every possible
 13-entry maximal history fits. Explain capacity refusal without truncating evidence.
@@ -123,6 +124,10 @@ Verify the entire store with the root-bound key. Committed head must equal the j
 head. For first publication C has revision 0, previous nil, the exact bootstrap binding,
 Space entry and new Thread entry. Later C extends the head by exactly one Thread entry,
 retaining all prior entries exactly; verify every carried route and history too.
+Previously carried references must already be actual and honored: listing (PR 5) or
+genuine client delivery precedes later publication. Only the new staged reference is
+hypothetical. A missing old reference refuses; capacity fixtures publish exact client
+frames between revisions and do not prove a listed receipt.
 Root, genesis, creation, reference and route come from reviewed actual logs/instances,
 never caller summaries. Route/replica reuse checks inspect all stored revisions.
 A single pending envelope must describe this exact rebuilt C; another fork refuses.
