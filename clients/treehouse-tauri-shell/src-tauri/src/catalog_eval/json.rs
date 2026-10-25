@@ -1,5 +1,5 @@
 //! Strict artifact JSON: bounded nodes/depth before allocation and no duplicate decoded keys.
-use super::canonical::{Result, MAX_BYTES, MAX_DEPTH, MAX_NODES};
+use super::canonical::{Result, MAX_BYTES, MAX_JSON_DEPTH, MAX_NODES};
 use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 use std::fmt;
@@ -30,7 +30,7 @@ struct Seed<'a> {
 impl<'de> DeserializeSeed<'de> for Seed<'_> {
     type Value = Value;
     fn deserialize<D: Deserializer<'de>>(self, decoder: D) -> std::result::Result<Value, D::Error> {
-        if *self.remaining == 0 || self.depth > MAX_DEPTH * 2 + 2 {
+        if *self.remaining == 0 || self.depth > MAX_JSON_DEPTH {
             return Err(de::Error::custom("JSON resource limit"));
         }
         *self.remaining -= 1;

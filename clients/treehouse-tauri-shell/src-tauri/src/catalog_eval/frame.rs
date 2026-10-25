@@ -1,6 +1,8 @@
 //! Signature/hash authenticity only. A verified frame may still be unauthorized,
 //! quarantined, causally incomplete or outside the catalog's replica scope.
-use super::canonical::{base64, encode, Result, Term};
+//! Atom vocabulary/admission belongs to the later portability stage, as in TS
+//! `verifyCarrierOp`; unknown signed names are not signature failures.
+use super::canonical::{base64, encode_op_payload, Result, Term};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use ed25519_dalek::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
@@ -73,7 +75,7 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
     deps.dedup();
     let body = Term::from_carrier(&value["body"])?;
     let cap = Term::from_carrier(&value["cap"])?;
-    let payload = encode(&Term::List(vec![
+    let payload = encode_op_payload(&[
         Term::Binary(b"lattice-op-v2".to_vec()),
         Term::Binary(replica.as_bytes().to_vec()),
         Term::Binary(author.clone()),
@@ -85,7 +87,7 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
         Term::Atom(kind.to_owned()),
         body.clone(),
         cap.clone(),
-    ]))?;
+    ])?;
     if URL_SAFE_NO_PAD.encode(Sha256::digest(&payload)) != id {
         return Err(INVALID);
     }

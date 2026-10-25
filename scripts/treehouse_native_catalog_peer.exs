@@ -4,7 +4,16 @@ alias Lattice.Carrier.Wire
 alias Treehouse.{CatalogTrustVectors, CatalogVectors, TransportCatalog}
 Code.ensure_loaded!(TransportCatalog)
 # Compile-time test vocabulary only; never create atoms from incoming text.
-_ = [:kind, :post, :author_edit, :genesis, :admin, :moderator, :"Unicode:雪"]
+_ = [
+  :kind,
+  :post,
+  :author_edit,
+  :genesis,
+  :admin,
+  :moderator,
+  :"Unicode:雪",
+  :native_unadmitted_probe
+]
 
 case System.argv() do
   ["produce"] ->
@@ -12,6 +21,54 @@ case System.argv() do
     histories = CatalogTrustVectors.fixture().histories
     frames = Enum.flat_map(histories, & &1.frames)
     IO.puts(Jason.encode!(Map.put(vector, :frames, frames)))
+
+  ["boundaries"] ->
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    terms =
+      Enum.map(input["terms"], fn item ->
+        case Wire.decode_value(item["term"]) do
+          {:ok, value} -> %{accepted: true, bytes: Base.encode64(Canonical.term(value))}
+          _ -> %{accepted: false}
+        end
+      end)
+
+    frames =
+      Enum.map(input["frames"], fn item ->
+        raw = item["frame"]
+
+        admitted =
+          case Wire.decode_op(raw) do
+            {:ok, op} -> Op.valid?(op)
+            _ -> false
+          end
+
+        authentic =
+          with {:ok, body} <- Wire.decode_value(raw["body"]),
+               {:ok, cap} <- Wire.decode_value(raw["cap"]) do
+            key = Base.decode64!(raw["author"])
+
+            payload =
+              Canonical.term([
+                "lattice-op-v2",
+                raw["replica"],
+                key,
+                Enum.sort(Enum.uniq(raw["deps"])),
+                :command,
+                body,
+                cap
+              ])
+
+            Base.url_encode64(:crypto.hash(:sha256, payload), padding: false) == raw["id"] and
+              :crypto.verify(:eddsa, :none, payload, Base.decode64!(raw["sig"]), [key, :ed25519])
+          else
+            _ -> false
+          end
+
+        %{admitted: admitted, authentic: authentic}
+      end)
+
+    IO.puts(Jason.encode!(%{terms: terms, frames: frames}))
 
   ["consume"] ->
     vector = IO.read(:stdio, :eof) |> Jason.decode!()
