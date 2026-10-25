@@ -99,7 +99,7 @@ defmodule LatticeCarrierServer.Operator.JournalParityTest do
       {"initial pending", initial.("carrier_pending"), true},
       {"initial activated", initial.("activated"), true},
       {"initial ready", initial.("ready"), true},
-      {"initial publication gated", initial.("catalogued"), false},
+      {"initial catalogued", initial.("catalogued"), true},
       {"initial listing gated", initial.("listed"), false},
       {"unknown reference mode",
        with_catalog("ready", [%{reference | "review" => %{"mode" => "unknown"}}], nil), false},

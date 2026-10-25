@@ -10,13 +10,13 @@
 >
 > **Drift check (run first)**: `git log --oneline 1cebccd03..HEAD -- scripts/treehouse_operator_mutation.py
 > apps/lattice_carrier_server/lib apps/lattice_core/lib/treehouse clients/lattice-client/src/treehouse_catalog_*.ts`.
-> A new journal phase, owner plan kind, manifest field or catalog trust refusal since 1cebccd03 is a STOP.
+> For PR 4, plan 263 rebases this drift check to 187cc3d8a; unexplained later phase/owner/manifest/trust changes require reconciliation.
 
 ## Status
 
 Design written 2026-10-19 (slice 18) against main 1cebccd03. Row 224 stays BLOCKED (rule 8) until
 the inputs in "Depends on" exist. PR 1 (Design 1) landed in PR #155; PR 3 (Design 3) landed in PR #158.
-PR 2 (Design 2, OD-1 and OD-5 as decided in D-39) is built in PR #160; PRs 4-5 wait on the ceremony report; PR 6 is plan 245.
+PR 2 landed in #160. Plan 263 implements PR 4 on disposable ceremony fixtures (D-47); operational PRs 4-5 still need the real ceremony report. PR 6 is plan 245.
 
 ## Header
 
@@ -200,7 +200,7 @@ envelope may exist, else `stale_catalog_head`.
   with `Signer.read_seed` plus the `Paths.signer` ancestor checks, requires its public key to equal
   the root-signed `record.catalog_key` (`signer_key_mismatch`), wraps it in `Secret` and signs inside
   the call. This is the slice 13 sketch; it puts the signer on the network-facing host.
-- (b) `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file)` runs the checks below and
+- (b) `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file, custodian_status)` runs the checks below and
   writes `catalog-unsigned.json` (canonical `C` and `sha256` of `catalog_bytes(C)`). The custodian
   runs a new ceremony command `sign-catalog`. It keeps a custodian-side record of the last signed
   revision, id and envelope bytes (envelope written and fsynced before the record advances). It
@@ -209,7 +209,7 @@ envelope may exist, else `stale_catalog_head`.
   re-runs `CatalogEntries.observe/2` over the custodian's Space and Thread exports plus that frame,
   as the carrier's step 6 does;
   it prints a review sheet with the binding id and, per new entry, replica, root, route and
-  reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file,
+  reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file, package_file,
   envelope_file)` re-runs every check, requires `envelope.catalog == C` exactly, and verifies the
   signature with the binding `catalog_key`.
 

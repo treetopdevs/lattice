@@ -2,13 +2,12 @@
 
 ## Status, dependencies and execution boundary
 
-IN PROGRESS, 2026-10-24. PR A #166 merged as ba7f23f49 after exact-tip run
-40146178153 passed; merge tree equals tested 81bb82f6. PR B #167 is a draft against
-main with ordinary offline controls, shared codecs and native export. Local suites
-pass; packaged proof and listing remain open. Its first hosted run found a Keychain
-HOME-domain setup mismatch; the next created distinct identities and signed/exported
-the invitation, then exposed an unlabeled native file-control accessibility target.
-Use an explicit visible picker button, and require the final exact-tip packaged gate.
+IN PROGRESS. Initial provisioning and offline enrollment PRs are merged after their
+required exact-tip checks passed, with merge trees matching the tested heads.
+Ordinary OS Keychain identities, native file picker,
+fingerprint refusal, offline acceptance/admission/grants and operator-bundle export
+passed in the hosted packaged gate. These are software/packaged results; native catalog
+trust, guarded listing and a real two-Mac relay session remain separate requirements.
 
 The design was prepared from main e8f5c285ed3508f93efaea8279819012d72b41cb. PR #165
 merged bounded creation and native custody. PR B started from fresh main a297e1ddf,
