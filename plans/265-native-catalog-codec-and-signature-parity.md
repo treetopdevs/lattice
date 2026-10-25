@@ -3,8 +3,8 @@
 ## Status
 
 IN PROGRESS. Canonical/frame/catalog authenticity, bounded readers and executable
-Rust↔TS/BEAM peers are implemented. Independent review fixes are confirmed; full
-checks and requested external review remain. Implements plan 245 build PR 2,
+Rust↔TS/BEAM peers are implemented. Independent review fixes are confirmed and
+local gates pass; hosted checks and requested external review remain. Implements plan 245 build PR 2,
 independently of the pending listing consumer. Base includes catalog publication.
 No native trust command,
 route installation, custody mutation, authority fold or network change is in scope.
