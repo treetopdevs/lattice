@@ -5,6 +5,9 @@ import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "../../src/carrier
 import { verifyCarrierOp, canonicalBytesForCarrierTerm, authorCarrierOp } from "../../src/codec";
 import { canonicalBase64Bytes } from "../../src/codec";
 import { ed25519 } from "@noble/curves/ed25519.js";
+import { analyzeAuthority } from "../../src/authority";
+import { revokedAsOf } from "../../src/capability";
+import { treehouseSpaceSchema, treehouseThreadSchema } from "../../src/treehouse";
 import { canonicalOrder } from "../../src/dag";
 import { treehouseCommandDecoders } from "../../src/treehouse";
 
@@ -112,6 +115,23 @@ if (process.argv[2] === "produce") {
     assert.deepEqual(history.frontier, actual.frontier);
   }
   console.log(JSON.stringify({histories: input.histories.length}));
+} else if (process.argv[2] === "delegations") {
+  const input = JSON.parse(readFileSync(0, "utf8")) as History & {queries: {op: string; delegation: string}[]; reasonIds: string[]};
+  await graph(input);
+  const schema = input.replica.startsWith("replica:treehouse:space:") ? treehouseSpaceSchema : treehouseThreadSchema;
+  const ops = carrierOpsToSemanticOps(input.frames, {}, treehouseCommandDecoders(schema.name as "Treehouse.Space" | "Treehouse.Thread"));
+  const byId = new Map(ops.map(op => [op.id, op]));
+  const analysis = analyzeAuthority(schema, ops, new Set(byId.keys()), canonicalOrder(ops), byId, input.replica);
+  const security = analysis.security;
+  const records = Object.fromEntries([...security.delegations].map(([id, record]) => [id, {
+    validation: record.validation, introductions: record.introductionOpIds,
+    invalidIntroductions: Object.fromEntries(record.invalidIntroductionReasons),
+  }]));
+  console.log(JSON.stringify({root: security.root?.pubkey ?? null, records,
+    reasons: Object.fromEntries(input.reasonIds.map(id => [id, analysis.quarantineReasons.get(id) ?? null])),
+    active: Object.fromEntries([...security.delegations].map(([id,r]) => [id,r.validation.valid])),
+    revokes: security.effectiveRevokes.map(r => [r.opId, r.delegationId]),
+    revoked: input.queries.map(q => revokedAsOf(byId.get(q.op)!, q.delegation, byId, security, new Map()))}));
 } else if (process.argv[2] === "cutoffs") {
   console.log(serialize(await cutoffCases()));
 } else if (process.argv[2] === "consume-cutoffs") {

@@ -88,6 +88,36 @@ case System.argv() do
 
     IO.puts(Jason.encode!(%{histories: length(input["histories"])}))
 
+  ["delegations"] ->
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    ops =
+      Enum.map(input["frames"], fn frame ->
+        {:ok, op} = Wire.decode_op(frame)
+        true = Op.valid?(op)
+        op
+      end)
+
+    log = Log.from_ops(input["replica"], Map.new(ops, &{&1.id, &1}))
+    :ok = Log.verify_authenticity(log)
+    root = Lattice.Authority.root(log)
+    ids = input["delegationIds"]
+
+    module =
+      if String.starts_with?(input["replica"], "replica:treehouse:space:"),
+        do: Treehouse.Space,
+        else: Treehouse.Thread
+
+    analysis = Lattice.Authority.analyze(module, log)
+
+    IO.puts(
+      Jason.encode!(%{
+        root: if(root, do: Base.encode64(root)),
+        active: Map.new(ids, &{&1, Lattice.Authority.delegation_active?(log, &1)}),
+        reasons: Map.new(input["reasonIds"], &{&1, analysis.reasons[&1]})
+      })
+    )
+
   ["cutoffs"] ->
     f = CatalogVectors.bootstrap_history()
 

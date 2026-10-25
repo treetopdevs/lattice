@@ -20,6 +20,16 @@ onto the codec's minimal parity correction with its cutoff implementation unchan
 Checkpoint hosted checks and requested external review remain open; full authority,
 incoming/stored history integration and retained-trust logic are still unfinished. The full authority/evaluator and parity matrix below remain mandatory.
 
+A third checkpoint adds the static delegation component: signature/id consistency,
+root commitments, iterative chain attenuation, introduction-specific refusals,
+conditional succession roots and causal revocation. Its private state is built only
+from an authenticated DAG. It exposes neither active capabilities nor command or
+route verdicts. Raw tuple collection follows the BEAM component; the final incoming
+semantic normalization and portability gate remain mandatory, including TypeScript's
+existing refusal of nonportable high logical ticks. No source oracle is changed.
+Fresh BEAM/TS histories and Rust-authored chain/revoke cases exercise the actual
+runtime owners. Expanded checks and review of this checkpoint are in progress.
+
 ## Outcome and immutable contracts
 
 Rust independently evaluates the complete raw evidence and retained catalog state
