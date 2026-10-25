@@ -1,4 +1,4 @@
-# Plan 270: malformed Thread lineage parity
+# Plan 270: Treehouse text and malformed lineage parity
 
 ## Status
 
@@ -14,6 +14,10 @@ target; TypeScript's semantic decoder has already refused those arguments. An
 absent previous target therefore produces `application_target_not_visible` in
 BEAM but `application_target_quarantined` in TypeScript.
 
+A second fresh regression confirms that TypeScript silently strips leading U+FEFF
+from binary product text while BEAM preserves it. Preserve every valid UTF-8 code
+point, including this leading character, in product arguments and projection.
+
 Lineage traversal must follow only structurally valid product edit commands.
 Malformed commands remain authenticated history and remain quarantined; their
 uninterpretable arguments cannot introduce further lineage targets. Keep ordinary
@@ -25,9 +29,11 @@ wire encoding, signatures, capability checks or successful commands.
 
 1. Add a fresh signed cross-runtime regression for malformed replacement values,
    absent/concurrent predecessors, descendant edits, and well-formed controls.
-2. Require UTF-8 text lineage ids in edit/tombstone effects, matching the strict
+2. Preserve leading U+FEFF during TypeScript product text decoding. Compare actual
+   materialized posts as well as reason maps. Require UTF-8 text lineage ids in edit/tombstone effects, matching the strict
    product decoder. Before following a raw prior edit, require the existing effects
-   grammar. Preserve the current seen-set cycle bound.
+   grammar via the already final causal malformed-command verdict; avoid rescanning
+   each prior body at every hop. Preserve the current seen-set cycle bound.
 3. Verify full command reason maps against TypeScript in both delivery orders;
    malformed ancestors must retain `malformed_command` and descendants must refuse.
 4. Run the prepared client build, full Mix check and both boundary security scans.

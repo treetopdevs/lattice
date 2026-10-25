@@ -446,7 +446,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 266 | [Catalog evidence exporter](266-catalog-evidence-exporter.md) | P1 | L | 245 PR 4; listing parent before integration | DONE (#171; exact-tip Linux/hosted and browser gates pass; matching merge tree; no installed trust) |
 | 268 | [Canonical continuation dependency aliases](268-canonical-continuation-dependency-aliases.md) | P1 | M | Separate protected-core correction before native evaluator closure | DONE (#173; exact-tip run 40196864012 and browser proof pass; merge tree matches; native adoption belongs to 267) |
 | 269 | [Incoming catalog refusal order](269-incoming-catalog-refusal-order.md) | P1 | L | Protected source review; pending evaluator PR 172 | IN PROGRESS: shared reader guards and proof parity implemented; capacity/freeze/native adoption and final review/gates remain. |
-| 270 | [Malformed Thread lineage parity](270-thread-malformed-lineage-parity.md) | P1 | M | Fresh native policy discrepancy; before plan 267 adoption | IN PROGRESS: align malformed-edit traversal with product semantic validity; fresh cross-runtime regression and gates required. |
+| 270 | [Treehouse text and lineage parity](270-thread-malformed-lineage-parity.md) | P1 | M | Fresh native policy discrepancy; before plan 267 adoption | IN PROGRESS: preserve literal UTF-8 and align malformed-edit traversal; bidirectional state/reason regressions pass; final review/gates remain. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

@@ -3,7 +3,7 @@ import {fixtureId,fixtureSigner} from "./export_treehouse_catalog_trust";
 import {authorCarrierDelegation,authorCarrierOp} from "../../src/codec";
 import {carrierOpsToSemanticOps} from "../../src/carrier";
 import type {CarrierTerm,CarrierOpFrame} from "../../src/carrier";
-import {treehouseCommandDecoders,treehouseThreadSchema} from "../../src/treehouse";
+import {treehouseCommandDecoders,treehouseThreadSchema,observeTreehouse} from "../../src/treehouse";
 import {materialize} from "../../src/materialize";
 import {bindTownshipReplica} from "../../src/township";
 import {readFileSync} from "node:fs";
@@ -25,7 +25,7 @@ if(process.argv[2]==="--consume"){
   }
   const ops=carrierOpsToSemanticOps(h.frames,{},treehouseCommandDecoders("Treehouse.Thread"));
   const result=materialize(treehouseThreadSchema,ops);
-  results.push(Object.fromEntries(ops.filter(o=>o.kind==="command").map(o=>[o.id,result.quarantineReasons.get(o.id)??null])));
+  results.push({reasons:Object.fromEntries(ops.filter(o=>o.kind==="command").map(o=>[o.id,result.quarantineReasons.get(o.id)??null])),posts:observeTreehouse("Treehouse.Thread",ops).posts.map(p=>p.text)});
  }
  console.log(JSON.stringify({results}));
  process.exit(0);
@@ -39,17 +39,36 @@ const genesis=await authorCarrierOp({replica,signer,deps:[],kind:"authority",cap
 const command=(deps:string[],name:string,args:CarrierTerm[])=>authorCarrierOp({replica,signer,deps,kind:"command",cap:text(cap.id),body:["tuple",[["atom",name],["list",args]]]});
 const post=await command([genesis.id],"post",[text("original")]);
 const cases=[];
+const bomPost=await command([post.id],"post",[text("\uFEFFretained text")]);
+const bomTarget=await command([post.id],"author_tombstone",[text(`\uFEFF${post.id}`),text(post.id)]);
+for(const [name,frames] of [["literal-bom-text",[genesis,post,bomPost]],["literal-bom-target",[genesis,post,bomTarget]]] as [string,CarrierOpFrame[]][]){
+ const ops=carrierOpsToSemanticOps(frames,{},treehouseCommandDecoders("Treehouse.Thread"));
+ const result=materialize(treehouseThreadSchema,ops);
+ cases.push({name,replica,frames,reasons:Object.fromEntries(ops.filter(o=>o.kind==="command").map(o=>[o.id,result.quarantineReasons.get(o.id)??null]))});
+}
 for(const name of ["author_edit","author_tombstone","moderator_tombstone"]){
  for(const position of [0,1]){
   const args:CarrierTerm[]=[text(post.id),text(post.id),...(name==="author_edit"?[text("valid text")]:[])];
   args[position]=["bin",Buffer.from([255]).toString("base64")];
   const malformed=await command([post.id],name,args);
-  const frames=[genesis,post,malformed];
+  const descendant=await command([malformed.id],"author_edit",[text(post.id),text(malformed.id),text("invalid utf8 ancestor")]);
+  const frames=[genesis,post,malformed,descendant];
   const ops=carrierOpsToSemanticOps(frames,{},treehouseCommandDecoders("Treehouse.Thread"));
   const result=materialize(treehouseThreadSchema,ops);
   assert.equal(result.quarantineReasons.get(malformed.id),"malformed_command");
+  assert.equal(result.quarantineReasons.get(descendant.id),"application_target_quarantined");
   cases.push({name:`invalid-utf8-${name}-${position}`,replica,frames,reasons:Object.fromEntries(ops.filter(o=>o.kind==="command").map(o=>[o.id,result.quarantineReasons.get(o.id)??null]))});
  }
+}
+for(const previous of [["int",7],["nil"],["list",[]]] as CarrierTerm[]){
+ const malformed=await command([post.id],"author_edit",[text(post.id),previous,text("valid body")]);
+ const descendant=await command([malformed.id],"author_edit",[text(post.id),text(malformed.id),text("nontext predecessor")]);
+ const frames=[genesis,post,malformed,descendant];
+ const ops=carrierOpsToSemanticOps(frames,{},treehouseCommandDecoders("Treehouse.Thread"));
+ const result=materialize(treehouseThreadSchema,ops);
+ assert.equal(result.quarantineReasons.get(malformed.id),"malformed_command");
+ assert.equal(result.quarantineReasons.get(descendant.id),"application_target_quarantined");
+ cases.push({name:`nontext-predecessor-${previous[0]}`,replica,frames,reasons:Object.fromEntries(ops.filter(o=>o.kind==="command").map(o=>[o.id,result.quarantineReasons.get(o.id)??null]))});
 }
 for(const [label,value] of [["integer",["int",7]],["nil",["nil"]],["list",["list",[]]]] as [string,CarrierTerm][]){
  for(const predecessor of [post.id,"absent"]){
@@ -78,4 +97,4 @@ for(const [name,frames] of [["valid-lineage",[genesis,post,edit,later]],["valid-
  if(name==="concurrent-target") assert.equal(result.quarantineReasons.get(concurrent.id),"application_target_not_visible");
  cases.push({name,replica,frames,reasons:Object.fromEntries(ops.filter(o=>o.kind==="command").map(o=>[o.id,result.quarantineReasons.get(o.id)??null]))});
 }
-console.log(JSON.stringify({cases}));
+console.log(JSON.stringify({cases:cases.map(c=>({...c,posts:observeTreehouse("Treehouse.Thread",carrierOpsToSemanticOps(c.frames,{},treehouseCommandDecoders("Treehouse.Thread"))).posts.map(p=>p.text)}))}));

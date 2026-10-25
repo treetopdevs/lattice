@@ -53,7 +53,8 @@ defmodule Treehouse.Thread do
 
   def command_op_status(%Op{body: {command, [post, target | _]}} = op, visible, context)
       when command in [:author_edit, :author_tombstone, :moderator_tombstone] do
-    targets = lineage_targets(target, post, context.visible_ops, MapSet.new([post]))
+    targets =
+      lineage_targets(target, post, context.visible_ops, context.verdicts, MapSet.new([post]))
 
     cond do
       Enum.any?(targets, &(not MapSet.member?(visible, &1))) ->
@@ -81,19 +82,19 @@ defmodule Treehouse.Thread do
 
   def command_op_status(_op, _visible, _context), do: :ok
 
-  defp lineage_targets(target, post, ops, seen) do
+  defp lineage_targets(target, post, ops, verdicts, seen) do
     if MapSet.member?(seen, target) do
       seen
     else
       seen = MapSet.put(seen, target)
 
       case ops[target] do
-        %Op{kind: :command, body: {:author_edit, [^post, previous, _] = args}} ->
+        %Op{kind: :command, body: {:author_edit, [^post, previous, _]}} ->
           # A malformed signed command stays in history, but its arguments did
-          # not become product semantics. Match the strict product decoder before
-          # following its predecessor; authorization is judged separately below.
-          if valid_edit_arguments?(args) do
-            lineage_targets(previous, post, ops, seen)
+          # not become product semantics. Its causal verdict is already final;
+          # do not rescan every earlier message body on each lineage hop.
+          if verdicts[target] != :malformed_command do
+            lineage_targets(previous, post, ops, verdicts, seen)
           else
             seen
           end
@@ -103,9 +104,6 @@ defmodule Treehouse.Thread do
       end
     end
   end
-
-  defp valid_edit_arguments?(args),
-    do: match?({:ok, _}, Lattice.Replica.command_effects(__MODULE__, :author_edit, args))
 
   defp valid_lineage?(targets, post, replica, ops) do
     match?(%Op{replica: ^replica, kind: :command, body: {:post, [_]}}, ops[post]) and
