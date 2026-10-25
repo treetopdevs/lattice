@@ -98,3 +98,40 @@ fn artifact_json_rejects_duplicate_decoded_names_and_oversized_or_lossy_input() 
         json!({"x":[1,true,null,"雪"]})
     );
 }
+
+#[test]
+fn actual_ts_signed_catalog_histories_authenticate_without_an_authority_verdict() {
+    use treehouse_tauri_shell::catalog_eval::frame::verify;
+    let fixture: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../lattice-client/test/vectors/catalog/ts_trust.json"
+    )))
+    .unwrap();
+    let mut count = 0;
+    for history in fixture["histories"].as_array().unwrap() {
+        for frame in history["frames"].as_array().unwrap() {
+            let authentic = verify(&serde_json::to_vec(frame).unwrap()).unwrap();
+            assert_eq!(authentic.id(), frame["id"].as_str().unwrap());
+            assert_eq!(authentic.replica(), history["replica"].as_str().unwrap());
+            for field in [
+                "id", "replica", "author", "deps", "kind", "body", "cap", "sig",
+            ] {
+                let mut changed = frame.clone();
+                changed[field] = match field {
+                    "body" | "cap" => json!(["bin", "dGFtcGVy"]),
+                    "deps" => json!(["A".repeat(43)]),
+                    "kind" => json!("tombstone"),
+                    _ => json!("changed"),
+                };
+                if changed != *frame {
+                    assert!(
+                        verify(&serde_json::to_vec(&changed).unwrap()).is_err(),
+                        "{field}"
+                    );
+                }
+            }
+            count += 1;
+        }
+    }
+    assert_eq!(count, 8, "all Space and Thread frames in this fixture");
+}
