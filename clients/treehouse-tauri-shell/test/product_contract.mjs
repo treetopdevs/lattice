@@ -107,6 +107,7 @@ assert.deepEqual(
   [
     "treehouse_commit",
     "treehouse_export_space_frames",
+    "treehouse_export_public_evidence",
     "treehouse_initialize_identity",
     "treehouse_initialize_thread",
     "treehouse_thread_identity",
@@ -117,7 +118,7 @@ assert.deepEqual(
     "treehouse_sign_carrier",
   ].sort(),
 );
-const previewCommands = ["treehouse_thread_identity", "treehouse_initialize_thread", "treehouse_sign_thread", "treehouse_open", "treehouse_initialize_identity", "treehouse_commit", "treehouse_load_draft", "treehouse_save_draft", "treehouse_sign_carrier", "treehouse_export_space_frames"];
+const previewCommands = ["treehouse_thread_identity", "treehouse_initialize_thread", "treehouse_sign_thread", "treehouse_open", "treehouse_initialize_identity", "treehouse_commit", "treehouse_load_draft", "treehouse_save_draft", "treehouse_sign_carrier", "treehouse_export_space_frames", "treehouse_export_public_evidence"];
 const witnessCommands = ["treehouse_witness_public_identity", "treehouse_witness_prepare_creation", "treehouse_witness_generate", "treehouse_witness_prove_binding", "treehouse_witness_cancel"];
 const build = await readFile("src-tauri/build.rs", "utf8");
 assert.deepEqual([...build.matchAll(/"(treehouse_\w+)"/g)].map(m => m[1]).sort(), [...previewCommands, ...witnessCommands].sort());

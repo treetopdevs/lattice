@@ -41,7 +41,7 @@ import type {
   Verifier,
 } from "@treetopdevs/lattice-client";
 import { buildSpaceFramesExport, isExportFileName } from "./space_export";
-import { buildOfflineInvitation, reviewOfflineInvitation as decodeOfflineInvitation } from "./offline_enrollment";
+import { buildInitialProvisioningBundle, buildOfflineInvitation, reviewOfflineInvitation as decodeOfflineInvitation } from "./offline_enrollment";
 import type { OfflineInvitationReview } from "./offline_enrollment";
 import {
   assertRetainedMonotonic,
@@ -958,6 +958,30 @@ export class TreehouseWorkflow {
       const merged = mergeRelay(this.state.relay, config);
       if (merged === null) return;
       await this.persist({ ...structuredClone(this.state), relay: merged });
+    });
+  }
+  exportOfflineInvitation(fileName: string, text: string) {
+    return this.exclusive(async () => {
+      if (!isExportFileName(fileName)) throw new Error("invalid_export_name");
+      if (!this.native.exportPublicEvidence) throw new Error("export_unavailable");
+      // Re-authenticate captured public output; the writer never reads app/key storage.
+      const parsed = JSON.parse(text);
+      const reviewed = await decodeOfflineInvitation(new TextEncoder().encode(text), parsed.recipient);
+      const space = this.spaceProfile();
+      if (reviewed.space !== space.replica || reviewed.spaceRoot !== this.state.publicKey) throw new Error("wrong_replica");
+      return this.native.exportPublicEvidence(fileName, reviewed.text);
+    });
+  }
+  exportInitialProvisioning(fileName: string) {
+    return this.exclusive(async () => {
+      if (!isExportFileName(fileName)) throw new Error("invalid_export_name");
+      if (!this.native.exportPublicEvidence) throw new Error("export_unavailable");
+      const space = this.boundedRootSpace();
+      const threads = this.state.profiles.filter(profile => profile.product === "Treehouse.Thread");
+      if (this.state.intent || threads.length !== 1) throw new Error("initial_pair_required");
+      const thread = threads[0]!;
+      const text = await buildInitialProvisioningBundle({ space: space.replica, spaceFrames: space.frames, thread: thread.replica, threadFrames: thread.frames });
+      return this.native.exportPublicEvidence(fileName, text);
     });
   }
   /** Recipient key is reviewed separately from the joiner's group fingerprint. No signature or write. */

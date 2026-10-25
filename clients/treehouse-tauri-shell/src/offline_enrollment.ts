@@ -2,7 +2,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   carrierOpsToSemanticOps, decodeCarrierOpFrame, resolveContinuationProfileFromFrames,
   reviewTreehouseInvitation, treehouseCatalogBootstrapsFromFrames,
-  treehouseCommandDecoders, treehouseSpaceFamily, treehouseSpaceInitialization, verifyCarrierOp,
+  treehouseCommandDecoders, observeTreehouse, treehouseSpaceFamily, treehouseSpaceInitialization, verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
 import { buildSpaceFramesExport } from "./space_export";
@@ -26,6 +26,8 @@ const verifier = { verify: async (pub: string, bytes: Uint8Array, sig: Uint8Arra
 export interface OfflineInvitationReview {
   space: string;
   spaceRoot: string;
+  name: string;
+  threadTitles: { replica: string; title: string }[];
   bootstrapId: string;
   invitationId: string;
   recipient: string;
@@ -96,7 +98,44 @@ export async function reviewOfflineInvitation(bytes: Uint8Array, recipient: stri
       "treehouse-offline-group-fingerprint-v1", doc.space, doc.spaceRoot, doc.bootstrapId,
     ]))));
     const fingerprint = Array.from(digest, n => n.toString(16).padStart(2, "0")).join("").match(/.{4}/g)!.join(" ");
-    return { space: doc.space, spaceRoot: doc.spaceRoot, bootstrapId: doc.bootstrapId,
+    const view = observeTreehouse("Treehouse.Space", ops);
+    const threadTitles = (view.state.threads as { replica: string; title: string }[])
+      .filter(thread => invitation.threads.includes(thread.replica));
+    return { space: doc.space, spaceRoot: doc.spaceRoot, name: String(view.state.name), threadTitles, bootstrapId: doc.bootstrapId,
       invitationId: doc.invitationId, recipient, threads: invitation.threads, fingerprint, frames, text };
   } catch { return refuse(); }
+}
+
+/** Public provisioning candidate; the Linux importer independently verifies its ceremony and full staging policy. */
+export async function buildInitialProvisioningBundle(input: {
+  space: string; spaceFrames: readonly CarrierOpFrame[]; thread: string; threadFrames: readonly CarrierOpFrame[];
+}): Promise<string> {
+  const snapshot = structuredClone(input);
+  const profiles = await Promise.all([
+    { product: "Treehouse.Space", replica: snapshot.space, frames: snapshot.spaceFrames },
+    { product: "Treehouse.Thread", replica: snapshot.thread, frames: snapshot.threadFrames },
+  ].map(async profile => {
+    const resolved = await resolveContinuationProfileFromFrames({ replica: profile.replica, frames: profile.frames });
+    if (!resolved.ok) return refuse();
+    const exported = JSON.parse(await buildSpaceFramesExport({ space: profile.replica, rootPublicKey: resolved.root,
+      frames: profile.frames, verify: async frame => (await verifyCarrierOp(frame, verifier)).valid }));
+    return { product: profile.product, replica: profile.replica, frames: exported.frames as CarrierOpFrame[] };
+  }));
+  if (profiles[0]!.frames.length + profiles[1]!.frames.length > 4000) return refuse();
+  const observed = await treehouseCatalogBootstrapsFromFrames({ replica: snapshot.space, frames: profiles[0]!.frames });
+  if (!observed.ok || observed.bootstraps.length !== 1) return refuse();
+  const bootstrap = observed.bootstraps[0]!;
+  const spaceOps = carrierOpsToSemanticOps(profiles[0]!.frames, {}, treehouseCommandDecoders("Treehouse.Space"));
+  const view = observeTreehouse("Treehouse.Space", spaceOps);
+  const references = spaceOps.filter(op => op.command === "create_thread" && !view.quarantineReasons.has(op.id));
+  const members = view.state.members as string[];
+  if (references.length !== 1 || references[0]!.commandArgs?.[0] !== snapshot.thread ||
+    members.length !== 2 || !members.includes(bootstrap.record.spaceRoot)) return refuse();
+  const threadOps = carrierOpsToSemanticOps(profiles[1]!.frames, {}, treehouseCommandDecoders("Treehouse.Thread"));
+  const threadView = observeTreehouse("Treehouse.Thread", threadOps);
+  if (threadView.quarantineReasons.size || threadOps.some(op => op.kind === "tombstone")) return refuse();
+  const text = canonical({ format: "treehouse-initial-provisioning-v1", product: "treehouse", space: snapshot.space,
+    spaceRoot: bootstrap.record.spaceRoot, bootstrapId: bootstrap.id, referenceId: references[0]!.id, profiles });
+  if (encoder.encode(text).length > OFFLINE_EVIDENCE_MAX_BYTES) return refuse();
+  return text;
 }

@@ -12,7 +12,8 @@
     "allow-treehouse-load-draft",
     "allow-treehouse-save-draft",
     "allow-treehouse-sign-carrier",
-    "allow-treehouse-export-space-frames"
+    "allow-treehouse-export-space-frames",
+    "allow-treehouse-export-public-evidence"
   ],
   "webviews": [
     "main"

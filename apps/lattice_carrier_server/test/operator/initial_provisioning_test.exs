@@ -199,6 +199,35 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioningTest do
     assert {:ok, _} = LatticeCarrierServer.Operator.CeremonyFixture.report(ceremony)
     true = Port.command(port, "\"verified\"\n")
     completed = phase(port, "bundle")
+    invitation = JSON.decode!(completed["invitation"])
+    assert completed["invitation"] == InitialBundle.canonical(invitation)
+
+    fingerprint =
+      [
+        "treehouse-offline-group-fingerprint-v1",
+        invitation["space"],
+        invitation["spaceRoot"],
+        invitation["bootstrapId"]
+      ]
+      |> InitialBundle.canonical()
+      |> then(&:crypto.hash(:sha256, &1))
+      |> Base.encode16(case: :lower)
+      |> String.codepoints()
+      |> Enum.chunk_every(4)
+      |> Enum.map_join(" ", &Enum.join/1)
+
+    assert completed["fingerprint"] == fingerprint
+    assert {:ok, verified_bundle} = InitialBundle.decode(completed["bytes"])
+    assert verified_bundle.bootstrap.id == invitation["bootstrapId"]
+
+    assert [%{"product" => "Treehouse.Space", "frames" => candidate_frames}] =
+             invitation["profiles"]
+
+    for frame <- candidate_frames do
+      assert {:ok, op} = Lattice.Carrier.Wire.decode_op(frame)
+      assert verified_bundle.space.ops[op.id] == op
+    end
+
     assert_receive {^port, {:exit_status, 0}}, 30_000
     public = Path.join(f.fixture.root, "ordinary-final.json")
     File.write!(public, completed["bytes"])

@@ -142,7 +142,8 @@ fn application_invoke_handler<R: tauri::Runtime>(
         treehouse_load_draft,
         treehouse_save_draft,
         treehouse_sign_carrier,
-        space_export::treehouse_export_space_frames
+        space_export::treehouse_export_space_frames,
+        space_export::treehouse_export_public_evidence
     ];
     move |invoke| {
         if witness_commands::recognizes_command(invoke.message.command()) {

@@ -20,6 +20,7 @@ export const native: PreviewNative = {
         bytes: btoa(String.fromCharCode(...bytes)),
       }),
     ),
+  exportPublicEvidence: (fileName, contents) => invoke("treehouse_export_public_evidence", { fileName, contents }),
   exportSpaceFrames: (fileName, contents) =>
     invoke("treehouse_export_space_frames", { fileName, contents }),
 };

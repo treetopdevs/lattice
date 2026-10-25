@@ -11,6 +11,7 @@ import { TreehouseWorkflow, parsePublicKeys } from "./treehouse_workflow";
 import { native } from "./native_adapter";
 import WitnessSetup from "./WitnessSetup.vue";
 import ContinuationPanel from "./ContinuationPanel.vue";
+import OfflineEnrollmentPanel from "./OfflineEnrollmentPanel.vue";
 const workflow = new TreehouseWorkflow(native);
 // Plan 181 decision 11: the enrollment panel and its relay copy exist only in the build made with
 // VITE_TREEHOUSE_ENROLLMENT=1 together with VITE_TREEHOUSE_DEV_TRACE=1 (vite.config.ts refuses any build
@@ -112,6 +113,16 @@ const title = (replica: string) =>
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const known: Record<string, string> = {
+    invalid_offline_invitation: "This invitation could not be verified for your identity. Nothing was installed.",
+    offline_evidence_too_large: "That invitation file is too large. Ask the founder for a bounded initial invitation.",
+    offline_bootstrap_required: "Finish the catalog binding ceremony before preparing an offline invitation.",
+    no_pending_offline_review: "Review and confirm the current key or fingerprint before signing.",
+    stale_offline_review: "Saved state changed. Reopen and review the file or recipient again before signing.",
+    offline_join_not_available: "Prepare a join request in an empty app profile before reviewing an invitation.",
+    initial_pair_required: "The initial operator bundle needs one completed group and one Thread.",
+    export_unavailable: "File export is unavailable in this build.",
+    export_exists: "That file name already exists. Choose a new name; the existing file was preserved.",
+    invalid_export_name: "Use a plain file name ending in .json, without folders or consecutive dots.",
     stale_saved_state:
       "Another window saved changes. Reopen Treehouse before retrying; your saved history is intact.",
     draft_changed_in_another_window:
@@ -360,8 +371,8 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
       <section v-else-if="joining" class="notice" aria-label="Joining a group">
         <h2>Waiting for your group</h2>
         <p>
-          Your identity is ready. The group appears here once Sync brings it
-          from the relay after you are admitted.
+          Your identity is ready. Exchange an invitation and acceptance below.
+          Group history and relay access follow after admission.
         </p>
       </section>
       <section v-else class="notice">
@@ -370,8 +381,8 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
         <button :disabled="busy" @click="resume">Finish local setup</button>
       </section>
       <p v-if="!enrollment" class="fine">
-        There are no members or connections yet. Inviting others and recovery
-        come later.
+        Offline invitations are available below. Relay access and recovery require
+        their separate setup steps.
       </p>
     </main>
     <div v-else-if="ready" class="workspace">
@@ -662,6 +673,7 @@ onBeforeUnmount(() => clearTimeout(draftTimer));
       :run="run"
       :describe="describe"
     />
+    <OfflineEnrollmentPanel v-if="ready" :workflow="workflow" :state="state" :busy="busy" :run="run" />
     <WitnessSetup />
   </div>
 </template>
