@@ -161,7 +161,12 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.Packet do
 
   defp raw_histories(histories) when map_size(histories) in 1..13 do
     Enum.reduce_while(histories, {:ok, []}, fn {replica, log}, {:ok, acc} ->
-      with %Log{replica: ^replica} <- log, :ok <- Log.verify_authenticity(log) do
+      with %Log{replica: ^replica} <- log,
+           :ok <- Log.verify_authenticity(log),
+           :ok <-
+             frame_budget(
+               PublicHistory.frames(log) ++ Enum.map(Log.quarantine(log), &Wire.encode_op(&1.op))
+             ) do
         rejected =
           log
           |> Log.quarantine()
@@ -176,6 +181,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.Packet do
 
         {:cont, {:ok, [raw | acc]}}
       else
+        {:error, :evidence_page_too_large} = error -> {:halt, error}
         _ -> {:halt, {:error, :invalid_verified_history}}
       end
     end)
@@ -186,6 +192,12 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.Packet do
   end
 
   defp raw_histories(_), do: {:error, :evidence_page_malformed}
+
+  defp frame_budget(frames) do
+    if Enum.all?(frames, fn frame ->
+         byte_size(PublicHistory.canonical(%{"type" => "push", "ops" => [frame]})) <= 64_000
+       end), do: :ok, else: {:error, :evidence_page_too_large}
+  end
 
   defp pages(catalogs, histories) do
     catalogs
@@ -215,6 +227,12 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.Packet do
            same(
              length(all_histories) in 1..13 and Enum.all?(all_histories, &history?/1),
              :evidence_page_malformed
+           ),
+         :ok <-
+           frame_budget(
+             Enum.flat_map(all_histories, fn history ->
+               history["frames"] ++ Enum.map(history["rejected"], & &1["frame"])
+             end)
            ),
          [space_raw] <- Enum.filter(all_histories, &(&1["replica"] == doc["space"])),
          {:ok, space} <- restored(space_raw),

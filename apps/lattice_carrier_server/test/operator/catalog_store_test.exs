@@ -156,6 +156,13 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
            }
 
     assert {:ok, one.id} == CatalogStore.committed_head(root)
+    assert {:ok, documents} = CatalogStore.committed_documents(root, signer().pub)
+    assert documents.head == one.id
+    assert Enum.map(documents.documents, & &1.bytes) == [zero.bytes, one.bytes]
+    assert Enum.map(documents.documents, & &1.id) == [zero.id, one.id]
+
+    assert {:error, :catalog_store_corrupt} =
+             CatalogStore.committed_documents(root, signer("other").pub)
   end
 
   test "a killed temp write leaves the store readable", %{root: root} do
@@ -177,6 +184,9 @@ defmodule LatticeCarrierServer.Operator.CatalogStoreTest do
     assert {:ok, %{head: head, pending: pending}} = CatalogStore.verify(root, nil)
     assert head == zero.id
     assert pending == %{id: one.id, sha256: one.sha256, revision: 1}
+
+    assert {:error, :catalog_publication_pending} =
+             CatalogStore.committed_documents(root, signer().pub)
   end
 
   test "with no receipt the first envelope is pending", %{root: root} do

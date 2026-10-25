@@ -331,8 +331,16 @@ defmodule Lattice.Log do
   @spec restore_verified(Path.t()) ::
           {:ok, %{log: t(), sha256: String.t()}} | {:error, term()}
   def restore_verified(path) do
+    with {:ok, bytes} <- File.read(path), do: restore_verified_bytes(bytes)
+  rescue
+    _ -> {:error, :invalid_log}
+  end
+
+  @doc "Verify a caller-bounded dump read with the same legacy upgrade and authenticity rules."
+  @spec restore_verified_bytes(binary()) ::
+          {:ok, %{log: t(), sha256: String.t()}} | {:error, term()}
+  def restore_verified_bytes(bytes) when is_binary(bytes) do
     with :ok <- ensure_dump_vocabulary(),
-         {:ok, bytes} <- File.read(path),
          {:ok, {:lattice_log_dump_v1, %__MODULE__{ops: ops} = stored}} <-
            safe_binary_to_term(bytes),
          true <- is_map(ops),
@@ -346,6 +354,8 @@ defmodule Lattice.Log do
   rescue
     _error -> {:error, :invalid_log}
   end
+
+  def restore_verified_bytes(_), do: {:error, :invalid_log}
 
   # `:safe` blocks atom/resource creation from a tampered dump; a dump referencing
   # unknown atoms (or otherwise unsafe terms) raises, which we map to an error.

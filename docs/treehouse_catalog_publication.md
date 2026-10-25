@@ -157,3 +157,45 @@ this deliberately permits a bounded JSON transient rather than a streaming forma
 budget refusals; inspect the documented byte/frame limits rather than assuming corruption.
 An entry-count overflow is the distinct `catalog_capacity` refusal. A carried instance
 missing from a hand-altered deployment is refused, never omitted from a catalog.
+
+## Export public catalog evidence after listing
+
+Once guarded listing has produced a `listed` receipt, export the complete committed
+catalog chain and actual Space/Thread histories for offline candidate evaluation.
+Run the command from `apps/lattice_carrier_server` with the project's configured
+Elixir/OTP toolchain. On the local development machine, use the asdf shim from
+AGENTS.md instead of plain `mix`:
+
+```sh
+mix treehouse.catalog_evidence \
+  --root /srv/treehouse/operator \
+  --ceremony /srv/treehouse/ceremony \
+  --manifest /srv/treehouse/active/manifest.json \
+  --out /srv/treehouse/transfer/catalog-evidence.json
+```
+
+The manifest must be the exact file recorded by the listed receipt. The command loads
+configuration without starting another relay or listener, so it can run while the
+configured service is already bound. Its only write is the new output file. Choose an
+existing directory owned by the operator or root, with no writable group/other or
+symlink ancestors, outside the operator and ceremony roots and all protected inputs.
+An existing output file or link refuses; choose a new filename for each export.
+
+The closed `lattice-catalog-evidence-page-v1` file preserves exact signed catalog JSON
+strings and complete authenticated frame histories. It includes no private seed,
+service identity file, signer, user consent or installed trust. The encoder runs the
+existing catalog evaluator and refuses a fork, gap, missing history, authority lapse,
+pending publication or changed source. A successful export establishes only a checked
+candidate over the bytes observed on this host. It does not establish current network
+availability, freshness, participant membership or authority to activate routes.
+
+Limits remain 128 KiB per artifact, 1,024 artifacts/16 MiB total, 32 artifacts per page,
+a 32 MiB retained snapshot and a 64 MiB transport file. Every frame must fit a
+64,000-byte push envelope. Native dump reads are bounded at 64 MiB across sources;
+a compressed dump's declared expanded size counts against that budget before decoding.
+Refusals never truncate authentic history. Preserve inputs, resolve the named refusal
+and retry to a new output filename. A failed write cleans up only its own partial file;
+it does not remove a replacement owned by another writer.
+
+Import and native trust installation are later app work. Do not edit the ordinary
+app's database or infer an installed route from a successful file export.

@@ -172,4 +172,33 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.PacketTest do
                head
              )
   end
+
+  test "an authentic oversized operation cannot become an unusable evidence frame", %{
+    f: f,
+    histories: histories,
+    head: head
+  } do
+    thread = hd(f.threads)
+
+    post =
+      Op.new(
+        thread.root,
+        thread.replica,
+        Log.frontier(thread.log),
+        :command,
+        {:post, [String.duplicate("x", 50_000)]},
+        cap: thread.delegation.id
+      )
+
+    grown = Log.append!(thread.log, post)
+    assert :ok = Log.verify_authenticity(grown)
+
+    assert {:error, :evidence_page_too_large} =
+             Packet.encode(
+               f.space_log,
+               [f.catalog_json],
+               Map.put(histories, thread.replica, grown),
+               head
+             )
+  end
 end

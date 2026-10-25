@@ -6,6 +6,10 @@ IN PROGRESS: implement plan 245 build PR 4 independently of its Rust evaluator.
 The fresh worktree started from main with catalog publication and is now rebased
 onto the verified listing merge for its real release/publication fixture.
 No pending-parent implementation is copied or silently treated as merged.
+Host reads, exclusive output and the standalone command are implemented. Focused
+Linux tests exercise actual listed fixtures and the TS evaluator. A genuine signed
+fixture reaches both the exact artifact and retained-snapshot limits. Final broad
+checks, review and hosted PR verification remain open.
 
 ## Outcome
 
@@ -29,14 +33,19 @@ remain parked separately; software gates use disposable real-mode fixtures.
   a current `listed` journal and the exact manifest whose digest it records. The
   explicit manifest argument makes the standalone command usable without starting
   another relay VM. It never accepts routes, a signer key or a caller verdict.
-- `mix treehouse.catalog_evidence --root ... --ceremony ... --manifest ... --out ...`
-  loads configuration only, never application listeners. Closed options reject
+- From `apps/lattice_carrier_server`, run
+  `mix treehouse.catalog_evidence --root ... --ceremony ... --manifest ... --out ...`.
+  It loads configuration only, never application listeners. Umbrella-root invocation
+  retains AGENTS.md's full-build/Cargo prerequisites. Closed options reject
   duplicates and unknown arguments. Refusals are atoms, without inspected terms.
 - A pending envelope or current non-listed phase refuses; export never accidentally
   promotes an unfinished publication. Only the committed linear chain is included.
 - Preserve the envelope's exact validated JSON bytes. Add a narrowly shared verified
-  document reader to CatalogStore if needed: its current map-only reader discards
-  the bytes. Preserve the existing load_envelope API and all store validation.
+  document reader to CatalogStore: its existing map-only reader discards the bytes.
+  Bulk committed reads retain validation without quadratic full-store rescans.
+  Extract Log.restore_verified_bytes from the existing file reader so bounded
+  source reads retain identical safe decoding/legacy upgrades; no encoding changes.
+  Preserve both existing APIs and all validation.
 - A pure packet encoder/decoder may support tests and offline inspection, but it
   must authenticate histories and run the actual CatalogTrust pipeline. It cannot
   accept a saved decision, honored flag or installed-state claim.
@@ -81,7 +90,10 @@ capacity to make an easy test pass; prove the maximum-capacity case explicitly.
 
 Create a new regular output file exclusively; an existing file, hard link or
 symlink refuses. The selected parent must be a real directory, matching the native
-Space exporter. Reject protected input targets/subtrees. Sync and close the file;
+Space exporter. Require the output ancestor chain to satisfy the existing operator
+directory policy (owned by this user/root, no writable group/other or symlink
+ancestors), preventing aliases into protected inputs. Reject protected input
+targets/subtrees. Sync and close the file;
 on failure remove only the file this call created, never another process's file.
 Output bytes repeat exactly for unchanged inputs. No journal, catalog, log, identity
 or ceremony artifact is mutated. Do not start a listener or add a network action.

@@ -76,6 +76,54 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
     _ -> {:error, :catalog_store_corrupt}
   end
 
+  @doc "Read the exact verified bytes of the complete committed chain without repeated full-store scans."
+  @spec committed_documents(Path.t(), binary()) :: {:ok, map()} | {:error, atom()}
+  def committed_documents(root, key) when is_binary(key) and byte_size(key) == 32 do
+    with {:ok, before} <- verify(root, key),
+         nil <- before.pending,
+         true <- is_binary(before.head) and map_size(before.envelopes) <= 1024,
+         {:ok, uid} <- Journal.effective_uid(),
+         {:ok, documents} <- read_documents(root, before.envelopes, uid, key),
+         {:ok, ^before} <- verify(root, key) do
+      {:ok, %{head: before.head, documents: documents}}
+    else
+      %{id: _} -> {:error, :catalog_publication_pending}
+      _ -> {:error, :catalog_store_corrupt}
+    end
+  rescue
+    _ -> {:error, :catalog_store_corrupt}
+  end
+
+  def committed_documents(_, _), do: {:error, :catalog_store_corrupt}
+
+  defp read_documents(root, entries, uid, key) do
+    entries
+    |> Enum.sort_by(fn {_id, meta} -> meta.revision end)
+    |> Enum.reduce_while({:ok, [], 0}, fn {id, meta}, {:ok, documents, size} ->
+      with {:ok, {:final, checked}, bytes} <-
+             read_file(file_path(root, meta.sha256), meta.sha256 <> ".json", uid, key),
+           true <- checked.id == id and checked.revision == meta.revision,
+           true <- size + byte_size(bytes) <= 16 * 1024 * 1024,
+           {:ok, envelope} <- TransportCatalog.decode_catalog_json(bytes) do
+        item = %{
+          id: id,
+          sha256: meta.sha256,
+          revision: meta.revision,
+          bytes: bytes,
+          envelope: envelope
+        }
+
+        {:cont, {:ok, [item | documents], size + byte_size(bytes)}}
+      else
+        _ -> {:halt, {:error, :catalog_store_corrupt}}
+      end
+    end)
+    |> case do
+      {:ok, reversed, _size} -> {:ok, Enum.reverse(reversed)}
+      refusal -> refusal
+    end
+  end
+
   defp read_store(root, uid, key) do
     dir = path(root)
 
@@ -158,7 +206,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
             inode: inode
           }} <- File.lstat(file),
          true <- links in [1, 2] and band(mode, 0o077) == 0 and size <= @max_envelope,
-         {:ok, bytes} <- File.read(file),
+         {:ok, bytes} <- bounded_document(file),
          true <- Journal.digest(bytes) == sha,
          {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(bytes),
          true <- signed?(bytes, key) do
@@ -175,6 +223,19 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
         }}, bytes}
     else
       _ -> {:error, :catalog_store_corrupt}
+    end
+  end
+
+  defp bounded_document(path) do
+    with {:ok, file} <- File.open(path, [:read, :binary, :raw]) do
+      try do
+        case :file.read(file, @max_envelope + 1) do
+          {:ok, bytes} when byte_size(bytes) <= @max_envelope -> {:ok, bytes}
+          _ -> {:error, :catalog_store_corrupt}
+        end
+      after
+        File.close(file)
+      end
     end
   end
 

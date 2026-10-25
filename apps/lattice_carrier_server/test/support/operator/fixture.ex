@@ -180,12 +180,14 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     space_peers = peers.("space-root", Sim.identity(space, "creator").pub)
     child_peers = peers.("child-root", Sim.identity(child, "creator").pub)
 
+    [space_port, child_port] = Keyword.get(opts, :listener_ports, [0, 0])
+
     instance = %{
       "name" => "space",
       "realm" => binding_realm,
       "identity_file" => identity,
       "log_file" => active_log,
-      "listener" => %{"ip" => "127.0.0.1", "port" => 0},
+      "listener" => %{"ip" => "127.0.0.1", "port" => space_port},
       "route" => space_route,
       "trusted_peers" => peer_json.(space_peers),
       "relay_realms" => Enum.map(space_peers, &elem(&1, 0))
@@ -203,6 +205,7 @@ defmodule LatticeCarrierServer.Operator.Fixture do
     next_instance = %{
       instance
       | "name" => "thread",
+        "listener" => %{"ip" => "127.0.0.1", "port" => child_port},
         "log_file" => child_path,
         "route" => child_route,
         "trusted_peers" => peer_json.(child_peers),
