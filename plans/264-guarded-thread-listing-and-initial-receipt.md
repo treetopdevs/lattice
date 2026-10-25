@@ -3,9 +3,10 @@
 ## Status and dependency
 
 Prepared 2026-10-24 from main `187cc3d8a77242cbca0fa1d6916af10fc1d6ef0c`.
-This is plan 224 PR 5. Implementation waits for catalog publication PR #168
-(plan 263) to merge on its required gates; this packet itself changes no runtime.
-After that merge, refresh this worktree from main and inspect the actual parent APIs.
+This is plan 224 PR 5. The independent holder snapshot/CAS and persistence tests may
+start privately from current main while catalog publication PR #168 (plan 263) verifies.
+Catalog integration and dependent merge wait for that parent to merge on its gates.
+After that merge, refresh this worktree from main and inspect actual parent APIs.
 Do not copy parent code, start from an unverified merge, or claim listing is built.
 D-48 records the delegated decisions. The unified roadmap is the execution ledger.
 
@@ -186,11 +187,12 @@ record fields. Keep BEAM/Python parity behavioral, without source/prose pins.
 
 ## Implementation order
 
-1. Verify #168 merge ancestry/tree/gates, refresh main and prepare Node dependencies.
-   Reuse its ActivationFixture/publication helpers; do not replace real histories with
-   fixtures carrying precomputed ready/honored flags.
-2. Implement local holder snapshot/CAS courier, fence/durability reuse, checked no-write
-   presence and dedicated behavioral tests. Prove it is unreachable over the network.
+1. Prepare Node/Mix dependencies and inspect current main. Independently implement/test
+   holder snapshot/CAS, persistence fencing and proof APIs against that main; these files
+   are unchanged by #168. Prove no new network action, with no precomputed honor flags.
+2. Before catalog integration, verify #168 merge ancestry/tree/gates and refresh main.
+   Reuse its actual ActivationFixture/publication APIs and preserve both plans/decisions
+   through rebase. No dependent merge or completion claim precedes the parent's gates.
 3. Implement ReleaseListing with before/inside/after current-history checks and strict
    artifact/catalog linkage. Add both normal pending and initial-existing integration.
 4. Wire list into CatalogCli, update both validators only with the guarded initial
