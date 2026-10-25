@@ -41,10 +41,12 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
   envelope signature is checked; with nil only structure is.
   """
   @spec verify(Path.t(), binary() | nil) :: {:ok, result()} | {:error, atom()}
-  def verify(root, key) do
+  def verify(root, key), do: verify_store(root, key, :general)
+
+  defp verify_store(root, key, policy) do
     with :ok <- Journal.secure_root(root),
          {:ok, uid} <- Journal.effective_uid(),
-         {:ok, stored} <- read_store(root, uid, key),
+         {:ok, stored} <- read_store(root, uid, key, policy),
          {:ok, chain} <- chain(stored),
          {:ok, current, receipts, replicas} <- receipts(root, uid),
          :ok <- match_receipts(chain, receipts),
@@ -76,7 +78,63 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
     _ -> {:error, :catalog_store_corrupt}
   end
 
-  defp read_store(root, uid, key) do
+  @doc "Read the exact verified bytes of the complete committed chain without repeated full-store scans."
+  @spec committed_documents(Path.t(), binary()) :: {:ok, map()} | {:error, atom()}
+  def committed_documents(root, key) when is_binary(key) and byte_size(key) == 32 do
+    with {:ok, before} <- verify_store(root, key, :evidence),
+         nil <- before.pending,
+         true <- is_binary(before.head),
+         {:ok, uid} <- Journal.effective_uid(),
+         {:ok, documents} <- read_documents(root, before.envelopes, uid, key),
+         {:ok, ^before} <- verify_store(root, key, :evidence) do
+      {:ok, %{head: before.head, documents: documents}}
+    else
+      %{id: _} -> {:error, :catalog_publication_pending}
+      {:error, :evidence_page_too_large} = refusal -> refusal
+      _ -> {:error, :catalog_store_corrupt}
+    end
+  rescue
+    _ -> {:error, :catalog_store_corrupt}
+  end
+
+  def committed_documents(_, _), do: {:error, :catalog_store_corrupt}
+
+  defp read_documents(root, entries, uid, key) do
+    entries
+    |> Enum.sort_by(fn {_id, meta} -> meta.revision end)
+    |> Enum.reduce_while({:ok, [], 0}, fn {id, meta}, {:ok, documents, size} ->
+      with {:ok, {:final, checked}, bytes} <-
+             read_file(
+               file_path(root, meta.sha256),
+               meta.sha256 <> ".json",
+               uid,
+               key,
+               16 * 1024 * 1024 - size
+             ),
+           true <- checked.id == id and checked.revision == meta.revision,
+           :ok <- document_budget(size + byte_size(bytes)),
+           {:ok, envelope} <- TransportCatalog.decode_catalog_json(bytes) do
+        item = %{
+          id: id,
+          sha256: meta.sha256,
+          revision: meta.revision,
+          bytes: bytes,
+          envelope: envelope
+        }
+
+        {:cont, {:ok, [item | documents], size + byte_size(bytes)}}
+      else
+        {:error, :evidence_page_too_large} = refusal -> {:halt, refusal}
+        _ -> {:halt, {:error, :catalog_store_corrupt}}
+      end
+    end)
+    |> case do
+      {:ok, reversed, _size} -> {:ok, Enum.reverse(reversed)}
+      refusal -> refusal
+    end
+  end
+
+  defp read_store(root, uid, key, policy) do
     dir = path(root)
 
     case File.lstat(dir) do
@@ -84,8 +142,9 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
         {:ok, []}
 
       {:ok, %{type: :directory, uid: ^uid, mode: mode}} when band(mode, 0o077) == 0 ->
-        with {:ok, names} <- File.ls(dir),
-             {:ok, entries} <- read_names(dir, names, uid, key),
+        with {:ok, names} <- store_names(dir, policy),
+             :ok <- store_budget(dir, names, policy),
+             {:ok, entries} <- read_names(dir, names, uid, key, policy),
              do: split_entries(entries)
 
       _ ->
@@ -93,23 +152,90 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
     end
   end
 
-  defp read_names(dir, names, uid, key) do
-    Enum.reduce_while(names, {:ok, []}, fn name, {:ok, acc} ->
-      case read_name(dir, name, uid, key) do
-        {:ok, entry} -> {:cont, {:ok, [entry | acc]}}
+  defp store_names(dir, :general), do: File.ls(dir)
+
+  defp store_names(dir, :evidence) do
+    script = Application.app_dir(:lattice_carrier_server, "priv/catalog_evidence_names.py")
+
+    case System.cmd("python3", ["-I", "-S", script, dir], stderr_to_stdout: true) do
+      {json, 0} ->
+        case JSON.decode(json) do
+          {:ok, names} when is_list(names) and length(names) <= 2048 -> {:ok, names}
+          _ -> {:error, :catalog_store_corrupt}
+        end
+
+      {_, 2} ->
+        {:error, :evidence_page_too_large}
+
+      _ ->
+        {:error, :catalog_store_corrupt}
+    end
+  rescue
+    _ -> {:error, :catalog_store_corrupt}
+  end
+
+  defp store_budget(_dir, _names, :general), do: :ok
+
+  defp store_budget(dir, names, :evidence) do
+    finals = Enum.filter(names, &Regex.match?(~r/\A[0-9a-f]{64}\.json\z/, &1))
+
+    if length(finals) > 1024 do
+      {:error, :evidence_page_too_large}
+    else
+      Enum.reduce_while(finals, 0, fn name, total ->
+        case counted_file_size(Path.join(dir, name), total) do
+          {:ok, size} -> {:cont, size}
+          refusal -> {:halt, refusal}
+        end
+      end)
+      |> case do
+        size when is_integer(size) -> :ok
+        refusal -> refusal
+      end
+    end
+  end
+
+  defp counted_file_size(path, total) do
+    with {:ok, %{type: :regular, size: size}} <- File.lstat(path),
+         true <- size <= @max_envelope,
+         :ok <- document_budget(total + size) do
+      {:ok, total + size}
+    else
+      false -> {:error, :evidence_page_too_large}
+      {:error, :evidence_page_too_large} = refusal -> refusal
+      _ -> {:error, :catalog_store_corrupt}
+    end
+  end
+
+  defp document_budget(size) when size <= 16 * 1024 * 1024, do: :ok
+  defp document_budget(_), do: {:error, :evidence_page_too_large}
+
+  defp read_names(dir, names, uid, key, policy) do
+    Enum.reduce_while(names, {:ok, [], 0}, fn name, {:ok, acc, size} ->
+      remaining = if policy == :evidence, do: 16 * 1024 * 1024 - size, else: nil
+
+      case read_name(dir, name, uid, key, remaining) do
+        {:ok, entry, bytes} -> {:cont, {:ok, [entry | acc], size + bytes}}
         {:error, _} = error -> {:halt, error}
       end
     end)
+    |> case do
+      {:ok, entries, _} -> {:ok, entries}
+      refusal -> refusal
+    end
   end
 
-  defp read_name(dir, name, uid, key) do
+  defp read_name(dir, name, uid, key, remaining) do
     cond do
       Regex.match?(~r/\A\.tmp\.[0-9a-f]{32}\z/, name) ->
-        read_temp(Path.join(dir, name), uid)
+        case read_temp(Path.join(dir, name), uid) do
+          {:ok, entry} -> {:ok, entry, 0}
+          refusal -> refusal
+        end
 
       Regex.match?(~r/\A[0-9a-f]{64}\.json\z/, name) ->
-        case read_file(Path.join(dir, name), name, uid, key) do
-          {:ok, entry, _bytes} -> {:ok, entry}
+        case read_file(Path.join(dir, name), name, uid, key, remaining) do
+          {:ok, entry, bytes} -> {:ok, entry, byte_size(bytes)}
           {:error, _} = refusal -> refusal
         end
 
@@ -144,7 +270,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
     if ok?, do: {:ok, finals}, else: {:error, :catalog_store_corrupt}
   end
 
-  defp read_file(file, name, uid, key) do
+  defp read_file(file, name, uid, key, remaining \\ nil) do
     sha = String.replace_suffix(name, ".json", "")
 
     with {:ok,
@@ -158,7 +284,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
             inode: inode
           }} <- File.lstat(file),
          true <- links in [1, 2] and band(mode, 0o077) == 0 and size <= @max_envelope,
-         {:ok, bytes} <- File.read(file),
+         {:ok, bytes} <- bounded_document(file, remaining),
          true <- Journal.digest(bytes) == sha,
          {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(bytes),
          true <- signed?(bytes, key) do
@@ -174,7 +300,24 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
           shared: {catalog.bootstrap, catalog.binding, catalog.space}
         }}, bytes}
     else
+      {:error, :evidence_page_too_large} = refusal -> refusal
       _ -> {:error, :catalog_store_corrupt}
+    end
+  end
+
+  defp bounded_document(path, remaining) do
+    maximum = if is_integer(remaining), do: min(remaining, @max_envelope), else: @max_envelope
+
+    with {:ok, file} <- File.open(path, [:read, :binary, :raw]) do
+      try do
+        case :file.read(file, maximum + 1) do
+          {:ok, bytes} when byte_size(bytes) <= maximum -> {:ok, bytes}
+          {:ok, _} when is_integer(remaining) -> {:error, :evidence_page_too_large}
+          _ -> {:error, :catalog_store_corrupt}
+        end
+      after
+        File.close(file)
+      end
     end
   end
 
