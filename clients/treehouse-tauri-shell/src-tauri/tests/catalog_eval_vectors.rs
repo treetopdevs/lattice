@@ -1,4 +1,5 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
+use ed25519_dalek::SigningKey;
 use serde_json::{json, Value};
 use treehouse_tauri_shell::catalog_eval::canonical::{decode, encode, Term};
 
@@ -149,8 +150,9 @@ fn real_beam_and_ts_catalog_envelopes_verify_under_only_the_supplied_key() {
             STANDARD.encode(verified.signing_bytes()),
             fixture["catalog_bytes"]
         );
-        let mut wrong_key = key.clone();
-        wrong_key[0] ^= 1;
+        // Use a different valid curve key: rejection must exercise signature
+        // verification, not merely malformed-key decoding.
+        let wrong_key = SigningKey::from_bytes(&[99; 32]).verifying_key().to_bytes();
         assert!(verify(&bytes, &wrong_key).is_err());
         assert!(verify(&bytes, &key[..31]).is_err());
         let mut extra = fixture["catalog_envelope_term"].clone();
