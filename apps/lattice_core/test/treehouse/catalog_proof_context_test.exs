@@ -1,8 +1,8 @@
 defmodule Treehouse.CatalogProofContextTest do
   use ExUnit.Case, async: true
-  alias Lattice.Op
+  alias Lattice.{Op, Log}
   alias Lattice.Carrier.Wire
-  alias Treehouse.{CatalogTrust, CatalogTrustVectors}
+  alias Treehouse.{CatalogTrust, CatalogTrustVectors, CatalogCutoff}
   @client Path.expand("../../../../clients/lattice-client", __DIR__)
   @expected %{trust_revision: 0, history_generation: 0}
 
@@ -67,7 +67,14 @@ defmodule Treehouse.CatalogProofContextTest do
     valid = %{cutoff: cutoff, history: hd(histories)}
 
     cases =
-      Enum.map(b["cases"], &{&1["name"], %{cutoff: cutoff, history: history(&1["history"])}}) ++
+      Enum.map(
+        b["cases"],
+        &{&1["name"],
+         %{
+           cutoff: if(&1["cutoff"], do: cutoff(&1["cutoff"]), else: cutoff),
+           history: history(&1["history"])
+         }}
+      ) ++
         [
           {"malformed-proof", Map.put(valid, :extra, true)},
           {"malformed-cutoff", %{valid | cutoff: Map.put(cutoff, :extra, true)}},
@@ -81,7 +88,7 @@ defmodule Treehouse.CatalogProofContextTest do
       assert (d.reason && Atom.to_string(d.reason)) == peer["reason"]
       assert d.detail.ids == peer["ids"]
 
-      if name == "valid" do
+      if name in ["valid", "valid-prefix"] do
         assert d.kind == :propose
         assert d.reason == nil
         assert length(d.routes) == 2
@@ -91,23 +98,37 @@ defmodule Treehouse.CatalogProofContextTest do
         assert reopened.kind == :unchanged
         assert reopened.next == d.next
 
-        broken =
-          put_in(d.next.cutoff_proofs, [%{proof | cutoff: %{cutoff | log_digest: wrong_digest}}])
+        if name == "valid" do
+          broken =
+            put_in(d.next.cutoff_proofs, [%{proof | cutoff: %{cutoff | log_digest: wrong_digest}}])
 
-        recovered = evaluate(broken, %{page() | cutoff_proofs: [proof]})
-        assert recovered.kind == :reject
-        assert recovered.reason == :trust_recovery_required
-        assert recovered.detail.ids == []
-
-        for defect <- Enum.reject(b["cases"], &(&1["name"] == "valid")) do
-          broken = put_in(d.next.cutoff_proofs, [%{proof | history: history(defect["history"])}])
           recovered = evaluate(broken, %{page() | cutoff_proofs: [proof]})
           assert recovered.kind == :reject
           assert recovered.reason == :trust_recovery_required
           assert recovered.detail.ids == []
+
+          for defect <-
+                Enum.reject(
+                  b["cases"],
+                  &(&1["name"] in ["valid", "valid-prefix", "absent-member"])
+                ) do
+            broken =
+              put_in(d.next.cutoff_proofs, [%{proof | history: history(defect["history"])}])
+
+            recovered = evaluate(broken, %{page() | cutoff_proofs: [proof]})
+            assert recovered.kind == :reject
+            assert recovered.reason == :trust_recovery_required
+            assert recovered.detail.ids == []
+          end
         end
       else
         assert d.kind == :reject
+
+        assert d.detail.ids ==
+                 if(name in ["absent-member", "wrong-cutoff"],
+                   do: [proof.cutoff.log_digest],
+                   else: []
+                 )
 
         assert d.reason ==
                  if(name in ["malformed-proof", "malformed-cutoff"],
@@ -136,6 +157,14 @@ defmodule Treehouse.CatalogProofContextTest do
       |> Wire.encode_op()
 
     proof = Enum.find(f.cutoff_proofs, &(&1.cutoff.replica == f.space.replica))
+    prefix = CatalogTrustVectors.raw_history(f.space.log)
+
+    absent_log =
+      Log.append!(f.space_log, Op.new(f.space.root, f.space.replica, [], :command, nil))
+
+    absent = CatalogTrustVectors.raw_history(absent_log)
+    {:ok, prefix_proof} = CatalogCutoff.derive(f.space.log)
+    {:ok, absent_proof} = CatalogCutoff.derive(absent_log)
     r = f.review
 
     %{
@@ -158,6 +187,8 @@ defmodule Treehouse.CatalogProofContextTest do
       },
       cases: [
         %{name: "valid", history: h},
+        %{name: "valid-prefix", history: prefix, cutoff: public_cutoff(prefix_proof.cutoff)},
+        %{name: "absent-member", history: absent, cutoff: public_cutoff(absent_proof.cutoff)},
         %{name: "unsupported", history: %{h | frames: h.frames ++ [unknown]}},
         %{
           name: "forged",
@@ -191,6 +222,8 @@ defmodule Treehouse.CatalogProofContextTest do
       {key, value}
     end)
   end
+
+  defp public_cutoff(c), do: %{replica: c.replica, frontier: c.frontier, logDigest: c.log_digest}
 
   defp cutoff(c),
     do: %{replica: c["replica"], frontier: c["frontier"], log_digest: c["logDigest"]}
