@@ -2,14 +2,17 @@
 
 ## Status, dependencies and execution boundary
 
-IN PROGRESS, 2026-10-24. PR A is in review as #166; importer, phase guards and local
-Linux staging/activation/readiness gates pass. Hosted, offline UI and listing gates remain.
+IN PROGRESS, 2026-10-24. PR A #166 is in review. PR B implements ordinary offline
+controls, shared codecs and native export; its stacked draft will exercise the required
+packaged gate. Local suites pass; hosted proof, review confirmation and listing remain.
 Prepared from fresh main `e8f5c285ed3508f93efaea8279819012d72b41cb`; plan number 262
 was free in that tip's plan index and tree. PR #165 is a required code dependency:
 its ordinary bounded creation, independent child custody, founder membership/grant,
-and restart behavior must merge with required checks before publishing implementation.
-Isolated build work may use the reviewed dependency tip while its gates run. Refresh
-and rebase onto main after #165 merges, then rerun affected checks before publication.
+and restart behavior merged in #165 with required checks. PR B was started from fresh
+main a297e1ddf and rebased onto PR A tip 81bb82f6. A stacked draft may exercise hosted
+CI against that explicit dependency while #166 finishes. Merge neither dependent
+work nor claim completion before the parent is green; rebase onto merged main and
+rerun affected checks before marking PR B ready.
 
 Plan stamp: design base `e8f5c285ed3508f93efaea8279819012d72b41cb`, reviewed PR A base
 `a297e1ddfe72076f337ef2fd0ce03c2fe07696a6`. Review drift before applying the plan:
