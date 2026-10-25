@@ -6,8 +6,10 @@ IN PROGRESS. Both expected-claim builders now normalize header dependencies.
 Fresh reciprocal Space/Thread alias and refusal tests pass after independent RED
 failures in BEAM and TS. Full mix check, all 17 local client CI suites, shell
 typecheck/tests and both boundary scans pass. Both independent protected-core
-reviews have no actionable findings. Requested provider review, hosted checks
-and later native adoption remain open.
+reviews have no actionable findings. Requested fallback Sonnet5.5 High adversarial
+review found no P1/P2 defect in the unchanged implementation. The preceding exact
+hosted gate passed. A direct BEAM alias wire-decode assertion now passes focused
+checks; refreshed final verification and later native adoption remain open.
 
 A protocol consistency defect was proved while implementing the native
 bounded authority fold. This is a separate correction to the existing BEAM/TS

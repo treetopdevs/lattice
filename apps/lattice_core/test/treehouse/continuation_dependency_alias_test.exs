@@ -63,6 +63,9 @@ defmodule Treehouse.ContinuationDependencyAliasTest do
 
       for alias_op <- F.aliases(op),
           ops <- [prior ++ [alias_op], [alias_op | Enum.reverse(prior)]] do
+        {:ok, decoded_alias} = alias_op |> Wire.encode_op() |> Wire.decode_op()
+        assert decoded_alias.deps == alias_op.deps
+        assert decoded_alias == alias_op
         actual = F.judge(module, role, v["replica"], ops) |> Jason.encode!() |> Jason.decode!()
         assert_outcome(actual, v["expected"])
       end
