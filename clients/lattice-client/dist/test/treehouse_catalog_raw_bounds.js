@@ -37,8 +37,8 @@ test("aggregate node budget counts every logical occurrence of shared input", ()
 test("raw JSON depth and cycles cannot grow a traversal stack without bound", () => {
     const nested = (depth) => { let value = 0; for (let i = 0; i < depth; i++)
         value = [value]; return value; };
-    assert.equal(bounded({ body: ["nil"], cap: ["nil"], padding: nested(135) }), true);
-    assert.equal(bounded({ body: ["nil"], cap: ["nil"], padding: nested(136) }), false);
+    assert.equal(bounded({ body: ["nil"], cap: ["nil"], padding: nested(198) }), true);
+    assert.equal(bounded({ body: ["nil"], cap: ["nil"], padding: nested(199) }), false);
     const cycle = [];
     cycle.push(cycle);
     assert.equal(bounded({ body: cycle, cap: ["nil"] }), false);

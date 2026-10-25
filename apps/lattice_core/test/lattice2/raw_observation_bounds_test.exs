@@ -34,13 +34,13 @@ defmodule Lattice.RawObservationBoundsTest do
     assert RawObservationBounds.within?(%{
              "body" => ["nil"],
              "cap" => ["nil"],
-             "padding" => nested.(135)
+             "padding" => nested.(198)
            })
 
     refute RawObservationBounds.within?(%{
              "body" => ["nil"],
              "cap" => ["nil"],
-             "padding" => nested.(136)
+             "padding" => nested.(199)
            })
   end
 

@@ -52,6 +52,15 @@ defmodule Treehouse.CatalogIncomingOrderTest do
         "push-64001-complete" => {"reject", "unsupported_cutoff"},
         "push-64000-partial" => {"reject", "trust_pending"},
         "push-64001-partial" => {"reject", "trust_pending"},
+        "map-65-delegation-leaf-complete" => {"reject", "unsupported_cutoff"},
+        "map-65-delegation-leaf-partial" => {"reject", "trust_pending"},
+        "map-64-delegation-leaf-complete" => {"propose", nil},
+        "map-64-delegation-leaf-partial" => {"reject", "trust_pending"},
+        "map-depth-64-complete" => {"propose", nil},
+        "map-depth-65-complete" => {"reject", "unsupported_cutoff"},
+        "map-depth-66-complete" => {"reject", "invalid_verified_history"},
+        "map-depth-65-partial" => {"reject", "trust_pending"},
+        "map-depth-66-partial" => {"reject", "invalid_verified_history"},
         "depth-64-complete" => {"propose", nil},
         "depth-65-complete" => {"reject", "unsupported_cutoff"},
         "depth-66-complete" => {"reject", "invalid_verified_history"},
@@ -73,6 +82,11 @@ defmodule Treehouse.CatalogIncomingOrderTest do
            String.starts_with?(c["name"], "forged-unknown-kind-") do
         assert c["ts"]["reason"] == "invalid_verified_history"
         assert c["ts"]["detail"]["ids"] == []
+      end
+
+      if c["name"] == "map-64-delegation-leaf-complete" do
+        [frame] = Enum.filter(frames, fn f -> match?(["map", _], f["body"]) end)
+        assert {:ok, _} = Lattice.Carrier.Wire.decode_op(frame)
       end
 
       if c["name"] == "depth-65-complete" do

@@ -43,7 +43,8 @@ raw observation in both owners. Correctly signed depth-65 evidence authenticates
 but remains unsupported at complete portability, while forged evidence is invalid.
 Depth-66 accepted input exceeds observation bounds and cannot become pending.
 Separate raw budget guards bound 67,108,864 logical JSON nodes and UTF-8 string
-bytes, plus JSON container depth 136. They prove no wire shape or authority.
+bytes, plus per-frame JSON container depth 199 (three map wrappers per domain level,
+plus the frame and flat delegation leaf). They prove no wire shape or authority.
 Shared input counts at every logical occurrence; cycles cannot grow a JS walk.
 
 Fresh actual public APIs compare unknown kinds, exact push sizes 64,000/64,001,
@@ -57,6 +58,16 @@ compilation exposed a missing copied shared-module dependency; adding the raw
 bounds helper to that explicit source list passes local browser formatting,
 unit tests and the real warnings-as-errors/Vite build. Refreshed hosted checks
 remain required; no older gate is credited to this integration repair.
+
+A coordinating codec review also exposed that the earlier list-only JSON wrapper
+budget could clip valid deep maps. Fresh expected-success depth-64 map tests
+reproduced that defect even though both owners previously agreed on rejection.
+The per-frame bound now derives from the worst supported map/delegation shape.
+A separate RED found the catalog mirror charged a flat delegation leaf at zero
+remaining generic depth despite ordinary Wire accepting it; the mirror now matches
+that unchanged Wire rule. Map-depth and flat-leaf boundary cases pass through both
+actual APIs, with the depth-64 delegation case independently decoded by Wire.
+These follow-up fixes await focused review and full final gates.
 
 These checkpoints do not complete the broader matrix below. Full independent producer boundary coverage, complete history/page aggregate limits
 and stored/reopen behavior

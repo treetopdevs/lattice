@@ -3,7 +3,9 @@
 const MAX_NODES = 64 * 1024 * 1024;
 const MAX_STRING_BYTES = 64 * 1024 * 1024;
 const MAX_DEPTH = 65;
-const MAX_JSON_DEPTH = 136;
+// A map uses term-array, pairs-array and pair-array wrappers; a flat
+// delegation leaf adds array/object/names-array beneath the frame object.
+const MAX_JSON_DEPTH = MAX_DEPTH * 3 + 4;
 const encoder = new TextEncoder();
 function* fields(value: object): Generator<unknown> {
   for (const key of Object.keys(value)) { yield key; yield Reflect.get(value, key); }

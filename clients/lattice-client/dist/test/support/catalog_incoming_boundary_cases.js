@@ -34,6 +34,19 @@ export async function boundaryCases(f) {
             const frame = await atSize(size, deps);
             results.push([`push-${size}-${suffix}`, [...f.histories[0].frames, frame]]);
         }
+        let delegated = ["delegation", f.space.delegation];
+        for (let n = 0; n < 64; n++)
+            delegated = ["map", [[["nil"], delegated]]];
+        results.push([`map-64-delegation-leaf-${suffix}`, [...f.histories[0].frames, await raw("command", delegated, deps)]]);
+        delegated = ["map", [[["nil"], delegated]]];
+        results.push([`map-65-delegation-leaf-${suffix}`, [...f.histories[0].frames, await raw("command", delegated, deps)]]);
+        for (const depth of [64, 65, 66]) {
+            let body = ["nil"];
+            for (let n = 0; n < depth; n++)
+                body = ["map", [[["nil"], body]]];
+            const frame = await raw("command", body, deps);
+            results.push([`map-depth-${depth}-${suffix}`, [...f.histories[0].frames, frame]]);
+        }
         for (const depth of [64, 65, 66]) {
             let body = ["nil"];
             for (let n = 0; n < depth; n++)

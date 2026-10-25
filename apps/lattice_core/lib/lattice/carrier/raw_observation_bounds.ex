@@ -7,8 +7,13 @@ defmodule Lattice.Carrier.RawObservationBounds do
   Shared subterms count at every occurrence; imported names remain binary data.
   """
 
+  # A generic map uses three JSON containers. The frame object and flat
+  # delegation array/object/names-array leaf add four without domain depth.
+  @max_json_depth 65 * 3 + 4
+
   @spec within?(term()) :: boolean()
-  def within?(value), do: observation_bound?([{:value, value, 136}], 67_108_864, 67_108_864)
+  def within?(value),
+    do: observation_bound?([{:value, value, @max_json_depth}], 67_108_864, 67_108_864)
 
   defp observation_bound?(_pending, nodes, bytes) when nodes < 0 or bytes < 0, do: false
   defp observation_bound?([], _nodes, _bytes), do: true

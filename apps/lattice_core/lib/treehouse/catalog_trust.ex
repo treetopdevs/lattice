@@ -2110,7 +2110,7 @@ defmodule Treehouse.CatalogTrust do
       Enum.all?(values, &closed_wire_term?(&1, depth - 1)) and
         canonical_wire_terms_unique?(values)
 
-  defp closed_wire_term?(["delegation", value], depth) when is_map(value) and depth > 0 do
+  defp closed_wire_term?(["delegation", value], depth) when is_map(value) and depth >= 0 do
     required = ~w(id replica issuer audience parent_id ops roles live sig)
 
     closed_delegation_keys?(value, required) and closed_delegation_identity?(value) and
