@@ -5,9 +5,10 @@
 Design prepared 2026-10-24 against `ffb7f3f22d1abf7adfd437bc0f14292dadffff56`.
 User adopted D1–D6 and authorized starting slice A on 2026-10-24. Deployment remains
 a later authorized operation. Slice A's library, native custody, crash recovery and
-ordinary desktop creation are implemented locally. Hosted packaged, Linux staging,
-actual Keychain/device and field evidence remain separate gates. No live host inspection
-or deployment accompanies this work.
+ordinary desktop creation have local and hosted software proof. Offline exchange,
+Linux provisioning and guarded listing are also merged and verified. Native catalog
+installation, actual physical-device custody and the real-relay field session remain.
+No live host inspection or deployment accompanies this work.
 
 Target: one assisted, text-only session between two ordinary macOS apps, independently
 created Keychain identities, one new bounded Space and one bounded Thread, one real WSS
