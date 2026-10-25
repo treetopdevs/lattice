@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-treehouse-export-public-evidence"
+description = "Enables the treehouse_export_public_evidence command without any pre-configured scope."
+commands.allow = ["treehouse_export_public_evidence"]
+
+[[permission]]
+identifier = "deny-treehouse-export-public-evidence"
+description = "Denies the treehouse_export_public_evidence command without any pre-configured scope."
+commands.deny = ["treehouse_export_public_evidence"]

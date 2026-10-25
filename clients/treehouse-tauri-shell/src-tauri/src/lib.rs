@@ -142,7 +142,8 @@ fn application_invoke_handler<R: tauri::Runtime>(
         treehouse_load_draft,
         treehouse_save_draft,
         treehouse_sign_carrier,
-        space_export::treehouse_export_space_frames
+        space_export::treehouse_export_space_frames,
+        space_export::treehouse_export_public_evidence
     ];
     move |invoke| {
         if witness_commands::recognizes_command(invoke.message.command()) {
@@ -166,6 +167,7 @@ mod application_boundary_tests {
             "treehouse_initialize_thread",
             "treehouse_thread_identity",
             "treehouse_sign_thread",
+            "treehouse_export_public_evidence",
             witness_public::WITNESS_IDENTITY,
             witness_public::WITNESS_PREPARE_CREATION,
             witness_public::WITNESS_GENERATE,
@@ -268,6 +270,7 @@ mod application_boundary_tests {
                 "treehouse_initialize_thread",
                 "treehouse_thread_identity",
                 "treehouse_sign_thread",
+                "treehouse_export_public_evidence",
             ] {
                 assert!(authority
                     .resolve_access(command, "main", "main", &tauri::ipc::Origin::Local)

@@ -82,6 +82,7 @@ export interface PreviewNative {
   sign(bytes: Uint8Array): Promise<Uint8Array>;
   /** Write public export bytes to a new file in the user's downloads folder; resolves to the written path. */
   exportSpaceFrames(fileName: string, contents: string): Promise<string>;
+  exportPublicEvidence?(fileName: string, contents: string): Promise<string>;
 }
 export const emptyState = (): PreviewState => ({
   version: 2,

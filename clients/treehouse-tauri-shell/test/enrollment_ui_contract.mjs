@@ -14,8 +14,6 @@ const DISCLOSURE =
   "The relay operator, and anyone with its host, backups or admitted peers, can read this group's plaintext log, and the host can withhold availability. The relay cannot decide who may act in the group.";
 const ENROLLMENT_FINE_PRINT =
   "Relay routes are hand-configured by an operator and are not signed by any catalog. Recovery comes later.";
-const OLD_FINE_PRINT =
-  "There are no members or connections yet. Inviting others and recovery come later.";
 const REMOTE_ACK_OLD =
   "No operation has a remote delivery acknowledgement.";
 const LABELS = [
@@ -52,7 +50,6 @@ const RETAINED = [
   "Save edit",
   "Archive thread",
   "This thread is archived.",
-  OLD_FINE_PRINT,
 ];
 const PROHIBITED = [
   "nothing hosted",
@@ -140,7 +137,7 @@ assert(
 );
 // Every packaged-preview literal the existing harness drives stays present.
 for (const literal of RETAINED.filter(
-  (l) => l !== "Local preview" && l !== OLD_FINE_PRINT,
+  (l) => l !== "Local preview",
 ))
   assert(enrolled.includes(literal), `enrollment build lost literal: ${literal}`);
 

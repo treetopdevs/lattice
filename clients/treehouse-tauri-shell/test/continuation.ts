@@ -93,7 +93,7 @@ console.log("PASS bounded Space creation persists and reloads; Threads stay lega
 
 // ---- 2. a hostile record cannot smuggle a malformed bounded replica ----------------------------------------
 for (const bad of [
-  replica.replace("v1", "v2"),
+  replica.replace("#authority:bounded-continuation-v1#", "#authority:bounded-continuation-v2#"),
   replica.replace("#root:", "#authority:bounded-continuation-v1#root:"),
   `${replica}#authority:bounded-continuation-v1`,
 ]) {

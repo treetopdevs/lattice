@@ -28,3 +28,5 @@ export type { TreehouseCatalogRawHistory, TreehouseCatalogBootstrapReview, Treeh
 export * from "./treehouse_member_continuity_codec";
 export { observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, assembleMemberContinuityFromFrames } from "./treehouse_member_continuity";
 export type { MemberContinuityObservation, MemberContinuityReviewRequest, MemberContinuityReview, MemberContinuityReviewResult, MemberContinuityAssemblyResult } from "./treehouse_member_continuity";
+export * from "./treehouse_public_frames";
+export * from "./treehouse_offline_enrollment";
