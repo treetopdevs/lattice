@@ -13,7 +13,14 @@ before missing-dependency/refusal decisions, using inert canonical name wrappers
 and returning only header metadata. Existing wire admission remains unchanged.
 Fresh TS cases and fresh BEAM-authored unknown-name inputs agree on demonstrated
 signature, vocabulary, duplicate, scope and pending-id outcomes. The focused trust,
-reciprocal and wire suites pass. Full checks and protected reviews are running.
+reciprocal and wire suites pass. Spec review found duplicate map keys could be
+collapsed before authentication; observation-only map/set canonical duplicate
+checks and decimal spelling checks now refuse such aliases. Fresh controls and
+malformed aliases agree through both actual APIs; both reviewers confirm the fix.
+Client build, desktop checks, ordinary/tracing native suites, client catalog and
+canonical suites, full Mix check and both boundary scans pass after corrections.
+The checkpoint is independently reviewed; required external adversarial review
+and the complete phase matrix remain open.
 
 This checkpoint does not complete the broader phase matrix below. In particular,
 malformed/extra-header precedence, unknown kinds, rejected-record combinations,
