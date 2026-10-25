@@ -42,6 +42,38 @@ pub fn write_export(dir: &Path, file_name: &str, contents: &str) -> Result<PathB
     )
 }
 
+fn public_frame_shape(value: &serde_json::Value) -> bool {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let Some(frame) = value.as_object() else {
+        return false;
+    };
+    let mut keys: Vec<&str> = frame.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    let encoded = |name: &str, length: usize| {
+        frame[name].as_str().is_some_and(|text| {
+            STANDARD
+                .decode(text)
+                .is_ok_and(|bytes| bytes.len() == length && STANDARD.encode(bytes) == text)
+        })
+    };
+    keys == [
+        "author", "body", "cap", "deps", "id", "kind", "replica", "sig", "v",
+    ] && frame["v"].as_u64() == Some(1)
+        && frame["id"].is_string()
+        && frame["replica"].is_string()
+        && encoded("author", 32)
+        && encoded("sig", 64)
+        && frame["deps"]
+            .as_array()
+            .is_some_and(|deps| deps.iter().all(serde_json::Value::is_string))
+        && frame["body"].is_array()
+        && frame["cap"].is_array()
+        && matches!(
+            frame["kind"].as_str(),
+            Some("authority" | "command" | "inbox" | "tombstone")
+        )
+}
+
 fn valid_evidence_shape(contents: &str) -> bool {
     let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(contents)
     else {
@@ -82,6 +114,21 @@ fn valid_evidence_shape(contents: &str) -> bool {
         _ => return false,
     };
     map["product"].as_str() == Some("treehouse")
+        && map
+            .iter()
+            .all(|(key, value)| key == "profiles" || value.is_string())
+        && map["profiles"].as_array().is_some_and(|profiles| {
+            profiles
+                .iter()
+                .map(|profile| {
+                    profile
+                        .get("frames")
+                        .and_then(serde_json::Value::as_array)
+                        .map_or(0, Vec::len)
+                })
+                .sum::<usize>()
+                <= 4000
+        })
         && map["profiles"].as_array().is_some_and(|profiles| {
             profiles.len() == count
                 && profiles.iter().enumerate().all(|(i, profile)| {
@@ -101,24 +148,14 @@ fn valid_evidence_shape(contents: &str) -> bool {
                         && profile["frames"].as_array().is_some_and(|frames| {
                             !frames.is_empty()
                                 && frames.len() <= 4000
-                                && frames.iter().all(|frame| {
-                                    let Some(frame) = frame.as_object() else {
-                                        return false;
-                                    };
-                                    let mut keys: Vec<&str> =
-                                        frame.keys().map(String::as_str).collect();
-                                    keys.sort_unstable();
-                                    keys == [
-                                        "author", "body", "cap", "deps", "id", "kind", "replica",
-                                        "sig", "v",
-                                    ]
-                                })
+                                && frames.iter().all(public_frame_shape)
                         })
                 })
         })
 }
 
-/// Public bytes only. Shape validation is not native semantic verification or a trust-install receipt.
+/// Writes supplied public evidence bytes, with no store or custody access. Structural checks are not
+/// semantic verification, a confidentiality filter for arbitrary payloads, or a trust-install receipt.
 pub fn write_public_evidence(
     dir: &Path,
     file_name: &str,
@@ -243,11 +280,22 @@ mod tests {
     #[test]
     fn public_evidence_is_closed_bounded_and_never_overwrites() {
         let dir = tempfile::tempdir().unwrap();
-        let frame = serde_json::json!({"v":1,"id":"id","replica":"s","author":"public","deps":[],"kind":"command","body":["nil"],"cap":["nil"],"sig":"signature"});
+        let frame = serde_json::json!({"v":1,"id":"id","replica":"s","author":base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [0u8;32]),"deps":[],"kind":"command","body":["nil"],"cap":["nil"],"sig":base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [0u8;64])});
         let profile =
             serde_json::json!({"product":"Treehouse.Space","replica":"s","frames":[frame]});
         let mut evidence = serde_json::json!({"format":"treehouse-offline-invitation-v1","product":"treehouse","space":"s","spaceRoot":"public","bootstrapId":"b","invitationId":"i","recipient":"member","profiles":[profile]});
         let text = evidence.to_string();
+        for replacement in [
+            serde_json::json!({"state":"not a wire term"}),
+            serde_json::json!("not an array"),
+        ] {
+            let mut malformed = evidence.clone();
+            malformed["profiles"][0]["frames"][0]["body"] = replacement;
+            assert!(!valid_evidence_shape(&malformed.to_string()));
+        }
+        let mut malformed = evidence.clone();
+        malformed["profiles"][0]["frames"][0]["v"] = serde_json::json!(2);
+        assert!(!valid_evidence_shape(&malformed.to_string()));
         let path = write_public_evidence(dir.path(), "invitation.json", &text).unwrap();
         assert_eq!(std::fs::read_to_string(path).unwrap(), text);
         assert_eq!(

@@ -31,6 +31,7 @@ import {
   TREEHOUSE_LITE_THREAD_CAP,
   treehouseCommandDecoders,
   treehouseCatalogBootstrapsFromFrames,
+  treehouseGroupFingerprint, normalizeTreehouseFingerprint,
   treehouseCommandRoles,
   verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
@@ -73,6 +74,7 @@ import {
   validateLocalRealm,
 } from "./treehouse_routes";
 
+export type OfflineInvitationDisplay = Omit<OfflineInvitationReview, "frames" | "text">;
 export type Observation = ReturnType<typeof observeTreehouse>;
 /** What the person reviews before an offer's routes are persisted (Use, then confirm). */
 export interface OfferReview {
@@ -965,11 +967,15 @@ export class TreehouseWorkflow {
       if (!isExportFileName(fileName)) throw new Error("invalid_export_name");
       if (!this.native.exportPublicEvidence) throw new Error("export_unavailable");
       // Re-authenticate captured public output; the writer never reads app/key storage.
-      const parsed = JSON.parse(text);
+      let parsed: unknown;
+      try { parsed = JSON.parse(text); } catch { throw new Error("invalid_offline_invitation"); }
+      if (!parsed || typeof parsed !== "object" || !("recipient" in parsed) || typeof parsed.recipient !== "string") throw new Error("invalid_offline_invitation");
       const reviewed = await decodeOfflineInvitation(new TextEncoder().encode(text), parsed.recipient);
       const space = this.spaceProfile();
       if (reviewed.space !== space.replica || reviewed.spaceRoot !== this.state.publicKey) throw new Error("wrong_replica");
-      return this.native.exportPublicEvidence(fileName, reviewed.text);
+      const current = await buildOfflineInvitation({ space: space.replica, frames: space.frames,
+        invitationId: reviewed.invitationId, recipient: reviewed.recipient });
+      return this.native.exportPublicEvidence(fileName, current);
     });
   }
   exportInitialProvisioning(fileName: string) {
@@ -991,11 +997,18 @@ export class TreehouseWorkflow {
       if (this.state.intent) throw new Error("creation_incomplete");
       if (!this.snapshot().canIssueInvitation) throw new Error("no_capability");
       const { publicKey: recipient } = decodeTreehouseJoinRequest(joinRequest);
-      const space = this.spaceProfile();
+      const space = this.boundedRootSpace();
+      const view = this.views.get(space.replica)!;
+      const threads = view.state.threads as { replica: string; title: string }[];
+      const members = view.state.members as string[];
+      if (threads.length !== 1 || members.length < 1 || members.length > 2 ||
+        !members.includes(this.state.publicKey!) || members.some(key => key !== this.state.publicKey && key !== recipient) || recipient === this.state.publicKey)
+        throw new Error("initial_pair_required");
       const bootstraps = await treehouseCatalogBootstrapsFromFrames({ replica: space.replica, frames: space.frames });
       if (!bootstraps.ok || bootstraps.bootstraps.length !== 1) throw new Error("offline_bootstrap_required");
+      const fingerprint = await treehouseGroupFingerprint(space.replica, this.state.publicKey!, bootstraps.bootstraps[0]!.id);
       this.pendingRecipient = { recipient, state: this.state };
-      return { recipient };
+      return { recipient, fingerprint };
     });
   }
   cancelOfflineReview() { this.pendingRecipient = null; this.pendingOffline = null; }
@@ -1040,14 +1053,16 @@ export class TreehouseWorkflow {
       if (!this.state.publicKey || this.state.profiles.length) throw new Error("offline_join_not_available");
       const review = await decodeOfflineInvitation(bytes, this.state.publicKey);
       this.pendingOffline = { review, state: this.state };
-      return structuredClone(review);
+      const { frames: _frames, text: _text, ...display } = review;
+      return structuredClone(display);
     });
   }
   /** Explicit out-of-band group fingerprint confirmation precedes the recipient-bound signature. */
   acceptOfflineInvitation(confirmedFingerprint: string) {
     return this.exclusive(async () => {
       const pending = this.pendingOffline;
-      if (!pending || pending.review.fingerprint !== confirmedFingerprint) throw new Error("no_pending_offline_review");
+      if (!pending) throw new Error("no_pending_offline_review");
+      if (normalizeTreehouseFingerprint(pending.review.fingerprint) !== normalizeTreehouseFingerprint(confirmedFingerprint)) throw new Error("offline_fingerprint_mismatch");
       await this.offlineStateCurrent(pending.state);
       const acceptance = await signTreehouseAcceptance({ replica: pending.review.space, frames: pending.review.frames,
         invitationId: pending.review.invitationId, signer: this.signer() });

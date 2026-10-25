@@ -1,7 +1,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
-import { resolveContinuationProfileFromFrames } from "./authority";
-import { reviewTreehouseInvitation } from "./treehouse_enrollment";
+import { resolveContinuationProfileFromFrames, continuationFamily } from "./authority";
+import { liveTreehouseDelegations, reviewTreehouseInvitation } from "./treehouse_enrollment";
 import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, observeTreehouse, treehouseSpaceInitialization } from "./treehouse";
 import { treehouseSpaceFamily } from "./treehouse_bounded";
 import { verifyCarrierOp } from "./codec";
@@ -17,15 +17,34 @@ const closed = (value, names) => value !== null && typeof value === "object" && 
     JSON.stringify(Object.keys(value).sort()) === JSON.stringify(names);
 const refuse = () => { throw new Error("invalid_offline_invitation"); };
 const verifier = { verify: async (pub, bytes, sig) => ed25519.verify(sig, bytes, Uint8Array.from(atob(pub), c => c.charCodeAt(0)), { zip215: false }) };
+/** Stable group identity code; invitation scope is separately reviewed against the current signed Space. */
+export async function treehouseGroupFingerprint(space, spaceRoot, bootstrapId) {
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(canonical([
+        "treehouse-offline-group-fingerprint-v1", space, spaceRoot, bootstrapId,
+    ]))));
+    return Array.from(digest, n => n.toString(16).padStart(2, "0")).join("").match(/.{4}/g).join(" ");
+}
+export const normalizeTreehouseFingerprint = (value) => value.replace(/\s/g, "").toLowerCase();
+async function verifiedBootstrapBinding(space, frames) {
+    const profile = await resolveContinuationProfileFromFrames({ replica: space, frames });
+    if (!profile.ok || treehouseSpaceFamily(space) !== "bounded" || profile.profile.kind !== "space" || profile.profile.role !== "admin")
+        return refuse();
+    const observed = await treehouseCatalogBootstrapsFromFrames({ replica: space, frames });
+    if (!observed.ok || observed.bootstraps.length !== 1)
+        return refuse();
+    const bootstrap = observed.bootstraps[0];
+    if (bootstrap.record.space !== space || bootstrap.record.spaceRoot !== profile.root ||
+        bootstrap.record.profileGenesis !== profile.profileGenesis || bootstrap.record.profileId !== profile.profileId ||
+        frames.find(frame => frame.id === bootstrap.id)?.author !== profile.root)
+        return refuse();
+    const ops = carrierOpsToSemanticOps([...frames], {}, treehouseCommandDecoders("Treehouse.Space"));
+    if (treehouseSpaceInitialization(ops) !== "ready" || ops.some(op => op.kind === "tombstone" && op.authorPubkey === profile.root))
+        return refuse();
+    return { profile, bootstrap, ops, view: observeTreehouse("Treehouse.Space", ops) };
+}
 /** Rebuild public frames through the established canonical wire encoder, never export retained app state. */
 export async function buildOfflineInvitation(input) {
-    const profile = await resolveContinuationProfileFromFrames({ replica: input.space, frames: input.frames });
-    if (!profile.ok || treehouseSpaceFamily(input.space) !== "bounded")
-        return refuse();
-    const bootstraps = await treehouseCatalogBootstrapsFromFrames({ replica: input.space, frames: input.frames });
-    if (!bootstraps.ok || bootstraps.bootstraps.length !== 1)
-        return refuse();
-    const bootstrap = bootstraps.bootstraps[0];
+    const { profile, bootstrap } = await verifiedBootstrapBinding(input.space, input.frames);
     const exported = JSON.parse(await buildSpaceFramesExport({ space: input.space,
         rootPublicKey: profile.root, frames: input.frames,
         verify: async (frame) => (await verifyCarrierOp(frame, verifier)).valid }));
@@ -61,34 +80,18 @@ export async function reviewOfflineInvitation(bytes, recipient) {
                 return refuse();
             return frame;
         });
-        const profile = await resolveContinuationProfileFromFrames({ replica: doc.space, frames });
-        if (!profile.ok || treehouseSpaceFamily(doc.space) !== "bounded" || profile.root !== doc.spaceRoot ||
-            profile.profile.kind !== "space" || profile.profile.role !== "admin")
-            return refuse();
-        const observed = await treehouseCatalogBootstrapsFromFrames({ replica: doc.space, frames });
-        if (!observed.ok || observed.bootstraps.length !== 1)
-            return refuse();
-        const bootstrap = observed.bootstraps[0];
-        if (bootstrap.id !== doc.bootstrapId || bootstrap.record.space !== doc.space ||
-            bootstrap.record.spaceRoot !== doc.spaceRoot || bootstrap.record.profileGenesis !== profile.profileGenesis ||
-            bootstrap.record.profileId !== profile.profileId || frames.find(f => f.id === bootstrap.id)?.author !== profile.root)
-            return refuse();
-        const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
-        if (treehouseSpaceInitialization(ops) !== "ready" || ops.some(op => op.kind === "tombstone" && op.authorPubkey === profile.root))
+        const { profile, bootstrap, ops, view } = await verifiedBootstrapBinding(doc.space, frames);
+        if (profile.root !== doc.spaceRoot || bootstrap.id !== doc.bootstrapId)
             return refuse();
         const invitation = reviewTreehouseInvitation({ replica: doc.space, frames, invitationId: doc.invitationId, recipient });
-        if (!invitation.ok || invitation.threads.length > 3)
+        if (!invitation.ok || invitation.threads.length !== 1 || frames.find(frame => frame.id === doc.invitationId)?.author !== profile.root)
             return refuse();
         // Rebuild terms/order as BEAM does. Authentic but noncanonical term spellings do not survive.
         const exported = JSON.parse(await buildSpaceFramesExport({ space: doc.space, rootPublicKey: profile.root, frames,
             verify: async (frame) => (await verifyCarrierOp(frame, verifier)).valid }));
         if (canonical(exported.frames) !== canonical(raw.frames))
             return refuse();
-        const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(canonical([
-            "treehouse-offline-group-fingerprint-v1", doc.space, doc.spaceRoot, doc.bootstrapId,
-        ]))));
-        const fingerprint = Array.from(digest, n => n.toString(16).padStart(2, "0")).join("").match(/.{4}/g).join(" ");
-        const view = observeTreehouse("Treehouse.Space", ops);
+        const fingerprint = await treehouseGroupFingerprint(doc.space, doc.spaceRoot, doc.bootstrapId);
         const threadTitles = view.state.threads
             .filter(thread => invitation.threads.includes(thread.replica));
         return { space: doc.space, spaceRoot: doc.spaceRoot, name: String(view.state.name), threadTitles, bootstrapId: doc.bootstrapId,
@@ -100,6 +103,14 @@ export async function reviewOfflineInvitation(bytes, recipient) {
 }
 /** Public provisioning candidate; the Linux importer independently verifies its ceremony and full staging policy. */
 export async function buildInitialProvisioningBundle(input) {
+    try {
+        return await initialProvisioningBundle(input);
+    }
+    catch {
+        throw new Error("invalid_initial_provisioning");
+    }
+}
+async function initialProvisioningBundle(input) {
     const snapshot = structuredClone(input);
     const profiles = await Promise.all([
         { product: "Treehouse.Space", replica: snapshot.space, frames: snapshot.spaceFrames },
@@ -114,12 +125,7 @@ export async function buildInitialProvisioningBundle(input) {
     }));
     if (profiles[0].frames.length + profiles[1].frames.length > 4000)
         return refuse();
-    const observed = await treehouseCatalogBootstrapsFromFrames({ replica: snapshot.space, frames: profiles[0].frames });
-    if (!observed.ok || observed.bootstraps.length !== 1)
-        return refuse();
-    const bootstrap = observed.bootstraps[0];
-    const spaceOps = carrierOpsToSemanticOps(profiles[0].frames, {}, treehouseCommandDecoders("Treehouse.Space"));
-    const view = observeTreehouse("Treehouse.Space", spaceOps);
+    const { profile: spaceProfile, bootstrap, ops: spaceOps, view } = await verifiedBootstrapBinding(snapshot.space, profiles[0].frames);
     const references = spaceOps.filter(op => op.command === "create_thread" && !view.quarantineReasons.has(op.id));
     const members = view.state.members;
     if (references.length !== 1 || references[0].commandArgs?.[0] !== snapshot.thread ||
@@ -129,9 +135,52 @@ export async function buildInitialProvisioningBundle(input) {
     const threadView = observeTreehouse("Treehouse.Thread", threadOps);
     if (threadView.quarantineReasons.size || threadOps.some(op => op.kind === "tombstone"))
         return refuse();
+    const child = await resolveContinuationProfileFromFrames({ replica: snapshot.thread, frames: profiles[1].frames });
+    if (!child.ok || continuationFamily(snapshot.thread) !== "thread" || child.profile.kind !== "thread" ||
+        child.profile.role !== "moderator" || child.root === spaceProfile.root ||
+        [child.root, spaceProfile.root, ...members].includes(bootstrap.record.serviceKey))
+        return refuse();
+    const genesis = threadOps.filter(op => op.authority?.type === "genesis" && op.deps.length === 0 && op.authorPubkey === child.root);
+    const creation = threadOps.filter(op => op.command === "create_thread");
+    if (genesis.length !== 1 || genesis[0].authority?.type !== "genesis" || creation.length !== 1 ||
+        creation[0].commandArgs?.[0] !== references[0].commandArgs?.[1])
+        return refuse();
+    const rootGrant = genesis[0].authority.delegation.id;
+    const rootFrame = profiles[1].frames.find(frame => frame.id === genesis[0].id);
+    if (rootFrame.body[0] !== "tuple" || canonical(rootFrame.body[1][2]) !== canonical(["map", []]))
+        return refuse();
+    const grants = threadOps.filter(op => op.authority?.type === "grant");
+    const live = new Map(liveTreehouseDelegations("Treehouse.Thread", profiles[1].frames, snapshot.thread).map(grant => [grant.id, grant]));
+    const recipients = [];
+    for (const op of grants) {
+        if (op.authority?.type !== "grant")
+            return refuse();
+        const grant = live.get(op.authority.delegation.id);
+        if (!grant || grant.issuer !== child.root || grant.parent_id !== rootGrant || grant.live || grant.roles.length ||
+            canonical([...grant.ops].sort()) !== canonical(["author_edit", "author_tombstone", "post"]))
+            return refuse();
+        recipients.push(grant.audience);
+    }
+    if (canonical(recipients.sort()) !== canonical([...members].sort()))
+        return refuse();
+    const allowed = new Set([genesis[0].id, child.profileGenesis, ...grants.map(op => op.id)]);
+    if (threadOps.some(op => op.kind === "authority" && !allowed.has(op.id)))
+        return refuse();
+    const pin = threadOps.find(op => op.id === child.profileGenesis);
+    if (pin?.authority?.type !== "genesis" || canonical(pin.authority.beaconPolicy && { ...pin.authority.beaconPolicy, witnesses: [...pin.authority.beaconPolicy.witnesses].sort() }) !== canonical({ mode: "witnessed", version: 1,
+        witnesses: [...child.profile.witnesses].sort(), threshold: child.profile.threshold, maxEpochStep: 1 }))
+        return refuse();
     const text = canonical({ format: "treehouse-initial-provisioning-v1", product: "treehouse", space: snapshot.space,
         spaceRoot: bootstrap.record.spaceRoot, bootstrapId: bootstrap.id, referenceId: references[0].id, profiles });
     if (encoder.encode(text).length > OFFLINE_EVIDENCE_MAX_BYTES)
         return refuse();
+    for (const participant of members) {
+        const owned = participant === spaceProfile.root ? [participant, child.root] : [participant];
+        const retained = profiles.map(profile => ({ ...profile, outbox: profile.frames.filter(frame => owned.includes(frame.author)).map(frame => frame.id), acked: [] }));
+        const projected = { version: 2, product: "treehouse", revision: 0, publicKey: participant, profiles: retained,
+            active: snapshot.thread, intent: null, clearedDrafts: {}, relay: null };
+        if (encoder.encode(canonical(projected)).length > 1_048_576)
+            return refuse();
+    }
     return text;
 }

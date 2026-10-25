@@ -113,6 +113,8 @@ const title = (replica: string) =>
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const known: Record<string, string> = {
+    offline_fingerprint_mismatch: "That fingerprint does not match this group. Compare it with the founder through a separate channel before signing.",
+    invalid_initial_provisioning: "This initial bundle is not ready. Check the bound group, its one Thread, both memberships and current Thread permissions.",
     invalid_offline_invitation: "This invitation could not be verified for your identity. Nothing was installed.",
     offline_evidence_too_large: "That invitation file is too large. Ask the founder for a bounded initial invitation.",
     offline_bootstrap_required: "Finish the catalog binding ceremony before preparing an offline invitation.",

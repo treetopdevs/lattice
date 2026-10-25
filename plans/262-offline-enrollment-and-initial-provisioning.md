@@ -185,7 +185,12 @@ frame therefore preserves a refusal, not a promise that the bundle can stage.
 The review displays group/Thread, recipient, roots and a grouped SHA-256 fingerprint
 of a domain-separated canonical tuple `(space, spaceRoot, bootstrapId)`. The joiner
 must explicitly compare it through an independent channel; a fingerprint carried only
-inside the same file is not confirmation. Cancel signs nothing. Review binds captured
+inside the same file is not confirmation. The founder displays the same group code;
+the joiner enters the independently received value (case/spacing normalized), rather
+than feeding the candidate's own value back through a checkbox. The invitation must
+be root-issued. The group code remains the stable identity tuple above; the one-Thread
+scope is independently derived and displayed from the current signed Space.
+Cancel signs nothing. Review binds captured
 exact bytes, identity and state generation; changes/reopen require a fresh review.
 
 The joiner signs the existing recipient-bound acceptance only after this review.
@@ -197,6 +202,11 @@ no `verified_fresh` assertion, trust sentinel, installation receipt or catalog p
 created by this flow. Native first-member trust owner and migration remain plan 245/
 plan 261 work; this honest-shell review is not a native semantic-verification claim.
 
+Initial founder issuance requires the bounded Space root, exactly one referenced
+Thread, and a root-only roster or an exact replay for its sole second member. Refuse
+other states before signing rather than create an enrollment the initial exporter
+cannot publish. Preparing a join identity explicitly warns that this profile will
+join an existing group and cannot subsequently create its own group.
 Founder issuance must work without a relay configuration. Supply the verified held
 replica inventory to the pure invitation helper as scope availability, never fabricated
 endpoint routes. Reuse an existing honored current-scope invitation. The existing

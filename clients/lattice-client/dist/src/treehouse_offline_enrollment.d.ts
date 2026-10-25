@@ -1,6 +1,9 @@
 import type { CarrierOpFrame } from "./carrier";
 export declare const OFFLINE_INVITATION_FORMAT = "treehouse-offline-invitation-v1";
 export declare const OFFLINE_EVIDENCE_MAX_BYTES: number;
+/** Stable group identity code; invitation scope is separately reviewed against the current signed Space. */
+export declare function treehouseGroupFingerprint(space: string, spaceRoot: string, bootstrapId: string): Promise<string>;
+export declare const normalizeTreehouseFingerprint: (value: string) => string;
 /** Candidate evidence only. A successful decode installs no profile, route, catalog pin or trust receipt. */
 export interface OfflineInvitationReview {
     space: string;

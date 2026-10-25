@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
-  authorTreehouseOfflineInvitation, authorTreehouseCommand, carrierDelegationsFromFrames,
+  buildInitialProvisioningBundle, authorTreehouseOfflineInvitation, authorTreehouseCommand, authorTreehouseAdmitAndGrant, signTreehouseAcceptance, carrierDelegationsFromFrames,
   carrierOpsToSemanticOps, treehouseCommandDecoders, prepareTreehouseBoundedThreadCreation,
 } from "@treetopdevs/lattice-client";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
@@ -67,10 +67,18 @@ const { FaultNative } = await import("./support/fault_native");
 const founderNative = new BoundedNative(); founderNative.seed = seed;
 const childNonce = child.replica.split(":")[3]!.split("#")[0]!;
 founderNative.children.set(childNonce, new Uint8Array(32).fill(202)); founderNative.bindings.add(childNonce);
+const selfInvite = await authorTreehouseOfflineInvitation({ signer: root, replica: vector.replica, frames,
+  threadFrames: { [child.replica]: child.pending }, heldReplicas: [vector.replica, child.replica], recipient: Buffer.from(root.publicKey).toString("base64") });
+frames.push(selfInvite.frame);
+const selfAcceptance = await signTreehouseAcceptance({ replica: vector.replica, frames, invitationId: selfInvite.frame.id, signer: root });
+const selfAdmission = await authorTreehouseAdmitAndGrant({ signer: root, replica: vector.replica, frames,
+  threadFrames: { [child.replica]: child.pending }, acceptance: selfAcceptance, threadSigners: { [child.replica]: signer(202) } });
+assert(selfAdmission.admit); frames.push(selfAdmission.admit);
+const founderThreadFrames = [...child.pending, ...selfAdmission.grants.map(grant => grant.frame)];
 founderNative.record = JSON.stringify({ ...emptyState(), publicKey: Buffer.from(root.publicKey).toString("base64"),
   active: child.replica, profiles: [
     { product: "Treehouse.Space", replica: vector.replica, frames, outbox: [], acked: [] },
-    { product: "Treehouse.Thread", replica: child.replica, frames: child.pending, outbox: [], acked: [] },
+    { product: "Treehouse.Thread", replica: child.replica, frames: founderThreadFrames, outbox: [], acked: [] },
   ] });
 const founder = new TreehouseWorkflow(founderNative); await founder.open();
 const memberNative = new FaultNative(); const member = new TreehouseWorkflow(memberNative); await member.open();
@@ -86,7 +94,7 @@ const candidate = await member.reviewOfflineInvitation(new TextEncoder().encode(
 assert.equal(memberNative.record, memberBefore);
 assert.equal(member.state.profiles.length, 0);
 assert.equal(member.state.relay, null);
-await assert.rejects(() => member.acceptOfflineInvitation("not confirmed"), /no_pending_offline_review/);
+await assert.rejects(() => member.acceptOfflineInvitation("not confirmed"), /offline_fingerprint_mismatch/);
 member.cancelOfflineReview();
 await assert.rejects(() => member.acceptOfflineInvitation(candidate.fingerprint), /no_pending_offline_review/);
 await member.reviewOfflineInvitation(new TextEncoder().encode(invitationText));
@@ -100,7 +108,7 @@ memberNative.record = JSON.stringify({ ...JSON.parse(memberBefore!), revision: m
 await assert.rejects(() => member.acceptOfflineInvitation(candidate.fingerprint), /stale_offline_review/);
 assert.equal(signatures, 0);
 memberNative.record = memberBefore;
-const acceptance = await member.acceptOfflineInvitation(candidate.fingerprint);
+const acceptance = await member.acceptOfflineInvitation(recipientReview.fingerprint.toUpperCase().replaceAll(" ", ""));
 assert.equal(signatures, 1);
 assert.equal(memberNative.record, memberBefore);
 assert.equal(member.state.profiles.length, 0);
@@ -114,3 +122,11 @@ await founder.reviewOfflineRecipient(request);
 assert.equal(await founder.issueOfflineInvitation(recipientReview.recipient), await buildOfflineInvitation({ space: vector.replica,
   frames: founder.state.profiles[0]!.frames, invitationId: candidate.invitationId, recipient: recipientReview.recipient }));
 console.log("PASS offline workflow: independent confirmations, cancel/reopen, no installed candidate/routes, direct child grant and replay");
+
+const bundleInput = { space: vector.replica, spaceFrames: founder.state.profiles[0]!.frames,
+  thread: child.replica, threadFrames: founder.state.profiles[1]!.frames };
+const initialBundle = JSON.parse(await buildInitialProvisioningBundle(bundleInput));
+assert.equal(initialBundle.spaceRoot, founder.state.publicKey);
+assert.equal(initialBundle.profiles.length, 2);
+await assert.rejects(() => buildInitialProvisioningBundle({ ...bundleInput, threadFrames: founderThreadFrames }), /invalid_initial_provisioning/);
+console.log("PASS initial bundle checks the root binding and both direct live child grants before export");

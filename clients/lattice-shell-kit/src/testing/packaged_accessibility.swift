@@ -19,14 +19,24 @@ guard args.count>=3, let pid=Int32(args[1]) else {exit(2)}
 let app=AXUIElementCreateApplication(pid)
 let windows=attribute(app,kAXWindowsAttribute as CFString) as? [AXUIElement] ?? []
 let nodes=windows.flatMap { descendants($0) }
-if args[2]=="dump" {
+if args[2]=="choose-file", args.count==4 {
+ // Operate the native open panel, never the webview's FileList or application state.
+ NSRunningApplication(processIdentifier:pid)?.activate(options:[])
+ func key(_ code:CGKeyCode, _ flags:CGEventFlags = []) {
+  for down in [true,false] {let event=CGEvent(keyboardEventSource:nil,virtualKey:code,keyDown:down)!;event.flags=flags;event.postToPid(pid)}
+ }
+ key(5,[.maskCommand,.maskShift]);usleep(400000)
+ let board=NSPasteboard.general;board.clearContents()
+ guard board.setString(args[3],forType:.string) else {exit(4)}
+ key(9,.maskCommand);usleep(200000);key(36);usleep(400000);key(36)
+} else if args[2]=="dump" {
  let data=try JSONSerialization.data(withJSONObject:nodes.map(output),options:[.prettyPrinted,.sortedKeys]);print(String(data:data,encoding:.utf8)!)
 } else {
  guard args.count>=4 else {exit(2)}
  let label=args[3]
  guard let node=nodes.first(where: {n in
   let values=output(n)
-  let roleMatches=args[2]=="press" ? values["role"]=="AXButton" : ["AXTextField","AXTextArea"].contains(values["role"] ?? "")
+  let roleMatches=args[2]=="press" ? ["AXButton","AXCheckBox"].contains(values["role"] ?? "") : ["AXTextField","AXTextArea"].contains(values["role"] ?? "")
   return roleMatches && values["enabled"]=="true" && (values["title"]==label || values["description"]==label)
  }) else {fputs("Enabled visible control not found: \(label)\n",stderr);exit(3)}
  let result:AXError

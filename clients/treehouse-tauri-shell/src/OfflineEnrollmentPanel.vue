@@ -1,30 +1,32 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { TreehouseWorkflow } from "./treehouse_workflow";
+import type { OfflineInvitationDisplay, TreehouseWorkflow } from "./treehouse_workflow";
 import type { PreviewState } from "./treehouse_state";
-import type { OfflineInvitationReview } from "./offline_enrollment";
 import { OFFLINE_EVIDENCE_MAX_BYTES } from "./offline_enrollment";
 const props = defineProps<{
   workflow: TreehouseWorkflow; state: PreviewState; busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
 }>();
 const joinRequest = ref(""), recipientRequest = ref(""), recipient = ref("");
-const recipientConfirmed = ref(false), fingerprintConfirmed = ref(false);
+const recipientConfirmed = ref(false), fingerprintConfirmed = ref("");
+const founderFingerprint = ref(""), joinConfirmed = ref(false);
 const exportName = ref("treehouse-invitation.json"), bundleName = ref("treehouse-initial.json");
 const invitation = ref(""), acceptance = ref(""), acceptanceInput = ref(""), status = ref("");
-const review = ref<OfflineInvitationReview | null>(null);
-const canInvite = computed(() => { void props.state; return props.workflow.snapshot().canIssueInvitation; });
+const review = ref<OfflineInvitationDisplay | null>(null);
+const facts = computed(() => { void props.state; return props.workflow.snapshot(); });
+const canInvite = computed(() => facts.value.isFounder && facts.value.canIssueInvitation);
+const canAdmit = computed(() => facts.value.isFounder && facts.value.canAdmit);
 const joining = computed(() => props.state.profiles.length === 0);
 function cancel() {
   props.workflow.cancelOfflineReview(); recipient.value = ""; review.value = null;
-  recipientConfirmed.value = false; fingerprintConfirmed.value = false;
+  recipientConfirmed.value = false; fingerprintConfirmed.value = "";
 }
 watch(() => props.state, cancel);
 watch(recipientRequest, cancel);
-async function begin() { await props.run(async () => { joinRequest.value = await props.workflow.beginJoin(); }); }
+async function begin() { await props.run(async () => { if (!joinConfirmed.value) return; joinRequest.value = await props.workflow.beginJoin(); }); }
 async function reviewRecipient() {
   cancel();
-  await props.run(async () => { recipient.value = (await props.workflow.reviewOfflineRecipient(recipientRequest.value)).recipient; });
+  await props.run(async () => { const shown = await props.workflow.reviewOfflineRecipient(recipientRequest.value); recipient.value = shown.recipient; founderFingerprint.value = shown.fingerprint; });
 }
 async function issue() {
   if (!recipientConfirmed.value) return;
@@ -42,11 +44,11 @@ async function readInvitation(event: Event) {
 }
 async function accept() {
   if (!fingerprintConfirmed.value || !review.value) return;
-  const fingerprint = review.value.fingerprint;
+  const fingerprint = fingerprintConfirmed.value;
   await props.run(async () => { acceptance.value = await props.workflow.acceptOfflineInvitation(fingerprint); cancel(); });
 }
 async function admit() {
-  await props.run(async () => { await props.workflow.admitAndGrant(acceptanceInput.value); status.value = "Admission and Thread permissions saved together. Prepare the operator bundle next."; });
+  await props.run(async () => { const result = await props.workflow.admitAndGrant(acceptanceInput.value); status.value = result.admit || result.grants.length ? "Admission and Thread permissions saved together. Prepare the operator bundle next." : "This acceptance is already admitted with its Thread permissions."; });
 }
 </script>
 
@@ -55,7 +57,9 @@ async function admit() {
     <h2>Invite someone by file</h2>
     <p>Exchange these signed files privately. Compare keys and fingerprints in a separate conversation. This step does not connect either app to a relay.</p>
     <template v-if="joining">
-      <button :disabled="busy || Boolean(state.intent)" @click="begin">Prepare join request</button>
+      <p>Preparing a join request reserves this app identity for joining an existing group. It cannot then create its own group.</p>
+      <label><input v-model="joinConfirmed" type="checkbox" :disabled="busy" />I want this app to join an existing group.</label>
+      <button :disabled="busy || Boolean(state.intent) || !joinConfirmed" @click="begin">Prepare join request</button>
       <label v-if="joinRequest">Your join request<textarea :value="joinRequest" readonly aria-label="Your join request" /></label>
       <p v-if="state.publicKey">Your public key: <code>{{ state.publicKey }}</code></p>
       <label>Open invitation file<input type="file" accept=".json,application/json" :disabled="busy || !state.publicKey" @change="readInvitation" /></label>
@@ -65,14 +69,15 @@ async function admit() {
         <p>Group root: <code>{{ review.spaceRoot }}</code></p>
         <p>Recipient: <code>{{ review.recipient }}</code></p>
         <p>Group fingerprint: <code>{{ review.fingerprint }}</code></p>
-        <label><input v-model="fingerprintConfirmed" type="checkbox" :disabled="busy" />I compared this fingerprint with the founder through a separate channel.</label>
+        <label>Fingerprint received from the founder<input v-model="fingerprintConfirmed" :disabled="busy" autocomplete="off" /></label>
         <button :disabled="busy || !fingerprintConfirmed" @click="accept">Sign acceptance</button>
         <button :disabled="busy" @click="cancel">Cancel</button>
       </section>
       <label v-if="acceptance">Send this acceptance to the founder<textarea :value="acceptance" readonly aria-label="Signed acceptance" /></label>
       <p v-if="acceptance">Your identity stays on this device. Group history and relay access arrive in a later step.</p>
     </template>
-    <template v-else-if="canInvite">
+    <template v-else-if="facts.isFounder">
+      <template v-if="canInvite">
       <label>Person's join request<textarea v-model="recipientRequest" :disabled="busy" maxlength="4096" /></label>
       <button :disabled="busy || !recipientRequest" @click="reviewRecipient">Review recipient key</button>
       <section v-if="recipient" aria-label="Review invitation recipient">
@@ -81,11 +86,15 @@ async function admit() {
         <button :disabled="busy || !recipientConfirmed" @click="issue">Sign invitation</button>
         <button :disabled="busy" @click="cancel">Cancel</button>
       </section>
+      <p v-if="founderFingerprint">Tell the person this group fingerprint through a separate channel: <code>{{ founderFingerprint }}</code></p>
       <label v-if="invitation">Signed invitation JSON<textarea :value="invitation" readonly aria-label="Signed offline invitation" /></label>
       <label v-if="invitation">Invitation file name<input v-model="exportName" :disabled="busy" /></label>
       <button v-if="invitation" :disabled="busy" @click="props.run(async () => { status = await workflow.exportOfflineInvitation(exportName, invitation); })">Save invitation file</button>
+      </template>
+      <template v-if="canAdmit">
       <label>Person's signed acceptance<textarea v-model="acceptanceInput" :disabled="busy" maxlength="4096" /></label>
       <button :disabled="busy || !acceptanceInput" @click="admit">Admit and grant Thread access</button>
+      </template>
       <label>Operator bundle file name<input v-model="bundleName" :disabled="busy" /></label>
       <button :disabled="busy" @click="props.run(async () => { status = await workflow.exportInitialProvisioning(bundleName); })">Save initial operator bundle</button>
       <p>The operator must verify the bundle and ceremony before starting the relay. Exporting does not establish relay readiness.</p>
