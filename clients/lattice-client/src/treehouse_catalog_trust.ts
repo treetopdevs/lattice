@@ -148,6 +148,8 @@ async function evaluateSnapshot(value: {
     }
     if (!withinCatalogRawEvidenceBounds(value.incoming)) fail("invalid_verified_history");
     const next = structuredClone(original);
+    for (const raw of value.incoming.histories) await authenticateFrames(raw);
+    await validateRejectedHistories(value.incoming.histories);
     const histories = await mergeHistories(original.histories, value.incoming.histories);
     validateStoredClosure(original);
     next.histories = [...histories.values()].map((h) => h.raw).sort((a, b) => compareUtf8(a.replica, b.replica));
@@ -680,8 +682,8 @@ async function mergeHistories(saved: readonly TreehouseCatalogRawHistory[], inco
   for (const [id, raw] of map) observed.set(id, await observeHistory(raw));
   return observed;
 }
-// Retention and proof membership compare exact raw values, not merely the signed quotient.
-function fingerprint(f: CarrierOpFrame): string { return JSON.stringify(stable(f)); }
+// Compare the signed payload and signature while retaining the first raw values.
+function fingerprint(f: CarrierOpFrame): string { return `${f.id}:${hash(canonicalBytesForCarrierOp(f))}:${f.sig}`; }
 function hash(bytes: Uint8Array): string {
   const digest = sha256(bytes);
   let binary = ""; for (const n of digest) binary += String.fromCharCode(n);
@@ -749,17 +751,23 @@ function entryProof(entry: CatalogEntry, histories: Map<string, ObservedHistory>
 }
 async function mergeProofs(saved: readonly TreehouseCatalogCutoffProof[], incoming: readonly TreehouseCatalogCutoffProof[], histories: Map<string, ObservedHistory>): Promise<TreehouseCatalogCutoffProof[]> {
   const proofs = new Map<string, TreehouseCatalogCutoffProof>();
+  const membership = new Map<string, {present: Set<string>; rejected: Set<string>}>();
   for (const proof of [...saved, ...incoming]) {
     if (!closed(proof, ["cutoff", "history"]) || normalizeCatalogCutoff(proof.cutoff) === null) fail("malformed_catalog");
     // A proof claims a complete immutable point; it cannot solicit incremental ancestors.
-    if (!historyValid(proof.history)) fail("recovery_incomplete");
+    if (!historyValid(proof.history) || !["space", "thread"].includes(continuationFamily(proof.history.replica))) fail("recovery_incomplete");
     const observed = await deriveTreehouseCatalogCutoff(proof.history);
     if (!observed.ok) fail("recovery_incomplete");
     if (!equal(observed.cutoff, proof.cutoff)) fail("recovery_incomplete", [proof.cutoff.logDigest]);
     const current = histories.get(proof.history.replica);
     if (current === undefined) fail("recovery_incomplete", [proof.cutoff.logDigest]);
-    const present = new Set(current.raw.frames.map((f) => fingerprint(f as CarrierOpFrame)));
-    const rejected = new Set(current.raw.rejected.map((r) => fingerprint(r.frame as CarrierOpFrame)));
+    let members = membership.get(proof.history.replica);
+    if (members === undefined) {
+      members = {present: new Set(current.raw.frames.map((f) => fingerprint(f as CarrierOpFrame))),
+        rejected: new Set(current.raw.rejected.map((r) => fingerprint(r.frame as CarrierOpFrame)))};
+      membership.set(proof.history.replica, members);
+    }
+    const {present, rejected} = members;
     if (proof.history.frames.some((f) => !present.has(fingerprint(f as CarrierOpFrame))) || proof.history.rejected.some((r) => !rejected.has(fingerprint(r.frame as CarrierOpFrame)))) fail("recovery_incomplete", [proof.cutoff.logDigest]);
     const key = `${proof.cutoff.replica}:${proof.cutoff.logDigest}`;
     if (!proofs.has(key)) proofs.set(key, proof);

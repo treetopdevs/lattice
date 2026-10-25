@@ -173,3 +173,31 @@ test("shared uint64 boundaries separate lexical safety from high-text portabilit
     for (const value of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, null, true, [], {}])
         assert.equal(canonicalUint64Scalar(value), false);
 });
+test("repeated small proofs do not re-encode the entire retained history", async () => {
+    const { f } = await setup();
+    const { authorCarrierOpUnchecked } = await import("./support/unchecked_author");
+    const { deriveTreehouseCatalogCutoff } = await import("../src/treehouse_catalog_cutoff");
+    const text = "proof-membership-cache:" + "x".repeat(32_000), encoded = Buffer.from(text).toString("base64");
+    const extra = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [f.bootstrap.id], kind: "command", body: ["tuple", [["atom", "create_space"], ["list", [["bin", encoded]]]]], cap: ["nil"] });
+    const history = { ...f.histories[0], frames: [...f.histories[0].frames, extra] };
+    const prepared = await prepareTreehouseCatalogInstallation({ review: f.review, history, store: { kind: "verified_fresh", expected } });
+    assert.equal(prepared.kind, "propose");
+    const derived = await deriveTreehouseCatalogCutoff(f.histories[0]);
+    assert.equal(derived.ok, true);
+    if (!derived.ok)
+        throw new Error("valid prefix proof required");
+    const proof = { cutoff: derived.cutoff, history: f.histories[0] }, original = Buffer.from;
+    let decodes = 0;
+    Buffer.from = new Proxy(original, { apply(target, receiver, args) { if (args[0] === encoded)
+            decodes++; return Reflect.apply(target, receiver, args); } });
+    try {
+        const evaluate = async (count) => { decodes = 0; const d = await evaluateTreehouseCatalogTrust({ installed: prepared.next, expected, incoming: { catalogs: [], rotations: [], histories: [], cutoffProofs: Array(count).fill(proof) } }); assert.equal(d.kind, "propose"); assert.equal(d.next.cutoffProofs.length, 1); return { next: d.next, decodes }; };
+        const one = await evaluate(1), many = await evaluate(8);
+        assert.deepEqual(many.next, one.next);
+        assert.ok(one.decodes > 0);
+        assert.equal(many.decodes, one.decodes, "proof count must not multiply whole-history decoding");
+    }
+    finally {
+        Buffer.from = original;
+    }
+});

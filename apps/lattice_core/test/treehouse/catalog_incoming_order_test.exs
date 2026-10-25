@@ -46,6 +46,8 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       end
 
       expected = %{
+        "null-unleased-expiry-complete" => {"reject", "unsupported_cutoff"},
+        "null-unleased-expiry-partial" => {"reject", "trust_pending"},
         "numeric-scalar-complete" => {"propose", nil},
         "numeric-scalar-partial" => {"reject", "trust_pending"},
         "small-text-scalar-complete" => {"reject", "unsupported_cutoff"},

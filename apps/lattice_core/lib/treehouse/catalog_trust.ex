@@ -156,6 +156,8 @@ defmodule Treehouse.CatalogTrust do
       unless RawObservationBounds.within_evidence?(input.incoming),
         do: refuse(:invalid_verified_history)
 
+      authenticate_incoming_headers!(input.incoming.histories)
+      validate_incoming_rejected!(input.incoming.histories)
       union = merge_histories!(original.histories, input.incoming.histories)
       %{logs: histories, raws: raw_histories} = histories!(union, :incoming)
 
@@ -1385,8 +1387,10 @@ defmodule Treehouse.CatalogTrust do
     if source == :incoming do
       preflight_incoming!(raws)
     else
-      unless Enum.all?(raws, &history_shape?/1) and RawObservationBounds.within_histories?(raws),
-        do: refuse(history_reason(source))
+      unless Enum.all?(raws, &history_shape?/1) and
+               Enum.all?(raws, &match?({:bounded, _}, Continuation.family(&1.replica))) and
+               RawObservationBounds.within_histories?(raws),
+             do: refuse(history_reason(source))
     end
 
     duplicates = raws |> Enum.map(&Map.get(&1, :replica)) |> duplicate?()
@@ -1438,14 +1442,7 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp authenticate_incoming!(raws) do
-    checked =
-      Enum.map(raws, fn history ->
-        frames = Enum.map(history.frames, &authenticate_incoming_frame!(&1, history.replica))
-
-        ids = Enum.map(frames, & &1.id)
-        if duplicate?(ids), do: refuse(:invalid_verified_history)
-        {frames, MapSet.new(ids)}
-      end)
+    checked = authenticate_incoming_headers!(raws)
 
     missing =
       checked
@@ -1454,10 +1451,24 @@ defmodule Treehouse.CatalogTrust do
       end)
       |> sorted()
 
+    validate_incoming_rejected!(raws)
+    if missing != [], do: refuse(:trust_pending, missing)
+  end
+
+  defp authenticate_incoming_headers!(raws) do
+    Enum.map(raws, fn history ->
+      frames = Enum.map(history.frames, &authenticate_incoming_frame!(&1, history.replica))
+
+      ids = Enum.map(frames, & &1.id)
+      if duplicate?(ids), do: refuse(:invalid_verified_history)
+      {frames, MapSet.new(ids)}
+    end)
+  end
+
+  defp validate_incoming_rejected!(raws) do
     rejected = Enum.map(raws, &scan_incoming_rejected/1)
     if Enum.any?(rejected, &match?({:invalid, _}, &1)), do: refuse(:invalid_verified_history)
     if Enum.any?(rejected, &match?({:unsupported, _}, &1)), do: refuse(:unsupported_cutoff)
-    if missing != [], do: refuse(:trust_pending, missing)
   end
 
   defp authenticate_incoming_frame!(frame, replica) do
@@ -1669,8 +1680,20 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp equivalent_frame?(left, right) do
-    left == right
+    with {:ok, left_op} <- Wire.decode_op(left),
+         {:ok, right_op} <- Wire.decode_op(right) do
+      equivalent_op?(left_op, right_op)
+    else
+      _ -> false
+    end
   end
+
+  defp equivalent_op?(%Op{} = left, %Op{} = right) do
+    left.id == right.id and left.sig == right.sig and
+      Op.canonical_encoding(left) == Op.canonical_encoding(right)
+  end
+
+  defp equivalent_op?(_, _), do: false
 
   defp reviewed_bootstrap!(review, log, initial?) do
     {:ok, observed} = CatalogBootstrap.observe(log)
@@ -2067,14 +2090,19 @@ defmodule Treehouse.CatalogTrust do
   defp ensure_history_subset!(proof, current, digest) do
     current_ops = Log.ops(current)
 
-    if Enum.any?(Log.ops(proof), fn {id, op} -> current_ops[id] != op end),
+    if Enum.any?(Log.ops(proof), fn {id, op} -> not equivalent_op?(current_ops[id], op) end),
       do: refuse(:recovery_incomplete, [digest])
 
-    rejected = MapSet.new(Log.quarantine(current), &{&1.op, &1.reason})
+    rejected = Map.new(Log.quarantine(current), &{&1.op.id, &1})
 
-    if Enum.any?(Log.quarantine(proof), &(not MapSet.member?(rejected, {&1.op, &1.reason}))),
+    if Enum.any?(Log.quarantine(proof), &(not equivalent_rejected?(&1, rejected[&1.op.id]))),
       do: refuse(:recovery_incomplete, [digest])
   end
+
+  defp equivalent_rejected?(entry, %{reason: reason, op: op}),
+    do: entry.reason == reason and equivalent_op?(entry.op, op)
+
+  defp equivalent_rejected?(_, _), do: false
 
   defp inventory_extends?(before, next_entries) do
     Enum.all?(before, fn entry ->

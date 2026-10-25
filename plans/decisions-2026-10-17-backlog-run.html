@@ -635,6 +635,13 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Scope</dt><dd>This changes build dependency preparation, not wire admission, browser authority or a production relay claim.</dd>
 </dl></section>
 
+<section id="d75"><h2><span>D-75</span> Preserve bytes while coalescing authenticated signed identity</h2><dl>
+<dt>Correction to D73</dt><dd>Requested Sonnet review and a fresh live probe exposed a denial-of-progress defect in strict raw comparison: a portable duplicate-dependency alias installed first caused later honest spelling to refuse. Both owners could be wedged. Exact first-seen raw values remain retained data, but signed identity is the canonical payload plus signature; unsigned ordering cannot become semantic authority.</dd>
+<dt>Common contract</dt><dd>Validate every incoming accepted header and structural rejected record before merging. Only then coalesce equal canonical payload/signature identities, preserving the first raw frame. Conflicting or forged identities still refuse. Complete-proof membership compares the same canonical operation and signature, including normalized dependency sets; authentic aliases can arrive first or later without blocking an honest proof. This revises D73's raw-comparison decision rather than silently selecting one old owner.</dd>
+<dt>Boundary follow-through</dt><dd>Stored histories must all belong to bounded Space/Thread families before incoming data is considered. Wrong-family complete proof histories are unreadable recovery evidence. Duplicate-list and non-object refusals are pinned before cross-origin conflicts. TypeScript caches current-history membership fingerprints per replica so repeated small proofs cannot multiply full-history encoding; a Buffer decode counter compares one and eight genuine proofs.</dd>
+<dt>Nullable unleased expiry disposition</dt><dd>The raw signature observer intentionally treats absent/null expiry as the same unleased canonical meaning. Both owners may report signed missing dependencies for that alias, just as signed depth-65 or unknown-name observations can fetch without admission. Both strict complete catalog readers refuse the null representation as unsupported; no lease, authority or route is admitted. Fresh complete/partial reciprocal controls pin that declared observation/admission distinction.</dd>
+</dl></section>
+
 </main>
 </body>
 </html>

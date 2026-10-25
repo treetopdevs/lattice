@@ -103,6 +103,9 @@ async function evaluateSnapshot(value, originalOnly) {
         if (!withinCatalogRawEvidenceBounds(value.incoming))
             fail("invalid_verified_history");
         const next = structuredClone(original);
+        for (const raw of value.incoming.histories)
+            await authenticateFrames(raw);
+        await validateRejectedHistories(value.incoming.histories);
         const histories = await mergeHistories(original.histories, value.incoming.histories);
         validateStoredClosure(original);
         next.histories = [...histories.values()].map((h) => h.raw).sort((a, b) => compareUtf8(a.replica, b.replica));
@@ -794,8 +797,8 @@ async function mergeHistories(saved, incoming) {
         observed.set(id, await observeHistory(raw));
     return observed;
 }
-// Retention and proof membership compare exact raw values, not merely the signed quotient.
-function fingerprint(f) { return JSON.stringify(stable(f)); }
+// Compare the signed payload and signature while retaining the first raw values.
+function fingerprint(f) { return `${f.id}:${hash(canonicalBytesForCarrierOp(f))}:${f.sig}`; }
 function hash(bytes) {
     const digest = sha256(bytes);
     let binary = "";
@@ -895,11 +898,12 @@ function entryProof(entry, histories, space) {
 }
 async function mergeProofs(saved, incoming, histories) {
     const proofs = new Map();
+    const membership = new Map();
     for (const proof of [...saved, ...incoming]) {
         if (!closed(proof, ["cutoff", "history"]) || normalizeCatalogCutoff(proof.cutoff) === null)
             fail("malformed_catalog");
         // A proof claims a complete immutable point; it cannot solicit incremental ancestors.
-        if (!historyValid(proof.history))
+        if (!historyValid(proof.history) || !["space", "thread"].includes(continuationFamily(proof.history.replica)))
             fail("recovery_incomplete");
         const observed = await deriveTreehouseCatalogCutoff(proof.history);
         if (!observed.ok)
@@ -909,8 +913,13 @@ async function mergeProofs(saved, incoming, histories) {
         const current = histories.get(proof.history.replica);
         if (current === undefined)
             fail("recovery_incomplete", [proof.cutoff.logDigest]);
-        const present = new Set(current.raw.frames.map((f) => fingerprint(f)));
-        const rejected = new Set(current.raw.rejected.map((r) => fingerprint(r.frame)));
+        let members = membership.get(proof.history.replica);
+        if (members === undefined) {
+            members = { present: new Set(current.raw.frames.map((f) => fingerprint(f))),
+                rejected: new Set(current.raw.rejected.map((r) => fingerprint(r.frame))) };
+            membership.set(proof.history.replica, members);
+        }
+        const { present, rejected } = members;
         if (proof.history.frames.some((f) => !present.has(fingerprint(f))) || proof.history.rejected.some((r) => !rejected.has(fingerprint(r.frame))))
             fail("recovery_incomplete", [proof.cutoff.logDigest]);
         const key = `${proof.cutoff.replica}:${proof.cutoff.logDigest}`;

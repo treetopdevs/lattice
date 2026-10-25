@@ -31,10 +31,11 @@ a separate implementation under plan 267.
    histories; both outrank missing accepted ancestors.
 4. Report sorted unique missing ids, independently of delivery order. Merge retained
    and incremental incoming frames before calculating missing ancestors.
-5. A retained/incoming id conflict requires equal parsed raw frame values, not
-   merely equal canonical signatures. Object-key order is irrelevant; changed
-   arrays or scalar representations refuse with `invalid_verified_history` and
-   the conflicting id. Complete proof membership uses the same exact raw values.
+5. Validate incoming accepted headers and rejected records before coalescing with
+   retained evidence. Same-id frames may coalesce only with the same canonical
+   signed payload and signature. Preserve the first retained raw values; neither
+   changed shape nor a forged overlap may hide behind prior data. Portable aliases
+   must work both before and after the honest spelling, including proof membership.
 6. Apply complete cutoff portability and the strict product reader before semantic
    projection. Unsupported or forged evidence cannot become authority or a route.
 

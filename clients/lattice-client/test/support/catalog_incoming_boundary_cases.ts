@@ -52,6 +52,7 @@ export async function boundaryCases(f: Fixture): Promise<ProbeInput[]> {
     const flat=await raw("command",["delegation",f.space.delegation],deps);
     results.push([`canonical-delegation-bytes-${suffix}`,[...f.histories[0]!.frames,flat]]);
     results.push([`extra-delegation-field-${suffix}`,[...f.histories[0]!.frames,{...flat,body:["delegation",{...f.space.delegation,extra:"unsigned"}]}]]);
+    results.push([`null-unleased-expiry-${suffix}`,[...f.histories[0]!.frames,{...flat,body:["delegation",{...f.space.delegation,expires_epoch:null}]}]]);
     const missingParent={...f.space.delegation} as Partial<typeof f.space.delegation>;delete missingParent.parent_id;
     results.push([`missing-delegation-parent-${suffix}`,[...f.histories[0]!.frames,{...flat,body:["delegation",missingParent]}]]);
 
