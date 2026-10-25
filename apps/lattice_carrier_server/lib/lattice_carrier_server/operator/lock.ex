@@ -102,6 +102,7 @@ defmodule LatticeCarrierServer.Operator.Lock do
 
   @doc """
   Record the `catalogued` journal as `listed`, with the same checks as `ready`.
+  An exact already-listed retry repeats the locked checks without another receipt.
   """
   @spec listed(Path.t(), binary(), map(), binary(), String.t()) :: :ok | {:error, term()}
   def listed(root, expected, active_manifest, record, incarnation) do

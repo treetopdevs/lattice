@@ -17,7 +17,7 @@ defmodule LatticeCarrierServer.Operator.PublicationFixture do
     Staging
   }
 
-  alias LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{SignCatalog, SigningLedger}
 
   def ready(context) do
     previous = Application.get_env(:lattice_carrier_server, :manifest)
@@ -101,6 +101,14 @@ defmodule LatticeCarrierServer.Operator.PublicationFixture do
 
   def catalogued(context) do
     {:ok, f} = ready(context)
+    catalogued_ready(f)
+  end
+
+  def catalogued_ready(f) do
+    {:ok, status} = SigningLedger.status(f.ceremony_dir, f.binding)
+    status_path = Path.join(f.root, "listing-status-#{System.unique_integer([:positive])}.json")
+    File.write!(status_path, SigningLedger.export_status(status, f.binding))
+    f = %{f | status_path: status_path}
 
     {:ok, prepared} =
       ReleaseCatalog.prepare(f.root, f.ready, f.ceremony_dir, f.probe, f.status_path)
@@ -115,8 +123,8 @@ defmodule LatticeCarrierServer.Operator.PublicationFixture do
         package.digest
       )
 
-    package_path = Path.join(f.root, "listing-package.json")
-    envelope_path = Path.join(f.root, "listing-envelope.json")
+    package_path = Path.join(f.root, "listing-package-#{prepared.catalog.revision}.json")
+    envelope_path = Path.join(f.root, "listing-envelope-#{prepared.catalog.revision}.json")
     File.write!(package_path, prepared.package)
     File.write!(envelope_path, envelope)
 
@@ -124,6 +132,93 @@ defmodule LatticeCarrierServer.Operator.PublicationFixture do
       ReleaseCatalog.commit(f.root, f.ready, f.ceremony_dir, f.probe, package_path, envelope_path)
 
     {:ok, catalogued} = Journal.read(f.root)
-    {:ok, Map.merge(f, %{catalogued: catalogued, catalog: prepared.catalog, envelope: envelope})}
+    {:ok, record} = Journal.decode(catalogued)
+    reference = Enum.find(record["artifacts"], &(&1["kind"] == "reference"))
+
+    {:ok, op} =
+      reference["path"] |> File.read!() |> Jason.decode!() |> Lattice.Carrier.Wire.decode_op()
+
+    {:ok,
+     Map.merge(f, %{
+       catalogued: catalogued,
+       catalog: prepared.catalog,
+       envelope: envelope,
+       reference: op
+     })}
+  end
+
+  def next_ready(f, expected, head, number) do
+    tag = "catalog-child-#{number}"
+    {:ok, %{log: space_log}} = Lattice.Log.restore_verified(f.active_log)
+
+    {:ok, donor_data} =
+      Fixture.new(second_member: length(Staging.roster(space_log)) == 2, child_tag: tag)
+
+    donor = Map.new(donor_data)
+    child_artifact = Enum.find(donor.artifacts, &(&1.kind == :log))
+    sim = %{f.space | logs: Map.put(f.space.logs, "creator", space_log)}
+
+    {_sim, reference} =
+      Lattice.Sim.command(sim, "creator", :create_thread, [donor.child.replica, "Branch"])
+
+    attempt = LatticeCarrierServer.Operator.CeremonyFixture.id("catalog-attempt-#{number}")
+    child_path = Staging.artifact_path(f.root, attempt, Journal.digest(child_artifact.bytes))
+    manifest = Jason.decode!(File.read!(f.manifest))
+    template = Enum.find(manifest["instances"], &(&1["name"] == "thread"))
+
+    root_key = Lattice.Sim.identity(donor.child, "creator").pub
+
+    peers =
+      [Base.encode64(root_key) | Staging.roster(space_log)]
+      |> Enum.uniq()
+      |> Enum.sort()
+      |> Enum.map(fn key ->
+        %{"pubkey" => key, "realm" => InitialProvisioning.client_realm(Base.decode64!(key))}
+      end)
+
+    instance =
+      template
+      |> Map.put("name", "thread-#{number}")
+      |> Map.put("log_file", child_path)
+      |> Map.put("route", "/r/" <> LatticeCarrierServer.Operator.CeremonyFixture.id(tag))
+      |> Map.put("trusted_peers", peers)
+      |> Map.put("relay_realms", Enum.map(peers, & &1["realm"]))
+
+    manifest = Map.update!(manifest, "instances", &(&1 ++ [instance]))
+
+    artifacts = [
+      child_artifact,
+      %{
+        kind: :reference,
+        bytes: Jason.encode!(Lattice.Carrier.Wire.encode_op(reference)),
+        replica: space_log.replica,
+        op_id: reference.id,
+        review: nil
+      },
+      %{kind: :manifest, bytes: Jason.encode!(manifest), replica: nil, op_id: nil, review: nil}
+    ]
+
+    request = %{
+      active_manifest: f.manifest,
+      attempt: attempt,
+      generation: number,
+      catalog_head: head,
+      manifest_digest: Journal.digest(File.read!(f.manifest))
+    }
+
+    {:ok, status} = SigningLedger.status(f.ceremony_dir, f.binding)
+    status_path = Path.join(f.root, "restaging-status-#{number}.json")
+    File.write!(status_path, SigningLedger.export_status(status, f.binding))
+
+    assert {:ok, _} =
+             Staging.prepare(f.root, expected, request, artifacts, f.ceremony_dir, status_path)
+
+    {:ok, pending} = Journal.read(f.root)
+    next = Map.merge(f, %{journal: pending, request: request, artifacts: artifacts})
+    activated = ActivationFixture.activated!(next)
+    ActivationFixture.restart!()
+    assert {:ok, _} = ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
+    {:ok, ready} = Journal.read(f.root)
+    Map.put(next, :ready, ready)
   end
 end

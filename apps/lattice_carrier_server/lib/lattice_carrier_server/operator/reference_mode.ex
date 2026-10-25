@@ -27,7 +27,7 @@ defmodule LatticeCarrierServer.Operator.ReferenceMode do
   @spec observe(map(), Log.t(), Log.t()) :: {:ok, Log.t()} | {:error, atom()}
   def observe(bundle, space, child_log), do: observe_reference(bundle, space, child_log, :staged)
 
-  @doc "Judge exact absent/present pending references, or present-only initial references, for listing."
+  @doc "Judge the exact present Sync candidate for listing, retaining strict initial provenance."
   @spec observe_listing(map(), Log.t(), Log.t()) :: {:ok, Log.t()} | {:error, atom()}
   def observe_listing(bundle, space, child_log),
     do: observe_reference(bundle, space, child_log, :listing)
@@ -73,7 +73,6 @@ defmodule LatticeCarrierServer.Operator.ReferenceMode do
   defp presence(nil, op, space, :listing) do
     case Map.fetch(space.ops, op.id) do
       {:ok, ^op} -> {:ok, space}
-      :error -> Log.accept(space, op)
       _ -> :error
     end
   end

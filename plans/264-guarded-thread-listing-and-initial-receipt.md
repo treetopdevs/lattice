@@ -3,9 +3,10 @@
 ## Status and dependency
 
 IN PROGRESS: holder APIs, guarded pending/initial listing and the closed local command
-flow are implemented. Focused Linux evidence covers exact retry, network refusal,
-roster/CAS races and concurrent calls. Complete crash/carrying evidence, independent
-implementation reviews and required final gates remain.
+flow are implemented. Full local mix check, both boundary security scans and 483 non-root Linux
+operator/carrier tests pass. Independent spec/standards reviews are resolved.
+Remaining full-API crash/refusal cases, external focused confirmation and hosted
+final gates remain.
 
 Prepared 2026-10-24 from then-current main. This is plan 224 PR 5, now rebased onto
 merged catalog publication PR #168 (plan 263). Its exact tested tree and merge ancestry
@@ -119,8 +120,10 @@ The privileged BEAM operator is already inside the local trust boundary.
    journal bytes so delivered and present retries derive the same phase-only receipt.
 
 The critical holder call has no semantic review callback or new cross-holder wait.
-Its timeout stays within the existing relay persistence/cleanup/slack budget, and its
-normal bounded duration must fit ReleaseQuiesce's default five-second drain window.
+Its caller allows observation headroom for digests, while the existing persistence,
+cleanup and five-second drain budgets remain unchanged. Normal critical work must fit
+that drain window; overload still fails closed. Report courier_outcome_unknown or
+listing_outcome_unknown when a reply cannot establish the effect.
 Close the gate during blocked persistence in tests: drain captures the completed exact
 log or fails closed, never commits an incomplete capture. A caller timeout is ambiguous,
 not proof of no effect. Request cancellation within a bound, retain the monitor and
@@ -161,6 +164,14 @@ semantics: Authority constructs quarantine from exactly the keys of reasons.
 
 ## Observation and owner receipt after the courier
 
+Before delivery, collect a bounded served snapshot for EVERY catalog entry and require
+memory/disk equality, matching owner/source/replica and the snapshot budgets. Use those
+actual snapshots for pure review. A known over-budget carried history refuses before
+Space writes. Under the target lock, the writer independently compares the existing
+bytes with its exact current deterministic dump before any replacement; disk drift
+refuses unchanged. Rename errors are ambiguous even when the errno resembles a
+pre-write failure. Only completed preparation before the rename call stays retryable.
+
 Read authenticated served histories again for every committed catalog entry, with no
 hypothetical frames. `CatalogEntries.observe/2` must pass, including the actual Space
 reference, current authority and the unique bound bootstrap. Readiness/binding/roster
@@ -170,7 +181,8 @@ that authentic history and require an explicit retry/review, never remove the fr
 Construct exactly the catalogued record with `phase = listed`. Call existing
 `Lock.listed/5` with the checked active manifest, expected raw bytes and current boot
 incarnation. The Python owner remains the only journal writer and independently checks
-CAS, attempt, unchanged manifest/envelope and derived transition. Add no signing or
+CAS, attempt, unchanged manifest/envelope and derived transition. Recheck pure binding
+profile and bootstrap uniqueness against the exact final served Space snapshot. Add no signing or
 semantic evaluation to Python.
 
 Only when the actual initial consumer exists, update BOTH BEAM ReferenceMode/journal
@@ -256,3 +268,13 @@ matrix, supported command flow, reviews and exact-tip required checks pass, with
 verified merge tree. Record evidence in PR/index. The operator's real ceremony/listed
 run is separate. Next: plan 245 native catalog evaluation/trust enrollment and plan 261
 ordinary-app relay integration; listed server evidence alone does not enable app chat.
+
+## Current verification checkpoint
+
+Full `mix check` passed after the stale-incarnation retry fix. Both boundary Sobelow
+scans passed. The actual non-root Linux operator/carrier matrix passed 483 tests.
+Independent spec review found the retry gap; its focused confirmation resolves it.
+Standards review found no documented violation or P1/P2. All five external P2 findings
+were fixed; the follow-up service returned quota exhaustion, not a review verdict.
+Missing-initial/bootstrap-fork and full-API holder-death boundaries remain explicit
+evidence work before software completion; existing holder-level crash tests pass.

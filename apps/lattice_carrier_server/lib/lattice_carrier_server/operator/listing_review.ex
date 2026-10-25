@@ -34,7 +34,21 @@ defmodule LatticeCarrierServer.Operator.ListingReview do
     after
       @timeout ->
         Process.exit(pid, :kill)
+
+        receive do
+          {:DOWN, ^monitor, :process, ^pid, _} -> :ok
+        after
+          250 -> :ok
+        end
+
         Process.demonitor(monitor, [:flush])
+
+        receive do
+          {^ref, _} -> :ok
+        after
+          0 -> :ok
+        end
+
         {:error, :listing_review_timeout}
     end
   end

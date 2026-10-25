@@ -68,6 +68,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   Publication consumers must still derive and commit their own phase transition.
   This observation grants no authority and is not a durable readiness receipt.
   """
+  @test_hooks_enabled Mix.env() == :test
+
   @spec review(Path.t(), binary() | nil, Path.t(), Path.t(), String.t()) ::
           {:ok, map()} | {:error, atom()}
   def review(root, expected, probe_identity_file, ceremony_dir, phase)
@@ -315,9 +317,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   defp read_route(target, secret) do
     # Synchronous test hook, run in this process before the route is dialed:
     # it receives the route path only, never a key.
-    case Application.get_env(:lattice_carrier_server, :readiness_probe_hook) do
-      hook when is_function(hook, 1) -> hook.(target.route)
-      _ -> :ok
+    if @test_hooks_enabled do
+      case Application.get_env(:lattice_carrier_server, :readiness_probe_hook) do
+        hook when is_function(hook, 1) -> hook.(target.route)
+        _ -> :ok
+      end
     end
 
     holder = Holder.via(target.name)

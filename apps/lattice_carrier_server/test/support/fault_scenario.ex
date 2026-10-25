@@ -419,8 +419,8 @@ defmodule LatticeCarrierServer.FaultScenario do
 
   defp code_paths do
     :code.get_path()
-    |> Enum.map(&List.to_string/1)
-    |> Enum.filter(&String.contains?(&1, "_build"))
+    |> Enum.map(&(List.to_string(&1) |> Path.expand()))
+    |> Enum.filter(&File.dir?/1)
   end
 
   defp elixir_bin do

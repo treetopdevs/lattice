@@ -131,7 +131,7 @@ defmodule LatticeCarrierServer.Holder do
   @spec courier(GenServer.server(), Op.t(), courier_review_token()) ::
           {:ok, courier_receipt()} | {:error, term()}
   def courier(holder, op, token),
-    do: GenServer.call(holder, {:courier, op, token}, relay_call_timeout_ms())
+    do: GenServer.call(holder, {:courier, op, token}, relay_call_timeout_ms() + 2_000)
 
   @spec state_report(GenServer.server()) :: {:ok, map()} | {:error, :read_only}
   def state_report(holder), do: GenServer.call(holder, :state_report)
@@ -308,10 +308,10 @@ defmodule LatticeCarrierServer.Holder do
 
   def handle_call({:courier, op, token}, _from, state) do
     with :ok <- courier_open(state),
-         true <- state.courier_durability_proven,
          {:ok, current} <- snapshot_token(state),
          :ok <- match_review(token, current, op),
          {:ok, candidate, report, outcome} <- courier_candidate(state.log, op),
+         :ok <- courier_write_proven(state, outcome),
          {:ok, digest} <- courier_digest(candidate),
          true <- digest == token.candidate_digest do
       case persist_relay(candidate, report, state) do
@@ -347,6 +347,10 @@ defmodule LatticeCarrierServer.Holder do
   def handle_call({:relay, peer_realm, op}, _from, state),
     do: relay_owned(peer_realm, op, state)
 
+  defp courier_write_proven(_state, :present), do: :ok
+  defp courier_write_proven(%{courier_durability_proven: true}, :delivered), do: :ok
+  defp courier_write_proven(_state, _outcome), do: {:error, :durability_not_proven}
+
   defp courier_open(%{persistence_fenced: true}), do: {:error, :persistence_ambiguous}
   defp courier_open(%{release_owner: nil}), do: {:error, :unguarded_courier}
   defp courier_open(%{source: {:log, _}}), do: {:error, :unsupported_courier_source}
@@ -366,9 +370,18 @@ defmodule LatticeCarrierServer.Holder do
       )
 
     case result do
-      :ok -> :ok
-      {:error, _, :ambiguous} -> {:error, :persistence_ambiguous}
-      _ -> {:error, :durability_unsupported}
+      :ok ->
+        :ok
+
+      {:error, _, :ambiguous} ->
+        {:error, :persistence_ambiguous}
+
+      {:error, reason, :unchanged}
+      when reason in [:release_closed, :release_identity_changed, :persistence_ambiguous] ->
+        {:error, reason}
+
+      _ ->
+        {:error, :durability_unsupported}
     end
   end
 
@@ -386,7 +399,8 @@ defmodule LatticeCarrierServer.Holder do
   end
 
   defp courier_digest(log) do
-    if map_size(log.ops) + length(log.quarantine) <= 4_000 do
+    if map_size(log.ops) + length(log.quarantine) <= 4_000 and
+         :erlang.external_size(log) <= 16 * 1024 * 1024 do
       bytes = :erlang.term_to_iovec(log, [:deterministic])
 
       if IO.iodata_length(bytes) <= 16 * 1024 * 1024,
@@ -606,6 +620,9 @@ defmodule LatticeCarrierServer.Holder do
     end
   end
 
+  defp persistence_refusal(:persistence_ambiguous, :unchanged, state),
+    do: persistence_refusal(:persistence_ambiguous, :ambiguous, state)
+
   defp persistence_refusal(reason, :unchanged, state),
     do: {:reply, {:error, {:persistence_failed, reason}}, state}
 
@@ -617,7 +634,8 @@ defmodule LatticeCarrierServer.Holder do
   defp bounded_atomic_dump(log, path, %{durability: durability} = state) do
     bounded_persistence(
       fn ->
-        with {:ok, temp_path} <- Durability.secure_temp(path) do
+        with :ok <- disk_matches(path, state.log),
+             {:ok, temp_path} <- Durability.secure_temp(path) do
           try do
             atomic_dump(log, path, temp_path, durability)
           after
@@ -628,6 +646,26 @@ defmodule LatticeCarrierServer.Holder do
       path,
       write_context(state)
     )
+  end
+
+  # Compare exact deterministic dump bytes before replacement. This is linear
+  # serialization/IO, not a cryptographic replay on every participant relay.
+  # Read at most the expected dump length plus one byte, including corrupt files.
+  defp disk_matches(path, log) do
+    expected = Log.dump_bytes(log)
+
+    with {:ok, file} <- :file.open(String.to_charlist(path), [:read, :binary, :raw]) do
+      try do
+        case :file.read(file, byte_size(expected) + 1) do
+          {:ok, ^expected} -> :ok
+          _ -> {:error, :disk_history_diverged}
+        end
+      after
+        :file.close(file)
+      end
+    else
+      {:error, _} -> {:error, :disk_history_diverged}
+    end
   end
 
   defp bounded_persistence(fun, path, context) do
@@ -747,10 +785,11 @@ defmodule LatticeCarrierServer.Holder do
     with {:ok, %File.Stat{mode: mode}} <- File.stat(path),
          :ok <- Log.dump(log, temp_path),
          :ok <- File.chmod(temp_path, Bitwise.band(mode, 0o777)),
-         :ok <- durability.sync_file(temp_path),
-         :ok <- durability.rename(temp_path, path) do
-      case durability.sync_directory(Path.dirname(path)) do
-        :ok -> :ok
+         :ok <- durability.sync_file(temp_path) do
+      with :ok <- durability.rename(temp_path, path),
+           :ok <- durability.sync_directory(Path.dirname(path)) do
+        :ok
+      else
         {:error, reason} -> {:error, reason, :ambiguous}
       end
     else

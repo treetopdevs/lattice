@@ -6,11 +6,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
     ActivationFixture,
     CatalogSigningPackage,
     CatalogStore,
-    Fixture,
     InitialProvisioning,
     Journal,
     ReleaseCatalog,
-    ReleaseReadiness,
     Staging
   }
 
@@ -592,80 +590,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
     assert length(prepared.catalog.entries) == 3
   end
 
-  defp next_release!(f, expected, head, number) do
-    tag = "catalog-child-#{number}"
-    {:ok, %{log: space_log}} = Lattice.Log.restore_verified(f.active_log)
-
-    {:ok, donor_data} =
-      Fixture.new(second_member: length(Staging.roster(space_log)) == 2, child_tag: tag)
-
-    donor = Map.new(donor_data)
-    child_artifact = Enum.find(donor.artifacts, &(&1.kind == :log))
-    sim = %{f.space | logs: Map.put(f.space.logs, "creator", space_log)}
-
-    {_sim, reference} =
-      Lattice.Sim.command(sim, "creator", :create_thread, [donor.child.replica, "Branch"])
-
-    attempt = LatticeCarrierServer.Operator.CeremonyFixture.id("catalog-attempt-#{number}")
-    child_path = Staging.artifact_path(f.root, attempt, Journal.digest(child_artifact.bytes))
-    manifest = Jason.decode!(File.read!(f.manifest))
-    template = Enum.find(manifest["instances"], &(&1["name"] == "thread"))
-
-    root_key = Lattice.Sim.identity(donor.child, "creator").pub
-
-    peers =
-      [Base.encode64(root_key) | Staging.roster(space_log)]
-      |> Enum.uniq()
-      |> Enum.sort()
-      |> Enum.map(fn key ->
-        %{"pubkey" => key, "realm" => InitialProvisioning.client_realm(Base.decode64!(key))}
-      end)
-
-    instance =
-      template
-      |> Map.put("name", "thread-#{number}")
-      |> Map.put("log_file", child_path)
-      |> Map.put("route", "/r/" <> LatticeCarrierServer.Operator.CeremonyFixture.id(tag))
-      |> Map.put("trusted_peers", peers)
-      |> Map.put("relay_realms", Enum.map(peers, & &1["realm"]))
-
-    manifest = Map.update!(manifest, "instances", &(&1 ++ [instance]))
-
-    artifacts = [
-      child_artifact,
-      %{
-        kind: :reference,
-        bytes: Jason.encode!(Lattice.Carrier.Wire.encode_op(reference)),
-        replica: space_log.replica,
-        op_id: reference.id,
-        review: nil
-      },
-      %{kind: :manifest, bytes: Jason.encode!(manifest), replica: nil, op_id: nil, review: nil}
-    ]
-
-    request = %{
-      active_manifest: f.manifest,
-      attempt: attempt,
-      generation: number,
-      catalog_head: head,
-      manifest_digest: Journal.digest(File.read!(f.manifest))
-    }
-
-    {:ok, status} = SigningLedger.status(f.ceremony_dir, f.binding)
-    status_path = Path.join(f.root, "restaging-status-#{number}.json")
-    File.write!(status_path, SigningLedger.export_status(status, f.binding))
-
-    assert {:ok, _} =
-             Staging.prepare(f.root, expected, request, artifacts, f.ceremony_dir, status_path)
-
-    {:ok, pending} = Journal.read(f.root)
-    next = Map.merge(f, %{journal: pending, request: request, artifacts: artifacts})
-    activated = ActivationFixture.activated!(next)
-    ActivationFixture.restart!()
-    assert {:ok, _} = ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
-    {:ok, ready} = Journal.read(f.root)
-    Map.put(next, :ready, ready)
-  end
+  defp next_release!(f, expected, head, number),
+    do: LatticeCarrierServer.Operator.PublicationFixture.next_ready(f, expected, head, number)
 
   defp signed!(f) do
     {:ok, prepared} =

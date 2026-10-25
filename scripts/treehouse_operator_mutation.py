@@ -749,7 +749,7 @@ def listed(root, plan):
     if plan["artifacts"] is not None:
         refuse("malformed_operator_plan")
     old, manifest = promoted(plan)
-    if (old["phase"] != "catalogued" or old["attempt"] != plan["attempt"]
+    if (old["phase"] not in ("catalogued", "listed") or old["attempt"] != plan["attempt"]
             or record(plan["record"]) != dict(old, phase="listed")
             or plan["checks"][0]["sha256"] != manifest["sha256"]):
         refuse("stale_operator_intent")
@@ -759,7 +759,9 @@ def listed(root, plan):
     for a in old["artifacts"]:
         if a["kind"] == "catalog":
             staged(a)
-    commit(root, plan["expected"], plan["record"], writes="listed")
+    # Exact listed retries retain the same locked checks without a second receipt.
+    if old["phase"] == "catalogued":
+        commit(root, plan["expected"], plan["record"], writes="listed")
     reply({"ok": True})
 
 

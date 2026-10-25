@@ -4,7 +4,8 @@ Use this step after [catalog publication](treehouse_catalog_publication.md) has 
 `catalogued`. It publishes only the already client-signed staged Space reference and
 records a dated local `listed` receipt. It does not install trust or routes in an app,
 prove a public relay or establish physical custody. Clients still judge current histories.
-The ordinary two-app session remains a separate acceptance gate.
+The ordinary two-app session remains a separate acceptance gate. Local RPC and holders
+of the BEAM distribution cookie are trusted operators, not ordinary app participants.
 
 ## Run inside the guarded relay
 
@@ -60,15 +61,30 @@ presence observation. Guarded Treehouse routes retain OD-5's reviewed relay real
 
 ## Retry and recovery
 
-A timeout or lost reply can follow a durable reference or journal write. Preserve the
+`courier_outcome_unknown` and `listing_outcome_unknown` distinguish an ambiguous reply
+from a definite refusal. `persistence_failed` means inspect the holder's fenced/readiness
+state before recovery. A timeout or lost reply can follow a durable reference or journal write. Preserve the
 original intent and retry the same command. An exact matching listed receipt is accepted
 only after fresh current-history review; no duplicate frame or journal history is written.
 A different attempt, catalog, artifact or receipt is stale intent. Never replace the
 intent with a fresh journal merely to hide a refusal, remove an authentic frame, hand-edit
 a journal or reset the catalog signing ledger.
 
+Every entry is budget-checked before delivery: at most 4,000 operations/quarantined
+frames and a 16 MiB native snapshot per history. `courier_history_budget` is a hard
+ceiling, including presence-only retries; stop and plan retention/rollover before it is
+reached. No history is truncated. The caller has additional observation headroom for
+snapshot hashing; this does not extend the persistence worker's timeout or the existing
+five-second drain deadline.
+
+`disk_history_diverged` means the disk differs from the holder's current deterministic
+dump. The writer refuses under the target lock before replacing any bytes; preserve that
+history and reconcile through controlled restart, not a manual overwrite.
+
 `stale_served_history` means the Space changed between review and delivery. Retry from
-fresh evidence. `roster_drift_since_catalog`, `reference_not_honored`,
+fresh evidence. A caller killed before its probe connects can leave a `readiness_probe_busy`
+grant until the existing ten-second expiry; retry the original command after it expires.
+`roster_drift_since_catalog`, `reference_not_honored`,
 `initial_reference_competing` or `catalog_carried_entry_lapsed` requires explicit review
 of current histories. A lapsed immutable reference retains its catalog slot. Replacement
 is the separate row 244 workflow; signing another same-revision catalog is not recovery.

@@ -23,7 +23,13 @@ defmodule LatticeCarrierServer.CourierTest do
         else: :ok
     end
 
-    def rename(from, to), do: File.rename(from, to)
+    def rename(from, to) do
+      result = File.rename(from, to)
+
+      if :persistent_term.get({__MODULE__, Path.dirname(to)}, nil) == :rename_after_error,
+        do: {:error, :eio},
+        else: result
+    end
 
     def sync_directory(dir) do
       case :persistent_term.get({__MODULE__, dir}, nil) do
@@ -403,9 +409,80 @@ defmodule LatticeCarrierServer.CourierTest do
     refute ReleaseGate.valid?(context.owner, %{})
   end
 
+  @tag :tmp_dir
+  test "rename then error fences even when the errno resembles a pre-write failure", context do
+    {holder, path, author} = holder(context, durability: FaultSequence, relay_realms: ["author"])
+    {:ok, snapshot} = Holder.courier_snapshot(holder)
+    op = Op.new(author, @replica, [], :command, {:post, "renamed before eio"})
+    FaultSequence.arm(context.tmp_dir, :rename_after_error)
+    on_exit(fn -> FaultSequence.clear(context.tmp_dir) end)
+
+    assert {:error, {:persistence_failed, :eio}} =
+             Holder.courier(holder, op, reviewed(snapshot, op))
+
+    assert {:ok, %{log: disk}} = Log.restore_verified(path)
+    assert disk.ops[op.id] == op
+    before = File.read!(path)
+    assert {:error, :persistence_ambiguous} = Holder.ready?(holder)
+    assert {:error, :persistence_ambiguous} = Holder.relay(holder, "author", op)
+
+    assert {:error, :persistence_ambiguous} =
+             GenServer.call(holder, {:drain_release, context.owner})
+
+    assert File.read!(path) == before
+  end
+
+  @tag :tmp_dir
+  test "a quarantine-only update invalidates a previously reviewed candidate", context do
+    {holder, path, author} = holder(context, relay_realms: ["author"])
+    {:ok, snapshot} = Holder.courier_snapshot(holder)
+    op = Op.new(author, @replica, [], :command, {:post, "candidate"})
+
+    bad = %{
+      Op.new(author, @replica, [], :command, {:post, "quarantined"})
+      | sig: <<0::512>>
+    }
+
+    assert {:ok, %{quarantined: [_]}} = Holder.relay(holder, "author", bad)
+    before = File.read!(path)
+    assert {:error, :stale_served_history} = Holder.courier(holder, op, reviewed(snapshot, op))
+    assert File.read!(path) == before
+  end
+
+  @tag :tmp_dir
+  test "unproven append and a changed operation cannot consume a snapshot token", context do
+    {holder, path, author} = holder(context)
+    {:ok, snapshot} = Holder.served_snapshot(holder)
+    op = Op.new(author, @replica, [], :command, {:post, "first"})
+    other = Op.new(author, @replica, [], :command, {:post, "other"})
+    before = File.read!(path)
+    token = reviewed(snapshot, op)
+    assert {:error, :durability_not_proven} = Holder.courier(holder, op, token)
+    assert :ok = Holder.prove_durability(holder)
+    assert {:error, :invalid_courier_review} = Holder.courier(holder, other, token)
+    assert File.read!(path) == before
+  end
+
+  @tag :tmp_dir
+  test "read-only presence observation needs no write rehearsal or replacement", context do
+    author = Identity.from_seed("author", "courier-test-author")
+    op = Op.new(author, @replica, [], :command, {:post, "already durable"})
+    initial = Log.append!(Log.new(@replica), op)
+    {holder, path, _} = holder(context, initial_log: initial, durability: FaultSequence)
+    File.touch!(path, 1_600_000_000)
+    before = file_snapshot(path)
+    FaultSequence.arm(context.tmp_dir, :before)
+    on_exit(fn -> FaultSequence.clear(context.tmp_dir) end)
+    {:ok, snapshot} = Holder.served_snapshot(holder)
+    assert {:ok, %{outcome: :present}} = Holder.courier(holder, op, reviewed(snapshot, op))
+    assert {:error, :durability_not_proven} = Holder.courier_snapshot(holder)
+    assert file_snapshot(path) == before
+  end
+
   defp holder(context, options \\ []) do
     path = Path.join(context.tmp_dir, "matter.log")
-    assert :ok = Log.new(@replica) |> Log.dump(path)
+    {initial, options} = Keyword.pop(options, :initial_log, Log.new(@replica))
+    assert :ok = Log.dump(initial, path)
     author = Identity.from_seed("author", "courier-test-author")
 
     opts = [

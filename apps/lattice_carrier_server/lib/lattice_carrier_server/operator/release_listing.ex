@@ -18,15 +18,18 @@ defmodule LatticeCarrierServer.Operator.ReleaseListing do
     ReleaseReadiness
   }
 
-  alias LatticeCarrierServer.Operator.CatalogCeremony.Store
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{Binding, Store}
   alias Treehouse.{CatalogEntries, TransportCatalog}
+
+  @test_hooks_enabled Mix.env() == :test
 
   @owner_refusals %{
     "operator_busy" => :operator_busy,
     "stale_operator_intent" => :stale_operator_intent,
     "stale_operator_incarnation" => :stale_operator_incarnation,
     "operator_history_full" => :operator_history_full,
-    "immutable_artifact_conflict" => :immutable_artifact_conflict
+    "immutable_artifact_conflict" => :immutable_artifact_conflict,
+    "operator_persistence_failed" => :listing_outcome_unknown
   }
 
   @spec publish(Path.t(), binary(), Path.t(), Path.t()) :: {:ok, map()} | {:error, atom()}
@@ -35,18 +38,25 @@ defmodule LatticeCarrierServer.Operator.ReleaseListing do
          {:ok, before} <- ReleaseReadiness.review(root, actual, probe, ceremony, record["phase"]),
          {:ok, context} <- context(root, before),
          holder = Holder.via(context.space_instance.name),
-         :ok <- Holder.prove_durability(holder),
-         {:ok, snapshot} <- Holder.courier_snapshot(holder),
-         :ok <- snapshot_bound(snapshot, before),
+         {:ok, snapshots} <- served_snapshots(context, before),
+         snapshot = Map.fetch!(snapshots, context.catalog.space),
+         context = %{
+           context
+           | histories: snapshot_histories(snapshots),
+             child_log: Map.fetch!(snapshots, context.child.replica).log
+         },
+         :ok <- prove_if_absent(holder, snapshot, context.op),
          {:ok, proposed} <- ListingReview.run(context, snapshot),
          :ok <- before_courier(context.op.id),
-         {:ok, _receipt} <- Holder.courier(holder, context.op, proposed.token),
+         {:ok, _receipt} <- deliver(holder, context.op, proposed.token),
          {:ok, after_review} <-
            ReleaseReadiness.review(root, actual, probe, ceremony, record["phase"]),
          true <- after_review.binding == before.binding,
          {:ok, after_context} <- context(root, after_review),
          true <- after_context.catalog == context.catalog and after_context.op == context.op,
-         {:ok, histories} <- served_histories(after_context, after_review),
+         {:ok, final_snapshots} <- served_snapshots(after_context, after_review),
+         histories = snapshot_histories(final_snapshots),
+         :ok <- final_binding(histories[context.catalog.space], after_review.binding),
          true <- histories[context.catalog.space].ops[context.op.id] == context.op,
          {:ok, _} <- CatalogEntries.observe(context.catalog, histories),
          {:ok, listed} <- receipt(root, expected, after_review) do
@@ -54,6 +64,15 @@ defmodule LatticeCarrierServer.Operator.ReleaseListing do
     else
       {:error, {:operator_refused, reason}} when is_binary(reason) ->
         {:error, Map.get(@owner_refusals, reason, :listing_refused)}
+
+      {:error, {:persistence_failed, :disk_history_diverged}} ->
+        {:error, :disk_history_diverged}
+
+      {:error, {:persistence_failed, _}} ->
+        {:error, :persistence_failed}
+
+      {:error, reason} when reason in [:operator_mutation_timeout, :operator_mutation_failed] ->
+        {:error, :listing_outcome_unknown}
 
       {:error, reason} when is_atom(reason) ->
         {:error, reason}
@@ -64,17 +83,44 @@ defmodule LatticeCarrierServer.Operator.ReleaseListing do
   rescue
     _ -> {:error, :listing_refused}
   catch
+    :exit, _ -> {:error, :listing_outcome_unknown}
     _, _ -> {:error, :listing_refused}
   end
 
   # Test seam at the snapshot-CAS boundary; receives public reference id only.
   defp before_courier(id) do
-    case Application.get_env(:lattice_carrier_server, :listing_courier_hook) do
-      hook when is_function(hook, 1) -> hook.(id)
-      _ -> :ok
+    if @test_hooks_enabled do
+      case Application.get_env(:lattice_carrier_server, :listing_courier_hook) do
+        hook when is_function(hook, 1) -> hook.(id)
+        _ -> :ok
+      end
     end
 
     :ok
+  end
+
+  defp prove_if_absent(holder, snapshot, op) do
+    if snapshot.log.ops[op.id] == op, do: :ok, else: Holder.prove_durability(holder)
+  end
+
+  defp deliver(holder, op, token) do
+    Holder.courier(holder, op, token)
+  catch
+    :exit, _ -> {:error, :courier_outcome_unknown}
+  end
+
+  defp snapshot_histories(snapshots),
+    do: Map.new(snapshots, fn {replica, snapshot} -> {replica, snapshot.log} end)
+
+  defp final_binding(space, binding) do
+    with :ok <- Binding.profile_unchanged(space, binding.record),
+         {:ok, id} <- Binding.honored_bootstrap(space, binding.record),
+         true <- id == binding.bootstrap_id do
+      :ok
+    else
+      {:error, reason} when is_atom(reason) -> {:error, reason}
+      _ -> {:error, :service_binding_mismatch}
+    end
   end
 
   defp current(root, expected) do
@@ -168,39 +214,39 @@ defmodule LatticeCarrierServer.Operator.ReleaseListing do
        end), do: :ok, else: {:error, :catalog_route_mismatch}
   end
 
-  defp snapshot_bound(snapshot, review) do
-    if snapshot.token.owner == review.deployment.owner,
-      do: :ok,
-      else: {:error, :release_boot_unguarded}
+  defp snapshot_bound(snapshot, review, instance, replica) do
+    if snapshot.token.owner == review.deployment.owner and
+         snapshot.token.source == {:path, instance.log_file} and snapshot.token.replica == replica,
+       do: :ok,
+       else: {:error, :release_boot_unguarded}
   end
 
-  defp served_histories(context, review) do
+  defp served_snapshots(context, review) do
     pairs =
       Map.new(review.current.pairs, fn {instance, log} -> {log.replica, {instance, log}} end)
 
-    Enum.reduce_while(context.catalog.entries, {:ok, %{}}, fn entry, {:ok, histories} ->
+    Enum.reduce_while(context.catalog.entries, {:ok, %{}}, fn entry, {:ok, snapshots} ->
       {instance, disk} = Map.fetch!(pairs, entry.replica)
 
       with {:ok, snapshot} <- Holder.served_snapshot(Holder.via(instance.name)),
-           :ok <- snapshot_bound(snapshot, review),
+           :ok <- snapshot_bound(snapshot, review, instance, entry.replica),
            true <- snapshot.log == disk,
            :ok <- Log.verify_authenticity(snapshot.log) do
-        {:cont, {:ok, Map.put(histories, entry.replica, snapshot.log)}}
+        {:cont, {:ok, Map.put(snapshots, entry.replica, snapshot)}}
       else
+        {:error, reason} when is_atom(reason) -> {:halt, {:error, reason}}
         _ -> {:halt, {:error, :served_history_changed}}
       end
     end)
   end
 
-  defp receipt(root, _expected, %{record: %{"phase" => "listed"} = record}) do
-    with {:ok, raw} <- Journal.read(root), true <- raw == Journal.encode(record) do
-      {:ok, record}
-    else
-      _ -> {:error, :stale_operator_intent}
-    end
+  defp receipt(root, _expected, %{record: %{"phase" => "listed"}} = review) do
+    checked_receipt(root, Journal.encode(review.record), review)
   end
 
-  defp receipt(root, expected, review) do
+  defp receipt(root, expected, review), do: checked_receipt(root, expected, review)
+
+  defp checked_receipt(root, expected, review) do
     record = Map.put(review.record, "phase", "listed")
 
     with :ok <-

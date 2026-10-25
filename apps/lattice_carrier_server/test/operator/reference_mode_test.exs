@@ -70,6 +70,27 @@ defmodule LatticeCarrierServer.Operator.ReferenceModeTest do
              ReferenceMode.observe_listing(initial, space, f.child_log)
   end
 
+  test "a concurrent valid revocation makes the signed reference unhonored", f do
+    {:ok, reference} = f.bundle.reference.bytes |> Jason.decode!() |> Wire.decode_op()
+
+    revoke =
+      Op.new(
+        f.owner,
+        reference.replica,
+        Log.frontier(f.space),
+        :authority,
+        {:revoke, reference.cap}
+      )
+
+    assert Op.valid?(revoke)
+    assert {:ok, current} = Log.accept(f.present, revoke)
+    assert :ok = Log.verify_authenticity(current)
+    assert Map.has_key?(Lattice.Authority.analyze(Treehouse.Space, current).reasons, reference.id)
+
+    assert {:error, :reference_not_honored} =
+             ReferenceMode.observe_listing(f.bundle, current, f.child_log)
+  end
+
   test "a different valid signed reference cannot stand in for the observed artifact", f do
     initial = put_in(f.bundle, [:reference, :review], %{"mode" => "initial_existing"})
     {:ok, original} = initial.reference.bytes |> Jason.decode!() |> Wire.decode_op()
