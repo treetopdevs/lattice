@@ -8,8 +8,10 @@ onto the verified listing merge for its real release/publication fixture.
 No pending-parent implementation is copied or silently treated as merged.
 Host reads, exclusive output and the standalone command are implemented. Focused
 Linux tests exercise actual listed fixtures and the TS evaluator. A genuine signed
-fixture reaches both the exact artifact and retained-snapshot limits. Final broad
-checks, review and hosted PR verification remain open.
+fixture reaches both the exact artifact and retained-snapshot limits. Full local
+checks, actual-owner Linux coverage and independent review are complete. Requested
+external review is unavailable under provider quota; hosted PR verification remains
+open. Keep draft and do not claim software completion or installed trust.
 
 ## Outcome
 

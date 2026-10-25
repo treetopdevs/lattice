@@ -183,24 +183,27 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
       {:error, :evidence_page_too_large}
     else
       Enum.reduce_while(finals, 0, fn name, total ->
-        case File.lstat(Path.join(dir, name)) do
-          {:ok, %{type: :regular, size: size}} when size <= @max_envelope ->
-            case document_budget(total + size) do
-              :ok -> {:cont, total + size}
-              refusal -> {:halt, refusal}
-            end
-
-          {:ok, %{type: :regular}} ->
-            {:halt, {:error, :evidence_page_too_large}}
-
-          _ ->
-            {:halt, {:error, :catalog_store_corrupt}}
+        case counted_file_size(Path.join(dir, name), total) do
+          {:ok, size} -> {:cont, size}
+          refusal -> {:halt, refusal}
         end
       end)
       |> case do
         size when is_integer(size) -> :ok
         refusal -> refusal
       end
+    end
+  end
+
+  defp counted_file_size(path, total) do
+    with {:ok, %{type: :regular, size: size}} <- File.lstat(path),
+         true <- size <= @max_envelope,
+         :ok <- document_budget(total + size) do
+      {:ok, total + size}
+    else
+      false -> {:error, :evidence_page_too_large}
+      {:error, :evidence_page_too_large} = refusal -> refusal
+      _ -> {:error, :catalog_store_corrupt}
     end
   end
 
