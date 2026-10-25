@@ -6,6 +6,7 @@ import {
   authorTreehouseContinuationPin,
   authorTreehouseCommand,
   authorTreehouseIssueInvitation,
+  authorTreehouseOfflineInvitation,
   carrierDelegationsFromFrames,
   carrierOpsToSemanticOps,
   decodeTreehouseAcceptance,
@@ -29,6 +30,7 @@ import {
   townshipReplicaRootTag,
   TREEHOUSE_LITE_THREAD_CAP,
   treehouseCommandDecoders,
+  treehouseCatalogBootstrapsFromFrames,
   treehouseCommandRoles,
   verifyCarrierOp,
 } from "@treetopdevs/lattice-client";
@@ -39,6 +41,8 @@ import type {
   Verifier,
 } from "@treetopdevs/lattice-client";
 import { buildSpaceFramesExport, isExportFileName } from "./space_export";
+import { buildOfflineInvitation, reviewOfflineInvitation as decodeOfflineInvitation } from "./offline_enrollment";
+import type { OfflineInvitationReview } from "./offline_enrollment";
 import {
   assertRetainedMonotonic,
   emptyState,
@@ -203,6 +207,8 @@ export class TreehouseWorkflow {
   /** Reviewed but unsigned catalog binding payload. Memory only: cancelling or reopening discards it. */
   private pendingContinuation: ContinuationReview | null = null;
   private pendingBinding: { payloadText: string; review: BindingReview } | null = null;
+  private pendingRecipient: { recipient: string; state: PreviewState } | null = null;
+  private pendingOffline: { review: OfflineInvitationReview; state: PreviewState } | null = null;
   private continuationCache: { state: PreviewState; facts: ContinuationFacts } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   /** snapshot() cache, keyed on the identity of `state` (replaced on every persist) and `keyAvailable`. */
@@ -251,6 +257,8 @@ export class TreehouseWorkflow {
     this.views = views;
     this.pendingOffer = null;
     this.pendingBinding = null;
+    this.pendingRecipient = null;
+    this.pendingOffline = null;
     this.pendingContinuation = null;
     this.keyAvailable = captured.keyStatus === "available";
     if (
@@ -396,6 +404,8 @@ export class TreehouseWorkflow {
     this.views = views;
     // Any persisted change invalidates an unsigned continuation review.
     this.pendingContinuation = null;
+    this.pendingRecipient = null;
+    this.pendingOffline = null;
   }
   createSpace(name: string) {
     return this.exclusive(async () => {
@@ -948,6 +958,77 @@ export class TreehouseWorkflow {
       const merged = mergeRelay(this.state.relay, config);
       if (merged === null) return;
       await this.persist({ ...structuredClone(this.state), relay: merged });
+    });
+  }
+  /** Recipient key is reviewed separately from the joiner's group fingerprint. No signature or write. */
+  reviewOfflineRecipient(joinRequest: string) {
+    return this.exclusive(async () => {
+      this.pendingRecipient = null;
+      if (this.state.intent) throw new Error("creation_incomplete");
+      if (!this.snapshot().canIssueInvitation) throw new Error("no_capability");
+      const { publicKey: recipient } = decodeTreehouseJoinRequest(joinRequest);
+      const space = this.spaceProfile();
+      const bootstraps = await treehouseCatalogBootstrapsFromFrames({ replica: space.replica, frames: space.frames });
+      if (!bootstraps.ok || bootstraps.bootstraps.length !== 1) throw new Error("offline_bootstrap_required");
+      this.pendingRecipient = { recipient, state: this.state };
+      return { recipient };
+    });
+  }
+  cancelOfflineReview() { this.pendingRecipient = null; this.pendingOffline = null; }
+  private async offlineStateCurrent(state: PreviewState) {
+    const captured = await this.native.open();
+    if (state !== this.state || captured.keyStatus !== "available" || captured.publicKey !== this.state.publicKey ||
+      JSON.stringify(parseState(captured.record)) !== JSON.stringify(this.state)) throw new Error("stale_offline_review");
+  }
+  /** Explicit founder confirmation of the independently compared recipient key. Routes are not needed. */
+  issueOfflineInvitation(confirmedRecipient: string) {
+    return this.exclusive(async () => {
+      const pending = this.pendingRecipient;
+      if (!pending || pending.recipient !== confirmedRecipient) throw new Error("no_pending_offline_review");
+      await this.offlineStateCurrent(pending.state);
+      const space = this.spaceProfile();
+      const existing = carrierOpsToSemanticOps(space.frames, {}, treehouseCommandDecoders("Treehouse.Space"))
+        .filter(op => op.kind === "command" && op.command === "issue_invitation" && op.commandArgs?.[0] === pending.recipient)
+        .map(op => reviewTreehouseInvitation({ replica: space.replica, frames: space.frames, invitationId: op.id, recipient: pending.recipient }))
+        .find(review => review.ok);
+      if (existing?.ok) {
+        const held = new Set(this.state.profiles.map(profile => profile.replica));
+        if (existing.threads.some(replica => !held.has(replica))) throw new Error("thread_scope_not_held");
+        const text = await buildOfflineInvitation({ space: space.replica, frames: space.frames, invitationId: existing.invitationId, recipient: pending.recipient });
+        this.pendingRecipient = null;
+        return text;
+      }
+      const authored = await authorTreehouseOfflineInvitation({ signer: this.signer(), replica: space.replica,
+        frames: space.frames, threadFrames: this.threadFrames(), heldReplicas: this.state.profiles.map(profile => profile.replica), recipient: pending.recipient });
+      const text = await buildOfflineInvitation({ space: space.replica, frames: [...space.frames, authored.frame], invitationId: authored.frame.id, recipient: pending.recipient });
+      const next = structuredClone(this.state);
+      const target = next.profiles.find(profile => profile.replica === space.replica)!;
+      target.frames.push(authored.frame); target.outbox.push(authored.frame.id);
+      await this.persist(next, [target]);
+      return text;
+    });
+  }
+  /** Joiner candidate review is memory-only. Neither Space history nor routes enter PreviewState. */
+  reviewOfflineInvitation(bytes: Uint8Array) {
+    return this.exclusive(async () => {
+      this.pendingOffline = null;
+      if (this.state.intent) throw new Error("creation_incomplete");
+      if (!this.state.publicKey || this.state.profiles.length) throw new Error("offline_join_not_available");
+      const review = await decodeOfflineInvitation(bytes, this.state.publicKey);
+      this.pendingOffline = { review, state: this.state };
+      return structuredClone(review);
+    });
+  }
+  /** Explicit out-of-band group fingerprint confirmation precedes the recipient-bound signature. */
+  acceptOfflineInvitation(confirmedFingerprint: string) {
+    return this.exclusive(async () => {
+      const pending = this.pendingOffline;
+      if (!pending || pending.review.fingerprint !== confirmedFingerprint) throw new Error("no_pending_offline_review");
+      await this.offlineStateCurrent(pending.state);
+      const acceptance = await signTreehouseAcceptance({ replica: pending.review.space, frames: pending.review.frames,
+        invitationId: pending.review.invitationId, signer: this.signer() });
+      this.pendingOffline = null;
+      return encodeTreehouseAcceptance(acceptance);
     });
   }
   /** Founder: sign an `issue_invitation` over the full honored Thread scope and return the offer text. */
