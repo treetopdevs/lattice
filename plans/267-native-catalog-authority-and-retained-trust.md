@@ -65,8 +65,10 @@ and the pre-application-policy gate: capability scope/validity/audience/grant sc
 introduction visibility, role grants, revocation, expiry and causal holder freshness.
 Its opaque result explicitly reports `ApplicationPolicyRequired`, never final honor.
 Fresh actual runtime cases exercise all refusal branches and effect metadata, with
-reversed delivery and Rust-authored input consumed by both owners. Full checks and
-independent review are in progress. Incoming TS structural normalization, application
+reversed delivery and Rust-authored input consumed by both owners. Ordinary native
+177/0, tracing 188/0, client build, desktop checks, full Mix check and both boundary
+scans pass. Independent spec review found no mismatch; standards review confirmed
+the shared runtime-launch helper correction. Incoming TS structural normalization, application
 policy, CRDT projection and retained catalog trust remain mandatory unfinished work.
 Plan 268's candidate correction is in separate draft PR 173; this port continues
 using its current reviewed-source baseline until that correction is adopted.
