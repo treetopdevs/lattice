@@ -23,6 +23,13 @@ Public disposable frames and actual results are saved at
 They contain no private keys. Regenerate live inputs for implementation tests;
 never use saved verdicts when either runtime prerequisite is absent.
 
+Reproduce with `catalog_incoming_order_probe.ts` in the client test-support
+folder, piping its JSON to a temporary file, then pass that file to
+`scripts/treehouse_catalog_incoming_order_probe.exs` under the test environment.
+The TS producer signs fresh inputs and calls its actual public API; the BEAM
+consumer calls its actual public API. These are diagnostic probes, not tests
+asserting that disagreement is desirable or a substitute for the RED regression.
+
 TS `observeHistory` authenticates raw accepted frames before missing-dependency
 collection, then derives cutoff and invokes the strict product reader. BEAM
 `scan_frame` invokes closed vocabulary decoding before signature classification;
