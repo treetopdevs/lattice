@@ -1,4 +1,6 @@
 # Executable independent BEAM peer for native codec vectors. No trust installation.
+# Boundary crypto re-derivation is a test-local command oracle; actual wire
+# admission is independently observed through Wire.decode_op/1.
 alias Lattice.{Canonical, Op}
 alias Lattice.Carrier.Wire
 alias Treehouse.{CatalogTrustVectors, CatalogVectors, TransportCatalog}

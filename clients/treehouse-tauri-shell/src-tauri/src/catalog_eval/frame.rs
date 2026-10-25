@@ -10,6 +10,8 @@ use sha2::{Digest, Sha256};
 pub const MAX_FRAME_BYTES: usize = 64_000;
 const INVALID: &str = "catalog_envelope_invalid";
 
+/// Signature/hash authenticity only, never wire admission or authority.
+/// The product reader must enforce vocabulary/admission before any fold or trust decision.
 #[derive(Debug)]
 pub struct AuthenticFrame {
     id: String,

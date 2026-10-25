@@ -4,7 +4,7 @@ use serde_json::Value;
 
 pub const MAX_BYTES: usize = 128 * 1024;
 pub const MAX_DEPTH: usize = 64;
-// Each carrier map adds tag, entries and pair wrappers; flat delegation metadata adds four.
+// Three wrappers per carrier map, plus the frame object and flat delegation metadata.
 pub const MAX_JSON_DEPTH: usize = MAX_DEPTH * 3 + 4;
 pub const MAX_NODES: usize = 32_768;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
