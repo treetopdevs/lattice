@@ -533,6 +533,18 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </dl>
 </article>
 
+<article id="d47">
+<h2><span>D-47</span>Build catalog publication with the signer off the relay</h2>
+<dl>
+<dt>When</dt><dd>2026-10-24, under the user's delegated backlog workflow; main ba7f23f49.</dd>
+<dt>Decision</dt><dd>Adopt plan 224 OD-2(b): the carrier prepares public evidence, an off-host custodian independently verifies it and signs, and the carrier rechecks before committing. Plan 263 covers the complete PR 4 transition, including carried entries, both reference modes and crash recovery.</dd>
+<dt>Inputs</dt><dd>Use disposable real-mode ceremony fixtures to build and prove software now. The operator's real ceremony, second-host backup and public relay remain field prerequisites; no software fixture is credited as physical custody.</dd>
+<dt>Safety</dt><dd>The signer keeps a locked immutable revision ledger, syncs envelope before head, and releases output only after durable acknowledgment. Record the whole-ledger rollback preservation assumption. Existing initial references are never appended twice; initial listing stays blocked until the guarded courier exists.</dd>
+<dt>Bounds</dt><dd>13 histories, 4,000 frames and 16 MiB per history, 64 MiB aggregate public package, 128 KiB metadata. Refuse excess rather than truncate. These operator bounds do not enlarge the ordinary app's 1 MiB record.</dd>
+<dt>Next</dt><dd>Plan 263 implementation and adversarial review, then guarded listing, native catalog acceptance and real-relay app proof. PR #167's ordinary two-app offline gate is separately running after its native picker fix.</dd>
+</dl>
+</article>
+
 </main>
 </body>
 </html>
