@@ -1,4 +1,4 @@
-import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds } from "./treehouse_catalog_raw_bounds";
+import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
 // This module proposes decisions over an adapter-owned complete snapshot. It
 // performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
 // installation receipt. The expected token is reflected for the trusted adapter
@@ -95,6 +95,13 @@ async function evaluateSnapshot(value, originalOnly) {
         if (!stateValid(value.installed))
             fail("trust_recovery_required");
         const original = value.installed;
+        for (const raw of value.incoming.histories) {
+            const family = continuationFamily(raw.replica);
+            if (family !== "space" && family !== "thread")
+                fail("wrong_catalog_scope");
+        }
+        if (!withinCatalogRawEvidenceBounds(value.incoming))
+            fail("invalid_verified_history");
         const next = structuredClone(original);
         const histories = await mergeHistories(original.histories, value.incoming.histories);
         validateStoredClosure(original);
@@ -392,6 +399,8 @@ function rejection(error) {
     return error instanceof Refusal ? { kind: "reject", reason: error.reason, detail: error.info } : { kind: "reject", reason: "malformed_catalog", detail: detail() };
 }
 function issue(kind, expected, next, reason, replacementConfigured, bootstrapIds, bindingHeads, catalogHeads, routes) {
+    if (!withinCatalogRawEvidenceBounds(next))
+        fail("invalid_verified_history");
     const result = { kind, expected, next, reason, replacementConfigured, observed: { bootstrapIds, bindingHeads, catalogHeads },
         detail: detail(next.blocked?.opIds, null, next.blocked?.pendingProofIds), routes };
     decisions.set(result, { routes: structuredClone(routes), blocked: next.blocked?.reason ?? null });
@@ -488,7 +497,7 @@ function stateValid(v) {
         Array.isArray(w.frontier) && w.frontier.every(idValid) && Array.isArray(w.opIds) && w.opIds.every(idValid)) ||
         !v.blocked.triggers.every((t) => closed(t, ["kind", "id", "digest", "bytes"]) && (t.kind === "catalog" || t.kind === "rotation") && idValid(t.id) && idValid(t.digest) && safe(t.bytes))))
         return false;
-    return true;
+    return withinCatalogRawEvidenceBounds(v);
 }
 function validateStoredClosure(state) {
     for (const history of state.histories) {

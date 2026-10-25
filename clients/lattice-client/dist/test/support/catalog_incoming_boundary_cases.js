@@ -1,5 +1,7 @@
 import { authorCarrierOpUnchecked } from "./unchecked_author";
-import { canonicalBytesForCarrierTerm, canonicalHash } from "../../src/codec";
+import assert from "node:assert/strict";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { authorCarrierDelegation, canonicalBytesForCarrierDelegation, canonicalBytesForCarrierTerm, canonicalHash } from "../../src/codec";
 const bin = (value) => ["bin", Buffer.from(value).toString("base64")];
 export async function boundaryCases(f) {
     const missing = "A".repeat(43);
@@ -22,9 +24,16 @@ export async function boundaryCases(f) {
         }
         throw new Error("no exact push size encoding");
     };
+    const unknownDelegation = await authorCarrierDelegation({ replica: f.space.replica, signer: f.root, audiencePubkey: f.root.publicKey, ops: ["create_space"], roles: ["future_incoming_role"], live: true });
+    const delegatedBytes = canonicalBytesForCarrierDelegation(unknownDelegation);
+    assert.equal(await canonicalHash(delegatedBytes), unknownDelegation.id);
+    assert.ok(ed25519.verify(Buffer.from(unknownDelegation.sig, "base64"), delegatedBytes, f.root.publicKey, { zip215: false }));
     const results = [];
     for (const deps of [[], [missing]]) {
         const suffix = deps.length === 0 ? "complete" : "partial";
+        const delegatedUnknown = await raw("command", ["map", [[["nil"], ["delegation", unknownDelegation]]]], deps);
+        results.push([`unknown-delegation-${suffix}`, [...f.histories[0].frames, delegatedUnknown]]);
+        results.push([`forged-unknown-delegation-${suffix}`, [...f.histories[0].frames, { ...delegatedUnknown, sig: Buffer.alloc(64).toString("base64") }]]);
         const nil = await raw("command", ["nil"], deps);
         results.push([`malformed-scalar-arity-${suffix}`, [...f.histories[0].frames, { ...nil, body: ["nil", 0] }]]);
         const unknown = await raw("future_incoming_kind", ["nil"], deps);

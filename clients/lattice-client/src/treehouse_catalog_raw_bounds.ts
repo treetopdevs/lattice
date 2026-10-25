@@ -48,6 +48,11 @@ export function withinCatalogRawHistoriesBounds(histories: unknown): boolean {
   return withinJsonBounds(histories, MAX_JSON_DEPTH + 4);
 }
 
+// A proof-history adds page/list/proof/history/rejected/record wrappers.
+export function withinCatalogRawEvidenceBounds(value: unknown): boolean {
+  return withinJsonBounds(value, MAX_JSON_DEPTH + 6);
+}
+
 export function withinCatalogRawObservationBounds(frame: unknown): boolean {
   if (!withinJsonBounds(frame, MAX_JSON_DEPTH)) return false;
   try {

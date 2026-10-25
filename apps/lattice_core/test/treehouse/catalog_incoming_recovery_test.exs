@@ -120,6 +120,26 @@ defmodule Treehouse.CatalogIncomingRecoveryTest do
       assert summary(decision) == expected[name]
     end
 
+    malformed = [
+      nil,
+      %{replica: base.review.space, frames: []},
+      %{replica: 4, frames: [], rejected: []},
+      %{replica: base.review.space, frames: [], rejected: [], extra: true}
+    ]
+
+    for {bad, slot} <- Enum.with_index(malformed),
+        {order, histories} <- [{"first", [bad, wrong]}, {"last", [wrong, bad]}] do
+      decision = evaluate(base, page(histories))
+      assert decision.kind == :reject
+      assert decision.reason == :malformed_catalog
+      assert decision.detail.ids == []
+      assert summary(decision) == expected["shape-#{slot}-#{order}"]
+    end
+
+    nonlist = evaluate(base, %{page() | histories: %{wrong: wrong}})
+    assert nonlist.kind == :reject
+    assert nonlist.reason == :malformed_catalog
+    assert summary(nonlist) == expected["shape-nonlist"]
     forged_only = evaluate(base, page([forged]))
     assert forged_only.kind == :reject
     assert forged_only.reason == :invalid_verified_history

@@ -2,7 +2,11 @@
 
 ## Status and scope
 
-IN PROGRESS. Fresh public installation calls proved BEAM/TS disagreement before
+IN PROGRESS. Main-history phase order, aggregate budgets and two-producer recovery
+are implemented locally. Incoming cutoff-proof refusal parity still needs a live
+audit, followed by final external/integration/hosted gates and native adoption.
+
+Fresh public installation calls proved BEAM/TS disagreement before
 semantic projection. Execute the correction separately from the native evaluator, from
 verified current main, with protected-boundary reviews. Plan 267 must not silently
 choose one existing runtime's result and claim parity. No external identity,
@@ -107,9 +111,9 @@ Frame domain/crypto/admission rules remain separate. Exact shared string and nod
 maxima/one-over tests and maximum rejected wrapper tests exercise actual budgets.
 Fresh signed two-frame evidence at the 64 MiB history string maximum reaches
 unsupported portability in both public APIs/owners; one byte over is invalid,
-and a forged at-limit signature is invalid. This is TS-produced aggregate evidence;
-an independent BEAM producer, proof-history/page metadata aggregation and transport
-preallocation limits remain open. Both protected reviews found no contract defect;
+and a forged at-limit signature is invalid. The initial aggregate checkpoint was TS-produced; whole-envelope coverage and
+independent BEAM production are addressed below. Transport preallocation remains
+a separate ownership boundary. Both protected reviews found no contract defect;
 a redundant repeated BEAM walk was removed following standards feedback and
 independently confirmed. All 12 focused BEAM/reciprocal tests, six direct TS
 budget tests, client build and strict lint pass. Final full gates remain open.
@@ -120,6 +124,36 @@ a nonempty saved dependency, is absent from the base, yields exact pending ids
 when isolated, and is retained exactly after successful incremental delivery.
 Both fresh producer directions pass these stronger controls. No earlier vacuous
 zero-dependency control is credited as proof of saved-ancestor closure.
+
+A whole-envelope checkpoint now bounds incoming pages, retained snapshots and
+proposed next snapshots at the same node/string budgets, including cutoff-proof
+histories, artifacts and metadata. Six proof/rejected wrappers produce JSON depth
+205. BEAM lazily counts typed wrapper keys in their public camel-case spelling,
+atom values as names and the sole reviewed root byte field as Base64. Binary wire
+keys and names remain data; no normalized history copy or atom interning occurs.
+Saved overflow requires recovery before incoming processing; incoming scope still
+precedes budget classification. Proposed overflow cannot be issued for persistence.
+
+Fresh independent BEAM and TS producers sign exact history and page maxima and
+one-over variants. Both actual owners/APIs pin reasons for genuine, forged,
+main/proof split and oversized saved-proof cases, accounting for page-wrapper
+bytes separately from the history-only budget. Independent producer tests pass.
+Protected reviews confirm the implementation. Additional tests pin headline
+reasons/ids, malformed aliases, duplicate signed-dependency aliases versus changed
+sets, shape-neighbor precedence and post-consumer no-atom-interning. Genuinely
+signed unknown delegation-role names, including nested and missing-parent forms,
+are checked from both producers, with their inner signatures independently verified.
+All fifteen focused tests, eight direct TS budget tests, client build and strict
+lint pass; the three delegation-name tests pass again after the signature controls.
+
+Before source signoff, audit incoming cutoff-proof refusal parity with fresh small
+unsupported/forged/partial proof histories. Static inspection found that BEAM
+`merge_proofs!` maps unreadable incoming proof histories to `recovery_incomplete`,
+where TS `mergeProofs` currently forwards the cutoff observer's reason. This is a
+suspected existing owner disagreement, not yet a reproduced counterexample; do not
+choose one result silently. Prove it through both APIs, define the complete-proof
+context contract, then review any necessary correction before native adoption.
+Bounds before transport parsing or SDK cloning are not established by these guards.
 
 ## Reproduced problem
 

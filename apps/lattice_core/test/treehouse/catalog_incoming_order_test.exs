@@ -46,6 +46,29 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       end
 
       expected = %{
+        "unknown-delegation-complete" => {"reject", "unsupported_cutoff"},
+        "unknown-delegation-partial" => {"reject", "trust_pending"},
+        "forged-unknown-delegation-complete" => {"reject", "invalid_verified_history"},
+        "forged-unknown-delegation-partial" => {"reject", "invalid_verified_history"},
+        "signed-unknown-and-missing" => {"reject", "trust_pending"},
+        "forged-unknown-and-missing" => {"reject", "invalid_verified_history"},
+        "signed-known-and-multiple-missing" => {"reject", "trust_pending"},
+        "duplicate-signed-deps" => {"reject", "trust_pending"},
+        "changed-signed-deps" => {"reject", "invalid_verified_history"},
+        "forged-known-and-multiple-missing" => {"reject", "invalid_verified_history"},
+        "signed-unknown-complete" => {"reject", "unsupported_cutoff"},
+        "forged-unknown-complete" => {"reject", "invalid_verified_history"},
+        "nested-unknown-and-missing" => {"reject", "trust_pending"},
+        "duplicate-unknown-id" => {"reject", "invalid_verified_history"},
+        "partial-with-later-forgery" => {"reject", "invalid_verified_history"},
+        "partial-with-earlier-forgery" => {"reject", "invalid_verified_history"},
+        "partial-wrong-replica" => {"reject", "invalid_verified_history"},
+        "unique-map-control" => {"reject", "trust_pending"},
+        "unique-mapset-control" => {"reject", "trust_pending"},
+        "canonical-integer-control" => {"reject", "trust_pending"},
+        "duplicate-map-key-and-missing" => {"reject", "invalid_verified_history"},
+        "duplicate-mapset-and-missing" => {"reject", "invalid_verified_history"},
+        "alternate-integer-and-missing" => {"reject", "invalid_verified_history"},
         "unknown-kind-complete" => {"reject", "unsupported_cutoff"},
         "unknown-kind-partial" => {"reject", "trust_pending"},
         "push-64000-complete" => {"propose", nil},
@@ -125,6 +148,20 @@ defmodule Treehouse.CatalogIncomingOrderTest do
              "evaluation #{c["name"]}"
 
       assert evaluated.detail.ids == c["tsEvaluation"]["detail"]["ids"], "evaluation #{c["name"]}"
+
+      if Map.has_key?(expected, c["name"]) do
+        {kind, reason} = expected[c["name"]]
+        assert Atom.to_string(evaluated.kind) == kind, c["name"]
+
+        evaluation_reason = evaluation_reason(c["name"], kind, reason)
+
+        assert if(evaluated.reason, do: Atom.to_string(evaluated.reason)) == evaluation_reason,
+               c["name"]
+
+        ids = if reason == "trust_pending", do: missing_ids(frames), else: []
+        assert actual.detail.ids == ids, c["name"]
+        assert evaluated.detail.ids == ids, c["name"]
+      end
     end
   end
 
@@ -173,12 +210,32 @@ defmodule Treehouse.CatalogIncomingOrderTest do
 
     assert {:ok, %{deps: [""]}} = Wire.authenticate_observation(empty_dep)
 
+    unknown_delegation =
+      Lattice.Authority.Delegation.new(f.space.root, f.space.replica, f.space.root.pub,
+        ops: [:create_space],
+        roles: [%Canonical.Atom{name: name}],
+        live: true
+      )
+
+    assert Lattice.Authority.Delegation.valid_sig?(unknown_delegation)
+
+    delegated_complete =
+      Op.new(f.space.root, f.space.replica, [], :command, unknown_delegation) |> Wire.encode_op()
+
+    delegated_partial =
+      Op.new(f.space.root, f.space.replica, [missing], :command, unknown_delegation)
+      |> Wire.encode_op()
+
     cases =
       Enum.map(
         [
           {"signed", frame},
           {"forged", Map.put(frame, "sig", Base.encode64(<<0::512>>))},
-          {"empty-dependency", empty_dep}
+          {"empty-dependency", empty_dep},
+          {"beam-unknown-delegation-complete", delegated_complete},
+          {"beam-unknown-delegation-partial", delegated_partial},
+          {"beam-forged-delegation-partial",
+           Map.put(delegated_partial, "sig", Base.encode64(<<0::512>>))}
         ],
         fn {name, value} ->
           %{name: name, history: %{replica: f.space.replica, frames: [value], rejected: []}}
@@ -277,7 +334,44 @@ defmodule Treehouse.CatalogIncomingOrderTest do
                result["tsEvaluation"]["reason"]
 
       assert evaluated.detail.ids == result["tsEvaluation"]["detail"]["ids"]
+      assert_delegation_case(input.name, actual, evaluated, missing)
     end
+
+    assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
+  end
+
+  defp assert_delegation_case(name, prepared, evaluated, missing) do
+    expected = %{
+      "beam-unknown-delegation-complete" => {:unsupported_cutoff, []},
+      "beam-unknown-delegation-partial" => {:trust_pending, [missing]},
+      "beam-forged-delegation-partial" => {:invalid_verified_history, []}
+    }
+
+    if value = expected[name] do
+      {reason, ids} = value
+
+      for decision <- [prepared, evaluated] do
+        assert decision.kind == :reject
+        assert decision.reason == reason
+        assert decision.detail.ids == ids
+      end
+    end
+  end
+
+  # Evaluation starts from a prepared bootstrap without a catalog. A valid
+  # history proposal therefore still reports catalog availability as pending.
+  defp evaluation_reason("extra-rejected-record-field", _kind, _reason), do: "malformed_catalog"
+  defp evaluation_reason(_name, "propose", _reason), do: "trust_pending"
+  defp evaluation_reason(_name, _kind, reason), do: reason
+
+  defp missing_ids(frames) do
+    present = MapSet.new(frames, & &1["id"])
+
+    frames
+    |> Enum.flat_map(& &1["deps"])
+    |> Enum.reject(&MapSet.member?(present, &1))
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
   defp decode_rejected(record) when is_map(record) do

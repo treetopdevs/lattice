@@ -40,6 +40,8 @@ const inputs = [
     ['signed-unknown-and-missing', [frame]],
     ['forged-unknown-and-missing', [{ ...frame, sig: Buffer.alloc(64).toString('base64') }]],
     ['signed-known-and-multiple-missing', [known]],
+    ['duplicate-signed-deps', [{ ...known, deps: [...known.deps, known.deps[0]] }]],
+    ['changed-signed-deps', [{ ...known, deps: [fixtureId('incoming-missing'), fixtureId('different-missing')] }]],
     ['forged-known-and-multiple-missing', [{ ...known, sig: Buffer.alloc(64).toString('base64') }]],
     ['signed-unknown-complete', [completeUnknown]],
     ['forged-unknown-complete', [{ ...completeUnknown, sig: Buffer.alloc(64).toString('base64') }]],

@@ -154,6 +154,9 @@ defmodule Treehouse.CatalogTrust do
       validate_page!(input.incoming)
       preflight_incoming!(input.incoming.histories)
 
+      unless RawObservationBounds.within_evidence?(input.incoming),
+        do: refuse(:invalid_verified_history)
+
       union = merge_histories!(original.histories, input.incoming.histories)
       %{logs: histories, raws: raw_histories} = histories!(union, :incoming)
 
@@ -407,6 +410,7 @@ defmodule Treehouse.CatalogTrust do
 
   defp validate_original!(state) do
     state = validate_state_shape!(state)
+    unless RawObservationBounds.within_evidence?(state), do: refuse(:trust_recovery_required)
     %{logs: histories} = histories!(state.histories, :stored)
 
     {bootstrap, bootstrap_ids, replacement} =
@@ -2216,6 +2220,8 @@ defmodule Treehouse.CatalogTrust do
          catalog_heads,
          routes
        ) do
+    unless RawObservationBounds.within_evidence?(next), do: refuse(:invalid_verified_history)
+
     %{
       kind: kind,
       expected: expected,

@@ -85,6 +85,39 @@ defmodule Lattice.RawObservationBoundsTest do
     refute RawObservationBounds.within_histories?(history.(67_108_864 - 15))
   end
 
+  test "evidence budget counts public metadata spelling and reviewed key encoding" do
+    fixed = byte_size("reviewspaceRootcutoffProofspadding") + 44
+
+    value = %{
+      review: %{space_root: <<0::256>>},
+      cutoff_proofs: [],
+      padding: :binary.copy("z", 67_108_864 - fixed)
+    }
+
+    assert RawObservationBounds.within_evidence?(value)
+    refute RawObservationBounds.within_evidence?(%{value | padding: value.padding <> "z"})
+  end
+
+  test "proof-history rejected context preserves the deepest raw frame" do
+    for {depth, expected} <- [{198, true}, {199, false}] do
+      nested = Enum.reduce(1..depth, 0, fn _, value -> [value] end)
+
+      value = %{
+        cutoff_proofs: [
+          %{
+            history: %{
+              replica: "r",
+              frames: [],
+              rejected: [%{frame: %{"padding" => nested}, reason: :bad_signature}]
+            }
+          }
+        ]
+      }
+
+      assert RawObservationBounds.within_evidence?(value) == expected
+    end
+  end
+
   # Compact immutable sharing exercises the real maximum without allocating
   # sixty-seven million input cells. The production walk must count occurrences.
   defp forest(nodes) do

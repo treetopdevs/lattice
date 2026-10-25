@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { withinCatalogRawObservationBounds as bounded, withinCatalogRawHistoriesBounds as historiesBounded } from "../src/treehouse_catalog_raw_bounds";
+import { withinCatalogRawObservationBounds as bounded, withinCatalogRawHistoriesBounds as historiesBounded, withinCatalogRawEvidenceBounds as evidenceBounded } from "../src/treehouse_catalog_raw_bounds";
 
 // This seam proves only resource budgets. These intentionally unsigned objects
 // cannot pass the separate closed-header/authentication gate.
@@ -62,4 +62,17 @@ test("history node budget counts shared occurrences at the actual maximum", () =
  // History wrappers and all non-padding nodes consume sixteen nodes.
  assert.equal(historiesBounded(history(64*1024*1024-16)),true);
  assert.equal(historiesBounded(history(64*1024*1024-15)),false);
+});
+
+test("evidence budget counts public metadata and proof histories together", () => {
+ const fixed=Buffer.byteLength("reviewspaceRootcutoffProofspadding")+44;
+ const value={review:{spaceRoot:Buffer.alloc(32).toString("base64")},cutoffProofs:[],padding:"z".repeat(64*1024*1024-fixed)};
+ assert.equal(evidenceBounded(value),true);
+ assert.equal(evidenceBounded({...value,padding:value.padding+"z"}),false);
+});
+test("proof-history rejected context preserves the deepest raw frame", () => {
+ const nested=(depth:number)=>{let v:unknown=0;for(let i=0;i<depth;i++)v=[v];return v;};
+ const value=(depth:number)=>({cutoffProofs:[{history:{replica:"r",frames:[],rejected:[{frame:{padding:nested(depth)},reason:"bad_signature"}]}}]});
+ assert.equal(evidenceBounded(value(198)),true);
+ assert.equal(evidenceBounded(value(199)),false);
 });

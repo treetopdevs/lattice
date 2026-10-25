@@ -42,6 +42,20 @@ async function run(bundle) {
         assert.equal(decision.reason, "wrong_catalog_scope");
         observations.push({ name, decision: summary(decision) });
     }
+    const malformed = [null, { replica: bundle.review.space, frames: [] }, { replica: 4, frames: [], rejected: [] }, { replica: bundle.review.space, frames: [], rejected: [], extra: true }];
+    for (const [slot, bad] of malformed.entries())
+        for (const [order, histories] of [["first", [bad, wrong]], ["last", [wrong, bad]]]) {
+            const incoming = JSON.parse(JSON.stringify({ ...page(), histories }));
+            const decision = await evaluateTreehouseCatalogTrust({ installed: first.next, expected, incoming });
+            assert.equal(decision.kind, "reject");
+            assert.equal(decision.reason, "malformed_catalog");
+            assert.deepEqual(decision.detail.ids, []);
+            observations.push({ name: `shape-${slot}-${order}`, decision: summary(decision) });
+        }
+    const nonlist = await evaluateTreehouseCatalogTrust({ installed: first.next, expected, incoming: JSON.parse(JSON.stringify({ ...page(), histories: { wrong } })) });
+    assert.equal(nonlist.kind, "reject");
+    assert.equal(nonlist.reason, "malformed_catalog");
+    observations.push({ name: "shape-nonlist", decision: summary(nonlist) });
     const forgedOnly = await evaluateTreehouseCatalogTrust({ installed: first.next, expected, incoming: page([forged]) });
     assert.equal(forgedOnly.kind, "reject");
     assert.equal(forgedOnly.reason, "invalid_verified_history");
