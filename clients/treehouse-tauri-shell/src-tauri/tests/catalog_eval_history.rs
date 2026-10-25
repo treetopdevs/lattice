@@ -6,22 +6,13 @@ use ed25519_dalek::{Signer, SigningKey};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+#[path = "support/catalog_peer.rs"]
+mod catalog_peer;
 use treehouse_tauri_shell::catalog_eval::{
     canonical::{encode, Term},
     history::AuthenticDag,
 };
 
-fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .canonicalize()
-        .unwrap()
-}
 fn signer() -> SigningKey {
     SigningKey::from_bytes(&[61; 32])
 }
@@ -196,68 +187,14 @@ fn long_authentic_chain_preserves_its_causal_past_without_recursive_stack_growth
     assert_eq!(dag.ancestors(&previous[0]).unwrap().len(), 4095);
 }
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
-    static PEER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _guard = PEER_LOCK
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner());
-    let mut command = if runtime == "beam" {
-        let shim = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".asdf/shims/mix");
-        let mut command = Command::new(if shim.is_file() { shim } else { "mix".into() });
-        command.current_dir(root()).env("MIX_ENV", "test").args([
-            "run",
-            "--no-compile",
-            "--no-start",
-            "scripts/treehouse_native_catalog_history_peer.exs",
-            mode,
-        ]);
-        command
-    } else {
-        let mut command = Command::new("node");
-        command
-            .current_dir(root().join("clients/lattice-client"))
-            .args([
-                "--import",
-                "tsx",
-                "test/support/native_catalog_history_peer.ts",
-                mode,
-            ]);
-        command
-    };
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("prepare actual Node and BEAM peers before native reciprocal tests");
-    if let Some(input) = input {
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(&serde_json::to_vec(input).unwrap())
-            .unwrap();
-    }
-    drop(child.stdin.take());
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{runtime} {mode}: {} {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    // Test-only corpus contains deliberate depth-65 terms plus a case wrapper,
-    // beyond serde's generic depth128. Production entry points retain their
-    // separate seeded depth/node bounds; this local peer output is byte bounded.
-    assert!(
-        output.stdout.len() <= 256 * 1024 * 1024,
-        "peer corpus budget"
-    );
-    let mut decoder = serde_json::Deserializer::from_slice(&output.stdout);
+    let output = catalog_peer::output(runtime, mode, input, 256 * 1024 * 1024);
+    // Deliberately deep test terms use a separate byte-bounded decoder.
+    let mut decoder = serde_json::Deserializer::from_slice(&output);
     decoder.disable_recursion_limit();
     let value = Value::deserialize(&mut decoder).unwrap_or_else(|error| {
         panic!(
             "actual {runtime} {mode} peer JSON: {error}: {}",
-            String::from_utf8_lossy(&output.stdout[..output.stdout.len().min(192)])
+            String::from_utf8_lossy(&output[..output.len().min(192)])
         )
     });
     decoder.end().unwrap();
@@ -323,7 +260,7 @@ fn compare_cutoff(input: &Value, expected: &Value, label: &str) {
 #[test]
 fn committed_cutoff_vectors_preserve_exact_accepted_and_structural_rejection_bytes() {
     let vectors: Value = serde_json::from_slice(
-        &std::fs::read(root().join(
+        &std::fs::read(catalog_peer::root().join(
             "clients/lattice-client/test/vectors/catalog/cutoff_default_pre_member_continuity.json",
         ))
         .unwrap(),

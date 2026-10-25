@@ -5,73 +5,18 @@ use base64::{
 use ed25519_dalek::{Signer, SigningKey};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+#[path = "support/catalog_peer.rs"]
+mod catalog_peer;
 use treehouse_tauri_shell::catalog_eval::{
     canonical::{encode, Term},
     commands::{CommandPreflight, PrePolicyDecision},
     history::AuthenticDag,
 };
-fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .canonicalize()
-        .unwrap()
-}
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
-    let mut command = if runtime == "beam" {
-        let shim = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".asdf/shims/mix");
-        let mut cmd = Command::new(if shim.is_file() { shim } else { "mix".into() });
-        cmd.current_dir(root()).env("MIX_ENV", "test").args([
-            "run",
-            "--no-compile",
-            "--no-start",
-            "scripts/treehouse_native_catalog_history_peer.exs",
-            mode,
-        ]);
-        cmd
-    } else {
-        let mut cmd = Command::new("node");
-        cmd.current_dir(root().join("clients/lattice-client"))
-            .args([
-                "--import",
-                "tsx",
-                "test/support/native_catalog_history_peer.ts",
-                mode,
-            ]);
-        cmd
-    };
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("prepare real Node and BEAM prerequisites");
-    if let Some(input) = input {
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(&serde_json::to_vec(input).unwrap())
-            .unwrap();
-    }
-    drop(child.stdin.take());
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{runtime} {mode}: {} {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        output.stdout.len() <= 64 * 1024 * 1024,
-        "bounded test corpus"
-    );
-    serde_json::from_slice(&output.stdout).expect("actual runtime JSON")
+    let output = catalog_peer::output(runtime, mode, input, 64 * 1024 * 1024);
+    serde_json::from_slice(&output).expect("actual runtime JSON")
 }
+
 fn checked(replica: &str, frames: &[Value]) -> AuthenticDag {
     let bytes: Vec<_> = frames
         .iter()
