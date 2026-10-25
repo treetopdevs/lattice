@@ -46,6 +46,30 @@ fn signed(
         "author":STANDARD.encode(key.verifying_key().to_bytes()),"deps":deps,"kind":kind,
         "body":body,"cap":cap,"sig":STANDARD.encode(key.sign(&payload).to_bytes())})
 }
+fn delegation(
+    key: &SigningKey,
+    replica: &str,
+    audience: &[u8; 32],
+    parent: Option<&str>,
+    ops: &[&str],
+    live: bool,
+) -> Value {
+    let public = key.verifying_key().to_bytes();
+    let bytes = encode(&Term::List(vec![
+        Term::Binary(b"lattice-delegation-v2".to_vec()),
+        Term::Binary(replica.as_bytes().to_vec()),
+        Term::Binary(public.to_vec()),
+        Term::Binary(audience.to_vec()),
+        parent.map_or(Term::Nil, |id| Term::Binary(id.as_bytes().to_vec())),
+        Term::List(ops.iter().map(|s| Term::Atom((*s).into())).collect()),
+        Term::List(vec![Term::Atom("moderator".into())]),
+        Term::Bool(live),
+    ]))
+    .unwrap();
+    json!(["delegation",{"id":URL_SAFE_NO_PAD.encode(Sha256::digest(&bytes)),"replica":replica,
+        "issuer":STANDARD.encode(public),"audience":STANDARD.encode(audience),"parent_id":parent,
+        "ops":ops,"roles":["moderator"],"live":live,"sig":STANDARD.encode(key.sign(&bytes).to_bytes())}])
+}
 fn rust_histories() -> Vec<Value> {
     let key = SigningKey::from_bytes(&[89; 32]);
     let public = key.verifying_key().to_bytes();
@@ -63,27 +87,14 @@ fn rust_histories() -> Vec<Value> {
         "create_thread",
     ];
     ops.sort();
-    let delegation_bytes = encode(&Term::List(vec![
-        Term::Binary(b"lattice-delegation-v2".to_vec()),
-        Term::Binary(replica.as_bytes().to_vec()),
-        Term::Binary(public.to_vec()),
-        Term::Binary(public.to_vec()),
-        Term::Nil,
-        Term::List(ops.iter().map(|s| Term::Atom((*s).into())).collect()),
-        Term::List(vec![Term::Atom("moderator".into())]),
-        Term::Bool(true),
-    ]))
-    .unwrap();
-    let cap_id = URL_SAFE_NO_PAD.encode(Sha256::digest(&delegation_bytes));
-    let delegation = json!(["delegation",{"id":cap_id,"replica":replica,"issuer":STANDARD.encode(public),
-        "audience":STANDARD.encode(public),"parent_id":null,"ops":ops,"roles":["moderator"],"live":true,
-        "sig":STANDARD.encode(key.sign(&delegation_bytes).to_bytes())}]);
+    let root_delegation = delegation(&key, &replica, &public, None, &ops, true);
+    let cap_id = root_delegation[1]["id"].as_str().unwrap().to_owned();
     let genesis = signed(
         &key,
         &replica,
         &[],
         "authority",
-        json!(["tuple", [["atom", "genesis"], delegation, ["map", []]]]),
+        json!(["tuple", [["atom", "genesis"], root_delegation, ["map", []]]]),
         json!(["nil"]),
     );
     let command = |prior: &Value, name: &str, args: Vec<Value>| {
@@ -136,6 +147,64 @@ fn rust_histories() -> Vec<Value> {
         "create_thread",
         vec![text("Deeper Rust title")],
     );
+    let normal_four = command(&edit, "create_thread", vec![text("normal four")]);
+    let normal_five = command(&normal_four, "create_thread", vec![text("normal five")]);
+    // Both titles have full height six. Omitting the refused post lowers only
+    // deeper_title to five, so the competitor wins under that broken algorithm.
+    let competitor = (0..256)
+        .map(|nonce| {
+            command(
+                &normal_five,
+                "create_thread",
+                vec![text(&format!("competitor {nonce}"))],
+            )
+        })
+        .find(|frame| frame["id"].as_str().unwrap() < deeper_title["id"].as_str().unwrap())
+        .expect("bounded deterministic signed-id witness");
+    let first = SigningKey::from_bytes(&[90; 32]);
+    let second = SigningKey::from_bytes(&[91; 32]);
+    let mut grants = Vec::new();
+    let mut transfers = Vec::new();
+    for nominee in [&first, &second] {
+        let child = delegation(
+            &key,
+            &replica,
+            &nominee.verifying_key().to_bytes(),
+            Some(&cap_id),
+            &ops,
+            false,
+        );
+        let grant = signed(
+            &key,
+            &replica,
+            &[post_id.into()],
+            "authority",
+            json!(["tuple", [["atom", "grant"], child]]),
+            json!(["nil"]),
+        );
+        let transfer = signed(
+            &key,
+            &replica,
+            &[grant["id"].as_str().unwrap().into()],
+            "authority",
+            json!([
+                "tuple",
+                [
+                    ["atom", "transfer"],
+                    ["atom", "moderator"],
+                    child,
+                    ["int", 1]
+                ]
+            ]),
+            json!(["nil"]),
+        );
+        grants.push(grant);
+        transfers.push(transfer);
+    }
+    let single_transfer = json!({"name":"rust-moderator-transfer","replica":replica,
+        "frames":[genesis,creation,post,grants[0],transfers[0]]});
+    let competing_transfers = json!({"name":"rust-competing-moderator-transfers","replica":replica,
+        "frames":[genesis,creation,post,grants[0],grants[1],transfers[0],transfers[1]]});
     let base = json!({"name":"rust-authored-policy-and-fork","replica":replica,
         "frames":[genesis,creation,post,malformed,refused,edit,fork,archive,archived_post,concurrent_post]});
     let mut title_fork = base.clone();
@@ -146,8 +215,19 @@ fn rust_histories() -> Vec<Value> {
         .push(concurrent_title);
     let mut deeper = title_fork.clone();
     deeper["name"] = json!("rust-depth-wins-title");
+    deeper["depthWitness"] = json!({"refused":archived_post["id"],"competitor":competitor["id"]});
     deeper["frames"].as_array_mut().unwrap().push(deeper_title);
-    vec![base, title_fork, deeper]
+    deeper["frames"]
+        .as_array_mut()
+        .unwrap()
+        .extend([normal_four, normal_five, competitor]);
+    vec![
+        base,
+        title_fork,
+        deeper,
+        single_transfer,
+        competing_transfers,
+    ]
 }
 
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
@@ -235,6 +315,21 @@ fn causal_thread_policy_and_projection_match_both_actual_owners() {
             assert_eq!(projection["title"], "Deeper Rust title");
             assert_eq!(projection["posts"].as_array().unwrap().len(), 2);
             assert_eq!(projection["archived"], true);
+            assert_eq!(
+                projection["commandReasons"][history["depthWitness"]["refused"].as_str().unwrap()],
+                "application_archived_thread"
+            );
+            assert_eq!(
+                projection["commandReasons"]
+                    [history["depthWitness"]["competitor"].as_str().unwrap()],
+                Value::Null
+            );
+        }
+        if history["name"] == "rust-moderator-transfer" {
+            assert_eq!(
+                projection["moderator"],
+                STANDARD.encode(SigningKey::from_bytes(&[90; 32]).verifying_key().to_bytes())
+            );
         }
         assert_eq!(
             projection, ts_projection["results"][i],
