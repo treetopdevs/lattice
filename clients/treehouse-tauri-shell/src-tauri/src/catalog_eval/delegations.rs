@@ -21,19 +21,19 @@ pub enum Validation {
 
 #[derive(Clone, Debug)]
 pub struct Delegation {
-    id: String,
-    replica: String,
-    issuer: Vec<u8>,
-    audience: Vec<u8>,
-    parent: Option<String>,
-    ops: BTreeSet<String>,
-    roles: BTreeSet<String>,
-    live: bool,
-    expires: Option<u64>,
-    signature: Vec<u8>,
+    pub(super) id: String,
+    pub(super) replica: String,
+    pub(super) issuer: Vec<u8>,
+    pub(super) audience: Vec<u8>,
+    pub(super) parent: Option<String>,
+    pub(super) ops: BTreeSet<String>,
+    pub(super) roles: BTreeSet<String>,
+    pub(super) live: bool,
+    pub(super) expires: Option<u64>,
+    pub(super) signature: Vec<u8>,
 }
 impl Delegation {
-    fn decode(term: &Term) -> Option<Self> {
+    pub(super) fn decode(term: &Term) -> Option<Self> {
         let Term::Delegation(v) = term else {
             return None;
         };
@@ -83,7 +83,7 @@ impl Delegation {
         }
         encode(&Term::List(terms)).ok()
     }
-    fn self_consistent(&self) -> bool {
+    pub(super) fn self_consistent(&self) -> bool {
         self.signing_bytes().is_some_and(|bytes| {
             URL_SAFE_NO_PAD.encode(Sha256::digest(&bytes)) == self.id
                 && frame::verify_signature(&self.issuer, &bytes, &self.signature).is_ok()
@@ -109,10 +109,10 @@ impl Delegation {
 
 #[derive(Debug)]
 pub struct Record {
-    delegation: Option<Delegation>,
-    introductions: Vec<String>,
+    pub(super) delegation: Option<Delegation>,
+    pub(super) introductions: Vec<String>,
     invalid_introductions: BTreeMap<String, &'static str>,
-    validation: Validation,
+    pub(super) validation: Validation,
 }
 impl Record {
     pub fn validation(&self) -> &Validation {
@@ -128,7 +128,7 @@ impl Record {
 
 #[derive(Debug)]
 pub struct StaticDelegations<'a> {
-    dag: &'a AuthenticDag,
+    pub(super) dag: &'a AuthenticDag,
     records: BTreeMap<String, Record>,
     root: Option<Vec<u8>>,
     revokes: Vec<(String, String)>,

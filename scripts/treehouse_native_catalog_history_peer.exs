@@ -88,6 +88,65 @@ case System.argv() do
 
     IO.puts(Jason.encode!(%{histories: length(input["histories"])}))
 
+  ["authority-cases"] ->
+    dir =
+      Path.join(
+        System.tmp_dir!(),
+        "native-authority-beam-#{System.pid()}-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir!(dir)
+
+    try do
+      :ok = Lattice.ContinuationVectors.write(dir)
+      data = File.read!(Path.join([dir, "continuation", "authority.json"])) |> Jason.decode!()
+      IO.puts(Jason.encode!(%{histories: data}))
+    after
+      File.rm_rf!(dir)
+    end
+
+  ["authority"] ->
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    results =
+      Enum.map(input["histories"], fn history ->
+        ops =
+          Enum.map(history["frames"], fn frame ->
+            {:ok, op} = Wire.decode_op(frame)
+            true = Op.valid?(op)
+            op
+          end)
+
+        log = Log.from_ops(history["replica"], Map.new(ops, &{&1.id, &1}))
+        :ok = Log.verify_authenticity(log)
+
+        {module, roles} =
+          if String.starts_with?(log.replica, "replica:treehouse:space:"),
+            do: {Treehouse.Space, [:admin, :moderator]},
+            else: {Treehouse.Thread, [:moderator]}
+
+        Code.ensure_loaded!(module)
+        {analysis, beacons} = Lattice.Authority.analyze_with_beacon_evidence(module, log)
+
+        Enum.each(history["expiryQueries"] || [], fn [id, expired] ->
+          expected = if expired, do: :lease_expired, else: nil
+          ^expected = analysis.reasons[id]
+        end)
+
+        ids = ops |> Enum.filter(&(&1.kind == :authority)) |> MapSet.new(& &1.id)
+
+        %{
+          reasons: Map.filter(analysis.reasons, fn {id, _} -> MapSet.member?(ids, id) end),
+          beacons: Enum.map(beacons, &[&1.op_id, Integer.to_string(&1.epoch)]),
+          epochs:
+            Map.new(roles, &{&1, analysis.holder_epochs[&1] && analysis.holder_epochs[&1].op_id}),
+          holders:
+            Map.new(roles, &{&1, analysis.holders[&1] && Base.encode64(analysis.holders[&1])})
+        }
+      end)
+
+    IO.puts(Jason.encode!(%{results: results}))
+
   ["delegations"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
 

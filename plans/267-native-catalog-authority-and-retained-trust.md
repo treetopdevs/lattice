@@ -33,6 +33,18 @@ check and both boundary scans pass. Standards review has no actionable finding;
 the spec finding on authentic malformed tuples is fixed and independently confirmed.
 Requested external review remains unavailable; the full evaluator remains unfinished.
 
+A fourth checkpoint ports bounded role acquisition/transfer, heartbeats, root and
+witnessed beacons, finite continuation profile selection, independently derived
+witness claims, continuation scope/quorum/current-predecessor checks and causal
+lease expiry. It is tested against freshly generated current BEAM/TS continuation
+corpora, both delivery orders, and fresh Rust-authored renewals, witness refusals
+and expiry-boundary histories consumed by both runtimes. Review and full gates
+for this checkpoint are in progress. The result remains raw authority evidence;
+semantic normalization, command/application policy and retained catalog trust are
+still unfinished. Raw BEAM classification of a witnessed epoch above JS's exact
+horizon does not make that history portable: the final strict incoming boundary
+must preserve the existing TypeScript refusal without changing either oracle.
+
 ## Outcome and immutable contracts
 
 Rust independently evaluates the complete raw evidence and retained catalog state

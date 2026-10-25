@@ -6,3 +6,6 @@ pub mod envelope;
 pub mod frame;
 pub mod history;
 pub mod json;
+
+pub mod authority;
+mod evidence_terms;

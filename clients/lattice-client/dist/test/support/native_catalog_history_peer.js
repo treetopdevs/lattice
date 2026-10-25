@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { trustFixture } from "./export_treehouse_catalog_trust";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "../../src/carrier";
 import { verifyCarrierOp, canonicalBytesForCarrierTerm, authorCarrierOp } from "../../src/codec";
 import { canonicalBase64Bytes } from "../../src/codec";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { analyzeAuthority } from "../../src/authority";
-import { revokedAsOf } from "../../src/capability";
+import { capabilityQuarantine, revokedAsOf } from "../../src/capability";
 import { treehouseSpaceSchema, treehouseThreadSchema } from "../../src/treehouse";
 import { canonicalOrder } from "../../src/dag";
 import { treehouseCommandDecoders } from "../../src/treehouse";
@@ -106,6 +109,51 @@ else if (process.argv[2] === "consume") {
         assert.deepEqual(history.frontier, actual.frontier);
     }
     console.log(JSON.stringify({ histories: input.histories.length }));
+}
+else if (process.argv[2] === "strict-portability") {
+    const input = JSON.parse(readFileSync(0, "utf8"));
+    console.log(JSON.stringify({ portable: input.histories.map(h => {
+            try {
+                h.frames.map(decodeCarrierOpFrame);
+                return true;
+            }
+            catch {
+                return false;
+            }
+        }) }));
+}
+else if (process.argv[2] === "authority-cases") {
+    const dir = mkdtempSync(join(tmpdir(), "native-authority-ts-"));
+    try {
+        const out = join(dir, "cases.json");
+        execFileSync(process.execPath, ["--import", "tsx", "test/support/export_continuation_authoring.ts", "--out", out]);
+        const input = JSON.parse(readFileSync(out, "utf8"));
+        console.log(JSON.stringify({ histories: input.vectors }));
+    }
+    finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+else if (process.argv[2] === "authority") {
+    const input = JSON.parse(readFileSync(0, "utf8"));
+    const results = [];
+    for (const history of input.histories) {
+        await graph(history);
+        const schema = history.replica.startsWith("replica:treehouse:space:") ? treehouseSpaceSchema : treehouseThreadSchema;
+        const ops = carrierOpsToSemanticOps(history.frames, {}, treehouseCommandDecoders(schema.name));
+        const byId = new Map(ops.map(op => [op.id, op]));
+        const a = analyzeAuthority(schema, ops, new Set(byId.keys()), canonicalOrder(ops), byId, history.replica);
+        for (const [id, expired] of history.expiryQueries ?? []) {
+            assert.deepEqual(capabilityQuarantine(byId.get(id), schema, byId, a.security), expired ? { quarantined: true, reason: "lease_expired" } : { quarantined: false });
+        }
+        const roles = Object.keys(schema.fields).filter(r => "authority" in schema.fields[r]);
+        const acquires = Object.fromEntries(roles.map(r => [r, (a.acquiresByRole.get(r) ?? []).map(v => ({ opId: v.opId, holder: v.holderPubkey, tick: String(v.atTick ?? 0) }))]));
+        results.push({ reasons: Object.fromEntries([...a.quarantineReasons].filter(([id]) => byId.get(id)?.kind === "authority")),
+            beacons: a.security.validBeacons.map(b => [b.opId, String(b.epoch)]).sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0),
+            epochs: Object.fromEntries(roles.map(r => [r, a.acquiresByRole.get(r)?.at(-1)?.opId ?? null])),
+            holders: Object.fromEntries(roles.map(r => [r, a.acquiresByRole.get(r)?.at(-1)?.holderPubkey ?? null])), acquires });
+    }
+    console.log(JSON.stringify({ results }));
 }
 else if (process.argv[2] === "delegations") {
     const input = JSON.parse(readFileSync(0, "utf8"));
