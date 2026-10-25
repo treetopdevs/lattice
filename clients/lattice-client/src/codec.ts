@@ -1,3 +1,4 @@
+import {parseCanonicalUint64} from "./uint64";
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm } from "./carrier";
 import type { Verifier } from "./identity";
 import { isWireVocabularyName } from "./wire_vocabulary";
@@ -696,21 +697,7 @@ function encodeUint(value: number | string): Uint8Array {
 }
 
 function parseUint(value: number | string): bigint {
-  if (typeof value === "number") {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new Error(`unsupported canonical integer: ${value}`);
-    }
-
-    return BigInt(value);
-  }
-
-  // Reject impossible uint64 scalars before BigInt, including delegation epochs.
-  if (typeof value !== "string" || value.length === 0 || value.length > 20 || /[^0-9]/.test(value) ||
-    (value.length > 1 && value[0] === "0") || (value.length === 20 && value > "18446744073709551615")) {
-    throw new Error("unsupported canonical integer");
-  }
-
-  return BigInt(value);
+  return parseCanonicalUint64(value);
 }
 
 function major(majorType: number, n: bigint): Uint8Array {

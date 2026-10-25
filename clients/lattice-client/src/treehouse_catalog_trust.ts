@@ -325,7 +325,7 @@ async function evaluateSnapshot(value: {
     }
     if (originalOnly) {
       await validateStoredBlock(original, next.blocked, catalogs, bindings, histories);
-      if (original.cutoffProofs.length !== next.cutoffProofs.length) fail("trust_recovery_required");
+      if (!equal(original.cutoffProofs, next.cutoffProofs)) fail("trust_recovery_required");
       return issue("unchanged", value.expected, original, original.blocked?.reason ?? null, replacement, bootstrapIds, heads, catalogHeads, []);
     }
     // Validate every original/candidate graph and proof before a budget shortcut.

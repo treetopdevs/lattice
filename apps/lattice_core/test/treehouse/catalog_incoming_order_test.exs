@@ -46,6 +46,12 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       end
 
       expected = %{
+        "numeric-scalar-complete" => {"propose", nil},
+        "numeric-scalar-partial" => {"reject", "trust_pending"},
+        "small-text-scalar-complete" => {"reject", "unsupported_cutoff"},
+        "small-text-scalar-partial" => {"reject", "trust_pending"},
+        "extra-delegation-field-partial" => {"reject", "invalid_verified_history"},
+        "extra-delegation-field-complete" => {"reject", "invalid_verified_history"},
         "missing-delegation-parent-partial" => {"reject", "invalid_verified_history"},
         "missing-delegation-parent-complete" => {"reject", "invalid_verified_history"},
         "canonical-bin-partial" => {"reject", "trust_pending"},
@@ -133,7 +139,10 @@ defmodule Treehouse.CatalogIncomingOrderTest do
 
       if String.starts_with?(c["name"], "padbits-") do
         alias_frame = List.last(c["history"]["frames"])
-        assert {:ok, _} = Lattice.Carrier.Wire.decode_op(alias_frame)
+        assert {:ok, decoded} = Lattice.Carrier.Wire.decode_op(alias_frame)
+        canonical_frame = Lattice.Carrier.Wire.encode_op(decoded)
+        refute canonical_frame == alias_frame
+        assert {:ok, _} = Lattice.Carrier.Wire.authenticate_observation(canonical_frame)
 
         assert {:error, :malformed_op} =
                  Lattice.Carrier.Wire.authenticate_observation(alias_frame)

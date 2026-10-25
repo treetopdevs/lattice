@@ -64,13 +64,18 @@ Strings must be well-formed before encoding. Integer scalars must be canonical
 uint64 values; decimal text is at most 20 digits and is checked before BigInt.
 Delegation primitives must retain their declared types. Observation requires
 canonical Base64 for decoded byte fields, while ordinary wire behavior is preserved.
-Absent/null unleased expiry remains supported.
+Absent/null unleased expiry remains supported. The strict catalog JSON profile uses
+numbers through the JS safe maximum and decimal text above it. Raw authentication
+can recognize a canonicalizable small-text alias before a missing dependency, but
+a complete alias is not portable catalog evidence. Parsed-value APIs do not claim
+to distinguish JSON numeric spellings before transport parsing.
 
 ## Retained recovery and capacity
 
 Validate saved state independently before incoming evidence. Incoming data cannot
 repair corrupt saved signatures, unsupported saved terms or inconsistent watermarks.
-A blocked installation must not become unblocked. Preserve exact retained frames,
+Saved proof indexes must already be sorted and unique; replay cannot silently
+normalize corruption. A blocked installation must not become unblocked. Preserve exact retained frames,
 rejected records and accepted watermarks across refusal and serialized reopen.
 
 A rejection is non-advancing and is never evidence of current freshness. Native
@@ -96,9 +101,10 @@ as though it were an incremental page. Main-history reasons remain unchanged.
 
 ## Remaining work in order
 
-0. Resolve the shared scalar-validation design across main, rejected and proof readers.
+0. Verify shared scalar validation across main, rejected and proof readers.
    Every decimal conversion needs a lexical uint64 bound before allocation, and
-   BEAM delegation observation needs the same closed key set as TypeScript.
+   both delegation observers require the closed key set. Reader-specific admission
+   and numeric representation rules remain separate from allocation safety.
 1. Verify the common complete-proof contract with independent fresh producers,
    valid and corrupt saved-state controls, without changing authority or canonical bytes.
 2. Extend the genuine saved/proposed envelope-cap controls with an independent BEAM

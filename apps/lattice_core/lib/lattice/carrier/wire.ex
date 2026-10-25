@@ -20,6 +20,7 @@ defmodule Lattice.Carrier.Wire do
   alias Lattice.Canonical
   alias Lattice.Canonical.Atom, as: CanonicalAtom
   alias Lattice.Carrier.RawObservationBounds
+  alias Lattice.Carrier.Uint64
   alias Lattice.Carrier.WireVocabulary
   alias Lattice.Op
 
@@ -366,10 +367,11 @@ defmodule Lattice.Carrier.Wire do
        when is_integer(value) and value >= 0 and value <= @max_json_safe_integer,
        do: {:ok, value}
 
-  defp decode_term(["int", value], depth, :observation) when is_binary(value) do
-    if byte_size(value) <= 20 and Regex.match?(~r/^(0|[1-9][0-9]*)$/, value),
-      do: decode_term(["int", value], depth, :value),
-      else: {:error, :malformed_term}
+  defp decode_term(["int", value], _depth, :observation) when is_binary(value) do
+    case Uint64.parse_text(value) do
+      {:ok, integer} -> {:ok, integer}
+      :error -> {:error, :malformed_term}
+    end
   end
 
   defp decode_term(["int", value], _depth, _mode) when is_binary(value) do
@@ -530,7 +532,12 @@ defmodule Lattice.Carrier.Wire do
   defp decode_delegation(_, _mode), do: {:error, :malformed_term}
 
   defp observation_delegation_shape?(frame, issuer, audience, sig, expires_epoch, :observation) do
-    Map.has_key?(frame, "parent_id") and byte_size(issuer) == 32 and byte_size(audience) == 32 and
+    required = ~w(id replica issuer audience sig parent_id live ops roles)
+    keys = Map.keys(frame)
+
+    Enum.all?(required, &Map.has_key?(frame, &1)) and
+      Enum.all?(keys, &(&1 in ["expires_epoch" | required])) and byte_size(issuer) == 32 and
+      byte_size(audience) == 32 and
       byte_size(sig) == 64 and (is_nil(expires_epoch) or expires_epoch <= @max_json_safe_integer)
   end
 

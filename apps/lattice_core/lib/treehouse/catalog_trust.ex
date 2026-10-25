@@ -8,7 +8,7 @@ defmodule Treehouse.CatalogTrust do
 
   alias Lattice.{Authority, Canonical, Identity, Log, Op}
   alias Lattice.Authority.{Continuation, ContinuationCertificate}
-  alias Lattice.Carrier.{RawObservationBounds, Wire}
+  alias Lattice.Carrier.{RawObservationBounds, Uint64, Wire}
   alias Treehouse.{CatalogBootstrap, CatalogCutoff, CatalogEntries, Space, TransportCatalog}
 
   @history_fields [:replica, :frames, :rejected]
@@ -80,7 +80,6 @@ defmodule Treehouse.CatalogTrust do
   @max_artifacts 1_024
   @max_artifact_bytes 131_072
   @max_total_bytes 16 * 1_024 * 1_024
-  @max_canonical_integer 18_446_744_073_709_551_615
 
   # The retained-cutoff grammar is fixed and derived at compile time from the one
   # owner, `Treehouse.CatalogCutoff`. Checking names before Wire decoding makes a
@@ -2147,13 +2146,9 @@ defmodule Treehouse.CatalogTrust do
   defp closed_wire_term?(["int", value], _depth) when is_integer(value), do: safe?(value)
 
   defp closed_wire_term?(["int", value], _depth) when is_binary(value) do
-    case Integer.parse(value) do
-      {integer, ""} ->
-        integer > @max_safe_integer and integer <= @max_canonical_integer and
-          Integer.to_string(integer) == value
-
-      _ ->
-        false
+    case Uint64.parse_text(value) do
+      {:ok, integer} -> integer > @max_safe_integer
+      :error -> false
     end
   end
 

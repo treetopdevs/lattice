@@ -46,12 +46,15 @@ export async function boundaryCases(f) {
         results.push([`padbits-bin-${suffix}`, [...f.histories[0].frames, { ...binary, body: ["bin", "Zh=="] }]]);
         const flat = await raw("command", ["delegation", f.space.delegation], deps);
         results.push([`canonical-delegation-bytes-${suffix}`, [...f.histories[0].frames, flat]]);
+        results.push([`extra-delegation-field-${suffix}`, [...f.histories[0].frames, { ...flat, body: ["delegation", { ...f.space.delegation, extra: "unsigned" }] }]]);
         const missingParent = { ...f.space.delegation };
         delete missingParent.parent_id;
         results.push([`missing-delegation-parent-${suffix}`, [...f.histories[0].frames, { ...flat, body: ["delegation", missingParent] }]]);
         for (const field of ["issuer", "audience", "sig"]) {
             results.push([`padbits-delegation-${field}-${suffix}`, [...f.histories[0].frames, { ...flat, body: ["delegation", { ...f.space.delegation, [field]: alias64(f.space.delegation[field]) }] }]]);
         }
+        results.push([`numeric-scalar-${suffix}`, [...f.histories[0].frames, await raw("command", ["int", 1], deps)]]);
+        results.push([`small-text-scalar-${suffix}`, [...f.histories[0].frames, await raw("command", ["int", "1"], deps)]]);
         const nil = await raw("command", ["nil"], deps);
         results.push([`malformed-scalar-arity-${suffix}`, [...f.histories[0].frames, { ...nil, body: ["nil", 0] }]]);
         const unknown = await raw("future_incoming_kind", ["nil"], deps);

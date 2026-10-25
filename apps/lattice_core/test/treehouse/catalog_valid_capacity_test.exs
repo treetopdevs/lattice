@@ -1,8 +1,8 @@
 defmodule Treehouse.CatalogValidCapacityTest do
   use ExUnit.Case, async: false
-  alias Treehouse.{CatalogTrust, CatalogCutoff}
   alias Lattice.Carrier.{RawObservationBounds, Wire}
   alias Lattice.Log
+  alias Treehouse.{CatalogCutoff, CatalogTrust}
   @client Path.expand("../../../../clients/lattice-client", __DIR__)
   @expected %{trust_revision: 0, history_generation: 0}
 

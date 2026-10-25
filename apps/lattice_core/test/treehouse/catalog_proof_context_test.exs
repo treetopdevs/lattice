@@ -1,8 +1,8 @@
 defmodule Treehouse.CatalogProofContextTest do
   use ExUnit.Case, async: true
-  alias Lattice.{Op, Log}
   alias Lattice.Carrier.Wire
-  alias Treehouse.{CatalogTrust, CatalogTrustVectors, CatalogCutoff}
+  alias Lattice.{Log, Op}
+  alias Treehouse.{CatalogCutoff, CatalogTrust, CatalogTrustVectors}
   @client Path.expand("../../../../clients/lattice-client", __DIR__)
   @expected %{trust_revision: 0, history_generation: 0}
 
@@ -63,6 +63,22 @@ defmodule Treehouse.CatalogProofContextTest do
     assert base.kind == :propose
     assert base.next.accepted.revision == 0
     assert length(base.routes) == 2
+
+    proofs =
+      Enum.map(b["proofs"], &%{cutoff: cutoff(&1["cutoff"]), history: history(&1["history"])})
+
+    with_proofs = evaluate(base.next, %{page() | cutoff_proofs: proofs})
+    assert with_proofs.kind == :propose
+    assert length(with_proofs.next.cutoff_proofs) == 2
+    [first | _] = with_proofs.next.cutoff_proofs
+
+    for broken <- [Enum.reverse(with_proofs.next.cutoff_proofs), [first, first]] do
+      d = evaluate(%{with_proofs.next | cutoff_proofs: broken}, %{page() | cutoff_proofs: proofs})
+      assert d.kind == :reject
+      assert d.reason == :trust_recovery_required
+      assert d.detail.ids == []
+    end
+
     cutoff = cutoff(b["cutoff"])
     wrong_digest = b["wrongDigest"]
     valid = %{cutoff: cutoff, history: hd(histories)}
@@ -99,29 +115,7 @@ defmodule Treehouse.CatalogProofContextTest do
         assert reopened.kind == :unchanged
         assert reopened.next == d.next
 
-        if name == "valid" do
-          broken =
-            put_in(d.next.cutoff_proofs, [%{proof | cutoff: %{cutoff | log_digest: wrong_digest}}])
-
-          recovered = evaluate(broken, %{page() | cutoff_proofs: [proof]})
-          assert recovered.kind == :reject
-          assert recovered.reason == :trust_recovery_required
-          assert recovered.detail.ids == []
-
-          for defect <-
-                Enum.reject(
-                  b["cases"],
-                  &(&1["name"] in ["valid", "valid-prefix", "absent-member"])
-                ) do
-            broken =
-              put_in(d.next.cutoff_proofs, [%{proof | history: history(defect["history"])}])
-
-            recovered = evaluate(broken, %{page() | cutoff_proofs: [proof]})
-            assert recovered.kind == :reject
-            assert recovered.reason == :trust_recovery_required
-            assert recovered.detail.ids == []
-          end
-        end
+        if name == "valid", do: assert_saved_corruption(d.next, proof, wrong_digest, b["cases"])
       else
         assert d.kind == :reject
 
@@ -140,6 +134,26 @@ defmodule Treehouse.CatalogProofContextTest do
     end
 
     assert_raise ArgumentError, fn -> String.to_existing_atom(b["unknownName"]) end
+  end
+
+  defp assert_saved_corruption(state, proof, wrong_digest, cases) do
+    broken = %{
+      state
+      | cutoff_proofs: [%{proof | cutoff: %{proof.cutoff | log_digest: wrong_digest}}]
+    }
+
+    recovered = evaluate(broken, %{page() | cutoff_proofs: [proof]})
+    assert recovered.kind == :reject
+    assert recovered.reason == :trust_recovery_required
+    assert recovered.detail.ids == []
+
+    for defect <- Enum.reject(cases, &(&1["name"] in ["valid", "valid-prefix", "absent-member"])) do
+      broken = %{state | cutoff_proofs: [%{proof | history: history(defect["history"])}]}
+      recovered = evaluate(broken, %{page() | cutoff_proofs: [proof]})
+      assert recovered.kind == :reject
+      assert recovered.reason == :trust_recovery_required
+      assert recovered.detail.ids == []
+    end
   end
 
   defp beam_bundle do
@@ -188,6 +202,8 @@ defmodule Treehouse.CatalogProofContextTest do
       histories: f.histories,
       catalogJson: f.catalog_json,
       unknownName: unknown_name,
+      proofs:
+        Enum.map(f.cutoff_proofs, &%{cutoff: public_cutoff(&1.cutoff), history: &1.history}),
       wrongDigest: CatalogTrustVectors.id("proof-wrong-digest"),
       cutoff: %{
         replica: proof.cutoff.replica,

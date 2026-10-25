@@ -6,7 +6,7 @@ import {prepareTreehouseCatalogInstallation,evaluateTreehouseCatalogTrust} from 
 import type {TreehouseCatalogRawHistory,TreehouseCatalogBootstrapReview,TreehouseCatalogCutoffProof} from "../../src/treehouse_catalog_trust";
 import {deriveTreehouseCatalogCutoff} from "../../src/treehouse_catalog_cutoff";
 const expected={trustRevision:0,historyGeneration:0};
-type Bundle={review:TreehouseCatalogBootstrapReview;histories:TreehouseCatalogRawHistory[];catalogJson:string;unknownName:string;wrongDigest:string;cutoff:TreehouseCatalogCutoffProof["cutoff"];cases:{name:string;history:unknown;cutoff?:TreehouseCatalogCutoffProof["cutoff"]}[]};
+type Bundle={review:TreehouseCatalogBootstrapReview;histories:TreehouseCatalogRawHistory[];catalogJson:string;unknownName:string;proofs:TreehouseCatalogCutoffProof[];wrongDigest:string;cutoff:TreehouseCatalogCutoffProof["cutoff"];cases:{name:string;history:unknown;cutoff?:TreehouseCatalogCutoffProof["cutoff"]}[]};
 async function produce():Promise<Bundle>{
  const f=await trustFixture(1),history=f.histories[0]!;
  const unknownName=`proof_future_${process.pid}_${Date.now()}`;
@@ -16,7 +16,7 @@ async function produce():Promise<Bundle>{
  const prefixCutoff=await deriveTreehouseCatalogCutoff(prefix),absentCutoff=await deriveTreehouseCatalogCutoff(absent);
  assert.equal(prefixCutoff.ok,true);assert.equal(absentCutoff.ok,true);
  if(!prefixCutoff.ok||!absentCutoff.ok)throw new Error("producer must create portable proof controls");
- return {review:f.review,histories:f.histories,catalogJson:f.catalogJson,unknownName,wrongDigest:fixtureId("proof-wrong-digest"),cutoff:f.cutoffProofs.find(p=>p.cutoff.replica===f.review.space)!.cutoff,cases:[
+ return {review:f.review,histories:f.histories,catalogJson:f.catalogJson,unknownName,proofs:f.cutoffProofs,wrongDigest:fixtureId("proof-wrong-digest"),cutoff:f.cutoffProofs.find(p=>p.cutoff.replica===f.review.space)!.cutoff,cases:[
   {name:"valid",history},{name:"valid-prefix",history:prefix,cutoff:prefixCutoff.cutoff},{name:"absent-member",history:absent,cutoff:absentCutoff.cutoff},{name:"unsupported",history:{...history,frames:[...history.frames,unknown]}},
   {name:"forged",history:{...history,frames:[...history.frames,{...unknown,sig:Buffer.alloc(64).toString("base64")}]}},
   {name:"partial",history:{...history,frames:[partial]}},{name:"malformed-history",history:{replica:history.replica,frames:[]}},
@@ -30,6 +30,14 @@ async function run(bundle:Bundle){
  const base=await evaluateTreehouseCatalogTrust({installed:prepared.next,expected,incoming:{...page,catalogs:[bundle.catalogJson],histories:bundle.histories}});
  assert.equal(base.kind,"propose");assert.equal(base.next.accepted?.revision,0);assert.equal(base.routes.length,2);
  const original=JSON.stringify(base.next),results=[];
+ const withProofs=await evaluateTreehouseCatalogTrust({installed:base.next,expected,incoming:{...page,cutoffProofs:bundle.proofs}});
+ assert.equal(withProofs.kind,"propose");assert.equal(withProofs.next.cutoffProofs.length,2);
+ const savedProofs=withProofs.next.cutoffProofs;
+ for(const corruptProofs of [[...savedProofs].reverse(),[savedProofs[0]!,savedProofs[0]!]]){
+  const bad=await evaluateTreehouseCatalogTrust({installed:{...withProofs.next,cutoffProofs:corruptProofs},expected,incoming:{...page,cutoffProofs:bundle.proofs}});
+  assert.equal(bad.kind,"reject");assert.equal(bad.reason,"trust_recovery_required");assert.deepEqual(bad.detail.ids,[]);
+ }
+
  const cases=[...bundle.cases.map(c=>({...c,proof:{cutoff:c.cutoff??bundle.cutoff,history:c.history}})),
   {name:"malformed-proof",proof:{cutoff:bundle.cutoff,history:bundle.histories[0],extra:true}},
   {name:"malformed-cutoff",proof:{cutoff:{...bundle.cutoff,extra:true},history:bundle.histories[0]}},

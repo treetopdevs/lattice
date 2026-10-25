@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { withinCatalogRawObservationBounds as bounded } from "../src/treehouse_catalog_raw_bounds";
-import { canonicalBytesForCarrierTerm, canonicalHash, authorCarrierDelegation } from "../src/codec";
+import { canonicalBytesForCarrierTerm, canonicalHash, authorCarrierDelegation, verifyCarrierOpHash } from "../src/codec";
 import { trustFixture, fixtureId } from "./support/export_treehouse_catalog_trust";
 import { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust } from "../src/treehouse_catalog_trust";
 const fixture = trustFixture(0), expected = { trustRevision: 0, historyGeneration: 0 };
@@ -91,11 +91,66 @@ test("flat delegation primitives cannot be coerced into a different signed repre
             assert.equal(d.kind, "reject");
             assert.equal(d.reason, "trust_pending");
         }
-    const bad = [{ ...base, body: ["delegation", { ...f.space.delegation, extra: "unsigned" }] }, { ...typed, body: ["delegation", { ...letters, roles: "post" }] }, { ...typed, body: ["delegation", { ...letters, live: "true" }] }, { ...epoch, body: ["delegation", { ...leased, expires_epoch: "0" }] }, { ...base, body: ["delegation", absentParent] }];
+    const extra = JSON.parse(JSON.stringify({ ...base, body: ["delegation", { ...f.space.delegation, extra: "unsigned" }] }));
+    assert.equal(await verifyCarrierOpHash(extra), true, "unsigned field must preserve the signed canonical hash so the guard is tested");
+    const bad = [extra, { ...typed, body: ["delegation", { ...letters, roles: "post" }] }, { ...typed, body: ["delegation", { ...letters, live: "true" }] }, { ...epoch, body: ["delegation", { ...leased, expires_epoch: "0" }] }, { ...base, body: ["delegation", absentParent] }];
     for (const value of bad)
         for (const d of await decisions(value)) {
             assert.equal(d.kind, "reject");
             assert.equal(d.reason, "invalid_verified_history");
             assert.deepEqual(d.detail.ids, []);
         }
+});
+test("rejected records and complete proofs bound decimals before BigInt", async () => {
+    const { f } = await setup();
+    const { authorCarrierOpUnchecked } = await import("./support/unchecked_author");
+    const { deriveTreehouseCatalogCutoff } = await import("../src/treehouse_catalog_cutoff");
+    const control = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [], kind: "command", body: ["int", 1], cap: ["nil"] });
+    const history = f.histories[0];
+    const prepared = await prepareTreehouseCatalogInstallation({ review: f.review, history, store: { kind: "verified_fresh", expected } });
+    assert.equal(prepared.kind, "propose");
+    const cutoff = await deriveTreehouseCatalogCutoff(history);
+    assert.equal(cutoff.ok, true);
+    if (!cutoff.ok)
+        throw new Error("valid proof control required");
+    const page = { catalogs: [], rotations: [], histories: [], cutoffProofs: [] };
+    const forged = { ...control, sig: Buffer.alloc(64).toString("base64") };
+    const validRejected = { ...history, rejected: [{ frame: forged, reason: "bad_signature" }] };
+    assert.equal((await prepareTreehouseCatalogInstallation({ review: f.review, history: validRejected, store: { kind: "verified_fresh", expected } })).kind, "propose");
+    const validProof = { cutoff: cutoff.cutoff, history };
+    const accepted = await evaluateTreehouseCatalogTrust({ installed: prepared.next, expected, incoming: { ...page, cutoffProofs: [validProof] } });
+    assert.equal(accepted.kind, "propose");
+    const original = globalThis.BigInt;
+    let oversized = 0;
+    globalThis.BigInt = new Proxy(original, { apply(target, receiver, args) { if (typeof args[0] === "string" && args[0].length > 20 && /^[0-9]+$/.test(args[0])) {
+            oversized++;
+            throw new Error("oversized decimal conversion attempted");
+        } return Reflect.apply(target, receiver, args); } });
+    try {
+        for (const size of [21, 1_048_576]) {
+            const bad = { ...control, body: ["int", "9".repeat(size)] };
+            const rejected = { ...history, rejected: [{ frame: { ...bad, sig: forged.sig }, reason: "bad_signature" }] };
+            const installation = await prepareTreehouseCatalogInstallation({ review: f.review, history: rejected, store: { kind: "verified_fresh", expected } });
+            const incoming = await evaluateTreehouseCatalogTrust({ installed: prepared.next, expected, incoming: { ...page, histories: [rejected] } });
+            for (const d of [installation, incoming]) {
+                assert.equal(d.kind, "reject");
+                assert.equal(d.reason, "unsupported_cutoff");
+                assert.deepEqual(d.detail.ids, []);
+            }
+            const proof = { cutoff: cutoff.cutoff, history: { ...history, frames: [...history.frames, bad] } };
+            const incomingProof = await evaluateTreehouseCatalogTrust({ installed: prepared.next, expected, incoming: { ...page, cutoffProofs: [proof] } });
+            assert.equal(incomingProof.kind, "reject");
+            assert.equal(incomingProof.reason, "recovery_incomplete");
+            assert.deepEqual(incomingProof.detail.ids, []);
+            const broken = { ...accepted.next, cutoffProofs: [proof] };
+            const savedProof = await evaluateTreehouseCatalogTrust({ installed: broken, expected, incoming: { ...page, cutoffProofs: [validProof] } });
+            assert.equal(savedProof.kind, "reject");
+            assert.equal(savedProof.reason, "trust_recovery_required");
+            assert.deepEqual(savedProof.detail.ids, []);
+        }
+        assert.equal(oversized, 0);
+    }
+    finally {
+        globalThis.BigInt = original;
+    }
 });

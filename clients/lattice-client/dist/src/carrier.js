@@ -1,3 +1,4 @@
+import { canonicalUint64Text, canonicalHighUint64Text } from "./uint64";
 import { cmpHash } from "./op";
 import { assertWireVocabularyTerm, verifyCarrierOp } from "./codec";
 import { WIRE_REPORT_REASONS, isWireVocabularyName } from "./wire_vocabulary";
@@ -1120,8 +1121,7 @@ function decodeCarrierBody(op) {
         body[1][0][1] === "beacon") {
         const epoch = body[1][1];
         if (epoch[0] === "int" && epoch.length === 2 && typeof epoch[1] === "string" &&
-            /^(0|[1-9][0-9]*)$/.test(epoch[1]) && BigInt(epoch[1]) > BigInt(Number.MAX_SAFE_INTEGER) &&
-            BigInt(epoch[1]) <= uint64Max) {
+            canonicalHighUint64Text(epoch[1])) {
             return { type: "tuple", values: [decodeCarrierTerm(body[1][0]),
                     { type: "legacy_beacon_epoch", decimal: epoch[1] }] };
         }
@@ -1167,8 +1167,7 @@ function decodeCarrierTerm(term, context = "strict") {
                 throw new Error("malformed bool term");
             return term[1];
         case "int": {
-            if (context !== "strict" && typeof term[1] === "string" && /^(0|[1-9][0-9]*)$/.test(term[1]) &&
-                BigInt(term[1]) > BigInt(Number.MAX_SAFE_INTEGER) && BigInt(term[1]) <= uint64Max) {
+            if (context !== "strict" && typeof term[1] === "string" && canonicalHighUint64Text(term[1])) {
                 // An opaque invalid value cannot satisfy a numeric, binary or nullable field.
                 return { type: "invalid_beacon_integer" };
             }
@@ -2015,7 +2014,7 @@ function parseCarrierInteger(value) {
     if (typeof value !== "string") {
         throw new Error("malformed integer term");
     }
-    if (!/^(0|[1-9][0-9]*)$/.test(value)) {
+    if (!canonicalUint64Text(value)) {
         throw new Error("malformed integer term");
     }
     const parsed = BigInt(value);

@@ -1,3 +1,4 @@
+import {canonicalUint64Scalar} from "./uint64";
 // Raw observation is wider than wire admission (64 generic composites), so a
 // signed depth-65 refusal can still be authenticated. Neither result is authority.
 const MAX_NODES = 64 * 1024 * 1024;
@@ -64,11 +65,7 @@ export function withinCatalogRawObservationBounds(frame: unknown): boolean {
       if (!Array.isArray(next.value)) return false;
       const [tag, values] = next.value;
       if (next.value.length !== (tag === "nil" ? 1 : 2)) return false;
-      if (tag === "int") {
-        if (typeof values === "number") { if (!Number.isSafeInteger(values) || values < 0) return false; }
-        else if (typeof values !== "string" || values.length === 0 || values.length > 20 || /[^0-9]/.test(values) ||
-          (values.length > 1 && values[0] === "0") || (values.length === 20 && values > "18446744073709551615")) return false;
-      }
+      if (tag === "int" && !canonicalUint64Scalar(values)) return false;
       if (tag === "delegation") {
         if (values === null || typeof values !== "object" || Array.isArray(values)) return false;
         const d=values as Record<string,unknown>;

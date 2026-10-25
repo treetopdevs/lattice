@@ -327,7 +327,7 @@ async function evaluateSnapshot(value, originalOnly) {
         }
         if (originalOnly) {
             await validateStoredBlock(original, next.blocked, catalogs, bindings, histories);
-            if (original.cutoffProofs.length !== next.cutoffProofs.length)
+            if (!equal(original.cutoffProofs, next.cutoffProofs))
                 fail("trust_recovery_required");
             return issue("unchanged", value.expected, original, original.blocked?.reason ?? null, replacement, bootstrapIds, heads, catalogHeads, []);
         }
