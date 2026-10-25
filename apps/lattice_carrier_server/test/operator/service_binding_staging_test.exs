@@ -166,16 +166,23 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
 
   describe "a Space replica already in a committed catalog" do
     test "keeps its catalogued route and stages", f do
-      {request, expected} = committed(f, f.space_route)
+      {request, expected, status_path} = committed(f, f.space_route)
 
       assert {:ok, record} =
-               Staging.prepare(f.root, expected, request, f.artifacts, f.ceremony_dir)
+               Staging.prepare(
+                 f.root,
+                 expected,
+                 request,
+                 f.artifacts,
+                 f.ceremony_dir,
+                 status_path
+               )
 
       assert record["catalog_head"] == request.catalog_head
     end
 
     test "may not change its route", f do
-      {request, expected} = committed(f, f.space_route)
+      {request, expected, status_path} = committed(f, f.space_route)
       moved = "/r/" <> Base.url_encode64(:crypto.hash(:sha256, "moved"), padding: false)
 
       assert {:error, :catalog_route_changed} =
@@ -184,7 +191,8 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
                  expected,
                  request,
                  mutate(f, space(&Map.put(&1, "route", moved))),
-                 f.ceremony_dir
+                 f.ceremony_dir,
+                 status_path
                )
 
       assert {:ok, ^expected} = Journal.read(f.root)
@@ -192,10 +200,17 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
 
     test "already catalogued under another route refuses the active route", f do
       moved = "/r/" <> Base.url_encode64(:crypto.hash(:sha256, "moved"), padding: false)
-      {request, expected} = committed(f, moved)
+      {request, expected, status_path} = committed(f, moved)
 
       assert {:error, :catalog_route_changed} =
-               Staging.prepare(f.root, expected, request, f.artifacts, f.ceremony_dir)
+               Staging.prepare(
+                 f.root,
+                 expected,
+                 request,
+                 f.artifacts,
+                 f.ceremony_dir,
+                 status_path
+               )
 
       assert {:ok, ^expected} = Journal.read(f.root)
     end
@@ -326,12 +341,14 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
   defp committed(f, route) do
     id = &Base.url_encode64(:crypto.hash(:sha256, &1), padding: false)
 
+    {:ok, binding} = CatalogBinding.load_log(f.ceremony_dir, Sim.log(f.space, "creator"))
+
     catalog = %{
       version: 1,
       product: :treehouse,
       space: f.space.replica,
-      bootstrap: id.("bootstrap"),
-      binding: id.("binding"),
+      bootstrap: binding.bootstrap_id,
+      binding: binding.bootstrap_id,
       revision: 0,
       previous: nil,
       entries: [
@@ -343,22 +360,41 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
           root: :crypto.hash(:sha256, "root"),
           genesis: id.("genesis"),
           creation: id.("creation"),
-          reference: id.("bootstrap"),
+          reference: binding.bootstrap_id,
           route: route,
-          service_id: id.("service"),
+          service_id: binding.record.service_id,
           service_key: f.service_pub
         }
       ]
     }
 
-    signer = Identity.from_seed("catalog", "staging-test")
+    # Structural route-pin fixture, not publication/history-authentication proof.
+    # Model a bounded first inventory and a status signed by the bound key.
+    prior = %{
+      hd(catalog.entries)
+      | replica: "replica:treehouse:thread:prior-route-pin",
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        route: "/r/" <> id.("prior-thread-route"),
+        root: :crypto.hash(:sha256, "prior-thread-root"),
+        reference: id.("prior-thread-reference")
+    }
+
+    catalog = %{catalog | entries: Enum.sort_by(catalog.entries ++ [prior], & &1.replica)}
+    alias LatticeCarrierServer.Operator.CatalogCeremony.{Signer, SigningLedger}
+    signer_path = LatticeCarrierServer.Operator.CeremonyFixture.signer_template().signer
+    {:ok, secret, key} = Signer.read_seed(signer_path)
+    assert key == binding.record.catalog_key
+
+    signature =
+      :crypto.sign(:eddsa, :none, TransportCatalog.catalog_bytes(catalog), [
+        LatticeCarrierServer.Secret.unwrap(secret),
+        :ed25519
+      ])
 
     bytes =
-      Jason.encode!(
-        Wire.encode_value(%{
-          catalog: catalog,
-          signature: Identity.sign(signer, TransportCatalog.catalog_bytes(catalog))
-        })
+      LatticeCarrierServer.Operator.PublicHistory.canonical(
+        Wire.encode_value(%{catalog: catalog, signature: signature})
       )
 
     sha = Journal.digest(bytes)
@@ -405,7 +441,10 @@ defmodule LatticeCarrierServer.Operator.ServiceBindingStagingTest do
     File.write!(Journal.path(f.root), raw)
     File.chmod!(Journal.path(f.root), 0o600)
     assert {:ok, ^head} = CatalogStore.committed_head(f.root)
-    {%{f.request | catalog_head: head}, raw}
+    status = %{head_bytes: SigningLedger.head(binding, 0, head), chain: [%{bytes: bytes}]}
+    status_path = Path.join(f.root, "committed-custodian-status.json")
+    File.write!(status_path, SigningLedger.export_status(status, binding))
+    {%{f.request | catalog_head: head}, raw, status_path}
   end
 
   # Adds to the active manifest a bound Treehouse Thread instance whose log is

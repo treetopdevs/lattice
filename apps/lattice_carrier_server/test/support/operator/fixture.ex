@@ -93,10 +93,14 @@ defmodule LatticeCarrierServer.Operator.Fixture do
       Sim.new(
         Treehouse.Thread,
         "replica:treehouse:thread:" <>
-          Treehouse.ContinuationFixtures.digest("operator") <>
+          Treehouse.ContinuationFixtures.digest(Keyword.get(opts, :child_tag, "operator")) <>
           "#authority:bounded-continuation-v1",
         ["creator", "nominee", "w1", "w2", "w3"] ++ Enum.map(grantees, &elem(&1, 0)),
-        seed: "independent-child"
+        seed:
+          if(Keyword.has_key?(opts, :child_tag),
+            do: "independent-child:" <> opts[:child_tag],
+            else: "independent-child"
+          )
       )
       |> reuse_child_creator(Keyword.get(opts, :child_creator), space)
       |> Sim.create_replica("creator", policies: Keyword.get(opts, :root_policies, %{}))

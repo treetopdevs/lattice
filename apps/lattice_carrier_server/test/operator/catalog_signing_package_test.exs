@@ -543,6 +543,25 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     end
   end
 
+  test "a revision beyond the bounded inventory refuses before ledger or seed access", f do
+    space = f.histories[f.catalog.space]
+    reference = f.fixture[:reference]
+    pending = Lattice.Log.from_ops(space.replica, Map.delete(space.ops, reference.id))
+    histories = Map.put(f.histories, space.replica, pending)
+    catalog = %{f.catalog | revision: 12, previous: f.catalog.bootstrap}
+    assert {:ok, bytes} = CatalogSigningPackage.encode(catalog, histories, reference, "pending")
+
+    assert {:error, :catalog_ledger_capacity} =
+             SignCatalog.sign(
+               bytes,
+               f.fixture[:ceremony_dir],
+               "/absent",
+               CatalogSigningPackage.digest(catalog)
+             )
+
+    refute File.exists?(Path.join(f.fixture[:ceremony_dir], "catalog-signing"))
+  end
+
   defp encode(f),
     do:
       CatalogSigningPackage.encode(

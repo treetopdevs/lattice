@@ -1,8 +1,15 @@
 defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
   @moduledoc false
   alias Lattice.Log
-  alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogSigningPackage, PublicHistory}
-  alias LatticeCarrierServer.Operator.CatalogCeremony.{Paths, SignCatalog, SigningLedger, Store}
+
+  alias LatticeCarrierServer.Operator.{
+    CatalogBinding,
+    CatalogSigningPackage,
+    PublicArtifact,
+    PublicHistory
+  }
+
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{SignCatalog, SigningLedger, Store}
   alias Treehouse.TransportCatalog
 
   @spec review(keyword()) :: {:ok, map()} | {:error, atom()}
@@ -17,7 +24,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
   def init(opts) do
     with {:ok, binding} <- CatalogBinding.load(opts[:ceremony], opts[:space_log]),
          {:ok, state} <- SigningLedger.init(opts[:ceremony], binding),
-         :ok <- output(opts[:out], SigningLedger.export_status(state, binding)) do
+         :ok <- PublicArtifact.write(opts[:out], SigningLedger.export_status(state, binding)) do
       {:ok, %{"custodian_status" => Path.expand(opts[:out]), "binding" => binding.bootstrap_id}}
     end
   end
@@ -30,7 +37,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
          {:ok, package} <- SignCatalog.review(bytes, opts[:ceremony]),
          {:ok, state} <- command.(bytes, opts[:ceremony]),
          text = SigningLedger.export_status(state, package.binding),
-         :ok <- output(opts[:out], text) do
+         :ok <- PublicArtifact.write(opts[:out], text) do
       {:ok,
        %{"custodian_status" => Path.expand(opts[:out]), "binding" => package.binding.bootstrap_id}}
     end
@@ -41,7 +48,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
     with {:ok, bytes} <- package(opts),
          {:ok, envelope} <-
            SignCatalog.sign(bytes, opts[:ceremony], opts[:signer], opts[:confirm_catalog]),
-         :ok <- output(opts[:out], envelope) do
+         :ok <- PublicArtifact.write(opts[:out], envelope) do
       {:ok, %{"signed_catalog" => Path.expand(opts[:out]), "sha256" => Store.sha256(envelope)}}
     end
   end
@@ -56,35 +63,6 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
         {:error, :catalog_package_required}
     end
   end
-
-  # The durable ledger is authoritative even if the public transfer file is
-  # lost. Exports are exclusive; retry may reuse only the same bytes.
-  defp output(path, bytes) when is_binary(path) and path != "" do
-    path = Path.expand(path)
-
-    with {:ok, _} <- Store.ceremony([ceremony: Path.dirname(path)], :real) do
-      case Paths.create_private(
-             path,
-             fn -> bytes end,
-             :catalog_output_exists,
-             :catalog_output_failed
-           ) do
-        {:ok, _} ->
-          :ok
-
-        {:error, :catalog_output_exists} ->
-          case Store.read_text(Path.dirname(path), Path.basename(path), 67_108_864) do
-            {:ok, ^bytes} -> :ok
-            _ -> {:error, :catalog_output_conflict}
-          end
-
-        {:error, _} = refusal ->
-          refusal
-      end
-    end
-  end
-
-  defp output(_, _), do: {:error, :catalog_output_required}
 
   @spec sheet(map()) :: map()
   def sheet(package) do

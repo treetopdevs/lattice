@@ -9,7 +9,8 @@ commit, and crash-safe `catalogued` publication. Shared read-only release review
 implemented, together with authenticated public histories and the signing package
 verifier. Custodian ledger/signing APIs now have replay, refusal and kill-boundary
 tests and CLI controls. Relay prepare/commit now have live pending/initial-reference
-rehearsals. Carried-entry/capacity, relay CLI and complete crash/final gates remain.
+rehearsals. Carried-entry and 13/14 capacity rehearsals pass; the relay command
+adapter and restaging status guard are implemented. Complete crash/final gates remain.
 Custody P1 fixes are confirmed; this is not yet a completed publication slice.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 
@@ -59,6 +60,8 @@ Existing files are below `apps/lattice_carrier_server/lib/lattice_carrier_server
    deterministically and return a closed public signing package plus a review sheet.
    Prepare also requires the public custodian ledger status, including any pending C;
    only that same pending C may be prepared. Export status under the custodian lock.
+   Restaging an existing ready/catalogued/listed attempt requires Staging.prepare/6
+   with that status, checked inside the owner-held inspection.
    No journal/store mutation or private signing occurs. CLI writes a new exclusive
    output file; same bytes may replay, conflicting output refuses.
 3. Add `CatalogCeremony.SignCatalog.review/1` and `.sign/1`, exposed by ceremony CLI
