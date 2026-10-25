@@ -15,8 +15,10 @@ read-only ancestor queries. It deliberately cannot report authority, membership,
 a catalog decision or a route. Completing that checkpoint does not complete this
 plan. Portable cutoff observation is also implemented as a second checkpoint:
 real BEAM/TS owners agree on exact canonical bytes and refusal precedence, including
-retained structural rejections. Full local final gates and checkpoint review are
-still pending. The full authority/evaluator and parity matrix below remain mandatory.
+retained structural rejections. All local checkpoint gates and independent review pass. The branch is refreshed
+onto the codec's minimal parity correction with its cutoff implementation unchanged.
+Checkpoint hosted checks and requested external review remain open; full authority,
+incoming/stored history integration and retained-trust logic are still unfinished. The full authority/evaluator and parity matrix below remain mandatory.
 
 ## Outcome and immutable contracts
 
