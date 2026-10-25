@@ -60,6 +60,32 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
     no_grants!()
   end
 
+  test "publication review probes a ready release without advancing its receipt", f do
+    activated = activated!(f)
+    restart!()
+    assert {:ok, ready} = ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
+    {:ok, raw} = Journal.read(f.root)
+    history = File.read!(Journal.history_path(f.root))
+
+    assert {:ok, observation} =
+             ReleaseReadiness.review(f.root, raw, f.probe, f.ceremony_dir, "ready")
+
+    assert observation.record == ready
+    assert observation.deployment.incarnation == Runtime.deployment().incarnation
+    assert length(observation.current.pairs) == 2
+    assert {:ok, ^raw} = Journal.read(f.root)
+    assert File.read!(Journal.history_path(f.root)) == history
+    no_grants!()
+
+    for phase <- ["activated", "carrier_pending", "listed", nil] do
+      assert {:error, :stale_operator_intent} =
+               ReleaseReadiness.review(f.root, raw, f.probe, f.ceremony_dir, phase)
+    end
+
+    assert {:error, :stale_operator_intent} =
+             ReleaseReadiness.review(f.root, activated, f.probe, f.ceremony_dir, "ready")
+  end
+
   test "a restart after confirm with the same bytes boots and keeps ready", f do
     activated = activated!(f)
     restart!()

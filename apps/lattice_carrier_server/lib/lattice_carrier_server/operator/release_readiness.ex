@@ -43,25 +43,15 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
 
   @spec confirm(Path.t(), binary() | nil, Path.t(), Path.t()) :: {:ok, map()} | {:error, term()}
   def confirm(root, expected, probe_identity_file, ceremony_dir) do
-    with {:ok, deployment} <- Runtime.deployment() |> guarded(root),
-         {:ok, record} <- activated(root, expected),
-         digest = Base.encode16(deployment.manifest_digest, case: :lower),
-         :ok <- same(digest == manifest_artifact(record)["sha256"], :release_manifest_mismatch),
-         :ok <- same(Health.ready?(), :route_not_ready),
-         {:ok, instances} <- loaded_manifest(deployment),
-         {:ok, current} <- roster_current(record, instances),
-         {:ok, binding} <- bound(record, instances, ceremony_dir),
-         :ok <- check_bound(instances, current, binding, reference(record)),
-         :ok <- pulled(targets(current, binding), binding, probe_identity_file),
-         :ok <- rebound(record, instances, ceremony_dir, binding),
-         next = Map.put(record, "phase", "ready"),
+    with {:ok, review} <- review(root, expected, probe_identity_file, ceremony_dir, "activated"),
+         next = Map.put(review.record, "phase", "ready"),
          :ok <-
            Lock.ready(
              root,
              expected,
-             %{path: deployment.manifest_path, sha256: digest},
+             %{path: review.deployment.manifest_path, sha256: review.digest},
              Journal.encode(next),
-             deployment.incarnation
+             review.deployment.incarnation
            ) do
       {:ok, next}
     else
@@ -74,6 +64,49 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
     :exit, _ -> {:error, :release_readiness_refused}
   end
 
+  @doc """
+  Re-observe a guarded release without changing its journal or catalog store.
+
+  Publication consumers must still derive and commit their own phase transition.
+  This observation grants no authority and is not a durable readiness receipt.
+  """
+  @spec review(Path.t(), binary() | nil, Path.t(), Path.t(), String.t()) ::
+          {:ok, map()} | {:error, atom()}
+  def review(root, expected, probe_identity_file, ceremony_dir, phase)
+      when phase in ["activated", "ready", "catalogued"] do
+    with {:ok, deployment} <- Runtime.deployment() |> guarded(root),
+         {:ok, record} <- current_record(root, expected, phase),
+         digest = Base.encode16(deployment.manifest_digest, case: :lower),
+         :ok <- same(digest == manifest_artifact(record)["sha256"], :release_manifest_mismatch),
+         :ok <- same(Health.ready?(), :route_not_ready),
+         {:ok, instances} <- loaded_manifest(deployment),
+         {:ok, current} <- roster_current(record, instances),
+         {:ok, binding} <- bound(record, instances, ceremony_dir),
+         :ok <- check_bound(instances, current, binding, reference(record)),
+         :ok <- pulled(targets(current, binding), binding, probe_identity_file),
+         :ok <- rebound(record, instances, ceremony_dir, binding) do
+      {:ok,
+       %{
+         deployment: deployment,
+         record: record,
+         digest: digest,
+         instances: instances,
+         current: current,
+         binding: binding
+       }}
+    else
+      {:error, _} = refusal -> refusal
+      _ -> {:error, :release_readiness_refused}
+    end
+  rescue
+    _ -> {:error, :release_readiness_refused}
+  catch
+    :exit, _ -> {:error, :release_readiness_refused}
+  end
+
+  def review(_root, _expected, _probe_identity_file, _ceremony_dir, _phase),
+    do: {:error, :stale_operator_intent}
+
   defp guarded(deployment, root) do
     with %{operator_root: guarded_root, incarnation: incarnation} when is_binary(incarnation) <-
            deployment,
@@ -84,9 +117,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
     end
   end
 
-  defp activated(root, expected) do
+  defp current_record(root, expected, phase) do
     with {:ok, ^expected} when is_binary(expected) <- Journal.read(root),
-         {:ok, %{"phase" => "activated"} = record} <- Journal.decode(expected) do
+         {:ok, %{"phase" => ^phase} = record} <- Journal.decode(expected) do
       {:ok, record}
     else
       _ -> {:error, :stale_operator_intent}
