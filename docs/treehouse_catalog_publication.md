@@ -108,9 +108,9 @@ immutable envelope before its journal receipt. Its output is a local `catalogued
 receipt, not a live health signal or an app route-installation receipt.
 
 For initial provisioning, the reference already exists in Space: commit observes the
-exact honored frame and leaves the served Space file unchanged. Initial `listed` stays
-refused until the separately guarded listing consumer is implemented. For later pending
-references, cataloguing leaves the staged reference unserved; guarded listing is next.
+exact honored frame and leaves the served Space file unchanged. For later pending
+references, cataloguing leaves the staged reference unserved. Follow the separate
+[guarded listing step](treehouse_thread_listing.md) for either reference mode.
 
 ## Retry and refusal
 

@@ -68,10 +68,12 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   Publication consumers must still derive and commit their own phase transition.
   This observation grants no authority and is not a durable readiness receipt.
   """
+  @test_hooks_enabled Mix.env() == :test
+
   @spec review(Path.t(), binary() | nil, Path.t(), Path.t(), String.t()) ::
           {:ok, map()} | {:error, atom()}
   def review(root, expected, probe_identity_file, ceremony_dir, phase)
-      when phase in ["activated", "ready", "catalogued"] do
+      when phase in ["activated", "ready", "catalogued", "listed"] do
     with {:ok, deployment} <- Runtime.deployment() |> guarded(root),
          {:ok, record} <- current_record(root, expected, phase),
          digest = Base.encode16(deployment.manifest_digest, case: :lower),
@@ -112,6 +114,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   defp window("activated"), do: :roster_drift_since_activation
   defp window("ready"), do: :roster_drift_since_ready
   defp window("catalogued"), do: :roster_drift_since_catalog
+  defp window("listed"), do: :roster_drift_since_catalog
 
   defp guarded(deployment, root) do
     with %{operator_root: guarded_root, incarnation: incarnation} when is_binary(incarnation) <-
@@ -314,9 +317,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   defp read_route(target, secret) do
     # Synchronous test hook, run in this process before the route is dialed:
     # it receives the route path only, never a key.
-    case Application.get_env(:lattice_carrier_server, :readiness_probe_hook) do
-      hook when is_function(hook, 1) -> hook.(target.route)
-      _ -> :ok
+    if @test_hooks_enabled do
+      case Application.get_env(:lattice_carrier_server, :readiness_probe_hook) do
+        hook when is_function(hook, 1) -> hook.(target.route)
+        _ -> :ok
+      end
     end
 
     holder = Holder.via(target.name)

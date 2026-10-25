@@ -222,9 +222,6 @@ def record(raw):
     if len(r["artifacts"]) - len(catalogs) > 128:
         refuse("corrupt_operator_journal")
     if r["phase"] in ("catalogued", "listed"):
-        if r["phase"] == "listed" and any(a["kind"] == "reference" and a["review"] == {"mode": "initial_existing"}
-               for a in r["artifacts"]):
-            refuse("corrupt_operator_journal")
         if len(catalogs) != 1 or r["catalog_head"] != catalogs[0]["op_id"]:
             refuse("corrupt_operator_journal")
     elif catalogs:
@@ -752,7 +749,7 @@ def listed(root, plan):
     if plan["artifacts"] is not None:
         refuse("malformed_operator_plan")
     old, manifest = promoted(plan)
-    if (old["phase"] != "catalogued" or old["attempt"] != plan["attempt"]
+    if (old["phase"] not in ("catalogued", "listed") or old["attempt"] != plan["attempt"]
             or record(plan["record"]) != dict(old, phase="listed")
             or plan["checks"][0]["sha256"] != manifest["sha256"]):
         refuse("stale_operator_intent")
@@ -762,7 +759,9 @@ def listed(root, plan):
     for a in old["artifacts"]:
         if a["kind"] == "catalog":
             staged(a)
-    commit(root, plan["expected"], plan["record"], writes="listed")
+    # Exact listed retries retain the same locked checks without a second receipt.
+    if old["phase"] == "catalogued":
+        commit(root, plan["expected"], plan["record"], writes="listed")
     reply({"ok": True})
 
 

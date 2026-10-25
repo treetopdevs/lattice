@@ -8,18 +8,18 @@ defmodule LatticeCarrierServer.Operator.CatalogCli do
   the live journal after the user reviewed it. Command files contain closed JSON
   argv data, not executable expressions.
   """
-  alias LatticeCarrierServer.Operator.{PublicArtifact, ReleaseCatalog}
+  alias LatticeCarrierServer.Operator.{PublicArtifact, ReleaseCatalog, ReleaseListing}
   alias LatticeCarrierServer.Operator.CatalogCeremony.Store
 
   @switches [
-    root: :string,
-    expected: :string,
-    ceremony: :string,
-    probe: :string,
-    status: :string,
-    out: :string,
-    package: :string,
-    envelope: :string
+    root: [:string, :keep],
+    expected: [:string, :keep],
+    ceremony: [:string, :keep],
+    probe: [:string, :keep],
+    status: [:string, :keep],
+    out: [:string, :keep],
+    package: [:string, :keep],
+    envelope: [:string, :keep]
   ]
 
   @spec run([String.t()]) :: :ok | {:error, atom()}
@@ -73,10 +73,14 @@ defmodule LatticeCarrierServer.Operator.CatalogCli do
       {_, _, [_ | _]} ->
         {:error, :invalid_catalog_options}
 
-      {opts, [command], []} when command in ["prepare", "commit"] ->
+      {opts, [command], []} when command in ["prepare", "commit", "list"] ->
         required =
           [:root, :expected, :ceremony, :probe] ++
-            if(command == "prepare", do: [:status, :out], else: [:package, :envelope])
+            case command do
+              "prepare" -> [:status, :out]
+              "commit" -> [:package, :envelope]
+              "list" -> []
+            end
 
         keys = Keyword.keys(opts)
 
@@ -106,6 +110,20 @@ defmodule LatticeCarrierServer.Operator.CatalogCli do
          "package" => Path.expand(opts[:out]),
          "review" => prepared.sheet,
          "claim" => "Public signing candidate only; journal remains ready."
+       }}
+    end
+  end
+
+  defp execute("list", opts) do
+    with {:ok, expected} <- read(opts[:expected], 1_048_576),
+         {:ok, record} <-
+           ReleaseListing.publish(opts[:root], expected, opts[:ceremony], opts[:probe]) do
+      {:ok,
+       %{
+         "phase" => record["phase"],
+         "catalog_id" => record["catalog_head"],
+         "claim" =>
+           "Dated local served-reference receipt; clients independently judge current histories."
        }}
     end
   end

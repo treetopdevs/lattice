@@ -815,7 +815,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
     with {:ok, child_log} <- staged_child(child),
          [space] <- Enum.filter(logs, &(&1.replica == reference["replica"])),
-         :ok <- initial_reference_current(reference, child, space, child_log),
+         :ok <- initial_reference_current(reference, child, space, child_log, window),
          roster = roster(space),
          true <- Enum.sort(Enum.map(child["review"]["grants"], & &1["recipient"])) == roster,
          true <- bootstrap_peers_exact?(admitted, roster, child_log) do
@@ -828,7 +828,7 @@ defmodule LatticeCarrierServer.Operator.Staging do
 
   # Activation and readiness must re-observe the current served history, not a
   # journal boolean. Pending-mode behavior remains the existing saga.
-  defp initial_reference_current(reference, child, space, child_log) do
+  defp initial_reference_current(reference, child, space, child_log, window) do
     if ReferenceMode.initial?(reference["review"]) do
       with {:ok, bytes} <- File.read(reference["path"]),
            true <- Journal.digest(bytes) == reference["sha256"],
@@ -842,15 +842,25 @@ defmodule LatticeCarrierServer.Operator.Staging do
              child: %{replica: child["replica"], op_id: child["op_id"], review: child["review"]}
            },
            true <- initial_child_current?(bundle.child, child_log),
-           {:ok, _} <- ReferenceMode.observe(bundle, space, child_log) do
+           {:ok, _} <- current_initial_observation(bundle, space, child_log, window) do
         :ok
       else
-        _ -> {:error, :invalid_staged_signed_artifact}
+        {:error, reason} when reason in [:initial_reference_competing, :reference_not_honored] ->
+          {:error, reason}
+
+        _ ->
+          {:error, :invalid_staged_signed_artifact}
       end
     else
       :ok
     end
   end
+
+  defp current_initial_observation(bundle, space, child_log, :roster_drift_since_catalog),
+    do: ReferenceMode.observe_listing(bundle, space, child_log)
+
+  defp current_initial_observation(bundle, space, child_log, _window),
+    do: ReferenceMode.observe(bundle, space, child_log)
 
   defp initial_child_current?(child, log), do: verify_current_child_log(log, child) == :ok
 

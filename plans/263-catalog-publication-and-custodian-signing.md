@@ -9,7 +9,8 @@ verifier. Custodian ledger/signing APIs now have replay, refusal and kill-bounda
 tests and CLI controls. Relay prepare/commit now have live pending/initial-reference
 rehearsals. Carried-entry and 13/14 capacity rehearsals pass; the relay command
 adapter and restaging status guard are implemented. Final crash tests pass locally
-and on Linux. Final hosted checks remain before completion.
+and on Linux. Software checks and reviews are complete; guarded listing follows in
+plan 264. Actual operator ceremony evidence remains separate.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 
 Software acceptance uses disposable keys and real-mode ceremony fixtures, the production

@@ -440,7 +440,8 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 261 | [Two ordinary desktop apps over the real relay](261-two-ordinary-desktop-apps-real-relay.md) | P1 | XL | 224, 245; ceremony; two Macs | IN PROGRESS (#165 custody/creation and #167 ordinary offline exchange merged; hosted Keychain gates pass; native trust, listing and real-relay field session remain) |
 
 | 262 | [Offline enrollment and guarded initial provisioning](262-offline-enrollment-and-initial-provisioning.md) | P1 | XL | PR #165; plan 224 PRs 4-5 for listing | IN PROGRESS (#166 and #167 merged on green exact tips; ordinary offline exchange and operator import proved; listing, native trust and field session remain) |
-| 263 | [Catalog publication with off-host custodian](263-catalog-publication-and-custodian-signing.md) | P1 | L | 224 PRs 1–3; 262 A | IN PROGRESS (D-47: pending/initial, carried entries and 13/14 capacity proved; relay CLI and restaging guard built; final crash/review/gates remain) |
+| 263 | [Catalog publication with off-host custodian](263-catalog-publication-and-custodian-signing.md) | P1 | L | 224 PRs 1–3; 262 A | DONE (#168; run 40157925199 at 0e4dc87d; merge tree matches; fixture software evidence, actual operator ceremony separate) |
+| 264 | [Guarded Thread listing and initial receipt](264-guarded-thread-listing-and-initial-receipt.md) | P1 | L | 263 / PR #168 merged | IN PROGRESS: full local check and 483 Linux tests pass; all reviews resolved; final full-API crash cases verifying; hosted gates open. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
