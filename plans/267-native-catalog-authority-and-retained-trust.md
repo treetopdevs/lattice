@@ -8,6 +8,9 @@ causal Thread application policy/projection are implemented. Space application p
 implemented as a component. Catalog graph evaluation, retained trust and the full
 incoming/resource integration remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
+Native signoff is stopped on a separately reproduced source signature mismatch:
+BEAM accepts weak-key detached invitation consent that TypeScript/native reject.
+Plan 272 owns the common verifier correction; do not compensate in native policy.
 
 Fresh Thread application-policy work exposes a source discrepancy for malformed
 edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.
