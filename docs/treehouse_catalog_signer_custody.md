@@ -492,3 +492,8 @@ add files: even a `.DS_Store` is outside its closed inventory and causes a refus
 Preserve unexpected files for explicit reconciliation; never reset the ledger to clear
 that refusal. Transfer only the exported package/envelope/status files in the parent
 transfer directory. Unknown ledger files are not silently ignored.
+
+Keep the custodian's verified signed Space log in a writable private local directory;
+the authenticity reader may acquire a sibling filesystem lock. This does not rewrite
+the reviewed log. `catalog-status` authenticates its supplied package once before
+reading the ledger; it need not decode the same history twice.

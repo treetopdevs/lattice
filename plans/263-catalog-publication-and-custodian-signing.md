@@ -13,7 +13,8 @@ verifier. Custodian ledger/signing APIs now have replay, refusal and kill-bounda
 tests and CLI controls. Relay prepare/commit now have live pending/initial-reference
 rehearsals. Carried-entry and 13/14 capacity rehearsals pass; the relay command
 adapter and restaging status guard are implemented. Final crash tests pass locally
-and on Linux; rebased final checks and adversarial publication review remain.
+and on Linux. Independent reviews and Sonnet fallback confirmation have no remaining
+P1/P2; final frozen-tip verification and hosted checks remain.
 Custody P1 fixes are confirmed; this is not yet a completed publication slice.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 

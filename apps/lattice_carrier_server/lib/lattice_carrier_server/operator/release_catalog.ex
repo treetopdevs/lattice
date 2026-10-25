@@ -164,6 +164,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
            Wire.encode_op(reference_op) == raw_reference and reference_op.id == reference["op_id"],
          {:ok, prior} <- prior(envelopes, head),
          old_entries = if(prior, do: prior.catalog.entries, else: []),
+         :ok <- carried_references_present(old_entries, space),
          {:ok, initial} <- initial_entries(prior, space_instance, space, review.binding),
          new =
            entry(
@@ -204,6 +205,12 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
       {:error, reason} when is_atom(reason) -> {:error, reason}
       _ -> {:error, :catalog_invalid}
     end
+  end
+
+  defp carried_references_present(entries, space) do
+    if Enum.all?(entries, &(&1.kind != :thread or Map.has_key?(space.ops, &1.reference))),
+      do: :ok,
+      else: {:error, :catalog_reference_pending}
   end
 
   defp capacity(entries) do

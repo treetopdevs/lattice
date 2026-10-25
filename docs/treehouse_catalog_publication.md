@@ -141,7 +141,7 @@ signature; it cannot prove that a remote custodian has signed nothing since a sn
 A later catalog can carry an earlier Thread only when its earlier reference is actually
 served and honored. It never treats that old reference as hypothetical. Complete listing
 (or genuine client publication of the exact signed reference) before another publication
-attempt. A still-absent carried reference makes prepare refuse and preserves the current
+attempt. A still-absent carried reference makes prepare refuse `catalog_reference_pending` and preserves the current
 journal/store; it is not repaired by inventing a second frame. The capacity rehearsal
 uses fixture-only client-signed relay deliveries between revisions, not a listed receipt.
 

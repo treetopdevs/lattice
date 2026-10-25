@@ -33,7 +33,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
   def status(opts) do
     with {:ok, bytes} <- package(opts),
          {:ok, package} <- SignCatalog.review(bytes, opts[:ceremony]),
-         {:ok, state} <- SignCatalog.status(bytes, opts[:ceremony]),
+         {:ok, state} <- SigningLedger.status(opts[:ceremony], package.binding),
          text = SigningLedger.export_status(state, package.binding),
          :ok <- PublicArtifact.write(opts[:out], text) do
       {:ok,

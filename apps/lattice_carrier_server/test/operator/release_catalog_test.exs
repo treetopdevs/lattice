@@ -628,7 +628,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
              CatalogStore.verify(f.root, f.binding.record.catalog_key)
   end
 
-  test "a carried reference that has not been published keeps the next catalog pending", f do
+  test "an unpublished carried reference refuses until the exact frame is served", f do
     {_prepared, package_path, envelope_path, _} = signed!(f)
 
     assert {:ok, record} =
@@ -648,13 +648,26 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
     path = Path.join(f.root, "status-with-unlisted-reference.json")
     File.write!(path, SigningLedger.export_status(status, f.binding))
 
-    assert {:error, :invalid_catalog_package} =
+    assert {:error, :catalog_reference_pending} =
              ReleaseCatalog.prepare(f.root, next.ready, f.ceremony_dir, f.probe, path)
 
     assert {:ok, next.ready} == Journal.read(f.root)
     assert {:ok, store} = CatalogStore.verify(f.root, f.binding.record.catalog_key)
     assert store.head == record["catalog_head"]
     assert map_size(store.envelopes) == 1
+
+    assert {:ok, _} =
+             LatticeCarrierServer.Holder.relay(
+               LatticeCarrierServer.Holder.via("space"),
+               "member",
+               f.reference
+             )
+
+    assert {:ok, prepared} =
+             ReleaseCatalog.prepare(f.root, next.ready, f.ceremony_dir, f.probe, path)
+
+    assert prepared.catalog.previous == record["catalog_head"]
+    assert length(prepared.catalog.entries) == 3
   end
 
   defp next_release!(f, expected, head, number) do
