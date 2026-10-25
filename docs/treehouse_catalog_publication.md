@@ -174,14 +174,19 @@ mix treehouse.catalog_evidence \
   --out /srv/treehouse/transfer/catalog-evidence.json
 ```
 
-The manifest must be the exact file recorded by the listed receipt. The command loads
+The manifest must match the exact bytes and resolved identity/log paths of the
+archived candidate recorded by the listed receipt. The archival filename is not
+the active configuration filename; relocating identical relative-path bytes must
+not redirect the exporter to copied histories. The command loads
 configuration without starting another relay or listener, so it can run while the
 configured service is already bound. Its only write is the new output file. Choose an
 existing directory owned by the operator or root, with no writable group/other or
 symlink ancestors, outside the operator and ceremony roots and all protected inputs.
 An existing output file or link refuses; choose a new filename for each export.
 The reported output path is the normalized path actually checked and written, and
-contents are written only after its new file is private (0600). A partial file can
+contents are written only after its new file is private (0600). Descriptor and
+pathname identity, owner, link count, mode and expected size are checked before
+success. A replaced output refuses without deleting the replacement. A partial file can
 remain after process/power loss or if inode ownership cannot be proved during error
 cleanup. Preserve that unknown file and choose a new name; an export error is not
 proof that no file was created. This transfer artifact is not a durable publication
@@ -205,8 +210,9 @@ one interrupted-publication link per retained artifact; excessive temporary debr
 refuses with the same size reason. Resolve it through operator recovery rather than
 having the exporter delete anything.
 Refusals never truncate authentic history. Preserve inputs, resolve the named refusal
-and retry to a new output filename. A failed write cleans up only its own partial file;
-it does not remove a replacement owned by another writer.
+and retry to a new output filename. A failed write cleans up its own partial file
+while its descriptor is held. A close or final acknowledgement failure preserves
+the uncertain public file; it never removes a replacement owned by another writer.
 
 Import and native trust installation are later app work. Do not edit the ordinary
 app's database or infer an installed route from a successful file export.

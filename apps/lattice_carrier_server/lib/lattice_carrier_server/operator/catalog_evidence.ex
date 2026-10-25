@@ -2,7 +2,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   @moduledoc """
   Export a checked listed host snapshot as public evidence, never installed trust.
 
-  The explicit manifest must match the listed artifact's location and bytes. All logs and
+  The explicit manifest must match the listed artifact's bytes and resolved resources. All logs and
   catalogs are re-read before publishing. No application is started, no signature
   is made and no private identity or ceremony bytes are copied to the output.
   """
@@ -23,7 +23,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     with {:ok, raw} <- Journal.read(root),
          {:ok, %{"phase" => "listed"} = record} <- Journal.decode(raw),
          {:ok, manifest} <- load_manifest(manifest_path),
-         :ok <- manifest_bound(manifest, record, manifest_path),
+         :ok <- manifest_bound(manifest, record),
          {:ok, histories, captures} <- histories(manifest.instances),
          [reference] <- Enum.filter(record["artifacts"], &(&1["kind"] == "reference")),
          %Log{} = space <- histories[reference["replica"]],
@@ -70,14 +70,15 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     end
   end
 
-  defp manifest_bound(manifest, record, manifest_path) do
+  defp manifest_bound(manifest, record) do
     case Enum.filter(record["artifacts"], &(&1["kind"] == "manifest")) do
       [%{"path" => expected_path, "sha256" => digest}] ->
-        same(
-          Path.expand(expected_path) == manifest_path and
-            Base.encode16(manifest.sha256, case: :lower) == digest,
-          :release_manifest_mismatch
-        )
+        with {:ok, archived} <- load_manifest(expected_path),
+             true <- Base.encode16(archived.sha256, case: :lower) == digest,
+             true <- manifest.sha256 == archived.sha256,
+             true <- public_instances(manifest) == public_instances(archived),
+             do: :ok,
+             else: (_ -> {:error, :release_manifest_mismatch})
 
       _ ->
         {:error, :release_manifest_mismatch}
@@ -244,37 +245,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   defp write_new(path, bytes) do
     case File.open(path, [:write, :binary, :exclusive]) do
       {:ok, file} ->
-        created =
-          case :file.read_file_info(file) do
-            {:ok, info} -> File.Stat.from_record(info)
-            _ -> nil
-          end
-
-        result =
-          try do
-            with %File.Stat{} <- created,
-                 :ok <- output_bound(file, path, created, false),
-                 :ok <- File.chmod(path, 0o600),
-                 :ok <- before_write(file, path),
-                 :ok <- output_bound(file, path, created, true),
-                 :ok <- IO.binwrite(file, bytes),
-                 :ok <- :file.sync(file),
-                 :ok <- output_bound(file, path, created, true),
-                 do: :ok
-          rescue
-            _ -> :error
-          catch
-            _, _ -> :error
-          end
-
-        closed = File.close(file)
-
-        if result == :ok and closed == :ok and output_path_bound(path, created) == :ok do
-          :ok
-        else
-          remove_created_file(path, created)
-          {:error, :evidence_export_failed}
-        end
+        write_opened(file, path, bytes)
 
       {:error, :eexist} ->
         {:error, :evidence_output_exists}
@@ -284,24 +255,71 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     end
   end
 
-  defp output_bound(file, path, created, private?) do
+  defp write_opened(file, path, bytes) do
+    with {:ok, info} <- :file.read_file_info(file) do
+      write_verified(file, path, bytes, File.Stat.from_record(info))
+    else
+      _ -> {:error, :evidence_export_failed}
+    end
+  rescue
+    _ -> {:error, :evidence_export_failed}
+  catch
+    _, _ -> {:error, :evidence_export_failed}
+  after
+    File.close(file)
+  end
+
+  defp write_verified(file, path, bytes, created) do
+    size = byte_size(bytes)
+
+    result =
+      try do
+        with :ok <- output_bound(file, path, created, false, 0),
+             :ok <- File.chmod(path, 0o600),
+             :ok <- writer_hook(file, path, :before_write),
+             :ok <- output_bound(file, path, created, true, 0),
+             :ok <- IO.binwrite(file, bytes),
+             :ok <- :file.sync(file),
+             :ok <- writer_hook(file, path, :after_sync),
+             :ok <- output_bound(file, path, created, true, size),
+             do: :ok
+      rescue
+        _ -> :error
+      catch
+        _, _ -> :error
+      end
+
+    # Resolve failures while the descriptor still pins the created inode. A
+    # later close/acknowledgement failure preserves the uncertain public file.
+    if result != :ok, do: remove_created_file(path, created)
+    closed = File.close(file)
+
+    with :ok <- result,
+         :ok <- closed,
+         :ok <- writer_hook(file, path, :after_close),
+         :ok <- output_path_bound(path, created, size),
+         do: :ok,
+         else: (_ -> {:error, :evidence_export_failed})
+  end
+
+  defp output_bound(file, path, created, private?, size) do
     with {:ok, info} <- :file.read_file_info(file),
          {:ok, stat} <- File.lstat(path),
-         true <- output_matches?(File.Stat.from_record(info), created, private?),
-         true <- output_matches?(stat, created, private?),
+         true <- output_matches?(File.Stat.from_record(info), created, private?, size),
+         true <- output_matches?(stat, created, private?, size),
          do: :ok,
          else: (_ -> :error)
   end
 
-  defp output_path_bound(path, created) do
+  defp output_path_bound(path, created, size) do
     case File.lstat(path) do
-      {:ok, stat} -> if output_matches?(stat, created, true), do: :ok, else: :error
+      {:ok, stat} -> if output_matches?(stat, created, true, size), do: :ok, else: :error
       _ -> :error
     end
   end
 
-  defp output_matches?(stat, created, private?) do
-    stat.type == :regular and stat.links == 1 and stat.uid == created.uid and
+  defp output_matches?(stat, created, private?, size) do
+    stat.type == :regular and stat.links == 1 and stat.uid == created.uid and stat.size == size and
       file_node(stat) == file_node(created) and
       (not private? or Bitwise.band(stat.mode, 0o7777) == 0o600)
   end
@@ -315,10 +333,11 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
 
   defp remove_created_file(_, _), do: :ok
 
-  defp before_write(file, path) do
+  defp writer_hook(file, path, phase) do
     if @test_hooks_enabled do
       case Application.get_env(:lattice_carrier_server, :catalog_evidence_writer_hook) do
-        hook when is_function(hook, 2) -> hook.(file, path)
+        hook when is_function(hook, 3) -> hook.(file, path, phase)
+        hook when is_function(hook, 2) and phase == :before_write -> hook.(file, path)
         _ -> :ok
       end
     else

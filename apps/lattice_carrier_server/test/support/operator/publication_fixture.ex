@@ -74,6 +74,7 @@ defmodule LatticeCarrierServer.Operator.PublicationFixture do
         f
       end
 
+    f = if context[:relative_manifest], do: relative_manifest(f), else: f
     {:ok, _} = Staging.prepare(f.root, nil, f.request, f.artifacts, f.ceremony_dir)
     {:ok, journal} = Journal.read(f.root)
     probe = Path.join(f.root, "publication-probe.identity")
@@ -102,6 +103,37 @@ defmodule LatticeCarrierServer.Operator.PublicationFixture do
     end)
 
     {:ok, Map.merge(f, %{ready: ready, binding: binding, status_path: status_path})}
+  end
+
+  defp relative_manifest(f) do
+    depth =
+      max(length(Path.split(f.root)), length(Path.split(f.request.active_manifest))) + 8
+
+    prefix = String.duplicate("../", depth)
+
+    artifacts = Enum.map(f.artifacts, &relative_artifact(&1, prefix))
+
+    Map.merge(f, %{artifacts: artifacts, relative_manifest_depth: depth})
+  end
+
+  defp relative_artifact(%{kind: :manifest} = artifact, prefix) do
+    manifest =
+      artifact.bytes
+      |> Jason.decode!()
+      |> Map.update!(
+        "instances",
+        &Enum.map(&1, fn instance -> relative_instance(instance, prefix) end)
+      )
+
+    %{artifact | bytes: Jason.encode!(manifest)}
+  end
+
+  defp relative_artifact(artifact, _prefix), do: artifact
+
+  defp relative_instance(instance, prefix) do
+    Enum.reduce(~w(log_file identity_file), instance, fn key, fields ->
+      Map.update!(fields, key, &(prefix <> String.trim_leading(&1, "/")))
+    end)
   end
 
   def catalogued(context) do

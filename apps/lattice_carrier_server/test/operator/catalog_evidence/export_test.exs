@@ -13,7 +13,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
   }
 
   alias Lattice.{Log, Op, Sim}
-  alias LatticeCarrierServer.Durability
+  alias LatticeCarrierServer.{Durability, Manifest}
   alias Treehouse.TransportCatalog
 
   setup context do
@@ -61,18 +61,65 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert inputs(f) == before
   end
 
-  test "identical manifest bytes at another listed location refuse", f do
+  test "a manifest copy with identical bytes and resolved resources is accepted", f do
     copy = Path.join(Path.dirname(f.manifest), "copied-manifest.json")
     File.cp!(f.manifest, copy)
     on_exit(fn -> File.rm(copy) end)
     before = inputs(f)
     assert File.read!(copy) == File.read!(f.manifest)
+    assert {:ok, original} = Manifest.load(f.manifest)
+    assert {:ok, copied} = Manifest.load(copy)
+    assert copied.sha256 == original.sha256
+
+    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, copy, f.output)
+    assert {:ok, _} = Packet.decode(File.read!(f.output))
+    assert inputs(f) == before
+  end
+
+  @tag :relative_manifest
+  test "relocated identical relative bytes cannot redirect reads to copied histories", f do
+    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+    assert {:ok, _} = Packet.decode(File.read!(f.output))
+    File.rm!(f.output)
+
+    directory =
+      Path.join([f.root | List.duplicate("relocated", f.relative_manifest_depth + 2)])
+
+    File.mkdir_p!(directory)
+    bytes = File.read!(f.manifest)
+    copy = Path.join(directory, "manifest.json")
+    File.write!(copy, bytes)
+
+    for instance <- Jason.decode!(bytes)["instances"], field <- ~w(log_file identity_file) do
+      original = Path.expand(instance[field], Path.dirname(f.manifest))
+      redirected = Path.expand(instance[field], directory)
+      refute original == redirected
+      File.mkdir_p!(Path.dirname(redirected))
+      File.cp!(original, redirected)
+    end
+
+    assert {:ok, original} = Manifest.load(f.manifest)
+    assert {:ok, relocated} = Manifest.load(copy)
+    assert original.sha256 == relocated.sha256
+
+    refute Enum.map(original.instances, & &1.log_file) ==
+             Enum.map(relocated.instances, & &1.log_file)
+
+    before = inputs(f)
 
     assert {:error, :release_manifest_mismatch} =
              CatalogEvidence.export(f.root, f.ceremony_dir, copy, f.output)
 
     refute File.exists?(f.output)
     assert inputs(f) == before
+  end
+
+  test "a normalized spelling of the listed manifest is accepted", f do
+    manifest = Path.dirname(f.manifest) <> "/./" <> Path.basename(f.manifest)
+    refute manifest == f.manifest
+
+    assert {:ok, _} = CatalogEvidence.export(f.root, f.ceremony_dir, manifest, f.output)
+    assert {:ok, _} = Packet.decode(File.read!(f.output))
   end
 
   test "symlink dot-dot input writes only the validated normalized destination", f do
@@ -272,7 +319,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
 
     Application.put_env(:lattice_carrier_server, key, fn file, path ->
       # Keep the original inode open until its replacement exists, so this also
-      # proves cleanup uses descriptor identity rather than the current pathname.
+      # proves cleanup compares the descriptor's recorded inode to the pathname.
       File.rm!(path)
       File.write!(path, "another process owns this file")
       File.close(file)
@@ -310,6 +357,64 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
              CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
 
     assert File.read!(f.output) == "preserve replacement"
+    assert inputs(f) == before
+  end
+
+  test "replacement after sync or close refuses and preserves both public files", f do
+    key = :catalog_evidence_writer_hook
+    previous = Application.get_env(:lattice_carrier_server, key)
+    before = inputs(f)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:lattice_carrier_server, key, previous),
+        else: Application.delete_env(:lattice_carrier_server, key)
+    end)
+
+    for phase <- [:after_sync, :after_close] do
+      moved = f.output <> ".#{phase}"
+      on_exit(fn -> File.rm(moved) end)
+
+      Application.put_env(:lattice_carrier_server, key, fn
+        _file, path, ^phase ->
+          File.rename!(path, moved)
+          File.write!(path, "preserve replacement")
+          :ok
+
+        _file, _path, _other ->
+          :ok
+      end)
+
+      assert {:error, :evidence_export_failed} =
+               CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+
+      assert File.read!(f.output) == "preserve replacement"
+      assert {:ok, _} = Packet.decode(File.read!(moved))
+      assert inputs(f) == before
+      File.rm!(f.output)
+    end
+  end
+
+  test "truncation after sync refuses before acknowledging the output", f do
+    key = :catalog_evidence_writer_hook
+    previous = Application.get_env(:lattice_carrier_server, key)
+    before = inputs(f)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:lattice_carrier_server, key, previous),
+        else: Application.delete_env(:lattice_carrier_server, key)
+    end)
+
+    Application.put_env(:lattice_carrier_server, key, fn
+      _file, path, :after_sync -> File.write(path, "short")
+      _file, _path, _phase -> :ok
+    end)
+
+    assert {:error, :evidence_export_failed} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.manifest, f.output)
+
+    refute File.exists?(f.output)
     assert inputs(f) == before
   end
 

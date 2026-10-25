@@ -2,7 +2,7 @@
 
 ## Status and dependency
 
-IN PROGRESS. Bounded host reads, exact manifest binding, exclusive output with
+IN PROGRESS. Bounded host reads, bound manifest resources, exclusive output with
 descriptor identity checks and the standalone command are implemented. Final
 current-tip Linux and hosted gates remain before completion.
 
@@ -30,7 +30,9 @@ remain parked separately; software gates use disposable real-mode fixtures.
 ## Public interfaces and decisions
 
 - `CatalogEvidence.export(root, ceremony_dir, manifest_path, output_path)` reads
-  a current `listed` journal and the exact manifest whose normalized path and digest it records. The
+  a current `listed` journal and a manifest matching the archived candidate's exact
+  bytes and resolved identity/log resources. The archived artifact path is not the
+  active configuration filename; copied bytes must not change resource resolution. The
   explicit manifest argument makes the standalone command usable without starting
   another relay VM. It never accepts routes, a signer key or a caller verdict.
 - From `apps/lattice_carrier_server`, run
@@ -53,8 +55,9 @@ remain parked separately; software gates use disposable real-mode fixtures.
 ## Construction and observation
 
 1. Read canonical journal bytes at listed; verify private root and exact artifact
-   metadata. Capture the named manifest and require its hash to equal the listed
-   manifest artifact. Reuse Manifest loading and its existing service-identity
+   metadata. Capture the named manifest and require its hash and resolved resource
+   view to equal the listed archived manifest artifact loaded in its original
+   staging context. Reuse Manifest loading and its existing service-identity
    handling, without exporting any seed or invoking a signer.
 2. Read/authenticate every relevant log under its target lock with bounded reads.
    Derive the one Space from the receipt and verify its public ceremony using
@@ -101,11 +104,14 @@ directory policy (owned by this user/root, no writable group/other or symlink
 ancestors), preventing aliases into protected inputs. Reject protected input
 targets/subtrees. Check that the descriptor and output pathname still identify
 the created regular file, with one link, the creator's owner and mode 0600,
-before writing and after syncing; check the pathname again after closing and
+before writing and after syncing, with exact output size after the write; check the pathname again after closing and
 before reporting success. A replaced or removed output refuses without deleting
 the replacement. This is a check at completion, not a guarantee against later
-mutation by another process. Sync and close the file;
-on failure remove only the file this call created, never another process's file.
+mutation by another process. Path-based chmod retains the declared same-UID
+trust assumption. Sync and close the file; on write failure remove only the file
+this call created while the descriptor still pins its inode. A close or final
+acknowledgement failure preserves the uncertain public file for operator inspection,
+never removing a replacement based on an inode number after releasing the descriptor.
 Output bytes repeat exactly for unchanged inputs. No journal, catalog, log, identity
 or ceremony artifact is mutated. Do not start a listener or add a network action.
 
