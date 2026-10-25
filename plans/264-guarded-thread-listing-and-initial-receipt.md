@@ -5,8 +5,7 @@
 IN PROGRESS: holder APIs, guarded pending/initial listing and the closed local command
 flow are implemented. Full local mix check, both boundary security scans and 483 non-root Linux
 operator/carrier tests pass. Independent spec/standards reviews are resolved.
-Remaining full-API crash/refusal cases, external focused confirmation and hosted
-final gates remain.
+Full-API crash/refusal cases are implemented and verifying; hosted final gates remain.
 
 Prepared 2026-10-24 from then-current main. This is plan 224 PR 5, now rebased onto
 merged catalog publication PR #168 (plan 263). Its exact tested tree and merge ancestry
@@ -268,13 +267,3 @@ matrix, supported command flow, reviews and exact-tip required checks pass, with
 verified merge tree. Record evidence in PR/index. The operator's real ceremony/listed
 run is separate. Next: plan 245 native catalog evaluation/trust enrollment and plan 261
 ordinary-app relay integration; listed server evidence alone does not enable app chat.
-
-## Current verification checkpoint
-
-Full `mix check` passed after the stale-incarnation retry fix. Both boundary Sobelow
-scans passed. The actual non-root Linux operator/carrier matrix passed 483 tests.
-Independent spec review found the retry gap; its focused confirmation resolves it.
-Standards review found no documented violation or P1/P2. All five external P2 findings
-were fixed; the follow-up service returned quota exhaustion, not a review verdict.
-Missing-initial/bootstrap-fork and full-API holder-death boundaries remain explicit
-evidence work before software completion; existing holder-level crash tests pass.

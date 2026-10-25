@@ -3,7 +3,8 @@ defmodule LatticeCarrierServer.Operator.ReleaseListingTest do
   if :os.type() != {:unix, :linux}, do: @moduletag(skip: "Requires actual Linux operator owner")
 
   alias Lattice.{Identity, Log, Op, Sim}
-  alias Lattice.Carrier.WebSocket
+  alias Lattice.Carrier.{WebSocket, Wire}
+  alias Lattice.Transport.WebSocket.Client
   alias LatticeCarrierServer.{Holder, Listener, Manifest, ProbeRealm, Runtime}
 
   alias LatticeCarrierServer.Operator.{
@@ -18,6 +19,43 @@ defmodule LatticeCarrierServer.Operator.ReleaseListingTest do
 
   alias Treehouse.CatalogEntries
 
+  defmodule KillBoundaryDurability do
+    @behaviour LatticeCarrierServer.Durability
+    alias LatticeCarrierServer.Durability.Posix
+
+    def arm(dir, phase, observer),
+      do: :persistent_term.put({__MODULE__, dir}, {phase, observer})
+
+    def clear(dir), do: :persistent_term.erase({__MODULE__, dir})
+
+    @impl true
+    def sync_file(path) do
+      with :ok <- Posix.sync_file(path), do: boundary(Path.dirname(path), :before_rename)
+    end
+
+    @impl true
+    def rename(from, to), do: Posix.rename(from, to)
+
+    @impl true
+    def sync_directory(dir) do
+      with :ok <- Posix.sync_directory(dir), do: boundary(dir, :after_rename)
+    end
+
+    defp boundary(dir, phase) do
+      case :persistent_term.get({__MODULE__, dir}, nil) do
+        {^phase, observer} ->
+          send(observer, {:listing_write_boundary, phase, self()})
+
+          receive do
+            :continue -> :ok
+          end
+
+        _ ->
+          :ok
+      end
+    end
+  end
+
   setup context do
     PublicationFixture.catalogued(context)
   end
@@ -31,6 +69,17 @@ defmodule LatticeCarrierServer.Operator.ReleaseListingTest do
     with_probe(f, fn conn ->
       assert {:error, {:peer_error, "read_only"}} = WebSocket.push(conn, [f.reference])
     end)
+
+    with_member(f, fn conn ->
+      assert {:ok, %{"type" => "error", "reason" => "read_only"}} =
+               Client.request_envelope(conn.client, %{
+                 type: "courier",
+                 op: Wire.encode_op(f.reference)
+               })
+    end)
+
+    {:ok, %{log: unchanged}} = Log.restore_verified(f.active_log)
+    assert unchanged == before
 
     assert {:ok, listed} = ReleaseListing.publish(f.root, f.catalogued, f.ceremony_dir, f.probe)
     assert listed["phase"] == "listed"
@@ -90,6 +139,64 @@ defmodule LatticeCarrierServer.Operator.ReleaseListingTest do
     assert file_snapshot(f.active_log) == before
     assert elem(Journal.read(f.root), 1) == journal
     assert File.read!(Journal.history_path(f.root)) == history
+  end
+
+  @tag :initial
+  test "missing initial reference refuses without appending a replacement", f do
+    :ok = Application.stop(:lattice_carrier_server)
+    without_reference = Sim.log(f.space, "creator")
+    refute Map.has_key?(without_reference.ops, f.reference.id)
+    assert :ok = Log.verify_authenticity(without_reference)
+    assert :ok = Log.dump(without_reference, f.active_log)
+    assert {:ok, _} = Application.ensure_all_started(:lattice_carrier_server)
+    before = file_snapshot(f.active_log)
+
+    assert {:error, :reference_not_honored} =
+             ReleaseListing.publish(f.root, f.catalogued, f.ceremony_dir, f.probe)
+
+    assert file_snapshot(f.active_log) == before
+    assert {:ok, f.catalogued} == Journal.read(f.root)
+  end
+
+  test "a second root-authored bootstrap refuses before delivering the pending reference", f do
+    {:ok, %{log: current}} = Log.restore_verified(f.active_log)
+    owner = Sim.identity(f.space, "creator")
+
+    record = %{
+      f.binding.record
+      | nonce: Base.url_encode64(:crypto.hash(:sha256, "fork-bootstrap"), padding: false)
+    }
+
+    fork =
+      Op.new(
+        owner,
+        current.replica,
+        Log.frontier(current),
+        :command,
+        {:catalog_bootstrap_v1, [record]},
+        cap: f.reference.cap
+      )
+
+    relay_ops(f, [fork])
+    {:ok, %{log: forked}} = Log.restore_verified(f.active_log)
+    assert {:ok, %{bootstraps: bootstraps}} = Treehouse.CatalogBootstrap.observe(forked)
+    assert length(bootstraps) == 2
+    before = file_snapshot(f.active_log)
+
+    assert {:error, :binding_fork} =
+             ReleaseListing.publish(f.root, f.catalogued, f.ceremony_dir, f.probe)
+
+    assert file_snapshot(f.active_log) == before
+    assert {:ok, f.catalogued} == Journal.read(f.root)
+    {:ok, %{log: actual}} = Log.restore_verified(f.active_log)
+    refute Map.has_key?(actual.ops, f.reference.id)
+  end
+
+  for phase <- [:before_rename, :after_rename] do
+    @tag :listing_boundary
+    test "holder death #{phase} recovers through controlled restart and exact listing retry", f do
+      holder_death!(f, unquote(phase))
+    end
   end
 
   test "a stale intent or changed reference artifact cannot advance the journal", f do
@@ -457,6 +564,52 @@ defmodule LatticeCarrierServer.Operator.ReleaseListingTest do
 
     assert file_snapshot(f.active_log) == before
     assert {:ok, f.catalogued} == Journal.read(f.root)
+  end
+
+  defp holder_death!(f, phase) do
+    holder = GenServer.whereis(Holder.via(space_instance(f).name))
+    assert :ok = Holder.prove_durability(holder)
+    :sys.replace_state(holder, &%{&1 | durability: KillBoundaryDurability})
+    dir = Path.dirname(f.active_log)
+    KillBoundaryDurability.arm(dir, phase, self())
+    on_exit(fn -> KillBoundaryDurability.clear(dir) end)
+    observer = self()
+    journal_history = File.read!(Journal.history_path(f.root))
+
+    spawn(fn ->
+      send(
+        observer,
+        {:listing_after_holder_death,
+         ReleaseListing.publish(f.root, f.catalogued, f.ceremony_dir, f.probe)}
+      )
+    end)
+
+    assert_receive {:listing_write_boundary, ^phase, worker}, 10_000
+    monitor = Process.monitor(worker)
+    Process.exit(holder, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 2_000
+    assert_receive {:listing_after_holder_death, {:error, :courier_outcome_unknown}}, 2_000
+    assert {:ok, f.catalogued} == Journal.read(f.root)
+    assert File.read!(Journal.history_path(f.root)) == journal_history
+    {:ok, %{log: disk}} = Log.restore_verified(f.active_log)
+    assert Map.has_key?(disk.ops, f.reference.id) == (phase == :after_rename)
+    KillBoundaryDurability.clear(dir)
+
+    ActivationFixture.restart!()
+    assert {:ok, listed} = ReleaseListing.publish(f.root, f.catalogued, f.ceremony_dir, f.probe)
+    assert listed["phase"] == "listed"
+    {:ok, %{log: recovered}} = Log.restore_verified(f.active_log)
+    assert recovered.ops[f.reference.id] == f.reference
+    assert Log.size(recovered) == Log.size(disk) + if(phase == :before_rename, do: 1, else: 0)
+    history = File.read!(Journal.history_path(f.root))
+
+    assert length(String.split(history, "\n", trim: true)) ==
+             length(String.split(journal_history, "\n", trim: true)) + 1
+
+    snapshot = file_snapshot(f.active_log)
+    assert {:ok, ^listed} = ReleaseListing.publish(f.root, f.catalogued, f.ceremony_dir, f.probe)
+    assert file_snapshot(f.active_log) == snapshot
+    assert File.read!(Journal.history_path(f.root)) == history
   end
 
   defp await_probe_expiry(instance, deadline) do
