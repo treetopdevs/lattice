@@ -266,11 +266,12 @@ defmodule Lattice.Log do
 
   @doc "Serialize the whole log deterministically (ops + structural quarantine) to disk."
   @spec dump(t(), Path.t()) :: :ok | {:error, term()}
-  def dump(%__MODULE__{} = log, path) do
-    File.write(
-      path,
-      :erlang.term_to_binary({:lattice_log_dump_v1, downgrade_structs(log)}, [:deterministic])
-    )
+  def dump(%__MODULE__{} = log, path), do: File.write(path, dump_bytes(log))
+
+  @doc "The deterministic dump bytes, for callers that require an exclusive durable file writer."
+  @spec dump_bytes(t()) :: binary()
+  def dump_bytes(%__MODULE__{} = log) do
+    :erlang.term_to_binary({:lattice_log_dump_v1, downgrade_structs(log)}, [:deterministic])
   end
 
   # The dump-side mirror of `upgrade_structs/1`: a nil-lease delegation dumps in

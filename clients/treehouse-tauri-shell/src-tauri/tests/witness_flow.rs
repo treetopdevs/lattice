@@ -375,7 +375,11 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
         )
         .is_err());
     cancel_release_tx.send(()).unwrap();
-    for _ in 0..100 {
+    // Worker scheduling is not the contract. Wait for the observed slot-release
+    // condition with a bounded deadline, rather than assuming 100 one-ms sleeps
+    // are enough while hosted runners compile and run the full native suite.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
         if let Ok(next) = flow.execute(
             view.clone(),
             witness_public::PublicRequest::Identity,

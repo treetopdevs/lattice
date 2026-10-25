@@ -79,10 +79,37 @@ defmodule LatticeCarrierServer.Operator.JournalParityTest do
     op = one["op_id"]
     manifest = hd(base()["artifacts"])
     staged = fn n -> for i <- 1..n, do: %{manifest | "path" => "/operator/attempt/m#{i}"} end
+
+    reference = %{
+      one
+      | "kind" => "reference",
+        "path" => "/operator/attempt/reference",
+        "review" => %{"mode" => "initial_existing"}
+    }
+
+    initial = fn phase ->
+      artifacts = if phase in ["catalogued", "listed"], do: [reference, one], else: [reference]
+      with_catalog(phase, artifacts, if(phase in ["catalogued", "listed"], do: op, else: nil))
+    end
+
     review = %{"creation" => op, "grants" => [], "profile_genesis" => op, "profile_id" => op}
 
     [
       {"carrier_pending", phase.("carrier_pending"), true},
+      {"initial pending", initial.("carrier_pending"), true},
+      {"initial activated", initial.("activated"), true},
+      {"initial ready", initial.("ready"), true},
+      {"initial publication gated", initial.("catalogued"), false},
+      {"initial listing gated", initial.("listed"), false},
+      {"unknown reference mode",
+       with_catalog("ready", [%{reference | "review" => %{"mode" => "unknown"}}], nil), false},
+      {"reference mode extra field",
+       Jason.encode!(%{
+         base()
+         | "artifacts" => [
+             %{reference | "review" => %{"mode" => "initial_existing", "extra" => true}}
+           ]
+       }), false},
       {"activated", phase.("activated"), true},
       {"ready", phase.("ready"), true},
       {"catalogued bare", phase.("catalogued"), false},

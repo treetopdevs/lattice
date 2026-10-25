@@ -25,14 +25,35 @@ defmodule LatticeCarrierServer.Operator.CatalogBinding do
           {:ok, %{bootstrap_id: String.t(), record: map(), realm: String.t(), attested: map()}}
           | {:error, atom()}
   def load(ceremony_dir, space_log_path) do
-    ingest(ceremony_dir, space_log_path)
+    ingest(ceremony_dir, {:path, space_log_path})
   rescue
     _ -> {:error, :ceremony_artifact_malformed}
   catch
     _, _ -> {:error, :ceremony_artifact_malformed}
   end
 
-  defp ingest(ceremony_dir, space_log_path) do
+  @doc "Verify a public imported log against the same finished ceremony without writing a served file."
+  @spec load_log(term(), Log.t()) :: {:ok, map()} | {:error, atom()}
+  def load_log(ceremony_dir, log) do
+    ingest(ceremony_dir, {:log, log})
+  rescue
+    _ -> {:error, :ceremony_artifact_malformed}
+  catch
+    _, _ -> {:error, :ceremony_artifact_malformed}
+  end
+
+  defp imported_source({:path, path}), do: served(path)
+
+  defp imported_source({:log, %Log{} = log}) do
+    case Log.verify_authenticity(log) do
+      :ok -> {:ok, log}
+      _ -> {:error, :invalid_space_log}
+    end
+  end
+
+  defp imported_source(_), do: {:error, :invalid_space_log}
+
+  defp ingest(ceremony_dir, source) do
     with {:ok, dir} <- Store.ceremony([ceremony: ceremony_dir], :real),
          {:ok, signer_key, _signer} <- Signer.load(dir, :real),
          {:ok, _payload, record, sha} <- Binding.load_payload(dir, signer_key),
@@ -41,7 +62,7 @@ defmodule LatticeCarrierServer.Operator.CatalogBinding do
          {:ok, report} <- report(dir),
          :ok <-
            Store.undisposable([record.catalog_key, record.service_key, record.space_root], :real),
-         {:ok, log} <- served(space_log_path),
+         {:ok, log} <- imported_source(source),
          :ok <- Binding.profile_unchanged(log, record),
          {:ok, id} <- honored(log, record),
          :ok <- same(binding["bootstrap_id"], id),

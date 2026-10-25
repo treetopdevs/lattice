@@ -156,7 +156,7 @@ def artifact_record(a):
     if a["kind"] == "catalog":
         return a["review"] is None and a["replica"] != ""
     if a["kind"] == "reference":
-        return a["review"] is None
+        return a["review"] is None or a["review"] == {"mode": "initial_existing"}
     r = a["review"]
     return (closed(r, ["creation", "profile_genesis", "profile_id", "grants"])
             and all(op_id(r[k]) for k in ("creation", "profile_genesis", "profile_id"))
@@ -222,6 +222,9 @@ def record(raw):
     if len(r["artifacts"]) - len(catalogs) > 128:
         refuse("corrupt_operator_journal")
     if r["phase"] in ("catalogued", "listed"):
+        if any(a["kind"] == "reference" and a["review"] == {"mode": "initial_existing"}
+               for a in r["artifacts"]):
+            refuse("corrupt_operator_journal")
         if len(catalogs) != 1 or r["catalog_head"] != catalogs[0]["op_id"]:
             refuse("corrupt_operator_journal")
     elif catalogs:
@@ -237,7 +240,9 @@ def canonical(r):
     artifacts = []
     for a in r["artifacts"]:
         a = pick(a, ["kind", "op_id", "path", "replica", "review", "sha256"])
-        if a["review"] is not None:
+        if a["kind"] == "reference" and a["review"] is not None:
+            a["review"] = pick(a["review"], ["mode"])
+        elif a["review"] is not None:
             review = pick(a["review"], ["creation", "grants", "profile_genesis", "profile_id"])
             review["grants"] = [pick(g, ["delegation", "introduction", "recipient"]) for g in review["grants"]]
             a["review"] = review

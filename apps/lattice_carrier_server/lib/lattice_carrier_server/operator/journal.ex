@@ -163,6 +163,8 @@ defmodule LatticeCarrierServer.Operator.Journal do
 
   defp canonical_review(nil), do: nil
 
+  defp canonical_review(%{"mode" => mode}), do: OrderedObject.new([{"mode", mode}])
+
   defp canonical_review(review) do
     OrderedObject.new(Enum.map(@review_fields, &{&1, canonical_review_field(&1, review[&1])}))
   end
@@ -215,7 +217,8 @@ defmodule LatticeCarrierServer.Operator.Journal do
       r["generation"] < 9_007_199_254_740_991 and
       (r["catalog_head"] == nil or op_id?(r["catalog_head"])) and
       digest?(r["manifest_digest"]) and artifacts?(r["artifacts"]) and
-      service?(r["service"]) and catalog_coupling?(r)
+      service?(r["service"]) and catalog_coupling?(r) and
+      LatticeCarrierServer.Operator.ReferenceMode.phase_allowed?(r["phase"], r["artifacts"])
   end
 
   defp valid?(_), do: false
@@ -283,7 +286,9 @@ defmodule LatticeCarrierServer.Operator.Journal do
 
   defp artifact?(_), do: false
 
-  defp review?(%{"kind" => "reference", "review" => nil}), do: true
+  defp review?(%{"kind" => "reference", "review" => review}),
+    do: LatticeCarrierServer.Operator.ReferenceMode.valid_review?(review)
+
   defp review?(%{"kind" => "catalog", "review" => nil, "replica" => replica}), do: replica != ""
 
   defp review?(%{"kind" => "log", "review" => r}) when is_map(r) do

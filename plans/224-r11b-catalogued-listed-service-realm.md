@@ -194,7 +194,7 @@ envelope may exist, else `stale_catalog_head`.
 
 ## Design 4: `catalogued`
 
-**Signing location is OD-2.** Recommended (b): the carrier host never holds the seed.
+**Signing location is OD-2.** Recommended (b): the carrier host never holds the seed. Designs 2/4/5 adopt plan 262 and lifecycle §5 for initial-only existing references: re-observe exact current evidence, gate catalog/listing until guarded consumers exist, and never write the reference twice.
 
 - (a) `ReleaseCatalog.publish(root, expected, ceremony_dir, probe_file, signer_file)` reads the seed
   with `Signer.read_seed` plus the `Paths.signer` ancestor checks, requires its public key to equal
