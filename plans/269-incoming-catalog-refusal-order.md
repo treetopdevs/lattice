@@ -67,12 +67,24 @@ A separate RED found the catalog mirror charged a flat delegation leaf at zero
 remaining generic depth despite ordinary Wire accepting it; the mirror now matches
 that unchanged Wire rule. Map-depth and flat-leaf boundary cases pass through both
 actual APIs, with the depth-64 delegation case independently decoded by Wire.
-These follow-up fixes await focused review and full final gates.
+Both independent reviewers confirm these follow-up fixes; full final gates remain.
 
 These checkpoints do not complete the broader matrix below. Full independent producer boundary coverage, complete history/page aggregate limits
-and stored/reopen behavior
 still need explicit full parity proof before completion and native adoption. The saved diagnostic evidence is
 marked as captured before this correction; its old verdicts are not an oracle.
+
+A recovery checkpoint uses fresh independent TypeScript and BEAM producers and both
+actual owners to
+accept revision 1 with two routes, freeze on a genuine catalog fork, and reopen
+serialized snapshots. Incoming boundary failures preserve accepted watermarks,
+exact retained frames and rejection records, and sticky blocks. Corrupt stored
+signatures, unsupported stored depth and inconsistent watermarks require recovery
+even when incoming evidence could repair them. Review tightened explicit successful
+reopen assertions and exact evidence preservation. Both producer directions pass;
+both independent reviewers confirm the sources. Final full gates remain open. The first
+full refresh passed all tests but strict lint found one nested test helper; the
+test orchestration is now split into shallow assertion helpers. Final focused
+recovery tests and strict lint pass after that cleanup; final combined gates remain.
 
 ## Reproduced problem
 
