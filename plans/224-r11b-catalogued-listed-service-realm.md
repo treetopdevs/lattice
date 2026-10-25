@@ -10,7 +10,7 @@
 >
 > **Drift check (run first)**: `git log --oneline 1cebccd03..HEAD -- scripts/treehouse_operator_mutation.py
 > apps/lattice_carrier_server/lib apps/lattice_core/lib/treehouse clients/lattice-client/src/treehouse_catalog_*.ts`.
-> For PR 4, plan 263 rebases this drift check to ba7f23f49; unexplained later phase/owner/manifest/trust changes require reconciliation.
+> For PR 4, plan 263 rebases this drift check to 187cc3d8a; unexplained later phase/owner/manifest/trust changes require reconciliation.
 
 ## Status
 

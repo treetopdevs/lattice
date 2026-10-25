@@ -4,13 +4,16 @@
 
 Implementation packet prepared 2026-10-24 from main
 `ba7f23f49bff3257f57747ae6a0766e4786eb2c6`, after merged PRs #165 and #166.
+Execution rebased onto `187cc3d8a77242cbca0fa1d6916af10fc1d6ef0c` after #167;
+all 29 implementation files were byte-identical across rebase.
 Implements plan 224 PR 4 in full: prepare, independent custodian verification/signing,
 commit, and crash-safe `catalogued` publication. Shared read-only release review is
 implemented, together with authenticated public histories and the signing package
 verifier. Custodian ledger/signing APIs now have replay, refusal and kill-boundary
 tests and CLI controls. Relay prepare/commit now have live pending/initial-reference
 rehearsals. Carried-entry and 13/14 capacity rehearsals pass; the relay command
-adapter and restaging status guard are implemented. Complete crash/final gates remain.
+adapter and restaging status guard are implemented. Final crash tests pass locally
+and on Linux; rebased final checks and adversarial publication review remain.
 Custody P1 fixes are confirmed; this is not yet a completed publication slice.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 
@@ -23,10 +26,10 @@ second-host backup and public relay remain operational prerequisites in plan 224
 ## Rebaseline and invariants
 
 Read plans/README.md, plan 224 Designs 3–5, plan 262 and lifecycle §5 first.
-Run `git log --oneline ba7f23f49..HEAD -- scripts/treehouse_operator_mutation.py
+Run `git log --oneline 187cc3d8a..HEAD -- scripts/treehouse_operator_mutation.py
 apps/lattice_carrier_server/lib apps/lattice_core/lib/treehouse` before implementation.
 Plan 224's older baseline predates its merged realm, store and initial-reference work;
-those changes are accepted prerequisites here. Unexplained subsequent journal, manifest,
+those changes, plus merged ordinary offline enrollment #167, are accepted prerequisites here. Unexplained subsequent journal, manifest,
 owner, catalog or authority changes require reconciling this packet before implementation.
 Do not change Authority, Wire, signed catalog bytes, trust rules or client networking.
 
