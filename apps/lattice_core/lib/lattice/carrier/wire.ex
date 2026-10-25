@@ -19,6 +19,7 @@ defmodule Lattice.Carrier.Wire do
   alias Lattice.Authority.Delegation
   alias Lattice.Canonical
   alias Lattice.Canonical.Atom, as: CanonicalAtom
+  alias Lattice.Carrier.RawObservationBounds
   alias Lattice.Carrier.WireVocabulary
   alias Lattice.Op
 
@@ -130,7 +131,7 @@ defmodule Lattice.Carrier.Wire do
   """
   @spec authenticate_observation(term()) :: {:ok, map()} | {:error, :malformed_op}
   def authenticate_observation(frame) do
-    with true <- Lattice.Carrier.RawObservationBounds.within?(frame),
+    with true <- RawObservationBounds.within?(frame),
          true <- is_map(frame) and map_size(frame) == 9,
          %{
            "v" => 1,

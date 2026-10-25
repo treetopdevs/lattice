@@ -1421,18 +1421,7 @@ defmodule Treehouse.CatalogTrust do
         unless Continuation.family(history.replica) in [{:bounded, :space}, {:bounded, :thread}],
           do: refuse(:wrong_catalog_scope)
 
-        frames =
-          Enum.map(history.frames, fn frame ->
-            case Wire.authenticate_observation(frame) do
-              {:ok, %{replica: replica} = proof} when replica == history.replica ->
-                if Enum.all?(proof.deps, &text?/1),
-                  do: proof,
-                  else: refuse(:invalid_verified_history)
-
-              _ ->
-                refuse(:invalid_verified_history)
-            end
-          end)
+        frames = Enum.map(history.frames, &authenticate_incoming_frame!(&1, history.replica))
 
         ids = Enum.map(frames, & &1.id)
         if duplicate?(ids), do: refuse(:invalid_verified_history)
@@ -1450,6 +1439,16 @@ defmodule Treehouse.CatalogTrust do
     if Enum.any?(rejected, &match?({:invalid, _}, &1)), do: refuse(:invalid_verified_history)
     if Enum.any?(rejected, &match?({:unsupported, _}, &1)), do: refuse(:unsupported_cutoff)
     if missing != [], do: refuse(:trust_pending, missing)
+  end
+
+  defp authenticate_incoming_frame!(frame, replica) do
+    case Wire.authenticate_observation(frame) do
+      {:ok, %{replica: ^replica} = proof} ->
+        if Enum.all?(proof.deps, &text?/1), do: proof, else: refuse(:invalid_verified_history)
+
+      _ ->
+        refuse(:invalid_verified_history)
+    end
   end
 
   defp history_shape?(history) do
