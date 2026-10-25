@@ -8,7 +8,8 @@ pending dependency, not merged implementation or a native trust claim. Keep late
 PRs based on the codec branch until its required external review and merge finish;
 then rebase onto the verified main and run the exact-tip gate.
 
-The first implementation checkpoint is an authenticated DAG for the later fold.
+The first implementation checkpoint is an authenticated DAG for the later fold;
+it is implemented, locally checked and independently reviewed.
 It supplies signature/hash verification, causal closure, deterministic order and
 read-only ancestor queries. It deliberately cannot report authority, membership,
 a catalog decision or a route. Completing that checkpoint does not complete this
