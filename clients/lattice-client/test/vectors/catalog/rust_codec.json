@@ -1,0 +1,418 @@
+{
+  "catalog_bytes": "glgmbGF0dGljZS10cmVlaG91c2UtdHJhbnNwb3J0LWNhdGFsb2ctdjGo2epgRXNwYWNlWCF0cmVlaG91c2U6c3BhY2U6cnVzdC1uYXRpdmUtY29kZWPZ6mBHYmluZGluZ1grTkEtTk9YRkVjRU11LVVLOG1yanBWZDBhSGl4Z21DWEkyOENkUm5sLWMxb9nqYEdlbnRyaWVzgavZ6mBEa2luZNnqYEVzcGFjZdnqYERyb290WCAZf2sj4WyFMsaryDj6zV6nib4MdrKSAzQDm/qLPTaNYdnqYEVyb3V0ZVguL3IvZVFrM2o1T0ZkNTNMeEgxVk0waTQ3TXZIcUNVdkhSNk5ZcmlSLWMxTTlNONnqYEZzY2hlbWHZ6mBSdHJlZWhvdXNlX3NwYWNlX3Yx2epgR2dlbmVzaXNYK2JQWjgxQ2Y5VExOUmtodTBIamtWYmhUS2Z4a0ZISlJyNTJISW9ZMk5zLTDZ6mBHcHJvZHVjdNnqYEl0cmVlaG91c2XZ6mBHcmVwbGljYVghdHJlZWhvdXNlOnNwYWNlOnJ1c3QtbmF0aXZlLWNvZGVj2epgSGNyZWF0aW9uWCtsNnU1N0szU1JLYnpsdllSUlBlVzBaT3h6OEp6dHNrb2lXbFhMVWhHdWw02epgSXJlZmVyZW5jZVgrTkEtTk9YRkVjRU11LVVLOG1yanBWZDBhSGl4Z21DWEkyOENkUm5sLWMxb9nqYEpzZXJ2aWNlX2lkWCswZ0QxcE9rWnljeGliR19Rc3JBY215UkwyaVotTUFKUDFNNHRGSkNvR2Fn2epgS3NlcnZpY2Vfa2V5WCDQSrIydCu0qzoTaL1GFeTm0CJKtxoBa6+FIKMyyXeHN9nqYEdwcm9kdWN02epgSXRyZWVob3VzZdnqYEd2ZXJzaW9uAdnqYEhwcmV2aW91c1grbU9LMmdWajVrX1d3bkhXWEJnd2JUd2dISXEtMWVXUkxXNGV1YTJVYXdqTdnqYEhyZXZpc2lvbgHZ6mBJYm9vdHN0cmFwWCtOQS1OT1hGRWNFTXUtVUs4bXJqcFZkMGFIaXhnbUNYSTI4Q2RSbmwtYzFv",
+  "catalog_envelope_term": [
+    "map",
+    [
+      [
+        [
+          "atom",
+          "catalog"
+        ],
+        [
+          "map",
+          [
+            [
+              [
+                "atom",
+                "version"
+              ],
+              [
+                "int",
+                1
+              ]
+            ],
+            [
+              [
+                "atom",
+                "product"
+              ],
+              [
+                "atom",
+                "treehouse"
+              ]
+            ],
+            [
+              [
+                "atom",
+                "space"
+              ],
+              [
+                "bin",
+                "dHJlZWhvdXNlOnNwYWNlOnJ1c3QtbmF0aXZlLWNvZGVj"
+              ]
+            ],
+            [
+              [
+                "atom",
+                "bootstrap"
+              ],
+              [
+                "bin",
+                "TkEtTk9YRkVjRU11LVVLOG1yanBWZDBhSGl4Z21DWEkyOENkUm5sLWMxbw=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "binding"
+              ],
+              [
+                "bin",
+                "TkEtTk9YRkVjRU11LVVLOG1yanBWZDBhSGl4Z21DWEkyOENkUm5sLWMxbw=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "revision"
+              ],
+              [
+                "int",
+                1
+              ]
+            ],
+            [
+              [
+                "atom",
+                "previous"
+              ],
+              [
+                "bin",
+                "bU9LMmdWajVrX1d3bkhXWEJnd2JUd2dISXEtMWVXUkxXNGV1YTJVYXdqTQ=="
+              ]
+            ],
+            [
+              [
+                "atom",
+                "entries"
+              ],
+              [
+                "list",
+                [
+                  [
+                    "map",
+                    [
+                      [
+                        [
+                          "atom",
+                          "product"
+                        ],
+                        [
+                          "atom",
+                          "treehouse"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "replica"
+                        ],
+                        [
+                          "bin",
+                          "dHJlZWhvdXNlOnNwYWNlOnJ1c3QtbmF0aXZlLWNvZGVj"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "kind"
+                        ],
+                        [
+                          "atom",
+                          "space"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "schema"
+                        ],
+                        [
+                          "atom",
+                          "treehouse_space_v1"
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "root"
+                        ],
+                        [
+                          "bin",
+                          "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "genesis"
+                        ],
+                        [
+                          "bin",
+                          "YlBaODFDZjlUTE5Sa2h1MEhqa1ZiaFRLZnhrRkhKUnI1MkhJb1kyTnMtMA=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "creation"
+                        ],
+                        [
+                          "bin",
+                          "bDZ1NTdLM1NSS2J6bHZZUlJQZVcwWk94ejhKenRza29pV2xYTFVoR3VsNA=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "reference"
+                        ],
+                        [
+                          "bin",
+                          "TkEtTk9YRkVjRU11LVVLOG1yanBWZDBhSGl4Z21DWEkyOENkUm5sLWMxbw=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "route"
+                        ],
+                        [
+                          "bin",
+                          "L3IvZVFrM2o1T0ZkNTNMeEgxVk0waTQ3TXZIcUNVdkhSNk5ZcmlSLWMxTTlNOA=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_id"
+                        ],
+                        [
+                          "bin",
+                          "MGdEMXBPa1p5Y3hpYkdfUXNyQWNteVJMMmlaLU1BSlAxTTR0RkpDb0dhZw=="
+                        ]
+                      ],
+                      [
+                        [
+                          "atom",
+                          "service_key"
+                        ],
+                        [
+                          "bin",
+                          "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc="
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ],
+      [
+        [
+          "atom",
+          "signature"
+        ],
+        [
+          "bin",
+          "D718+ChDw3d/6peordYzYi1Ru3p+kpBBICIIddINOQEdGgW5lqBv6WPEbfB2UjTjhCfSpD/Wher49Nx4wMOyBg=="
+        ]
+      ]
+    ]
+  ],
+  "catalog_id": "dookZMCgHUbCdE0EbpdYKLxdTO9hd7y--Ro1voioIOg",
+  "expected_catalog_key": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+  "frame": {
+    "author": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+    "body": [
+      "tuple",
+      [
+        [
+          "atom",
+          "post"
+        ],
+        [
+          "bin",
+          "UnVzdCDihpIgQkVBTSAvIFRTOiDpm6rvu78="
+        ]
+      ]
+    ],
+    "cap": [
+      "nil"
+    ],
+    "deps": [],
+    "id": "sv3sVgBhW0y90lShrtv0yRhFWxHaY5RFK0W1yuN9H3I",
+    "kind": "command",
+    "replica": "treehouse:space:rust-native-codec",
+    "sig": "jPXivxKBw3XLbhVZK+T13kOC6B/FAffvz86nYPqLO/s/L1Z4zZUSpDoprKf3t21JefF7wmQlRoPWjVQUsA/eBg==",
+    "v": 1
+  },
+  "terms": [
+    {
+      "bytes": "9g==",
+      "term": [
+        "nil"
+      ]
+    },
+    {
+      "bytes": "9Q==",
+      "term": [
+        "bool",
+        true
+      ]
+    },
+    {
+      "bytes": "G///////////",
+      "term": [
+        "int",
+        "18446744073709551615"
+      ]
+    },
+    {
+      "bytes": "TlVuaWNvZGU66Zuq77u/",
+      "term": [
+        "bin",
+        "VW5pY29kZTrpm6rvu78="
+      ]
+    },
+    {
+      "bytes": "2epgS1VuaWNvZGU66Zuq",
+      "term": [
+        "atom",
+        "Unicode:雪"
+      ]
+    },
+    {
+      "bytes": "2ephgvb0",
+      "term": [
+        "tuple",
+        [
+          [
+            "nil"
+          ],
+          [
+            "bool",
+            false
+          ]
+        ]
+      ]
+    },
+    {
+      "bytes": "okAaAAEAANnqYERraW5kGBg=",
+      "term": [
+        "map",
+        [
+          [
+            [
+              "atom",
+              "kind"
+            ],
+            [
+              "int",
+              24
+            ]
+          ],
+          [
+            [
+              "bin",
+              ""
+            ],
+            [
+              "int",
+              65536
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "bytes": "2epiggAZAQA=",
+      "term": [
+        "mapset",
+        [
+          [
+            "int",
+            256
+          ],
+          [
+            "int",
+            0
+          ]
+        ]
+      ]
+    },
+    {
+      "bytes": "2epjiVgrVWhTX1kzY1gzYlNBN01WVXN1eE1QNW9MUWdYdnl5Y1UxS0xhYXRUMnV4b1ghdHJlZWhvdXNlOnNwYWNlOnJ1c3QtbmF0aXZlLWNvZGVjWCAZf2sj4WyFMsaryDj6zV6nib4MdrKSAzQDm/qLPTaNYVgg0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzf2gtnqYEthdXRob3JfZWRpdNnqYERwb3N0gtnqYEVhZG1pbtnqYEltb2RlcmF0b3L1WEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "term": [
+        "delegation",
+        {
+          "audience": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc=",
+          "id": "UhS_Y3cX3bSA7MVUsuxMP5oLQgXvyycU1KLaatT2uxo",
+          "issuer": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+          "live": true,
+          "ops": [
+            "post",
+            "author_edit"
+          ],
+          "parent_id": null,
+          "replica": "treehouse:space:rust-native-codec",
+          "roles": [
+            "moderator",
+            "admin"
+          ],
+          "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        }
+      ]
+    },
+    {
+      "bytes": "2epjilgrVWhTX1kzY1gzYlNBN01WVXN1eE1QNW9MUWdYdnl5Y1UxS0xhYXRUMnV4b1ghdHJlZWhvdXNlOnNwYWNlOnJ1c3QtbmF0aXZlLWNvZGVjWCAZf2sj4WyFMsaryDj6zV6nib4MdrKSAzQDm/qLPTaNYVgg0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzf2gtnqYEthdXRob3JfZWRpdNnqYERwb3N0gtnqYEVhZG1pbtnqYEltb2RlcmF0b3L1WEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABw==",
+      "term": [
+        "delegation",
+        {
+          "audience": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc=",
+          "expires_epoch": 7,
+          "id": "UhS_Y3cX3bSA7MVUsuxMP5oLQgXvyycU1KLaatT2uxo",
+          "issuer": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+          "live": true,
+          "ops": [
+            "post",
+            "author_edit"
+          ],
+          "parent_id": null,
+          "replica": "treehouse:space:rust-native-codec",
+          "roles": [
+            "moderator",
+            "admin"
+          ],
+          "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        }
+      ]
+    },
+    {
+      "bytes": "2epjiUBAWCAZf2sj4WyFMsaryDj6zV6nib4MdrKSAzQDm/qLPTaNYVgg0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzdAgtnqYEthdXRob3JfZWRpdNnqYERwb3N0gtnqYEVhZG1pbtnqYEltb2RlcmF0b3L1WEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "term": [
+        "delegation",
+        {
+          "audience": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc=",
+          "id": "",
+          "issuer": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+          "live": true,
+          "ops": [
+            "post",
+            "author_edit"
+          ],
+          "parent_id": "",
+          "replica": "",
+          "roles": [
+            "moderator",
+            "admin"
+          ],
+          "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        }
+      ]
+    }
+  ],
+  "version": 1
+}

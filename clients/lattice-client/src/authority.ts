@@ -545,7 +545,7 @@ function continuationExpectedClaim(op: Op, role: string, d: AuthorityDelegationE
     version: 1, product: "treehouse", kind: pin.profile.kind, replica: op.replica!, role: pin.profile.role,
     profileId: continuationProfileId(pin.profile)!, profileGenesis: pin.opId,
     holder: p.holderPubkey, holderEpoch: p.opId, successor: d.audience,
-    delegationId: d.id, author: op.authorPubkey, deps: [...op.deps].sort(), epoch,
+    delegationId: d.id, author: op.authorPubkey, deps: [...new Set(op.deps)].sort(), epoch,
     epochBasis: beacons.filter((b) => b.epoch === epoch).map((b) => b.opId).sort(),
   };
   return {ok: true, claim, profile: pin.profile};
