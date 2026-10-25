@@ -34,6 +34,14 @@ seed is read on the relay host. The holder's service identity remains transport-
 entry pending/refused on clients, which independently judge their own current histories.
 No continuous freshness, automatic replacement or founder-loss claim follows.
 
+Current-parent inspection adds three implementation constraints. Read-only holders skip
+startup write rehearsal, so an append-capable courier must prove persistence through an
+isolated sibling rehearsal; it must never rewrite the actual initial Space as a probe.
+The existing persistence error path retains old memory even when rename has landed.
+Fence subsequent holder mutations after any ambiguous persistence failure until verified
+restart/reconciliation, so a different relay cannot overwrite that authentic disk history.
+Test failure after rename followed by a different relay, not only redelivery of the same op.
+
 ## Supported operator API and command
 
 Implement `ReleaseListing.publish(root, expected, ceremony_dir, probe_file)`. The explicit
@@ -45,7 +53,11 @@ Extend the parent's `CatalogCli` with `list`, using the existing guarded VM via 
 release RPC or console. Required options: root, preserved expected catalogued-intent
 file, ceremony and probe. No signer, seed, arbitrary frame, target replica/route, caller
 "honored" flag or relay-toggle option. Strict command-file keys/argv rules remain.
-The adapter starts no app/listener and never starts a second relay process. The runbook
+The adapter starts no app/listener and never starts a second relay process. Lost-reply
+retry reviews the actual `listed` record, after proving it is exactly the phase-only
+transition from the preserved catalogued bytes. Extend the shared release review with
+that explicit phase; do not pass invented journal bytes or regress ready/catalogued checks.
+The runbook
 shows preserving catalogued journal bytes, listing, exact retry and current-history refusal.
 
 ## Review before the holder
@@ -100,7 +112,12 @@ Inside that one holder call:
 - Return bounded public reference id, outcome and snapshot/frontier information. A
   rejected Sync delivery or an unchanged log without the checked frame is not success.
 
-Catch guard raises/exits/invalid returns as closed refusals; preserve the old log and
+Run guard in a monitored, unlinked bounded worker while the holder waits; the holder's
+mailbox remains serialized, so no relay can interleave. On deadline terminate the worker,
+consume its monitor/result and refuse without persistence; a callback timeout must not
+kill the holder or continue writing in a detached worker. Include this deadline in the
+courier call budget in addition to the persistence budget. Catch guard raises/exits/invalid
+returns as closed refusals; preserve the old log and
 holder availability. Guard only evaluates its supplied Space snapshot and previously
 verified bounded child context; it must not perform cross-holder calls or a recursive
 Space pull. Reuse the parent's evidence budgets and a bounded courier call timeout that
