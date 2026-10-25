@@ -158,7 +158,7 @@ fn delegation(value: &Value, nodes: &mut usize) -> Result<Vec<Term>> {
     let text = |key: &str| -> Result<Term> {
         let text = object[key]
             .as_str()
-            .filter(|s| !s.is_empty() && s.len() <= MAX_BYTES)
+            .filter(|s| s.len() <= MAX_BYTES)
             .ok_or(INVALID)?;
         Ok(Term::Binary(text.as_bytes().to_vec()))
     };
