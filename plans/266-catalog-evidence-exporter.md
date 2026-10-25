@@ -57,7 +57,8 @@ remain parked separately; software gates use disposable real-mode fixtures.
 1. Read canonical journal bytes at listed; verify private root and exact artifact
    metadata. Read the unique archived manifest at its recorded normalized path;
    reject another filename before parsing and require its hash to equal the listed
-   artifact. The staged archive context is the source of relative resource paths.
+   artifact. The publication owner already requires normalized absolute
+   identity/log paths; exact archive identity is checked independently.
    Reuse Manifest loading and its existing service-identity
    handling, without exporting any seed or invoking a signer.
 2. Read/authenticate every relevant log under its target lock with bounded reads.
@@ -103,14 +104,17 @@ symlink refuses. The selected parent must be a real directory, matching the nati
 Space exporter. Require the output ancestor chain to satisfy the existing operator
 directory policy (owned by this user/root, no writable group/other or symlink
 ancestors), preventing aliases into protected inputs. Reject protected input
-targets/subtrees. Check that the descriptor and output pathname still identify
+targets/subtrees. Revalidate the parent and resolved protected-location exclusion
+after creation, before writing, after sync and before acknowledging success.
+Check that the descriptor and output pathname still identify
 the created regular file, with one link, the creator's owner and mode 0600,
 before writing and after syncing, with exact output size after the write; check the pathname again after closing and
 before reporting success. A replaced or removed output refuses without deleting
 the replacement. This is a check at completion, not a guarantee against later
 mutation by another process. Path-based chmod retains the declared same-UID
 trust assumption. Sync and close the file; on write failure remove only the file
-this call created while the descriptor still pins its inode. A close or final
+this call created while a live raw descriptor still pins its inode. A previously
+closed descriptor, close failure or final
 acknowledgement failure preserves the uncertain public file for operator inspection,
 never removing a replacement based on an inode number after releasing the descriptor.
 Output bytes repeat exactly for unchanged inputs. No journal, catalog, log, identity

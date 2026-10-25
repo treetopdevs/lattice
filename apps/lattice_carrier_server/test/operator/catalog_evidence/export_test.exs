@@ -291,22 +291,25 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
 
     [catalog] = Path.wildcard(Path.join(CatalogStore.path(f.root), "*.json"))
 
-    for path <- [Journal.path(f.root), f.export_manifest, catalog] do
+    for {path, expected_reason} <- [
+          {Journal.path(f.root), :corrupt_operator_journal},
+          {f.export_manifest, :evidence_source_changed},
+          {catalog, :catalog_store_corrupt}
+        ] do
       original = File.read!(path)
       changed = original <> " "
       Application.put_env(:lattice_carrier_server, key, fn -> File.write!(path, changed) end)
 
-      assert {:error, reason} =
+      assert {:error, ^expected_reason} =
                CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
-      assert is_atom(reason)
       refute File.exists?(f.output)
       assert File.read!(path) == changed
       File.write!(path, original)
     end
   end
 
-  test "failed write removes only its created inode, preserving a replacement", f do
+  test "closed descriptor failures preserve uncertain files and replacements", f do
     key = :catalog_evidence_writer_hook
     previous = Application.get_env(:lattice_carrier_server, key)
 
@@ -326,12 +329,13 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     assert {:error, :evidence_export_failed} =
              CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
 
-    refute File.exists?(f.output)
+    assert File.read!(f.output) == ""
     assert inputs(f) == before
+    File.rm!(f.output)
 
     Application.put_env(:lattice_carrier_server, key, fn file, path ->
-      # Keep the original inode open until its replacement exists, so this also
-      # proves cleanup compares the descriptor's recorded inode to the pathname.
+      # Pin the original inode until the replacement exists. Once closed, the
+      # descriptor no longer proves ownership, so the replacement must remain.
       File.rm!(path)
       File.write!(path, "another process owns this file")
       File.close(file)
@@ -404,6 +408,51 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
       assert {:ok, _} = Packet.decode(File.read!(moved))
       assert inputs(f) == before
       File.rm!(f.output)
+    end
+  end
+
+  test "parent replacement cannot redirect creation or completion into the ceremony", f do
+    key = :catalog_evidence_writer_hook
+    previous = Application.get_env(:lattice_carrier_server, key)
+    before = inputs(f)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:lattice_carrier_server, key, previous),
+        else: Application.delete_env(:lattice_carrier_server, key)
+    end)
+
+    for phase <- [:before_create, :after_sync, :after_close] do
+      parent = f.output <> ".#{phase}.parent"
+      moved = Path.join(f.ceremony_dir, "output-parent-#{phase}")
+      output = Path.join(parent, "evidence.json")
+      protected = Path.join(moved, "evidence.json")
+      File.mkdir!(parent)
+      File.chmod!(parent, 0o700)
+
+      on_exit(fn ->
+        File.rm(parent)
+        File.rm_rf(moved)
+      end)
+
+      Application.put_env(:lattice_carrier_server, key, fn
+        _file, _path, ^phase ->
+          File.rename!(parent, moved)
+          File.ln_s!(moved, parent)
+          :ok
+
+        _file, _path, _other ->
+          :ok
+      end)
+
+      assert {:error, :unsafe_export_location} =
+               CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, output)
+
+      if phase == :after_close,
+        do: assert(match?({:ok, _}, Packet.decode(File.read!(protected)))),
+        else: refute(File.exists?(protected))
+
+      assert inputs(f) == before
     end
   end
 

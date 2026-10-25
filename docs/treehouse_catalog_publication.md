@@ -178,7 +178,8 @@ Use the unique manifest artifact's `path` from `operator-journal.json`, replacin
 the placeholder path above. This is the archived candidate, not the active
 configuration file. Both its normalized filename and exact digest must match the
 listed receipt; copies at another filename refuse even when their bytes match.
-This fixes the resource-resolution context for relative identity/log paths. The command loads
+The publication owner already requires absolute identity/log paths; exact archive
+identity is checked independently. The command loads
 configuration without starting another relay or listener, so it can run while the
 configured service is already bound. Its only write is the new output file. Choose an
 existing directory owned by the operator or root, with no writable group/other or
@@ -187,11 +188,16 @@ An existing output file or link refuses; choose a new filename for each export.
 The reported output path is the normalized path actually checked and written, and
 contents are written only after its new file is private (0600). Descriptor and
 pathname identity, owner, link count, mode and expected size are checked before
-success. A replaced output refuses without deleting the replacement. A partial file can
+success, with parent/protected-location rechecks after creation and before success.
+A replaced output refuses without deleting the replacement. A partial file can
 remain after process/power loss or if inode ownership cannot be proved during error
 cleanup. Preserve that unknown file and choose a new name; an export error is not
 proof that no file was created. This transfer artifact is not a durable publication
 receipt and installs no catalog trust.
+
+`LATTICE_CARRIER_MANIFEST`, if already set for the running service, is distinct from
+the archive supplied to `--manifest`. Exporting does not attest that the running
+service currently loaded these configuration bytes.
 
 The closed `lattice-catalog-evidence-page-v1` file preserves exact signed catalog JSON
 strings and complete authenticated frame histories. It includes no private seed,
