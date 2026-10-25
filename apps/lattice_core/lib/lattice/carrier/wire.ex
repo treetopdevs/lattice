@@ -427,6 +427,16 @@ defmodule Lattice.Carrier.Wire do
     with {:ok, values} <- decode_list(values, depth - 1, mode), do: {:ok, List.to_tuple(values)}
   end
 
+  defp decode_term(["mapset", values], depth, :observation) when is_list(values) and depth > 0 do
+    with {:ok, values} <- decode_list(values, depth - 1, :observation),
+         encoded = Enum.map(values, &Canonical.term/1),
+         true <- MapSet.size(MapSet.new(encoded)) == length(encoded) do
+      {:ok, MapSet.new(values)}
+    else
+      _ -> {:error, :malformed_term}
+    end
+  end
+
   defp decode_term(["mapset", values], depth, mode) when is_list(values) and depth > 0 do
     with {:ok, values} <- decode_list(values, depth - 1, mode), do: {:ok, MapSet.new(values)}
   end
@@ -446,6 +456,27 @@ defmodule Lattice.Carrier.Wire do
   defp reduce_decode([value | rest], acc, depth, mode) do
     with {:ok, value} <- decode_term(value, depth, mode),
          do: reduce_decode(rest, [value | acc], depth, mode)
+  end
+
+  defp decode_map(pairs, depth, :observation) do
+    Enum.reduce_while(pairs, {:ok, %{}, MapSet.new()}, fn
+      [k, v], {:ok, acc, seen} ->
+        with {:ok, k} <- decode_term(k, depth, :observation),
+             {:ok, v} <- decode_term(v, depth, :observation),
+             bytes = Canonical.term(k),
+             false <- MapSet.member?(seen, bytes) do
+          {:cont, {:ok, Map.put(acc, k, v), MapSet.put(seen, bytes)}}
+        else
+          _ -> {:halt, {:error, :malformed_term}}
+        end
+
+      _, _ ->
+        {:halt, {:error, :malformed_term}}
+    end)
+    |> case do
+      {:ok, map, _seen} -> {:ok, map}
+      error -> error
+    end
   end
 
   defp decode_map(pairs, depth, mode) do

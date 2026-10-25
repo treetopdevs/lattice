@@ -8,9 +8,18 @@ const frame = await authorCarrierOpUnchecked({ replica: f.space.replica, signer:
 const known = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [fixtureId('incoming-missing-2'), fixtureId('incoming-missing')], kind: 'command', body: ['atom', 'post'], cap: ['nil'] });
 const completeUnknown = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [], kind: 'command', body: ['atom', 'outside_wire_vocabulary'], cap: ['nil'] });
 const nested = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [fixtureId('incoming-missing')], kind: 'command', body: ['map', [[['atom', 'post'], ['tuple', [['atom', 'outside_wire_vocabulary']]]]]], cap: ['nil'] });
+const mapped = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [fixtureId('incoming-missing')], kind: 'command', body: ['map', [[['atom', 'post'], ['nil']]]], cap: ['nil'] });
+const set = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [fixtureId('incoming-missing')], kind: 'command', body: ['mapset', [['atom', 'post']]], cap: ['nil'] });
+const integer = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [fixtureId('incoming-missing')], kind: 'command', body: ['int', '1'], cap: ['nil'] });
 const cases = [];
 const inputs = [
     ['fresh-complete', f.histories[0].frames],
+    ['unique-map-control', [mapped]],
+    ['unique-mapset-control', [set]],
+    ['canonical-integer-control', [integer]],
+    ['duplicate-map-key-and-missing', [{ ...mapped, body: ['map', [[['atom', 'post'], ['nil']], [['atom', 'post'], ['nil']]]] }]],
+    ['duplicate-mapset-and-missing', [{ ...set, body: ['mapset', [['atom', 'post'], ['atom', 'post']]] }]],
+    ['alternate-integer-and-missing', [{ ...integer, body: ['int', '01'] }]],
     ['signed-unknown-and-missing', [frame]],
     ['forged-unknown-and-missing', [{ ...frame, sig: Buffer.alloc(64).toString('base64') }]],
     ['signed-known-and-multiple-missing', [known]],
