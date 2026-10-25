@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import { verifyEd25519 } from "./signature";
 import { canonicalBase64Bytes } from "./codec";
 import { carrierDelegationsFromFrames, carrierOpsToSemanticOps } from "./carrier";
 import { compareUtf8 } from "./op";
@@ -344,7 +344,7 @@ export async function authorTreehouseAdmitAndGrant(input) {
     const signature = canonicalBase64Bytes(acceptance.acceptance, 64), key = canonicalBase64Bytes(acceptance.recipient, 32);
     let signed = false;
     try {
-        signed = signature !== null && key !== null && ed25519.verify(signature, treehouseInvitationAcceptanceBytes(input.replica, invitation), key, { zip215: false });
+        signed = signature !== null && key !== null && verifyEd25519(signature, treehouseInvitationAcceptanceBytes(input.replica, invitation), key);
     }
     catch {
         signed = false;

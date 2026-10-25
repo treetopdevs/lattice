@@ -4458,6 +4458,7 @@ version = "0.1.0"
 dependencies = [
  "android-native-keyring-store",
  "base64 0.22.1",
+ "curve25519-dalek",
  "ed25519-dalek",
  "fs2",
  "keyring",

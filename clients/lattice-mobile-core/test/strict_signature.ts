@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {ed25519} from '@noble/curves/ed25519.js';
+import {createWebCryptoCarrierVerifier} from '../src/pairing_handoff';
+const key=new Uint8Array(32).fill(119),pub=ed25519.getPublicKey(key),message=new TextEncoder().encode('strict browser verifier');
+let calls=0;
+const permissive={importKey:async()=>({}),verify:async()=>{calls++;return true;}} as unknown as SubtleCrypto;
+const verifier=createWebCryptoCarrierVerifier(permissive);
+assert.equal(await verifier.verify(pub,message,ed25519.sign(message,key)),true);
+const identity=new Uint8Array(32);identity[0]=1;const forged=new Uint8Array(64);forged[0]=1;
+assert.equal(await verifier.verify(identity,message,forged),false);
+assert.equal(calls,1,'weak signatures never reach a permissive WebCrypto provider');
+const supported=createWebCryptoCarrierVerifier();
+assert.equal(await supported.verify(pub,message,ed25519.sign(message,key)),true);
+assert.equal(await supported.verify(identity,message,forged),false);
+console.log('PASS strict signature profile bounds both actual and permissive WebCrypto providers');

@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { authorCarrierDelegation, authorCarrierOp, verifyCarrierOp } from "./codec";
 import type { CarrierOpSigner } from "./codec";
 import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
@@ -126,7 +126,7 @@ export async function treehouseCatalogBootstrapsFromFrames(input: {
       frame.deps.some((dep) => !ids.has(dep)))) return invalid;
     for (const frame of frames) {
       const checked = await verifyCarrierOp(frame, { verify: async (pub, bytes, sig) =>
-        ed25519.verify(sig, bytes, base64ToBytes(pub), { zip215: false }) });
+        verifyEd25519(sig, bytes, base64ToBytes(pub)) });
       if (!checked.valid) return invalid;
     }
     const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
@@ -168,7 +168,7 @@ export async function prepareTreehouseSpaceCreation(input: {
   const retained = input.retained ?? [];
   for (const frame of retained) {
     if (frame.replica !== genesis.replica) throw new Error("wrong_replica");
-    const verified = await verifyCarrierOp(frame, { verify: async (pub, bytes, sig) => ed25519.verify(sig, bytes, base64ToBytes(pub), { zip215: false }) });
+    const verified = await verifyCarrierOp(frame, { verify: async (pub, bytes, sig) => verifyEd25519(sig, bytes, base64ToBytes(pub)) });
     if (!verified.valid) throw new Error("invalid_retained_frame");
   }
   const ids = new Set(retained.map((frame) => frame.id));
@@ -420,6 +420,6 @@ function spaceStatus(op: Op, visible: ReadonlySet<string>, context: CommandOpSta
       [...context.visibleOps.values()].some((prior) => prior.kind === "command" && prior.command === "revoke_invitation" && prior.commandArgs?.[0] === id && honored(context, prior))) return refused("application_invalid_invitation");
   const pub = canonicalBytes(recipient, 32); const sig = canonicalBytes(signature, 64);
   try {
-    return pub !== null && sig !== null && ed25519.verify(sig, treehouseInvitationAcceptanceBytes(op.replica!, invite), pub, { zip215: false }) ? allowed : refused("application_invalid_invitation");
+    return pub !== null && sig !== null && verifyEd25519(sig, treehouseInvitationAcceptanceBytes(op.replica!, invite), pub) ? allowed : refused("application_invalid_invitation");
   } catch { return refused("application_invalid_invitation"); }
 }

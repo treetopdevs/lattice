@@ -4,7 +4,6 @@
 //! `verifyCarrierOp`; unknown signed names are not signature failures.
 use super::canonical::{base64, encode_op_payload, Result, Term};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use ed25519_dalek::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
 
 pub const MAX_FRAME_BYTES: usize = 64_000;
@@ -115,8 +114,7 @@ pub(crate) fn identifier(value: &str) -> Result<()> {
 }
 
 pub(crate) fn verify_signature(key: &[u8], bytes: &[u8], signature: &[u8]) -> Result<()> {
-    let key =
-        VerifyingKey::from_bytes(key.try_into().map_err(|_| INVALID)?).map_err(|_| INVALID)?;
-    let signature = Signature::from_slice(signature).map_err(|_| INVALID)?;
-    key.verify_strict(bytes, &signature).map_err(|_| INVALID)
+    crate::signature::verify(key, bytes, signature)
+        .then_some(())
+        .ok_or(INVALID)
 }

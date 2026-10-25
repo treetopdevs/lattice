@@ -1,3 +1,4 @@
+import {verifyEd25519} from "./signature";
 import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
 import type { CatalogCutoff } from "./treehouse_catalog_codec";
 
@@ -5,7 +6,6 @@ import type { CatalogCutoff } from "./treehouse_catalog_codec";
 // performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
 // installation receipt. The expected token is reflected for the trusted adapter
 // to compare atomically with both trust and history generations.
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalHash } from "./codec";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
@@ -234,7 +234,7 @@ async function evaluateSnapshot(value: {
         // Distinguish old signer authorization from possession under the new key.
         const old = canonicalBase64Bytes(node.envelope.oldSignature, 64)!, pub = canonicalBase64Bytes(parent.key, 32)!;
         const bytes = canonicalBytesForCatalogRotation(node.envelope.rotation);
-        if (!ed25519.verify(old, bytes, pub, {zip215: false})) fail("invalid_catalog_signature", [id]);
+        if (!verifyEd25519(old, bytes, pub)) fail("invalid_catalog_signature", [id]);
         fail("invalid_possession", [id]);
       }
       node.authenticated = true;
@@ -620,7 +620,7 @@ async function authenticatedRawHeader(value: unknown, replica: string): Promise<
       !withinCatalogRawObservationBounds(value)) return null;
     const frame = value as unknown as CarrierOpFrame;
     const bytes = canonicalBytesForCarrierOp(frame), key = canonicalBase64Bytes(frame.author,32), sig = canonicalBase64Bytes(frame.sig,64);
-    if (key === null || sig === null || await canonicalHash(bytes) !== frame.id || !ed25519.verify(sig,bytes,key,{zip215:false})) return null;
+    if (key === null || sig === null || await canonicalHash(bytes) !== frame.id || !verifyEd25519(sig,bytes,key)) return null;
     return {id: frame.id, deps: frame.deps};
   } catch { return null; }
 }

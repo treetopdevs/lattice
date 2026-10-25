@@ -1,6 +1,6 @@
+import {verifyEd25519} from "@treetopdevs/lattice-client";
 import { bytesBase64 } from "./base64";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalBytesForWitnessedSuccessionClaim } from "@treetopdevs/lattice-client";
 import type {
   CarrierFrameStore,
@@ -188,7 +188,7 @@ export async function signGovernanceWitnessClaim(
     throw new Error("governance witness payload digest mismatch");
   }
   if (
-    !ed25519.verify(signatureBytes, payload, witnessBytes, { zip215: false })
+    !verifyEd25519(signatureBytes, payload, witnessBytes)
   ) {
     throw new Error("governance witness signature verification failed");
   }
@@ -215,11 +215,10 @@ export function verifyGovernanceWitnessSignature(
       64,
       "governance witness signature",
     );
-    return ed25519.verify(
+    return verifyEd25519(
       signatureBytes,
       canonicalBytesForWitnessedSuccessionClaim(claim),
       witnessBytes,
-      { zip215: false },
     );
   } catch {
     return false;

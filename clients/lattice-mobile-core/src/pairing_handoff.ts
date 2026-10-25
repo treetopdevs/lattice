@@ -1,3 +1,4 @@
+import {verifyEd25519} from "@treetopdevs/lattice-client";
 /**
  * Product-neutral carrier pairing seam.
  *
@@ -8,7 +9,6 @@
  * shells reuse the exact same validation and wire behavior.
  */
 
-import { ed25519 } from "@noble/curves/ed25519.js";
 import type { CarrierVerifier, Verifier } from "@treetopdevs/lattice-client";
 
 export type CarrierSubmission = "push" | "relay";
@@ -218,6 +218,9 @@ export function createWebCryptoCarrierVerifier(
 ): CarrierVerifier {
   return {
     async verify(pubkey: Uint8Array, bytes: Uint8Array, signature: Uint8Array): Promise<boolean> {
+      // A provider may be more permissive than the common profile. Availability
+      // failures retain their existing meaning, but cannot widen acceptance.
+      if (!verifyEd25519(signature, bytes, pubkey)) return false;
       if (subtle) {
         try {
           const algorithm = "Ed25519" as AlgorithmIdentifier;
@@ -227,7 +230,7 @@ export function createWebCryptoCarrierVerifier(
           if (!webCryptoEd25519Unavailable(error)) throw error;
         }
       }
-      return ed25519.verify(signature, bytes, pubkey, { zip215: false });
+      return verifyEd25519(signature, bytes, pubkey);
     },
   };
 }

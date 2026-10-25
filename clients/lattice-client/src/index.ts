@@ -69,3 +69,5 @@ export type { MemberContinuityObservation, MemberContinuityReviewRequest, Member
 
 export * from "./treehouse_public_frames";
 export * from "./treehouse_offline_enrollment";
+
+export { verifyEd25519 } from "./signature";

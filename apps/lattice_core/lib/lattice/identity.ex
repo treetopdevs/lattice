@@ -49,18 +49,54 @@ defmodule Lattice.Identity do
     :crypto.sign(:eddsa, :none, message, [priv, :ed25519])
   end
 
-  @doc "Verify a signature against an author public key."
+  # Canonical encodings of all eight points in the Ed25519 torsion subgroup.
+  # Source: @noble/curves 2.2.0 ED25519_TORSION_SUBGROUP (MIT).
+  @small_order Enum.map(
+                 [
+                   "0100000000000000000000000000000000000000000000000000000000000000",
+                   "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+                   "0000000000000000000000000000000000000000000000000000000000000080",
+                   "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+                   "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+                   "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+                   "0000000000000000000000000000000000000000000000000000000000000000",
+                   "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa"
+                 ],
+                 &Base.decode16!(&1, case: :lower)
+               )
+  @small_order_y Enum.uniq(
+                   Enum.map(@small_order, fn point ->
+                     Bitwise.band(
+                       :binary.decode_unsigned(point, :little),
+                       Bitwise.bsl(1, 255) - 1
+                     )
+                   end)
+                 )
+  @field_prime Bitwise.bsl(1, 255) - 19
+  @scalar_order Bitwise.bsl(1, 252) + 27_742_317_777_372_353_535_851_937_790_883_648_493
+
+  @doc "Verify canonical Ed25519 with no small-order key/R and a strict equation."
   @spec verify(pubkey(), binary(), binary()) :: boolean()
-  def verify(pub, message, signature)
-      when is_binary(pub) and is_binary(message) and is_binary(signature) do
-    # A forged op may carry a malformed `author`; :crypto raises on a bad key rather
-    # than returning false, so guard it — a malformed key is simply an invalid op.
-    :crypto.verify(:eddsa, :none, message, signature, [pub, :ed25519])
+  def verify(
+        <<_::256>> = pub,
+        message,
+        <<r::binary-size(32), s::little-unsigned-size(256)>> = signature
+      )
+      when is_binary(message) do
+    strict_point_encoding?(pub) and strict_point_encoding?(r) and s < @scalar_order and
+      :crypto.verify(:eddsa, :none, message, signature, [pub, :ed25519])
   rescue
     _ -> false
   end
 
   def verify(_pub, _message, _signature), do: false
+
+  # OTP/OpenSSL supplies point decoding and the uncofactored verification equation.
+  # Explicit guards remove its permissive weak-key / noncanonical input cases.
+  defp strict_point_encoding?(<<encoded::little-unsigned-size(256)>>) do
+    y = Bitwise.band(encoded, Bitwise.bsl(1, 255) - 1)
+    y < @field_prime and y not in @small_order_y
+  end
 
   @doc "Public key of this identity (its `author` value in ops)."
   @spec pub(t()) :: pubkey()

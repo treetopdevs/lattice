@@ -1,3 +1,4 @@
+use treehouse_tauri_shell::signature;
 #[path = "../src/witness_binding.rs"]
 mod witness_binding;
 #[path = "../src/witness_bridge.rs"]

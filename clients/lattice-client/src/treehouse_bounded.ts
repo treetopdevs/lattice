@@ -1,7 +1,7 @@
+import {verifyEd25519} from "./signature";
 // Bounded-family Treehouse Space/Thread creation, the root's empty-delegation continuation pin,
 // and the catalog bootstrap binding. Reuses the existing authority arms only (decision D4):
 // nothing here adds a TypeScript authority rule. A "pinned" continuation is only that.
-import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { authorCarrierDelegation, authorCarrierOp, canonicalBase64Bytes, canonicalBytesForCarrierTerm, verifyCarrierOp } from "./codec";
 import type { CarrierOpSigner } from "./codec";
@@ -34,7 +34,7 @@ export const treehouseBoundedGenesisOps: readonly string[] = [
 ];
 
 const verifier = { verify: async (pub: string, bytes: Uint8Array, sig: Uint8Array) =>
-  ed25519.verify(sig, bytes, base64ToBytes(pub), { zip215: false }) };
+  verifyEd25519(sig, bytes, base64ToBytes(pub)) };
 // No Node Buffer: this module also runs in the webview.
 const bytesToB64 = (bytes: Uint8Array): string => {
   let binary = "";

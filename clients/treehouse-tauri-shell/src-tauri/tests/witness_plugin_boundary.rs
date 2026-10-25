@@ -1,3 +1,4 @@
+use treehouse_tauri_shell::signature;
 #[path = "../src/witness_android.rs"]
 mod witness_android;
 #[path = "../src/witness_binding.rs"]

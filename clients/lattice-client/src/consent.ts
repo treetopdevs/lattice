@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { base64ToBytes, canonicalTerm } from "./carrier";
 import { ancestors } from "./dag";
 import type { Op } from "./op";
@@ -68,9 +68,7 @@ export function consentQuarantine(
   );
   try {
     if (
-      !ed25519.verify(base64ToBytes(evidence.sig), payload, base64ToBytes(evidence.toPub), {
-        zip215: false,
-      })
+      !verifyEd25519(base64ToBytes(evidence.sig), payload, base64ToBytes(evidence.toPub))
     ) {
       return { quarantined: true, reason: "invalid_consent" };
     }
