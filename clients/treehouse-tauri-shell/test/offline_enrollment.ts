@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
+  canonicalOrder, index, observeTreehouse, authorCarrierOp, authorTownshipDelegation, authorTownshipRevocation,
   buildInitialProvisioningBundle, authorTreehouseOfflineInvitation, authorTreehouseCommand, authorTreehouseAdmitAndGrant, signTreehouseAcceptance, carrierDelegationsFromFrames,
   carrierOpsToSemanticOps, treehouseCommandDecoders, prepareTreehouseBoundedThreadCreation,
 } from "@treetopdevs/lattice-client";
@@ -132,3 +133,29 @@ assert.equal(initialBundle.spaceRoot, founder.state.publicKey);
 assert.equal(initialBundle.profiles.length, 2);
 await assert.rejects(() => buildInitialProvisioningBundle({ ...bundleInput, threadFrames: founderThreadFrames }), /invalid_initial_provisioning/);
 console.log("PASS initial bundle checks the root binding and both direct live child grants before export");
+
+// Genuine, otherwise-honored histories must still satisfy the initial publication contract.
+const childOps = carrierOpsToSemanticOps(bundleInput.threadFrames, {}, treehouseCommandDecoders("Treehouse.Thread"));
+const childFrontier = () => { const used = new Set(bundleInput.threadFrames.flatMap(frame => frame.deps)); return bundleInput.threadFrames.filter(frame => !used.has(frame.id)).map(frame => frame.id).sort(); };
+const memberGrant = carrierDelegationsFromFrames(bundleInput.threadFrames).find(grant => grant.audience === recipientReview.recipient)!;
+const revokedGrant = await authorTownshipRevocation({ replica: child.replica, signer: signer(202), deps: childFrontier(), delegationId: memberGrant.id });
+await assert.rejects(() => buildInitialProvisioningBundle({ ...bundleInput, threadFrames: [...bundleInput.threadFrames, revokedGrant] }), /invalid_initial_provisioning/);
+const extraGrant = await authorTownshipDelegation({ replica: child.replica, signer: signer(202), deps: childFrontier(),
+  audiencePubkey: signer(209).publicKey, parentId: carrierDelegationsFromFrames(bundleInput.threadFrames)[0]!.id,
+  ops: ["post"], roles: [], live: false, expiresEpoch: 7 });
+const withExtra = [...bundleInput.threadFrames, extraGrant];
+assert.equal(observeTreehouse("Treehouse.Thread", carrierOpsToSemanticOps(withExtra, {}, treehouseCommandDecoders("Treehouse.Thread"))).quarantineReasons.size, 0);
+await assert.rejects(() => buildInitialProvisioningBundle({ ...bundleInput, threadFrames: withExtra }), /invalid_initial_provisioning/);
+const rewritten: CarrierOpFrame[] = [], changedIds = new Map<string, string>();
+for (const id of canonicalOrder(childOps, index(childOps))) {
+  const original = bundleInput.threadFrames.find(frame => frame.id === id)!;
+  const deps = original.deps.map(dep => changedIds.get(dep)!);
+  const changed = childOps.find(op => op.id === id)!.command === "create_thread"
+    ? await authorTreehouseCommand({ product: "Treehouse.Thread", replica: child.replica, signer: signer(202), deps,
+      capId: carrierDelegationsFromFrames(bundleInput.threadFrames)[0]!.id, command: { command: "create_thread", title: "Signed different title" } })
+    : await authorCarrierOp({ replica: original.replica, deps, kind: original.kind, body: original.body, cap: original.cap, signer: signer(202) });
+  changedIds.set(id, changed.id); rewritten.push(changed);
+}
+assert.equal(observeTreehouse("Treehouse.Thread", carrierOpsToSemanticOps(rewritten, {}, treehouseCommandDecoders("Treehouse.Thread"))).quarantineReasons.size, 0);
+await assert.rejects(() => buildInitialProvisioningBundle({ ...bundleInput, threadFrames: rewritten }), /invalid_initial_provisioning/);
+console.log("PASS otherwise honored histories refuse revoked, extra-audience and mismatched-title initial publication");

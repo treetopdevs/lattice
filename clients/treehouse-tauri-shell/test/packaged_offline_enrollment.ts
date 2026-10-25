@@ -19,14 +19,19 @@ const evidence = process.env.TREEHOUSE_EVIDENCE_DIR ?? join(root, "public-eviden
 const bundle = resolve("src-tauri/target/release/bundle/macos/Treehouse.app"); assertPackagedBundleVariant(bundle, "ordinary");
 const binary = join(bundle, "Contents/MacOS/treehouse-tauri-shell");
 const helper = join(root, "accessibility"); execFileSync("swiftc", [PACKAGED_ACCESSIBILITY_SWIFT, "-o", helper]);
-const security = (...args: string[]) => {
-  try { return execFileSync("security", args, { encoding: "utf8" }).trim(); }
+const platformEnv = (home: string): NodeJS.ProcessEnv => ({ ...process.env, HOME: home, CFFIXED_USER_HOME: home });
+const securityAt = (home: string, ...args: string[]) => {
+  try { return execFileSync("security", args, { env: platformEnv(home), encoding: "utf8" }).trim(); }
   catch { throw new Error(`OS Keychain operation failed: ${args[0]}`); }
 };
+const security = (...args: string[]) => securityAt(homedir(), ...args);
 const quotedPaths = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map(match => match[1]!);
 const priorDefault = quotedPaths(security("default-keychain", "-d", "user"))[0]!;
 const priorSearch = quotedPaths(security("list-keychains", "-d", "user")); assert(priorDefault && priorSearch.length);
 const joinHome = join(root, "joiner-home"); mkdirSync(joinHome, { mode: 0o700 }); mkdirSync(join(joinHome, "Downloads"));
+mkdirSync(join(joinHome, "Library/Preferences"), { recursive: true, mode: 0o700 });
+mkdirSync(join(joinHome, "Library/Keychains"), { recursive: true, mode: 0o700 });
+const joinSecurity = (...args: string[]) => securityAt(joinHome, ...args);
 const joinKeychain = join(root, "joiner.keychain-db"); const password = randomBytes(32).toString("base64");
 let child: ChildProcess | null = null; let ax: AxDriver | null = null;
 const driver = () => { assert(ax, "app must be launched before UI actions"); return ax; };
@@ -43,8 +48,8 @@ async function stop() {
 }
 async function launch(home: string) {
   await stop();
-  const env = { ...process.env, HOME: home, CFFIXED_USER_HOME: home };
-  for (const key of Object.keys(env)) if (key.startsWith("TREEHOUSE_DEV_")) delete env[key as keyof typeof env];
+  const env = platformEnv(home);
+  for (const key of Object.keys(env)) if (key.startsWith("TREEHOUSE_DEV_")) delete env[key];
   child = spawn(binary, [], { env, stdio: ["ignore", "pipe", "pipe"] });
   child.stdout!.on("data", data => logs.push(String(data))); child.stderr!.on("data", data => logs.push(String(data)));
   ax = createAxDriver({ attempts: 150, exec: (args, input) => execFileSync(helper, [String(child!.pid), ...args], { input, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }) });
@@ -69,11 +74,12 @@ try {
   const expectedFingerprint = createHash("sha256").update(JSON.stringify([
     "treehouse-offline-group-fingerprint-v1", space.replica, founder.publicKey, bootstraps.bootstraps[0]!.id,
   ])).digest("hex").match(/.{4}/g)!.join(" ");
-  security("create-keychain", "-p", password, joinKeychain);
-  security("unlock-keychain", "-p", password, joinKeychain);
-  security("set-keychain-settings", "-lut", "21600", joinKeychain);
-  security("list-keychains", "-d", "user", "-s", joinKeychain);
-  security("default-keychain", "-d", "user", "-s", joinKeychain);
+  joinSecurity("create-keychain", "-p", password, joinKeychain);
+  joinSecurity("unlock-keychain", "-p", password, joinKeychain);
+  joinSecurity("set-keychain-settings", "-lut", "21600", joinKeychain);
+  joinSecurity("list-keychains", "-d", "user", "-s", joinKeychain);
+  joinSecurity("default-keychain", "-d", "user", "-s", joinKeychain);
+  assert.deepEqual(quotedPaths(joinSecurity("default-keychain", "-d", "user")), [joinKeychain], "app and security CLI use the same isolated-home preference domain");
   assert(!existsSync(database(joinHome)), "joiner must start without injected history");
   await launch(joinHome); await driver().press("I want this app to join an existing group."); await driver().press("Prepare join request");
   const request = await driver().readWhenPresent("Your join request");
@@ -90,7 +96,7 @@ try {
   const invitationPath = await save("Invitation file name", `th-${tag}-offline-invitation.json`, "Save invitation file");
   const invitation = readFileSync(invitationPath, "utf8"); writeFileSync(join(evidence, "invitation.json"), invitation);
   await stop();
-  security("list-keychains", "-d", "user", "-s", joinKeychain); security("default-keychain", "-d", "user", "-s", joinKeychain);
+  joinSecurity("list-keychains", "-d", "user", "-s", joinKeychain); joinSecurity("default-keychain", "-d", "user", "-s", joinKeychain);
   await launch(joinHome); assert.equal(state(joinHome).publicKey, joiner.publicKey, "ordinary restart retains its Keychain identity");
   await driver().press("Open invitation file"); execFileSync(helper, [String(child!.pid), "choose-file", invitationPath]);
   await driver().waitFor("group review", nodes => nodes.some(node => node.title === "Review offline invitation" || node.description === "Review offline invitation"));
@@ -125,13 +131,28 @@ try {
   await stop(); await launch(homedir()); assert.equal(state(homedir()).publicKey, founder.publicKey);
   writeFileSync(join(evidence, "result.json"), JSON.stringify({ status: "PASS", variant: "ordinary", founder: founder.publicKey, joiner: joiner.publicKey,
     identitySource: "independent OS Keychain contexts; no injected seeds", profilesInstalledOnJoiner: 0, relayConfigured: false }, null, 2));
+} catch (error) {
+  // Capture observed UI before stopping the app; never guess an AX label or replace native state.
+  const currentProcess = (() : ChildProcess | null => child)();
+  if (ax && currentProcess && currentProcess.exitCode === null && currentProcess.signalCode === null) {
+    try { writeFileSync(join(evidence, "failed-ui.json"), JSON.stringify(await driver().dump(), null, 2)); } catch {}
+  }
+  const summaries = [homedir(), joinHome].map(home => {
+    try {
+      const saved = state(home);
+      return { home, publicKey: saved.publicKey, profiles: saved.profiles.map(profile => ({ product: profile.product, replica: profile.replica, frames: profile.frames.length })),
+        intent: saved.intent?.kind ?? null, relayConfigured: saved.relay !== null };
+    } catch { return { home, readableSavedHistory: false }; }
+  });
+  writeFileSync(join(evidence, "failure-summary.json"), JSON.stringify(summaries, null, 2));
+  throw error;
 } finally {
   const failures: unknown[] = [];
   for (const cleanup of [
     async () => stop(),
     async () => { security("list-keychains", "-d", "user", "-s", ...priorSearch); },
     async () => { security("default-keychain", "-d", "user", "-s", priorDefault); },
-    async () => { if (existsSync(joinKeychain)) security("delete-keychain", joinKeychain); },
+    async () => { if (existsSync(joinKeychain)) joinSecurity("delete-keychain", joinKeychain); },
     async () => { writeFileSync(join(evidence, "app.log"), logs.join("")); },
   ]) { try { await cleanup(); } catch (error) { failures.push(error); } }
   if (failures.length) throw new AggregateError(failures, "Packaged-test cleanup failed; every restoration was attempted");
