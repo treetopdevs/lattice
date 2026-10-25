@@ -441,7 +441,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 
 | 262 | [Offline enrollment and guarded initial provisioning](262-offline-enrollment-and-initial-provisioning.md) | P1 | XL | PR #165; plan 224 PRs 4-5 for listing | IN PROGRESS (#166 and #167 merged on green exact tips; ordinary offline exchange and operator import proved; listing, native trust and field session remain) |
 | 263 | [Catalog publication with off-host custodian](263-catalog-publication-and-custodian-signing.md) | P1 | L | 224 PRs 1–3; 262 A | DONE (#168; run 40157925199 at 0e4dc87d; merge tree matches; fixture software evidence, actual operator ceremony separate) |
-| 264 | [Guarded Thread listing and initial receipt](264-guarded-thread-listing-and-initial-receipt.md) | P1 | L | 263 / PR #168 merged | IN PROGRESS: holder CAS/fence tests pass; parent #168 merged and rebase verified; catalog integration and final gates remain. |
+| 264 | [Guarded Thread listing and initial receipt](264-guarded-thread-listing-and-initial-receipt.md) | P1 | L | 263 / PR #168 merged | IN PROGRESS: pending/initial listing and CLI pass Linux; CAS/roster/concurrency refusals pass; crash/carrying matrix, final reviews and gates remain. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

@@ -339,7 +339,7 @@ defmodule LatticeCarrierServer.CourierTest do
     task = Task.async(fn -> Holder.courier(holder, op, reviewed(snapshot, op)) end)
     assert_receive {:sync_blocked, worker}, 1_000
     assert {:ok, closing} = ReleaseGate.close(context.owner, "attempt", %{})
-    assert map_size(closing.leases) == 1
+    assert closing.phase == :quiescing
     send(worker, :continue)
     assert {:ok, %{outcome: :delivered}} = Task.await(task)
     assert {:ok, drained} = ReleaseGate.snapshot(context.owner, "attempt")
@@ -379,6 +379,28 @@ defmodule LatticeCarrierServer.CourierTest do
     assert_receive {:old_worker_result, {:error, :release_closed}}
     assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
     assert File.read!(path) == before
+  end
+
+  @tag :tmp_dir
+  test "an outstanding private write lease prevents a premature drain receipt", context do
+    {holder, _path, author} = holder(context, durability: FaultSequence)
+    :ok = Holder.prove_durability(holder)
+    {:ok, snapshot} = Holder.courier_snapshot(holder)
+    op = Op.new(author, @replica, [], :command, {:post, "not yet synced"})
+    FaultSequence.arm(context.tmp_dir, {:hang, self()})
+    on_exit(fn -> FaultSequence.clear(context.tmp_dir) end)
+    task = Task.async(fn -> Holder.courier(holder, op, reviewed(snapshot, op)) end)
+    assert_receive {:sync_blocked, worker}, 1_000
+    assert {:ok, closing} = ReleaseGate.close(context.owner, "attempt", %{})
+    assert closing.leases == %{}
+    deadline = System.monotonic_time(:millisecond) + 1_000
+
+    assert {:error, :release_changed} =
+             ReleaseGate.commit(context.owner, "attempt", closing, %{}, deadline)
+
+    send(worker, :continue)
+    assert {:error, {:persistence_failed, :release_closed}} = Task.await(task)
+    refute ReleaseGate.valid?(context.owner, %{})
   end
 
   defp holder(context, options \\ []) do

@@ -222,9 +222,6 @@ def record(raw):
     if len(r["artifacts"]) - len(catalogs) > 128:
         refuse("corrupt_operator_journal")
     if r["phase"] in ("catalogued", "listed"):
-        if r["phase"] == "listed" and any(a["kind"] == "reference" and a["review"] == {"mode": "initial_existing"}
-               for a in r["artifacts"]):
-            refuse("corrupt_operator_journal")
         if len(catalogs) != 1 or r["catalog_head"] != catalogs[0]["op_id"]:
             refuse("corrupt_operator_journal")
     elif catalogs:

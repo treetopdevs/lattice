@@ -71,7 +71,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   @spec review(Path.t(), binary() | nil, Path.t(), Path.t(), String.t()) ::
           {:ok, map()} | {:error, atom()}
   def review(root, expected, probe_identity_file, ceremony_dir, phase)
-      when phase in ["activated", "ready", "catalogued"] do
+      when phase in ["activated", "ready", "catalogued", "listed"] do
     with {:ok, deployment} <- Runtime.deployment() |> guarded(root),
          {:ok, record} <- current_record(root, expected, phase),
          digest = Base.encode16(deployment.manifest_digest, case: :lower),
@@ -112,6 +112,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   defp window("activated"), do: :roster_drift_since_activation
   defp window("ready"), do: :roster_drift_since_ready
   defp window("catalogued"), do: :roster_drift_since_catalog
+  defp window("listed"), do: :roster_drift_since_catalog
 
   defp guarded(deployment, root) do
     with %{operator_root: guarded_root, incarnation: incarnation} when is_binary(incarnation) <-

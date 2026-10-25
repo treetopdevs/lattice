@@ -96,6 +96,37 @@ defmodule LatticeCarrierServer.Holder do
           {:ok, %{log: Log.t(), token: courier_snapshot_token()}} | {:error, atom()}
   def courier_snapshot(holder), do: GenServer.call(holder, :courier_snapshot)
 
+  @doc "Read the bounded served snapshot without granting courier write permission."
+  @spec served_snapshot(GenServer.server()) ::
+          {:ok, %{log: Log.t(), token: courier_snapshot_token()}} | {:error, atom()}
+  def served_snapshot(holder), do: GenServer.call(holder, :served_snapshot)
+
+  @doc "Build the exact candidate outside the holder; semantic authorization remains the operator's job."
+  @spec prepare_courier(map(), Op.t()) :: {:ok, map()} | {:error, atom()}
+  def prepare_courier(%{log: log, token: token}, %Op{} = op) do
+    with true <- Op.valid?(op) and token.replica == log.replica,
+         :ok <- Log.verify_authenticity(log),
+         {:ok, digest} <- courier_digest(log),
+         true <- digest == token.digest,
+         {:ok, candidate, _report, outcome} <- courier_candidate(log, op),
+         :ok <- Log.verify_authenticity(candidate),
+         {:ok, candidate_digest} <- courier_digest(candidate) do
+      {:ok,
+       %{
+         log: candidate,
+         outcome: outcome,
+         token: %{snapshot: token, op_id: op.id, candidate_digest: candidate_digest}
+       }}
+    else
+      {:error, reason} when is_atom(reason) -> {:error, reason}
+      _ -> {:error, :invalid_courier_review}
+    end
+  rescue
+    _ -> {:error, :invalid_courier_review}
+  end
+
+  def prepare_courier(_, _), do: {:error, :invalid_courier_review}
+
   @doc "Deliver the exact externally reviewed candidate only while its snapshot still matches."
   @spec courier(GenServer.server(), Op.t(), courier_review_token()) ::
           {:ok, courier_receipt()} | {:error, term()}
@@ -253,6 +284,14 @@ defmodule LatticeCarrierServer.Holder do
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(:served_snapshot, _from, state) do
+    with :ok <- courier_open(state), {:ok, token} <- snapshot_token(state) do
+      {:reply, {:ok, %{log: state.log, token: token}}, state}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 

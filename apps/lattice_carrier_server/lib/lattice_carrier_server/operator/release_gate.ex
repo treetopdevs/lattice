@@ -419,18 +419,28 @@ defmodule LatticeCarrierServer.Operator.ReleaseGate do
     %{state | phase: :invalid, receipt: nil}
   end
 
-  defp view(state),
-    do:
-      Map.take(state, [
-        :incarnation,
-        :phase,
-        :attempt,
-        :expected,
-        :leases,
-        :identities,
-        :epoch,
-        :receipt
-      ])
+  # Public snapshots describe startup/identity stability. In-flight writes are
+  # serialized by Holder's drain call, and commit separately requires ALL leases
+  # empty. Keeping volatile write leases out of this view preserves that barrier.
+  defp view(state) do
+    state
+    |> Map.take([
+      :incarnation,
+      :phase,
+      :attempt,
+      :expected,
+      :leases,
+      :identities,
+      :epoch,
+      :receipt
+    ])
+    |> Map.update!(:leases, fn leases ->
+      Map.reject(leases, fn
+        {_, {_, _, {:holder_write, _, _}}} -> true
+        _ -> false
+      end)
+    end)
+  end
 
   defp call(pid, message) do
     GenServer.call(pid, message)

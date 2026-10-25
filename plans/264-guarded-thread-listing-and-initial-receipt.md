@@ -2,9 +2,10 @@
 
 ## Status and dependency
 
-IN PROGRESS: independent holder APIs and focused persistence tests are implemented.
-Catalog integration is unblocked by the verified green parent merge. Complete listing
-crash/refusal evidence, implementation reviews and required final gates remain.
+IN PROGRESS: holder APIs, guarded pending/initial listing and the closed local command
+flow are implemented. Focused Linux evidence covers exact retry, network refusal,
+roster/CAS races and concurrent calls. Complete crash/carrying evidence, independent
+implementation reviews and required final gates remain.
 
 Prepared 2026-10-24 from then-current main. This is plan 224 PR 5, now rebased onto
 merged catalog publication PR #168 (plan 263). Its exact tested tree and merge ancestry
@@ -219,9 +220,11 @@ record fields. Keep BEAM/Python parity behavioral, without source/prose pins.
   of the served reference and run the real CatalogEntries judgment over actual histories.
 - Pending path appends exactly the staged client frame. Replay adds neither op nor
   journal receipt. Initial path has byte-identical Space file and unchanged inode/mtime,
-  including retry and a read-only Space holder restart; missing or altered initial
-  reference refuses. Relay-enabled startup rehearsal may replace its target: for that
-  existing behavior assert restart bytes only and unchanged inode/mtime during listing.
+  including retry; missing or altered initial reference refuses. OD-5 requires relay
+  realms to equal trusted peers on guarded Treehouse routes, so its real initial fixture
+  is relay-enabled and startup intentionally replaces the target. Assert bytes across
+  that restart and unchanged inode/mtime during listing/retry. A separate read-only
+  holder presence fixture proves the no-target-rehearsal path without weakening OD-5.
 - Wrong catalog key/binding/service, changed artifact/digest/op id, competing reference,
   stale expected/attempt/incarnation/manifest and forged/different receipt refuse.
 - A correctly signed but currently unhonored reference refuses. Revoke/admit at a
