@@ -2,10 +2,11 @@
 
 ## Status and dependency
 
-IN PROGRESS: holder APIs, guarded pending/initial listing and the closed local command
-flow are implemented. Full local mix check, both boundary security scans and 483 non-root Linux
-operator/carrier tests pass. Independent spec/standards reviews are resolved.
-Full-API crash/refusal cases are implemented and verifying; hosted final gates remain.
+DONE (software): guarded pending/initial listing, exact retries, crash recovery,
+carried-entry checks and the closed local command are implemented and verified.
+Local, actual Linux owner and final hosted gates passed; reviews are resolved.
+Native client trust, the operator's actual ceremony and public two-app field proof
+remain separate work.
 
 Prepared 2026-10-24 from then-current main. This is plan 224 PR 5, now rebased onto
 merged catalog publication PR #168 (plan 263). Its exact tested tree and merge ancestry
