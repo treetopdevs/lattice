@@ -389,6 +389,29 @@
           "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
         }
       ]
+    },
+    {
+      "bytes": "2epjiUBAWCAZf2sj4WyFMsaryDj6zV6nib4MdrKSAzQDm/qLPTaNYVgg0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzdAgtnqYEthdXRob3JfZWRpdNnqYERwb3N0gtnqYEVhZG1pbtnqYEltb2RlcmF0b3L1WEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "term": [
+        "delegation",
+        {
+          "audience": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc=",
+          "id": "",
+          "issuer": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+          "live": true,
+          "ops": [
+            "post",
+            "author_edit"
+          ],
+          "parent_id": "",
+          "replica": "",
+          "roles": [
+            "moderator",
+            "admin"
+          ],
+          "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        }
+      ]
     }
   ],
   "version": 1

@@ -4,7 +4,8 @@
 
 IN PROGRESS. Canonical/frame/catalog authenticity, bounded readers and executable
 Rust↔TS/BEAM peers are implemented. Independent review fixes are confirmed and
-local gates pass; hosted checks and requested external review remain. Implements plan 245 build PR 2,
+prior local/hosted gates passed; an empty-text metadata parity correction now
+requires a refreshed exact-tip gate and requested external review remains. Implements plan 245 build PR 2,
 independently of the listing consumer. Rebased onto its verified merge; native
 implementation bytes were preserved.
 No native trust command,
@@ -70,6 +71,8 @@ assembly retains plan 245's 64 MiB transport and 32 MiB snapshot limits separate
 - Duplicate, unknown, noncanonical, over-cap and wrong-key input fails before producing
   verified output. Boundary tests include uint64 max, safe-number overflow and Unicode.
 - Rust-authored canonical/signature output is consumed by the actual TS/BEAM codecs.
+  The reciprocal corpus includes empty delegation id/replica/parent text. Both
+  existing codecs represent these fields; semantic validity belongs to authority.
 - All required local and exact-tip hosted gates pass; reviews are resolved.
 
 This slice earns native codec/authenticity parity only. It cannot install a catalog,

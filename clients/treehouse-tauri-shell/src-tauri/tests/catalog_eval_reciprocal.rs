@@ -105,6 +105,10 @@ fn rust_fixture() -> Value {
         "ops":["post","author_edit"],"roles":["moderator","admin"],"live":true,"sig":STANDARD.encode([0;64])}]);
     let mut leased = delegation.clone();
     leased[1]["expires_epoch"] = json!(7);
+    let mut empty_text = delegation.clone();
+    for key in ["id", "replica", "parent_id"] {
+        empty_text[1][key] = json!("");
+    }
     let terms = vec![
         json!(["nil"]),
         json!(["bool", true]),
@@ -122,6 +126,7 @@ fn rust_fixture() -> Value {
         json!(["mapset", [["int", 256], ["int", 0]]]),
         delegation,
         leased,
+        empty_text,
     ];
     let terms: Vec<Value> = terms
         .into_iter()
@@ -224,7 +229,7 @@ fn fresh_beam_and_ts_producers_verify_in_native_and_rust_output_verifies_in_both
     );
     for runtime in ["beam", "ts"] {
         let result = peer(runtime, "consume", Some(&produced));
-        assert_eq!(result["terms"], 10);
+        assert_eq!(result["terms"], 11);
         assert_eq!(result["frame"], produced["frame"]["id"]);
         assert_eq!(result["catalog"], produced["catalog_id"]);
     }
