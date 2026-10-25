@@ -34,7 +34,7 @@ seed is read on the relay host. The holder's service identity remains transport-
 entry pending/refused on clients, which independently judge their own current histories.
 No continuous freshness, automatic replacement or founder-loss claim follows.
 
-Current-parent inspection adds three implementation constraints. Read-only holders skip
+Current-parent inspection adds two persistence constraints. Read-only holders skip
 startup write rehearsal, so an append-capable courier must prove persistence through an
 isolated sibling rehearsal; it must never rewrite the actual initial Space as a probe.
 The existing persistence error path retains old memory even when rename has landed.
@@ -80,49 +80,59 @@ shows preserving catalogued journal bytes, listing, exact retry and current-hist
 
 ## Holder courier transaction
 
-Add local `Holder.courier(holder, op, guard)` as one synchronous GenServer call.
-The frame is decoded from the checked journal artifact by ReleaseListing. It is not a
-new HTTP/WebSocket/Wire action and cannot be invoked by a carrier envelope or relay realm.
-A local privileged BEAM caller is already inside the operator trust boundary; guard is
-an internal function, never an untrusted callback decoded from a request.
+Use a reviewed snapshot compare-and-swap (CAS), preserving OD-3(a)'s requirement that
+current authority judgment and delivery cannot be separated by a concurrent relay.
+No arbitrary callback runs inside the holder. Add local snapshot/review and courier
+APIs; neither is an HTTP/WebSocket/Wire action or decodable from a carrier envelope.
+The privileged BEAM operator is already inside the local trust boundary.
 
-Inside that one holder call:
+1. Obtain the actual holder's immutable log snapshot and a closed token binding release
+   owner/incarnation, source path, replica and a deterministic digest of the entire log,
+   including quarantine. Authenticate the snapshot. A disk-only snapshot is insufficient.
+2. Outside the holder, a dedicated pure listing reviewer computes the exact candidate via
+   `Sync.deliver(snapshot, [op])`, requires exact accepted/present op equality, verifies
+   authenticity and runs current roster, root/bootstrap/binding and catalog authority
+   checks on that SAME candidate. Use previously verified closed public ceremony data;
+   do not use a different path-based Space observation or invent carried references.
+   Pure review can have its own bounded worker; its crash/hang never blocks the holder.
+3. For pending absent, require the exact staged signed op to be accepted and honored.
+   For pending present, require exact equality and current honor. For initial-existing,
+   require already-present exact honor and the parent's one-Thread provenance/title/
+   creation rules. Never turn missing initial into append. Keep ReferenceMode.observe
+   strict for staging; add a narrow listing predicate rather than weaken absence checks.
+4. Send `Holder.courier(holder, op, reviewed_token)` with closed data only. In one call,
+   require an accepting nonnil release owner, the intended path-backed source and proven
+   persistence support. Match the exact current snapshot token and reviewed op/candidate
+   digest, recompute deterministic Sync delivery, and persist only that same candidate.
+   Any intervening relay/roster/quarantine change refuses `stale_served_history`; caller
+   must obtain a new snapshot and review, never silently refresh the token.
+5. Only the local courier bypasses the participant realm allowlist. Preserve all release
+   fence/drain rules and shared Holder/Sync/Durability persistence; add no second writer.
+   An exact present op returns a checked presence receipt with no log rewrite, subscriber
+   notification or duplicate delivery. An unchanged/rejected Sync report is not success.
+6. Return bounded public id/outcome/frontier information. Keep outcome/frontier out of
+   journal bytes so delivered and present retries derive the same phase-only receipt.
 
-- Require the release gate to be accepting, the intended path-backed holder and normal
-  persistence availability. Quiesce/drain/failure fencing still applies. Only the
-  instance's participant relay allowlist is bypassed by this local courier operation.
-- Run guard over the holder's current in-memory Space log, before delivery, so a relay
-  admission/revocation cannot interleave between judgment and delivery.
-- Guard checks the staged roster equals the exact reviewed grant-recipient set; reload
-  the same public binding against this supplied log and require the same bootstrap/key.
-  Do not reread the Space holder or synchronously call itself inside guard.
-- For a pending absent reference, build the authenticated hypothetical by accepting the
-  exact staged op and require Authority to honor it with the catalog's root/creation/
-  reference bindings. If already present, require exact op equality and still re-run
-  guard; presence is never an authorization verdict. Refuse `reference_not_honored` on
-  a lapsed reference, including a replay which was valid when first delivered.
-- For initial-existing, require the exact reference already present and honored in the
-  actual log, the parent's initial provenance and reviewed child title/creation. Never
-  switch a missing initial reference into the append branch or rewrite Space to restore it.
-- Deliver at most that one authenticated op and reuse the existing Holder/Sync/Durability
-  persistence path. Refactor shared persistence, not a second file writer. No frame is
-  acknowledged before durable persistence. Refuse in-memory or unsupported write paths.
-- An exact already-present frame skips delivery and disk writes, while returning a
-  checked presence receipt. This is essential for zero-write initial listing and retry.
-- Return bounded public reference id, outcome and snapshot/frontier information. A
-  rejected Sync delivery or an unchanged log without the checked frame is not success.
+The critical holder call has no semantic review callback or new cross-holder wait.
+Its timeout stays within the existing relay persistence/cleanup/slack budget, and its
+normal bounded duration must fit ReleaseQuiesce's default five-second drain window.
+Close the gate during blocked persistence in tests: drain captures the completed exact
+log or fails closed, never commits an incomplete capture. A caller timeout is ambiguous,
+not proof of no effect. No newly detached persistence task may outlive cancellation.
 
-Run guard in a monitored, unlinked bounded worker while the holder waits; the holder's
-mailbox remains serialized, so no relay can interleave. On deadline terminate the worker,
-consume its monitor/result and refuse without persistence; a callback timeout must not
-kill the holder or continue writing in a detached worker. Include this deadline in the
-courier call budget in addition to the persistence budget. Catch guard raises/exits/invalid
-returns as closed refusals; preserve the old log and
-holder availability. Guard only evaluates its supplied Space snapshot and previously
-verified bounded child context; it must not perform cross-holder calls or a recursive
-Space pull. Reuse the parent's evidence budgets and a bounded courier call timeout that
-covers guard plus existing persistence deadlines. Never relax the existing durability
-or release-fence policy to avoid a timeout. A timeout is ambiguous, not proof of no write.
+Read-only path holders must explicitly acquire isolated proven durability before an
+append. In-memory/unowned/unsupported paths refuse with atoms without crashing. An
+initial presence-only path never runs target-replacing rehearsal. On shared persistence
+error/timeout, fence ALL subsequent mutations until verified holder restart/reconciliation;
+never dump an old snapshot over a possibly newer file. Do not promote an unsynced candidate
+into a successful receipt. The final observation must authenticate the served carrier
+history and establish equality with disk, including quarantine where relevant, not merely
+observe a file ahead of the live holder. Unknown/late effects remain fenced.
+
+Retain strict initial single-reference and all-carried-entry checks. Name initial
+competition and lapsed carried-entry refusals distinctly and document row 244 as recovery;
+neither is a reason to relax authority. Use the core's existing honored predicate
+semantics: Authority constructs quarantine from exactly the keys of reasons.
 
 ## Observation and owner receipt after the courier
 
@@ -151,8 +161,8 @@ record fields. Keep BEAM/Python parity behavioral, without source/prose pins.
 - If journal was replaced but reply was lost, re-read and recognize only the same exact
   attempt/catalog/reference/record transition from the original expected bytes. Re-run
   current-history review before idempotent success. A different receipt is stale intent.
-- A concurrent relay arriving before the courier guard is judged inside guard. One
-  arriving after courier may make the later full observation refuse; this is a dated
+- A concurrent relay arriving between snapshot review and courier refuses the stale
+  token. One arriving after courier may make the later full observation refuse; this is a dated
   observation boundary, never an excuse to mark a now-invalid reference listed.
 - Two simultaneous list calls converge on one log op and one receipt, or a clear bounded
   busy/stale refusal whose exact retry succeeds. Never synthesize another reference.
@@ -167,7 +177,7 @@ record fields. Keep BEAM/Python parity behavioral, without source/prose pins.
 1. Verify #168 merge ancestry/tree/gates, refresh main and prepare Node dependencies.
    Reuse its ActivationFixture/publication helpers; do not replace real histories with
    fixtures carrying precomputed ready/honored flags.
-2. Implement local holder courier with guard, fence/durability reuse, checked no-write
+2. Implement local holder snapshot/CAS courier, fence/durability reuse, checked no-write
    presence and dedicated behavioral tests. Prove it is unreachable over the network.
 3. Implement ReleaseListing with before/inside/after current-history checks and strict
    artifact/catalog linkage. Add both normal pending and initial-existing integration.
@@ -184,19 +194,21 @@ record fields. Keep BEAM/Python parity behavioral, without source/prose pins.
   of the served reference and run the real CatalogEntries judgment over actual histories.
 - Pending path appends exactly the staged client frame. Replay adds neither op nor
   journal receipt. Initial path has byte-identical Space file and unchanged inode/mtime,
-  including retry and restart; missing or altered initial reference refuses.
+  including retry and a read-only Space holder restart; missing or altered initial
+  reference refuses. Relay-enabled startup rehearsal may replace its target: for that
+  existing behavior assert restart bytes only and unchanged inode/mtime during listing.
 - Wrong catalog key/binding/service, changed artifact/digest/op id, competing reference,
   stale expected/attempt/incarnation/manifest and forged/different receipt refuse.
 - A correctly signed but currently unhonored reference refuses. Revoke/admit at a
-  deterministic guard boundary to prove the roster/authority decision is in-holder;
+  deterministic snapshot-to-CAS boundary to prove a stale authority decision cannot write;
   assert no operator phase advance and preserve already-authentic writes.
 - Missing/unavailable carried history, carried authority drift, changed route and
   forked bootstrap refuse. Every carried entry is observed, not only the new Thread.
 - Read-only network relay policy still refuses an authenticated participant push.
   Attempts to encode/invoke courier over the real WebSocket boundary refuse and create
   no write; local courier still persists through the required guarded path.
-- Drain/closed gate, persistence timeout/error, guard error/exit and invalid callback
-  returns yield bounded refusals without corrupting/replacing the readable log.
+- Drain/closed gate, persistence timeout/error and reviewer crash/hang or invalid token
+  yield bounded refusals without corrupting/replacing the readable log.
 - Actual process kill around log durability and journal replacement/reply; exact retry
   yields one op and one receipt. Concurrent same-attempt listings and relay races pass.
 - Both reference modes have closed command-file/CLI rehearsal, atom-only refusals,
