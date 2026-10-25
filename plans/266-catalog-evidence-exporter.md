@@ -3,8 +3,8 @@
 ## Status and dependency
 
 IN PROGRESS: implement plan 245 build PR 4 independently of its Rust evaluator.
-The fresh worktree starts from current main with catalog publication. Rebase onto
-the verified listing merge before integrating its real release/publication fixture.
+The fresh worktree started from main with catalog publication and is now rebased
+onto the verified listing merge for its real release/publication fixture.
 No pending-parent implementation is copied or silently treated as merged.
 
 ## Outcome
@@ -72,7 +72,10 @@ remain parked separately; software gates use disposable real-mode fixtures.
 Retain 128 KiB per artifact, 1,024/16 MiB aggregate retained artifact limits and
 32 artifacts per page from the evaluator. The serialized retained snapshot must
 fit the existing 32 MiB native persistence cap; the output transport cap is 64 MiB.
-Measure actual encoded bytes, including escaping. Bound source reads and allocations
+Measure actual encoded bytes, including escaping. Each frame must fit the existing
+64,000-byte push envelope, matching the publication profile and native client;
+maximum-capacity fixtures use legitimate bounded frames rather than oversized ops.
+Bound source reads and allocations
 before loading an oversized native dump. Do not lower the accepted evaluator-valid
 capacity to make an easy test pass; prove the maximum-capacity case explicitly.
 
