@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-IN PROGRESS. Main-history and complete-proof ordering, observation bounds and retained recovery are implemented; shared scalar validation, capacity controls and final signoff remain open.
+IN PROGRESS. Main-history and complete-proof ordering, observation bounds and retained recovery are implemented; shared scalar validation and capacity controls are verified; final signoff remains open.
 
 This plan aligns the BEAM and TypeScript catalog owners before the native evaluator
 adopts their behavior. Raw authentication returns header metadata, not admitted
@@ -112,10 +112,9 @@ as though it were an incremental page. Main-history reasons remain unchanged.
    and numeric representation rules remain separate from allocation safety.
 1. Verify the common complete-proof contract with independent fresh producers,
    valid and corrupt saved-state controls, without changing authority or canonical bytes.
-2. Extend the genuine saved/proposed envelope-cap controls with an independent BEAM
-   producer and valid matching-proof envelopes. A page and saved state individually
-   under the cap may still have an over-cap proposed union; refuse without advancing
-   and never substitute corruption that already fails without the budget guard.
+2. Keep both independent valid saved/proposed envelope-cap producers and matching
+   proof controls in the required suite. At-cap acceptance/reopen and one-over
+   rejection must remain discriminating, with no route candidate on rejection.
 3. Resolve the freeze-capacity obligation and require native rejection/freshness
    tests before route installation. Verify that no retained evidence is silently
    evicted and that rejection never clears a prior block.

@@ -78,7 +78,7 @@ async function run(b) {
         assert.equal(d.reason, "invalid_verified_history");
         assert.deepEqual(d.detail.ids, []);
     }
-    const damaged = { ...base.next, histories: [...base.next.histories, b.wrongHistory] };
+    const damaged = { ...base.next, histories: [...base.next.histories, b.wrongHistory].sort((a, b) => a.replica < b.replica ? -1 : a.replica > b.replica ? 1 : 0) };
     const recovery = await evaluateTreehouseCatalogTrust({ installed: damaged, expected, incoming: { ...page, histories: [b.history] } });
     assert.equal(recovery.kind, "reject");
     assert.equal(recovery.reason, "trust_recovery_required");

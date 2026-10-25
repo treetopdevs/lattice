@@ -203,7 +203,12 @@ defmodule Treehouse.CatalogRawRetentionTest do
 
     wrong = b["wrongHistory"]
     wrong_history = %{replica: wrong["replica"], frames: wrong["frames"], rejected: []}
-    damaged = %{base.next | histories: base.next.histories ++ [wrong_history]}
+
+    damaged = %{
+      base.next
+      | histories: Enum.sort_by(base.next.histories ++ [wrong_history], & &1.replica)
+    }
+
     recovery = evaluate(damaged, %{page() | histories: [history]})
     assert recovery.kind == :reject
     assert recovery.reason == :trust_recovery_required

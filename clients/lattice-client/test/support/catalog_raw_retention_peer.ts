@@ -49,7 +49,7 @@ async function run(b:Bundle){
   const d=await evaluateTreehouseCatalogTrust({installed:base.next,expected,incoming:JSON.parse(JSON.stringify({...page,histories:[{...b.history,frames}]}))});
   assert.equal(d.kind,"reject");assert.equal(d.reason,"invalid_verified_history");assert.deepEqual(d.detail.ids,[]);
  }
- const damaged={...base.next,histories:[...base.next.histories,b.wrongHistory]};
+ const damaged={...base.next,histories:[...base.next.histories,b.wrongHistory].sort((a,b)=>a.replica<b.replica?-1:a.replica>b.replica?1:0)};
  const recovery=await evaluateTreehouseCatalogTrust({installed:damaged,expected,incoming:{...page,histories:[b.history]}});assert.equal(recovery.kind,"reject");assert.equal(recovery.reason,"trust_recovery_required");assert.deepEqual(recovery.detail.ids,[]);
  const wrongCutoff=await deriveTreehouseCatalogCutoff(b.wrongHistory);assert.equal(wrongCutoff.ok,true);if(!wrongCutoff.ok)throw new Error("signed wrong-family proof required");
  const wrongProof=await evaluateTreehouseCatalogTrust({installed:base.next,expected,incoming:{...page,cutoffProofs:[{cutoff:wrongCutoff.cutoff,history:b.wrongHistory}]}});assert.equal(wrongProof.kind,"reject");assert.equal(wrongProof.reason,"recovery_incomplete");assert.deepEqual(wrongProof.detail.ids,[]);
