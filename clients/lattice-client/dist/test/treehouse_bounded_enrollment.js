@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { prepareTreehouseBoundedSpaceCreation, prepareTreehouseBoundedThreadCreation, authorTreehouseCommand, authorTreehouseIssueInvitation, signTreehouseAcceptance, authorTreehouseAdmitAndGrant, authorTownshipRevocation, carrierDelegationsFromFrames, resolveContinuationProfileFromFrames, carrierOpsToSemanticOps, treehouseCommandDecoders, observeTreehouse, memberCapability, } from "../src/index";
+import { prepareTreehouseBoundedSpaceCreation, prepareTreehouseBoundedThreadCreation, authorTreehouseCommand, authorTreehouseIssueInvitation, authorTreehouseOfflineInvitation, signTreehouseAcceptance, authorTreehouseAdmitAndGrant, authorTownshipRevocation, carrierDelegationsFromFrames, resolveContinuationProfileFromFrames, carrierOpsToSemanticOps, treehouseCommandDecoders, observeTreehouse, memberCapability, } from "../src/index";
 import { frontier } from "../src/sync";
 const signer = (byte) => {
     const seed = new Uint8Array(32).fill(byte);
@@ -56,6 +56,14 @@ spaceFrames.push(founderAdmission.admit);
 initialThreadFrames.push(...founderAdmission.grants.map((g) => g.frame));
 const invitation = await authorTreehouseIssueInvitation({ signer: root, replica: space.replica, frames: spaceFrames,
     threadFrames: { [thread.replica]: initialThreadFrames }, routes: [{ replica: thread.replica }], recipient: key(member.publicKey) });
+const offlineInput = { signer: root, replica: space.replica, frames: spaceFrames,
+    threadFrames: { [thread.replica]: initialThreadFrames }, heldReplicas: [space.replica, thread.replica], recipient: key(member.publicKey) };
+assert.deepEqual(await authorTreehouseOfflineInvitation(offlineInput), invitation);
+let signatures = 0;
+await assert.rejects(() => authorTreehouseOfflineInvitation({ ...offlineInput, heldReplicas: [space.replica],
+    signer: { publicKey: root.publicKey, sign: (bytes) => { signatures++; return root.sign(bytes); } } }), /thread_scope_not_held/);
+assert.equal(signatures, 0);
+await assert.rejects(() => authorTreehouseOfflineInvitation({ ...offlineInput, threadFrames: {} }), /thread_not_available/);
 spaceFrames.push(invitation.frame);
 await assert.rejects(() => signTreehouseAcceptance({ replica: space.replica, frames: spaceFrames, invitationId: invitation.frame.id, signer: stranger }), /wrong_recipient/);
 const acceptance = await signTreehouseAcceptance({ replica: space.replica, frames: spaceFrames, invitationId: invitation.frame.id, signer: member });

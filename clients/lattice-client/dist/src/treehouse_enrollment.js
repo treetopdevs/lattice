@@ -298,15 +298,22 @@ function assertHonored(product, frames, authored) {
  * Refuses `thread_scope_exceeds_routes` above the lite cap or when a Thread in scope has no supplied route.
  */
 export async function authorTreehouseIssueInvitation(input) {
+    return authorScopedInvitation(input, input.routes.map((route) => route.replica), "thread_scope_exceeds_routes");
+}
+/** Offline founder issuance: held, verified profiles supply scope availability; no endpoints or routes are invented. */
+export async function authorTreehouseOfflineInvitation(input) {
+    return authorScopedInvitation(input, input.heldReplicas, "thread_scope_not_held");
+}
+async function authorScopedInvitation(input, available, unavailable) {
     if (canonicalBase64Bytes(input.recipient, 32) === null)
         throw new Error("invalid_recipient");
     if (input.frames.some((frame) => frame.replica !== input.replica))
         throw new Error("wrong_replica");
     const ops = opsOf("Treehouse.Space", input.frames);
     const scope = threadScope(ops, verdicts("Treehouse.Space", ops));
-    const routed = new Set(input.routes.map((route) => route.replica));
-    if (scope.length > TREEHOUSE_LITE_THREAD_CAP || scope.some((replica) => !routed.has(replica)))
-        throw new Error("thread_scope_exceeds_routes");
+    const held = new Set(available);
+    if (scope.length > TREEHOUSE_LITE_THREAD_CAP || scope.some((replica) => !held.has(replica)))
+        throw new Error(unavailable);
     const threads = scope.map((replica) => {
         const view = observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", requireFrames(input.threadFrames[replica], replica)));
         return { replica, archived: view.state.archived === true };

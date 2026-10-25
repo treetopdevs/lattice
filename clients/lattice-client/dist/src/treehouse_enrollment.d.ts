@@ -93,6 +93,18 @@ export declare function authorTreehouseIssueInvitation(input: {
     frame: CarrierOpFrame;
     threads: TreehouseOfferThread[];
 }>;
+/** Offline founder issuance: held, verified profiles supply scope availability; no endpoints or routes are invented. */
+export declare function authorTreehouseOfflineInvitation(input: {
+    signer: CarrierOpSigner;
+    replica: string;
+    frames: readonly CarrierOpFrame[];
+    threadFrames: Readonly<Record<string, readonly CarrierOpFrame[]>>;
+    heldReplicas: readonly string[];
+    recipient: string;
+}): Promise<{
+    frame: CarrierOpFrame;
+    threads: TreehouseOfferThread[];
+}>;
 export interface TreehouseThreadGrant {
     replica: string;
     frame: CarrierOpFrame;
