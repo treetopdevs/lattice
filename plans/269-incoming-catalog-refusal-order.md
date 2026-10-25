@@ -101,10 +101,10 @@ as though it were an incremental page. Main-history reasons remain unchanged.
    BEAM delegation observation needs the same closed key set as TypeScript.
 1. Verify the common complete-proof contract with independent fresh producers,
    valid and corrupt saved-state controls, without changing authority or canonical bytes.
-2. Add discriminating valid saved/proposed envelope controls at the actual cap and
-   one over. Use valid authenticated histories and matching proofs, not corruption
-   that would already fail without a budget guard. Cover a page and saved state
-   individually under the cap whose proposed union exceeds it.
+2. Extend the genuine saved/proposed envelope-cap controls with an independent BEAM
+   producer and valid matching-proof envelopes. A page and saved state individually
+   under the cap may still have an over-cap proposed union; refuse without advancing
+   and never substitute corruption that already fails without the budget guard.
 3. Resolve the freeze-capacity obligation and require native rejection/freshness
    tests before route installation. Verify that no retained evidence is silently
    evicted and that rejection never clears a prior block.
