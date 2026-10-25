@@ -135,3 +135,33 @@ fn actual_ts_signed_catalog_histories_authenticate_without_an_authority_verdict(
     }
     assert_eq!(count, 8, "all Space and Thread frames in this fixture");
 }
+
+#[test]
+fn real_beam_and_ts_catalog_envelopes_verify_under_only_the_supplied_key() {
+    use treehouse_tauri_shell::catalog_eval::envelope::{public_key, verify};
+    for name in ["beam_codec.json", "ts_codec.json"] {
+        let fixture = vectors(name);
+        let key = public_key(fixture["expected_catalog_key"].as_str().unwrap()).unwrap();
+        let bytes = serde_json::to_vec(&fixture["catalog_envelope_term"]).unwrap();
+        let verified = verify(&bytes, &key).unwrap();
+        assert_eq!(verified.id(), fixture["catalog_id"].as_str().unwrap());
+        assert_eq!(
+            STANDARD.encode(verified.signing_bytes()),
+            fixture["catalog_bytes"]
+        );
+        let mut wrong_key = key.clone();
+        wrong_key[0] ^= 1;
+        assert!(verify(&bytes, &wrong_key).is_err());
+        assert!(verify(&bytes, &key[..31]).is_err());
+        let mut extra = fixture["catalog_envelope_term"].clone();
+        extra[1]
+            .as_array_mut()
+            .unwrap()
+            .push(json!([["atom", "unexpected"], ["nil"]]));
+        assert!(verify(&serde_json::to_vec(&extra).unwrap(), &key).is_err());
+        let mut duplicated = fixture["catalog_envelope_term"].clone();
+        let first = duplicated[1][0].clone();
+        duplicated[1].as_array_mut().unwrap().push(first);
+        assert!(verify(&serde_json::to_vec(&duplicated).unwrap(), &key).is_err());
+    }
+}
