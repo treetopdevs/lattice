@@ -411,7 +411,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     end
   end
 
-  test "parent replacement cannot redirect creation or completion into the ceremony", f do
+  test "parent redirection refuses, cleaning known files and preserving closed ones", f do
     key = :catalog_evidence_writer_hook
     previous = Application.get_env(:lattice_carrier_server, key)
     before = inputs(f)
@@ -448,11 +448,16 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
       assert {:error, :unsafe_export_location} =
                CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, output)
 
+      assert File.lstat!(parent).type == :symlink
+      assert File.dir?(moved)
+
       if phase == :after_close,
         do: assert(match?({:ok, _}, Packet.decode(File.read!(protected)))),
         else: refute(File.exists?(protected))
 
       assert inputs(f) == before
+      File.rm!(parent)
+      File.rm_rf!(moved)
     end
   end
 
