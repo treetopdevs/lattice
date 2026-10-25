@@ -2,10 +2,6 @@
 
 ## Status and scope
 
-Implementation packet prepared 2026-10-24 from main
-`ba7f23f49bff3257f57747ae6a0766e4786eb2c6`, after merged PRs #165 and #166.
-Execution rebased onto `187cc3d8a77242cbca0fa1d6916af10fc1d6ef0c` after #167;
-all 29 implementation files were byte-identical across rebase.
 Implements plan 224 PR 4 in full: prepare, independent custodian verification/signing,
 commit, and crash-safe `catalogued` publication. Shared read-only release review is
 implemented, together with authenticated public histories and the signing package
@@ -13,9 +9,7 @@ verifier. Custodian ledger/signing APIs now have replay, refusal and kill-bounda
 tests and CLI controls. Relay prepare/commit now have live pending/initial-reference
 rehearsals. Carried-entry and 13/14 capacity rehearsals pass; the relay command
 adapter and restaging status guard are implemented. Final crash tests pass locally
-and on Linux. Independent reviews and Sonnet fallback confirmation have no remaining
-P1/P2; final frozen-tip verification and hosted checks remain.
-Custody P1 fixes are confirmed; this is not yet a completed publication slice.
+and on Linux. Final hosted checks remain before completion.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 
 Software acceptance uses disposable keys and real-mode ceremony fixtures, the production

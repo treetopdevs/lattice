@@ -427,7 +427,7 @@ reviewed. The seed and backup never enter a git checkout; the tool refuses to wr
 - Never use a dry-run key, directory or output as real material, and never the reverse.
 - Never hand-sign the binding outside the product; the root signs it in the app's Catalog binding action.
 
-## 9. Off-host catalog review and signing
+## 10. Off-host catalog review and signing
 
 Initialize the ledger using the custodian’s own verified signed Space log and transfer
 its genesis status to the operator before the first prepare. No signing package is
@@ -445,10 +445,12 @@ count/frontier digest. Compare the expected new entry with the operator independ
 The displayed digest identifies this catalog; it is not a live freshness receipt.
 
 ```bash
-~/.asdf/shims/mix treehouse.catalog_ceremony review-catalog \
-  --ceremony "$CEREMONY" --package "$PACKAGE"
+# Once, before the first relay prepare:
 ~/.asdf/shims/mix treehouse.catalog_ceremony init-ledger \
   --ceremony "$CEREMONY" --space-log "$SIGNED_SPACE_LOG" --out "$GENESIS_STATUS"
+# For each received package:
+~/.asdf/shims/mix treehouse.catalog_ceremony review-catalog \
+  --ceremony "$CEREMONY" --package "$PACKAGE"
 ~/.asdf/shims/mix treehouse.catalog_ceremony sign-catalog \
   --ceremony "$CEREMONY" --package "$PACKAGE" --signer "$SIGNER" \
   --confirm-catalog "$REVIEWED_DIGEST" --out "$SIGNED_ENVELOPE"
@@ -460,8 +462,9 @@ Choose explicit absolute file paths; output directories must already be private 
 Exports create new files (0600), or accept exactly matching existing bytes. Use a new
 status filename for each revision. Transfer the public envelope and current status to
 the operator. The relay must independently recheck before committing `catalogued`.
-CLI publication wiring is still being implemented in plan 263; these commands alone
-do not change a relay journal, install routes in an app, or mark a Thread listed.
+These custodian commands alone do not change a relay journal, install routes in an app,
+or mark a Thread listed. See [catalog publication](treehouse_catalog_publication.md)
+for the relay prepare/commit commands.
 
 `init-ledger` is a one-time initialization, never a recovery/reset command. Every future
 signature for this key and binding must use this same managed ceremony ledger. Preserve

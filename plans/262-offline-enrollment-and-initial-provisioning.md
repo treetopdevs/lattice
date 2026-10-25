@@ -2,10 +2,9 @@
 
 ## Status, dependencies and execution boundary
 
-IN PROGRESS, 2026-10-24. PR A #166 merged as ba7f23f49 after exact-tip run
-40146178153 passed; merge tree equals tested 81bb82f6. PR B #167 merged as
-187cc3d8a after review-fix exact-tip run 40153474000 passed at 8b6d60dca; its merge
-tree also equals the tested head. Ordinary OS Keychain identities, native file picker,
+IN PROGRESS. Initial provisioning and offline enrollment PRs are merged after their
+required exact-tip checks passed, with merge trees matching the tested heads.
+Ordinary OS Keychain identities, native file picker,
 fingerprint refusal, offline acceptance/admission/grants and operator-bundle export
 passed in the hosted packaged gate. These are software/packaged results; native catalog
 trust, guarded listing and a real two-Mac relay session remain separate requirements.

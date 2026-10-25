@@ -64,8 +64,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
          true <- Enum.any?(info.envelopes, fn {_id, meta} -> meta.sha256 == sha end),
          {:ok, uid} <- Journal.effective_uid(),
          path = file_path(root, sha),
-         {:ok, {:final, _}} <- read_file(path, sha <> ".json", uid, key),
-         {:ok, bytes} <- File.read(path),
+         {:ok, {:final, _}, bytes} <- read_file(path, sha <> ".json", uid, key),
          true <- byte_size(bytes) <= @max_envelope and Journal.digest(bytes) == sha,
          {:ok, envelope} <- TransportCatalog.decode_catalog_json(bytes),
          :ok <- TransportCatalog.verify_catalog(envelope, key) do
@@ -109,7 +108,10 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
         read_temp(Path.join(dir, name), uid)
 
       Regex.match?(~r/\A[0-9a-f]{64}\.json\z/, name) ->
-        read_file(Path.join(dir, name), name, uid, key)
+        case read_file(Path.join(dir, name), name, uid, key) do
+          {:ok, entry, _bytes} -> {:ok, entry}
+          {:error, _} = refusal -> refusal
+        end
 
       true ->
         {:error, :catalog_store_corrupt}
@@ -170,7 +172,7 @@ defmodule LatticeCarrierServer.Operator.CatalogStore do
           revision: catalog.revision,
           previous: catalog.previous,
           shared: {catalog.bootstrap, catalog.binding, catalog.space}
-        }}}
+        }}, bytes}
     else
       _ -> {:error, :catalog_store_corrupt}
     end
