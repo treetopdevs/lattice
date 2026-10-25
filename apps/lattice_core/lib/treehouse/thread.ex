@@ -33,11 +33,15 @@ defmodule Treehouse.Thread do
 
   command(:archive_thread, [], do: [{:archived, {:write, true}}])
 
-  defp edit(post, target, text) when is_binary(post) and is_binary(target),
-    do: [{:posts, {:edit, post, text!(text)}}]
+  defp edit(post, target, text) when is_binary(post) and is_binary(target) do
+    text!(target)
+    [{:posts, {:edit, text!(post), text!(text)}}]
+  end
 
-  defp tombstone(post, target) when is_binary(post) and is_binary(target),
-    do: [{:posts, {:delete, post}}]
+  defp tombstone(post, target) when is_binary(post) and is_binary(target) do
+    text!(target)
+    [{:posts, {:delete, text!(post)}}]
+  end
 
   defp text!(text) when is_binary(text) do
     if String.valid?(text), do: text, else: raise(ArgumentError, "Treehouse text must be UTF-8")
@@ -49,7 +53,8 @@ defmodule Treehouse.Thread do
 
   def command_op_status(%Op{body: {command, [post, target | _]}} = op, visible, context)
       when command in [:author_edit, :author_tombstone, :moderator_tombstone] do
-    targets = lineage_targets(target, post, context.visible_ops, MapSet.new([post]))
+    targets =
+      lineage_targets(target, post, context.visible_ops, context.verdicts, MapSet.new([post]))
 
     cond do
       Enum.any?(targets, &(not MapSet.member?(visible, &1))) ->
@@ -77,7 +82,7 @@ defmodule Treehouse.Thread do
 
   def command_op_status(_op, _visible, _context), do: :ok
 
-  defp lineage_targets(target, post, ops, seen) do
+  defp lineage_targets(target, post, ops, verdicts, seen) do
     if MapSet.member?(seen, target) do
       seen
     else
@@ -85,7 +90,14 @@ defmodule Treehouse.Thread do
 
       case ops[target] do
         %Op{kind: :command, body: {:author_edit, [^post, previous, _]}} ->
-          lineage_targets(previous, post, ops, seen)
+          # A malformed signed command stays in history, but its arguments did
+          # not become product semantics. Its causal verdict is already final;
+          # do not rescan every earlier message body on each lineage hop.
+          if verdicts[target] != :malformed_command do
+            lineage_targets(previous, post, ops, verdicts, seen)
+          else
+            seen
+          end
 
         _ ->
           seen
