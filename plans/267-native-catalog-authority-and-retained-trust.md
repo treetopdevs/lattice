@@ -17,7 +17,8 @@ plan. Portable cutoff observation is also implemented as a second checkpoint:
 real BEAM/TS owners agree on exact canonical bytes and refusal precedence, including
 retained structural rejections. All local checkpoint gates and independent review pass. The branch is refreshed
 onto the codec's minimal parity correction with its cutoff implementation unchanged.
-Checkpoint hosted checks and requested external review remain open; full authority,
+Earlier checkpoint hosted checks are green; the new bounded-role checkpoint and
+requested external review remain open. Full authority,
 incoming/stored history integration and retained-trust logic are still unfinished. The full authority/evaluator and parity matrix below remain mandatory.
 
 A third checkpoint adds the static delegation component: signature/id consistency,
@@ -38,8 +39,10 @@ witnessed beacons, finite continuation profile selection, independently derived
 witness claims, continuation scope/quorum/current-predecessor checks and causal
 lease expiry. It is tested against freshly generated current BEAM/TS continuation
 corpora, both delivery orders, and fresh Rust-authored renewals, witness refusals
-and expiry-boundary histories consumed by both runtimes. Review and full gates
-for this checkpoint are in progress. The result remains raw authority evidence;
+and expiry-boundary histories consumed by both runtimes. Full ordinary/dev-trace native, client build, shell typecheck/tests, full mix
+check and both boundary scans pass after the alias correction. Independent reviews
+and focused alias confirmation have no remaining findings. Refreshed hosted and
+requested external review remain open. The result remains raw authority evidence;
 semantic normalization, command/application policy and retained catalog trust are
 still unfinished. Raw BEAM classification of a witnessed epoch above JS's exact
 horizon does not make that history portable: the final strict incoming boundary
@@ -49,6 +52,13 @@ continuation evidence: both owners refuse a duplicate supplied dependency even
 though its canonical op signature is valid. Retain the supplied list separately
 from the signed normalized set, and use its sorted form only for expected-claim
 comparison. Preserve that distinction through later raw-history persistence.
+
+The alias experiment also proved an existing-owner consistency defect: the same
+signed operation and cutoff can select different holders under unsigned header
+multiplicity. Plan 268 owns its separate BEAM/TS correction and protected reviews.
+Do not silently fix either oracle inside this port. Native expected-claim parity
+must follow the corrected baseline only after that correction is reviewed/adopted;
+the current checkpoint deliberately matches the current owners.
 
 ## Outcome and immutable contracts
 

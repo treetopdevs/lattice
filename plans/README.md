@@ -443,7 +443,8 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 263 | [Catalog publication with off-host custodian](263-catalog-publication-and-custodian-signing.md) | P1 | L | 224 PRs 1–3; 262 A | DONE (#168; run 40157925199 at 0e4dc87d; merge tree matches; fixture software evidence, actual operator ceremony separate) |
 | 264 | [Guarded Thread listing and initial receipt](264-guarded-thread-listing-and-initial-receipt.md) | P1 | L | 263 / PR #168 merged | DONE (#169; exact-tip hosted gate passed; merge tree matches; native trust and field gates remain) |
 | 265 | [Native catalog codec and signature parity](265-native-catalog-codec-and-signature-parity.md) | P1 | L | 245 PR 1 / #164 | IN PROGRESS: independent Rust canonical/frame/catalog authenticity; no installed trust or routes. |
-| 267 | [Native catalog authority and retained trust](267-native-catalog-authority-and-retained-trust.md) | P1 | XL | 245 PR 3; #170 codec dependency | IN PROGRESS: DAG/cutoff/static-delegation checkpoints locally green and reviewed; full authority/retained evaluator remains. Explicit #170 dependency. |
+| 267 | [Native catalog authority and retained trust](267-native-catalog-authority-and-retained-trust.md) | P1 | XL | 245 PR 3; #170 codec dependency | IN PROGRESS: bounded-role checkpoint locally verified/reviewed; full semantic/trust port remains. Explicit #170 and separate 268 correction dependencies. |
+| 268 | [Canonical continuation dependency aliases](268-canonical-continuation-dependency-aliases.md) | P1 | M | Separate core correction before 267 closure | PLANNED: identical signed op/cutoff can select different holders; normalize expected header dependencies in both owners, with protected-core review. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
