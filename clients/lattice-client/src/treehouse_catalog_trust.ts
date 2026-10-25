@@ -1,3 +1,4 @@
+import { withinCatalogRawObservationBounds } from "./treehouse_catalog_raw_bounds";
 import type { CatalogCutoff } from "./treehouse_catalog_codec";
 
 // This module proposes decisions over an adapter-owned complete snapshot. It
@@ -597,20 +598,27 @@ async function authenticateFrames(raw: TreehouseCatalogRawHistory): Promise<stri
   // Authentication before a fetch refusal prevents forged partial input being
   // mislabeled as a harmless missing page. Full portable validation follows.
   for (const value of raw.frames) {
-    const f = value as CarrierOpFrame;
-    try {
-      if (!closed(f, ["v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig"]) || f.v !== 1 ||
-          !text(f.id) || f.replica !== raw.replica || ids.has(f.id) || !Array.isArray(f.deps) || !f.deps.every(text)) fail("invalid_verified_history");
-      const bytes = canonicalBytesForCarrierOp(f), key = canonicalBase64Bytes(f.author, 32), sig = canonicalBase64Bytes(f.sig, 64);
-      if (key === null || sig === null || await canonicalHash(bytes) !== f.id || !ed25519.verify(sig, bytes, key, {zip215: false})) fail("invalid_verified_history");
-      ids.add(f.id);
-    } catch (error) { if (error instanceof Refusal) throw error; fail("invalid_verified_history"); }
+    const proof = await authenticatedRawHeader(value, raw.replica);
+    if (proof === null || ids.has(proof.id) || !proof.deps.every(text)) fail("invalid_verified_history");
+    ids.add(proof.id);
   }
   return sorted(raw.frames.flatMap((f) => (f as CarrierOpFrame).deps.filter((id) => !ids.has(id))));
+}
+async function authenticatedRawHeader(value: unknown, replica: string): Promise<{id: string; deps: readonly string[]} | null> {
+  try {
+    if (!closed(value, ["v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig"]) || value.v !== 1 ||
+      !text(value.id) || value.replica !== replica || typeof value.kind !== "string" || !Array.isArray(value.deps) || !value.deps.every((v) => typeof v === "string") ||
+      !withinCatalogRawObservationBounds(value)) return null;
+    const frame = value as unknown as CarrierOpFrame;
+    const bytes = canonicalBytesForCarrierOp(frame), key = canonicalBase64Bytes(frame.author,32), sig = canonicalBase64Bytes(frame.sig,64);
+    if (key === null || sig === null || await canonicalHash(bytes) !== frame.id || !ed25519.verify(sig,bytes,key,{zip215:false})) return null;
+    return {id: frame.id, deps: frame.deps};
+  } catch { return null; }
 }
 async function validateRejectedHistories(histories: Iterable<TreehouseCatalogRawHistory>): Promise<void> {
   let unsupported = false;
   for (const raw of histories) {
+    for (const record of raw.rejected) if (await authenticatedRawHeader(record.frame,raw.replica) !== null) fail("invalid_verified_history");
     const checked = await deriveTreehouseCatalogCutoff({...raw, frames: []});
     if (!checked.ok && checked.reason === "invalid_verified_history") fail(checked.reason);
     if (!checked.ok) unsupported = true;

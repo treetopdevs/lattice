@@ -26,6 +26,7 @@ defmodule Lattice.Carrier.Wire do
   @max_json_safe_integer 9_007_199_254_740_991
   @max_canonical_integer 18_446_744_073_709_551_615
   @max_decode_depth 64
+  @max_observation_depth 65
   @op_kinds [:command, :authority, :inbox, :tombstone]
 
   @spec version() :: pos_integer()
@@ -124,11 +125,12 @@ defmodule Lattice.Carrier.Wire do
 
   Unknown names remain canonical atom-name wrappers. Only header metadata is
   returned; callers must still use closed wire decoding before semantics. The
-  observation has bounded nodes/string bytes and the existing term depth limit.
+  observation has bounded nodes/string bytes and a depth-65 observation limit.
+  Ordinary wire admission retains its separate depth-64 limit.
   """
   @spec authenticate_observation(term()) :: {:ok, map()} | {:error, :malformed_op}
   def authenticate_observation(frame) do
-    with true <- observation_bound?([{:value, frame}], 67_108_864, 67_108_864),
+    with true <- Lattice.Carrier.RawObservationBounds.within?(frame),
          true <- is_map(frame) and map_size(frame) == 9,
          %{
            "v" => 1,
@@ -142,13 +144,13 @@ defmodule Lattice.Carrier.Wire do
            "sig" => sig64
          } <- frame,
          true <- is_binary(id) and is_binary(replica) and is_binary(kind),
-         true <- is_list(deps) and Enum.all?(deps, &(is_binary(&1) and byte_size(&1) > 0)),
+         true <- is_list(deps) and Enum.all?(deps, &is_binary/1),
          {:ok, author} <- Base.decode64(author64),
          true <- byte_size(author) == 32 and Base.encode64(author) == author64,
          {:ok, sig} <- Base.decode64(sig64),
          true <- byte_size(sig) == 64 and Base.encode64(sig) == sig64,
-         {:ok, body} <- decode_term(body, @max_decode_depth, :observation),
-         {:ok, cap} <- decode_term(cap, @max_decode_depth, :observation),
+         {:ok, body} <- decode_term(body, @max_observation_depth, :observation),
+         {:ok, cap} <- decode_term(cap, @max_observation_depth, :observation),
          true <- Canonical.signable?(body) and Canonical.signable?(cap),
          true <-
            Op.valid?(%Op{
@@ -168,40 +170,6 @@ defmodule Lattice.Carrier.Wire do
   rescue
     _ -> {:error, :malformed_op}
   end
-
-  defp observation_bound?(_pending, nodes, bytes) when nodes < 0 or bytes < 0, do: false
-  defp observation_bound?([], _nodes, _bytes), do: true
-
-  defp observation_bound?([{:value, value} | rest], nodes, bytes) when is_binary(value),
-    do: observation_bound?(rest, nodes - 1, bytes - byte_size(value))
-
-  defp observation_bound?([{:value, value} | rest], nodes, bytes) when is_list(value),
-    do: observation_bound?([{:list, value} | rest], nodes - 1, bytes)
-
-  defp observation_bound?([{:value, value} | rest], nodes, bytes) when is_map(value),
-    do: observation_bound?([{:map, :maps.iterator(value)} | rest], nodes - 1, bytes)
-
-  defp observation_bound?([{:value, value} | rest], nodes, bytes)
-       when is_number(value) or is_boolean(value) or is_nil(value),
-       do: observation_bound?(rest, nodes - 1, bytes)
-
-  defp observation_bound?([{:list, []} | rest], nodes, bytes),
-    do: observation_bound?(rest, nodes, bytes)
-
-  defp observation_bound?([{:list, [head | tail]} | rest], nodes, bytes),
-    do: observation_bound?([{:value, head}, {:list, tail} | rest], nodes, bytes)
-
-  defp observation_bound?([{:map, iterator} | rest], nodes, bytes) do
-    case :maps.next(iterator) do
-      :none ->
-        observation_bound?(rest, nodes, bytes)
-
-      {key, value, next} ->
-        observation_bound?([{:value, key}, {:value, value}, {:map, next} | rest], nodes, bytes)
-    end
-  end
-
-  defp observation_bound?(_pending, _nodes, _bytes), do: false
 
   @spec decode_op(term()) :: {:ok, Op.t()} | {:error, :malformed_op}
   def decode_op(%{

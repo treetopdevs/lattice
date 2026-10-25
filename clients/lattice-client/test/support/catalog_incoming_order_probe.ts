@@ -1,3 +1,4 @@
+import { boundaryCases } from "./catalog_incoming_boundary_cases";
 import {readFileSync} from "node:fs";
 // Fresh public input and actual TS installation results; no saved verdict fallback.
 import {trustFixture,fixtureId} from './export_treehouse_catalog_trust';
@@ -50,6 +51,7 @@ const inputs:[string,unknown[],unknown[]?][]=[
  ['partial-with-earlier-forgery',[{...frame,sig:Buffer.alloc(64).toString('base64')},known]],
  ['partial-wrong-replica',[{...frame,replica:'other-replica'}]],
 ];
+inputs.push(...await boundaryCases(f));
 const input=process.argv[2]==="--consume" ? JSON.parse(readFileSync(process.argv[3]!,"utf8")) : {review:f.review,baselineHistory:f.histories[0]!,cases:inputs.map(([name,frames,rejected=[]])=>({name,history:{replica:f.space.replica,frames,rejected}}))};
 const baseline=await prepareTreehouseCatalogInstallation({review:input.review,history:input.baselineHistory,store:{kind:'verified_fresh',expected:{trustRevision:0,historyGeneration:0}}});
 if(baseline.kind!=="propose") throw new Error("actual valid installed baseline is required");

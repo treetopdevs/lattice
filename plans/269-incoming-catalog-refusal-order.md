@@ -38,8 +38,22 @@ the correction. Final full Mix check, client build/catalog suites, desktop check
 and both boundary scans pass. A transient courier timeout in the earlier full run
 passed all focused courier tests and the final complete umbrella rerun.
 
-These checkpoints do not complete the broader matrix below. Unknown kinds, full
-independent producer boundary coverage, exact resource limits and stored/reopen behavior
+A resource checkpoint now distinguishes depth-64 wire admission from depth-65
+raw observation in both owners. Correctly signed depth-65 evidence authenticates
+but remains unsupported at complete portability, while forged evidence is invalid.
+Depth-66 accepted input exceeds observation bounds and cannot become pending.
+Separate raw budget guards bound 67,108,864 logical JSON nodes and UTF-8 string
+bytes, plus JSON container depth 136. They prove no wire shape or authority.
+Shared input counts at every logical occurrence; cycles cannot grow a JS walk.
+
+Fresh actual public APIs compare unknown kinds, exact push sizes 64,000/64,001,
+partial and forged variants, and depth 64/65/66. Direct BEAM/TS budget tests prove
+actual maxima and one over for nodes, UTF-8 bytes and JSON depth without creating
+sixty-seven million input cells. Focused resource/matrix tests pass. Full gates
+and independent protected reviews for this checkpoint are running.
+
+These checkpoints do not complete the broader matrix below. Full independent producer boundary coverage, complete history/page aggregate limits
+and stored/reopen behavior
 still need explicit full parity proof before completion and native adoption. The saved diagnostic evidence is
 marked as captured before this correction; its old verdicts are not an oracle.
 

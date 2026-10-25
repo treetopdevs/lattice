@@ -46,6 +46,17 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       end
 
       expected = %{
+        "unknown-kind-complete" => {"reject", "unsupported_cutoff"},
+        "unknown-kind-partial" => {"reject", "trust_pending"},
+        "push-64000-complete" => {"propose", nil},
+        "push-64001-complete" => {"reject", "unsupported_cutoff"},
+        "push-64000-partial" => {"reject", "trust_pending"},
+        "push-64001-partial" => {"reject", "trust_pending"},
+        "depth-64-complete" => {"propose", nil},
+        "depth-65-complete" => {"reject", "unsupported_cutoff"},
+        "depth-66-complete" => {"reject", "invalid_verified_history"},
+        "depth-65-partial" => {"reject", "trust_pending"},
+        "depth-66-partial" => {"reject", "invalid_verified_history"},
         "genuine-unknown-mislabeled-rejected" => {"reject", "invalid_verified_history"},
         "forged-unknown-rejected" => {"reject", "unsupported_cutoff"},
         "empty-id-rejected" => {"reject", "unsupported_cutoff"},
@@ -57,6 +68,19 @@ defmodule Treehouse.CatalogIncomingOrderTest do
 
       if Map.has_key?(expected, c["name"]),
         do: assert({c["ts"]["kind"], c["ts"]["reason"]} == expected[c["name"]])
+
+      if String.starts_with?(c["name"], "forged-depth-") or
+           String.starts_with?(c["name"], "forged-unknown-kind-") do
+        assert c["ts"]["reason"] == "invalid_verified_history"
+        assert c["ts"]["detail"]["ids"] == []
+      end
+
+      if c["name"] == "depth-65-complete" do
+        # The producer adds exactly one nested domain term to the valid baseline.
+        [frame] = Enum.filter(frames, fn f -> match?(["list", _], f["body"]) end)
+        assert {:ok, _} = Lattice.Carrier.Wire.authenticate_observation(frame)
+        assert {:error, :malformed_op} = Lattice.Carrier.Wire.decode_op(frame)
+      end
 
       rejected = Enum.map(raw_rejected, &decode_rejected/1)
       history = %{replica: c["history"]["replica"], frames: frames, rejected: rejected}
@@ -88,6 +112,16 @@ defmodule Treehouse.CatalogIncomingOrderTest do
 
       assert evaluated.detail.ids == c["tsEvaluation"]["detail"]["ids"], "evaluation #{c["name"]}"
     end
+  end
+
+  @tag timeout: 180_000
+  test "raw observation resource budgets are exact at their actual maxima" do
+    {output, status} =
+      System.cmd("node", ["--import", "tsx", "--test", "test/treehouse_catalog_raw_bounds.ts"],
+        cd: @client
+      )
+
+    assert status == 0, output
   end
 
   @tag :tmp_dir
@@ -123,7 +157,7 @@ defmodule Treehouse.CatalogIncomingOrderTest do
       Op.new(f.space.root, f.space.replica, [""], :command, %Canonical.Atom{name: name})
       |> Wire.encode_op()
 
-    assert {:error, :malformed_op} = Wire.authenticate_observation(empty_dep)
+    assert {:ok, %{deps: [""]}} = Wire.authenticate_observation(empty_dep)
 
     cases =
       Enum.map(

@@ -1424,8 +1424,13 @@ defmodule Treehouse.CatalogTrust do
         frames =
           Enum.map(history.frames, fn frame ->
             case Wire.authenticate_observation(frame) do
-              {:ok, %{replica: replica} = proof} when replica == history.replica -> proof
-              _ -> refuse(:invalid_verified_history)
+              {:ok, %{replica: replica} = proof} when replica == history.replica ->
+                if Enum.all?(proof.deps, &text?/1),
+                  do: proof,
+                  else: refuse(:invalid_verified_history)
+
+              _ ->
+                refuse(:invalid_verified_history)
             end
           end)
 
