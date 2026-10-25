@@ -86,6 +86,36 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadinessTest do
              ReleaseReadiness.review(f.root, activated, f.probe, f.ceremony_dir, "ready")
   end
 
+  test "publication returns the authenticated history reread after route probes", f do
+    activated = activated!(f)
+    restart!()
+    assert {:ok, _} = ReleaseReadiness.confirm(f.root, activated, f.probe, f.ceremony_dir)
+    {:ok, raw} = Journal.read(f.root)
+    late = Identity.from_seed("late", "publication-review-late")
+
+    {space, invitation} =
+      Sim.command(f.space, "creator", :issue_invitation, [Base.encode64(late.pub), []])
+
+    refute Sim.quarantined(space, "creator", invitation.id)
+
+    hook!(fn route ->
+      if route == f.space_route do
+        assert {:ok, _} = Holder.relay(Holder.via("space"), "member", invitation)
+      end
+    end)
+
+    assert {:ok, observation} =
+             ReleaseReadiness.review(f.root, raw, f.probe, f.ceremony_dir, "ready")
+
+    {_instance, observed} =
+      Enum.find(observation.current.pairs, fn {_instance, log} -> log.replica == space.replica end)
+
+    assert observed.ops[invitation.id] == invitation
+    assert invitation.id in observation.frontiers[space.replica]
+    assert {:ok, ^raw} = Journal.read(f.root)
+    no_grants!()
+  end
+
   test "a restart after confirm with the same bytes boots and keeps ready", f do
     activated = activated!(f)
     restart!()

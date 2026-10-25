@@ -200,7 +200,7 @@ envelope may exist, else `stale_catalog_head`.
   with `Signer.read_seed` plus the `Paths.signer` ancestor checks, requires its public key to equal
   the root-signed `record.catalog_key` (`signer_key_mismatch`), wraps it in `Secret` and signs inside
   the call. This is the slice 13 sketch; it puts the signer on the network-facing host.
-- (b) `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file)` runs the checks below and
+- (b) `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file, custodian_status)` runs the checks below and
   writes `catalog-unsigned.json` (canonical `C` and `sha256` of `catalog_bytes(C)`). The custodian
   runs a new ceremony command `sign-catalog`. It keeps a custodian-side record of the last signed
   revision, id and envelope bytes (envelope written and fsynced before the record advances). It

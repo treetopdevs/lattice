@@ -49,9 +49,13 @@ Existing files are below `apps/lattice_carrier_server/lib/lattice_carrier_server
    implementation. Keep `confirm/4` behavior and refusal compatibility. Publication
    requires exact raw `expected` journal bytes at `ready`, matching loaded manifest and
    incarnation, health, reviewed relay realms and current roster. Reload binding after
-   probes. Read each served log through the existing durability locking mechanism.
-2. Add `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file)`: construct C
+   probes. Re-read and revalidate served logs after probes, returning that later snapshot
+   and its frontiers. Use phase-specific roster drift atoms. Probe keys must differ
+   from catalog/service/Space/Thread roots. Read logs through durability locks.
+2. Add `ReleaseCatalog.prepare(root, expected, ceremony_dir, probe_file, custodian_status)`: construct C
    deterministically and return a closed public signing package plus a review sheet.
+   Prepare also requires the public custodian ledger status, including any pending C;
+   only that same pending C may be prepared. Export status under the custodian lock.
    No journal/store mutation or private signing occurs. CLI writes a new exclusive
    output file; same bytes may replay, conflicting output refuses.
 3. Add `CatalogCeremony.SignCatalog.review/1` and `.sign/1`, exposed by ceremony CLI
@@ -94,8 +98,15 @@ the hypothetical Space for normal mode; for `initial_existing`, require its exac
 already honored in the actual Space, an empty committed catalog head and the initial
 journal provenance. The custodian verifies the root-bound bootstrap against its own
 ceremony binding/report, not merely a matching key supplied inside the package.
+Complete histories expose chat plaintext to the custodian and its backup readers.
+Do not advertise this transfer as metadata-only. Keep complete evidence: pruning
+ancestry can omit revocations/beacons and change Authority judgments. Busy histories
+can exhaust these explicit limits and block further catalogs until a separately
+designed scalable evidence format exists; never silently drop chat or authority ops.
 The package digest is not independent authorization: the review sheet names binding,
 revision/previous, complete inventory and, for new entries, replica/root/route/reference.
+Print each history frontier digest and frame count. Commit requires current histories
+to extend the reviewed snapshot and independently evaluates their current authority.
 
 ## Catalog construction and store checks
 
@@ -119,8 +130,13 @@ create/delete lock sentinel. A small Python filesystem owner may hold flock on m
 and Linux and persist only public envelope/head bytes; it never receives a seed. Keep
 this separate from the Linux-only operator mutation owner. BEAM checks ledger state,
 reads the seed and signs while ownership is live; output requires durable owner ACK.
-Owner EOF/death means no output and no late persistence after lock release.
+Owner EOF/death means no output and no late persistence after lock release. Use a
+bounded owner hold deadline; expiry revokes the session and never releases a signature.
 
+An explicit one-time init-ledger after binding verification durably creates a genesis
+head naming binding, catalog key and no signed revision, under the same lock. Only an
+empty ledger may initialize; missing head thereafter is corruption. Initialization
+crashes before head publication may retry only while no envelope exists.
 Under the lock verify the entire contiguous immutable envelope ledger and head record.
 Accept only the next revision with previous equal to the last signed id. Exact same C
 returns stored envelope bytes without another signature. A competing C at that revision
@@ -150,6 +166,11 @@ rebuilds the same C and commits it. Lost journal reply is resolved by exact exis
 receipt/envelope comparison; return idempotent success without another artifact or
 revision. A catalogued retry still rechecks current binding, roster, routes and histories;
 reject drift rather than silently preparing a new revision or restaging live logs.
+A signed but now-unusable C permanently consumes that revision: no fork-safe abandon
+exists. This is an operator custody/recovery event, never a reset. Before restaging,
+require current public custodian status and refuse a pending signed revision with
+:catalog_signature_pending. The custodian remains authoritative if status is withheld;
+its next sign refuses a conflicting C. Document this cross-host preservation boundary.
 Do not weaken generic owner callers into accepting arbitrary record transitions.
 
 ## Implementation order
@@ -177,6 +198,9 @@ Do not weaken generic owner callers into accepting arbitrary record transitions.
 - Concurrent identical signing replays exact envelope; different catalogs at the same
   revision yield one winner. Kill at each envelope/head/ACK boundary, reopen and retry.
   Assert no signature output before ACK and no publication after losing lock ownership.
+  Include initialization kills, first-envelope/head kills and expired hold deadlines.
+  Signing followed by roster drift/restaging must surface the pending signature and
+  refuse a conflicting revision without resetting either ledger.
 - Owner kill before/after artifact link, receipt write and reply produces one catalog,
   one receipt, or a bounded refusal. Missing receipt, deleted tail, corrupted envelope,
   forged chain and mismatched pending C cannot silently recover or fork.

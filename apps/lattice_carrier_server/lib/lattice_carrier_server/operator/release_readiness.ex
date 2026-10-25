@@ -39,8 +39,6 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
     Secret
   }
 
-  @window :roster_drift_since_activation
-
   @spec confirm(Path.t(), binary() | nil, Path.t(), Path.t()) :: {:ok, map()} | {:error, term()}
   def confirm(root, expected, probe_identity_file, ceremony_dir) do
     with {:ok, review} <- review(root, expected, probe_identity_file, ceremony_dir, "activated"),
@@ -80,11 +78,13 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
          :ok <- same(digest == manifest_artifact(record)["sha256"], :release_manifest_mismatch),
          :ok <- same(Health.ready?(), :route_not_ready),
          {:ok, instances} <- loaded_manifest(deployment),
-         {:ok, current} <- roster_current(record, instances),
+         {:ok, current} <- roster_current(record, instances, window(phase)),
          {:ok, binding} <- bound(record, instances, ceremony_dir),
-         :ok <- check_bound(instances, current, binding, reference(record)),
+         :ok <- check_bound(instances, current, binding, reference(record), window(phase)),
          :ok <- pulled(targets(current, binding), binding, probe_identity_file),
-         :ok <- rebound(record, instances, ceremony_dir, binding) do
+         :ok <- rebound(record, instances, ceremony_dir, binding),
+         {:ok, current} <- roster_current(record, instances, window(phase)),
+         :ok <- check_bound(instances, current, binding, reference(record), window(phase)) do
       {:ok,
        %{
          deployment: deployment,
@@ -92,7 +92,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
          digest: digest,
          instances: instances,
          current: current,
-         binding: binding
+         binding: binding,
+         frontiers:
+           Map.new(current.pairs, fn {_instance, log} -> {log.replica, Log.frontier(log)} end)
        }}
     else
       {:error, _} = refusal -> refusal
@@ -106,6 +108,10 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
 
   def review(_root, _expected, _probe_identity_file, _ceremony_dir, _phase),
     do: {:error, :stale_operator_intent}
+
+  defp window("activated"), do: :roster_drift_since_activation
+  defp window("ready"), do: :roster_drift_since_ready
+  defp window("catalogued"), do: :roster_drift_since_catalog
 
   defp guarded(deployment, root) do
     with %{operator_root: guarded_root, incarnation: incarnation} when is_binary(incarnation) <-
@@ -147,7 +153,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   # shared with activation. The holder persists before it acknowledges, so the
   # file is the served history; a file that cannot be read is a route that is
   # not ready.
-  defp roster_current(record, instances) do
+  defp roster_current(record, instances, window) do
     [child] = Enum.filter(record["artifacts"], &(&1["kind"] == "log"))
 
     with {:ok, pairs} <- served_logs(instances),
@@ -155,11 +161,11 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
          # one serving the staged child log.
          [admitted] <- Enum.filter(instances, &(&1.log_file == child["path"])),
          {:ok, current} <-
-           Staging.roster_current(record, admitted, Enum.map(pairs, &elem(&1, 1)), @window) do
+           Staging.roster_current(record, admitted, Enum.map(pairs, &elem(&1, 1)), window) do
       {:ok, Map.put(current, :pairs, pairs)}
     else
       {:error, _} = refusal -> refusal
-      _ -> {:error, @window}
+      _ -> {:error, window}
     end
   end
 
@@ -197,7 +203,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
     end
   end
 
-  defp check_bound(instances, current, binding, reference) do
+  defp check_bound(instances, current, binding, reference, window) do
     replicas = Map.new(current.pairs, fn {instance, log} -> {instance.log_file, log.replica} end)
 
     roots =
@@ -210,7 +216,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
         replica_of: &Map.get(replicas, &1.log_file),
         roots: roots,
         roster: current.roster,
-        peer_error: @window
+        peer_error: window
       },
       binding
     )
@@ -253,12 +259,17 @@ defmodule LatticeCarrierServer.Operator.ReleaseReadiness do
   end
 
   # Every route is probed, one grant at a time, so no grant outlives the call.
-  # The probe key is refused if it reuses the service key or any route's root.
+  # The probe key must differ from service, catalog and authority-root keys.
   defp pulled(targets, binding, probe_identity_file) do
     with {:ok, secret, pub} <- probe_key(probe_identity_file),
          :ok <-
            same(
-             pub != binding.record.service_key and pub not in Enum.map(targets, & &1.root),
+             pub not in [
+               binding.record.service_key,
+               binding.record.catalog_key,
+               binding.record.space_root
+             ] and
+               pub not in Enum.map(targets, & &1.root),
              :readiness_probe_key_reused
            ) do
       Enum.reduce_while(targets, :ok, fn target, :ok ->
