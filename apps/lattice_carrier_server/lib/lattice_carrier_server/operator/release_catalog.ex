@@ -297,11 +297,14 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
     current = Map.new(pairs, fn {_instance, log} -> {log.replica, log} end)
 
     if Enum.all?(histories, fn {replica, log} ->
-         case current[replica] do
-           nil -> false
-           latest -> Enum.all?(log.ops, fn {id, op} -> latest.ops[id] == op end)
-         end
+         history_extends?(current[replica], log)
        end), do: :ok, else: {:error, :catalog_history_replaced}
+  end
+
+  defp history_extends?(nil, _log), do: false
+
+  defp history_extends?(latest, log) do
+    Enum.all?(log.ops, fn {id, op} -> latest.ops[id] == op end)
   end
 
   defp store(root, key) do

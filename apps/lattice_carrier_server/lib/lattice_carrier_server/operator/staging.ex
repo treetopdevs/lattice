@@ -141,23 +141,27 @@ defmodule LatticeCarrierServer.Operator.Staging do
   defp restaging_status(expected, head, binding, path) do
     with {:ok, record} <- Journal.decode(expected) do
       if record["phase"] in ["ready", "catalogued", "listed"] do
-        with true <- is_binary(path),
-             {:ok, bytes} <-
-               Store.read_text(Path.dirname(Path.expand(path)), Path.basename(path), 67_108_864),
-             {:ok, status} <- SigningLedger.verify_status(bytes, binding) do
-          latest = List.last(status.chain)
-
-          if (latest == nil and head == nil) or (latest != nil and latest.id == head),
-            do: :ok,
-            else: {:error, :catalog_signature_pending}
-        else
-          false -> {:error, :custodian_status_required}
-          {:error, _} = refusal -> refusal
-          _ -> {:error, :catalog_signature_pending}
-        end
+        verify_restaging_status(head, binding, path)
       else
         :ok
       end
+    end
+  end
+
+  defp verify_restaging_status(head, binding, path) do
+    with true <- is_binary(path),
+         {:ok, bytes} <-
+           Store.read_text(Path.dirname(Path.expand(path)), Path.basename(path), 67_108_864),
+         {:ok, status} <- SigningLedger.verify_status(bytes, binding) do
+      latest = List.last(status.chain)
+
+      if (latest == nil and head == nil) or (latest != nil and latest.id == head),
+        do: :ok,
+        else: {:error, :catalog_signature_pending}
+    else
+      false -> {:error, :custodian_status_required}
+      {:error, _} = refusal -> refusal
+      _ -> {:error, :catalog_signature_pending}
     end
   end
 
