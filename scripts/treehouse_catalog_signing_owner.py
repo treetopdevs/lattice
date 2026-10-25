@@ -17,6 +17,8 @@ import tempfile
 
 CAP = 131072
 TOTAL = 67108864
+MAX_ENVELOPES = 12
+mutation_guard = lambda: None
 
 
 class Refusal(Exception):
@@ -64,10 +66,16 @@ def secure_root(path):
         parent = os.path.dirname(parent)
 
 
+def durable_sync(fd):
+    os.fsync(fd)
+    if sys.platform == "darwin":
+        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+
+
 def sync_dir(path):
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        os.fsync(fd)
+        durable_sync(fd)
     finally:
         os.close(fd)
 
@@ -79,7 +87,14 @@ def read(path):
         opened = os.fstat(fd)
         require((opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino))
         require(opened.st_size <= CAP)
-        data = os.read(fd, CAP + 1)
+        pieces = []
+        remaining = opened.st_size
+        while remaining:
+            piece = os.read(fd, min(remaining, CAP))
+            require(piece)
+            pieces.append(piece)
+            remaining -= len(piece)
+        data = b"".join(pieces)
         after = os.lstat(path)
         require(len(data) == opened.st_size and
                 (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) ==
@@ -105,11 +120,18 @@ def clean_temps(root):
 
 
 def write(root, name, data, replace=False):
+    mutation_guard()
     require(isinstance(data, str) and len(data.encode()) <= CAP, "catalog_ledger_capacity")
     target = os.path.join(root, name)
     if os.path.lexists(target):
         previous = read(target)
         if previous == data:
+            fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                durable_sync(fd)
+            finally:
+                os.close(fd)
+            sync_dir(root)
             return
         require(replace, "catalog_ledger_fork")
     fd, temporary = tempfile.mkstemp(prefix=".tmp-", dir=root)
@@ -118,8 +140,10 @@ def write(root, name, data, replace=False):
         with os.fdopen(fd, "wb") as output:
             output.write(data.encode())
             output.flush()
-            os.fsync(output.fileno())
+            durable_sync(output.fileno())
+        mutation_guard()
         if replace:
+            require(read(target) == previous, "catalog_ledger_fork")
             os.replace(temporary, target)
         else:
             os.link(temporary, target, follow_symlinks=False)
@@ -133,7 +157,7 @@ def write(root, name, data, replace=False):
 
 def snapshot(root):
     names = os.listdir(root)
-    require(len(names) <= 514, "catalog_ledger_capacity")
+    require(len(names) <= MAX_ENVELOPES + 2, "catalog_ledger_capacity")
     require(all(name in ("lock", "head.json") or re.fullmatch(r"[0-9a-f]{64}\.json", name)
                 for name in names))
     envelopes = []
@@ -152,7 +176,7 @@ def head_shape(value, binding, key):
     require(isinstance(value, dict) and set(value) == {"binding", "key", "revision", "id"})
     require(value["binding"] == binding and value["key"] == key)
     require((value["revision"] is None and value["id"] is None) or
-            (type(value["revision"]) is int and 0 <= value["revision"] <= 512
+            (type(value["revision"]) is int and 0 <= value["revision"] < MAX_ENVELOPES
              and isinstance(value["id"], str)))
 
 
@@ -175,7 +199,12 @@ def main():
         sync_dir(ceremony)
     private(root, directory=True)
     lock = os.path.join(root, "lock")
-    fd = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    if not os.path.lexists(lock):
+        require(plan["action"] == "init" and not os.listdir(root), "catalog_ledger_corrupt")
+        flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    else:
+        flags = os.O_RDWR | os.O_NOFOLLOW
+    fd = os.open(lock, flags, 0o600)
     try:
         checked = private(lock)
         held = os.fstat(fd)
@@ -184,6 +213,13 @@ def main():
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise Refusal("catalog_ledger_busy")
+        def check_lock():
+            current_lock = private(lock)
+            require((current_lock.st_dev, current_lock.st_ino) == (held.st_dev, held.st_ino),
+                    "catalog_ledger_busy")
+        global mutation_guard
+        mutation_guard = check_lock
+        check_lock()
         # No BEAM callback can outlive this lock-owning process. A bounded
         # deadline kills the session; no ACK means no signature may escape.
         signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(Refusal("catalog_ledger_timeout")))
@@ -200,6 +236,9 @@ def main():
         emit(current)
         command = read_line()
         require(set(command) == {"head", "envelope"}, "catalog_ledger_protocol")
+        signal.alarm(0)
+        check_lock()
+        require(read(os.path.join(root, "head.json")) == current["head"], "catalog_ledger_fork")
         next_head = json.loads(command["head"])
         head_shape(next_head, plan["binding"], plan["key"])
         if command["envelope"] is None:
@@ -214,12 +253,14 @@ def main():
             write(root, "head.json", command["head"], replace=True)
         after = snapshot(root)
         require(after["head"] == command["head"])
+        check_lock()
         emit({"ok": True})
     finally:
         os.close(fd)
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     try:
         main()

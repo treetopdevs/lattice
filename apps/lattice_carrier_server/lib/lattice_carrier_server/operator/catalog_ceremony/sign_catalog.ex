@@ -43,16 +43,16 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
     _, _ -> {:error, :catalog_signing_refused}
   end
 
-  defp choose(package, %{pending: %{catalog: catalog} = pending}, _ceremony, _path) do
-    if catalog == package.catalog,
-      do: persist(package, pending.bytes),
-      else: {:error, :catalog_ledger_fork}
-  end
-
   defp choose(package, state, ceremony, path) do
     cond do
       state.committed != nil and state.committed.catalog == package.catalog ->
-        persist(package, state.committed.bytes)
+        {:ok, state.head_bytes, state.committed.bytes, state.committed.bytes}
+
+      state.pending != nil and state.pending.catalog == package.catalog ->
+        persist(package, state.pending.bytes)
+
+      state.pending != nil ->
+        {:error, :catalog_ledger_fork}
 
       SigningLedger.extends?(package.catalog, state.committed) ->
         with {:ok, canonical} <- Paths.signer(path, Path.expand(ceremony), :real),

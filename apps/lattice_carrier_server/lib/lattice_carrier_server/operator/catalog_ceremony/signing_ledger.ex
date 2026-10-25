@@ -21,6 +21,36 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   @spec status(Path.t(), map()) :: {:ok, map()} | {:error, atom()}
   def status(dir, binding), do: transact(dir, binding, "open", &unchanged/1)
 
+  @doc "Public ledger status for relay-side preparation; no freshness guarantee."
+  @spec export_status(map(), map()) :: binary()
+  def export_status(state, binding) do
+    PublicHistory.canonical(%{
+      "format" => "treehouse-custodian-status-v1",
+      "binding" => binding.bootstrap_id,
+      "key" => Base.encode64(binding.record.catalog_key),
+      "head" => state.head_bytes,
+      "envelopes" => Enum.map(state.chain, & &1.bytes)
+    })
+  end
+
+  @spec verify_status(term(), map()) :: {:ok, map()} | {:error, atom()}
+  def verify_status(bytes, binding) when is_binary(bytes) and byte_size(bytes) <= @cap do
+    with {:ok, doc} <- JSON.decode(bytes),
+         true <- Enum.sort(Map.keys(doc)) == ~w(binding envelopes format head key),
+         true <- doc["format"] == "treehouse-custodian-status-v1",
+         true <- doc["binding"] == binding.bootstrap_id,
+         true <- doc["key"] == Base.encode64(binding.record.catalog_key),
+         true <- PublicHistory.canonical(doc) == bytes do
+      verify(Map.take(doc, ["head", "envelopes"]), binding)
+    else
+      _ -> {:error, :catalog_ledger_corrupt}
+    end
+  rescue
+    _ -> {:error, :catalog_ledger_corrupt}
+  end
+
+  def verify_status(_, _), do: {:error, :catalog_ledger_corrupt}
+
   defp unchanged(state), do: {:ok, state.head_bytes, nil, state}
 
   @doc false
@@ -78,7 +108,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
 
   defp verify(%{"head" => bytes, "envelopes" => envelopes} = raw, binding)
        when map_size(raw) == 2 and is_binary(bytes) and is_list(envelopes) and
-              length(envelopes) <= 512 do
+              length(envelopes) <= 12 do
     with {:ok, head} <- JSON.decode(bytes),
          true <- Enum.sort(Map.keys(head)) == ~w(binding id key revision),
          true <- head["binding"] == binding.bootstrap_id,
@@ -97,7 +127,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
 
   defp envelopes(bytes, binding) do
     Enum.reduce_while(bytes, {:ok, []}, fn bytes, {:ok, result} ->
-      with {:ok, %{catalog: catalog} = envelope} <- TransportCatalog.decode_catalog_json(bytes),
+      with true <- is_binary(bytes) and byte_size(bytes) <= 131_072,
+           {:ok, %{catalog: catalog} = envelope} <- TransportCatalog.decode_catalog_json(bytes),
            :ok <- TransportCatalog.verify_catalog(envelope, binding.record.catalog_key),
            true <- PublicHistory.canonical(Wire.encode_value(envelope)) == bytes,
            true <-
@@ -128,7 +159,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   @doc false
   @spec extends?(map(), map() | nil) :: boolean()
   def extends?(catalog, nil),
-    do: catalog.revision == 0 and catalog.previous == nil and length(catalog.entries) == 2
+    do:
+      catalog.revision == 0 and catalog.previous == nil and
+        Enum.sort(Enum.map(catalog.entries, & &1.kind)) == [:space, :thread]
 
   def extends?(catalog, previous) do
     before = previous.catalog

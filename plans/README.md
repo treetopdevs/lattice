@@ -440,7 +440,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 261 | [Two ordinary desktop apps over the real relay](261-two-ordinary-desktop-apps-real-relay.md) | P1 | XL | 224, 245; ceremony; two Macs | IN PROGRESS (2026-10-24; slice A custody and ordinary bounded creation implemented locally; packaged/field proof and slices B–G remain) |
 
 | 262 | [Offline enrollment and guarded initial provisioning](262-offline-enrollment-and-initial-provisioning.md) | P1 | XL | PR #165; plan 224 PRs 4-5 for listing | IN PROGRESS (#166 importer; #167 draft offline controls/shared codec/export; local gates pass; hosted proof, final review and listing remain) |
-| 263 | [Catalog publication with off-host custodian](263-catalog-publication-and-custodian-signing.md) | P1 | L | 224 PRs 1–3; 262 A | IN PROGRESS (D-47: release review and public package verifier tested; custodian ledger, CLI and catalog commit remain; field ceremony separate) |
+| 263 | [Catalog publication with off-host custodian](263-catalog-publication-and-custodian-signing.md) | P1 | L | 224 PRs 1–3; 262 A | IN PROGRESS (D-47: package, custodian ledger and CLI tested; review fixes underway; relay prepare/commit and final gates remain; field ceremony separate) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

@@ -10,6 +10,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Cli do
   alias LatticeCarrierServer.Operator.CatalogCeremony
 
   @switches [
+    package: :string,
+    confirm_catalog: :string,
     signer: :string,
     ceremony: :string,
     out: :string,
@@ -26,6 +28,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Cli do
 
   # command => {function, required options, optional options}
   @commands %{
+    "review-catalog" => {:review_catalog, [:ceremony, :package], []},
+    "init-ledger" => {:init_catalog_ledger, [:ceremony, :package, :out], []},
+    "catalog-status" => {:catalog_status, [:ceremony, :package, :out], []},
+    "sign-catalog" => {:sign_catalog, [:ceremony, :package, :signer, :confirm_catalog, :out], []},
     "generate" => {:generate, [:signer, :ceremony], []},
     "import" => {:import_signer, [:signer, :ceremony], []},
     "backup" => {:backup, [:signer, :ceremony, :out], []},
@@ -126,6 +132,12 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Cli do
       "report_sha256" => result.report_sha256
     })
   end
+
+  defp print(:review_catalog, _opts, result), do: IO.puts(Jason.encode!(result, pretty: true))
+
+  defp print(command, _opts, result)
+       when command in [:init_catalog_ledger, :catalog_status, :sign_catalog],
+       do: show(result)
 
   defp artifact(opts, name), do: opts[:ceremony] |> Path.expand() |> Path.join(name)
 

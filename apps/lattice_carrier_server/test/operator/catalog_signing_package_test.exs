@@ -296,6 +296,16 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     spec=importlib.util.spec_from_file_location("owner",helper)
     owner=importlib.util.module_from_spec(spec);spec.loader.exec_module(owner)
     original=owner.write
+    original_link=owner.os.link
+    original_replace=owner.os.replace
+    def kill_after_link(*args,**kwargs):
+        original_link(*args,**kwargs)
+        if stage=="link": os.kill(os.getpid(),signal.SIGKILL)
+    def kill_after_replace(*args,**kwargs):
+        original_replace(*args,**kwargs)
+        if stage=="replace": os.kill(os.getpid(),signal.SIGKILL)
+    owner.os.link=kill_after_link
+    owner.os.replace=kill_after_replace
     def kill_after_write(root,name,data,replace=False):
         original(root,name,data,replace)
         if (stage=="envelope" and name!="head.json") or (stage=="head" and name=="head.json"):
@@ -306,7 +316,7 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     owner.main()
     """
 
-    for stage <- ["envelope", "head"] do
+    for stage <- ["envelope", "head", "link", "replace"] do
       File.write!(Path.join(ledger, "head.json"), genesis.head_bytes)
       File.rm!(Path.join(ledger, envelope_name))
 
@@ -378,6 +388,150 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     assert {:ok, state} = SignCatalog.status(bytes, dir)
     assert state.head_bytes == genesis.head_bytes
     assert state.chain == []
+  end
+
+  test "the ordinary ceremony CLI reviews, initializes, signs and exports verifiable status", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    path = Path.join(dir, "catalog-package.json")
+    File.write!(path, bytes)
+    base = ["--ceremony", dir, "--package", path]
+    cli = LatticeCarrierServer.Operator.CatalogCeremony.Cli
+
+    review =
+      ExUnit.CaptureIO.capture_io(fn -> assert :ok = cli.run(["review-catalog" | base]) end)
+
+    sheet = Jason.decode!(review)
+    assert sheet["confirm_catalog"] == CatalogSigningPackage.digest(f.catalog)
+    assert length(sheet["inventory"]) == 2
+
+    assert Enum.sort(Enum.map(sheet["snapshots"], & &1["frames"])) ==
+             Enum.sort(Enum.map(f.histories, fn {_, log} -> map_size(log.ops) end))
+
+    genesis_path = Path.join(dir, "genesis-status.json")
+
+    ExUnit.CaptureIO.capture_io(fn ->
+      assert :ok = cli.run(["init-ledger", "--out", genesis_path] ++ base)
+    end)
+
+    signed_path = Path.join(dir, "signed-catalog.json")
+
+    args =
+      [
+        "sign-catalog",
+        "--signer",
+        CeremonyFixture.signer_template().signer,
+        "--confirm-catalog",
+        sheet["confirm_catalog"],
+        "--out",
+        signed_path
+      ] ++ base
+
+    ExUnit.CaptureIO.capture_io(fn -> assert :ok = cli.run(args) end)
+    envelope = File.read!(signed_path)
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+
+    assert :ok =
+             Treehouse.TransportCatalog.verify_catalog_json(
+               envelope,
+               package.binding.record.catalog_key
+             )
+
+    status_path = Path.join(dir, "signed-status.json")
+
+    ExUnit.CaptureIO.capture_io(fn ->
+      assert :ok = cli.run(["catalog-status", "--out", status_path] ++ base)
+    end)
+
+    assert {:ok, status} = SigningLedger.verify_status(File.read!(status_path), package.binding)
+    assert length(status.chain) == 1
+    assert {:ok, genesis} = SigningLedger.verify_status(File.read!(genesis_path), package.binding)
+    assert genesis.chain == []
+
+    assert {:error, :catalog_ledger_corrupt} =
+             SigningLedger.verify_status(" " <> File.read!(status_path), package.binding)
+
+    File.write!(signed_path, "conflict")
+
+    ExUnit.CaptureIO.capture_io(:stderr, fn ->
+      assert {:error, :catalog_output_conflict} = cli.run(args)
+    end)
+
+    assert File.read!(signed_path) == "conflict"
+  end
+
+  test "a deleted lock cannot be recreated over an existing ledger", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    parent = self()
+
+    task =
+      Task.async(fn ->
+        SigningLedger.transact(dir, package.binding, "open", fn state ->
+          send(parent, :locked_before_delete)
+
+          receive do
+            :continue_after_delete -> :ok
+          end
+
+          {:ok, state.head_bytes, nil, :must_not_escape}
+        end)
+      end)
+
+    assert_receive :locked_before_delete, 5000
+    lock = Path.join([dir, "catalog-signing", "lock"])
+    File.rm!(lock)
+    assert {:error, :catalog_ledger_corrupt} = SignCatalog.init(bytes, dir)
+    refute File.exists?(lock)
+    send(task.pid, :continue_after_delete)
+    assert {:error, _} = Task.await(task)
+    assert File.read!(Path.join([dir, "catalog-signing", "head.json"])) == genesis.head_bytes
+  end
+
+  test "BEAM caller death releases the helper without committing a callback result", f do
+    {:ok, bytes} = encode(f)
+    dir = f.fixture[:ceremony_dir]
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    {:ok, genesis} = SignCatalog.init(bytes, dir)
+    parent = self()
+
+    {pid, monitor} =
+      spawn_monitor(fn ->
+        result =
+          SigningLedger.transact(dir, package.binding, "open", fn _state ->
+            send(parent, :callback_holding)
+
+            receive do
+              :never_sent -> :ok
+            end
+          end)
+
+        send(parent, {:unexpected_callback_result, result})
+      end)
+
+    assert_receive :callback_holding, 5000
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^pid, :killed}, 5000
+    state = await_unlocked(fn -> SigningLedger.status(dir, package.binding) end, 100)
+    assert state.head_bytes == genesis.head_bytes
+    assert state.chain == []
+    refute_receive {:unexpected_callback_result, _}
+  end
+
+  defp await_unlocked(fun, retries) do
+    case fun.() do
+      {:ok, state} ->
+        state
+
+      {:error, :catalog_ledger_busy} when retries > 0 ->
+        Process.sleep(20)
+        await_unlocked(fun, retries - 1)
+
+      other ->
+        flunk("ledger did not release after caller death: #{inspect(other)}")
+    end
   end
 
   defp encode(f),

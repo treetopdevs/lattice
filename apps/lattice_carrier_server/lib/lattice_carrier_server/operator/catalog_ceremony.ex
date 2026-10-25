@@ -3,8 +3,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony do
   Operator ceremony tooling for the Treehouse catalog signer (plan 223, row 224).
 
   The ceremony prepares the custody inputs for a later catalogued phase; it is
-  an operator record, not catalog publication, and it never signs anything in
-  real mode. The commands are:
+  an operator record, not catalog publication. Catalog signing is a separate
+  explicit operation with its own durable revision ledger. The commands are:
 
     * `generate/1` and `import_signer/1` make or adopt the catalog signer seed file.
     * `backup/1` writes a passphrase-encrypted copy; `verify_backup/1` proves
@@ -29,7 +29,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony do
     Binding,
     DryRun,
     Report,
-    Signer
+    Signer,
+    SigningCommands
   }
 
   @type result :: {:ok, map()} | {:error, atom()}
@@ -65,6 +66,22 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony do
   @doc "Rehearse the flow in a new or empty `:ceremony` directory with disposable keys."
   @spec dry_run(keyword()) :: result()
   def dry_run(opts), do: guarded(fn -> DryRun.run(opts) end)
+
+  @doc "Review a public catalog package against this custodian's ceremony."
+  @spec review_catalog(keyword()) :: result()
+  def review_catalog(opts), do: guarded(fn -> SigningCommands.review(opts) end)
+
+  @doc "Initialize the per-binding public signing ledger and export its genesis status."
+  @spec init_catalog_ledger(keyword()) :: result()
+  def init_catalog_ledger(opts), do: guarded(fn -> SigningCommands.init(opts) end)
+
+  @doc "Export verified public signing history without reading the seed."
+  @spec catalog_status(keyword()) :: result()
+  def catalog_status(opts), do: guarded(fn -> SigningCommands.status(opts) end)
+
+  @doc "Sign an independently reviewed package after exact digest confirmation."
+  @spec sign_catalog(keyword()) :: result()
+  def sign_catalog(opts), do: guarded(fn -> SigningCommands.sign(opts) end)
 
   # No refusal may carry a term that could hold key material.
   defp guarded(fun) do

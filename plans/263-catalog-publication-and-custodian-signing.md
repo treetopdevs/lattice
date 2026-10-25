@@ -8,7 +8,8 @@ Implements plan 224 PR 4 in full: prepare, independent custodian verification/si
 commit, and crash-safe `catalogued` publication. Shared read-only release review is
 implemented, together with authenticated public histories and the signing package
 verifier. Custodian ledger/signing APIs now have replay, refusal and kill-boundary
-tests; CLI and publication construction/commit remain. Custody review is in progress.
+tests and CLI controls. Relay publication construction/commit and complete slice
+verification remain; focused custody review fixes are implemented and being checked.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 
 Software acceptance uses disposable keys and real-mode ceremony fixtures, the production
@@ -131,8 +132,9 @@ create/delete lock sentinel. A small Python filesystem owner may hold flock on m
 and Linux and persist only public envelope/head bytes; it never receives a seed. Keep
 this separate from the Linux-only operator mutation owner. BEAM checks ledger state,
 reads the seed and signs while ownership is live; output requires durable owner ACK.
-Owner EOF/death means no output and no late persistence after lock release. Use a
-bounded owner hold deadline; expiry revokes the session and never releases a signature.
+Owner EOF/death means no output and no late persistence after lock release. Bound
+the callback wait with a deadline; expiry refuses without releasing a signature.
+Disarm that alarm before the bounded local write phase, avoiding an alarm after ACK.
 
 An explicit one-time init-ledger after binding verification durably creates a genesis
 head naming binding, catalog key and no signed revision, under the same lock. Only an
@@ -142,7 +144,10 @@ Under the lock verify the entire contiguous immutable envelope ledger and head r
 Accept only the next revision with previous equal to the last signed id. Exact same C
 returns stored envelope bytes without another signature. A competing C at that revision
 refuses. Publish the envelope exclusively, sync file and directory, then atomically
-advance/sync head; ACK only afterwards. If a crash leaves one envelope beyond head,
+advance/sync head; ACK only afterwards. On macOS require F_FULLFSYNC as well as
+fsync, including replayed files and directory entries; unsupported storage refuses.
+Never recreate a missing lock over existing ledger state. Recheck held/path inode
+identity after flock and before writes/ACK; compare the head before replacement. If a crash leaves one envelope beyond head,
 only replay of that exact C may finish head advancement. Missing head with nonempty
 ledger, missing committed envelope, multiple pending envelopes, chain gap, substituted
 file, fork or corrupt state refuses. Never repair by deleting evidence or advancing to

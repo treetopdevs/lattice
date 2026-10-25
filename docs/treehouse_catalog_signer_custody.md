@@ -24,10 +24,10 @@ What this ceremony proves:
 What it does not prove or do:
 
 - It does not make anything **catalogued** or **listed**. It is an operator ceremony record,
-  not a catalogue phase. The carrier realm `treehouse-service:<service_id>` does not exist in the
-  carrier server yet.
-- The tool signs nothing in real mode. It proves possession by re-deriving the public key from
-  the seed.
+  not a catalogue phase. The carrier service realm is implemented separately; it supplies
+  neither client trust nor publication by itself.
+- The original custody commands prove possession by deriving the public key. The explicit
+  `sign-catalog` command below signs only after independent review and digest confirmation.
 - It does not change D1: activation stays local-only. Nothing here is a production claim.
 
 ## 2. Roles
@@ -426,3 +426,52 @@ reviewed. The seed and backup never enter a git checkout; the tool refuses to wr
 - Never pass a passphrase in argv or in the environment. Stdin only, from a pipe, never a terminal.
 - Never use a dry-run key, directory or output as real material, and never the reverse.
 - Never hand-sign the binding outside the product; the root signs it in the app's Catalog binding action.
+
+## 9. Off-host catalog review and signing
+
+Keep the catalog seed off the relay host. Transfer the public signing package from the
+operator to the custodian. The package includes complete histories: chat plaintext is
+visible to the custodian and its backup readers. The current bounds are 13 histories,
+4,000 frames and 16 MiB per history, 64 MiB total. A busy history can stop later catalog
+creation; no history is silently truncated.
+
+Use a completed real-mode ceremony directory on the custodian machine. Review the
+binding, full inventory, replica roots, routes and references, and each snapshot's frame
+count/frontier digest. Compare the expected new entry with the operator independently.
+The displayed digest identifies this catalog; it is not a live freshness receipt.
+
+```bash
+~/.asdf/shims/mix treehouse.catalog_ceremony review-catalog \
+  --ceremony "$CEREMONY" --package "$PACKAGE"
+~/.asdf/shims/mix treehouse.catalog_ceremony init-ledger \
+  --ceremony "$CEREMONY" --package "$PACKAGE" --out "$GENESIS_STATUS"
+~/.asdf/shims/mix treehouse.catalog_ceremony sign-catalog \
+  --ceremony "$CEREMONY" --package "$PACKAGE" --signer "$SIGNER" \
+  --confirm-catalog "$REVIEWED_DIGEST" --out "$SIGNED_ENVELOPE"
+~/.asdf/shims/mix treehouse.catalog_ceremony catalog-status \
+  --ceremony "$CEREMONY" --package "$PACKAGE" --out "$CURRENT_STATUS"
+```
+
+Choose explicit absolute file paths; output directories must already be private (0700).
+Exports create new files (0600), or accept exactly matching existing bytes. Use a new
+status filename for each revision. Transfer the public envelope and current status to
+the operator. The relay must independently recheck before committing `catalogued`.
+CLI publication wiring is still being implemented in plan 263; these commands alone
+do not change a relay journal, install routes in an app, or mark a Thread listed.
+
+`init-ledger` is a one-time initialization, never a recovery/reset command. Every future
+signature for this key and binding must use this same managed ceremony ledger. Preserve
+`catalog-signing/` with its head, immutable envelopes and lock file. Back up the complete
+ledger alongside the existing signer-backup practice, before signing another revision.
+Never delete or replace the lock, restore a ledger, or run a backup restoration while a
+signing/status process is active. A missing signed envelope or head refuses; do not
+repair by deleting more files or creating another ledger for the same key.
+
+A crash may leave one envelope ahead of its head. Retry the exact same catalog: it
+replays the stored bytes and completes the head without reading the seed. A competing
+catalog at the same revision refuses. A signed catalog that later fails relay review
+still consumes that revision; no fork-safe abandon/reset is provided. Treat this as a
+custody/recovery event. A whole-ledger rollback to an old consistent backup cannot be
+detected without an external monotonic witness. This tool makes no such anti-rollback
+or hardware durability claim. On macOS the owner requires F_FULLFSYNC in addition to
+filesystem synchronization; unsupported storage refuses rather than weakening the gate.
