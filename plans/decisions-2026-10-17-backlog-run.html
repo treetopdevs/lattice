@@ -574,6 +574,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 </dl>
 </article>
 
+<section><h2><span>D-59</span>Stop native incoming integration at a proved owner disagreement</h2><dl><dt>Evidence</dt><dd>Fresh valid TS-authored Space bootstrap history proposes installation in both actual public owners. A correctly signed unknown-name frame with a missing ancestor returns trust_pending in TS but unsupported_cutoff in BEAM. Zeroing its signature returns invalid_verified_history in TS but still unsupported_cutoff in BEAM. Saved public frames contain no private keys. Both owners refuse hostile inputs; this is a refusal/fetch consistency defect, not an unauthorized acceptance claim.</dd><dt>Decision</dt><dd>Plan 269 owns a separate protected source correction from verified current main. Preserve raw authentication before fetch, keep unknown names inert, test the full phase matrix and existing bounds, then review/adopt before native integration. Do not silently pick one oracle or weaken TS authentication to match an earlier BEAM vocabulary failure.</dd><dt>Remaining</dt><dd>No production correction or native incoming integration is claimed. Plan 267 still needs semantic normalization, application policy, catalog graph evaluation and retained trust. Source and native adoption remain independently reviewable.</dd></dl></section>
 </main>
 </body>
 </html>
