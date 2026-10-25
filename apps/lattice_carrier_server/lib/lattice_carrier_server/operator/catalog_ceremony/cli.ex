@@ -29,7 +29,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Cli do
   # command => {function, required options, optional options}
   @commands %{
     "review-catalog" => {:review_catalog, [:ceremony, :package], []},
-    "init-ledger" => {:init_catalog_ledger, [:ceremony, :package, :out], []},
+    "init-ledger" => {:init_catalog_ledger, [:ceremony, :space_log, :out], []},
     "catalog-status" => {:catalog_status, [:ceremony, :package, :out], []},
     "sign-catalog" => {:sign_catalog, [:ceremony, :package, :signer, :confirm_catalog, :out], []},
     "generate" => {:generate, [:signer, :ceremony], []},

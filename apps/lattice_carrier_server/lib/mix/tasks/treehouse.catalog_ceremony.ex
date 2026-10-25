@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Treehouse.CatalogCeremony do
         --passphrase-holder NAME --rotation-owner NAME
       mix treehouse.catalog_ceremony dry-run --ceremony DIR
       mix treehouse.catalog_ceremony review-catalog --ceremony DIR --package PATH
-      mix treehouse.catalog_ceremony init-ledger --ceremony DIR --package PATH --out STATUS
+      mix treehouse.catalog_ceremony init-ledger --ceremony DIR --space-log PATH --out STATUS
       mix treehouse.catalog_ceremony catalog-status --ceremony DIR --package PATH --out STATUS
       mix treehouse.catalog_ceremony sign-catalog --ceremony DIR --package PATH --signer KEY --confirm-catalog DIGEST --out ENVELOPE
 

@@ -1,7 +1,7 @@
 defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
   @moduledoc false
   alias Lattice.Log
-  alias LatticeCarrierServer.Operator.{CatalogSigningPackage, PublicHistory}
+  alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogSigningPackage, PublicHistory}
   alias LatticeCarrierServer.Operator.CatalogCeremony.{Paths, SignCatalog, SigningLedger, Store}
   alias Treehouse.TransportCatalog
 
@@ -14,7 +14,13 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningCommands do
   end
 
   @spec init(keyword()) :: {:ok, map()} | {:error, atom()}
-  def init(opts), do: status_command(opts, &SignCatalog.init/2)
+  def init(opts) do
+    with {:ok, binding} <- CatalogBinding.load(opts[:ceremony], opts[:space_log]),
+         {:ok, state} <- SigningLedger.init(opts[:ceremony], binding),
+         :ok <- output(opts[:out], SigningLedger.export_status(state, binding)) do
+      {:ok, %{"custodian_status" => Path.expand(opts[:out]), "binding" => binding.bootstrap_id}}
+    end
+  end
 
   @spec status(keyword()) :: {:ok, map()} | {:error, atom()}
   def status(opts), do: status_command(opts, &SignCatalog.status/2)

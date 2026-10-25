@@ -8,8 +8,9 @@ Implements plan 224 PR 4 in full: prepare, independent custodian verification/si
 commit, and crash-safe `catalogued` publication. Shared read-only release review is
 implemented, together with authenticated public histories and the signing package
 verifier. Custodian ledger/signing APIs now have replay, refusal and kill-boundary
-tests and CLI controls. Relay publication construction/commit and complete slice
-verification remain; focused custody review fixes are implemented and being checked.
+tests and CLI controls. Relay prepare/commit now have live pending/initial-reference
+rehearsals. Carried-entry/capacity, relay CLI and complete crash/final gates remain.
+Custody P1 fixes are confirmed; this is not yet a completed publication slice.
 The unified roadmap is the execution ledger. D-47 records the delegated decisions.
 
 Software acceptance uses disposable keys and real-mode ceremony fixtures, the production
@@ -64,7 +65,7 @@ Existing files are below `apps/lattice_carrier_server/lib/lattice_carrier_server
    commands `review-catalog` and `sign-catalog`. Review never reads the seed. Signing
    requires the exact reviewed catalog digest as explicit confirmation and independently
    validates the package and custodian's own verified ceremony binding/report.
-4. Add `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file, envelope_file)`:
+4. Add `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file, package_file, envelope_file)`:
    rebuild all observations and C, verify exact C and signature, then call existing
    `Lock.catalogued/6`. Never accept a catalog solely because prepare once succeeded.
 5. CLI and runbook show prepare → transfer public package → review → confirm/sign →
@@ -136,7 +137,9 @@ Owner EOF/death means no output and no late persistence after lock release. Boun
 the callback wait with a deadline; expiry refuses without releasing a signature.
 Disarm that alarm before the bounded local write phase, avoiding an alarm after ACK.
 
-An explicit one-time init-ledger after binding verification durably creates a genesis
+An explicit one-time init-ledger takes the custodian’s verified signed Space log,
+not a signing package: its exported genesis status must precede the first prepare.
+After binding verification it durably creates a genesis
 head naming binding, catalog key and no signed revision, under the same lock. Only an
 empty ledger may initialize; missing head thereafter is corruption. Initialization
 crashes before head publication may retry only while no envelope exists.
@@ -205,6 +208,9 @@ Do not weaken generic owner callers into accepting arbitrary record transitions.
   revision yield one winner. Kill at each envelope/head/ACK boundary, reopen and retry.
   Assert no signature output before ACK and no publication after losing lock ownership.
   Include initialization kills, first-envelope/head kills and expired hold deadlines.
+  Spy on fsync/fullfsync/link/replace ordering; check Darwin full-flush dispatch.
+  Include genesis kills, callback expiry, output loss while the write completes,
+  cleanup of temporary hard links, and concurrent identical/competing signing.
   Signing followed by roster drift/restaging must surface the pending signature and
   refuse a conflicting revision without resetting either ledger.
 - Owner kill before/after artifact link, receipt write and reply produces one catalog,

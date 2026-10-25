@@ -15,6 +15,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   @cap 67_108_864
   @timeout 35_000
 
+  @doc false
+  @spec max_envelopes() :: pos_integer()
+  def max_envelopes, do: 12
+
   @spec init(Path.t(), map()) :: {:ok, map()} | {:error, atom()}
   def init(dir, binding), do: transact(dir, binding, "init", &unchanged/1)
 

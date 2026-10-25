@@ -429,6 +429,10 @@ reviewed. The seed and backup never enter a git checkout; the tool refuses to wr
 
 ## 9. Off-host catalog review and signing
 
+Initialize the ledger using the custodian’s own verified signed Space log and transfer
+its genesis status to the operator before the first prepare. No signing package is
+needed to initialize; this avoids a package/status bootstrap circle.
+
 Keep the catalog seed off the relay host. Transfer the public signing package from the
 operator to the custodian. The package includes complete histories: chat plaintext is
 visible to the custodian and its backup readers. The current bounds are 13 histories,
@@ -444,7 +448,7 @@ The displayed digest identifies this catalog; it is not a live freshness receipt
 ~/.asdf/shims/mix treehouse.catalog_ceremony review-catalog \
   --ceremony "$CEREMONY" --package "$PACKAGE"
 ~/.asdf/shims/mix treehouse.catalog_ceremony init-ledger \
-  --ceremony "$CEREMONY" --package "$PACKAGE" --out "$GENESIS_STATUS"
+  --ceremony "$CEREMONY" --space-log "$SIGNED_SPACE_LOG" --out "$GENESIS_STATUS"
 ~/.asdf/shims/mix treehouse.catalog_ceremony sign-catalog \
   --ceremony "$CEREMONY" --package "$PACKAGE" --signer "$SIGNER" \
   --confirm-catalog "$REVIEWED_DIGEST" --out "$SIGNED_ENVELOPE"
@@ -475,3 +479,10 @@ custody/recovery event. A whole-ledger rollback to an old consistent backup cann
 detected without an external monotonic witness. This tool makes no such anti-rollback
 or hardware durability claim. On macOS the owner requires F_FULLFSYNC in addition to
 filesystem synchronization; unsupported storage refuses rather than weakening the gate.
+
+A timeout, failed export, closed pipe or lost acknowledgement does **not** prove that
+signing did not commit. Keep the package and retry exactly that catalog; consult
+`catalog-status` before preparing another revision. The ledger may already hold the
+signature even when no envelope reached the operator. Never treat an error as license
+to regenerate, reset or sign a competing catalog. The checkout helper and trusted
+Python/toolchain are part of this custody boundary; relocated releases are not supported.

@@ -411,7 +411,16 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
     genesis_path = Path.join(dir, "genesis-status.json")
 
     ExUnit.CaptureIO.capture_io(fn ->
-      assert :ok = cli.run(["init-ledger", "--out", genesis_path] ++ base)
+      assert :ok =
+               cli.run([
+                 "init-ledger",
+                 "--out",
+                 genesis_path,
+                 "--ceremony",
+                 dir,
+                 "--space-log",
+                 f.fixture[:binding].signed
+               ])
     end)
 
     signed_path = Path.join(dir, "signed-catalog.json")

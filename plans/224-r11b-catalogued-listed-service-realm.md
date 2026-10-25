@@ -209,7 +209,7 @@ envelope may exist, else `stale_catalog_head`.
   re-runs `CatalogEntries.observe/2` over the custodian's Space and Thread exports plus that frame,
   as the carrier's step 6 does;
   it prints a review sheet with the binding id and, per new entry, replica, root, route and
-  reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file,
+  reference; then it signs. `ReleaseCatalog.commit(root, expected, ceremony_dir, probe_file, package_file,
   envelope_file)` re-runs every check, requires `envelope.catalog == C` exactly, and verifies the
   signature with the binding `catalog_key`.
 

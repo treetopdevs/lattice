@@ -17,10 +17,10 @@ defmodule LatticeCarrierServer.Operator.ReferenceMode do
   @spec initial?(term()) :: boolean()
   def initial?(review), do: review == @initial
 
-  @doc "Do not advance an initial adoption into publication before its guarded consumers exist."
+  @doc "Initial cataloguing has a guarded consumer; initial listing remains blocked."
   @spec phase_allowed?(term(), [map()]) :: boolean()
   def phase_allowed?(phase, artifacts) do
-    phase not in ["catalogued", "listed"] or
+    phase != "listed" or
       not Enum.any?(artifacts, &(&1["kind"] == "reference" and initial?(&1["review"])))
   end
 
