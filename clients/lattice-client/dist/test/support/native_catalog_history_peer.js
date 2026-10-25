@@ -1,3 +1,4 @@
+import * as catalogRotationCodec from "../../src/treehouse_catalog_codec";
 import { WIRE_VOCABULARY } from "../../src/wire_vocabulary";
 import assert from "node:assert/strict";
 import { commandCases, judgeCommands, threadPolicyCases } from "./native_catalog_command_peer";
@@ -96,7 +97,19 @@ async function cutoffCases() {
     return { cases: await Promise.all(cases.map(async ({ name, ...input }) => ({ name, input, result: await deriveTreehouseCatalogCutoff(input) }))) };
 }
 const serialize = (value) => JSON.stringify(value, (_key, item) => item instanceof Uint8Array ? Buffer.from(item).toString("base64") : item);
-if (process.argv[2] === "produce") {
+if (process.argv[2] === "rotation-produce") {
+    const f = await trustFixture();
+    console.log(JSON.stringify({ envelope: JSON.parse(f.rotationJson), key: Buffer.from(f.catalogSigner.publicKey).toString("base64") }));
+}
+else if (process.argv[2] === "rotation-consume") {
+    const input = JSON.parse(readFileSync(0, "utf8"));
+    console.log(JSON.stringify({ results: input.cases.map(({ envelope, key }) => {
+            const e = catalogRotationCodec.catalogRotationEnvelopeFromCarrierTerm(envelope);
+            return e === null ? { shape: false, valid: false } : { shape: true, valid: catalogRotationCodec.verifyCatalogRotationEnvelope(e, key), id: catalogRotationCodec.catalogRotationId(e),
+                rotationBytes: Buffer.from(catalogRotationCodec.canonicalBytesForCatalogRotation(e.rotation)).toString("base64"), possessionBytes: Buffer.from(catalogRotationCodec.canonicalBytesForCatalogRotationPossession(e.rotation)).toString("base64") };
+        }) }));
+}
+else if (process.argv[2] === "produce") {
     const fixture = await trustFixture();
     const term = ["delegation", { id: "", replica: "", parent_id: "",
             issuer: Buffer.alloc(32, 7).toString("base64"), audience: Buffer.alloc(32, 7).toString("base64"),

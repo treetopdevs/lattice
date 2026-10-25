@@ -1,0 +1,244 @@
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine,
+};
+use ed25519_dalek::{Signer, SigningKey};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use treehouse_tauri_shell::catalog_eval::{
+    canonical::{Term, MAX_BYTES},
+    rotation,
+};
+#[path = "support/catalog_author.rs"]
+mod catalog_author;
+#[path = "support/catalog_peer.rs"]
+mod catalog_peer;
+use catalog_author::text;
+fn map(v: Vec<(&str, Value)>) -> Value {
+    json!([
+        "map",
+        v.into_iter()
+            .map(|(k, v)| json!([["atom", k], v]))
+            .collect::<Vec<_>>()
+    ])
+}
+fn id(label: &str) -> String {
+    URL_SAFE_NO_PAD.encode(Sha256::digest(label))
+}
+fn field<'a>(v: &'a mut Value, key: &str) -> &'a mut Value {
+    &mut v[1]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|pair| pair[0] == json!(["atom", key]))
+        .unwrap()[1]
+}
+fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
+    serde_json::from_slice(&catalog_peer::output(runtime, mode, input, 4 * 1024 * 1024)).unwrap()
+}
+fn native(case: &Value) -> Value {
+    let Ok(term) = Term::from_carrier(&case["envelope"]) else {
+        return json!({"shape":false,"valid":false});
+    };
+    let Some(e) = rotation::Envelope::decode(&term) else {
+        return json!({"shape":false,"valid":false});
+    };
+    let key = STANDARD.decode(case["key"].as_str().unwrap()).unwrap();
+    json!({"shape":true,"valid":e.verify(&key),"id":e.id().unwrap(),"rotationBytes":STANDARD.encode(e.rotation.signing_bytes().unwrap()),"possessionBytes":STANDARD.encode(e.rotation.possession_bytes().unwrap())})
+}
+fn rust_case(generation: u64, count: usize, same_key: bool) -> Value {
+    let old = SigningKey::from_bytes(&[121; 32]);
+    let next = if same_key {
+        old.clone()
+    } else {
+        SigningKey::from_bytes(&[122; 32])
+    };
+    let mut cutoff_names = (0..count)
+        .map(|i| format!("\u{feff}Rust rotation cutoff {i:02}"))
+        .collect::<Vec<_>>();
+    cutoff_names.sort();
+    let cutoffs = cutoff_names
+        .iter()
+        .map(|replica| {
+            map(vec![
+                ("replica", text(replica)),
+                ("frontier", json!(["list", []])),
+                ("log_digest", text(&id(replica))),
+            ])
+        })
+        .collect::<Vec<_>>();
+    let record = map(vec![
+        ("version", json!(["int", 1])),
+        ("product", json!(["atom", "treehouse"])),
+        ("space", text("\u{feff}Rust rotation Space")),
+        ("bootstrap", text(&id("bootstrap"))),
+        ("parent", text(&id("parent"))),
+        ("prior_catalog", text(&id("prior catalog"))),
+        ("generation", json!(["int", generation])),
+        (
+            "new_catalog_key",
+            json!(["bin", STANDARD.encode(next.verifying_key().to_bytes())]),
+        ),
+        ("nonce", text(&id("nonce"))),
+        ("inventory_digest", text(&id("inventory"))),
+        ("cutoffs", json!(["list", cutoffs])),
+    ]);
+    let term = Term::from_carrier(&record).unwrap();
+    let decoded = rotation::Rotation::decode(&term).unwrap();
+    let envelope = map(vec![
+        ("rotation", record.clone()),
+        (
+            "old_signature",
+            json!([
+                "bin",
+                STANDARD.encode(old.sign(&decoded.signing_bytes().unwrap()).to_bytes())
+            ]),
+        ),
+        (
+            "new_signature",
+            json!([
+                "bin",
+                STANDARD.encode(next.sign(&decoded.possession_bytes().unwrap()).to_bytes())
+            ]),
+        ),
+    ]);
+    json!({"envelope":envelope,"key":STANDARD.encode(old.verifying_key().to_bytes())})
+}
+#[test]
+fn fresh_rotation_records_bytes_ids_and_both_purposes_match_all_three_runtimes() {
+    let mut cases = vec![
+        peer("ts", "rotation-produce", None),
+        peer("beam", "rotation-produce", None),
+        rust_case(1, 1, false),
+        rust_case(9_007_199_254_740_991, 13, false),
+    ];
+    for base in cases.clone() {
+        let mut old = base.clone();
+        *field(&mut old["envelope"], "old_signature") = json!(["bin", STANDARD.encode([0; 64])]);
+        cases.push(old);
+        let mut new = base.clone();
+        *field(&mut new["envelope"], "new_signature") = json!(["bin", STANDARD.encode([0; 64])]);
+        cases.push(new);
+        let mut changed = base.clone();
+        *field(field(&mut changed["envelope"], "rotation"), "nonce") = text(&id("changed nonce"));
+        cases.push(changed);
+        let mut wrong = base.clone();
+        wrong["key"] = json!(STANDARD.encode(
+            SigningKey::from_bytes(&[123; 32])
+                .verifying_key()
+                .to_bytes()
+        ));
+        cases.push(wrong);
+        let mut malformed = base.clone();
+        *field(field(&mut malformed["envelope"], "rotation"), "cutoffs") = json!(["list", []]);
+        cases.push(malformed);
+        let mut malformed = base.clone();
+        *field(field(&mut malformed["envelope"], "rotation"), "generation") = json!(["int", 0]);
+        cases.push(malformed);
+        let mut malformed = base.clone();
+        *field(field(&mut malformed["envelope"], "rotation"), "generation") =
+            json!(["int", "9007199254740992"]);
+        cases.push(malformed);
+        let mut malformed = base.clone();
+        *field(&mut malformed["envelope"], "new_signature") =
+            json!(["bin", STANDARD.encode([0; 63])]);
+        cases.push(malformed);
+        for frontier in [
+            vec![text(&id("duplicate head")), text(&id("duplicate head"))],
+            {
+                let mut ids = vec![id("head A"), id("head B")];
+                ids.sort();
+                ids.reverse();
+                ids.iter().map(|id| text(id)).collect()
+            },
+        ] {
+            let mut malformed = base.clone();
+            let cutoffs = field(field(&mut malformed["envelope"], "rotation"), "cutoffs");
+            *field(&mut cutoffs[1][0], "frontier") = json!(["list", frontier]);
+            cases.push(malformed);
+        }
+        let mut malformed = base.clone();
+        let cutoffs = field(field(&mut malformed["envelope"], "rotation"), "cutoffs");
+        let duplicate = cutoffs[1][0].clone();
+        cutoffs[1].as_array_mut().unwrap().push(duplicate);
+        cases.push(malformed);
+        for name in ["generation", "version"] {
+            let mut malformed = base.clone();
+            let term = field(field(&mut malformed["envelope"], "rotation"), name);
+            let number = term[1].clone();
+            *term = json!(["int", format!("{}\n", number.as_u64().unwrap())]);
+            cases.push(malformed);
+        }
+        let mut reversed = base.clone();
+        let cutoffs = field(field(&mut reversed["envelope"], "rotation"), "cutoffs");
+        let entries = cutoffs[1].as_array_mut().unwrap();
+        if entries.len() > 1 {
+            entries.reverse();
+            cases.push(reversed);
+        }
+    }
+    let mut over = rust_case(1, 13, false);
+    let cutoffs = field(field(&mut over["envelope"], "rotation"), "cutoffs");
+    let mut extra = cutoffs[1][12].clone();
+    *field(&mut extra, "replica") = text("\u{feff}Rust rotation cutoff 99");
+    cutoffs[1].as_array_mut().unwrap().push(extra);
+    cases.push(over);
+    cases.push(rust_case(1, 1, true));
+    let mut purpose = rust_case(1, 1, false);
+    let record = field(&mut purpose["envelope"], "rotation").clone();
+    let term = Term::from_carrier(&record).unwrap();
+    let record = rotation::Rotation::decode(&term).unwrap();
+    *field(&mut purpose["envelope"], "new_signature") = json!([
+        "bin",
+        STANDARD.encode(
+            SigningKey::from_bytes(&[122; 32])
+                .sign(&record.signing_bytes().unwrap())
+                .to_bytes()
+        )
+    ]);
+    cases.push(purpose);
+    let input = json!({"cases":cases});
+    let ts = peer("ts", "rotation-consume", Some(&input));
+    let beam = peer("beam", "rotation-consume", Some(&input));
+    for (i, case) in input["cases"].as_array().unwrap().iter().enumerate() {
+        let result = native(case);
+        assert_eq!(result, ts["results"][i], "TS rotation case {i}");
+        assert_eq!(result, beam["results"][i], "BEAM rotation case {i}");
+        assert_eq!(
+            result["valid"],
+            json!(i < 4),
+            "absolute honored/refused control {i}"
+        );
+        let key = STANDARD.decode(case["key"].as_str().unwrap()).unwrap();
+        let verified = rotation::verify(&serde_json::to_vec(&case["envelope"]).unwrap(), &key);
+        assert_eq!(verified.is_ok(), i < 4, "artifact verifier {i}");
+        if let Ok(v) = verified {
+            assert_eq!(v.id(), result["id"].as_str().unwrap());
+        }
+    }
+    // The binding identity must retain signatures even when the altered signature refuses.
+    assert_ne!(
+        native(&input["cases"][0])["id"],
+        native(&input["cases"][4])["id"]
+    );
+}
+#[test]
+fn rotation_artifact_retains_exact_existing_json_byte_limit() {
+    let case = rust_case(1, 1, false);
+    let key = STANDARD.decode(case["key"].as_str().unwrap()).unwrap();
+    let mut bytes = serde_json::to_vec(&case["envelope"]).unwrap();
+    bytes.resize(MAX_BYTES, b' ');
+    assert!(rotation::verify(&bytes, &key).is_ok());
+    bytes.push(b' ');
+    assert!(rotation::verify(&bytes, &key).is_err());
+}
+
+#[test]
+fn artifact_json_numbers_retain_the_existing_unsigned_integer_lexical_profile() {
+    for bytes in [b"0".as_slice(), b"1".as_slice()] {
+        assert!(treehouse_tauri_shell::catalog_eval::json::parse(bytes).is_ok());
+    }
+    for bytes in [b"-0".as_slice(), b"1.0".as_slice(), b"1e0".as_slice()] {
+        assert!(treehouse_tauri_shell::catalog_eval::json::parse(bytes).is_err());
+    }
+}

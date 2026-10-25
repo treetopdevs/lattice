@@ -6,11 +6,16 @@ IN PROGRESS. Authenticated DAGs, portable cutoffs, static delegation analysis,
 bounded roles/continuation, command pre-policy, strict product readability and
 causal Thread application policy/projection are implemented. Space application policy/projection and member-certificate consent checks are now
 implemented as a component. Catalog graph evaluation, retained trust and the full
-incoming/resource integration remain unfinished.
+incoming/resource integration remain unfinished. Closed rotation records and
+dual-purpose signature/binding-id evaluation are implemented as graph inputs;
+parent/head, cutoff-completeness and transition authority remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
 Native signoff is stopped on a separately reproduced source signature mismatch:
 BEAM accepts weak-key detached invitation consent that TypeScript/native reject.
 Plan 272 owns the common verifier correction; do not compensate in native policy.
+Its source PR177 final hosted gate is now green. A separate public artifact
+integer-representation discrepancy is reproduced and assigned to plan273 before
+graph signoff. Preserve raw JSON and do not compensate in native decoding.
 
 Fresh Thread application-policy work exposes a source discrepancy for malformed
 edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.

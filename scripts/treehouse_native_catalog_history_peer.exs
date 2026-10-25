@@ -44,6 +44,41 @@ cutoff_input = fn name, log ->
 end
 
 case System.argv() do
+  ["rotation-produce"] ->
+    f = CatalogVectors.codec_vector()
+    IO.puts(Jason.encode!(%{envelope: f.rotation_envelope_term, key: f.expected_old_key}))
+
+  ["rotation-consume"] ->
+    alias Treehouse.TransportCatalog, as: Catalog
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    results =
+      Enum.map(input["cases"], fn item ->
+        with {:ok, envelope} when is_map(envelope) <- Wire.decode_value(item["envelope"]),
+             true <- Enum.sort(Map.keys(envelope)) == [:new_signature, :old_signature, :rotation],
+             true <- is_binary(envelope.old_signature) and byte_size(envelope.old_signature) == 64,
+             true <- is_binary(envelope.new_signature) and byte_size(envelope.new_signature) == 64,
+             {:ok, record} <- Catalog.normalize_rotation(envelope.rotation) do
+          valid =
+            case Base.decode64(item["key"]) do
+              {:ok, key} -> Catalog.verify_rotation(envelope, key) == :ok
+              _ -> false
+            end
+
+          %{
+            shape: true,
+            valid: valid,
+            id: Catalog.rotation_id(envelope),
+            rotationBytes: Base.encode64(Catalog.rotation_bytes(record)),
+            possessionBytes: Base.encode64(Catalog.rotation_possession_bytes(record))
+          }
+        else
+          _ -> %{shape: false, valid: false}
+        end
+      end)
+
+    IO.puts(Jason.encode!(%{results: results}))
+
   ["produce"] ->
     fixture = CatalogTrustVectors.fixture(2)
     logs = [fixture.space_log | Enum.map(fixture.threads, & &1.log)]
