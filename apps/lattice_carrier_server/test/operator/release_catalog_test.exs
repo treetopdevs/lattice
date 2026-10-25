@@ -577,7 +577,9 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalogTest do
     {output, status} =
       System.cmd(
         System.find_executable("python3"),
-        [runner, helper, f.root, stage, Jason.encode!(plan)], stderr_to_stdout: true)
+        [runner, helper, f.root, stage, Jason.encode!(plan)],
+        stderr_to_stdout: true
+      )
 
     assert status != 0
     refute String.contains?(output, ~s("ok":true))
