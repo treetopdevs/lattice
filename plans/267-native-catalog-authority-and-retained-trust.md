@@ -76,6 +76,14 @@ The next ownership step retains immutable original parsed transport alongside ea
 authenticated normalized DAG. Entry checks consume that shared owner rather than
 reconstructing private maps. This does not identify a trusted saved origin or
 validate an installed snapshot; the original-only pass below remains required.
+Closed retained-snapshot decoding now owns an explicitly unverified value with
+canonical review/record metadata, safe counters and existing storage/artifact
+limits. It deliberately accepts valid-shaped false signatures and watermark
+claims for the later authentication/graph pass; parsing never supplies trust.
+Snapshot depth counts container levels separately from scalar leaves. Preserve
+JavaScript numeric values for supported integral decimal/exponent metadata;
+later counter consumers must perform checked safe-integer conversion rather
+than assuming every valid retained number has an integer JSON representation.
 
 Compare fresh BEAM/TypeScript/Rust causal views through both actual runtime DAG
 owners, retain full-set authentication before selection, and prove long-chain

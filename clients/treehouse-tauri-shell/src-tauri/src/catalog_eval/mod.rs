@@ -20,6 +20,7 @@ mod bootstrap;
 pub mod member_certificate;
 mod projection;
 pub mod reader;
+pub mod snapshot;
 pub mod space_policy;
 pub mod space_projection;
 pub mod thread_policy;

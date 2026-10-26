@@ -43,6 +43,12 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
                 "tsx",
                 "test/support/native_catalog_chain_peer.ts",
             ]);
+        } else if mode == "snapshot-shapes" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_snapshot_peer.ts",
+            ]);
         } else if mode == "entries-consume" {
             command.args([
                 "--import",
