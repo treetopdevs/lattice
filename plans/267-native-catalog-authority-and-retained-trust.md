@@ -193,8 +193,11 @@ This component supplies no standalone retained validator or routes.
 Preparatory full-input runtime peers now cover ordinary accepted/pending/recovery
 cases and historical authority freeze/reopen/witness-corruption requests. They
 compare actual public BEAM/TypeScript decisions before any native port. Later
-history preserves the first recorded frontier; genuine current-policy re-honor
-and the remaining full acceptance/resource matrix still need proof. Source-gate
+history preserves the first recorded frontier. Fresh concurrent issuer revocation
+also re-honors the selected bootstrap in both actual public owners while the
+original historical freeze stays closed; a substituted current honored frontier
+requires recovery. Native consumption and the remaining full acceptance/resource
+matrix still need proof. Source-gate
 waiting does not establish native adoption or implement the retained resolver.
 
 The first full-resolver tests must exercise an empty installed inventory, genuinely

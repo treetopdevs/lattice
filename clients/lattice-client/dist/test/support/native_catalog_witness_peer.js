@@ -1,7 +1,8 @@
 // Fresh full-input historical-witness observations for the native resolver.
 import assert from "node:assert/strict";
 import { trustFixture, fixtureSigner, fixtureId } from "./export_treehouse_catalog_trust";
-import { authorTreehouseRoleTransfer } from "../../src/treehouse";
+import { authorTreehouseRoleTransfer, authorTreehouseGrantRevocation, treehouseCatalogBootstrapsFromFrames } from "../../src/treehouse";
+import { deriveTreehouseCatalogCutoff } from "../../src/treehouse_catalog_cutoff";
 import { authorCarrierOp } from "../../src/codec";
 import { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust } from "../../src/treehouse_catalog_trust";
 const expected = { trustRevision: 0, historyGeneration: 0 };
@@ -12,7 +13,7 @@ assert.equal(prepared.kind, "propose");
 const accepted = await evaluateTreehouseCatalogTrust({ installed: prepared.next, expected, incoming: { ...empty(), catalogs: [f.catalogJson], histories: f.histories } });
 assert.equal(accepted.kind, "propose");
 assert.equal(accepted.routes.length, 2);
-const { frame: transfer } = await authorTreehouseRoleTransfer({ replica: f.space.replica, deps: [f.space.creation.id], signer: f.root,
+const { frame: transfer, delegation: transferDelegation } = await authorTreehouseRoleTransfer({ replica: f.space.replica, deps: [f.space.creation.id], signer: f.root,
     recipient: fixtureSigner("witness-successor").publicKey, parent: f.space.delegation, action: "transfer_admin" });
 const changed = { ...f.histories[0], frames: [...f.space.frames, transfer] };
 const freezeInput = { installed: accepted.next, expected, incoming: { ...empty(), histories: [changed] } };
@@ -22,6 +23,7 @@ assert.equal(freeze.reason, "authority_changed");
 assert.deepEqual(freeze.routes, []);
 assert.equal(freeze.next.blocked.authorityWitnesses.length, 1);
 assert.ok(freeze.next.blocked.opIds.includes(f.review.bootstrapId));
+assert.equal(freeze.observed.bootstrapIds.includes(f.review.bootstrapId), false);
 const witnesses = structuredClone(freeze.next.blocked.authorityWitnesses);
 const beacon = await authorCarrierOp({ replica: f.space.replica, signer: f.root, deps: witnesses[0].frontier,
     kind: "authority", cap: ["nil"], body: ["tuple", [["atom", "beacon"], ["int", 1]]] });
@@ -31,11 +33,39 @@ const grown = await evaluateTreehouseCatalogTrust(growInput);
 assert.equal(grown.kind, "retain_blocked");
 assert.equal(grown.reason, "authority_changed");
 assert.deepEqual(grown.next.blocked.authorityWitnesses, witnesses, "first historical frontier must remain fixed");
+// The revoke is causally concurrent with the transfer, not its descendant.
+// Revocation therefore invalidates that role write and restores current eligibility.
+const revoke = await authorTreehouseGrantRevocation({ replica: f.space.replica, deps: [f.space.creation.id], signer: f.root, delegationId: transferDelegation.id });
+const rehonorHistory = { ...grownHistory, frames: [...grownHistory.frames, revoke] };
+const beforeQuery = await treehouseCatalogBootstrapsFromFrames(changed);
+const afterQuery = await treehouseCatalogBootstrapsFromFrames(rehonorHistory);
+assert.equal(beforeQuery.ok, true);
+assert.equal(afterQuery.ok, true);
+if (!beforeQuery.ok || !afterQuery.ok)
+    throw new Error("complete authentic bootstrap observations required");
+assert.equal(beforeQuery.bootstraps.some(b => b.id === f.review.bootstrapId), false);
+assert.equal(afterQuery.bootstraps.some(b => b.id === f.review.bootstrapId), true, "actual public policy must re-honor the selected bootstrap");
+const rehonorInput = { installed: grown.next, expected, incoming: { ...empty(), histories: [rehonorHistory] } };
+const rehonored = await evaluateTreehouseCatalogTrust(rehonorInput);
+assert.equal(rehonored.kind, "retain_blocked");
+assert.equal(rehonored.reason, "authority_changed");
+assert.deepEqual(rehonored.next.blocked.authorityWitnesses, witnesses);
+assert.equal(rehonored.observed.bootstrapIds.includes(f.review.bootstrapId), true);
+const currentCutoff = await deriveTreehouseCatalogCutoff(rehonorHistory);
+assert.equal(currentCutoff.ok, true);
+if (!currentCutoff.ok)
+    throw new Error("complete current cutoff required");
+assert.notDeepEqual(currentCutoff.cutoff.frontier, witnesses[0].frontier);
+const falseCurrentWitness = structuredClone(rehonored.next);
+falseCurrentWitness.blocked.authorityWitnesses[0].frontier = [...currentCutoff.cutoff.frontier];
 const inputs = [
     { name: "first-authority-freeze", input: freezeInput, reason: "authority_changed" },
     { name: "frozen-reopen", input: { installed: freeze.next, expected, incoming: empty() }, reason: "authority_changed" },
     { name: "later-history-preserves-first-witness", input: growInput, reason: "authority_changed" },
     { name: "grown-frozen-reopen", input: { installed: grown.next, expected, incoming: empty() }, reason: "authority_changed" },
+    { name: "genuine-current-rehonor-stays-frozen", input: rehonorInput, reason: "authority_changed" },
+    { name: "rehonored-frozen-reopen", input: { installed: rehonored.next, expected, incoming: empty() }, reason: "authority_changed" },
+    { name: "current-honored-frontier-is-not-historical-refusal", input: { installed: falseCurrentWitness, expected, incoming: { ...empty(), histories: rehonored.next.histories } }, reason: "trust_recovery_required" },
 ];
 for (const mutation of ["missing", "unknown-frontier", "redundant-frontier", "duplicate-frontier", "wrong-replica", "honored-target", "wrong-index"]) {
     const broken = structuredClone(grown.next), block = broken.blocked, witness = block.authorityWitnesses[0];
@@ -79,5 +109,5 @@ for (const item of inputs) {
     }
     cases.push({ name: item.name, orders });
 }
-assert.equal(cases.length, 11);
+assert.equal(cases.length, 14);
 await new Promise(resolve => process.stdout.write(JSON.stringify({ cases }) + "\n", () => resolve()));
