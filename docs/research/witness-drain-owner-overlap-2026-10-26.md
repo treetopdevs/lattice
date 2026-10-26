@@ -1,14 +1,21 @@
 # Witness drain and owner-check overlap
 
-## Finding
+## Current status
 
-PR178 predecessor hosted native tracing failed its usable-owner reuse control after the actual registry became idle. Current head changes only documentation relative to that failure. Passive registry observation fixed test interference but does not serialize internal owner reads.
+The production repair is published in PR 178. Required independent/adversarial
+reviews and all local gates pass. A new exact-tip hosted gate remains required
+before dependent adoption or final signoff; earlier checkpoint runs do not
+substitute for that gate.
 
-A deterministic diagnostic on the current source uses the actual NativePending, NativeDrain and WitnessOwner plus the existing test-only snapshot gate. The native dispatch check succeeds. The receiver then holds the owner mutex during its final current check. The physical drain completes. A finalizer-style owner check fails and permanently refuses the live owner; releasing the receiver yields cancelled. No sleeps, public polling, owner closure or production changes are involved. This proves the interleaving is possible; it does not prove every detail of the hosted scheduler.
+## Baseline finding
 
-The run_finished test flag is set on entry into finalization, before drain waits and the final owner check. The test comment claiming it includes the final owner check is inaccurate.
+A PR 178 predecessor hosted native tracing run failed its usable-owner reuse control after the actual registry became idle. At the diagnosis checkpoint, only documentation had changed relative to that failing source. Passive registry observation fixed test interference but does not serialize internal owner reads.
 
-## Recommended implementation
+The initial deterministic diagnostic on that baseline uses the actual NativePending, NativeDrain and WitnessOwner plus the existing test-only snapshot gate. The native dispatch check succeeds. The receiver then holds the owner mutex during its final current check. The physical drain completes. A finalizer-style owner check fails and permanently refuses the live owner; releasing the receiver yields cancelled. No sleeps, public polling, owner closure or production changes are involved. This proves the interleaving is possible; it does not prove every detail of the hosted scheduler.
+
+The run_finished test flag is set on entry into finalization, before drain waits and the final owner check. The original test comment claiming it included the final owner check was corrected.
+
+## Implementation contract
 
 Preserve physical NativeDrain semantics and WitnessOwner's conservative refusal policy. Add an explicit flow-owned completion barrier for cancellation response consumption. The flow must retain its operation reservation until both the native callback has physically drained and its cancellation receiver has completed its final owner check. Only then may finalization query owner eligibility and release the slot. Do not solve this by deleting the successful-reuse control, polling admission, adding sleeps or increasing deadlines.
 
@@ -20,13 +27,13 @@ Preserve physical NativeDrain semantics and WitnessOwner's conservative refusal 
 
 ## Operator decision
 
-The operator approved finishing the production completion-barrier fix in PR178. Preserve the catalog changes, owner lock-contention refusal policy and existing success/refusal controls. A separate PR or owner-policy change is not selected.
+The operator approved finishing the production completion-barrier fix in PR 178. Preserve the catalog changes, owner lock-contention refusal policy and existing success/refusal controls. A separate PR or owner-policy change is not selected.
 
 ## Local evidence
 
 Diagnostic patch: /tmp/lattice-witness-internal-owner-overlap-diagnostic.patch
 
-Failing run: /tmp/lattice-witness-internal-owner-overlap-red.log (one test, deterministic failure, exit101). The preliminary diagnostic remains saved outside the committed suite. The normal suite now contains a gated regression through the actual WitnessFlow cancellation path. Removing only the new sequencing checks deterministically fails its finalization-wait assertion; restoring them passes and permits a fresh public operation. Required reviews and full gates remain open.
+Failing run: /tmp/lattice-witness-internal-owner-overlap-red.log (one test, deterministic failure, exit 101). The preliminary diagnostic remains saved outside the committed suite. The normal suite now contains a gated regression through the actual WitnessFlow cancellation path. Removing only the new sequencing checks deterministically fails its finalization-wait assertion; restoring them passes and permits a fresh public operation. Reviews and local gates are complete; the current hosted gate remains required.
 
 ## Finalization handshake and fixture scheduling
 
@@ -48,8 +55,9 @@ Fake callback waits now use blocking workers; only the two deliberate synchronou
 owner-lock tests share a fixture gate. Twenty complete 17-test constrained runs
 passed after that change. The final repeat tightens its observer to require
 finished registration and all physical drains before marking consumer wait.
-Both native configurations, full repository checks and final adversarial/hosted
-results remain pending; superseded successful checkpoints are not final signoff.
+These were intermediate results. Both final native configurations, full repository
+checks and adversarial review subsequently passed, as recorded below. The current
+hosted gate remains required; superseded checkpoints are not final signoff.
 
 ## Verified local checkpoint
 
@@ -57,8 +65,8 @@ The final tightened observer passes twenty complete 17-test witness-family runs
 with two runtime workers and four test threads. Both ordinary and tracing native
 all-target suites also pass with two runtime workers, after moving the plugin-hook
 fixture's fake callback wait onto a blocking worker. Desktop typecheck/tests and
-both boundary security scans pass. The full mix check and new hosted exact-tip
-gate remain open.
+both boundary security scans pass. The full mix check also passes; the new hosted
+exact-tip gate remains required.
 
 Final independent specification and standards reviews find no actionable issue.
 Actual first-party Sonnet 5.5 High reports no P1/P2; its optional observer hardening
@@ -69,5 +77,5 @@ means entry into finalization rather than completed owner checking.
 
 The final full mix check exits successfully: core 899 tests/26 properties and
 carrier 643 tests, zero failures; carrier platform skips/exclusions remain
-explicit. Final local checks are complete. Publish the approved repair and pass
-one new exact-tip hosted gate before dependent adoption/signoff.
+explicit. Final local checks are complete and the approved repair is published.
+Pass the current exact-tip hosted gate before dependent adoption/signoff.
