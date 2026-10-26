@@ -2,6 +2,7 @@
 //! Authenticity remains separate from vocabulary/admission and authority.
 pub mod artifact;
 pub mod canonical;
+pub mod chains;
 pub mod cutoff;
 pub mod delegations;
 pub mod entries;

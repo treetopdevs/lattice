@@ -116,8 +116,8 @@ impl<'a> Rotation<'a> {
 pub struct Envelope<'a> {
     term: &'a Term,
     pub rotation: Rotation<'a>,
-    old_signature: &'a [u8],
-    new_signature: &'a [u8],
+    pub(super) old_signature: &'a [u8],
+    pub(super) new_signature: &'a [u8],
 }
 impl<'a> Envelope<'a> {
     pub fn decode(term: &'a Term) -> Option<Self> {
