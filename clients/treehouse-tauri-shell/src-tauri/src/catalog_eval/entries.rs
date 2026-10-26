@@ -36,7 +36,8 @@ pub fn observe(
 ) -> Result<EntryObservation, &'static str> {
     let catalog = field(artifact.term(), "catalog").ok_or("malformed_catalog")?;
     envelope::signing_bytes(catalog).map_err(|_| "malformed_catalog")?;
-    let histories = AuthenticatedHistories::authenticate(raw_histories)?;
+    let histories =
+        AuthenticatedHistories::authenticate(raw_histories).map_err(|error| error.reason)?;
     let space_id = text(field(catalog, "space").ok_or(INVALID)?).ok_or(INVALID)?;
     let bootstrap_id = text(field(catalog, "bootstrap").ok_or(INVALID)?).ok_or(INVALID)?;
     let space = histories.get(space_id).ok_or(PENDING)?.dag();

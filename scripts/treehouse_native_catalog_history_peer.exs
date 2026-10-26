@@ -279,6 +279,82 @@ case System.argv() do
       })
     )
 
+  ["raw-incoming-consume"] ->
+    alias Treehouse.CatalogTrust
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+    review = input["review"]
+
+    review = %{
+      version: 1,
+      product: :treehouse,
+      space: review["space"],
+      space_root: Base.decode64!(review["spaceRoot"]),
+      bootstrap_id: review["bootstrapId"],
+      observed_bootstrap_ids: review["observedBootstrapIds"],
+      disposition: :pin_exact_observed_bootstrap
+    }
+
+    raw_history = fn raw ->
+      Map.new(raw, fn
+        {"replica", value} ->
+          {:replica, value}
+
+        {"frames", value} ->
+          {:frames, value}
+
+        {"rejected", records} ->
+          {:rejected,
+           Enum.map(records, fn
+             record when is_map(record) ->
+               Map.new(record, fn
+                 {"frame", value} -> {:frame, value}
+                 {"reason", "bad_signature"} -> {:reason, :bad_signature}
+                 {"reason", value} -> {:reason, value}
+                 pair -> pair
+               end)
+
+             value ->
+               value
+           end)}
+
+        pair ->
+          pair
+      end)
+    end
+
+    expected = %{trust_revision: 0, history_generation: 0}
+
+    %{kind: :propose, next: installed} =
+      CatalogTrust.prepare_installation(%{
+        review: review,
+        history: raw_history.(input["baselineHistory"]),
+        store: %{kind: :verified_fresh, expected: expected}
+      })
+
+    results =
+      Enum.map(input["cases"], fn item ->
+        decision =
+          CatalogTrust.evaluate(%{
+            installed: installed,
+            expected: expected,
+            incoming: %{
+              catalogs: [item["catalogJson"]],
+              rotations: [],
+              cutoff_proofs: [],
+              histories: Enum.map(item["histories"], raw_history)
+            }
+          })
+
+        %{
+          kind: decision.kind,
+          reason: decision.reason,
+          ids: get_in(decision, [:detail, :ids]) || [],
+          route_count: length(Map.get(decision, :routes, []))
+        }
+      end)
+
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
+
   ["entries-consume"] ->
     alias Treehouse.{CatalogEntries, TransportCatalog}
     input = IO.read(:stdio, :eof) |> Jason.decode!()

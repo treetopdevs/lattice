@@ -95,6 +95,13 @@ adopted: malformed non-delegation genesis dependencies cannot complete a Space.
 The existing quarantine filter and neutral role-free replay semantics remain
 unchanged. This observes initialization only and supplies no authority receipt.
 
+Raw-history ownership now authenticates the whole supplied set and validates
+rejected evidence before returning sorted missing IDs. Complete histories retain
+closed cutoff derivation and apply the product reader before policy evaluation.
+The separately reviewed shared strict-integer context correction is adopted.
+The entry observer remains a reason-only projection; the full resolver must map
+original-state failures to recovery before considering incoming repair.
+
 ## Next integration: original-state validation and graph trust
 
 The shared available-invalid versus missing-entry source correction is reviewed,

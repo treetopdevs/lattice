@@ -3,8 +3,9 @@
 ## Status
 
 IN PROGRESS. A fresh actual raw-owner probe finds BEAM accepts an unrelated
-unsafe strict integer while TypeScript refuses unsupported_cutoff. The separately reviewed shared raw reader correction passes focused source
-checks; compose the native reader after cutoff derivation next.
+unsafe strict integer while TypeScript refuses unsupported_cutoff. The separately reviewed shared raw reader correction is adopted. Native staged
+authentication, detailed pending IDs and accepted product readability are composed.
+Fresh raw-owner comparisons pass; combined local/hosted gates remain required.
 Keep authentic incomplete histories pending before portability/semantic reading.
 
 ## Contract

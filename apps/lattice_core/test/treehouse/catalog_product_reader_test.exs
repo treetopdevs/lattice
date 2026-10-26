@@ -23,10 +23,17 @@ defmodule Treehouse.CatalogProductReaderTest do
     for {name, kind, body, cap, reason} <- [
           {:safe, :command, high - 1, nil, nil},
           {:unsafe_body, :command, high, nil, :unsupported_cutoff},
+          {:maximum_uint64_body, :command, 18_446_744_073_709_551_615, nil, :unsupported_cutoff},
           {:unsafe_cap, :command, nil, high, :unsupported_cutoff},
           {:beacon, :authority, {:beacon, high}, nil, nil},
           {:policy_metadata, :authority,
-           {:genesis, neutral, %{__beacon__: %{max_epoch_step: high}}}, nil, nil}
+           {:genesis, neutral, %{__beacon__: %{max_epoch_step: high}}}, nil, nil},
+          {:certificate_metadata, :authority,
+           {:beacon, 0, %{claim: %{epoch: 0, max_epoch_step: high}}}, nil, nil},
+          {:certificate_epoch, :authority, {:beacon, 0, %{claim: %{epoch: high}}}, nil,
+           :unsupported_cutoff},
+          {:certificate_outer_epoch, :authority, {:beacon, high, %{claim: %{epoch: 0}}}, nil,
+           :unsupported_cutoff}
         ] do
       op = Op.new(foreign, thread.replica, [], kind, body, cap: cap)
       log = Log.append!(thread.log, op)

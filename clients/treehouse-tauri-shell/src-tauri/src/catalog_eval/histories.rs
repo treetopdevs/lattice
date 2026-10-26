@@ -6,7 +6,12 @@
 //! Retaining all parsed histories intentionally increases memory versus a DAG-only
 //! fold. The incoming owner must bound that aggregate before exposing this to
 //! untrusted pages; this component is not an incoming admission boundary.
-use super::{cutoff, history::AuthenticDag, json};
+use super::{
+    cutoff,
+    history::{AuthenticDag, HistoryError},
+    json,
+    reader::ReadableFrame,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 const HISTORY: &str = "invalid_verified_history";
@@ -33,11 +38,19 @@ pub struct AuthenticatedHistories {
     histories: BTreeMap<String, AuthenticatedHistory>,
 }
 impl AuthenticatedHistories {
-    pub fn authenticate(raw_histories: &[(&str, &[u8])]) -> Result<Self, &'static str> {
+    pub fn authenticate(raw_histories: &[(&str, &[u8])]) -> Result<Self, HistoryError> {
+        let error = |reason| HistoryError {
+            reason,
+            ids: Vec::new(),
+        };
         let mut histories = BTreeMap::new();
         let mut unsupported = false;
         let mut names = BTreeSet::new();
-        // Continue after portability refusal: a later forged history takes priority.
+        let mut parsed = Vec::with_capacity(raw_histories.len());
+        let mut missing = BTreeSet::new();
+        // Raw authentication of the entire set precedes fetch/portability results.
+        // Do not run the strict DAG reader yet: authentic depth-65 observation
+        // must retain its cutoff refusal rather than becoming a frame error.
         for (name, bytes) in raw_histories {
             let raw = match json::parse_observation(bytes) {
                 Ok(raw) => raw,
@@ -45,35 +58,80 @@ impl AuthenticatedHistories {
                     unsupported = true;
                     continue;
                 }
-                Err(_) => return Err(HISTORY),
+                Err(_) => return Err(error(HISTORY)),
             };
-            if raw["replica"].as_str() != Some(*name) || !names.insert(*name) {
-                return Err(HISTORY);
+            if !closed_object(&raw, &["replica", "frames", "rejected"])
+                || raw["replica"].as_str() != Some(*name)
+                || !names.insert(*name)
+            {
+                return Err(error(HISTORY));
             }
-            authenticate_frames(&raw)?;
+            missing.extend(authenticate_frames(&raw).map_err(error)?);
+            // Rejected evidence has its own portability stage before fetching,
+            // just like the public owners' empty-accepted cutoff observation.
+            if !raw["rejected"]
+                .as_array()
+                .expect("authenticated shape")
+                .is_empty()
+            {
+                let rejected =
+                    serde_json::json!({"replica":name,"frames":[],"rejected":raw["rejected"]});
+                let bytes = serde_json::to_vec(&rejected).map_err(|_| error(HISTORY))?;
+                match cutoff::derive(&bytes) {
+                    Ok(_) => {}
+                    Err(e) if e.reason == "unsupported_cutoff" => unsupported = true,
+                    Err(_) => return Err(error(HISTORY)),
+                }
+            }
+            parsed.push((*name, *bytes, raw));
+        }
+        if unsupported {
+            return Err(error("unsupported_cutoff"));
+        }
+        if !missing.is_empty() {
+            return Err(HistoryError {
+                reason: "trust_pending",
+                ids: missing.into_iter().collect(),
+            });
+        }
+        // Only complete evidence reaches the unchanged closed cutoff primitive.
+        for (name, bytes, raw) in parsed {
             let observation = match cutoff::derive(bytes) {
                 Ok(observation) => observation,
-                Err(error) if error.reason == "unsupported_cutoff" => {
+                Err(cutoff_error) if cutoff_error.reason == "unsupported_cutoff" => {
                     unsupported = true;
                     continue;
                 }
-                Err(_) => return Err(HISTORY),
+                Err(_) => return Err(error(HISTORY)),
             };
-            if observation.replica() != *name || histories.contains_key(*name) {
-                return Err(HISTORY);
+            if observation.replica() != name {
+                return Err(error(HISTORY));
             }
             let frames: Vec<Vec<u8>> = raw["frames"]
                 .as_array()
-                .ok_or(HISTORY)?
+                .ok_or_else(|| error(HISTORY))?
                 .iter()
-                .map(|frame| serde_json::to_vec(frame).map_err(|_| HISTORY))
+                .map(|frame| serde_json::to_vec(frame).map_err(|_| error(HISTORY)))
                 .collect::<Result<_, _>>()?;
             let refs: Vec<&[u8]> = frames.iter().map(Vec::as_slice).collect();
-            let dag = AuthenticDag::authenticate(name, &refs).map_err(|_| HISTORY)?;
-            histories.insert((*name).to_owned(), AuthenticatedHistory { raw, dag });
+            let dag = AuthenticDag::authenticate(name, &refs)?;
+            let mut readable = true;
+            for frame in &frames {
+                match ReadableFrame::verify(frame) {
+                    Ok(_) => {}
+                    Err("unsupported_cutoff") => {
+                        unsupported = true;
+                        readable = false;
+                    }
+                    Err(_) => return Err(error(HISTORY)),
+                }
+            }
+            if readable {
+                histories.insert(name.to_owned(), AuthenticatedHistory { raw, dag });
+            }
         }
         if unsupported {
-            Err("unsupported_cutoff")
+            Err(error("unsupported_cutoff"))
         } else {
             Ok(Self { histories })
         }
@@ -92,19 +150,39 @@ impl AuthenticatedHistories {
 // Accepted evidence must already have authentic signed content; rejected evidence
 // must not relabel an authentic operation as a bad signature. Unrepresentable
 // rejected records remain the cutoff owner's unsupported-observation decision.
-fn authenticate_frames(raw: &serde_json::Value) -> Result<(), &'static str> {
+fn closed_object(value: &serde_json::Value, keys: &[&str]) -> bool {
+    value.as_object().is_some_and(|fields| {
+        fields.len() == keys.len() && keys.iter().all(|key| fields.contains_key(*key))
+    })
+}
+fn authenticate_frames(raw: &serde_json::Value) -> Result<BTreeSet<String>, &'static str> {
+    let replica = raw["replica"].as_str().ok_or(HISTORY)?;
+    let mut ids = BTreeSet::new();
+    let mut dependencies = BTreeSet::new();
     for frame in raw["frames"].as_array().ok_or(HISTORY)? {
         let inspected = super::frame::inspect_value(frame).map_err(|_| HISTORY)?;
-        if !inspected.authentic() {
+        if !inspected.authentic() || inspected.replica != replica || !ids.insert(inspected.id) {
             return Err(HISTORY);
         }
+        dependencies.extend(inspected.deps);
     }
+    let mut rejected_ids = BTreeSet::new();
     for rejected in raw["rejected"].as_array().ok_or(HISTORY)? {
+        if !closed_object(rejected, &["frame", "reason"])
+            || rejected["reason"] != "bad_signature"
+            || rejected["frame"]["replica"].as_str() != Some(replica)
+        {
+            return Err(HISTORY);
+        }
+        let id = rejected["frame"]["id"].as_str().ok_or(HISTORY)?;
+        if !rejected_ids.insert(id) {
+            return Err(HISTORY);
+        }
         if let Ok(inspected) = super::frame::inspect_value(&rejected["frame"]) {
             if inspected.authentic() {
                 return Err(HISTORY);
             }
         }
     }
-    Ok(())
+    Ok(dependencies.difference(&ids).cloned().collect())
 }

@@ -15,7 +15,7 @@ if (process.argv[2] === "consume") {
         assert.equal(prepared.kind, "propose");
         results.push(await evaluateTreehouseCatalogTrust({ installed: prepared.next, expected, incoming: { catalogs: [item.catalogJson], rotations: [], histories: item.histories, cutoffProofs: [] } }));
     }
-    console.log(JSON.stringify({ results }));
+    await new Promise((resolve) => process.stdout.write(JSON.stringify({ results }) + "\n", () => resolve()));
     process.exit(0);
 }
 const f = await trustFixture(2), expected = { trustRevision: 0, historyGeneration: 0 };

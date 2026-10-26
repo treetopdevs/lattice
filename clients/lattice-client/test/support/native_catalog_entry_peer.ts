@@ -11,14 +11,14 @@ import type {TreehouseCatalogRawHistory} from "../../src/treehouse_catalog_trust
 import {prepareTreehouseCatalogInstallation,evaluateTreehouseCatalogTrust} from "../../src/treehouse_catalog_trust";
 if(process.argv[2]==="consume"){
  const input=JSON.parse(readFileSync(0,"utf8"));
- const results=[];
+ const results: Awaited<ReturnType<typeof evaluateTreehouseCatalogTrust>>[]=[];
  for(const item of input.cases){
   const expected={trustRevision:0,historyGeneration:0};
   const prepared=await prepareTreehouseCatalogInstallation({review:item.review,history:item.histories.find((h:TreehouseCatalogRawHistory)=>h.replica===item.review.space),store:{kind:"verified_fresh",expected}});
   assert.equal(prepared.kind,"propose");
   results.push(await evaluateTreehouseCatalogTrust({installed:prepared.next,expected,incoming:{catalogs:[item.catalogJson],rotations:[],histories:item.histories,cutoffProofs:[]}}));
  }
- console.log(JSON.stringify({results}));process.exit(0);
+ await new Promise<void>((resolve)=>process.stdout.write(JSON.stringify({results})+"\n",()=>resolve()));process.exit(0);
 }
 const f=await trustFixture(2), expected={trustRevision:0,historyGeneration:0};
 const first=[...f.threads].sort((a,b)=>Buffer.compare(Buffer.from(a.replica),Buffer.from(b.replica)))[0]!;
