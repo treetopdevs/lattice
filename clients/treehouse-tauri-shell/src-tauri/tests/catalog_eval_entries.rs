@@ -731,8 +731,10 @@ fn rich_entry_facts_match_actual_priority_decisions_and_first_refusal_ids() {
                     "missing_reference" => &["reference"],
                     "missing_child"
                     | "missing_child_wrong_root"
-                    | "missing_child_wrong_reference"
-                    | "empty_child" => &["genesis", "creation", "reference"],
+                    | "missing_child_wrong_reference" => &["genesis", "creation", "reference"],
+                    // A present empty child still has a known Space reference;
+                    // only an absent history takes the source early return.
+                    "empty_child" => &["genesis", "creation"],
                     _ => &[],
                 };
                 if !fields.is_empty() {
