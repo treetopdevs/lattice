@@ -3,7 +3,7 @@
 //! High decimal text is portable at the scalar layer; record fields still apply
 //! their own horizons. No record-schema, signature, authority, freshness,
 //! retained-trust or route verdict is supplied.
-use super::canonical::{integer, Result, Term, MAX_BYTES, MAX_SAFE_INTEGER};
+use super::canonical::{integer, portable_integer, Result, Term, MAX_BYTES};
 use serde_json::Value;
 
 #[derive(Debug)]
@@ -49,8 +49,7 @@ fn portable(value: &Value) -> Result<()> {
                 if values.len() != 2 {
                     return Err("malformed_catalog");
                 }
-                let number = integer(&values[1]).map_err(|_| "malformed_catalog")?;
-                if values[1].is_string() && number <= MAX_SAFE_INTEGER {
+                if !portable_integer(&values[1]).map_err(|_| "malformed_catalog")? {
                     return Err("malformed_catalog");
                 }
             }

@@ -6,25 +6,14 @@ use curve25519_dalek::{
 use ed25519_dalek::{Signer, SigningKey};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha512};
-use std::{
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::{path::PathBuf, process::Command};
 use treehouse_tauri_shell::signature::verify;
 #[path = "support/peer_response.rs"]
 mod peer_response;
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let mut cmd = if runtime == "beam" {
-        let shim = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .map(|home| home.join(".asdf/shims/mix"));
-        let executable = std::env::var_os("MIX_BIN").unwrap_or_else(|| {
-            shim.filter(|path| path.is_file())
-                .map_or_else(|| "mix".into(), |path| path.into_os_string())
-        });
-        let mut c = Command::new(executable);
+    let cmd = if runtime == "beam" {
+        let mut c = Command::new(peer_response::mix_executable());
         c.current_dir(&root).env("MIX_ENV", "test").args([
             "run",
             "--no-compile",
@@ -43,25 +32,11 @@ fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
         ]);
         c
     };
-    let response = peer_response::PeerResponse::prepare(&mut cmd, runtime);
-    let mut child = cmd
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    if let Some(input) = input {
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(&serde_json::to_vec(input).unwrap())
-            .unwrap();
-    }
-    drop(child.stdin.take());
-    let output = child.wait_with_output().unwrap();
-    let bytes = response.finish(
-        output,
+    let input = input.map(|value| serde_json::to_vec(value).unwrap());
+    let bytes = peer_response::run(
+        cmd,
+        runtime,
+        input.as_deref(),
         64 * 1024 * 1024,
         &format!("{runtime} signature {mode}"),
     );

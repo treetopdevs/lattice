@@ -1,10 +1,6 @@
 //! Shared actual-runtime process runner. Tests retain their own decoder/budget.
 use serde_json::Value;
-use std::{
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::{path::PathBuf, process::Command};
 #[path = "peer_response.rs"]
 mod peer_response;
 
@@ -19,9 +15,8 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
     let _guard = PEER_LOCK
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
-    let mut command = if runtime == "beam" {
-        let shim = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".asdf/shims/mix");
-        let mut command = Command::new(if shim.is_file() { shim } else { "mix".into() });
+    let command = if runtime == "beam" {
+        let mut command = Command::new(peer_response::mix_executable());
         command.current_dir(root()).env("MIX_ENV", "test").args([
             "run",
             "--no-compile",
@@ -78,22 +73,12 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
         }
         command
     };
-    let response = peer_response::PeerResponse::prepare(&mut command, runtime);
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("prepare actual Node and BEAM peers before native reciprocal tests");
-    if let Some(input) = input {
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(&serde_json::to_vec(input).unwrap())
-            .unwrap();
-    }
-    drop(child.stdin.take());
-    let output = child.wait_with_output().unwrap();
-    response.finish(output, max_bytes, &format!("{runtime} {mode}"))
+    let input = input.map(|value| serde_json::to_vec(value).unwrap());
+    peer_response::run(
+        command,
+        runtime,
+        input.as_deref(),
+        max_bytes,
+        &format!("{runtime} {mode}"),
+    )
 }

@@ -419,7 +419,9 @@ defmodule Treehouse.Space do
   def initialization(%Log{} = log) do
     analysis = Authority.analyze(__MODULE__, log)
     honored = Enum.reject(Log.topo_ops(log), &MapSet.member?(analysis.quarantine, &1.id))
-    roots = for %Op{kind: :authority, body: {:genesis, _, _}, id: id} <- honored, do: id
+
+    roots =
+      for %Op{kind: :authority, body: {:genesis, %Delegation{}, _}, id: id} <- honored, do: id
 
     ready? =
       Enum.any?(honored, fn

@@ -227,12 +227,23 @@ defmodule Treehouse.CatalogCutoffVocabularyTest do
 
       raw = fixture.space_log |> Log.append!(op) |> CatalogTrustVectors.raw_history()
 
-      assert %{kind: :propose} =
-               CatalogTrust.prepare_installation(%{
-                 review: fixture.review,
-                 history: raw,
-                 store: %{kind: :verified_fresh, expected: @expected}
-               })
+      # Canonical uint64 remains valid Wire/cutoff evidence, while an ordinary
+      # unsafe scalar is outside the common product reader's exact integer range.
+      {:ok, decoded} = Wire.decode_op(Enum.find(raw.frames, &(&1["id"] == op.id)))
+      assert decoded.body == body
+      assert Op.valid?(decoded)
+      assert {:ok, _} = CatalogCutoff.derive(Log.append!(fixture.space_log, op))
+
+      decision =
+        CatalogTrust.prepare_installation(%{
+          review: fixture.review,
+          history: raw,
+          store: %{kind: :verified_fresh, expected: @expected}
+        })
+
+      if is_integer(body),
+        do: assert(%{kind: :reject, reason: :unsupported_cutoff} = decision),
+        else: assert(%{kind: :propose} = decision)
 
       malformed =
         Enum.map(raw.frames, fn frame ->

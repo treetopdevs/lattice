@@ -1,5 +1,10 @@
 //! Fresh bounded test response channel, separate from Mix's console output.
-use std::process::{Command, Output};
+use std::{
+    ffi::OsString,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Output, Stdio},
+};
 
 pub struct PeerResponse {
     file: Option<tempfile::NamedTempFile>,
@@ -39,4 +44,36 @@ impl PeerResponse {
         );
         bytes
     }
+}
+
+/// One launcher for every BEAM peer; explicit operator selection wins.
+pub fn mix_executable() -> OsString {
+    std::env::var_os("MIX_BIN").unwrap_or_else(|| {
+        std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .map(|home| home.join(".asdf/shims/mix"))
+            .filter(|path| path.is_file())
+            .map_or_else(|| "mix".into(), |path| path.into_os_string())
+    })
+}
+
+pub fn run(
+    mut command: Command,
+    runtime: &str,
+    input: Option<&[u8]>,
+    max_bytes: usize,
+    context: &str,
+) -> Vec<u8> {
+    let response = PeerResponse::prepare(&mut command, runtime);
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("prepare actual Node and BEAM peers before native reciprocal tests");
+    if let Some(input) = input {
+        child.stdin.take().unwrap().write_all(input).unwrap();
+    }
+    drop(child.stdin.take());
+    response.finish(child.wait_with_output().unwrap(), max_bytes, context)
 }

@@ -39,7 +39,7 @@ fn known_atom(name: &str) -> bool {
     NAMES.contains(name)
 }
 
-const MAX_SAFE: u64 = 9_007_199_254_740_991;
+const MAX_SAFE: u64 = super::canonical::MAX_SAFE_INTEGER;
 
 #[derive(Debug)]
 pub struct ReadableFrame(AuthenticFrame);
@@ -111,10 +111,7 @@ fn readable(term: &Value, context: Context) -> bool {
     match term[0].as_str().expect("authenticated term tag") {
         "nil" | "bool" | "bin" => true,
         "int" => {
-            let value = term[1]
-                .as_u64()
-                .or_else(|| term[1].as_str()?.parse::<u64>().ok())
-                .expect("authenticated integer");
+            let value = super::canonical::integer(&term[1]).expect("authenticated integer");
             value <= MAX_SAFE || context != Context::Strict
         }
         "atom" => known_atom(term[1].as_str().expect("authenticated atom")),

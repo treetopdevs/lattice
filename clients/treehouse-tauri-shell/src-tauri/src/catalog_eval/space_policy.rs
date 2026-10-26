@@ -369,23 +369,36 @@ fn conflicts(ctx: &Context<'_, '_>) -> BTreeMap<String, &'static str> {
         .filter(|id| ctx.honored(id))
         .filter_map(|id| certificate(ctx.dag, id).map(|c| (id.as_str(), c)))
         .collect();
-    let concurrent = |a: &str, b: &str| {
-        a != b
-            && !ctx.dag.ancestors(a).expect("candidate").contains(b)
-            && !ctx.dag.ancestors(b).expect("candidate").contains(a)
-    };
+    if candidates.is_empty() {
+        return BTreeMap::new();
+    }
+    let removals: Vec<_> = ctx
+        .scope
+        .iter()
+        .copied()
+        .filter(|id| ctx.honored(id) && ctx.command(id, "remove_member").is_some())
+        .collect();
+    let ancestors: BTreeMap<_, _> = candidates
+        .iter()
+        .map(|(id, _)| *id)
+        .chain(removals.iter().copied())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|id| (id, ctx.dag.ancestors(id).expect("scoped operation")))
+        .collect();
+    let claim_ids: BTreeMap<_, _> = candidates
+        .iter()
+        .map(|(id, cert)| (*id, cert.claim.id()))
+        .collect();
+    let concurrent =
+        |a: &str, b: &str| a != b && !ancestors[a].contains(b) && !ancestors[b].contains(a);
     let mut denied = BTreeMap::new();
     for (id, cert) in &candidates {
         let stale = cert.claim.vouchers.iter().any(|v| {
-            ctx.scope.iter().any(|removal| {
-                ctx.honored(removal)
-                    && ctx.removal(removal, v.member)
+            removals.iter().any(|removal| {
+                ctx.removal(removal, v.member)
                     && concurrent(id, removal)
-                    && ctx
-                        .dag
-                        .ancestors(removal)
-                        .expect("scoped removal")
-                        .contains(v.admission)
+                    && ancestors[removal].contains(v.admission)
             })
         });
         let collision = candidates.iter().any(|(other, c)| {
@@ -403,8 +416,8 @@ fn conflicts(ctx: &Context<'_, '_>) -> BTreeMap<String, &'static str> {
         let invalid = cert.claim.parents.iter().any(|parent| {
             !candidates.iter().any(|(wrapper, c)| {
                 c.claim.old_pub == cert.claim.old_pub
-                    && c.claim.id().as_deref() == Some(*parent)
-                    && ctx.dag.ancestors(id).expect("candidate").contains(wrapper)
+                    && claim_ids[wrapper].as_deref() == Some(*parent)
+                    && ancestors[id].contains(wrapper)
                     && !denied.contains_key(*wrapper)
             })
         });

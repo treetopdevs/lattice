@@ -463,3 +463,41 @@ fn high_lease_metadata_obeys_the_public_raw_profile_not_the_broader_typed_log_he
     assert_eq!(result["results"][0]["kind"], "reject");
     assert_eq!(result["results"][0]["reason"], "invalid_verified_history");
 }
+
+#[test]
+fn space_reference_binding_is_checked_before_missing_histories() {
+    use serde_json::{json, Value};
+    use treehouse_tauri_shell::catalog_eval::canonical::Term;
+    let table = decode_peer(&catalog_peer::output(
+        "ts",
+        "entries-produce",
+        None,
+        4 * 1024 * 1024,
+    ));
+    let mut envelope: Value =
+        serde_json::from_str(table["cases"][0]["catalogJson"].as_str().unwrap()).unwrap();
+    let original = artifact::parse(&serde_json::to_vec(&envelope).unwrap()).unwrap();
+    assert_eq!(
+        entries::observe(&original, &[]).unwrap_err(),
+        "trust_pending"
+    );
+    let catalog = carrier_field_mut(&mut envelope, "catalog");
+    let entries = carrier_field_mut(catalog, "entries")[1]
+        .as_array_mut()
+        .unwrap();
+    let space = entries
+        .iter_mut()
+        .find(|e| {
+            Term::from_carrier(e).unwrap().atom_field("kind") == Some(&Term::Atom("space".into()))
+        })
+        .unwrap();
+    *carrier_field_mut(space, "reference") = json!([
+        "bin",
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, "A".repeat(43))
+    ]);
+    let altered = artifact::parse(&serde_json::to_vec(&envelope).unwrap()).unwrap();
+    assert_eq!(
+        entries::observe(&altered, &[]).unwrap_err(),
+        "malformed_catalog"
+    );
+}

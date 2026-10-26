@@ -90,13 +90,27 @@ owners, retain full-set authentication before selection, and prove long-chain
 closure without recursion or payload copies. Review and combined gates remain
 required before the future retained-authority consumer uses this primitive.
 
+The shared initialization root-shape correction is separately reviewed and
+adopted: malformed non-delegation genesis dependencies cannot complete a Space.
+The existing quarantine filter and neutral role-free replay semantics remain
+unchanged. This observes initialization only and supplies no authority receipt.
+
+Raw-history ownership now authenticates the whole supplied set and validates
+rejected evidence before returning sorted missing IDs. Complete histories retain
+closed cutoff derivation and apply the product reader before policy evaluation.
+The separately reviewed shared strict-integer context correction is adopted.
+The entry observer remains a reason-only projection; the full resolver must map
+original-state failures to recovery before considering incoming repair.
+
 ## Next integration: original-state validation and graph trust
 
-STOP on rich-entry/retained source adoption: available invalid entry proof is
-classified differently by the public BEAM and TypeScript owners when another
-named item is missing. Plan276 owns the shared source correction. Preserve the
-completed input/graph components; do not add a Rust compensation. Resume richer
-entry folding after that correction passes review and its source gate.
+The shared available-invalid versus missing-entry source correction is reviewed,
+hosted-verified and adopted, together with the independently required native CI
+job and cold-process scheduling correction. The source adoption stop is cleared.
+Preserve the completed input/graph components and use the corrected common rule
+when implementing richer native entry folding; do not add a divergent Rust rule.
+The bounded groundwork can be reviewed independently of the full retained resolver;
+its combined native checkpoint still requires its own exact-tip hosted gate.
 
 The next implementation consumes the historical-view foundation inside the full
 retained resolver; a standalone caller-supplied witness checker is insufficient.

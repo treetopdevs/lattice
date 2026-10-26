@@ -185,6 +185,13 @@ pub(super) fn integer(value: &Value) -> Result<u64> {
     }
 }
 
+/// Raw catalog scalar representation, separate from the broader typed decoder.
+/// Safe values use JSON numbers; decimal text is reserved for larger uint64s.
+pub(super) fn portable_integer(value: &Value) -> Result<bool> {
+    let number = integer(value)?;
+    Ok(!value.is_string() || number > MAX_SAFE_INTEGER)
+}
+
 fn delegation(value: &Value, nodes: &mut usize, bounds: Bounds) -> Result<Vec<Term>> {
     let object = value.as_object().ok_or(INVALID)?;
     const REQUIRED: [&str; 9] = [

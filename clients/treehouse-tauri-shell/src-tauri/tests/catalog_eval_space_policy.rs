@@ -451,3 +451,93 @@ fn fresh_rust_space_certificates_and_observed_remove_state_match_both_owners() {
         assert_eq!(result["initialization"], "ready");
     }
 }
+
+#[test]
+fn genesis_root_shape_and_role_free_replays_match_actual_owners() {
+    let base = rust_histories().remove(0);
+    let replica = base["replica"].as_str().unwrap();
+    let original = base["frames"][0].clone();
+    let root = SigningKey::from_bytes(&[103; 32]);
+    let outsider = SigningKey::from_bytes(&[109; 32]);
+    let cap = original["body"][1][1].clone();
+    let root_cap = cap[1]["id"].as_str().unwrap();
+    let role_free = delegation(
+        &root,
+        replica,
+        &root.verifying_key().to_bytes(),
+        None,
+        &["create_space"],
+        false,
+        &[],
+    );
+    let mut histories = vec![
+        json!({"name":"legitimate-genesis","replica":replica,"frames":[original.clone(),base["frames"][1].clone()]}),
+    ];
+    for (name, payload, signer) in [
+        ("malformed-genesis", json!(["nil"]), &root),
+        ("malformed-atom-genesis", json!(["atom", "genesis"]), &root),
+        ("malformed-map-genesis", json!(["map", []]), &root),
+        ("role-free-root-pin", role_free.clone(), &root),
+        ("role-free-outsider-replay", role_free, &outsider),
+        ("role-bearing-outsider-replay", cap.clone(), &outsider),
+    ] {
+        let candidate = signed(
+            signer,
+            replica,
+            &[original["id"].as_str().unwrap().into()],
+            "authority",
+            json!(["tuple", [["atom", "genesis"], payload, ["map", []]]]),
+            json!(["nil"]),
+        );
+        let creation = signed(
+            &root,
+            replica,
+            &[candidate["id"].as_str().unwrap().into()],
+            "command",
+            json!([
+                "tuple",
+                [["atom", "create_space"], ["list", [text("Root shape")]]]
+            ]),
+            text(root_cap),
+        );
+        histories.push(
+            json!({"name":name,"replica":replica,"frames":[original.clone(),candidate,creation]}),
+        );
+    }
+    assert_eq!(histories.len(), 7);
+    let mut both_orders = Vec::new();
+    for history in histories {
+        let mut reversed = history.clone();
+        reversed["frames"].as_array_mut().unwrap().reverse();
+        both_orders.extend([history, reversed]);
+    }
+    let input = json!({"histories":both_orders});
+    let ts = peer("ts", "space-projection", Some(&input));
+    let beam = peer("beam", "space-projection", Some(&input));
+    for (i, history) in input["histories"].as_array().unwrap().iter().enumerate() {
+        let expected = match history["name"].as_str().unwrap() {
+            "legitimate-genesis" | "role-free-root-pin" | "role-free-outsider-replay" => "ready",
+            "malformed-genesis"
+            | "malformed-atom-genesis"
+            | "malformed-map-genesis"
+            | "role-bearing-outsider-replay" => "incomplete",
+            name => panic!("unregistered genesis case {name}"),
+        };
+        assert_eq!(
+            ts["results"][i]["initialization"], expected,
+            "{}",
+            history["name"]
+        );
+        assert_eq!(
+            ts["results"][i], beam["results"][i],
+            "source {}",
+            history["name"]
+        );
+        assert_eq!(
+            native(history),
+            ts["results"][i],
+            "native {}",
+            history["name"]
+        );
+    }
+}

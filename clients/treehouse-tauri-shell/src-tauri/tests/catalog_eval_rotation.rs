@@ -334,3 +334,20 @@ fn artifact_json_numbers_retain_the_existing_unsigned_integer_lexical_profile() 
         assert!(treehouse_tauri_shell::catalog_eval::json::parse(bytes).is_err());
     }
 }
+
+#[test]
+fn raw_rotation_verifier_refuses_small_text_integer_aliases_before_normalization() {
+    let case = rust_case(1, 1, false);
+    let key = STANDARD.decode(case["key"].as_str().unwrap()).unwrap();
+    assert!(rotation::verify(&serde_json::to_vec(&case["envelope"]).unwrap(), &key).is_ok());
+    for name in ["version", "generation"] {
+        let mut alias = case["envelope"].clone();
+        *field(field(&mut alias, "rotation"), name) = json!(["int", "1"]);
+        let bytes = serde_json::to_vec(&alias).unwrap();
+        assert!(treehouse_tauri_shell::catalog_eval::artifact::parse(&bytes).is_err());
+        assert!(
+            rotation::verify(&bytes, &key).is_err(),
+            "raw {name} alias must refuse"
+        );
+    }
+}
