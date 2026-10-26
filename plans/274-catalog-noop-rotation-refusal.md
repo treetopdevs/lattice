@@ -2,16 +2,11 @@
 
 ## Status
 
-IN PROGRESS. The one-line TypeScript correction and direct SDK regression pass.
-Two bidirectional public-owner tests cover11 fresh cases per producer, complete
-successful decisions/refusal details, first/repeated reads, valid repair controls,
-saved recovery and input immutability. Actual Sonnet5.5High finds no production
-P1/P2; its test concerns are corrected and final independent reviews have no
-remaining actionable issue. Full mix check901 core tests/26 properties and643
-carrier tests, SDK57 catalog tests, desktop/security gates and both native
-configurations pass on the same production change. Final test-only extensions
-pass focused reciprocal/SDK checks. Parent integration and final hosted gate
-remain before native chain adoption.
+IN PROGRESS. The resolved-parent transition check and direct/reciprocal
+regressions are implemented. Local repository, client, desktop, security and
+ordinary/tracing native gates pass. Final test-only extensions pass their focused
+checks. The refreshed source parent is integrated; final post-integration checks
+and the hosted gate remain before native chain adoption.
 
 Before correction, a correctly signed no-op gives invalid_catalog_transition in
 BEAM and invalid_possession in TS through actual public APIs. Both producer
@@ -31,7 +26,7 @@ a bad possession signature under a distinct new key must stay invalid_possession
 
 ## Implementation and proof
 
-Use a managed worktree from final green source178 bab44c97e. Preserve the native
+Use a managed worktree from the final green source178 checkpoint. Preserve the native
 chain WIP and primary checkout. Read AGENTS.md and plans/README.md; pinned asdf
 OTP28/Elixir1.19 and Node22 remain mandatory.
 
