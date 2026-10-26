@@ -2,16 +2,16 @@
 
 ## Status
 
-IN PROGRESS. The resolved-parent transition check and direct/reciprocal
-regressions are implemented. Local repository, client, desktop, security and
-ordinary/tracing native gates pass. Final test-only extensions pass their focused
-checks. The refreshed source parent is integrated; final post-integration checks
-and the hosted gate remain before native chain adoption.
+IN PROGRESS. The source correction passes its reviewed local and exact-tip hosted
+gates and is adopted in native structural chain observations. A later approved,
+fully gated source parent with witness cancellation/finalization repair is now
+integrated locally. Final combined checks and a new hosted exact-tip gate are
+required for this refreshed branch.
 
-Before correction, a correctly signed no-op gives invalid_catalog_transition in
-BEAM and invalid_possession in TS through actual public APIs. Both producer
-directions fail RED, then pass unchanged transition expectations after the fix.
-The native chain WIP remains stopped; no native compensation is introduced.
+The resolved-parent key guard preserves authorized ancestor-key return while
+classifying same-current-key rotations consistently. Native structural proof is
+separate from full graph/retained authority, installed routes and the real-relay
+ordinary-app prototype; no native compensation or expanded permission is added.
 
 ## Decision and scope
 

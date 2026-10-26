@@ -2,12 +2,11 @@
 
 ## Status
 
-DONE at source tip: browser and Flagship hosted runs pass, including the
-operator-approved generic witness-family cleanup. Native adoption passes both
-15-test witness configurations. PR 178 remains open; no merge or full
-native-evaluator completion is implied. Shared raw/uint64 validation,
-bidirectional source decisions, all client CI suites, full mix check, boundary
-scans and ordinary/tracing native gates pass.
+DONE at approved source checkpoint. Shared artifact integer validation and the
+operator-approved witness completion/owner-check handshake pass required local
+checks and both exact-tip hosted workflows. PR 178 remains open; no merge or
+full native evaluator/installed-trust completion is implied. Dependent branches
+must verify their own combined integration and final hosted gate.
 
 Before this correction, canonical catalog JSON proposes in both owners. Changing only version int 1 to
 text "1" still proposes in TypeScript but rejects malformed_catalog in BEAM.
@@ -94,19 +93,24 @@ the actual lease; terminal-publication tests observe the run phase instead of
 sleeping. Production owner/cancellation/custody policy is unchanged. The focused
 15-test suite passes twenty consecutive two-worker/four-test-thread runs.
 
-The operator approved finishing the generic test-only cleanup in PR178. Preserve
-the passive-observer design, public success/refusal controls and raw-integer
-correction. Both native all-target configurations pass. The final cleanup is
-published, and both new final-tip hosted workflows pass.
+The operator approved finishing the generic test-only cleanup in PR178, and that
+checkpoint passed its native and hosted gates. A later run exposed a production
+sequencing gap: a physically drained cancellation callback can still have a
+receiver performing its final owner check. A new cancellation can also reserve
+during finalization's own owner check.
 
-## Compatibility and STOP
+The operator approved completing one generic production barrier in this PR.
+Reserve cancellation consumption before dispatch; retain it with a scoped guard
+through receiver completion, errors and unwind. Finalization waits for both
+physical drains and consumer completion. Mark the final owner-check interval
+under the flow mutex; defer new cancellation dispatch until that check returns,
+without holding the flow mutex during owner access. Recheck reservations before
+publication/release. Known-unlaunched cleanup rolls back; unknown callback failure
+retains the failed physical drain. Keep owner lock-contention refusal unchanged.
 
-Old TS snapshots may retain aliases BEAM never admitted. Corrected readers require
-recovery for malformed saved artifacts; never rewrite signed bytes or repair
-corrupt retained state with incoming rows. Ordinary generated JSON is unchanged.
-Parsed-value APIs do not gain JSON numeric-lexeme claims: these raw-token checks
-apply where the API owns an artifact JSON string.
-
-STOP if matching requires changing signing domains, schema integer horizons,
-ordinary carrier wire behavior, or semantic authority reasons. This correction
-is not installed trust, a full native evaluator or the two-app real-relay proof.
+Prove both directions with explicit actual-flow gates and real public reuse after
+release. Serialize only the two deliberate synchronous owner-lock gates so a
+two-worker runtime can launch their cancellation tasks. Move fake async callback
+channel waits to blocking workers. Keep the existing success, closed-owner,
+publication and failed-drain controls. Final full checks, requested adversarial
+review and a new hosted exact-tip gate are required before publication/adoption.
