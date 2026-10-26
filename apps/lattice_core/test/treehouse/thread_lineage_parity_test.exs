@@ -26,7 +26,11 @@ defmodule Treehouse.ThreadLineageParityTest do
         end)
 
       assert actual == c["reasons"], c["name"]
-      assert Lattice.state(Treehouse.Thread, log).posts == c["posts"], c["name"]
+      result = reduction(log)
+
+      for key <- ["posts", "state", "quarantine", "order"] do
+        assert result[key] == c[key], "#{c["name"]}: #{key}"
+      end
     end
   end
 
@@ -37,7 +41,7 @@ defmodule Treehouse.ThreadLineageParityTest do
 
     {sim, _} =
       Treehouse.Thread
-      |> Sim.new(replica, ["root"], seed: "beam-lineage")
+      |> Sim.new(replica, ["root", "other"], seed: "beam-lineage")
       |> Sim.create_replica("root")
 
     {sim, post} = Sim.command(sim, "root", :post, ["original"])
@@ -71,7 +75,26 @@ defmodule Treehouse.ThreadLineageParityTest do
 
     {bom, _} = Sim.command(sim, "root", :post, ["\uFEFFretained text"])
     {bom_target, _} = Sim.command(sim, "root", :author_tombstone, ["\uFEFF" <> post.id, post.id])
-    histories = Enum.map(histories ++ [valid, missing, bom, bom_target], &history/1)
+    {wrong, _} = Sim.grant(sim, "root", "other", ops: [:author_edit])
+    wrong = Sim.sync_all(wrong)
+
+    {wrong, predecessor} =
+      Sim.command(wrong, "other", :author_edit, [post.id, post.id, "forged"])
+
+    wrong = Sim.sync_all(wrong)
+
+    {wrong, descendant} =
+      Sim.command(wrong, "root", :author_edit, [post.id, predecessor.id, "laundered"])
+
+    wrong = Sim.sync_all(wrong)
+    assert {true, :application_wrong_author} == Sim.quarantined(wrong, "root", predecessor.id)
+
+    assert {true, :application_target_quarantined} ==
+             Sim.quarantined(wrong, "root", descendant.id)
+
+    assert Sim.state(wrong, "root").posts == ["original"]
+
+    histories = Enum.map(histories ++ [valid, missing, bom, bom_target, wrong], &history/1)
 
     inputs =
       Enum.flat_map(histories, fn {history, _} ->
@@ -95,16 +118,31 @@ defmodule Treehouse.ThreadLineageParityTest do
   defp history(sim) do
     log = Sim.log(sim, "root")
     :ok = Log.verify_authenticity(log)
-    analysis = Authority.analyze(Treehouse.Thread, log)
     ops = Log.topo_ops(log)
 
-    reasons =
-      Map.new(
-        Enum.filter(ops, &(&1.kind == :command)),
-        &{&1.id, analysis.reasons[&1.id] && Atom.to_string(analysis.reasons[&1.id])}
-      )
+    {%{replica: log.replica, frames: Enum.map(ops, &Wire.encode_op/1)}, reduction(log)}
+  end
 
-    {%{replica: log.replica, frames: Enum.map(ops, &Wire.encode_op/1)},
-     %{"reasons" => reasons, "posts" => Lattice.state(Treehouse.Thread, log).posts}}
+  defp reduction(log) do
+    analysis = Authority.analyze(Treehouse.Thread, log)
+    ops = Log.topo_ops(log)
+    state = Lattice.state(Treehouse.Thread, log)
+
+    %{
+      "reasons" =>
+        Map.new(
+          Enum.filter(ops, &(&1.kind == :command)),
+          &{&1.id, analysis.reasons[&1.id] && Atom.to_string(analysis.reasons[&1.id])}
+        ),
+      "posts" => state.posts,
+      # TypeScript exposes the authority holder as a synthetic state field.
+      "state" =>
+        state
+        |> Map.put(:moderator, Base.encode64(analysis.holders.moderator))
+        |> Jason.encode!()
+        |> Jason.decode!(),
+      "quarantine" => Enum.sort(analysis.quarantine),
+      "order" => Enum.map(ops, & &1.id)
+    }
   end
 end
