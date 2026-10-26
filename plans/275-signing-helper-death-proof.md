@@ -5,8 +5,8 @@
 IN PROGRESS. The closed-port helper-death proof, targeted ACK-bypass negative
 control, repeated real kills and signing-package family pass. Full repository
 checks, both boundary scans and required independent/adversarial reviews pass.
-Production signing behavior is unchanged. The final exact-tip hosted gate and
-later native adoption remain before completion.
+Production signing behavior is unchanged. The final exact-tip hosted gate passes and the correction is adopted locally
+into the native evaluator. Its combined repository gate remains before completion.
 
 ## Contract and scope
 

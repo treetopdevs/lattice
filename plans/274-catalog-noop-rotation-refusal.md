@@ -2,11 +2,11 @@
 
 ## Status
 
-IN PROGRESS. The source correction passes its reviewed local and exact-tip hosted
-gates and is adopted in native structural chain observations. A later approved,
-fully gated source parent with witness cancellation/finalization repair is now
-integrated locally. Final combined checks and a new hosted exact-tip gate are
-required for this refreshed branch.
+IN PROGRESS. The source correction passes its reviewed local and original hosted
+gates and is adopted in native structural chain observations. The fully gated
+witness completion repair and signing-helper observer correction are integrated
+locally. All refreshed source/native local checks pass. Publish this integration
+and pass its new exact-tip hosted gate before final refreshed-branch signoff.
 
 The resolved-parent key guard preserves authorized ancestor-key return while
 classifying same-current-key rotations consistently. Native structural proof is

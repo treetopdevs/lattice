@@ -720,6 +720,10 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Dependency</dt><dd>Source PR180 at98ddeeafd/base191e403dd passes exact-head Flagship40282811461; browser is untriggered by verified path filters. Merge its test-only correction into source179 local checkpoint5982d0987 after independently confirming the hosted success and exact PR head. Keep the no-op rotation guard and all parent production changes intact. Preserve every historical HTML section from both merge parents; only index/timeline documents conflict.</dd>
 <dt>Gate</dt><dd>The previous published source179 de9bc3b3b remains the earlier gated baseline. This refreshed integration is local and requires combined checks and its own final exact-tip hosted gate before new signoff. Do not relabel the old source run as new integration proof, and do not import unfinished native evaluator changes into this source-only PR.</dd>
 </dl></section>
+<section id="d113"><h2><span>D-113</span> Publish refreshed no-op rotation source integration</h2><dl>
+<dt>Local gate</dt><dd>Source145565a84 includes fully gated source180 at98ddeeafd against source178 at191e403dd. Full mix check exits0: core901 tests/26 properties and carrier643 tests, zero failures with190 carrier skips/two exclusions explicit. SDK build and all57 catalog-trust tests pass; desktop typecheck/tests and both boundary scans pass. Ordinary165 and tracing176 native tests across29 target reports each pass with two Tokio workers. Logs /tmp/lattice-rotation-parent180-mix-check.log, /tmp/lattice-rotation-parent180-sdk-trust.log and /tmp/lattice-rotation-parent180-native-{ordinary,tracing}.log.</dd>
+<dt>Publication rule</dt><dd>The reviewed no-op guard itself is unchanged. Publish the refreshed local branch, then make gated source180 its PR base so the source-only diff stays focused. Pass a new final exact-tip hosted gate; do not reuse earlier de9bc3b3b hosted success as this integration's signoff. No remote merge or full native retained-trust/installed/relay completion is claimed.</dd>
+</dl></section>
 </main>
 </body>
 </html>
