@@ -176,3 +176,31 @@ fn fresh_beam_and_ts_producers_verify_in_native_and_rust_output_verifies_in_both
         assert_eq!(result["catalog"], produced["catalog_id"]);
     }
 }
+
+#[test]
+fn raw_catalog_verifier_applies_the_shared_profile_before_signature_normalization() {
+    fn field<'a>(record: &'a mut Value, name: &str) -> &'a mut Value {
+        &mut record[1]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|pair| pair[0] == json!(["atom", name]))
+            .unwrap()[1]
+    }
+    let produced = rust_fixture();
+    let key = STANDARD
+        .decode(produced["expected_catalog_key"].as_str().unwrap())
+        .unwrap();
+    let envelope = &produced["catalog_envelope_term"];
+    assert!(envelope::verify(&serde_json::to_vec(envelope).unwrap(), &key).is_ok());
+    for name in ["version", "revision"] {
+        let mut alias = envelope.clone();
+        *field(field(&mut alias, "catalog"), name) = json!(["int", "1"]);
+        let bytes = serde_json::to_vec(&alias).unwrap();
+        assert!(treehouse_tauri_shell::catalog_eval::artifact::parse(&bytes).is_err());
+        assert!(
+            envelope::verify(&bytes, &key).is_err(),
+            "raw {name} alias must refuse"
+        );
+    }
+}

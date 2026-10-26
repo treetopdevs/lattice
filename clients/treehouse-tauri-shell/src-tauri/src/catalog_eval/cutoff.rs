@@ -15,7 +15,7 @@ use std::{
 
 const INVALID: &str = "invalid_verified_history";
 const UNSUPPORTED: &str = "unsupported_cutoff";
-const MAX_SAFE: u64 = 9_007_199_254_740_991;
+const MAX_SAFE: u64 = super::canonical::MAX_SAFE_INTEGER;
 const ATOMS: &str =
     "__beacon__ __continuation__ accept active admin admin_actions admission admit_member
     archive_thread archived attest_member_key_v1 audience author author_edit author_tombstone
@@ -261,21 +261,7 @@ fn portability(raw: &Value, depth: usize) -> Result<bool, &'static str> {
     let item = &tagged[1];
     match tag {
         "bool" if item.is_boolean() => Ok(true),
-        "int" => {
-            let valid = item.as_u64().is_some_and(|n| n <= MAX_SAFE)
-                || item.as_str().is_some_and(|s| {
-                    !s.is_empty()
-                        && s.len() <= 20
-                        && (s == "0" || !s.starts_with('0'))
-                        && s.bytes().all(|c| c.is_ascii_digit())
-                        && s.parse::<u64>().is_ok()
-                });
-            if valid {
-                Ok(true)
-            } else {
-                Err(INVALID)
-            }
-        }
+        "int" => canonical::portable_integer(item).map_err(|_| INVALID),
         "bin" => canonical::observation_base64(item.as_str().ok_or(INVALID)?, None)
             .map(|_| true)
             .map_err(|_| INVALID),

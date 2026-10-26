@@ -103,6 +103,24 @@ fn raw_history_authentication_missing_and_product_readability_match_both_public_
             Some("unsupported_cutoff"),
         ),
         (
+            "small-text-zero",
+            json!(["int", "0"]),
+            json!(["nil"]),
+            Some("unsupported_cutoff"),
+        ),
+        (
+            "small-text-five",
+            json!(["int", "5"]),
+            json!(["nil"]),
+            Some("unsupported_cutoff"),
+        ),
+        (
+            "small-text-safe-maximum",
+            json!(["int", "9007199254740991"]),
+            json!(["nil"]),
+            Some("unsupported_cutoff"),
+        ),
+        (
             "unsafe-capability",
             json!(["nil"]),
             json!(["int", "9007199254740992"]),
@@ -299,7 +317,7 @@ fn raw_history_authentication_missing_and_product_readability_match_both_public_
     let mut hs = histories.clone();
     hs[thread]["rejected"] = json!([{"frame":rejected,"reason":"bad_signature"}]);
     add("unreadable-rejected-record", hs, None);
-    assert_eq!(cases.len(), 21);
+    assert_eq!(cases.len(), 24);
     let mut both_orders = Vec::new();
     for case in cases {
         let mut reverse = case.clone();

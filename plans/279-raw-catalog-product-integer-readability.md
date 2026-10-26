@@ -6,18 +6,22 @@ IN PROGRESS. A fresh actual raw-owner probe finds BEAM accepts an unrelated
 unsafe strict integer while TypeScript refuses unsupported_cutoff. The separately reviewed shared raw reader correction is adopted. Native staged
 authentication, detailed pending IDs and accepted product readability are composed.
 Fresh raw-owner comparisons pass; combined local/hosted gates remain required.
-Keep authentic incomplete histories pending before portability/semantic reading.
+Keep authentic incomplete accepted histories pending before complete-cutoff and
+accepted-frame product reading; rejected-evidence portability is checked first.
 
 ## Contract
 
 This narrows only the portable accepted-frame reader used by CatalogTrust.
 Ordinary scalar and capability integers must fit JavaScript's exact range.
 Existing uint64 beacon/policy metadata and certificate exceptions remain intact.
-Use the shared bounded Uint64 parser; do not allocate arbitrary decimal integers.
+Use shared bounded integer validation; do not allocate arbitrary decimal integers.
+Native artifact and cutoff readers share one portable scalar check. The broader
+canonical decoder and product metadata contexts keep their existing contracts.
 Do not change canonical encoding, Wire grammar, typed product semantics, authority
 policy, cutoff vocabulary or rejection evidence interpretation.
 
 All accepted/rejected frames authenticate before any missing-ID response.
+Rejected-evidence portability precedes pending; accepted-frame portability follows it.
 Authentic partial incoming histories return pending with sorted unique IDs;
 stored partial histories require recovery under the existing stored-state owner.
 The closed cutoff primitive remains closed and does not become a partial store.
