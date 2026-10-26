@@ -99,7 +99,7 @@ fn base64_bounded(value: &str, length: Option<usize>, bounds: Bounds) -> Result<
 
 fn parse(value: &Value, depth: usize, nodes: &mut usize, bounds: Bounds) -> Result<Term> {
     *nodes += 1;
-    if depth > MAX_DEPTH || *nodes > bounds.nodes {
+    if depth > bounds.depth || *nodes > bounds.nodes {
         return Err(INVALID);
     }
     let tagged = value.as_array().ok_or(INVALID)?;
@@ -127,7 +127,7 @@ fn parse(value: &Value, depth: usize, nodes: &mut usize, bounds: Bounds) -> Resu
             Term::Atom(name.to_owned())
         }
         "list" | "tuple" | "mapset" => {
-            if depth >= MAX_DEPTH {
+            if depth >= bounds.depth {
                 return Err(INVALID);
             }
             let values = argument.as_array().ok_or(INVALID)?;
@@ -145,7 +145,7 @@ fn parse(value: &Value, depth: usize, nodes: &mut usize, bounds: Bounds) -> Resu
             }
         }
         "map" => {
-            if depth >= MAX_DEPTH {
+            if depth >= bounds.depth {
                 return Err(INVALID);
             }
             let values = argument.as_array().ok_or(INVALID)?;
@@ -624,7 +624,7 @@ fn preflight(value: &Value, bounds: Bounds) -> Result<()> {
     let mut text_bytes = 0usize;
     while let Some((value, depth)) = stack.pop() {
         nodes += 1;
-        if nodes > bounds.nodes * 4 || depth > MAX_JSON_DEPTH {
+        if nodes > bounds.nodes * 4 || depth > bounds.depth * 3 + 4 {
             return Err(INVALID);
         }
         match value {

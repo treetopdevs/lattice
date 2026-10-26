@@ -30,7 +30,20 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
     } else {
         let mut command = Command::new("node");
         command.current_dir(root().join("clients/lattice-client"));
-        if mode == "artifact-profile-produce" {
+        if mode == "entries-consume" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_entry_peer.ts",
+                "consume",
+            ]);
+        } else if mode == "entries-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_entry_peer.ts",
+            ]);
+        } else if mode == "artifact-profile-produce" {
             command.args([
                 "--import",
                 "tsx",

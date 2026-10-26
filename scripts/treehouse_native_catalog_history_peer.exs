@@ -210,6 +210,263 @@ case System.argv() do
       File.rm_rf!(directory)
     end
 
+  ["entry-high-lease-profile"] ->
+    alias Treehouse.{CatalogEntries, CatalogTrust}
+    f = CatalogTrustVectors.fixture()
+    [thread] = f.threads
+
+    lease =
+      Delegation.new(thread.root, thread.replica, thread.root.pub,
+        ops: [],
+        roles: [],
+        live: false,
+        expires_epoch: 9_007_199_254_740_992
+      )
+
+    op = Op.new(thread.root, thread.replica, [], :authority, {:genesis, lease, %{}})
+    true = Op.valid?(op)
+    log = Log.append!(thread.log, op)
+
+    {:error, :unsupported_cutoff} =
+      CatalogEntries.observe(f.catalog, %{f.space.replica => f.space_log, thread.replica => log})
+
+    expected = %{trust_revision: 0, history_generation: 0}
+
+    %{kind: :propose, next: prepared} =
+      CatalogTrust.prepare_installation(%{
+        review: f.review,
+        history: CatalogTrustVectors.raw_history(f.space_log),
+        store: %{kind: :verified_fresh, expected: expected}
+      })
+
+    histories = [
+      CatalogTrustVectors.raw_history(f.space_log),
+      CatalogTrustVectors.raw_history(log)
+    ]
+
+    %{kind: :reject, reason: :invalid_verified_history} =
+      decision =
+      CatalogTrust.evaluate(%{
+        installed: prepared,
+        expected: expected,
+        incoming: %{
+          catalogs: [f.catalog_json],
+          rotations: [],
+          histories: histories,
+          cutoff_proofs: []
+        }
+      })
+
+    review = %{
+      version: 1,
+      product: "treehouse",
+      space: f.review.space,
+      spaceRoot: Base.encode64(f.review.space_root),
+      bootstrapId: f.review.bootstrap_id,
+      observedBootstrapIds: f.review.observed_bootstrap_ids,
+      disposition: "pin_exact_observed_bootstrap"
+    }
+
+    IO.puts(
+      Jason.encode!(%{
+        case: %{review: review, catalogJson: f.catalog_json, histories: histories},
+        public: %{kind: decision.kind, reason: decision.reason},
+        typedReason: "unsupported_cutoff"
+      })
+    )
+
+  ["entries-consume"] ->
+    alias Treehouse.{CatalogEntries, TransportCatalog}
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    results =
+      Enum.map(input["cases"], fn item ->
+        {:ok, envelope} = TransportCatalog.decode_catalog_json(item["catalogJson"])
+
+        logs =
+          Map.new(item["histories"], fn raw ->
+            [] = raw["rejected"]
+            {:ok, ops} = Wire.decode_ops(raw["frames"])
+            log = Log.from_ops(raw["replica"], Map.new(ops, &{&1.id, &1}))
+            {raw["replica"], log}
+          end)
+
+        case CatalogEntries.observe(envelope.catalog, logs) do
+          {:ok, observation} ->
+            %{
+              ok: true,
+              entries: Wire.encode_value(observation.entries),
+              bootstrap: Wire.encode_value(observation.bootstrap.record),
+              bootstrapId: observation.bootstrap.id
+            }
+
+          {:error, reason} ->
+            %{ok: false, reason: reason}
+        end
+      end)
+
+    IO.puts(Jason.encode!(%{results: results}))
+
+  ["entries-produce"] ->
+    alias Treehouse.{CatalogEntries, TransportCatalog}
+    alias Lattice.Identity
+    f = CatalogTrustVectors.fixture(2)
+    [first, second] = Enum.sort_by(f.threads, & &1.replica)
+    histories = Map.new([f.space_log | Enum.map(f.threads, & &1.log)], &{&1.replica, &1})
+
+    change = fn catalog, replica, edits ->
+      %{
+        catalog
+        | entries:
+            Enum.map(catalog.entries, fn e ->
+              if e.replica == replica, do: Map.merge(e, edits), else: e
+            end)
+      }
+    end
+
+    base = [
+      {"complete", f.catalog, histories},
+      {"missing-child", f.catalog, Map.delete(histories, first.replica)}
+    ]
+
+    changes = [
+      {"wrong-root", %{root: f.space.root.pub}},
+      {"genesis-is-creation", %{genesis: first.creation.id}},
+      {"creation-is-genesis", %{creation: first.genesis.id}},
+      {"wrong-reference", %{reference: f.space.creation.id}},
+      {"missing-genesis", %{genesis: CatalogTrustVectors.id("missing-genesis")}},
+      {"missing-creation", %{creation: CatalogTrustVectors.id("missing-creation")}},
+      {"missing-reference", %{reference: CatalogTrustVectors.id("missing-reference")}}
+    ]
+
+    cases =
+      base ++
+        Enum.map(changes, fn {name, edits} ->
+          {name, change.(f.catalog, first.replica, edits), histories}
+        end)
+
+    cases =
+      cases ++
+        [
+          {"pending-cannot-hide-invalid-entry",
+           change.(f.catalog, second.replica, %{root: f.space.root.pub}),
+           Map.delete(histories, first.replica)}
+        ]
+
+    stranger = Identity.from_seed("entry-stranger", "native-entry-stranger")
+
+    refused_reference =
+      Op.new(
+        stranger,
+        f.space.replica,
+        Log.frontier(f.space_log),
+        :command,
+        {:create_thread, [first.replica, "Denied"]},
+        cap: f.space.delegation.id
+      )
+
+    refused_creation =
+      Op.new(stranger, first.replica, [first.genesis.id], :command, {:create_thread, ["Denied"]},
+        cap: first.delegation.id
+      )
+
+    unrelated = Delegation.genesis(first.root, first.replica, ops: [], roles: [], live: false)
+    unrelated = Op.new(first.root, first.replica, [], :authority, {:genesis, unrelated, %{}})
+    false_genesis = Delegation.genesis(first.root, first.replica, ops: [], roles: [], live: false)
+
+    false_genesis =
+      Op.new(stranger, first.replica, [], :authority, {:genesis, false_genesis, %{}})
+
+    rooted_creation =
+      Op.new(
+        first.root,
+        first.replica,
+        [first.genesis.id, false_genesis.id],
+        :command,
+        {:create_thread, ["Root's actual command"]},
+        cap: first.delegation.id
+      )
+
+    false_genesis_log = first.log |> Log.append!(false_genesis) |> Log.append!(rooted_creation)
+
+    false =
+      MapSet.member?(
+        Lattice.Authority.analyze(Treehouse.Thread, false_genesis_log).quarantine,
+        rooted_creation.id
+      )
+
+    cases =
+      cases ++
+        [
+          {"refused-reference",
+           change.(f.catalog, first.replica, %{reference: refused_reference.id}),
+           Map.put(histories, f.space.replica, Log.append!(f.space_log, refused_reference))},
+          {"refused-creation",
+           change.(f.catalog, first.replica, %{creation: refused_creation.id}),
+           Map.put(histories, first.replica, Log.append!(first.log, refused_creation))},
+          {"unrelated-genesis", change.(f.catalog, first.replica, %{genesis: unrelated.id}),
+           Map.put(histories, first.replica, Log.append!(first.log, unrelated))},
+          {"wrong-genesis-author",
+           change.(f.catalog, first.replica, %{
+             genesis: false_genesis.id,
+             creation: rooted_creation.id
+           }), Map.put(histories, first.replica, false_genesis_log)}
+        ]
+
+    extra_replica = "replica:unrelated-entry-history"
+    extra = Op.new(stranger, extra_replica, [], :authority, {:future_entry_observation, []})
+    extra_log = Log.new(extra_replica) |> Log.append!(extra)
+    corrupt = %{extra_log | ops: %{extra.id => %{extra | sig: <<0::512>>}}}
+
+    cases =
+      cases ++
+        [
+          {"unrelated-unsupported", f.catalog, Map.put(histories, extra_replica, extra_log)},
+          {"missing-plus-unrelated-forgery", f.catalog,
+           histories |> Map.delete(first.replica) |> Map.put(extra_replica, corrupt)},
+          {"unsupported-plus-forgery", f.catalog,
+           histories
+           |> Map.put(extra_replica, extra_log)
+           |> Map.put(first.replica, %{
+             first.log
+             | ops: Map.put(first.log.ops, first.creation.id, %{first.creation | sig: <<0::512>>})
+           })}
+        ]
+
+    results =
+      Enum.map(cases, fn {name, catalog, logs} ->
+        result =
+          case CatalogEntries.observe(catalog, logs) do
+            {:ok, observation} ->
+              %{
+                ok: true,
+                entries: Wire.encode_value(observation.entries),
+                bootstrap: Wire.encode_value(observation.bootstrap.record),
+                bootstrapId: observation.bootstrap.id
+              }
+
+            {:error, reason} ->
+              %{ok: false, reason: reason}
+          end
+
+        {:ok, _} = TransportCatalog.normalize_catalog(catalog)
+
+        %{
+          name: name,
+          catalogJson:
+            CatalogTrustVectors.artifact_json(
+              CatalogTrustVectors.sign_catalog(catalog, f.space.catalog)
+            ),
+          histories:
+            Enum.map(Enum.sort(logs), fn {name, log} ->
+              %{name: name, raw: CatalogTrustVectors.raw_history(log)}
+            end),
+          result: result
+        }
+      end)
+
+    IO.puts(Jason.encode!(%{cases: results}))
+
   ["rotation-produce"] ->
     f = CatalogVectors.codec_vector()
     IO.puts(Jason.encode!(%{envelope: f.rotation_envelope_term, key: f.expected_old_key}))

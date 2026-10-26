@@ -39,8 +39,15 @@ fn preflight(dag: &AuthenticDag) -> Result<CommandPreflight<'_>, &'static str> {
 /// judged by the existing preflight; application policy sees only causal past.
 /// A `None` entry means no refusal at this layer, not final catalog admission.
 pub fn analyze(dag: &AuthenticDag) -> Result<BTreeMap<String, Option<&'static str>>, &'static str> {
+    Ok(analyze_with_preflight(dag)?.1)
+}
+
+pub(super) fn analyze_with_preflight(
+    dag: &AuthenticDag,
+) -> Result<(CommandPreflight<'_>, BTreeMap<String, Option<&'static str>>), &'static str> {
     let preflight = preflight(dag)?;
-    Ok(fold(dag, &preflight))
+    let reasons = fold(dag, &preflight);
+    Ok((preflight, reasons))
 }
 
 fn fold(

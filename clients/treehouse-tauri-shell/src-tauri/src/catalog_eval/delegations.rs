@@ -419,7 +419,7 @@ fn root_matches(replica: &str, audience: &[u8]) -> bool {
         .split_once("#root:")
         .is_none_or(|(_, root)| URL_SAFE_NO_PAD.encode(Sha256::digest(audience)) == root)
 }
-fn bounded_family(replica: &str) -> bool {
+pub(super) fn bounded_family(replica: &str) -> bool {
     let Some(rest) = replica.strip_prefix("replica:treehouse:") else {
         return false;
     };

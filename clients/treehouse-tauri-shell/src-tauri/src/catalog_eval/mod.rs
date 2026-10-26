@@ -4,6 +4,7 @@ pub mod artifact;
 pub mod canonical;
 pub mod cutoff;
 pub mod delegations;
+pub mod entries;
 pub mod envelope;
 pub mod frame;
 pub mod history;

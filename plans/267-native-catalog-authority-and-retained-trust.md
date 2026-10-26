@@ -26,6 +26,16 @@ object names are independently pinned. This supplies no signature, authority,
 freshness or graph verdict. Entry proofs and graph transitions follow in step5;
 no new frontier-count cap is introduced.
 
+The entry-fact component now binds authenticated raw histories to honored bootstrap,
+root genesis, causal creation and Space reference evidence. Fresh BEAM/TS producers
+and Rust-signed child creation/reference/catalog inputs exercise actual public owners.
+Authentication precedes portability, with depth65 observation distinct from depth64
+admission. High lease metadata retains the common public raw-input refusal; the
+broader typed BEAM helper is not the raw contract. Component review is resolved;
+full ordinary/tracing native, repository, desktop and security gates pass.
+Graph, retained trust, historical views,
+whole-page budgets and incoming adapters remain unfinished.
+
 Fresh Thread application-policy work exposed a source discrepancy for malformed
 edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.
 Separate plan 270 corrects the source behavior and literal leading U+FEFF text.
