@@ -8,7 +8,7 @@ import { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust } fr
 const expected = { trustRevision: 0, historyGeneration: 0 };
 const empty = () => ({ catalogs: [], rotations: [], histories: [], cutoffProofs: [] });
 if (process.argv[2] === "consume") {
-    const requests = JSON.parse(readFileSync(0, "utf8"));
+    const requests = JSON.parse(readFileSync(process.argv[3] ?? 0, "utf8"));
     const results = [];
     for (const item of requests.cases)
         results.push({ name: item.name, decision: await evaluateTreehouseCatalogTrust(item.input) });

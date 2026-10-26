@@ -104,9 +104,10 @@ original-state failures to recovery before considering incoming repair.
 
 ## Next integration: original-state validation and graph trust
 
-STOP on full-resolver source adoption: fresh public owners disagree on reordered
-unique saved history/artifact indexes. Plan 280 owns the isolated source correction.
-Preserve completed native components; do not select one oracle in Rust.
+The isolated plan 280 source correction is reviewed, hosted-gated and adopted.
+Both owners agree on unique saved row permutations and preserve original arrays
+on wholly unadmitted overflow paths. The source adoption STOP is cleared; keep
+the discrepancy STOP below for any new mismatch.
 
 The shared available-invalid versus missing-entry source correction is reviewed,
 hosted-verified and adopted, together with the independently required native CI

@@ -11,7 +11,7 @@ type Decision = Awaited<ReturnType<typeof evaluateTreehouseCatalogTrust>>;
 const expected = {trustRevision: 0, historyGeneration: 0};
 const empty = ():TreehouseCatalogEvidencePage => ({catalogs: [], rotations: [], histories: [], cutoffProofs: []});
 if (process.argv[2] === "consume") {
-  const requests = JSON.parse(readFileSync(0,"utf8")) as {cases:{name:string;input:Input}[]};
+  const requests = JSON.parse(readFileSync(process.argv[3] ?? 0,"utf8")) as {cases:{name:string;input:Input}[]};
   const results:{name:string;decision:Decision}[]=[];
   for (const item of requests.cases) results.push({name:item.name,decision:await evaluateTreehouseCatalogTrust(item.input)});
   await new Promise<void>(resolve=>process.stdout.write(JSON.stringify({results})+"\n",()=>resolve()));
