@@ -2,12 +2,12 @@
 
 ## Status
 
-DONE at source tip bab44c97e: browser40255972317 and Flagship40255972302
-pass, including the operator-approved generic witness-family cleanup. Native
-adoption41406bfc3 passes both15-test witness configurations. PR178 remains open;
-no merge or full native-evaluator completion is implied. Shared raw/uint64
-validation, bidirectional source decisions, all client CI suites, full mix check,
-boundary scans and ordinary/tracing native gates pass.
+DONE at source tip: browser and Flagship hosted runs pass, including the
+operator-approved generic witness-family cleanup. Native adoption passes both
+15-test witness configurations. PR 178 remains open; no merge or full
+native-evaluator completion is implied. Shared raw/uint64 validation,
+bidirectional source decisions, all client CI suites, full mix check, boundary
+scans and ordinary/tracing native gates pass.
 
 Before this correction, canonical catalog JSON proposes in both owners. Changing only version int 1 to
 text "1" still proposes in TypeScript but rejects malformed_catalog in BEAM.
@@ -97,7 +97,7 @@ sleeping. Production owner/cancellation/custody policy is unchanged. The focused
 The operator approved finishing the generic test-only cleanup in PR178. Preserve
 the passive-observer design, public success/refusal controls and raw-integer
 correction. Both native all-target configurations pass. The final cleanup is
-published at bab44c97e and both new final-tip hosted workflows pass.
+published, and both new final-tip hosted workflows pass.
 
 ## Compatibility and STOP
 
