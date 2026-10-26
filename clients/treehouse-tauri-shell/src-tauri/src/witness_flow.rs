@@ -901,6 +901,20 @@ impl Drop for FlowPending {
 #[cfg(test)]
 pub(crate) mod test_adapter {
     use super::*;
+    pub(crate) fn run_finished(flow: &WitnessFlow) -> bool {
+        flow.active
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|state| state.run_finished)
+    }
+
+    pub(crate) fn cancellation_registered(flow: &WitnessFlow) -> bool {
+        flow.active.lock().unwrap().as_ref().is_some_and(|state| {
+            state.cancel_sent && !state.cancel_starting && state.drains.len() >= 2
+        })
+    }
+
     pub(crate) fn flow(
         owner: Arc<WitnessOwner>,
         operations: Arc<WitnessOperationRegistry>,

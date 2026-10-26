@@ -243,6 +243,22 @@ fn completed_identity_is_reviewed_then_presence_signed_and_publicly_projected() 
 
 #[test]
 fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains() {
+    // Each case deliberately blocks its fake native callbacks. Run independent
+    // fixtures sequentially so they cannot exhaust the shared test runtime.
+    for close_owner in [false, true] {
+        dropped_caller_drain_case(close_owner);
+    }
+}
+
+fn wait_for_drain_state(condition: impl Fn() -> bool, message: &str) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline && !condition() {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(condition(), "{message}");
+}
+
+fn dropped_caller_drain_case(close_owner: bool) {
     let app = tauri::test::mock_builder()
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
@@ -269,6 +285,7 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     owner
         .page_load(&view, PageLoadEvent::Finished, &url)
         .unwrap();
+    let observed_session = owner.snapshot(&view).unwrap();
     let operations = Arc::new(witness_operation::test_adapter::registry(|| {
         Ok(Bytes32([9; 32]))
     }));
@@ -281,6 +298,7 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     let (cancel_release_tx, cancel_release_rx) = mpsc::channel();
     let cancel_release = Arc::new(Mutex::new(Some(cancel_release_rx)));
     let (kinds_tx, kinds_rx) = mpsc::channel();
+    let observed_operations = operations.clone();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
         let release = release.clone();
         let register = register.clone();
@@ -355,10 +373,8 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     drop_returned_rx
         .recv_timeout(Duration::from_secs(1))
         .expect("caller drop must return while cancel dispatch factory is blocked");
-    // Let the original callback finish while start_cancel is between launch
-    // and drain registration. The operation must remain reserved.
-    release_tx.send(()).unwrap();
-    std::thread::sleep(Duration::from_millis(20));
+    // The callbacks are still blocked: a public busy check cannot overlap any
+    // owner recheck yet. Later probes observe registry state instead.
     assert!(flow
         .execute(
             view.clone(),
@@ -366,32 +382,56 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
             Arc::new(|_, _| Ok(()))
         )
         .is_err());
+    if close_owner {
+        flow.owner_destroyed();
+        assert!(!witness_operation::test_adapter::is_idle(
+            &observed_operations
+        ));
+    }
+    // Observe the completed run while cancellation registration is blocked.
+    // This includes its final owner check; no scheduling sleep is the proof.
+    release_tx.send(()).unwrap();
+    wait_for_drain_state(
+        || witness_flow::test_adapter::run_finished(&flow),
+        "the original run must finish before cancellation registration",
+    );
+    assert!(
+        !witness_operation::test_adapter::is_idle(&observed_operations),
+        "slot must stay reserved before cancellation drain registration"
+    );
+    assert!(observed_operations.begin(&observed_session).is_err());
     register_tx.send(()).unwrap();
     dropper.join().unwrap();
-    assert!(flow
-        .execute(
-            view.clone(),
-            witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| Ok(()))
-        )
-        .is_err());
+    wait_for_drain_state(
+        || witness_flow::test_adapter::cancellation_registered(&flow),
+        "cancellation drain must register before its callback is released",
+    );
+    assert!(
+        !witness_operation::test_adapter::is_idle(&observed_operations),
+        "slot must stay reserved until the cancellation callback drains"
+    );
+    assert!(observed_operations.begin(&observed_session).is_err());
     cancel_release_tx.send(()).unwrap();
-    // Worker scheduling is not the contract. Wait for the observed slot-release
-    // condition with a bounded deadline, rather than assuming 100 one-ms sleeps
-    // are enough while hosted runners compile and run the full native suite.
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while std::time::Instant::now() < deadline {
-        if let Ok(next) = flow.execute(
-            view.clone(),
-            witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| Ok(())),
-        ) {
-            assert!(block_on(next.receive()).is_ok());
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(1));
+    // Observe the registry directly: probing execute() also queries the owner
+    // and can permanently refuse it on read contention. Keep the same deadline.
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "operation slot was not released after the original callback drained",
+    );
+    let next = flow.execute(
+        view,
+        witness_public::PublicRequest::Identity,
+        Arc::new(|_, _| Ok(())),
+    );
+    if close_owner {
+        assert!(
+            next.is_err(),
+            "owner closure remains separate from slot release"
+        );
+    } else {
+        let next = next.expect("a current owner can reuse the drained slot");
+        assert!(block_on(next.receive()).is_ok());
     }
-    panic!("operation slot was not released after the original callback drained");
 }
 
 #[test]
