@@ -190,6 +190,13 @@ those facts and preserves invalid-over-pending behavior. Frozen diagnostics can
 later consume structure without treating current refusal as structural corruption.
 This component supplies no standalone retained validator or routes.
 
+Preparatory full-input runtime peers now cover ordinary accepted/pending/recovery
+cases and historical authority freeze/reopen/witness-corruption requests. They
+compare actual public BEAM/TypeScript decisions before any native port. Later
+history preserves the first recorded frontier; genuine current-policy re-honor
+and the remaining full acceptance/resource matrix still need proof. Source-gate
+waiting does not establish native adoption or implement the retained resolver.
+
 The first full-resolver tests must exercise an empty installed inventory, genuinely
 pending entries, complete acceptance, first-invalid refusal IDs, frozen sibling
 reopen and corrupt original evidence plus otherwise repairing incoming input.
