@@ -1848,9 +1848,10 @@ defmodule Treehouse.CatalogTrust do
          not proper_list?(state.rotations) or not proper_list?(state.cutoff_proofs),
        do: refuse(:trust_recovery_required)
 
-    if Enum.map(state.histories, &Map.get(&1, :replica)) !=
-         state.histories |> Enum.map(&Map.get(&1, :replica)) |> sorted(),
-       do: refuse(:trust_recovery_required)
+    # Unsigned row order carries no authority. Keep each replica unique and
+    # reconstruct the deterministic index in the ordinary evidence fold.
+    history_names = Enum.map(state.histories, &Map.get(&1, :replica))
+    if history_names != Enum.uniq(history_names), do: refuse(:trust_recovery_required)
 
     validate_records!(state.catalogs)
     validate_records!(state.rotations)
@@ -1884,7 +1885,7 @@ defmodule Treehouse.CatalogTrust do
         record.id
       end)
 
-    if ids != sorted(ids), do: refuse(:trust_recovery_required)
+    if ids != Enum.uniq(ids), do: refuse(:trust_recovery_required)
   end
 
   defp validate_accepted!(nil), do: :ok

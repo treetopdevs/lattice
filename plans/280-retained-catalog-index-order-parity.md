@@ -2,8 +2,11 @@
 
 ## Status
 
-IN PROGRESS. A fresh full-resolver probe finds TypeScript reopening a saved
-accepted state with reordered unique history rows while BEAM requires recovery.
+IN PROGRESS. The protected source correction is implemented locally. Fresh
+public-owner comparisons now match for accepted and blocked index permutations;
+independent review is clear. Full checks, adversarial review and hosted gate remain.
+The initial full-resolver probe found TypeScript reopening a saved
+accepted state with reordered unique history rows while BEAM required recovery.
 This blocks native full-resolver adoption; no Rust compatibility rule is allowed.
 This source correction does not complete plan 267 or establish installed trust.
 
