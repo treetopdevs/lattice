@@ -1,5 +1,7 @@
 defmodule Treehouse.MemberContinuitySemanticReciprocalTest do
-  use ExUnit.Case, async: true
+  # This module starts fresh OS VMs for every corpus case and restore mode.
+  # Run after the async phase to avoid competing with its cryptographic workload.
+  use ExUnit.Case, async: false
   alias Lattice.{Log, Op, Sync}
   alias Lattice.Carrier.Wire
   alias Treehouse.MemberContinuity

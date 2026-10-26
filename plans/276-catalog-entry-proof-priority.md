@@ -7,10 +7,10 @@ implemented while preserving the legacy observation API. Fresh bidirectional
 public-owner tests cover ordinary, multiple-entry, Space and frozen diagnostic
 cases, both delivery orders and saved-state reopening. Structural invalidity stays
 separate from current policy refusal so an existing authority freeze retains its
-diagnostics without granting routes. Local checks and independent/adversarial
-review dispositions are complete. Publish on the reviewed CI-budget correction
-so the first hosted source gate has enough execution capacity. Both source and
-CI exact-tip gates remain required before native adoption.
+diagnostics without granting routes. The source checkpoint full checks, combined affected tests and review dispositions
+pass. Refresh on the reviewed CI-budget scheduling correction, preserving all
+production/client/config bytes. Both refreshed exact-tip gates remain required
+before native adoption; installer failures are not green source gates.
 
 ## Contract
 
