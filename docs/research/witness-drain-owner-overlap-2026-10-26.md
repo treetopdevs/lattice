@@ -3,9 +3,9 @@
 ## Current status
 
 The production repair is published in PR 178. Required independent/adversarial
-reviews and all local gates pass. A new exact-tip hosted gate remains required
-before dependent adoption or final signoff; earlier checkpoint runs do not
-substitute for that gate.
+reviews and all local gates pass. The final published tip, 191e403dd, passes
+Flagship 40273421121 and browser 40273420992. That gated repair is now adopted
+into the native evaluator; its combined integration gate remains separate.
 
 ## Baseline finding
 
@@ -33,7 +33,7 @@ The operator approved finishing the production completion-barrier fix in PR 178.
 
 Diagnostic patch: /tmp/lattice-witness-internal-owner-overlap-diagnostic.patch
 
-Failing run: /tmp/lattice-witness-internal-owner-overlap-red.log (one test, deterministic failure, exit 101). The preliminary diagnostic remains saved outside the committed suite. The normal suite now contains a gated regression through the actual WitnessFlow cancellation path. Removing only the new sequencing checks deterministically fails its finalization-wait assertion; restoring them passes and permits a fresh public operation. Reviews and local gates are complete; the current hosted gate remains required.
+Failing run: /tmp/lattice-witness-internal-owner-overlap-red.log (one test, deterministic failure, exit 101). The preliminary diagnostic remains saved outside the committed suite. The normal suite now contains a gated regression through the actual WitnessFlow cancellation path. Removing only the new sequencing checks deterministically fails its finalization-wait assertion; restoring them passes and permits a fresh public operation. Reviews and local gates are complete; the hosted gate was still pending at that checkpoint; its final result is recorded above.
 
 ## Finalization handshake and fixture scheduling
 
@@ -56,8 +56,8 @@ owner-lock tests share a fixture gate. Twenty complete 17-test constrained runs
 passed after that change. The final repeat tightens its observer to require
 finished registration and all physical drains before marking consumer wait.
 These were intermediate results. Both final native configurations, full repository
-checks and adversarial review subsequently passed, as recorded below. The current
-hosted gate remains required; superseded checkpoints are not final signoff.
+checks and adversarial review subsequently passed, as recorded below. The hosted gate was still pending at that checkpoint; its final result is recorded
+above. Superseded checkpoints are not final signoff.
 
 ## Verified local checkpoint
 
@@ -65,8 +65,8 @@ The final tightened observer passes twenty complete 17-test witness-family runs
 with two runtime workers and four test threads. Both ordinary and tracing native
 all-target suites also pass with two runtime workers, after moving the plugin-hook
 fixture's fake callback wait onto a blocking worker. Desktop typecheck/tests and
-both boundary security scans pass. The full mix check also passes; the new hosted
-exact-tip gate remains required.
+both boundary security scans pass. The full mix check also passes; the final hosted
+exact-tip result is recorded above.
 
 Final independent specification and standards reviews find no actionable issue.
 Actual first-party Sonnet 5.5 High reports no P1/P2; its optional observer hardening
@@ -78,4 +78,5 @@ means entry into finalization rather than completed owner checking.
 The final full mix check exits successfully: core 899 tests/26 properties and
 carrier 643 tests, zero failures; carrier platform skips/exclusions remain
 explicit. Final local checks are complete and the approved repair is published.
-Pass the current exact-tip hosted gate before dependent adoption/signoff.
+The final exact-tip hosted gate subsequently passed, as recorded above. Adoption
+does not replace the dependent native branch's combined integration checks.

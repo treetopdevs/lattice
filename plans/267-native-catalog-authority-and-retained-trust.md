@@ -10,11 +10,12 @@ incoming/resource integration remain unfinished. Closed rotation records and
 dual-purpose signature/binding-id evaluation are implemented as graph inputs;
 parent/head, cutoff-completeness and transition authority remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
-The signature discrepancy is corrected by source PR177 and adopted. Source PR178's
-artifact-integer checkpoint cccb58163 is also hosted-verified and adopted locally;
-production BEAM and SDK source byte identity is proven. The approved test-family
-cleanup at bab44c97e now passes both final hosted workflows and is adopted locally.
-No runtime owner, custody or signature policy is changed by that test cleanup.
+The signature discrepancy and shared artifact-integer profile are corrected by
+separately reviewed and hosted-verified source dependencies and adopted locally.
+The operator-approved witness completion barrier is also gated and adopted;
+it serializes cancellation consumption and final owner checks while preserving
+the existing conservative refusal policy. Its test-family cleanup preserves
+physical callback-drain behavior and successful public reuse controls.
 Full native signoff still requires the remaining graph/retained/incoming work.
 
 An explicit strict raw-artifact profile gate now precedes typed catalog/rotation
