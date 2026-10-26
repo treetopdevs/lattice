@@ -13,7 +13,7 @@ No component checkpoint completes this plan or grants installed trust/freshness.
 The signature discrepancy is corrected by source PR177 and adopted. Source PR178's
 artifact-integer checkpoint cccb58163 is also hosted-verified and adopted locally;
 production BEAM and SDK source byte identity is proven. The approved test-family
-cleanup is published at bab44c97e and awaits its final hosted gate and adoption.
+cleanup at bab44c97e now passes both final hosted workflows and is adopted locally.
 No runtime owner, custody or signature policy is changed by that test cleanup.
 Full native signoff still requires the remaining graph/retained/incoming work.
 

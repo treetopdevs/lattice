@@ -469,6 +469,7 @@ fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
     let attempt = Bytes32([3; 32]);
     let challenge = Bytes32([4; 32]);
     let (kinds_tx, kinds_rx) = mpsc::channel();
+    let observed_operations = operations.clone();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
         let kinds = kinds_tx.clone();
         witness_mobile::test_adapter::dispatch(
@@ -532,9 +533,13 @@ fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
         kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
         "cancel"
     );
-    for _ in 0..100 {
-        if let Ok(next) = flow.execute(
-            view.clone(),
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "malformed prepared cleanup did not release after cancel drained",
+    );
+    let next = flow
+        .execute(
+            view,
             witness_public::PublicRequest::Proof(witness_public::ProofPublicRequest {
                 replica: "replica:test".into(),
                 enrollment_id: Bytes32([1; 32]),
@@ -542,21 +547,17 @@ fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
                 fresh_validator_nonce: Bytes32([6; 32]),
             }),
             Arc::new(|_, _| Err("emit_failed")),
-        ) {
-            assert!(block_on(next.receive()).is_err());
-            assert_eq!(
-                kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-                "identity"
-            );
-            assert_eq!(
-                kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-                "cancel"
-            );
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(1));
-    }
-    panic!("malformed prepared cleanup did not release after cancel drained");
+        )
+        .expect("the drained slot admits the next public proof request");
+    assert!(block_on(next.receive()).is_err());
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "identity"
+    );
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "cancel"
+    );
 }
 
 #[test]
@@ -587,12 +588,14 @@ fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
     owner
         .page_load(&view, PageLoadEvent::Finished, &url)
         .unwrap();
+    let observed_session = owner.snapshot(&view).unwrap();
     let operations = Arc::new(witness_operation::test_adapter::registry(|| {
         Ok(Bytes32([9; 32]))
     }));
     let (started_tx, started_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let release = Arc::new(Mutex::new(Some(release_rx)));
+    let observed_operations = operations.clone();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
         if matches!(request, witness_bridge::PrivateRequest::Cancel(_)) {
             panic!("unknown whether a mobile callback launched before transport panic");
@@ -627,16 +630,28 @@ fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
         )
         .unwrap();
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-    drop(pending);
-    release_tx.send(()).unwrap();
-    std::thread::sleep(Duration::from_millis(20));
+    // Both callbacks are blocked, so this public guard cannot overlap a recheck.
     assert!(flow
         .execute(
             view,
             witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| Ok(())),
+            Arc::new(|_, _| Ok(()))
         )
         .is_err());
+    drop(pending);
+    release_tx.send(()).unwrap();
+    wait_for_drain_state(
+        || witness_flow::test_adapter::run_finished(&flow),
+        "the original run must finish after its callback",
+    );
+    wait_for_drain_state(
+        || witness_flow::test_adapter::cancellation_registered(&flow),
+        "the unknown dispatch outcome must record its failed drain",
+    );
+    assert!(!witness_operation::test_adapter::is_idle(
+        &observed_operations
+    ));
+    assert!(observed_operations.begin(&observed_session).is_err());
 }
 
 #[test]
@@ -673,6 +688,7 @@ fn known_unlaunched_cancel_entropy_panic_does_not_wedge_after_original_drain() {
     let (started_tx, started_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let release = Arc::new(Mutex::new(Some(release_rx)));
+    let observed_operations = operations.clone();
     let flow = witness_flow::test_adapter::flow_with_cancel_entropy(
         owner,
         operations,
@@ -716,18 +732,18 @@ fn known_unlaunched_cancel_entropy_panic_does_not_wedge_after_original_drain() {
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
     drop(pending);
     release_tx.send(()).unwrap();
-    for _ in 0..100 {
-        if let Ok(next) = flow.execute(
-            view.clone(),
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "known no-launch entropy failure wedged the registry",
+    );
+    let next = flow
+        .execute(
+            view,
             witness_public::PublicRequest::Identity,
             Arc::new(|_, _| Ok(())),
-        ) {
-            assert!(block_on(next.receive()).is_ok());
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(1));
-    }
-    panic!("known no-launch entropy failure wedged the registry");
+        )
+        .expect("a known unlaunched cancel does not retain the slot");
+    assert!(block_on(next.receive()).is_ok());
 }
 
 #[test]
@@ -916,9 +932,11 @@ fn terminal_publication_race(cancel_with_command: bool) {
         )
         .unwrap();
     ready_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-    // Let finish reach its drain wait. The operation must remain cancellable
-    // throughout that wait, independent of executor scheduling.
-    std::thread::sleep(Duration::from_millis(20));
+    // Observe the completed run while its native acknowledgement remains gated.
+    wait_for_drain_state(
+        || witness_flow::test_adapter::run_finished(&flow),
+        "the run must reach its drain before cancellation competes with publication",
+    );
 
     if cancel_with_command {
         let cancelled = flow
