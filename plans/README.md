@@ -453,6 +453,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 274 | [Common no-op catalog rotation refusal](274-catalog-noop-rotation-refusal.md) | P1 | S | 273; native chain source discrepancy | IN PROGRESS: parent180 integrated; full local source/native checks pass; refreshed exact-tip hosted gate remains. |
 | 275 | [Signing-helper death proof](275-signing-helper-death-proof.md) | P2 | S | 263; latest source178 | IN PROGRESS: #180 at98ddeeafd passes Flagship40282811461; test-only correction adopted; combined source/native checks remain. |
 | 276 | [Catalog entry proof priority](276-catalog-entry-proof-priority.md) | P1 | M | 274/275; reproduced native-port source disagreement | IN PROGRESS:43 focused, full local/native checks and reviews pass; publish on reviewed277 CI correction; exact-tip gates remain before native adoption. |
+| 277 | [Treehouse native CI budget](277-treehouse-native-ci-budget.md) | P1 | M | 274/275; timed-out native checkpoint | IN PROGRESS: native suites split;25 aggregate cases, independent setup and reviews pass; exact-tip hosted timing proof remains. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
