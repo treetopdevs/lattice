@@ -54,8 +54,8 @@ the native transition reason. Authentication, chain resolution and head
 observations still do not establish cutoff completeness, historical entry
 proofs, route history, fork policy, retained trust, aggregate candidate bounds
 or incoming/installation integration. Final combined gates and hosted native
-publication remain open. The separate approved production witness repair in
-source178 requires its new gate and later dependency refresh.
+publication remain open. The separate operator-approved production witness completion barrier is now
+hosted-verified and adopted. Final combined native gates remain required.
 
 ## Historical-view foundation
 
