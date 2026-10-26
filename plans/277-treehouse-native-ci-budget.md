@@ -6,7 +6,12 @@ IN PROGRESS. Both native suites now have an independently prepared required job
 with a bounded execution budget. The remaining unit job retains all other checks
 and cold-install headroom. Local workflow validation and the aggregate result
 matrix pass. Independent reviews are clear after fixing the aggregate runner's
-checkout. Independent and adversarial findings are resolved; exact-tip hosted proof remains. Keep the
+checkout. Independent and adversarial workflow findings are resolved. The first hosted
+run reached a slow package-download timeout and a separate cold-process test
+limit. Preserve the package cache for a bounded recovery attempt. Isolate the
+cold-process reciprocal module from the async phase without removing any case,
+assertion, fresh-process check or its existing two-minute limit. The scheduling correction is independently/adversarially reviewed and locally
+verified. Its refreshed exact-tip hosted gate remains required. Keep the
 native checkpoint draft until its complete required workflow succeeds.
 
 ## Contract
