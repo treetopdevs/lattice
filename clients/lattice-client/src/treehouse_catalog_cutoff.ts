@@ -1,5 +1,5 @@
 import {verifyEd25519} from "./signature";
-import { canonicalUint64Scalar, canonicalHighUint64Text } from "./uint64";
+import { canonicalUint64Scalar, portableUint64Scalar } from "./uint64";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, canonicalHash } from "./codec";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
 import { compareUtf8 } from "./op";
@@ -257,7 +257,7 @@ function term(value: unknown, depth: number): boolean {
   if (tag === "bool" && typeof item === "boolean") return true;
   if (tag === "int") {
     // The portable JSON profile uses numbers through MAX_SAFE_INTEGER and text above it.
-    if (canonicalUint64Scalar(item)) return typeof item === "number" || canonicalHighUint64Text(item);
+    if (canonicalUint64Scalar(item)) return portableUint64Scalar(item);
     throw new Error("malformed integer");
   }
   if (tag === "bin" && canonicalBase64Bytes(item) !== null) return true;
