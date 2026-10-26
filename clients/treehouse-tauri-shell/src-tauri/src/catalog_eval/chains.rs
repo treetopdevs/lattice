@@ -27,24 +27,24 @@ fn failure(reason: &'static str, id: &str) -> ChainError {
 }
 #[derive(Debug, serde::Serialize)]
 pub struct BindingObservation {
-    generation: u64,
-    key: Vec<u8>,
-    parent: Option<String>,
-    prior: Option<String>,
-    inventory: Option<String>,
+    pub(super) generation: u64,
+    pub(super) key: Vec<u8>,
+    pub(super) parent: Option<String>,
+    pub(super) prior: Option<String>,
+    pub(super) inventory: Option<String>,
 }
 #[derive(Debug, serde::Serialize)]
 pub struct CatalogObservation {
-    binding: String,
-    revision: u64,
-    previous: Option<String>,
+    pub(super) binding: String,
+    pub(super) revision: u64,
+    pub(super) previous: Option<String>,
 }
 #[derive(Debug, serde::Serialize)]
 pub struct ChainObservation {
-    bindings: BTreeMap<String, BindingObservation>,
-    catalogs: BTreeMap<String, CatalogObservation>,
-    binding_heads: Vec<String>,
-    catalog_heads: BTreeMap<String, Vec<String>>,
+    pub(super) bindings: BTreeMap<String, BindingObservation>,
+    pub(super) catalogs: BTreeMap<String, CatalogObservation>,
+    pub(super) binding_heads: Vec<String>,
+    pub(super) catalog_heads: BTreeMap<String, Vec<String>>,
 }
 struct Catalog<'a> {
     term: &'a Term,
@@ -86,6 +86,7 @@ pub fn observe(
         bootstrap.bootstrap(),
         catalogs,
         rotations,
+        |_, _| Ok(()),
     )
 }
 
@@ -97,7 +98,30 @@ pub fn observe_bootstrap(
     catalogs: &[Artifact],
     rotations: &[Artifact],
 ) -> Result<ChainObservation, ChainError> {
-    observe_record(bootstrap.id(), bootstrap.record(), catalogs, rotations)
+    observe_record(
+        bootstrap.id(),
+        bootstrap.record(),
+        catalogs,
+        rotations,
+        |_, _| Ok(()),
+    )
+}
+
+/// Join entry proof at the same graph stage as the source owner. This internal
+/// hook is constructed by the retained fold; it is not a caller trust flag.
+pub(super) fn observe_with_entries(
+    bootstrap: &super::entries::BootstrapObservation<'_>,
+    catalogs: &[Artifact],
+    rotations: &[Artifact],
+    check_entries: impl FnMut(&str, &Term) -> Result<(), ChainError>,
+) -> Result<ChainObservation, ChainError> {
+    observe_record(
+        bootstrap.id(),
+        bootstrap.record(),
+        catalogs,
+        rotations,
+        check_entries,
+    )
 }
 
 fn observe_record(
@@ -105,6 +129,7 @@ fn observe_record(
     record: &Term,
     catalogs: &[Artifact],
     rotations: &[Artifact],
+    mut check_entries: impl FnMut(&str, &Term) -> Result<(), ChainError>,
 ) -> Result<ChainObservation, ChainError> {
     let key = field(record, "catalog_key")
         .and_then(key)
@@ -172,10 +197,10 @@ fn observe_record(
         context.rotations.entry(id).or_insert(node);
     }
     for id in context.catalogs.keys().cloned().collect::<Vec<_>>() {
-        context.resolve(Work::Catalog(id))?;
+        context.resolve(Work::Catalog(id), &mut check_entries)?;
     }
     for id in context.rotations.keys().cloned().collect::<Vec<_>>() {
-        context.resolve(Work::Binding(id))?;
+        context.resolve(Work::Binding(id), &mut check_entries)?;
     }
     let parents: BTreeSet<_> = context
         .bindings
@@ -229,7 +254,11 @@ impl Context<'_> {
         }
         Ok(())
     }
-    fn resolve(&mut self, first: Work) -> Result<(), ChainError> {
+    fn resolve(
+        &mut self,
+        first: Work,
+        check_entries: &mut impl FnMut(&str, &Term) -> Result<(), ChainError>,
+    ) -> Result<(), ChainError> {
         let mut work = vec![first];
         while let Some(task) = work.pop() {
             match task {
@@ -270,6 +299,7 @@ impl Context<'_> {
                         }) {
                             return Err(failure(TRANSITION, &id));
                         }
+                        check_entries(&id, catalog.term)?;
                         self.ready.insert(id.clone());
                         self.visiting.remove(&Node::Catalog(id));
                     }
@@ -284,6 +314,7 @@ impl Context<'_> {
                     {
                         return Err(failure(TRANSITION, &id));
                     }
+                    check_entries(&id, catalog.term)?;
                     self.ready.insert(id.clone());
                     self.visiting.remove(&Node::Catalog(id));
                 }

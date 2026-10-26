@@ -3,8 +3,8 @@
 ## Status
 
 Source correction reviewed and exact-tip hosted-gated; adopted into the isolated
-native resolver worktree. Adopted component regression replay remains before
-closure. Unique row permutations match across both owners; canonical proof,
+native resolver worktree. Adopted source and ordinary/tracing component regression
+replays pass; this source correction is complete. Unique row permutations match across both owners; canonical proof,
 witness and trigger indexes remain strict. Whole-page overflow/fallback retains
 original inventory arrays in both owners. This does not complete plan 267 or
 establish installed trust.

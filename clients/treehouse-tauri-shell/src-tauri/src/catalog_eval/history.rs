@@ -35,9 +35,6 @@ impl AuthenticDag {
     /// Authenticate all frames before reporting missing ancestors. The byte cap
     /// counts encoded frames and their JSON array punctuation before allocation.
     pub fn authenticate(replica: &str, raw: &[&[u8]]) -> Result<Self, HistoryError> {
-        if replica.is_empty() || replica.len() > frame::MAX_FRAME_BYTES {
-            return Err(HistoryError::invalid());
-        }
         let mut bytes = 2usize;
         for (index, frame) in raw.iter().enumerate() {
             bytes = bytes
@@ -48,6 +45,21 @@ impl AuthenticDag {
             {
                 return Err(HistoryError::invalid());
             }
+        }
+        Self::authenticate_accounted(replica, raw)
+    }
+
+    /// Internal complete-history construction after the owned history profile
+    /// has accounted aggregate nodes/string bytes/depth. A retained union can
+    /// exceed one external JSON transport's encoded size. This preserves every
+    /// per-frame bound, signature/hash check, replica check and closure check;
+    /// it is not an authenticity or authority bypass.
+    pub(super) fn authenticate_accounted(
+        replica: &str,
+        raw: &[&[u8]],
+    ) -> Result<Self, HistoryError> {
+        if replica.is_empty() || replica.len() > frame::MAX_FRAME_BYTES {
+            return Err(HistoryError::invalid());
         }
         let mut frames = BTreeMap::new();
         for bytes in raw {
@@ -211,5 +223,85 @@ mod tests {
                 "invalid_verified_history"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod owned_union_tests {
+    use super::super::canonical::{encode_op_payload, Term};
+    use super::*;
+    use base64::{
+        engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+        Engine,
+    };
+    use ed25519_dalek::{Signer, SigningKey};
+    use serde_json::json;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn accounted_union_can_exceed_one_transport_without_widening_public_dag_input() {
+        let signer = SigningKey::from_bytes(&[89; 32]);
+        let replica = format!(
+            "replica:treehouse:thread:{}#authority:bounded-continuation-v1#root:{}",
+            URL_SAFE_NO_PAD.encode([90u8; 32]),
+            URL_SAFE_NO_PAD.encode([91u8; 32])
+        );
+        let author = signer.verifying_key().to_bytes();
+        let mut frames = Vec::with_capacity(1300);
+        for index in 0..1300u64 {
+            let mut values = vec![Term::Nil; 7000];
+            values.push(Term::Integer(index));
+            let body = Term::List(values);
+            let payload = encode_op_payload(
+                &[
+                    Term::Binary(b"lattice-op-v2".to_vec()),
+                    Term::Binary(replica.as_bytes().to_vec()),
+                    Term::Binary(author.to_vec()),
+                    Term::List(Vec::new()),
+                    Term::Atom("command".into()),
+                    body,
+                    Term::Nil,
+                ],
+                false,
+            )
+            .unwrap();
+            let mut values = vec![json!(["nil"]); 7000];
+            values.push(json!(["int", index]));
+            frames.push(serde_json::to_vec(&json!({"v":1,"id":URL_SAFE_NO_PAD.encode(Sha256::digest(&payload)),
+                "replica":replica,"author":STANDARD.encode(author),"deps":[],"kind":"command",
+                "body":["list",values],"cap":["nil"],"sig":STANDARD.encode(signer.sign(&payload).to_bytes())})).unwrap());
+        }
+        let refs: Vec<_> = frames.iter().map(Vec::as_slice).collect();
+        let encoded = 2 + frames.iter().map(Vec::len).sum::<usize>() + frames.len() - 1;
+        assert!(encoded > MAX_SOURCE_BYTES);
+        assert!(frames
+            .iter()
+            .all(|frame| frame.len() < frame::MAX_FRAME_BYTES));
+        //300 saved frames fit the32MiB retained input,1000 incoming frames fit
+        //64MiB transport. The union has <30MiB strings and <20Mi nodes; nil
+        //JSON wrappers make encoded bytes larger than either source metric.
+        assert!(frames[..300].iter().map(Vec::len).sum::<usize>() < 32 * 1024 * 1024);
+        assert!(frames[300..].iter().map(Vec::len).sum::<usize>() < 64 * 1024 * 1024);
+        assert_eq!(
+            AuthenticDag::authenticate(&replica, &refs)
+                .unwrap_err()
+                .reason,
+            "invalid_verified_history"
+        );
+        let dag = AuthenticDag::authenticate_accounted(&replica, &refs).unwrap();
+        assert_eq!(dag.order().len(), 1300);
+        assert_eq!(dag.frontier().len(), 1300);
+        //The internal path still authenticates all records, including the last.
+        let mut forged = serde_json::from_slice::<serde_json::Value>(&frames[1299]).unwrap();
+        forged["sig"] = json!(STANDARD.encode([0u8; 64]));
+        let forged = serde_json::to_vec(&forged).unwrap();
+        let mut bad_refs = refs;
+        bad_refs[1299] = &forged;
+        assert_eq!(
+            AuthenticDag::authenticate_accounted(&replica, &bad_refs)
+                .unwrap_err()
+                .reason,
+            "invalid_verified_history"
+        );
     }
 }

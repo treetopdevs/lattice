@@ -86,7 +86,13 @@ pub fn derive(bytes: &[u8]) -> Result<CutoffObservation, CutoffError> {
             INVALID
         })
     })?;
-    if !closed(&raw, &["replica", "frames", "rejected"]) {
+    derive_value(&raw)
+}
+
+// The retained union already owns and accounts parsed observations. Do not
+// serialize it through a single external transport limit a second time.
+pub(super) fn derive_value(raw: &Value) -> Result<CutoffObservation, CutoffError> {
+    if !closed(raw, &["replica", "frames", "rejected"]) {
         return Err(error(INVALID));
     }
     let replica = raw["replica"]

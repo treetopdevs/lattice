@@ -201,6 +201,36 @@ requires recovery. Native consumption and the remaining full acceptance/resource
 matrix still need proof. Source-gate
 waiting does not establish native adoption or implement the retained resolver.
 
+The internal retained module now joins rich entry facts at iterative graph-node
+completion, derives exact cutoff proof membership from raw evidence, and replays
+original-only authority witnesses through transient causal slices. Incoming raw
+history fragments authenticate before merge; complete union keeps the first raw
+representation and canonicalizes indexes. Aggregate node/string/depth accounting
+is separate from external encoded transport limits. These stages are not a public
+evaluate API: original snapshot/block/watermark validation, origin sequencing,
+full decision emission and sticky incoming/overflow handling remain unfinished.
+The original-only replay owner accepts snapshot bytes alone, retaining both its
+unverified snapshot and original authenticated histories. Witness allowed IDs
+come only from its owned accepted catalog after the existing record-schema gate;
+no external catalog/history can supply missing original support. The graph derives
+current authority refusal from the selected bootstrap and actual accepted entry
+facts, never a source-runtime block reason. Required cutoff claims remain owned
+by the resolved graph; proof completion accepts no replacement rotation slice.
+Saved catalog/rotation row labels are checked against schema-valid actual artifact
+IDs before supplying diagnostic membership or witness allowed IDs. The public DAG
+keeps its external encoded-input cap; an internal already-accounted union path
+preserves frame bounds/authenticity/closure without reapplying that transport cap.
+A native signed 1,300-frame regression proves the distinction and rejects a forged
+last frame. An actual large request (73,381,291 encoded frame bytes, split across
+16,933,991 saved and 56,447,301 incoming bytes) is proposed as trust_pending by both
+public source owners; native union authenticates that same request and retains
+all 1,300 Thread frames. This proves the input-profile distinction, not complete
+native decision parity or acceptable peak-cost closure. Aggregate cost evidence
+and remaining exact resource boundaries still precede any public boundary.
+The reciprocal contract tests compare both complete source owners and separately
+assert native union/graph/proof/replay stages; they do not claim complete native
+decision parity. Keep that distinction when extending them into the full fold.
+
 The first full-resolver tests must exercise an empty installed inventory, genuinely
 pending entries, complete acceptance, first-invalid refusal IDs, frozen sibling
 reopen and corrupt original evidence plus otherwise repairing incoming input.
@@ -301,6 +331,13 @@ existing depth/node limits. Bound complete-input parsing before allocation witho
 clipping evaluator-valid maximum-size history. Frame-set authentication accounts
 for encoded frame bytes and array separators before allocating verified state.
 Whole-page parsing and persisted snapshot checks remain separate later seams.
+Before exposing the full owner, account peak simultaneous owned JSON, merged
+history/frame serialization, proof fingerprint indexes and transient policy views;
+a finite input cap alone is not proof of acceptable native memory/CPU cost.
+Measure large authenticated inputs and repeated proof/view cases, avoid repeated
+whole-history policy/encoding work, and enforce the planned aggregate temporary
+budget without narrowing source-valid wire or canonical evidence. These resource
+gates remain unfinished; no complete bounded incoming owner is claimed.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.

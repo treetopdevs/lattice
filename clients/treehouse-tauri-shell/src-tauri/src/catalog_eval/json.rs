@@ -58,6 +58,63 @@ fn parse_bounded(
     Ok(value)
 }
 
+/// Account an already-owned observation without an encoded-size shortcut.
+/// Internal unions can exceed one external transport's encoded byte budget;
+/// the source still bounds every value/key occurrence and UTF-8 string byte.
+pub(super) fn within_observation(value: &Value, max_depth: usize) -> bool {
+    enum Item<'a> {
+        Value(&'a Value),
+        Key(&'a str),
+    }
+    let mut pending: Vec<Box<dyn Iterator<Item = Item<'_>> + '_>> =
+        vec![Box::new(std::iter::once(Item::Value(value)))];
+    let mut nodes = 0usize;
+    let mut bytes = 0usize;
+    while !pending.is_empty() {
+        let Some(item) = pending.last_mut().and_then(|items| items.next()) else {
+            pending.pop();
+            continue;
+        };
+        nodes += 1;
+        if nodes > MAX_OBSERVATION_INPUT {
+            return false;
+        }
+        let string = match item {
+            Item::Key(key) => Some(key),
+            Item::Value(Value::String(value)) => Some(value.as_str()),
+            Item::Value(Value::Array(values)) => {
+                if pending.len() > max_depth {
+                    return false;
+                }
+                pending.push(Box::new(values.iter().map(Item::Value)));
+                None
+            }
+            Item::Value(Value::Object(values)) => {
+                if pending.len() > max_depth {
+                    return false;
+                }
+                pending.push(Box::new(
+                    values
+                        .iter()
+                        .flat_map(|(key, value)| [Item::Key(key), Item::Value(value)]),
+                ));
+                None
+            }
+            _ => None,
+        };
+        if let Some(string) = string {
+            let Some(total) = bytes.checked_add(string.len()) else {
+                return false;
+            };
+            bytes = total;
+            if bytes > MAX_OBSERVATION_INPUT {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 struct Seed<'a> {
     remaining: &'a mut usize,
     depth: usize,
@@ -155,5 +212,25 @@ impl<'de> Visitor<'de> for StrictVisitor<'_> {
             values.insert(key, value);
         }
         Ok(Value::Object(values))
+    }
+}
+
+#[cfg(test)]
+mod observation_tests {
+    use super::*;
+    #[test]
+    fn owned_observation_counts_utf8_keys_and_container_levels() {
+        let exact = Value::String("x".repeat(MAX_OBSERVATION_INPUT));
+        assert!(within_observation(&exact, 203));
+        // The object key is a separate occurrence and exceeds the same total.
+        let keyed = Value::Object(Map::from_iter([("k".into(), exact)]));
+        assert!(!within_observation(&keyed, 203));
+        let mut value = Value::String("leaf".into());
+        for _ in 0..203 {
+            value = Value::Array(vec![value]);
+        }
+        assert!(within_observation(&value, 203));
+        value = Value::Array(vec![value]);
+        assert!(!within_observation(&value, 203));
     }
 }

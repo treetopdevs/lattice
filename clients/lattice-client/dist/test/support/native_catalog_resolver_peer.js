@@ -2,8 +2,8 @@
 // consumed by a native evaluator; this is the executable acceptance contract.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { trustFixture, signedCatalog, fixtureId } from "./export_treehouse_catalog_trust";
-import { catalogRotationEnvelopeFromCarrierTerm, catalogRotationId, transportCatalogId } from "../../src/treehouse_catalog_codec";
+import { trustFixture, signedCatalog, signedRotation, fixtureId, fixtureSigner } from "./export_treehouse_catalog_trust";
+import { catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, catalogRotationId, transportCatalogId } from "../../src/treehouse_catalog_codec";
 import { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust } from "../../src/treehouse_catalog_trust";
 const expected = { trustRevision: 0, historyGeneration: 0 };
 const empty = () => ({ catalogs: [], rotations: [], histories: [], cutoffProofs: [] });
@@ -36,6 +36,16 @@ else {
     const rotatedJson = await signedCatalog({ ...f.catalog, binding: catalogRotationId(rotation) }, f.nextCatalogSigner);
     add("rotation-missing-proof", accepted.next, { ...empty(), catalogs: [rotatedJson], rotations: [f.rotationJson] });
     add("rotation-with-proof", accepted.next, { ...empty(), catalogs: [rotatedJson], rotations: [f.rotationJson], cutoffProofs: f.cutoffProofs });
+    // Distinct unproved second-generation cutoffs expose inherited first-generation
+    // pending IDs; a test that only repeats the same cutoffs cannot prove propagation.
+    const secondSigner = fixtureSigner("resolver-second-catalog");
+    const secondRotationJson = await signedRotation({ ...rotation.rotation, parent: catalogRotationId(rotation),
+        priorCatalog: transportCatalogId(catalogEnvelopeFromCarrierTerm(JSON.parse(rotatedJson)).catalog), generation: 2,
+        newCatalogKey: Buffer.from(secondSigner.publicKey).toString("base64"), nonce: fixtureId("resolver-second-rotation"),
+        cutoffs: rotation.rotation.cutoffs.map(c => ({ ...c, logDigest: fixtureId(`second-missing:${c.replica}`) })) }, f.nextCatalogSigner, secondSigner);
+    const secondRotation = catalogRotationEnvelopeFromCarrierTerm(JSON.parse(secondRotationJson));
+    const secondCatalogJson = await signedCatalog({ ...f.catalog, binding: catalogRotationId(secondRotation) }, secondSigner);
+    add("rotation-descendant-missing-proof", accepted.next, { ...empty(), catalogs: [rotatedJson, secondCatalogJson], rotations: [f.rotationJson, secondRotationJson] });
     const rotated = await evaluateTreehouseCatalogTrust(inputs.find(c => c.name === "rotation-with-proof").input);
     assert.equal(rotated.kind, "propose");
     assert.equal(rotated.next.accepted.generation, 1);
@@ -75,6 +85,6 @@ else {
         }
         cases.push({ name: item.name, orders });
     }
-    assert.equal(cases.length, 10);
+    assert.equal(cases.length, 11);
     await new Promise(resolve => process.stdout.write(JSON.stringify({ cases }) + "\n", () => resolve()));
 }
