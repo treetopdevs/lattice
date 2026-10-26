@@ -2,14 +2,12 @@
 
 ## Status and dependency
 
-IN PROGRESS. Bounded host reads, bound manifest resources, exclusive output with
-descriptor identity checks and the standalone command are implemented. Final
-current-tip Linux and hosted gates remain before completion.
+DONE. Bounded host reads, archived manifest/resource binding, exclusive output,
+live descriptor and parent identity checks, and the standalone command are implemented.
 
-The exporter remains functionally independent of native evaluation. The native
-codec and core dependency-alias corrections are merged foundations. Verify the
-combined source against main and pass this exact tip before merging; the later
-native evaluator remains a separate gate.
+The exporter remains independent of native evaluation. It exports historical public
+evidence only; native import, installed trust, active routes and freshness remain
+separate gates under plan 267 and later plan 245 work.
 
 ## Outcome
 

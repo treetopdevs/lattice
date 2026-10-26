@@ -1,3 +1,4 @@
+import { canonicalUint64Scalar, canonicalHighUint64Text } from "./uint64";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, canonicalHash } from "./codec";
 import { compareUtf8 } from "./op";
@@ -146,7 +147,6 @@ const atoms = new Set([
 ]);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
-const maxUint64 = 18446744073709551615n;
 const frameFields = ["v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig"];
 const delegationFields = ["id", "replica", "issuer", "audience", "parent_id", "ops", "roles", "live", "sig"];
 const invalid = { ok: false, reason: "invalid_verified_history" };
@@ -273,10 +273,9 @@ function term(value, depth) {
     if (tag === "bool" && typeof item === "boolean")
         return true;
     if (tag === "int") {
-        if (typeof item === "number" && Number.isSafeInteger(item) && item >= 0)
-            return true;
-        if (typeof item === "string" && /^(0|[1-9][0-9]*)$/.test(item) && BigInt(item) <= maxUint64)
-            return true;
+        // The portable JSON profile uses numbers through MAX_SAFE_INTEGER and text above it.
+        if (canonicalUint64Scalar(item))
+            return typeof item === "number" || canonicalHighUint64Text(item);
         throw new Error("malformed integer");
     }
     if (tag === "bin" && canonicalBase64Bytes(item) !== null)

@@ -250,7 +250,7 @@ defmodule Treehouse.CatalogCutoffVocabularyTest do
           end
         end)
 
-      assert %{kind: :reject, reason: :unsupported_cutoff} =
+      assert %{kind: :reject, reason: :invalid_verified_history} =
                CatalogTrust.prepare_installation(%{
                  review: fixture.review,
                  history: %{raw | frames: malformed},

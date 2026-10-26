@@ -608,13 +608,13 @@ try {
     error instanceof Error ? error.message : String(error);
 }
 check(
-  "hash-preserving integer coercion is rejected before verification",
+  "integer coercion is rejected by canonical hashing and frame decoding",
   {
-    hashStillMatches: await verifyCarrierOpHash(coercedIntegerFrame),
+    hashFailure: await verifyCarrierOpHash(coercedIntegerFrame).then(() => "", error => error.message),
     frameFailure: coercedIntegerFailure,
   },
   {
-    hashStillMatches: true,
+    hashFailure: "unsupported canonical integer",
     frameFailure: "malformed carrier op",
   },
 );
