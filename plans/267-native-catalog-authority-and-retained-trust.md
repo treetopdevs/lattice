@@ -96,6 +96,17 @@ trust reasons and authority semantics are parity oracles, not editable targets.
    route/service reservation, linear/forked chains, rotation/cutoff proofs, pending
    dependencies, rollback, historical authority witnesses and sticky blocked state.
    Preserve accepted watermarks on incomplete evidence and emit no blocked routes.
+   The next entry-proof seam consumes a sealed Artifact and authenticated histories,
+   not caller-supplied honor flags. Authenticate the entire supplied set before
+   portability or missing-page classification. Bind the named honored bootstrap,
+   bounded replica family, service identity, root-authorized genesis, honored
+   creation with genesis in its causal past, and honored Space Thread reference.
+   Evaluate every available entry: invalid evidence takes precedence over pending.
+   Compare complete entry/bootstrap observations with fresh public BEAM/TS peers,
+   including forged unrelated history plus missing target, missing creation,
+   wrong root/service/family, quarantined creation/reference and delivery order.
+   This seam establishes entry evidence only; selecting trusted signer bindings,
+   historical cutoff views, forks and retained state still belongs to graph trust.
 6. Add executable reciprocal peers: fresh BEAM/TS inputs consumed by Rust, fresh
    Rust inputs consumed by both actual runtimes. Replay the complete current trust
    fixture matrix and compare full decisions, reasons, routes and retained state.
