@@ -78,6 +78,52 @@ owners, retain full-set authentication before selection, and prove long-chain
 closure without recursion or payload copies. Review and combined gates remain
 required before the future retained-authority consumer uses this primitive.
 
+## Next integration: original-state validation and graph trust
+
+The next implementation consumes the historical-view foundation inside the full
+retained resolver; a standalone caller-supplied witness checker is insufficient.
+Keep one graph/proof algorithm with an original-only validation pass, followed by
+an incoming-union pass. No incoming frame, artifact or cutoff proof may repair a
+corrupt saved snapshot, even when the saved snapshot is already blocked.
+
+1. Introduce sealed authenticated history/page ownership and closed retained-state
+   decoding. Keep original and incoming origins separate until the original-only
+   pass succeeds. Authenticate every supplied accepted/rejected frame before
+   missing-page, pending or portability shortcuts; preserve original raw evidence.
+2. Refactor entry facts into complete, pending, invalid and authority-refused
+   observations with exact operation IDs. Reuse actual Space/Thread policy;
+   retain invalid-over-pending precedence across all entries. The existing
+   complete-only observer remains a projection of this richer internal result.
+3. Join structural chains with complete entry and exact historical cutoff proofs.
+   Propagate pending proofs through parent bindings. Only complete entries reserve
+   historical routes. Preserve immutable inventories and actual public heads;
+   do not let a current maximum generation/revision select away a fork.
+4. Validate saved accepted binding/catalog watermarks and every stored block.
+   For authority witnesses, derive allowed bootstrap/genesis/creation/reference
+   IDs from the selected review and accepted catalog, require canonical distinct
+   replica/frontier/op-ID indexes and exact union, reconstruct each original-only
+   causal slice, require exact frontier and replay every named refusal. Unknown,
+   redundant, empty, foreign or re-honored-only witnesses require recovery.
+   Historical bootstrap fork witnesses must be honored in their inclusive slice.
+5. Apply incoming union only after that pass. Capture the first authority-freeze
+   frontier and preserve it when later history re-honors evidence. Preserve
+   overflow triggers in either event order. Originally retained nonaccepted
+   siblings under a validated block may remain diagnostic/pending when new
+   authentic history contradicts entry proof; new artifacts and accepted entries
+   retain their stricter rules. All blocked results expose no eligible routes.
+6. Compare complete decisions, refusal details, retained snapshots and routes
+   through both public source resolvers with fresh independently signed evidence.
+   Include saved corruption plus otherwise repairing incoming input, historical
+   refusal followed by re-honor, current refusal with false historical frontier,
+   pending-route reuse, frozen contradictory sibling/reopen, watermark rollback,
+   both fork orders and overflow/authority event orders. Add aggregate candidate,
+   history and temporary-view accounting before exposing the incoming boundary.
+
+Keep this in the existing native evaluator workstream. No new IPC, storage,
+installation, dial or freshness claim is introduced before the full resolver and
+its required gates are complete. A source discrepancy stops adoption and gets an
+independently reviewed correction rather than a native compatibility exception.
+
 ## Source adoption
 
 The codec, exporter and continuation alias foundations are merged. The evaluator
