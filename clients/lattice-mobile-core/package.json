@@ -20,7 +20,7 @@
     "manifest:contract": "tsx test/product_manifest.ts",
     "handoff:contract": "tsx test/pairing_handoff.ts",
     "deeplink:contract": "tsx test/pairing_deeplink.ts",
-    "test": "npm run manifest:contract && npm run handoff:contract && npm run deeplink:contract"
+    "test": "npm run manifest:contract && npm run handoff:contract && npm run deeplink:contract && tsx test/strict_signature.ts"
   },
   "dependencies": {
     "@noble/curves": "^2.2.0",

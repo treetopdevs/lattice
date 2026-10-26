@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "@treetopdevs/lattice-client";
 import { CarrierPeerError, verifyCarrierOp } from "@treetopdevs/lattice-client";
 import type {
   CarrierOpFrame,
@@ -144,7 +144,7 @@ export class FakeRelay {
     }
     if (forced === "quarantined") return quarantined();
     const valid = await verifyCarrierOp(op, {
-      verify: async (pub, bytes, sig) => ed25519.verify(sig, bytes, fromBase64(pub), { zip215: false }),
+      verify: async (pub, bytes, sig) => verifyEd25519(sig, bytes, fromBase64(pub)),
     });
     if (!valid.valid) return quarantined();
     if (this.log.has(op.id)) return report;

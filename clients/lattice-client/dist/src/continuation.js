@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import { verifyEd25519 } from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
 const profileDomain = "lattice-continuation-profile-v1";
@@ -124,7 +124,7 @@ export function verifyContinuationCertificate(certificate, expected, profile) {
         let previous = null;
         for (const entry of normalized.signatures) {
             if (!allowed.has(entry.witness) || previous !== null && comparePublicKeys(previous, entry.witness) >= 0 ||
-                !ed25519.verify(canonicalBase64Bytes(entry.signature, 64), payload, canonicalBase64Bytes(entry.witness, 32), { zip215: false }))
+                !verifyEd25519(canonicalBase64Bytes(entry.signature, 64), payload, canonicalBase64Bytes(entry.witness, 32)))
                 return false;
             previous = entry.witness;
         }

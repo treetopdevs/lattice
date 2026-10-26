@@ -6,7 +6,6 @@
 use crate::witness_binding::{BindingClaim, BindingSigningRequest};
 use crate::witness_bridge::{Bytes32, PRIVATE_PROTOCOL};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{de::Error as _, Deserialize, Deserializer};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -156,11 +155,9 @@ pub(crate) fn accept_signed(
     {
         return Err(REVIEWED_BINDING_REFUSED);
     }
-    let key =
-        VerifyingKey::from_bytes(&sealed.public_key.0).map_err(|_| REVIEWED_BINDING_REFUSED)?;
-    let signature = Signature::from_bytes(&signed.signature);
-    key.verify_strict(&sealed.claim_bytes, &signature)
-        .map_err(|_| REVIEWED_BINDING_REFUSED)?;
+    if !crate::signature::verify(&sealed.public_key.0, &sealed.claim_bytes, &signed.signature) {
+        return Err(REVIEWED_BINDING_REFUSED);
+    }
     Ok(VerifiedBinding {
         claim: signed.claim,
         claim_bytes: sealed.claim_bytes.clone(),

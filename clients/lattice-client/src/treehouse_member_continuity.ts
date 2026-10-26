@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { analyzeAuthority, continuationFamily, resolveContinuationProfileFromFrames } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
@@ -174,7 +174,7 @@ export async function observeMemberContinuityFromFrames(input: {
       frame.deps.some((dependency) => !ids.has(dependency)))) return invalid;
     for (const frame of frames) {
       const verified = await verifyCarrierOp(frame, {verify: async (author, bytes, signature) =>
-        ed25519.verify(signature, bytes, base64ToBytes(author), {zip215: false})});
+        verifyEd25519(signature, bytes, base64ToBytes(author))});
       if (!verified.valid) return invalid;
     }
     if (continuationFamily(snapshot.replica) !== "space") {
@@ -327,7 +327,7 @@ export async function assembleMemberContinuityFromFrames(input: {
     } catch { return refuse("signer_failed"); }
     try {
       if (!(await verifyCarrierOp(frame, {verify: async (author, bytes, signature) =>
-        ed25519.verify(signature, bytes, base64ToBytes(author), {zip215: false})})).valid) {
+        verifyEd25519(signature, bytes, base64ToBytes(author))})).valid) {
         return refuse("invalid_signer_signature");
       }
     } catch { return refuse("invalid_signer_signature"); }
@@ -347,7 +347,7 @@ async function authenticateJudgedHistory(replica: string, values: readonly unkno
   if (ids.size !== frames.length || frames.some((frame) => frame.replica !== replica || frame.deps.some((dep) => !ids.has(dep)))) return null;
   for (const frame of frames) {
     if (!(await verifyCarrierOp(frame, {verify: async (author, bytes, signature) =>
-      ed25519.verify(signature, bytes, base64ToBytes(author), {zip215: false})})).valid) return null;
+      verifyEd25519(signature, bytes, base64ToBytes(author))})).valid) return null;
   }
   const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
   const byId = new Map(ops.map((op) => [op.id, op])); const order = canonicalOrder(ops, byId);

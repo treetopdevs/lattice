@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierOpFrame } from "./carrier";
 import { resolveContinuationProfileFromFrames, continuationFamily } from "./authority";
@@ -21,7 +21,7 @@ const closed = (value: unknown, names: string[]): value is Record<string, unknow
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify(names);
 const refuse = (): never => { throw new Error("invalid_offline_invitation"); };
 const verifier = { verify: async (pub: string, bytes: Uint8Array, sig: Uint8Array) =>
-  ed25519.verify(sig, bytes, Uint8Array.from(atob(pub), c => c.charCodeAt(0)), { zip215: false }) };
+  verifyEd25519(sig, bytes, Uint8Array.from(atob(pub), c => c.charCodeAt(0))) };
 
 /** Stable group identity code; invitation scope is separately reviewed against the current signed Space. */
 export async function treehouseGroupFingerprint(space: string, spaceRoot: string, bootstrapId: string): Promise<string> {

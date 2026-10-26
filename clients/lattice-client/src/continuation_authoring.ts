@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import {verifyEd25519} from "./signature";
 import { deriveContinuationReview } from "./authority";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierDelegation, CarrierOpFrame } from "./carrier";
@@ -139,7 +139,7 @@ async function authenticateHistory(frames: readonly unknown[], replica: string):
 
 function verifySignature(author: string, bytes: Uint8Array, signature: Uint8Array): boolean {
   const key = canonicalBase64Bytes(author, 32);
-  return key !== null && ed25519.verify(signature, bytes, key, { zip215: false });
+  return key !== null && verifyEd25519(signature, bytes, key);
 }
 
 function delegationShape(value: CarrierDelegation): boolean {

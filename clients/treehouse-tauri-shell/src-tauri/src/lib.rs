@@ -7,6 +7,7 @@ mod catalog_store;
 mod dev_trace;
 mod key_store;
 pub mod preview;
+pub mod signature;
 mod space_export;
 mod witness_android;
 pub mod witness_binding;

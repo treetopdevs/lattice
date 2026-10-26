@@ -1,13 +1,4 @@
-/**
- * Product-neutral carrier pairing seam.
- *
- * Extracted from the Township shell's `township_carrier_peer.ts`: peer-config
- * validation, the versioned pairing handoff codec, the peer fingerprint, and
- * the Ed25519 verifier helpers. Every product string (handoff prefix, default
- * replica) arrives through `PairingHandoffOptions`, so Toolshed and Treehouse
- * shells reuse the exact same validation and wire behavior.
- */
-import { ed25519 } from "@noble/curves/ed25519.js";
+import { verifyEd25519 } from "@treetopdevs/lattice-client";
 export function normalizeCarrierPeerConfig(input, options) {
     const url = present(input.url);
     const localRealm = present(input.localRealm);
@@ -144,6 +135,10 @@ export function carrierPeerConfigsEqual(left, right) {
 export function createWebCryptoCarrierVerifier(subtle = globalThis.crypto?.subtle) {
     return {
         async verify(pubkey, bytes, signature) {
+            // A provider may be more permissive than the common profile. Availability
+            // failures retain their existing meaning, but cannot widen acceptance.
+            if (!verifyEd25519(signature, bytes, pubkey))
+                return false;
             if (subtle) {
                 try {
                     const algorithm = "Ed25519";
@@ -155,7 +150,8 @@ export function createWebCryptoCarrierVerifier(subtle = globalThis.crypto?.subtl
                         throw error;
                 }
             }
-            return ed25519.verify(signature, bytes, pubkey, { zip215: false });
+            // The strict software check above already succeeded.
+            return true;
         },
     };
 }

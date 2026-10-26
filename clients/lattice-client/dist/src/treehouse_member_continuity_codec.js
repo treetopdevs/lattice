@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import { verifyEd25519 } from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
 const claimFields = ["version", "product", "space", "oldPub", "newPub", "oldAdmission", "oldMembership", "nonce", "deps", "epoch", "epochBasis", "parents", "vouchers"];
@@ -117,10 +117,10 @@ export function verifyMemberContinuityCertificate(value, expected) {
         const certificate = normalizeMemberContinuityCertificate(value), claim = normalizeMemberContinuityClaim(expected);
         if (certificate === null || claim === null || !equal(canonicalBytesForMemberContinuityClaim(certificate.claim), canonicalBytesForMemberContinuityClaim(claim)))
             return false;
-        if (!ed25519.verify(canonicalBase64Bytes(certificate.possession, 64), canonicalBytesForMemberContinuityPossession(claim), canonicalBase64Bytes(claim.newPub, 32), { zip215: false }))
+        if (!verifyEd25519(canonicalBase64Bytes(certificate.possession, 64), canonicalBytesForMemberContinuityPossession(claim), canonicalBase64Bytes(claim.newPub, 32)))
             return false;
         const payload = canonicalBytesForMemberContinuityVouch(claim, certificate.possession);
-        return certificate.vouches.every((v) => ed25519.verify(canonicalBase64Bytes(v.signature, 64), payload, canonicalBase64Bytes(v.member, 32), { zip215: false }));
+        return certificate.vouches.every((v) => verifyEd25519(canonicalBase64Bytes(v.signature, 64), payload, canonicalBase64Bytes(v.member, 32)));
     }
     catch {
         return false;
@@ -180,7 +180,7 @@ export function verifyMemberKeyReturn(value, signature, expected) {
         if (challenge === null || checked === null || !bytes(signature, 64))
             return false;
         const payload = returnPayload(challenge);
-        return equal(payload, returnPayload(checked)) && ed25519.verify(canonicalBase64Bytes(signature, 64), payload, canonicalBase64Bytes(challenge.oldPub, 32), { zip215: false });
+        return equal(payload, returnPayload(checked)) && verifyEd25519(canonicalBase64Bytes(signature, 64), payload, canonicalBase64Bytes(challenge.oldPub, 32));
     }
     catch {
         return false;

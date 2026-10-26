@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import { verifyEd25519 } from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForWitnessedBeaconClaim, canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, verifyCarrierOp, } from "./codec";
 import { revokedAsOf } from "./capability";
@@ -62,7 +62,7 @@ async function verifiedContinuationContext(input) {
     for (const frame of decoded) {
         const verified = await verifyCarrierOp(frame, { verify: async (author, bytes, signature) => {
                 const key = canonicalBase64Bytes(author, 32);
-                return key !== null && ed25519.verify(signature, bytes, key, { zip215: false });
+                return key !== null && verifyEd25519(signature, bytes, key);
             } });
         if (!verified.valid)
             return { ok: false, reason: "invalid_verified_history" };
@@ -845,7 +845,7 @@ export function verifyWitnessedSuccessionCertificate(certificate, expectedClaim,
     }
     const payload = canonicalBytesForWitnessedSuccessionClaim(certificate.claim);
     try {
-        if (!certificate.signatures.every((entry) => ed25519.verify(canonicalBase64Bytes(entry.signature), payload, canonicalBase64Bytes(entry.witness, 32), { zip215: false }))) {
+        if (!certificate.signatures.every((entry) => verifyEd25519(canonicalBase64Bytes(entry.signature), payload, canonicalBase64Bytes(entry.witness, 32)))) {
             return invalidWitnessed("invalid_recovery_signature");
         }
     }
@@ -1247,7 +1247,7 @@ function verifyBeaconCertificate(certificate, expected, policy) {
         return false;
     try {
         const payload = canonicalBytesForWitnessedBeaconClaim(certificate.claim);
-        return signatures.every((entry) => ed25519.verify(canonicalBase64Bytes(entry.signature, 64), payload, canonicalBase64Bytes(entry.witness, 32), { zip215: false }));
+        return signatures.every((entry) => verifyEd25519(canonicalBase64Bytes(entry.signature, 64), payload, canonicalBase64Bytes(entry.witness, 32)));
     }
     catch {
         return false;
@@ -1419,7 +1419,7 @@ function delegationSelfConsistent(delegation) {
         return (signature !== null &&
             issuer !== null &&
             bytesToBase64Url(sha256(canonicalBytes)) === delegation.id &&
-            ed25519.verify(signature, canonicalBytes, issuer, { zip215: false }));
+            verifyEd25519(signature, canonicalBytes, issuer));
     }
     catch {
         return false;

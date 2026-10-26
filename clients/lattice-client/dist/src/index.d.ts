@@ -30,3 +30,4 @@ export { observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, as
 export type { MemberContinuityObservation, MemberContinuityReviewRequest, MemberContinuityReview, MemberContinuityReviewResult, MemberContinuityAssemblyResult } from "./treehouse_member_continuity";
 export * from "./treehouse_public_frames";
 export * from "./treehouse_offline_enrollment";
+export { verifyEd25519 } from "./signature";

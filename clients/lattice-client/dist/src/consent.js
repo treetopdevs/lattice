@@ -1,4 +1,4 @@
-import { ed25519 } from "@noble/curves/ed25519.js";
+import { verifyEd25519 } from "./signature";
 import { base64ToBytes, canonicalTerm } from "./carrier";
 import { ancestors } from "./dag";
 const consentDomainTag = "lattice-custody-consent-v1";
@@ -28,9 +28,7 @@ export function consentQuarantine(op, schema, byId, ancCache = new Map()) {
     }
     const payload = custodyConsentPayload(op.replica, evidence.requestOpId, base64ToBytes(evidence.authorPub), base64ToBytes(evidence.toPub));
     try {
-        if (!ed25519.verify(base64ToBytes(evidence.sig), payload, base64ToBytes(evidence.toPub), {
-            zip215: false,
-        })) {
+        if (!verifyEd25519(base64ToBytes(evidence.sig), payload, base64ToBytes(evidence.toPub))) {
             return { quarantined: true, reason: "invalid_consent" };
         }
     }

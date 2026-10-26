@@ -1,6 +1,6 @@
+import {verifyEd25519} from "@treetopdevs/lattice-client";
 import {invoke} from "@tauri-apps/api/core";
 import {getCurrentWebviewWindow} from "@tauri-apps/api/webviewWindow";
-import {ed25519} from "@noble/curves/ed25519.js";
 import {canonicalBase64Bytes} from "@treetopdevs/lattice-client";
 import {canonicalBytesForWitnessBinding} from "./witness_binding";
 
@@ -217,7 +217,7 @@ async function decodeResult(method: Method, request: Request, raw: unknown): Pro
       const expectedDigest = binary(claim.generationChallengeDigest, 32)!;
       if (!hash.every((byte, index) => expectedDigest[index] === byte)) throw new Error();
       const signature = binary(binding.signature, 64), key = binary(claim.actualWitnessPublicKey, 32)!;
-      if (!signature || !ed25519.verify(signature, bytes, key, {zip215: false})) throw new Error();
+      if (!signature || !verifyEd25519(signature, bytes, key)) throw new Error();
     }
     return value as unknown as WitnessResult;
   } catch {throw new Error("invalid_witness_result");}
