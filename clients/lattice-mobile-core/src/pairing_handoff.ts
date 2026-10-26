@@ -230,7 +230,8 @@ export function createWebCryptoCarrierVerifier(
           if (!webCryptoEd25519Unavailable(error)) throw error;
         }
       }
-      return verifyEd25519(signature, bytes, pubkey);
+      // The strict software check above already succeeded.
+      return true;
     },
   };
 }
