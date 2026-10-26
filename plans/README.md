@@ -451,6 +451,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 272 | [Common strict Ed25519 verification](272-strict-signature-parity.md) | P1 | M | Reproduced native/source consent mismatch | IN PROGRESS: shared strict verifiers and fresh three-runtime/ordinary invitation controls pass; final review and gates remain. |
 | 273 | [Shared catalog artifact integer profile](273-catalog-artifact-integer-profile.md) | P1 | M | 272; reproduced artifact reader disagreement | DONE: #178 191e403dd passes browser40273420992/Flagship40273421121, including the approved witness repair; PR remains open. |
 | 274 | [Common no-op catalog rotation refusal](274-catalog-noop-rotation-refusal.md) | P1 | S | 273; native chain source discrepancy | IN PROGRESS: source correction gated/adopted; final parent191e403dd integrated locally; combined checks and a new exact-tip gate remain. |
+| 275 | [Signing-helper death proof](275-signing-helper-death-proof.md) | P2 | S | 263; latest source178 | IN PROGRESS: #180 at98ddeeafd passes Flagship40282811461; test-only correction adopted; combined source/native checks remain. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
