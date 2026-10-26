@@ -76,6 +76,26 @@ AGENTS.md and plans/README.md and use the pinned asdf/Node toolchain.
    Argon4High or Sonnet5.5High fallback review. Publish a separate dependent PR,
    pass one final exact-tip hosted gate, then adopt in native plan267.
 
+## CI test-family cleanup
+
+The integer correction is implemented. CI also exposed a separate witness-drain
+observation problem: public admission probes can refuse an owner independently
+of whether the actual operation slot was released. After the first test-only
+checkpoint, a two-worker repeat reproduced that pattern in the unchanged
+known-unlaunched-cancel test. Repeated per-test timeout repairs are insufficient.
+
+The concrete test-only consolidation is ready locally: all cleanup waits use the
+shared passive registry/run/registration observations; success controls still
+make one real public request after cleanup; unknown callback failures still hold
+the actual lease; terminal-publication tests observe the run phase instead of
+sleeping. Production owner/cancellation/custody policy is unchanged. The focused
+15-test suite passes twenty consecutive two-worker/four-test-thread runs.
+
+The operator approved finishing the generic test-only cleanup in PR178. Preserve
+the passive-observer design, public success/refusal controls and raw-integer
+correction. Both native all-target configurations pass. Publish the approved
+cleanup and pass the new final-tip hosted gate before final source signoff.
+
 ## Compatibility and STOP
 
 Old TS snapshots may retain aliases BEAM never admitted. Corrected readers require
