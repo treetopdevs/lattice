@@ -59,6 +59,15 @@ export function isQuarantined(
     return { quarantined: true, reason: op.authorityInputReason };
   }
 
+  // Lifecycle tombstones belong to the bound replica root, independent of
+  // delegated command or role authority. Keep this verdict in causal contexts.
+  if (op.kind === "tombstone") {
+    const root = authority.security.root;
+    const rootAuthored = root !== null && (op.authorPubkey === undefined
+      ? op.author === root.realm : op.authorPubkey === root.pubkey);
+    if (!rootAuthored) return { quarantined: true, reason: "unauthorized_tombstone" };
+  }
+
   const capability = capabilityQuarantine(op, schema, byId, authority.security, ancCache);
   if (capability.quarantined) return capability;
 
