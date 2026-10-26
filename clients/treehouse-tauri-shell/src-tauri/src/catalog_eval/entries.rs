@@ -4,13 +4,12 @@
 //! complete-page/snapshot budgets belong to the unfinished incoming boundary.
 //! It is not an IPC boundary.
 use super::{
-    artifact::Artifact, canonical::Term, cutoff, delegations::Delegation, envelope,
-    evidence_terms::*, history::AuthenticDag, json, space_policy::SpacePolicy, thread_policy,
+    artifact::Artifact, canonical::Term, delegations::Delegation, envelope, evidence_terms::*,
+    histories::AuthenticatedHistories, history::AuthenticDag, space_policy::SpacePolicy,
+    thread_policy,
 };
-use std::collections::{BTreeMap, BTreeSet};
 
 const INVALID: &str = "invalid_catalog_transition";
-const HISTORY: &str = "invalid_verified_history";
 const PENDING: &str = "trust_pending";
 
 #[derive(Debug)]
@@ -37,10 +36,10 @@ pub fn observe(
 ) -> Result<EntryObservation, &'static str> {
     let catalog = field(artifact.term(), "catalog").ok_or("malformed_catalog")?;
     envelope::signing_bytes(catalog).map_err(|_| "malformed_catalog")?;
-    let histories = authenticate(raw_histories)?;
+    let histories = AuthenticatedHistories::authenticate(raw_histories)?;
     let space_id = text(field(catalog, "space").ok_or(INVALID)?).ok_or(INVALID)?;
     let bootstrap_id = text(field(catalog, "bootstrap").ok_or(INVALID)?).ok_or(INVALID)?;
-    let space = histories.get(space_id).ok_or(PENDING)?;
+    let space = histories.get(space_id).ok_or(PENDING)?.dag();
     let bootstrap_op = space.frame(bootstrap_id).ok_or(PENDING)?;
     let space_policy = SpacePolicy::analyze(space).map_err(|_| INVALID)?;
     let bootstrap = match command(bootstrap_op, "catalog_bootstrap_v1") {
@@ -67,78 +66,9 @@ pub fn observe(
     })
 }
 
-fn authenticate(
-    raw_histories: &[(&str, &[u8])],
-) -> Result<BTreeMap<String, AuthenticDag>, &'static str> {
-    let mut histories = BTreeMap::new();
-    let mut unsupported = false;
-    let mut names = BTreeSet::new();
-    // Continue after portability refusal: a later forged history takes priority.
-    for (name, bytes) in raw_histories {
-        let raw = match json::parse_observation(bytes) {
-            Ok(raw) => raw,
-            Err("observation_limit") => {
-                unsupported = true;
-                continue;
-            }
-            Err(_) => return Err(HISTORY),
-        };
-        if raw["replica"].as_str() != Some(*name) || !names.insert(*name) {
-            return Err(HISTORY);
-        }
-        authenticate_frames(&raw)?;
-        let observation = match cutoff::derive(bytes) {
-            Ok(observation) => observation,
-            Err(error) if error.reason == "unsupported_cutoff" => {
-                unsupported = true;
-                continue;
-            }
-            Err(_) => return Err(HISTORY),
-        };
-        if observation.replica() != *name || histories.contains_key(*name) {
-            return Err(HISTORY);
-        }
-        let frames: Vec<Vec<u8>> = raw["frames"]
-            .as_array()
-            .ok_or(HISTORY)?
-            .iter()
-            .map(|frame| serde_json::to_vec(frame).map_err(|_| HISTORY))
-            .collect::<Result<_, _>>()?;
-        let refs: Vec<&[u8]> = frames.iter().map(Vec::as_slice).collect();
-        let dag = AuthenticDag::authenticate(name, &refs).map_err(|_| HISTORY)?;
-        histories.insert((*name).to_owned(), dag);
-    }
-    if unsupported {
-        Err("unsupported_cutoff")
-    } else {
-        Ok(histories)
-    }
-}
-
-// Portability can refuse a representable observation before returning a cutoff.
-// Accepted evidence must already have authentic signed content; rejected evidence
-// must not relabel an authentic operation as a bad signature. Unrepresentable
-// rejected records remain the cutoff owner's unsupported-observation decision.
-fn authenticate_frames(raw: &serde_json::Value) -> Result<(), &'static str> {
-    for frame in raw["frames"].as_array().ok_or(HISTORY)? {
-        let inspected = super::frame::inspect_value(frame).map_err(|_| HISTORY)?;
-        if !inspected.authentic() {
-            return Err(HISTORY);
-        }
-    }
-    for rejected in raw["rejected"].as_array().ok_or(HISTORY)? {
-        if let Ok(inspected) = super::frame::inspect_value(&rejected["frame"]) {
-            if inspected.authentic() {
-                return Err(HISTORY);
-            }
-        }
-    }
-    Ok(())
-}
-
 fn verify_entry(
     entry: &Term,
-    histories: &BTreeMap<String, AuthenticDag>,
+    histories: &AuthenticatedHistories,
     space: &AuthenticDag,
     space_policy: &SpacePolicy<'_>,
     bootstrap: &Term,
@@ -153,7 +83,7 @@ fn verify_entry(
     {
         return Err(INVALID);
     }
-    let dag = histories.get(replica).ok_or(PENDING)?;
+    let dag = histories.get(replica).ok_or(PENDING)?.dag();
     let genesis_id = text(get("genesis")?).ok_or(INVALID)?;
     let creation_id = text(get("creation")?).ok_or(INVALID)?;
     let genesis = dag.frame(genesis_id).ok_or(PENDING)?;

@@ -8,6 +8,7 @@ pub mod delegations;
 pub mod entries;
 pub mod envelope;
 pub mod frame;
+pub mod histories;
 pub mod history;
 pub mod json;
 

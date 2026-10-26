@@ -72,6 +72,10 @@ Empty views remain valid DAG views, not valid authority witnesses by themselves.
 Derive slices transiently in the future witness owner and account metadata in its
 aggregate budgets; do not retain an unbounded cache of checkpoint views.
 No slice establishes authority, portability, installed trust or an IPC boundary.
+The next ownership step retains immutable original parsed transport alongside each
+authenticated normalized DAG. Entry checks consume that shared owner rather than
+reconstructing private maps. This does not identify a trusted saved origin or
+validate an installed snapshot; the original-only pass below remains required.
 
 Compare fresh BEAM/TypeScript/Rust causal views through both actual runtime DAG
 owners, retain full-set authentication before selection, and prove long-chain
