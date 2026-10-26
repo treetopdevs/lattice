@@ -9,6 +9,13 @@ import { readFileSync } from "node:fs";
 import { decodeCarrierOpFrame } from "../../src/carrier";
 import { verifyCarrierOp } from "../../src/codec";
 import { ed25519 } from "@noble/curves/ed25519.js";
+function reduction(frames) {
+    const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Thread"));
+    const result = materialize(treehouseThreadSchema, ops);
+    return { reasons: Object.fromEntries(ops.filter(o => o.kind === "command").map(o => [o.id, result.quarantineReasons.get(o.id) ?? null])),
+        posts: observeTreehouse("Treehouse.Thread", ops).posts.map(p => p.text),
+        state: result.state, quarantine: [...result.quarantine].sort(), order: result.order };
+}
 if (process.argv[2] === "--consume") {
     const input = JSON.parse(readFileSync(process.argv[3], "utf8"));
     const results = [];
@@ -21,9 +28,7 @@ if (process.argv[2] === "--consume") {
             assert.ok(f.deps.every(id => ids.has(id)));
             assert.equal((await verifyCarrierOp(f, { verify: async (key, bytes, sig) => ed25519.verify(sig, bytes, Buffer.from(key, "base64"), { zip215: false }) })).valid, true);
         }
-        const ops = carrierOpsToSemanticOps(h.frames, {}, treehouseCommandDecoders("Treehouse.Thread"));
-        const result = materialize(treehouseThreadSchema, ops);
-        results.push({ reasons: Object.fromEntries(ops.filter(o => o.kind === "command").map(o => [o.id, result.quarantineReasons.get(o.id) ?? null])), posts: observeTreehouse("Treehouse.Thread", ops).posts.map(p => p.text) });
+        results.push(reduction(h.frames));
     }
     console.log(JSON.stringify({ results }));
     process.exit(0);
@@ -97,4 +102,19 @@ for (const [name, frames] of [["valid-lineage", [genesis, post, edit, later]], [
         assert.equal(result.quarantineReasons.get(concurrent.id), "application_target_not_visible");
     cases.push({ name, replica, frames, reasons: Object.fromEntries(ops.filter(o => o.kind === "command").map(o => [o.id, result.quarantineReasons.get(o.id) ?? null])) });
 }
-console.log(JSON.stringify({ cases: cases.map(c => ({ ...c, posts: observeTreehouse("Treehouse.Thread", carrierOpsToSemanticOps(c.frames, {}, treehouseCommandDecoders("Treehouse.Thread"))).posts.map(p => p.text) })) }));
+const other = fixtureSigner("wrong-author-thread-lineage");
+const otherCap = await authorCarrierDelegation({ replica, signer, audiencePubkey: other.publicKey, parentId: cap.id, ops: ["author_edit"], roles: [], live: false });
+const grant = await authorCarrierOp({ replica, signer, deps: [post.id], kind: "authority", cap: ["nil"], body: ["tuple", [["atom", "grant"], ["delegation", otherCap]]] });
+const wrong = await authorCarrierOp({ replica, signer: other, deps: [grant.id], kind: "command", cap: text(otherCap.id), body: ["tuple", [["atom", "author_edit"], ["list", [text(post.id), text(post.id), text("forged")]]]] });
+const descendant = await command([wrong.id], "author_edit", [text(post.id), text(wrong.id), text("laundered")]);
+const wrongFrames = [genesis, post, grant, wrong, descendant];
+const wrongResult = reduction(wrongFrames);
+assert.equal(wrongResult.reasons[wrong.id], "application_wrong_author");
+assert.equal(wrongResult.reasons[descendant.id], "application_target_quarantined");
+assert.deepEqual(wrongResult.posts, ["original"]);
+cases.push({ name: "wrong-author-descendant", replica, frames: wrongFrames, reasons: wrongResult.reasons });
+console.log(JSON.stringify({ cases: cases.map(c => {
+        const result = reduction(c.frames);
+        assert.deepEqual(reduction([...c.frames].reverse()), result, c.name);
+        return { ...c, ...result };
+    }) }));

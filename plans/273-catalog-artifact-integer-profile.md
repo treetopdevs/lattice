@@ -2,18 +2,19 @@
 
 ## Status
 
-IN PROGRESS. Shared raw JSON and uint64 validation implemented. Fresh bidirectional
-complete-decision regression tests, all client CI suites and native ordinary/tracing
-all-target suites pass. Full mix check passes (899 core tests/26 properties, carrier
-643 tests; zero failures with platform skips explicit). Published checkpoint cccb58163 passes both hosted workflows. Native adoption of
-that checkpoint is in progress; the approved remaining test-family cleanup will
-be published in PR178 and needs its own final-tip hosted gate.
+DONE at source tip: browser and Flagship hosted runs pass, including the
+operator-approved generic witness-family cleanup. Native adoption passes both
+15-test witness configurations. PR 178 remains open; no merge or full
+native-evaluator completion is implied. Shared raw/uint64 validation,
+bidirectional source decisions, all client CI suites, full mix check, boundary
+scans and ordinary/tracing native gates pass.
+
 Before this correction, canonical catalog JSON proposes in both owners. Changing only version int 1 to
 text "1" still proposes in TypeScript but rejects malformed_catalog in BEAM.
 Raw numeric 1.0 also proposes in TS and rejects in BEAM. Raw -0 is accepted by
 both source owners, but the existing native artifact JSON parser rejects it.
-Native graph signoff stops until the separate source correction is reviewed and
-adopted. PR 177 strict-signature source is frozen and independently gated.
+This separate source correction is reviewed, gated and adopted; remaining native
+graph signoff belongs to plan267. PR 177 strict-signature source is frozen and independently gated.
 
 ## Decision and scope
 
@@ -95,8 +96,8 @@ sleeping. Production owner/cancellation/custody policy is unchanged. The focused
 
 The operator approved finishing the generic test-only cleanup in PR178. Preserve
 the passive-observer design, public success/refusal controls and raw-integer
-correction. Both native all-target configurations pass. Publish the approved
-cleanup and pass the new final-tip hosted gate before final source signoff.
+correction. Both native all-target configurations pass. The final cleanup is
+published, and both new final-tip hosted workflows pass.
 
 ## Compatibility and STOP
 

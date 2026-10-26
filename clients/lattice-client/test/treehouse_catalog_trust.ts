@@ -691,3 +691,38 @@ test("artifact integer spellings refuse before normalization, including saved re
     }
   }
 });
+
+test("a no-op rotation compares with the resolved parent after a real key change", async () => {
+  const f = await trustFixture(), initial = await installed(f);
+  const firstEnvelope = catalogRotationEnvelopeFromCarrierTerm(JSON.parse(f.rotationJson))!;
+  const firstBinding = catalogRotationId(firstEnvelope);
+  const firstCatalog = {...f.catalog, binding: firstBinding};
+  const first = await evaluate(initial, {rotations: [f.rotationJson],
+    catalogs: [await signedCatalog(firstCatalog, f.nextCatalogSigner)], cutoffProofs: f.cutoffProofs});
+  assert.equal(first.kind, "propose");
+  assert.equal(first.next.accepted?.generation, 1);
+  assert.equal(first.routes.length, 2);
+  const state = first.next;
+  const noOp = {...f.rotation, parent: firstBinding, priorCatalog: transportCatalogId(firstCatalog),
+    generation: 2, newCatalogKey: Buffer.from(f.nextCatalogSigner.publicKey).toString("base64")};
+  for (const variant of ["genuine", "bad-old", "bad-possession"]) {
+    const envelope = catalogRotationEnvelopeFromCarrierTerm(JSON.parse(
+      await signedRotation(noOp, f.nextCatalogSigner, f.nextCatalogSigner)))!;
+    if (variant === "bad-old") envelope.oldSignature = Buffer.alloc(64).toString("base64");
+    if (variant === "bad-possession") envelope.newSignature = Buffer.alloc(64).toString("base64");
+    const json = JSON.stringify(catalogRotationEnvelopeToCarrierTerm(envelope));
+    const catalog = await signedCatalog({...f.catalog, binding: catalogRotationId(envelope)}, f.nextCatalogSigner);
+    const before = JSON.stringify(state);
+    refused(await evaluate(state, {rotations: [json], catalogs: [catalog], cutoffProofs: f.cutoffProofs}),
+      "invalid_catalog_transition");
+    assert.equal(JSON.stringify(state), before);
+  }
+  const authorizedReturn = {...noOp, newCatalogKey: f.bootstrapRecord.catalogKey};
+  const returnJson = await signedRotation(authorizedReturn, f.nextCatalogSigner, f.catalogSigner);
+  const returnEnvelope = catalogRotationEnvelopeFromCarrierTerm(JSON.parse(returnJson))!;
+  const returned = await evaluate(state, {rotations: [returnJson], catalogs: [
+    await signedCatalog({...f.catalog, binding: catalogRotationId(returnEnvelope)}, f.catalogSigner)], cutoffProofs: f.cutoffProofs});
+  assert.equal(returned.kind, "propose");
+  assert.equal(returned.next.accepted?.generation, 2);
+  assert.equal(returned.routes.length, 2);
+});

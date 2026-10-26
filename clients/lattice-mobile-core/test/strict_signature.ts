@@ -13,3 +13,10 @@ const supported=createWebCryptoCarrierVerifier();
 assert.equal(await supported.verify(pub,message,ed25519.sign(message,key)),true);
 assert.equal(await supported.verify(identity,message,forged),false);
 console.log('PASS strict signature profile bounds both actual and permissive WebCrypto providers');
+
+let unavailableCalls=0;
+const unavailable={importKey:async()=>{unavailableCalls++;throw new DOMException('Ed25519 unavailable','NotSupportedError');}} as unknown as SubtleCrypto;
+const fallback=createWebCryptoCarrierVerifier(unavailable);
+assert.equal(await fallback.verify(pub,message,ed25519.sign(message,key)),true);
+assert.equal(await fallback.verify(identity,message,forged),false);
+assert.equal(unavailableCalls,1,'valid strict signatures survive an unavailable provider; weak signatures never reach it');
