@@ -649,6 +649,17 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Native gate</dt><dd>A rejection supplies no route candidate and does not advance trust. Native plan 267 must close current eligibility on every rejection, including capacity exhaustion or a freeze witness that cannot fit; it cannot reuse an earlier candidate as fresh or claim that a plain rejection durably persisted a block. This remains required before any installation/dial, not an installed-native claim here.</dd>
 </dl></section>
 
+<section id="d78"><h2><span>D-78</span> Stop malformed edits at the product semantic boundary</h2><dl>
+<dt>Observed discrepancy</dt><dd>Fresh signed Thread histories produced during plan 267 application-policy work show BEAM following an earlier malformed edit's raw predecessor, while TypeScript refuses to decode that command and stops traversal. A later edit therefore receives different missing-target versus quarantined-target reasons.</dd>
+<dt>Decision</dt><dd>Implement a separate source correction under plan 270 before native adoption. Require UTF-8 lineage ids in edit/tombstone effects and follow only structurally valid product edits; retain malformed signed operations and their malformed_command refusals. Do not stop traversal merely because an otherwise valid edit is unauthorized, and do not change encoding, signatures or successful command outcomes. The standing goal delegates this bounded implementation decision.</dd>
+<dt>Evidence and gate</dt><dd>The native reciprocal test failed against the actual BEAM owner while agreeing with actual TypeScript. Add independent fresh signed producer controls, exact reason-map and reverse-delivery comparisons, full local gates, independent and requested adversarial review, and an exact-tip hosted gate. This is not final native parity or installed trust.</dd>
+</dl></section>
+<section id="d79"><h2><span>D-79</span> Preserve literal product text and reuse final causal verdicts</h2><dl>
+<dt>Confirmed text discrepancy</dt><dd>Requested Sonnet review identified leading U+FEFF stripping by the default TypeScript TextDecoder. A fresh signed post regression fails actual BEAM-versus-TypeScript state comparison. Plan 270 includes preserving every valid UTF-8 code point with ignoreBOM enabled; a prefixed lineage id must remain distinct from the real signed id.</dd>
+<dt>Traversal cost</dt><dd>The causal context already contains final command verdicts. Stop traversal beyond malformed_command using that existing classification, rather than reevaluating and rescanning every prior edit body at every hop. Structurally valid refused edits remain traversable. Invalid UTF-8 lineage ids are malformed commands in both owners.</dd>
+<dt>Compatibility</dt><dd>This prototype correction changes refusal reasons for malformed signed histories and restores literal leading U+FEFF text in TypeScript. Mixed old/new builds can disagree on those histories; complete source verification and native adoption precede any new prototype parity claim. No wire/canonical format or successful ordinary ASCII behavior changes.</dd>
+<dt>Evidence</dt><dd>Both independently signed producer directions compare actual command reasons and materialized posts in both delivery orders. Added malformed/non-text predecessor and invalid-UTF-8 descendant controls; retain valid-lineage and valid-but-quarantined traversal controls. Refresh reviews and final gates on the resulting exact tip.</dd>
+</dl></section>
 </main>
 </body>
 </html>

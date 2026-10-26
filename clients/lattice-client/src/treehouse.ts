@@ -232,7 +232,7 @@ function term(value: unknown): CarrierTerm {
 
 function value(term: DecodedTerm): unknown {
   if (term !== null && typeof term === "object" && term.type === "bin") {
-    return new TextDecoder("utf-8", { fatal: true }).decode(term.bytes);
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(term.bytes);
   }
   if (term !== null && typeof term === "object" && term.type === "list") return term.values.map(value);
   throw new Error("malformed Treehouse argument");
