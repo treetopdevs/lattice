@@ -653,7 +653,7 @@ fn bootstrap_graph_survives_incomplete_inventory_and_facts_keep_refusals_separat
 #[test]
 fn rich_entry_facts_match_actual_priority_decisions_and_first_refusal_ids() {
     use treehouse_tauri_shell::catalog_eval::{
-        canonical::Term, envelope, histories::AuthenticatedHistories,
+        canonical::Term, chains, envelope, histories::AuthenticatedHistories,
     };
     for (mode, expected_count) in [("entry-priority", 18), ("entry-priority-multi", 8)] {
         let table = decode_peer(&catalog_peer::output("ts", mode, None, 32 * 1024 * 1024));
@@ -700,6 +700,85 @@ fn rich_entry_facts_match_actual_priority_decisions_and_first_refusal_ids() {
                 )
                 .unwrap();
                 let facts = bootstrap.entry_facts(&artifact).unwrap();
+                let Term::List(inventory) = artifact
+                    .term()
+                    .atom_field("catalog")
+                    .unwrap()
+                    .atom_field("entries")
+                    .unwrap()
+                else {
+                    panic!("inventory")
+                };
+                let target_index = inventory
+                    .iter()
+                    .position(|entry| {
+                        entry.atom_field("kind") == Some(&Term::Atom("thread".into()))
+                    })
+                    .unwrap();
+                let target = &inventory[target_index];
+                let fields: &[&str] = match case["name"].as_str().unwrap() {
+                    "missing_genesis"
+                    | "root_missing_genesis"
+                    | "creation_kind_missing_genesis"
+                    | "reference_kind_missing_genesis"
+                    | "refused_creation_missing_genesis"
+                    | "malformed_creation_missing_genesis" => &["genesis"],
+                    "missing_creation"
+                    | "root_missing_creation"
+                    | "genesis_kind_missing_creation"
+                    | "reference_kind_missing_creation"
+                    | "refused_reference_missing_creation" => &["creation"],
+                    "missing_reference" => &["reference"],
+                    "missing_child"
+                    | "missing_child_wrong_root"
+                    | "missing_child_wrong_reference"
+                    | "empty_child" => &["genesis", "creation", "reference"],
+                    _ => &[],
+                };
+                if !fields.is_empty() {
+                    let mut missing = fields
+                        .iter()
+                        .map(|name| match target.atom_field(name).unwrap() {
+                            Term::Binary(bytes) => String::from_utf8(bytes.clone()).unwrap(),
+                            _ => panic!("entry ID"),
+                        })
+                        .collect::<Vec<_>>();
+                    missing.sort();
+                    missing.dedup();
+                    assert_eq!(
+                        facts[target_index].pending(),
+                        missing,
+                        "{} reverse={reverse}",
+                        case["name"]
+                    );
+                }
+                if case["name"] == "complete" {
+                    let complete = entries::observe(&artifact, &refs).unwrap();
+                    let catalogs = [artifact::parse(artifact.bytes()).unwrap()];
+                    assert_eq!(
+                        serde_json::to_value(chains::observe(&complete, &catalogs, &[]).unwrap())
+                            .unwrap(),
+                        serde_json::to_value(
+                            chains::observe_bootstrap(&bootstrap, &catalogs, &[]).unwrap()
+                        )
+                        .unwrap()
+                    );
+                    let space_creation = inventory
+                        .iter()
+                        .find(|entry| entry.atom_field("kind") == Some(&Term::Atom("space".into())))
+                        .unwrap()
+                        .atom_field("creation")
+                        .unwrap();
+                    let Term::Binary(id) = space_creation else {
+                        panic!("creation ID")
+                    };
+                    assert!(entries::BootstrapObservation::observe(
+                        &histories,
+                        table["bundle"]["review"]["space"].as_str().unwrap(),
+                        std::str::from_utf8(id).unwrap()
+                    )
+                    .is_err());
+                }
                 if let Some(first) = facts
                     .iter()
                     .find(|f| f.invalid() || !f.refused().is_empty())
