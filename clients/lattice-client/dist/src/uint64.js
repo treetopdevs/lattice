@@ -18,3 +18,7 @@ export function canonicalHighUint64Text(value) {
     return canonicalUint64Text(value) && (value.length > 16 ||
         (value.length === 16 && value > "9007199254740991"));
 }
+/** Complete portable wire admission: small values use JSON numbers. */
+export function portableUint64Scalar(value) {
+    return typeof value === "number" ? Number.isSafeInteger(value) && value >= 0 : canonicalHighUint64Text(value);
+}

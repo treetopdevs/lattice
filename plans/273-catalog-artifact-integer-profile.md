@@ -2,8 +2,13 @@
 
 ## Status
 
-IN PROGRESS. Public source-owner discrepancy reproduced; implementation not started.
-Canonical catalog JSON proposes in both owners. Changing only version int 1 to
+IN PROGRESS. Shared raw JSON and uint64 validation implemented. Fresh bidirectional
+complete-decision regression tests, all client CI suites and native ordinary/tracing
+all-target suites pass. Full mix check passes (899 core tests/26 properties, carrier
+643 tests; zero failures with platform skips explicit). Published checkpoint cccb58163 passes both hosted workflows. Native adoption of
+that checkpoint is in progress; the approved remaining test-family cleanup will
+be published in PR178 and needs its own final-tip hosted gate.
+Before this correction, canonical catalog JSON proposes in both owners. Changing only version int 1 to
 text "1" still proposes in TypeScript but rejects malformed_catalog in BEAM.
 Raw numeric 1.0 also proposes in TS and rejects in BEAM. Raw -0 is accepted by
 both source owners, but the existing native artifact JSON parser rejects it.
@@ -18,8 +23,9 @@ Preserve existing canonical signing bytes, IDs, schemas, crypto checks and route
 rules. Distinguish three layers:
 
 - Raw artifact JSON must use unsigned canonical decimal safe-integer number
-  tokens. No floating/exponent spellings or -0. This matches the existing native
-  artifact reader and ordinary serializers; generated valid records are unchanged.
+  tokens. No floating/exponent spellings or -0. This retains the existing native
+  refusal of fractional/exponent/-0 tokens and ordinary serializers' safe-number
+  representation; generated valid records are unchanged.
 - At catalog trust admission/recovery, tagged integer values use the shared strict
   portability representation: safe JSON numbers, canonical decimal text only
   above JS's safe maximum. Current catalog schema integer fields are themselves

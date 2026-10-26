@@ -19,4 +19,18 @@ defmodule Lattice.Carrier.Uint64 do
   end
 
   def parse_text(_), do: :error
+
+  @doc "Portable JSON representation: safe numbers and canonical high decimal text."
+  @spec portable_scalar?(term()) :: boolean()
+  def portable_scalar?(value) when is_integer(value),
+    do: value >= 0 and value <= 9_007_199_254_740_991
+
+  def portable_scalar?(value) when is_binary(value) do
+    case parse_text(value) do
+      {:ok, integer} -> integer > 9_007_199_254_740_991
+      :error -> false
+    end
+  end
+
+  def portable_scalar?(_), do: false
 end

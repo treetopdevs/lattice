@@ -1,3 +1,4 @@
+import {canonicalUint64Scalar} from "./uint64";
 import {verifyEd25519} from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
@@ -94,8 +95,8 @@ const integerValue: ValueCodec<number> = {
   normalize(value) { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined; },
   encode(value) { return ["int", value]; },
   decode(value) {
-    if (!tagged(value, "int")) return undefined;
-    const number = typeof value[1] === "string" && /^(0|[1-9][0-9]*)$/.test(value[1]) ? Number(value[1]) : value[1];
+    if (!tagged(value, "int") || !canonicalUint64Scalar(value[1])) return undefined;
+    const number = typeof value[1] === "string" ? Number(value[1]) : value[1];
     return this.normalize(number);
   },
 };

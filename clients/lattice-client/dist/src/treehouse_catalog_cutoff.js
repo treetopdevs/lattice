@@ -1,5 +1,5 @@
 import { verifyEd25519 } from "./signature";
-import { canonicalUint64Scalar, canonicalHighUint64Text } from "./uint64";
+import { canonicalUint64Scalar, portableUint64Scalar } from "./uint64";
 import { canonicalBase64Bytes, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, canonicalHash } from "./codec";
 import { compareUtf8 } from "./op";
 // Cutoff-only vocabulary adopted 2026-09-06; identical to the BEAM observation.
@@ -275,7 +275,7 @@ function term(value, depth) {
     if (tag === "int") {
         // The portable JSON profile uses numbers through MAX_SAFE_INTEGER and text above it.
         if (canonicalUint64Scalar(item))
-            return typeof item === "number" || canonicalHighUint64Text(item);
+            return portableUint64Scalar(item);
         throw new Error("malformed integer");
     }
     if (tag === "bin" && canonicalBase64Bytes(item) !== null)
