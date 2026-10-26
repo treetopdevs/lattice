@@ -2,13 +2,11 @@
 
 ## Status
 
-IN PROGRESS: the shared integer/artifact correction and original test-family
-cleanup passed their hosted gates and native adoption. A later integration run
-exposed internal cancellation/finalization owner-check overlap. The operator
-approved finishing a production completion barrier in PR178, preserving physical
-callback drain and conservative owner refusal. Gated regressions cover both race
-directions; independent/adversarial reviews and local native gates pass; the full repository
-check also passes. Publication and the new hosted gate remain open. No merge or full native-evaluator completion is implied.
+DONE at approved source checkpoint. Shared artifact integer validation and the
+operator-approved witness completion/owner-check handshake pass required local
+checks and both exact-tip hosted workflows. PR 178 remains open; no merge or
+full native evaluator/installed-trust completion is implied. Dependent branches
+must verify their own combined integration and final hosted gate.
 
 Before this correction, canonical catalog JSON proposes in both owners. Changing only version int 1 to
 text "1" still proposes in TypeScript but rejects malformed_catalog in BEAM.
