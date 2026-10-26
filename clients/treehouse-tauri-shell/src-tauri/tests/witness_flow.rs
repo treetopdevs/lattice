@@ -246,8 +246,14 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     // Each case deliberately blocks its fake native callbacks. Run independent
     // fixtures sequentially so they cannot exhaust the shared test runtime.
     for close_owner in [false, true] {
-        dropped_caller_drain_case(close_owner);
+        dropped_caller_drain_case(close_owner, false);
     }
+}
+
+async fn release_callback(gate: mpsc::Receiver<()>) {
+    tauri::async_runtime::spawn_blocking(move || gate.recv().unwrap())
+        .await
+        .unwrap();
 }
 
 fn wait_for_drain_state(condition: impl Fn() -> bool, message: &str) {
@@ -258,7 +264,18 @@ fn wait_for_drain_state(condition: impl Fn() -> bool, message: &str) {
     assert!(condition(), "{message}");
 }
 
-fn dropped_caller_drain_case(close_owner: bool) {
+// These two tests deliberately hold a synchronous owner query on a runtime
+// worker. Serialize their gates so a two-worker runtime can still launch the
+// cancellation task whose ordering each independent fixture is proving.
+static OWNER_CHECK_GATE: Mutex<()> = Mutex::new(());
+
+#[test]
+fn cancelled_receiver_owner_check_finishes_before_slot_release() {
+    let _gate = OWNER_CHECK_GATE.lock().unwrap();
+    dropped_caller_drain_case(false, true);
+}
+
+fn dropped_caller_drain_case(close_owner: bool, gate_receiver: bool) {
     let app = tauri::test::mock_builder()
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
@@ -299,7 +316,17 @@ fn dropped_caller_drain_case(close_owner: bool) {
     let cancel_release = Arc::new(Mutex::new(Some(cancel_release_rx)));
     let (kinds_tx, kinds_rx) = mpsc::channel();
     let observed_operations = operations.clone();
+    let (receiver_held_tx, receiver_held_rx) = mpsc::channel();
+    let (receiver_release_tx, receiver_release_rx) = mpsc::channel();
+    let receiver_release = Arc::new(Mutex::new(Some(receiver_release_rx)));
+    let receiver_owner = owner.clone();
+    let receiver_view = view.clone();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
+        let receiver_owner = receiver_owner.clone();
+        let receiver_view = receiver_view.clone();
+        let receiver_release = receiver_release.clone();
+        let receiver_held = receiver_held_tx.clone();
+        let checks = std::sync::atomic::AtomicUsize::new(0);
         let release = release.clone();
         let register = register.clone();
         let cancel_release = cancel_release.clone();
@@ -320,25 +347,36 @@ fn dropped_caller_drain_case(close_owner: bool) {
             request,
             move |_| async move {
                 let status = if kind == ResponseKind::Identity {
-                    if let Some(release) = release.lock().unwrap().take() {
+                    let gate = release.lock().unwrap().take();
+                    if let Some(release) = gate {
                         started.send(()).unwrap();
-                        release.recv().unwrap();
+                        release_callback(release).await;
                     }
                     TerminalStatus::Missing
                 } else {
-                    cancel_release
-                        .lock()
-                        .unwrap()
-                        .take()
-                        .unwrap()
-                        .recv()
-                        .unwrap();
+                    let gate = cancel_release.lock().unwrap().take().unwrap();
+                    release_callback(gate).await;
                     TerminalStatus::Cancelled
                 };
                 let terminal = TerminalResponse::terminal(kind, operation_id, status).unwrap();
                 Ok(serde_json::from_slice(&encode_terminal_response(&terminal).unwrap()).unwrap())
             },
-            move || current(),
+            move || {
+                if gate_receiver
+                    && kind == ResponseKind::Cancel
+                    && checks.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 1
+                {
+                    witness_owner::test_adapter::snapshot_after_gate(
+                        &receiver_owner,
+                        &receiver_view,
+                        receiver_held.clone(),
+                        receiver_release.lock().unwrap().take().unwrap(),
+                    )
+                    .is_ok()
+                } else {
+                    current()
+                }
+            },
         );
         if kind == ResponseKind::Cancel {
             cancel_launch.send(()).unwrap();
@@ -388,8 +426,8 @@ fn dropped_caller_drain_case(close_owner: bool) {
             &observed_operations
         ));
     }
-    // Observe the completed run while cancellation registration is blocked.
-    // This includes its final owner check; no scheduling sleep is the proof.
+    // Observe entry into finalization while cancellation registration is blocked.
+    // The final owner check occurs only after all cancellation work completes.
     release_tx.send(()).unwrap();
     wait_for_drain_state(
         || witness_flow::test_adapter::run_finished(&flow),
@@ -412,6 +450,31 @@ fn dropped_caller_drain_case(close_owner: bool) {
     );
     assert!(observed_operations.begin(&observed_session).is_err());
     cancel_release_tx.send(()).unwrap();
+    if gate_receiver {
+        receiver_held_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        // The consumer holds the real owner snapshot lock. Observe finalization
+        // waiting after physical drain without issuing another owner query.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while std::time::Instant::now() < deadline
+            && !witness_flow::test_adapter::waiting_for_cancel_consumer(&flow)
+            && !witness_operation::test_adapter::is_idle(&observed_operations)
+        {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let waiting = witness_flow::test_adapter::waiting_for_cancel_consumer(&flow);
+        let reserved = !witness_operation::test_adapter::is_idle(&observed_operations);
+        receiver_release_tx.send(()).unwrap();
+        assert!(
+            waiting,
+            "finalization must wait for the cancellation consumer after callback drain"
+        );
+        assert!(
+            reserved,
+            "the live owner must retain its slot while its receiver checks it"
+        );
+    }
     // Observe the registry directly: probing execute() also queries the owner
     // and can permanently refuse it on read contention. Keep the same deadline.
     wait_for_drain_state(
@@ -610,7 +673,8 @@ fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
             request,
             move |_| async move {
                 started.send(()).unwrap();
-                release.lock().unwrap().take().unwrap().recv().unwrap();
+                let gate = release.lock().unwrap().take().unwrap();
+                release_callback(gate).await;
                 let terminal = TerminalResponse::terminal(
                     ResponseKind::Identity,
                     operation_id,
@@ -702,9 +766,10 @@ fn known_unlaunched_cancel_entropy_panic_does_not_wedge_after_original_drain() {
             witness_mobile::test_adapter::dispatch(
                 request,
                 move |_| async move {
-                    if let Some(gate) = release.lock().unwrap().take() {
+                    let gate = release.lock().unwrap().take();
+                    if let Some(gate) = gate {
                         started.send(()).unwrap();
-                        gate.recv().unwrap();
+                        release_callback(gate).await;
                     }
                     let terminal = TerminalResponse::terminal(
                         ResponseKind::Identity,
@@ -809,7 +874,8 @@ fn lifecycle_hook_latches_owner_and_cancels_without_a_retrieved_webview() {
             move |_| async move {
                 if kind == ResponseKind::Identity {
                     started.send(()).unwrap();
-                    release.lock().unwrap().take().unwrap().recv().unwrap();
+                    let gate = release.lock().unwrap().take().unwrap();
+                    release_callback(gate).await;
                 }
                 let status = if kind == ResponseKind::Identity {
                     TerminalStatus::Missing
@@ -1090,4 +1156,149 @@ fn prepare_refuses_before_review_if_cancel_id_cannot_be_delivered() {
 #[test]
 fn generate_refuses_before_review_if_cancel_id_cannot_be_delivered() {
     creation_review_notice(true, true);
+}
+
+#[test]
+fn cancellation_reserved_during_final_owner_check_waits_before_dispatch() {
+    let _gate = OWNER_CHECK_GATE.lock().unwrap();
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy({
+        let mut n = 0u8;
+        move || {
+            n += 1;
+            Ok(Bytes32([n; 32]))
+        }
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let session = owner.snapshot(&view).unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let observed_operations = operations.clone();
+    let (release_tx, release_rx) = mpsc::channel();
+    let release = Arc::new(Mutex::new(Some(release_rx)));
+    let (kinds_tx, kinds_rx) = mpsc::channel();
+    let flow =
+        witness_flow::test_adapter::flow(owner.clone(), operations, move |request, current| {
+            let release = release.clone();
+            let (kind, id) = match &request {
+                witness_bridge::PrivateRequest::Identity(v) => {
+                    (ResponseKind::Identity, v.operation_id)
+                }
+                witness_bridge::PrivateRequest::Cancel(v) => (ResponseKind::Cancel, v.operation_id),
+                _ => panic!("unexpected phase"),
+            };
+            kinds_tx.send(kind).unwrap();
+            witness_mobile::test_adapter::dispatch(
+                request,
+                move |_| async move {
+                    if kind == ResponseKind::Identity {
+                        let gate = release.lock().unwrap().take();
+                        if let Some(gate) = gate {
+                            release_callback(gate).await;
+                        }
+                    }
+                    let status = if kind == ResponseKind::Identity {
+                        TerminalStatus::Missing
+                    } else {
+                        TerminalStatus::Cancelled
+                    };
+                    let terminal = TerminalResponse::terminal(kind, id, status).unwrap();
+                    Ok(
+                        serde_json::from_slice(&encode_terminal_response(&terminal).unwrap())
+                            .unwrap(),
+                    )
+                },
+                move || current(),
+            )
+        });
+    let pending = flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .unwrap();
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ResponseKind::Identity
+    );
+    let (held_tx, held_rx) = mpsc::channel();
+    let (owner_release_tx, owner_release_rx) = mpsc::channel();
+    witness_flow::test_adapter::replace_final_current(&flow, {
+        let owner = owner.clone();
+        let view = view.clone();
+        let session = session.clone();
+        let first = std::sync::atomic::AtomicBool::new(true);
+        let release = Mutex::new(Some(owner_release_rx));
+        move || {
+            if first.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                witness_owner::test_adapter::snapshot_after_gate(
+                    &owner,
+                    &view,
+                    held_tx.clone(),
+                    release.lock().unwrap().take().unwrap(),
+                )
+                .is_ok_and(|fresh| fresh == session)
+            } else {
+                owner.current(&view, &session)
+            }
+        }
+    });
+    release_tx.send(()).unwrap();
+    held_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    // Dropping the original caller reserves cancellation without querying owner.
+    drop(pending);
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline
+        && !witness_flow::test_adapter::cancellation_waits_for_owner_check(&flow)
+    {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let waiting = witness_flow::test_adapter::cancellation_waits_for_owner_check(&flow);
+    let undispatched = matches!(kinds_rx.try_recv(), Err(mpsc::TryRecvError::Empty));
+    let reserved = !witness_operation::test_adapter::is_idle(&observed_operations);
+    owner_release_tx.send(()).unwrap();
+    assert!(
+        waiting,
+        "cancellation must wait at the final owner-check handshake"
+    );
+    assert!(
+        undispatched,
+        "no cancellation callback may read the owner during finalization's snapshot"
+    );
+    assert!(reserved);
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ResponseKind::Cancel
+    );
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "cancellation must finish after the owner check is released",
+    );
+    let next = flow
+        .execute(
+            view,
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .expect("the live owner survives cancellation during its final check");
+    assert!(block_on(next.receive()).is_ok());
 }

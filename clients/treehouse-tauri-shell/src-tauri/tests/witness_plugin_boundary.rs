@@ -199,7 +199,10 @@ fn cancellation_hook(event: &str) {
                 move |_| async move {
                     if kind == ResponseKind::Identity {
                         started.send(()).unwrap();
-                        release.lock().unwrap().take().unwrap().recv().unwrap();
+                        let gate = release.lock().unwrap().take().unwrap();
+                        tauri::async_runtime::spawn_blocking(move || gate.recv().unwrap())
+                            .await
+                            .unwrap();
                     }
                     let response = TerminalResponse::terminal(
                         kind,

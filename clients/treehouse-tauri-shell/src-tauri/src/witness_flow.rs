@@ -56,8 +56,14 @@ struct Active {
     drains: Vec<NativeDrain>,
     cancel_sent: bool,
     cancel_starting: bool,
+    cancel_consuming: bool,
+    final_owner_check: bool,
     call_starting: bool,
     run_finished: bool,
+    #[cfg(test)]
+    cancel_wait_observed: bool,
+    #[cfg(test)]
+    dispatch_wait_observed: bool,
     cancel_current: Current,
     publication: Publication,
 }
@@ -72,6 +78,47 @@ enum Publication {
 pub(crate) struct FlowPending {
     receiver: tauri::async_runtime::Receiver<Result<Vec<u8>, &'static str>>,
     cancel: Option<Box<dyn FnOnce() + Send>>,
+}
+
+// Physical callback drain and response consumption are separate lifetimes.
+// Keep the reservation until the receiver's final owner check has returned.
+struct CancelPending {
+    pending: MobilePending,
+    _completion: CancelConsumption,
+}
+
+struct CancelConsumption {
+    active: Arc<Mutex<Option<Active>>>,
+    ready: Arc<Condvar>,
+    id: Bytes32,
+}
+
+impl Drop for CancelConsumption {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.active.lock() {
+            if let Some(state) = active.as_mut().filter(|state| state.id == self.id) {
+                state.cancel_consuming = false;
+                self.ready.notify_all();
+            }
+        }
+    }
+}
+
+struct FinalOwnerCheck {
+    active: Arc<Mutex<Option<Active>>>,
+    ready: Arc<Condvar>,
+    id: Bytes32,
+}
+
+impl Drop for FinalOwnerCheck {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.active.lock() {
+            if let Some(state) = active.as_mut().filter(|state| state.id == self.id) {
+                state.final_owner_check = false;
+                self.ready.notify_all();
+            }
+        }
+    }
 }
 
 struct CompletionGuard {
@@ -186,8 +233,14 @@ impl WitnessFlow {
             drains: Vec::new(),
             cancel_sent: false,
             cancel_starting: false,
+            cancel_consuming: false,
+            final_owner_check: false,
             call_starting: false,
             run_finished: false,
+            #[cfg(test)]
+            cancel_wait_observed: false,
+            #[cfg(test)]
+            dispatch_wait_observed: false,
             cancel_current,
             publication: Publication::Running,
         });
@@ -549,10 +602,21 @@ impl WitnessFlow {
                 };
                 let state = active.as_mut().filter(|state| state.id == id)?;
                 state.run_finished = true;
-                while active
-                    .as_ref()
-                    .is_some_and(|state| state.cancel_starting || state.call_starting)
-                {
+                while active.as_ref().is_some_and(|state| {
+                    state.cancel_starting
+                        || state.call_starting
+                        || (state.cancel_consuming && state.drains.len() == waited)
+                }) {
+                    #[cfg(test)]
+                    if let Some(state) = active.as_mut() {
+                        if !state.cancel_starting
+                            && !state.call_starting
+                            && state.cancel_consuming
+                            && state.drains.len() == waited
+                        {
+                            state.cancel_wait_observed = true;
+                        }
+                    }
                     let Ok(value) = ready.wait(active) else {
                         return None;
                     };
@@ -574,34 +638,48 @@ impl WitnessFlow {
                 Some(None) => {
                     // Cancellation may have reserved or registered a drain
                     // after the blocking snapshot released the mutex.
-                    let current = {
-                        let Ok(active) = self.active.lock() else {
+                    let (current, owner_check) = {
+                        let Ok(mut active) = self.active.lock() else {
                             return false;
                         };
-                        let Some(state) = active.as_ref().filter(|state| state.id == token.id())
+                        let Some(state) = active.as_mut().filter(|state| state.id == token.id())
                         else {
                             return false;
                         };
                         if state.cancel_starting
+                            || state.cancel_consuming
                             || state.call_starting
                             || state.drains.len() > waited
                         {
                             drop(active);
                             continue 'drain;
                         }
-                        state.cancel_current.clone()
+                        state.final_owner_check = true;
+                        (
+                            state.cancel_current.clone(),
+                            FinalOwnerCheck {
+                                active: self.active.clone(),
+                                ready: self.completion_ready.clone(),
+                                id: token.id(),
+                            },
+                        )
                     };
                     // This may query the webview URL, so it must not run while
                     // holding flow state. Hooks claim Cancelled before they
                     // mutate the owner latch, closing the recheck interval.
                     let owner_current = current();
+                    drop(owner_check);
                     let Ok(mut active) = self.active.lock() else {
                         return false;
                     };
                     let Some(state) = active.as_mut().filter(|state| state.id == token.id()) else {
                         return false;
                     };
-                    if state.cancel_starting || state.call_starting || state.drains.len() > waited {
+                    if state.cancel_starting
+                        || state.cancel_consuming
+                        || state.call_starting
+                        || state.drains.len() > waited
+                    {
                         drop(active);
                         continue 'drain;
                     }
@@ -777,13 +855,14 @@ impl WitnessFlow {
         }
         state.cancel_sent = true;
         state.cancel_starting = true;
+        state.cancel_consuming = true;
         Ok(state.cancel_current.clone())
     }
 
     fn start_cancel(
         &self,
         target: &crate::witness_operation::CancellationTarget,
-    ) -> Result<MobilePending, &'static str> {
+    ) -> Result<CancelPending, &'static str> {
         let current = self.reserve_cancel(target)?;
         self.dispatch_reserved_cancel(target, current)
     }
@@ -792,7 +871,29 @@ impl WitnessFlow {
         &self,
         target: &crate::witness_operation::CancellationTarget,
         current: Current,
-    ) -> Result<MobilePending, &'static str> {
+    ) -> Result<CancelPending, &'static str> {
+        // A cancellation reserved during finalization must not start an owner
+        // read until the already-running final owner check has returned.
+        {
+            let mut active = self.active.lock().map_err(|_| FLOW_REFUSED)?;
+            loop {
+                let state = active
+                    .as_ref()
+                    .filter(|state| state.id == target.id())
+                    .ok_or(FLOW_REFUSED)?;
+                if !state.final_owner_check {
+                    break;
+                }
+                #[cfg(test)]
+                if let Some(state) = active.as_mut() {
+                    state.dispatch_wait_observed = true;
+                }
+                active = self
+                    .completion_ready
+                    .wait(active)
+                    .map_err(|_| FLOW_REFUSED)?;
+            }
+        }
         let nonce = catch_unwind(AssertUnwindSafe(|| {
             let mut source = self.cancel_nonce.lock().map_err(|_| FLOW_REFUSED)?;
             source.as_mut()()
@@ -831,14 +932,21 @@ impl WitnessFlow {
         state.drains.push(drain);
         state.cancel_starting = false;
         self.completion_ready.notify_all();
-        Ok(pending)
+        Ok(CancelPending {
+            pending,
+            _completion: CancelConsumption {
+                active: self.active.clone(),
+                ready: self.completion_ready.clone(),
+                id: target.id(),
+            },
+        })
     }
 
     async fn dispatch_reserved_cancel_async(
         self: Arc<Self>,
         target: crate::witness_operation::CancellationTarget,
         current: Current,
-    ) -> Result<MobilePending, &'static str> {
+    ) -> Result<CancelPending, &'static str> {
         tauri::async_runtime::spawn_blocking(move || {
             self.dispatch_reserved_cancel(&target, current)
         })
@@ -851,6 +959,7 @@ impl WitnessFlow {
             if let Some(state) = active.as_mut().filter(|state| state.id == id) {
                 state.cancel_sent = false;
                 state.cancel_starting = false;
+                state.cancel_consuming = false;
                 self.completion_ready.notify_all();
             }
         }
@@ -861,12 +970,17 @@ impl WitnessFlow {
             if let Some(state) = active.as_mut().filter(|state| state.id == id) {
                 state.drains.push(NativeDrain::failed());
                 state.cancel_starting = false;
+                state.cancel_consuming = false;
                 self.completion_ready.notify_all();
             }
         }
     }
 
-    async fn finish_cancel(pending: MobilePending) -> Result<Vec<u8>, &'static str> {
+    async fn finish_cancel(cancel: CancelPending) -> Result<Vec<u8>, &'static str> {
+        let CancelPending {
+            pending,
+            _completion,
+        } = cancel;
         match pending.receive().await.map_err(|_| FLOW_REFUSED)? {
             MobileResponse::Terminal(terminal) if terminal.status == TerminalStatus::Cancelled => {
                 witness_result::encode_cancelled()
@@ -907,6 +1021,29 @@ pub(crate) mod test_adapter {
             .unwrap()
             .as_ref()
             .is_some_and(|state| state.run_finished)
+    }
+
+    pub(crate) fn replace_final_current(
+        flow: &WitnessFlow,
+        current: impl Fn() -> bool + Send + Sync + 'static,
+    ) {
+        flow.active.lock().unwrap().as_mut().unwrap().cancel_current = Arc::new(current);
+    }
+
+    pub(crate) fn cancellation_waits_for_owner_check(flow: &WitnessFlow) -> bool {
+        flow.active
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|state| state.dispatch_wait_observed)
+    }
+
+    pub(crate) fn waiting_for_cancel_consumer(flow: &WitnessFlow) -> bool {
+        flow.active
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|state| state.cancel_wait_observed)
     }
 
     pub(crate) fn cancellation_registered(flow: &WitnessFlow) -> bool {
