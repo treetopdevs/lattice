@@ -455,6 +455,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 275 | [Signing-helper death proof](275-signing-helper-death-proof.md) | P2 | S | 263; latest source178 | DONE: #180 at98ddeeafd passes Flagship40282811461; native adoption and post-adoption repository checks pass. |
 | 276 | [Catalog entry proof priority](276-catalog-entry-proof-priority.md) | P1 | M | 274/275; reproduced native-port source disagreement | DONE: #182 1e5f6e9dc passes browser40342643594/Flagship40342643620; source adopted into native checkpoint; richer native fold remains. |
 | 277 | [Treehouse native CI budget](277-treehouse-native-ci-budget.md) | P1 | M | 274/275; timed-out native checkpoint | IN PROGRESS: #181 000dad638 passes browser40342045591/Flagship40342046082; adopted; combined native checkpoint gate remains. |
+| 278 | [Space initialization genesis shape](278-space-initialization-genesis-shape.md) | P1 | S | Fresh CodeRabbit source parity reproduction; before native adoption | IN PROGRESS: actual TS/BEAM/native disagreement reproduced; shared source shape correction and neutral replay controls; review/gates remain. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

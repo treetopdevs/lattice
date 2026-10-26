@@ -90,6 +90,11 @@ owners, retain full-set authentication before selection, and prove long-chain
 closure without recursion or payload copies. Review and combined gates remain
 required before the future retained-authority consumer uses this primitive.
 
+The shared initialization root-shape correction is separately reviewed and
+adopted: malformed non-delegation genesis dependencies cannot complete a Space.
+The existing quarantine filter and neutral role-free replay semantics remain
+unchanged. This observes initialization only and supplies no authority receipt.
+
 ## Next integration: original-state validation and graph trust
 
 The shared available-invalid versus missing-entry source correction is reviewed,

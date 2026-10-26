@@ -5,8 +5,9 @@
 IN PROGRESS. A fresh signed three-runtime reproduction shows a malformed
 non-delegation genesis dependency completing BEAM/native initialization while
 TypeScript reports incomplete. Correct the shared source observation first,
-then adopt its rule natively. The focused source tests and adversarial review pass. Native adoption and combined
-gates remain required.
+then adopt its rule natively. Focused source tests, adversarial review and native
+adoption now pass. Seven fresh cases in both delivery orders compare complete
+actual runtime projections. Combined local and hosted gates remain required.
 
 ## Contract
 

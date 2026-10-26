@@ -159,8 +159,8 @@ impl AuthenticRotation {
 }
 /// Artifact-sized JSON only. A verified envelope supplies no graph transition.
 pub fn verify(bytes: &[u8], expected_old_key: &[u8]) -> Result<AuthenticRotation> {
-    let value = super::json::parse(bytes)?;
-    let envelope = Term::from_carrier(&value)?;
+    let artifact = super::artifact::parse(bytes).map_err(|_| INVALID)?;
+    let envelope = artifact.term().clone();
     let decoded = Envelope::decode(&envelope).ok_or(INVALID)?;
     if !decoded.verify(expected_old_key) {
         return Err(INVALID);

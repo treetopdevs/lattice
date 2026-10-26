@@ -44,7 +44,7 @@ pub fn project(dag: &AuthenticDag) -> Result<SpaceProjection, &'static str> {
     let mut ready = false;
     let roots: BTreeSet<_> = dag.order().iter().filter(|id| !policy.preflight.authority().reasons().contains_key(id.as_str()))
         .filter(|id| dag.frame(id).is_some_and(|op| op.kind()=="authority"
-            && matches!(op.body(), super::canonical::Term::Tuple(v) if matches!(v.as_slice(),[tag,_,_] if super::evidence_terms::atom(tag)==Some("genesis")))))
+            && matches!(op.body(), super::canonical::Term::Tuple(v) if matches!(v.as_slice(),[tag,delegation,_] if super::evidence_terms::atom(tag)==Some("genesis") && super::delegations::Delegation::decode(delegation).is_some()))))
         .map(String::as_str).collect();
     for id in dag.order() {
         if policy.reasons.get(id) != Some(&None) {
