@@ -5,6 +5,9 @@ use std::{
     path::PathBuf,
     process::{Command, Stdio},
 };
+#[path = "peer_response.rs"]
+mod peer_response;
+
 pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -69,6 +72,7 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
         }
         command
     };
+    let response = peer_response::PeerResponse::prepare(&mut command, runtime);
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -85,12 +89,5 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
     }
     drop(child.stdin.take());
     let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{runtime} {mode}: {} {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(output.stdout.len() <= max_bytes, "peer corpus budget");
-    output.stdout
+    response.finish(output, max_bytes, &format!("{runtime} {mode}"))
 }

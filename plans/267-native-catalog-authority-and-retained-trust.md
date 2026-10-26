@@ -57,6 +57,26 @@ or incoming/installation integration. Final combined gates and hosted native
 publication remain open. The separate approved production witness repair in
 source178 requires its new gate and later dependency refresh.
 
+## Historical-view foundation
+
+Retained authority witnesses require the causal view at their saved frontier;
+route reservation also depends on complete versus pending entry proof. Do not
+port route checks while treating every structurally valid catalog as complete.
+Add a native causal slice of the already authenticated immutable DAG first.
+Share verified frame ownership, derive exact closure/order/frontier iteratively,
+and return no view for an unknown checkpoint. Duplicate/redundant frontier inputs
+normalize to the actual frontier; the future saved-witness owner must compare that
+frontier exactly and apply stored recovery versus incoming pending classification.
+Empty views remain valid DAG views, not valid authority witnesses by themselves.
+Derive slices transiently in the future witness owner and account metadata in its
+aggregate budgets; do not retain an unbounded cache of checkpoint views.
+No slice establishes authority, portability, installed trust or an IPC boundary.
+
+Compare fresh BEAM/TypeScript/Rust causal views through both actual runtime DAG
+owners, retain full-set authentication before selection, and prove long-chain
+closure without recursion or payload copies. Review and combined gates remain
+required before the future retained-authority consumer uses this primitive.
+
 ## Source adoption
 
 The codec, exporter and continuation alias foundations are merged. The evaluator

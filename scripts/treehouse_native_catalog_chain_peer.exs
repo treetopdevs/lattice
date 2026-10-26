@@ -1,3 +1,5 @@
+Code.require_file("support/native_peer_output.exs", __DIR__)
+
 # Independently signed BEAM producer. Expected decisions come from CatalogTrust;
 # structural links are decoded only from evidence retained by that public owner.
 alias Treehouse.{CatalogTrust, CatalogTrustVectors, TransportCatalog}
@@ -342,4 +344,6 @@ cases =
     end
   end)
 
-IO.puts(Jason.encode!(%{bootstrapCatalog: f.catalog_json, histories: f.histories, cases: cases}))
+Lattice.NativePeerOutput.puts(
+  Jason.encode!(%{bootstrapCatalog: f.catalog_json, histories: f.histories, cases: cases})
+)

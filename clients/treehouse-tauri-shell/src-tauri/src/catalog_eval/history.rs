@@ -3,7 +3,10 @@
 //! a portable cutoff. Raw-history rejected evidence and trust policy are later
 //! layers; callers cannot manufacture this proof from a saved decision.
 use super::frame::{self, AuthenticFrame};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 const MAX_SOURCE_BYTES: usize = 64 * 1024 * 1024;
 
@@ -24,7 +27,7 @@ impl HistoryError {
 #[derive(Debug)]
 pub struct AuthenticDag {
     replica: String,
-    frames: BTreeMap<String, AuthenticFrame>,
+    frames: BTreeMap<String, Arc<AuthenticFrame>>,
     order: Vec<String>,
     frontier: Vec<String>,
 }
@@ -52,7 +55,7 @@ impl AuthenticDag {
             if frame.replica() != replica || frames.contains_key(frame.id()) {
                 return Err(HistoryError::invalid());
             }
-            frames.insert(frame.id().to_owned(), frame);
+            frames.insert(frame.id().to_owned(), Arc::new(frame));
         }
         let missing: BTreeSet<_> = frames
             .values()
@@ -95,7 +98,48 @@ impl AuthenticDag {
         &self.frontier
     }
     pub fn frame(&self, id: &str) -> Option<&AuthenticFrame> {
-        self.frames.get(id)
+        self.frames.get(id).map(Arc::as_ref)
+    }
+
+    /// Derive a closed historical view from already authenticated immutable
+    /// frames. Duplicate/redundant frontier ids normalize to the actual frontier;
+    /// the future checkpoint owner must compare that frontier with its witness.
+    /// An unknown requested id returns None, leaving context-specific recovery
+    /// versus pending classification to that owner. No authority is established.
+    pub fn causal_slice(&self, frontier: &[String]) -> Option<Self> {
+        let mut pending = BTreeSet::new();
+        for id in frontier {
+            // Insert only known frame ids, bounding the work set by this DAG
+            // even when a caller supplies a repeated frontier.
+            pending.insert(self.frames.get(id)?.id());
+        }
+        let mut selected = BTreeSet::new();
+        while let Some(id) = pending.pop_first() {
+            if selected.insert(id) {
+                pending.extend(self.frames[id].deps().iter().map(String::as_str));
+            }
+        }
+        let frames: BTreeMap<_, _> = selected
+            .into_iter()
+            .map(|id| (id.to_owned(), Arc::clone(&self.frames[id])))
+            .collect();
+        let edges: BTreeMap<_, _> = frames
+            .iter()
+            .map(|(id, frame)| (id.clone(), frame.deps().to_vec()))
+            .collect();
+        let order = canonical_order(&edges).ok()?;
+        let referenced: BTreeSet<_> = edges.values().flatten().collect();
+        let frontier = frames
+            .keys()
+            .filter(|id| !referenced.contains(id))
+            .cloned()
+            .collect();
+        Some(Self {
+            replica: self.replica.clone(),
+            frames,
+            order,
+            frontier,
+        })
     }
 
     /// Exclusive causal past. Iterative traversal avoids stack growth on long

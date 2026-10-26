@@ -185,6 +185,10 @@ fn long_authentic_chain_preserves_its_causal_past_without_recursive_stack_growth
     assert_eq!(dag.order().len(), 4096);
     assert_eq!(dag.frontier(), previous);
     assert_eq!(dag.ancestors(&previous[0]).unwrap().len(), 4095);
+    let halfway = dag.causal_slice(&[id(&frames[2047])]).unwrap();
+    assert_eq!(halfway.order().len(), 2048);
+    assert_eq!(halfway.frontier(), &[id(&frames[2047])]);
+    assert_eq!(halfway.ancestors(&id(&frames[2047])).unwrap().len(), 2047);
 }
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
     let output = catalog_peer::output(runtime, mode, input, 256 * 1024 * 1024);
@@ -1182,4 +1186,139 @@ fn rust_beacon_history() -> Value {
     );
     json!({"name":"rust-witnessed-beacon-and-causal-expiry","replica":replica,"frames":frames,
         "expiryQueries":[[id(&early),false],[id(&equality),false],[id(&concurrent),true],[id(&late),true]],"delegationId":delegation_id(&child)})
+}
+
+#[test]
+fn causal_slices_share_verified_frames_and_normalize_exact_closed_views() {
+    let frames = fixture();
+    let dag = checked(&replica(), &frames).unwrap();
+    let original_order = dag.order().to_vec();
+    let left = dag.causal_slice(&[id(&frames[1])]).unwrap();
+    assert_eq!(left.order(), &[id(&frames[0]), id(&frames[1])]);
+    assert_eq!(left.frontier(), &[id(&frames[1])]);
+    assert_eq!(left.replica(), dag.replica());
+    let mut heads = vec![id(&frames[1]), id(&frames[2])];
+    heads.sort();
+    let branches = dag.causal_slice(&heads).unwrap();
+    assert_eq!(branches.order().len(), 3);
+    assert_eq!(branches.frontier(), heads);
+    let redundant_heads = dag
+        .causal_slice(&[id(&frames[0]), id(&frames[1]), id(&frames[2])])
+        .unwrap();
+    assert_eq!(redundant_heads.order(), branches.order());
+    assert_eq!(redundant_heads.frontier(), branches.frontier());
+
+    assert!(left.frame(&id(&frames[2])).is_none());
+    assert!(left.frame(&id(&frames[3])).is_none());
+    assert!(
+        std::ptr::eq(
+            left.frame(&id(&frames[0])).unwrap(),
+            dag.frame(&id(&frames[0])).unwrap()
+        ),
+        "historical views share immutable authenticated payloads"
+    );
+    let redundant = dag
+        .causal_slice(&[id(&frames[0]), id(&frames[1]), id(&frames[1])])
+        .unwrap();
+    assert_eq!(redundant.order(), left.order());
+    assert_eq!(redundant.frontier(), left.frontier());
+    assert!(
+        left.causal_slice(&[id(&frames[3])]).is_none(),
+        "an excluded future cannot be recovered from a historical view"
+    );
+    let root = left.causal_slice(&[id(&frames[0])]).unwrap();
+    assert_eq!(root.order(), &[id(&frames[0])]);
+    let full = dag.causal_slice(dag.frontier()).unwrap();
+    assert_eq!(full.order(), dag.order());
+    assert_eq!(full.frontier(), dag.frontier());
+    let empty = dag.causal_slice(&[]).unwrap();
+    assert!(empty.order().is_empty());
+    assert!(empty.frontier().is_empty());
+    assert_eq!(empty.replica(), dag.replica());
+    assert!(dag.causal_slice(&["unknown".into()]).is_none());
+    assert_eq!(dag.order(), original_order);
+    let mut forged_outside_view = frames.clone();
+    forged_outside_view[3]["sig"] = json!(STANDARD.encode([0; 64]));
+    assert_eq!(
+        checked(&replica(), &forged_outside_view)
+            .unwrap_err()
+            .reason,
+        "invalid_verified_history",
+        "type construction requires full provided-set authentication before any slice can be derived"
+    );
+}
+
+#[test]
+fn fresh_source_and_rust_causal_views_match_both_actual_runtime_graph_owners() {
+    let mut histories = Vec::new();
+    for runtime in ["beam", "ts"] {
+        histories.extend(
+            peer(runtime, "produce", None)["histories"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .cloned(),
+        );
+    }
+    let frames = fixture();
+    let dag = checked(&replica(), &frames).unwrap();
+    histories.push(json!({"replica":dag.replica(),"frames":frames,"order":dag.order(),"frontier":dag.frontier()}));
+    let a = signed(&replica(), &[], "forest-root-a");
+    let b = signed(&replica(), &[], "forest-root-b");
+    let left = signed(&replica(), &[id(&a)], "forest-left");
+    let right = signed(&replica(), &[id(&b)], "forest-right");
+    histories.push(json!({"replica":replica(),"frames":[right,a,left,b]}));
+    let mut expected = Vec::new();
+    for history in &mut histories {
+        let frames = history["frames"].as_array().unwrap();
+        let dag = checked(history["replica"].as_str().unwrap(), frames).unwrap();
+        let mut queries = vec![Vec::new(), dag.frontier().to_vec(), vec!["unknown".into()]];
+        queries.extend(dag.order().iter().map(|id| vec![id.clone()]));
+        // Independent runtime owners must also judge proper multi-head views,
+        // including concurrent branches, forests and redundant ancestors.
+        for (index, left) in dag.order().iter().enumerate() {
+            for right in &dag.order()[index + 1..] {
+                queries.push(vec![left.clone(), right.clone()]);
+            }
+        }
+
+        if let Some(last) = dag.order().last() {
+            queries.push(vec![last.clone(), last.clone(), dag.order()[0].clone()]);
+        }
+        let slices = queries.iter().map(|query| dag.causal_slice(query).map(|slice| {
+            let mut ids = slice.order().to_vec(); ids.sort();
+            json!({"replica":slice.replica(),"order":slice.order(),"frontier":slice.frontier(),"ids":ids})
+        })).collect::<Vec<_>>();
+        history["queries"] = json!(queries);
+        expected.push(slices);
+    }
+    let input = json!({"histories":histories});
+    for runtime in ["beam", "ts"] {
+        let result = peer(runtime, "causal-slices", Some(&input));
+        let actual = result["results"].as_array().unwrap();
+        assert_eq!(actual.len(), expected.len());
+        for (index, (history, slices)) in actual.iter().zip(&expected).enumerate() {
+            let queries = history["queries"].as_array().unwrap();
+            assert_eq!(queries.len(), slices.len());
+            for (query, expected) in queries.iter().zip(slices) {
+                match expected {
+                    None => assert!(query.is_null(), "{runtime} history={index}"),
+                    Some(expected) => {
+                        let mut ids = query["frames"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .map(id)
+                            .collect::<Vec<_>>();
+                        ids.sort();
+                        assert_eq!(
+                            json!({"replica":query["replica"],"order":query["order"],"frontier":query["frontier"],"ids":ids}),
+                            *expected,
+                            "{runtime} history={index}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

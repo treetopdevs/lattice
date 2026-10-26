@@ -1,3 +1,5 @@
+Code.require_file("support/native_peer_output.exs", __DIR__)
+
 # Real BEAM DAG/signature peer. A DAG result carries no authority judgment.
 alias Lattice.{Canonical, Log, Op}
 alias Lattice.Authority.Delegation
@@ -205,7 +207,9 @@ case System.argv() do
         end
         |> List.flatten()
 
-      IO.puts(Jason.encode!(%{cases: cases, controls: controls, foreign: foreign}))
+      Lattice.NativePeerOutput.puts(
+        Jason.encode!(%{cases: cases, controls: controls, foreign: foreign})
+      )
     after
       File.rm_rf!(directory)
     end
@@ -267,7 +271,7 @@ case System.argv() do
       disposition: "pin_exact_observed_bootstrap"
     }
 
-    IO.puts(
+    Lattice.NativePeerOutput.puts(
       Jason.encode!(%{
         case: %{review: review, catalogJson: f.catalog_json, histories: histories},
         public: %{kind: decision.kind, reason: decision.reason},
@@ -305,7 +309,7 @@ case System.argv() do
         end
       end)
 
-    IO.puts(Jason.encode!(%{results: results}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
 
   ["entries-produce"] ->
     alias Treehouse.{CatalogEntries, TransportCatalog}
@@ -465,11 +469,14 @@ case System.argv() do
         }
       end)
 
-    IO.puts(Jason.encode!(%{cases: results}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{cases: results}))
 
   ["rotation-produce"] ->
     f = CatalogVectors.codec_vector()
-    IO.puts(Jason.encode!(%{envelope: f.rotation_envelope_term, key: f.expected_old_key}))
+
+    Lattice.NativePeerOutput.puts(
+      Jason.encode!(%{envelope: f.rotation_envelope_term, key: f.expected_old_key})
+    )
 
   ["rotation-consume"] ->
     alias Treehouse.TransportCatalog, as: Catalog
@@ -500,7 +507,38 @@ case System.argv() do
         end
       end)
 
-    IO.puts(Jason.encode!(%{results: results}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
+
+  ["causal-slices"] ->
+    input = IO.read(:stdio, :eof) |> Jason.decode!()
+
+    results =
+      Enum.map(input["histories"], fn history ->
+        {:ok, ops} = Wire.decode_ops(history["frames"])
+        log = Log.from_ops(history["replica"], Map.new(ops, &{&1.id, &1}))
+        :ok = Log.verify_authenticity(log)
+        true = map_size(log.ops) == length(ops)
+
+        queries =
+          Enum.map(history["queries"], fn frontier ->
+            if Enum.all?(frontier, &Map.has_key?(log.ops, &1)) do
+              selected =
+                Enum.reduce(frontier, MapSet.new(), fn id, ids ->
+                  ids |> MapSet.put(id) |> MapSet.union(Lattice.Dag.ancestors(log.ops, id))
+                end)
+
+              slice = Log.from_ops(log.replica, Map.take(log.ops, MapSet.to_list(selected)))
+              :ok = Log.verify_authenticity(slice)
+              graph.(slice)
+            else
+              nil
+            end
+          end)
+
+        %{queries: queries}
+      end)
+
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
 
   ["produce"] ->
     fixture = CatalogTrustVectors.fixture(2)
@@ -518,7 +556,7 @@ case System.argv() do
       sig: :binary.copy(<<0>>, 64)
     }
 
-    IO.puts(
+    Lattice.NativePeerOutput.puts(
       Jason.encode!(%{
         histories: Enum.map(logs, graph),
         terms: [%{term: Wire.encode_value(term), bytes: Base.encode64(Canonical.term(term))}]
@@ -544,10 +582,12 @@ case System.argv() do
       true = actual.frontier == history["frontier"]
     end)
 
-    IO.puts(Jason.encode!(%{histories: length(input["histories"])}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{histories: length(input["histories"])}))
 
   ["space-policy-cases"] ->
-    IO.puts(Jason.encode!(%{histories: Treehouse.MemberContinuitySemanticVectors.corpus().cases}))
+    Lattice.NativePeerOutput.puts(
+      Jason.encode!(%{histories: Treehouse.MemberContinuitySemanticVectors.corpus().cases})
+    )
 
   [mode] when mode in ["space-policy", "space-projection"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -579,7 +619,7 @@ case System.argv() do
         end
       end)
 
-    IO.puts(Jason.encode!(%{results: results}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
 
   [mode] when mode in ["thread-policy", "thread-projection"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -611,7 +651,7 @@ case System.argv() do
         end
       end)
 
-    IO.puts(Jason.encode!(%{results: results}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
 
   ["command-gates"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -654,7 +694,7 @@ case System.argv() do
         end)
       end)
 
-    IO.puts(Jason.encode!(%{results: results}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
 
   ["authority-cases"] ->
     dir =
@@ -668,7 +708,7 @@ case System.argv() do
     try do
       :ok = Lattice.ContinuationVectors.write(dir)
       data = File.read!(Path.join([dir, "continuation", "authority.json"])) |> Jason.decode!()
-      IO.puts(Jason.encode!(%{histories: data}))
+      Lattice.NativePeerOutput.puts(Jason.encode!(%{histories: data}))
     after
       File.rm_rf!(dir)
     end
@@ -713,7 +753,7 @@ case System.argv() do
         }
       end)
 
-    IO.puts(Jason.encode!(%{results: results}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{results: results}))
 
   ["delegations"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -737,7 +777,7 @@ case System.argv() do
 
     analysis = Lattice.Authority.analyze(module, log)
 
-    IO.puts(
+    Lattice.NativePeerOutput.puts(
       Jason.encode!(%{
         root: if(root, do: Base.encode64(root)),
         active: Map.new(ids, &{&1, Lattice.Authority.delegation_active?(log, &1)}),
@@ -827,7 +867,7 @@ case System.argv() do
         }
       end
 
-    IO.puts(Jason.encode!(%{cases: cases}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{cases: cases}))
 
   ["consume-cutoffs"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -848,5 +888,5 @@ case System.argv() do
       true = actual == item["result"]
     end)
 
-    IO.puts(Jason.encode!(%{cases: length(input["cases"])}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{cases: length(input["cases"])}))
 end

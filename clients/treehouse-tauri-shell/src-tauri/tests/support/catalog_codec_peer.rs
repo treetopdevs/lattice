@@ -4,6 +4,9 @@ use std::{
     path::PathBuf,
     process::{Command, Stdio},
 };
+#[path = "peer_response.rs"]
+mod peer_response;
+
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -38,6 +41,7 @@ pub fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    let response = peer_response::PeerResponse::prepare(&mut command, runtime);
     let mut child = command
         .spawn()
         .expect("Node/client dependencies and compiled test BEAM are required prerequisites");
@@ -52,15 +56,11 @@ pub fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
         drop(child.stdin.take());
     }
     let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{runtime} peer failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap_or_else(|_| {
+    let bytes = response.finish(output, 64 * 1024 * 1024, &format!("{runtime} codec {mode}"));
+    serde_json::from_slice(&bytes).unwrap_or_else(|error| {
         panic!(
-            "{runtime} peer output: {}",
-            String::from_utf8_lossy(&output.stdout)
+            "{runtime} codec {mode} peer JSON: {error}: {}",
+            String::from_utf8_lossy(&bytes[..bytes.len().min(256)])
         )
     })
 }

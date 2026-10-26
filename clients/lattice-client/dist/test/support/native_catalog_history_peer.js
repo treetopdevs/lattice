@@ -15,7 +15,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { analyzeAuthority } from "../../src/authority";
 import { capabilityQuarantine, revokedAsOf } from "../../src/capability";
 import { treehouseSpaceSchema, treehouseThreadSchema, observeTreehouse, treehouseSpaceInitialization } from "../../src/treehouse";
-import { canonicalOrder } from "../../src/dag";
+import { canonicalOrder, ancestors, index } from "../../src/dag";
 import { treehouseCommandDecoders } from "../../src/treehouse";
 import { cutoffFixture } from "./export_treehouse_catalog_cutoff";
 import { authorCarrierOpUnchecked } from "./unchecked_author";
@@ -108,6 +108,26 @@ else if (process.argv[2] === "rotation-consume") {
             return e === null ? { shape: false, valid: false } : { shape: true, valid: catalogRotationCodec.verifyCatalogRotationEnvelope(e, key), id: catalogRotationCodec.catalogRotationId(e),
                 rotationBytes: Buffer.from(catalogRotationCodec.canonicalBytesForCatalogRotation(e.rotation)).toString("base64"), possessionBytes: Buffer.from(catalogRotationCodec.canonicalBytesForCatalogRotationPossession(e.rotation)).toString("base64") };
         }) }));
+}
+else if (process.argv[2] === "causal-slices") {
+    const input = JSON.parse(readFileSync(0, "utf8"));
+    const results = [];
+    for (const history of input.histories) {
+        await graph(history); // Authenticate the entire set before selecting a view.
+        const product = history.replica.startsWith("replica:treehouse:space:") ? "Treehouse.Space" : "Treehouse.Thread";
+        const ops = carrierOpsToSemanticOps(history.frames, {}, treehouseCommandDecoders(product));
+        const byId = index(ops), queries = [];
+        for (const frontier of history.queries) {
+            if (frontier.some(id => !byId.has(id))) {
+                queries.push(null);
+                continue;
+            }
+            const selected = new Set(frontier.flatMap(id => [id, ...ancestors(id, byId)]));
+            queries.push(await graph({ ...history, frames: history.frames.filter(frame => selected.has(frame.id)) }));
+        }
+        results.push({ queries });
+    }
+    console.log(JSON.stringify({ results }));
 }
 else if (process.argv[2] === "produce") {
     const fixture = await trustFixture();

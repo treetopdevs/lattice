@@ -256,13 +256,13 @@ fn rust_histories() -> Vec<Value> {
     ]
 }
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
-    serde_json::from_slice(&catalog_peer::output(
-        runtime,
-        mode,
-        input,
-        64 * 1024 * 1024,
-    ))
-    .expect("actual runtime result")
+    let output = catalog_peer::output(runtime, mode, input, 64 * 1024 * 1024);
+    serde_json::from_slice(&output).unwrap_or_else(|error| {
+        panic!(
+            "actual {runtime} {mode} peer JSON: {error}: {}",
+            String::from_utf8_lossy(&output[..output.len().min(256)])
+        )
+    })
 }
 fn native(h: &Value) -> Value {
     let frames: Vec<_> = h["frames"]

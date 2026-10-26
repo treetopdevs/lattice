@@ -12,6 +12,8 @@ use std::{
     process::{Command, Stdio},
 };
 use treehouse_tauri_shell::signature::verify;
+#[path = "support/peer_response.rs"]
+mod peer_response;
 fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let mut cmd = if runtime == "beam" {
@@ -41,6 +43,7 @@ fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
         ]);
         c
     };
+    let response = peer_response::PeerResponse::prepare(&mut cmd, runtime);
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -57,14 +60,19 @@ fn peer(runtime: &str, mode: &str, input: Option<&Value>) -> Value {
     }
     drop(child.stdin.take());
     let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{} {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+    let bytes = response.finish(
+        output,
+        64 * 1024 * 1024,
+        &format!("{runtime} signature {mode}"),
     );
-    serde_json::from_slice(&output.stdout).unwrap()
+    serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+        panic!(
+            "{runtime} signature {mode} peer JSON: {error}: {}",
+            String::from_utf8_lossy(&bytes[..bytes.len().min(256)])
+        )
+    })
 }
+
 #[test]
 fn three_actual_runtimes_share_strict_signature_profile_with_three_fresh_producers() {
     let mut input = peer("ts", "produce", None);
