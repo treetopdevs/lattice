@@ -10,14 +10,22 @@ incoming/resource integration remain unfinished. Closed rotation records and
 dual-purpose signature/binding-id evaluation are implemented as graph inputs;
 parent/head, cutoff-completeness and transition authority remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
-Native signoff is stopped on a separately reproduced source signature mismatch:
-BEAM accepts weak-key detached invitation consent that TypeScript/native reject.
-Plan 272 owns the common verifier correction; do not compensate in native policy.
-Its source PR177 final hosted gate is now green. A separate public artifact
-integer-representation discrepancy is reproduced and assigned to plan273 before
-graph signoff. Preserve raw JSON and do not compensate in native decoding.
+The signature discrepancy is corrected by source PR177 and adopted. Source PR178's
+artifact-integer checkpoint cccb58163 is also hosted-verified and adopted locally;
+production BEAM and SDK source byte identity is proven. The approved test-family
+cleanup is published at bab44c97e and awaits its final hosted gate and adoption.
+No runtime owner, custody or signature policy is changed by that test cleanup.
+Full native signoff still requires the remaining graph/retained/incoming work.
 
-Fresh Thread application-policy work exposes a source discrepancy for malformed
+Next, add an explicit strict raw-artifact profile gate before typed catalog or
+rotation normalization: preserve original bytes, reject unsafe/small-text aliases
+at trust admission, and retain legacy typed-helper behavior. Compare fresh signed
+BEAM and TS artifacts and original malformed JSON strings against the actual
+public source owners. This gate supplies no signature/authority/freshness verdict;
+entry proofs and graph transitions follow it in step5. Do not compensate in native
+decoding or introduce a new frontier-count cap.
+
+Fresh Thread application-policy work exposed a source discrepancy for malformed
 edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.
 Separate plan 270 corrects the source behavior and literal leading U+FEFF text.
 Its independently reviewed source is now adopted, and the original reciprocal
