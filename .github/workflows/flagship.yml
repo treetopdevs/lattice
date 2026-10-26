@@ -199,7 +199,8 @@ jobs:
     name: Unit + property suite
     needs: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Preserve cold apt headroom after moving both Treehouse native suites out.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -255,8 +256,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             clients/township-tauri-shell/src-tauri/target
-            clients/treehouse-tauri-shell/src-tauri/target
-          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/treehouse-tauri-shell/src-tauri/Cargo.lock', 'clients/treehouse-tauri-shell/src-tauri/src/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/tests/**/*.rs', 'clients/lattice-mobile-core/native/Cargo.lock', 'clients/lattice-mobile-core/native/src/**/*.rs', 'clients/lattice-mobile-core/native/tests/**/*.rs', 'clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs', 'clients/township-tauri-shell/src-tauri/tests/**/*.rs') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-township-tauri-${{ hashFiles('clients/lattice-mobile-core/native/Cargo.lock', 'clients/lattice-mobile-core/native/src/**/*.rs', 'clients/lattice-mobile-core/native/tests/**/*.rs', 'clients/township-tauri-shell/src-tauri/Cargo.lock', 'clients/township-tauri-shell/src-tauri/src/**/*.rs', 'clients/township-tauri-shell/src-tauri/tests/**/*.rs') }}
           restore-keys: ${{ runner.os }}-${{ runner.arch }}-township-tauri-
       - name: Install dependencies
         run: mix deps.get
@@ -334,6 +334,8 @@ jobs:
             echo "$untracked" >&2
             exit 1
           fi
+      - name: Required aggregate result matrix
+        run: node --test scripts/tests/required_job_results.mjs
       - name: TS client distribution guard regression
         run: node --test scripts/tests/client_dist_guard.mjs
       - name: Committed TS client dist matches build
@@ -578,13 +580,6 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/clients/township-tauri-shell/src-tauri/target
         run: cargo test
-      - name: Offline Treehouse native persistence and key boundaries
-        working-directory: clients/treehouse-tauri-shell/src-tauri
-        run: cargo test --locked
-      - name: Treehouse dev-trace identity seam
-        # Plan 181 5b. The seam is compiled out of the ordinary build, so its tests run only here.
-        working-directory: clients/treehouse-tauri-shell/src-tauri
-        run: cargo test --locked --features treehouse-dev-trace
       - name: TS Township witness fixture preflight
         if: needs.changes.outputs.township == 'true'
         working-directory: clients/township-tauri-shell
@@ -617,6 +612,141 @@ jobs:
         run: cd apps/lattice_server && mix sobelow --exit
       - name: Sobelow (township_web)
         run: cd apps/township_web && mix sobelow --exit
+
+  treehouse_native:
+    name: Treehouse native ordinary + tracing
+    needs: changes
+    runs-on: ubuntu-latest
+    # Cold apt is separately capped at 15m; allow compilation and both real-peer suites.
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "28.1"
+          elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/lattice-shell-kit/package-lock.json
+            clients/treehouse-tauri-shell/package-lock.json
+      - name: Cache deps and _build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-treehouse-native-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-treehouse-native-mix-
+      - name: Cache Treehouse native Cargo dependencies and build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/treehouse-tauri-shell/src-tauri/target
+          key: ${{ runner.os }}-${{ runner.arch }}-treehouse-native-${{ hashFiles('clients/treehouse-tauri-shell/src-tauri/Cargo.lock', 'clients/treehouse-tauri-shell/src-tauri/src/**/*.rs', 'clients/treehouse-tauri-shell/src-tauri/tests/**/*.rs', 'clients/lattice-mobile-core/native/src/**/*.rs') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-treehouse-native-
+      - name: Install dependencies
+        run: mix deps.get
+      # Reciprocal Treehouse tests execute the real TS authoring/verification seam.
+      - name: Install TS client dependencies
+        working-directory: clients/lattice-client
+        run: npm ci
+      - name: Build client before reciprocal preview test
+        working-directory: clients/lattice-client
+        run: npm run build
+      - name: Install Treehouse native peer dependencies
+        run: |
+          npm --prefix clients/lattice-shell-kit ci
+          npm --prefix clients/treehouse-tauri-shell ci
+          npm --prefix clients/treehouse-tauri-shell run build
+      - name: Compile current BEAM test support for native peers
+        # Force current source rather than trusting restored BEAM mtimes.
+        run: env MIX_ENV=test mix compile --force --warnings-as-errors
+      - name: Runner image key
+        id: image
+        run: echo "key=${ImageOS:-ubuntu}-${ImageVersion:-unversioned}" >> "$GITHUB_OUTPUT"
+      - name: Restore apt package cache
+        # The Azure apt mirror behind ubuntu-latest sometimes serves .deb files at ~70 KB/s; run
+        # 37759518040 spent 23 minutes in apt and timed this job out. The cache holds apt's downloaded
+        # archives. apt reuses an archive by file name and size alone, so the next step re-verifies
+        # every cached file against the current authenticated index before apt can see it. A failed
+        # install still saves what completed under a run-specific key that the prefix matches, so a
+        # cold cache seeds across reruns; the exact key is saved only when the install steps succeed
+        # and is then immutable until the runner image or the hashed files change.
+        id: apt_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ runner.os }}-apt-treehouse-native-${{ steps.image.outputs.key }}-${{ hashFiles('.github/workflows/flagship.yml', '.github/scripts/apt_archive_cache.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-treehouse-native-${{ steps.image.outputs.key }}-
+            ${{ runner.os }}-apt-treehouse-native-
+      - name: Point apt at the cache and verify its contents against the index
+        run: .github/scripts/apt_archive_cache.sh
+      - name: Install Tauri Linux prerequisites
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+      - name: Hand the apt archive directory to the runner user
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+      - name: Save apt package cache
+        # After a failed install the key is run-specific, so the next attempt restores it by prefix
+        # and downloads only what is still missing; the verify step above re-checks every file anyway.
+        if: always() && steps.apt_cache.outputs.cache-primary-key != '' && steps.apt_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ steps.apt_cache.outputs.cache-primary-key }}${{ job.status != 'success' && format('-partial-{0}-{1}', github.run_id, github.run_attempt) || '' }}
+      - name: Offline Treehouse native persistence and key boundaries
+        working-directory: clients/treehouse-tauri-shell/src-tauri
+        run: cargo test --locked
+      - name: Treehouse dev-trace identity seam
+        # Plan 181 5b. The seam is compiled out of the ordinary build, so its tests run only here.
+        working-directory: clients/treehouse-tauri-shell/src-tauri
+        run: cargo test --locked --features treehouse-dev-trace
 
   packaged_macos:
     name: Packaged macOS convergence
@@ -1722,21 +1852,16 @@ jobs:
   required:
     name: Required checks
     if: always()
-    needs: [changes, verify, unit, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, treehouse_offline_enrollment_macos, carrier_release, treehouse_android_preview, treehouse_android_launch, android_pilot_contract, android_pilot_verify]
+    needs: [changes, verify, unit, treehouse_native, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, treehouse_offline_enrollment_macos, carrier_release, treehouse_android_preview, treehouse_android_launch, android_pilot_contract, android_pilot_verify]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Fail on any failed or cancelled job
         env:
           RESULTS: ${{ toJSON(needs) }}
-        run: |
-          # Parse each direct dependency's .result only, so an output that happens to be named
-          # "result" cannot trip the fan-in. skipped passes: the classifier found that product untouched.
-          if echo "$RESULTS" | jq -e 'to_entries | map(.value.result) | any(. == "failure" or . == "cancelled")' > /dev/null; then
-            echo "a required job failed or was cancelled:" >&2
-            echo "$RESULTS" | jq -r 'to_entries[] | "\(.key)=\(.value.result)"' >&2
-            exit 1
-          fi
-          echo "all required jobs succeeded or were skipped"
+        run: .github/scripts/required_job_results.sh
