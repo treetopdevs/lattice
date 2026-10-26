@@ -2,10 +2,15 @@
 
 ## Status
 
-IN PROGRESS. Fresh public BEAM/TypeScript calls reproduce available invalid entry
-proof being hidden by another missing named operation in that same entry. The
-ordinary complete and genuinely missing controls agree. Native rich-entry and
-retained-trust adoption stops until the shared source rule is corrected and gated.
+DONE for the shared source correction. Available-fact classification and precise refusal detail are
+implemented while preserving the legacy observation API. Fresh bidirectional
+public-owner tests cover ordinary, multiple-entry, Space and frozen diagnostic
+cases, both delivery orders and saved-state reopening. Structural invalidity stays
+separate from current policy refusal so an existing authority freeze retains its
+diagnostics without granting routes. The source checkpoint full checks, combined affected tests and review dispositions
+pass. Refresh on the reviewed CI-budget scheduling correction, preserving all
+production/client/config bytes. Both refreshed source gates pass and the correction is adopted into the native
+checkpoint. Rich native entry folding and retained trust remain separate work.
 
 ## Contract
 

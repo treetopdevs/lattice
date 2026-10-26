@@ -92,11 +92,13 @@ required before the future retained-authority consumer uses this primitive.
 
 ## Next integration: original-state validation and graph trust
 
-STOP on rich-entry/retained source adoption: available invalid entry proof is
-classified differently by the public BEAM and TypeScript owners when another
-named item is missing. Plan276 owns the shared source correction. Preserve the
-completed input/graph components; do not add a Rust compensation. Resume richer
-entry folding after that correction passes review and its source gate.
+The shared available-invalid versus missing-entry source correction is reviewed,
+hosted-verified and adopted, together with the independently required native CI
+job and cold-process scheduling correction. The source adoption stop is cleared.
+Preserve the completed input/graph components and use the corrected common rule
+when implementing richer native entry folding; do not add a divergent Rust rule.
+The bounded groundwork can be reviewed independently of the full retained resolver;
+its combined native checkpoint still requires its own exact-tip hosted gate.
 
 The next implementation consumes the historical-view foundation inside the full
 retained resolver; a standalone caller-supplied witness checker is insufficient.
