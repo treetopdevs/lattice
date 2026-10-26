@@ -7,7 +7,7 @@ pub const MAX_DEPTH: usize = 64;
 // Three wrappers per map, then the frame and flat metadata leaf.
 pub const MAX_JSON_DEPTH: usize = MAX_DEPTH * 3 + 4;
 pub const MAX_NODES: usize = 32_768;
-const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+pub(super) const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 pub type Result<T> = std::result::Result<T, &'static str>;
 const INVALID: &str = "catalog_envelope_invalid";
 pub(crate) const MAX_OBSERVATION_INPUT: usize = 64 * 1024 * 1024;
@@ -167,7 +167,7 @@ fn parse(value: &Value, depth: usize, nodes: &mut usize, bounds: Bounds) -> Resu
     })
 }
 
-fn integer(value: &Value) -> Result<u64> {
+pub(super) fn integer(value: &Value) -> Result<u64> {
     if let Some(text) = value.as_str() {
         if text.is_empty()
             || text.len() > 20

@@ -17,13 +17,14 @@ cleanup is published at bab44c97e and awaits its final hosted gate and adoption.
 No runtime owner, custody or signature policy is changed by that test cleanup.
 Full native signoff still requires the remaining graph/retained/incoming work.
 
-Next, add an explicit strict raw-artifact profile gate before typed catalog or
-rotation normalization: preserve original bytes, reject unsafe/small-text aliases
-at trust admission, and retain legacy typed-helper behavior. Compare fresh signed
-BEAM and TS artifacts and original malformed JSON strings against the actual
-public source owners. This gate supplies no signature/authority/freshness verdict;
-entry proofs and graph transitions follow it in step5. Do not compensate in native
-decoding or introduce a new frontier-count cap.
+An explicit strict raw-artifact profile gate now precedes typed catalog/rotation
+normalization. It preserves original bytes and refuses unsafe numeric tokens,
+small-text aliases and foreign delegation metadata. Legacy typed decoding is
+unchanged. Fresh signed BEAM/TS public-owner cases cover malformed scalar forms,
+nested foreign records and exact-size controls; escaped strings and duplicate
+object names are independently pinned. This supplies no signature, authority,
+freshness or graph verdict. Entry proofs and graph transitions follow in step5;
+no new frontier-count cap is introduced.
 
 Fresh Thread application-policy work exposed a source discrepancy for malformed
 edit lineage: BEAM follows raw arguments that TypeScript refused to normalize.

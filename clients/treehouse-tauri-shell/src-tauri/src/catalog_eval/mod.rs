@@ -1,5 +1,6 @@
 //! Pure native catalog evidence evaluation; no installed trust, custody or routes.
 //! Authenticity remains separate from vocabulary/admission and authority.
+pub mod artifact;
 pub mod canonical;
 pub mod cutoff;
 pub mod delegations;

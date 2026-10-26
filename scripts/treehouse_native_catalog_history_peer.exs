@@ -44,6 +44,172 @@ cutoff_input = fn name, log ->
 end
 
 case System.argv() do
+  ["artifact-profile-produce"] ->
+    alias Treehouse.CatalogTrust
+
+    directory =
+      Path.join(
+        System.tmp_dir!(),
+        "native-artifact-profile-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(directory)
+
+    try do
+      path = Path.join(directory, "public.json")
+      CatalogTrustVectors.write_public_fixture!(path)
+      b = CatalogTrustVectors.read_ts_fixture!(path)
+      expected = %{trust_revision: 0, history_generation: 0}
+      page = %{catalogs: [], rotations: [], histories: [], cutoff_proofs: []}
+
+      run = fn state, incoming ->
+        CatalogTrust.evaluate(%{
+          installed: state,
+          expected: expected,
+          incoming: Map.merge(page, incoming)
+        })
+      end
+
+      observe = fn d ->
+        %{kind: Atom.to_string(d.kind), reason: d.reason && Atom.to_string(d.reason)}
+      end
+
+      %{kind: :propose, next: prepared} =
+        CatalogTrust.prepare_installation(%{
+          review: b.review,
+          history: hd(b.histories),
+          store: %{kind: :verified_fresh, expected: expected}
+        })
+
+      %{kind: :propose, next: base} =
+        run.(prepared, %{catalogs: [b.catalog_json], histories: b.histories})
+
+      %{kind: :propose} =
+        run.(base, %{
+          catalogs: [b.rotated_catalog_json],
+          rotations: [b.rotation_json],
+          cutoff_proofs: b.cutoff_proofs
+        })
+
+      cases =
+        for {field, original, rotation, number} <- [
+              {"version", b.catalog_json, false, 1},
+              {"revision", b.catalog_json, false, 0},
+              {"generation", b.rotation_json, true, 1}
+            ],
+            token <- [
+              Jason.encode!(Integer.to_string(number)),
+              "#{number}.0",
+              "#{number}e0",
+              "-0",
+              "9007199254740992",
+              String.duplicate("9", 10000),
+              Jason.encode!(String.duplicate("9", 10000)),
+              "01",
+              "duplicate"
+            ] do
+          pair = ~s([["atom","#{field}"],["int",#{number}]])
+
+          json =
+            if token == "duplicate",
+              do: String.replace(original, pair, pair <> "," <> pair, global: false),
+              else:
+                String.replace(
+                  original,
+                  ~s(["atom","#{field}"],["int",#{number}]),
+                  ~s(["atom","#{field}"],["int",#{token}]),
+                  global: false
+                )
+
+          true = json != original
+
+          incoming =
+            if rotation,
+              do: %{
+                rotations: [json],
+                catalogs: [b.rotated_catalog_json],
+                cutoff_proofs: b.cutoff_proofs
+              },
+              else: %{catalogs: [json], histories: b.histories}
+
+          %{kind: :reject, reason: :malformed_catalog} =
+            d = run.(if(rotation, do: base, else: prepared), incoming)
+
+          %{json: json, results: [observe.(d)]}
+        end
+
+      controls =
+        for {rotation, original, state} <- [
+              {false, b.catalog_json, prepared},
+              {true, b.rotation_json, base}
+            ] do
+          json = original <> String.duplicate(" ", 131_072 - byte_size(original))
+
+          incoming =
+            if rotation,
+              do: %{
+                rotations: [json],
+                catalogs: [b.rotated_catalog_json],
+                cutoff_proofs: b.cutoff_proofs
+              },
+              else: %{catalogs: [json], histories: b.histories}
+
+          %{kind: :propose} = d = run.(state, incoming)
+
+          oversized =
+            if rotation, do: %{rotations: [json <> " "]}, else: %{catalogs: [json <> " "]}
+
+          %{kind: :reject, reason: :control_history_limit} = over = run.(state, oversized)
+          %{json: json, result: observe.(d), over: observe.(over)}
+        end
+
+      foreign =
+        for epoch <- [5, "5"] do
+          json =
+            Jason.encode!([
+              "delegation",
+              %{
+                id: "",
+                replica: "",
+                issuer: Base.encode64(:binary.copy(<<7>>, 32)),
+                audience: Base.encode64(:binary.copy(<<7>>, 32)),
+                parent_id: nil,
+                ops: ["int", "5"],
+                roles: [],
+                live: true,
+                sig: Base.encode64(:binary.copy(<<9>>, 64)),
+                expires_epoch: epoch
+              }
+            ])
+
+          %{kind: :reject, reason: :malformed_catalog} =
+            d = run.(prepared, %{catalogs: [json], histories: b.histories})
+
+          nested =
+            for rotation <- [false, true] do
+              original = if rotation, do: b.rotation_json, else: b.catalog_json
+              mutated = String.replace(original, ~s(["int",1]), json, global: false)
+              true = mutated != original
+
+              incoming =
+                if rotation,
+                  do: %{rotations: [mutated]},
+                  else: %{catalogs: [mutated], histories: b.histories}
+
+              state = if rotation, do: base, else: prepared
+              %{kind: :reject, reason: :malformed_catalog} = result = run.(state, incoming)
+              %{json: mutated, result: observe.(result)}
+            end
+
+          [%{json: json, result: observe.(d)} | nested]
+        end
+        |> List.flatten()
+
+      IO.puts(Jason.encode!(%{cases: cases, controls: controls, foreign: foreign}))
+    after
+      File.rm_rf!(directory)
+    end
+
   ["rotation-produce"] ->
     f = CatalogVectors.codec_vector()
     IO.puts(Jason.encode!(%{envelope: f.rotation_envelope_term, key: f.expected_old_key}))

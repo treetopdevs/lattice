@@ -29,14 +29,21 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
         command
     } else {
         let mut command = Command::new("node");
-        command
-            .current_dir(root().join("clients/lattice-client"))
-            .args([
+        command.current_dir(root().join("clients/lattice-client"));
+        if mode == "artifact-profile-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_artifact_peer.ts",
+            ]);
+        } else {
+            command.args([
                 "--import",
                 "tsx",
                 "test/support/native_catalog_history_peer.ts",
                 mode,
             ]);
+        }
         command
     };
     let mut child = command
