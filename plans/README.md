@@ -453,6 +453,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 273 | [Shared catalog artifact integer profile](273-catalog-artifact-integer-profile.md) | P1 | M | 272; reproduced artifact reader disagreement | DONE: #178 at191e403dd passes required hosted gates; shared integer validation and approved witness completion barrier adopted locally. |
 | 274 | [Common no-op catalog rotation refusal](274-catalog-noop-rotation-refusal.md) | P1 | S | 273; native chain source discrepancy | IN PROGRESS: #179 de9bc3b3b passes both hosted gates and is adopted natively; refreshed parent integration needs its own gate. |
 | 275 | [Signing-helper death proof](275-signing-helper-death-proof.md) | P2 | S | 263; latest source178 | IN PROGRESS: #180 at98ddeeafd passes Flagship40282811461; test-only fix adopted locally; combined repository gate remains. |
+| 276 | [Catalog entry proof priority](276-catalog-entry-proof-priority.md) | P1 | M | 274/275; reproduced native-port source disagreement | IN PROGRESS: public owners disagree on invalid-plus-missing entry facts; native adoption stopped pending shared source correction. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

@@ -92,6 +92,12 @@ required before the future retained-authority consumer uses this primitive.
 
 ## Next integration: original-state validation and graph trust
 
+STOP on rich-entry/retained source adoption: available invalid entry proof is
+classified differently by the public BEAM and TypeScript owners when another
+named item is missing. Plan276 owns the shared source correction. Preserve the
+completed input/graph components; do not add a Rust compensation. Resume richer
+entry folding after that correction passes review and its source gate.
+
 The next implementation consumes the historical-view foundation inside the full
 retained resolver; a standalone caller-supplied witness checker is insufficient.
 Keep one graph/proof algorithm with an original-only validation pass, followed by
