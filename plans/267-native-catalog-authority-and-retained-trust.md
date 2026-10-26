@@ -142,6 +142,34 @@ installation, dial or freshness claim is introduced before the full resolver and
 its required gates are complete. A source discrepancy stops adoption and gets an
 independently reviewed correction rather than a native compatibility exception.
 
+## Retained resolver integration interfaces
+
+Keep the next implementation in one full resolver, with typed internal evidence
+rather than a caller-supplied status or standalone witness verdict. The current
+structural chain component takes a complete EntryObservation merely to obtain
+its bootstrap. Replace that coupling with an authenticated reviewed-bootstrap
+observation that can exist before all catalog entry proof is complete. It must
+bind the selected Space/root/bootstrap and retain the actual authenticated source;
+a parsed Bootstrap record alone is insufficient. Preserve complete-only entry
+observation as a compatibility projection of the richer facts.
+
+Use one graph/proof fold for original-only validation and incoming union. Its
+internal context owns the authenticated histories, decoded artifact inventory,
+reviewed bootstrap, per-view entry facts, exact cutoff proofs, accepted support
+and saved-witness replay. Construct the incoming context only after original-only
+validation succeeds; no public boolean may designate supplied input trusted.
+Keep current-policy refusals distinct from structural invalidity for the existing
+frozen-diagnostic path. Only complete eligible proof reserves historical routes.
+
+The first full-resolver tests must exercise an empty installed inventory, genuinely
+pending entries, complete acceptance, first-invalid refusal IDs, frozen sibling
+reopen and corrupt original evidence plus otherwise repairing incoming input.
+Extend the same fresh public-owner harness to historical witness re-honor, exact
+frontier equality, watermark rollback and fork/overflow ordering before closure.
+Do not expose a partial resolver through IPC or installation while those cases and
+aggregate input/temporary-view budgets remain incomplete. Source adoption and
+entry/retained implementation still wait for both dependency hosted gates.
+
 ## Source adoption
 
 The codec, exporter and continuation alias foundations are merged. The evaluator
