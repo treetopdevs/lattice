@@ -2,9 +2,10 @@ use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
     Engine,
 };
-use ed25519_dalek::{Signer, SigningKey};
+use curve25519_dalek::scalar::Scalar;
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 use treehouse_tauri_shell::catalog_eval::{
     canonical::{Term, MAX_BYTES},
     rotation,
@@ -104,6 +105,95 @@ fn rust_case(generation: u64, count: usize, same_key: bool) -> Value {
     ]);
     json!({"envelope":envelope,"key":STANDARD.encode(old.verifying_key().to_bytes())})
 }
+// An identity R with S=k*a satisfies the uncofactored equation, but the
+// strict profile must still refuse its small-order nonce point.
+fn small_r_signature(seed: [u8; 32], message: &[u8]) -> [u8; 64] {
+    let hash = Sha512::digest(seed);
+    let mut secret: [u8; 32] = hash[..32].try_into().unwrap();
+    secret[0] &= 248;
+    secret[31] &= 63;
+    secret[31] |= 64;
+    let a = Scalar::from_bytes_mod_order(secret);
+    let public = SigningKey::from_bytes(&seed).verifying_key().to_bytes();
+    let mut signature = [0; 64];
+    signature[0] = 1;
+    let mut challenge = Sha512::new();
+    challenge.update(&signature[..32]);
+    challenge.update(public);
+    challenge.update(message);
+    let k = Scalar::from_bytes_mod_order_wide(&challenge.finalize().into());
+    signature[32..].copy_from_slice(&(k * a).to_bytes());
+    SigningKey::from_bytes(&seed)
+        .verifying_key()
+        .verify(message, &Signature::from_bytes(&signature))
+        .unwrap();
+    signature
+}
+
+fn strict_slot_cases() -> Vec<Value> {
+    use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
+    let baseline = rust_case(1, 1, false);
+    let term = Term::from_carrier(&baseline["envelope"]).unwrap();
+    let envelope = rotation::Envelope::decode(&term).unwrap();
+    let mut old_r = baseline.clone();
+    *field(&mut old_r["envelope"], "old_signature") = json!([
+        "bin",
+        STANDARD.encode(small_r_signature(
+            [121; 32],
+            &envelope.rotation.signing_bytes().unwrap()
+        ))
+    ]);
+    let mut new_r = baseline.clone();
+    *field(&mut new_r["envelope"], "new_signature") = json!([
+        "bin",
+        STANDARD.encode(small_r_signature(
+            [122; 32],
+            &envelope.rotation.possession_bytes().unwrap()
+        ))
+    ]);
+
+    // For A=identity, R=37B and S=37 satisfy the equation for every message.
+    // The other slot stays freshly and correctly signed for its actual purpose.
+    let mut identity = [0; 32];
+    identity[0] = 1;
+    let scalar = Scalar::from(37u64);
+    let mut universal = [0; 64];
+    universal[..32].copy_from_slice(&(ED25519_BASEPOINT_POINT * scalar).compress().to_bytes());
+    universal[32..].copy_from_slice(&scalar.to_bytes());
+    VerifyingKey::from_bytes(&identity)
+        .unwrap()
+        .verify(
+            &envelope.rotation.signing_bytes().unwrap(),
+            &Signature::from_bytes(&universal),
+        )
+        .unwrap();
+    let mut old_a = baseline.clone();
+    old_a["key"] = json!(STANDARD.encode(identity));
+    *field(&mut old_a["envelope"], "old_signature") = json!(["bin", STANDARD.encode(universal)]);
+    let mut new_a = baseline;
+    *field(field(&mut new_a["envelope"], "rotation"), "new_catalog_key") =
+        json!(["bin", STANDARD.encode(identity)]);
+    let term = Term::from_carrier(field(&mut new_a["envelope"], "rotation")).unwrap();
+    let record = rotation::Rotation::decode(&term).unwrap();
+    *field(&mut new_a["envelope"], "old_signature") = json!([
+        "bin",
+        STANDARD.encode(
+            SigningKey::from_bytes(&[121; 32])
+                .sign(&record.signing_bytes().unwrap())
+                .to_bytes()
+        )
+    ]);
+    VerifyingKey::from_bytes(&identity)
+        .unwrap()
+        .verify(
+            &record.possession_bytes().unwrap(),
+            &Signature::from_bytes(&universal),
+        )
+        .unwrap();
+    *field(&mut new_a["envelope"], "new_signature") = json!(["bin", STANDARD.encode(universal)]);
+    vec![old_r, new_r, old_a, new_a]
+}
+
 #[test]
 fn fresh_rotation_records_bytes_ids_and_both_purposes_match_all_three_runtimes() {
     let mut cases = vec![
@@ -112,7 +202,9 @@ fn fresh_rotation_records_bytes_ids_and_both_purposes_match_all_three_runtimes()
         rust_case(1, 1, false),
         rust_case(9_007_199_254_740_991, 13, false),
     ];
-    for base in cases.clone() {
+    let controls = cases.clone();
+    cases.extend(strict_slot_cases());
+    for base in controls {
         let mut old = base.clone();
         *field(&mut old["envelope"], "old_signature") = json!(["bin", STANDARD.encode([0; 64])]);
         cases.push(old);
