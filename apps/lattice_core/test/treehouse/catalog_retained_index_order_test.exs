@@ -165,6 +165,86 @@ defmodule Treehouse.CatalogRetainedIndexOrderTest do
     end
   end
 
+  @tag timeout: 300_000
+  test "unadmitted overflow and triggered reopen retain original artifact order in both owners" do
+    f = CatalogTrustVectors.fixture(0)
+
+    prepared =
+      CatalogTrust.prepare_installation(%{
+        review: f.review,
+        history: hd(f.histories),
+        store: %{kind: :verified_fresh, expected: @expected}
+      })
+
+    assert prepared.kind == :propose
+
+    {records, accepted} =
+      Enum.reduce(0..1022, {[], nil}, fn revision, {records, previous} ->
+        catalog = %{f.catalog | revision: revision, previous: previous && previous.catalog}
+        id = TransportCatalog.catalog_id(catalog)
+        record = %{id: id, json: artifact_json(catalog, f.space.catalog)}
+
+        {[record | records],
+         %{binding: f.space.bootstrap.id, generation: 0, catalog: id, revision: revision}}
+      end)
+
+    records = records |> Enum.sort_by(& &1.id) |> Enum.reverse()
+    state = %{prepared.next | catalogs: records, accepted: accepted}
+    assert records != Enum.sort_by(records, & &1.id)
+    first = %{f.catalog | revision: 1023, previous: accepted.catalog}
+    second = %{f.catalog | revision: 1024, previous: TransportCatalog.catalog_id(first)}
+
+    input = %{
+      installed: state,
+      expected: @expected,
+      incoming: %{
+        empty()
+        | catalogs: [
+            artifact_json(first, f.space.catalog),
+            artifact_json(second, f.space.catalog)
+          ]
+      }
+    }
+
+    overflow = CatalogTrust.evaluate(input)
+    assert overflow.kind == :retain_blocked
+    assert overflow.reason == :control_history_limit
+    assert length(overflow.next.blocked.triggers) == 2
+    assert overflow.next.catalogs == records
+    assert overflow.routes == []
+    reopen = %{installed: overflow.next, expected: @expected, incoming: empty()}
+    reopened = CatalogTrust.evaluate(reopen)
+    assert reopened.kind == :retain_blocked
+    assert reopened.next.catalogs == records
+    assert reopened.next.blocked == overflow.next.blocked
+
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "catalog-index-overflow-#{System.unique_integer([:positive])}.json"
+      )
+
+    on_exit(fn -> File.rm(path) end)
+
+    File.write!(
+      path,
+      Jason.encode!(%{
+        cases:
+          Enum.map([{"overflow", input}, {"triggered-reopen", reopen}], fn {name, request} ->
+            %{name: name, input: NativeCatalogResolverPeer.output(request)}
+          end)
+      })
+    )
+
+    expected = peer(["consume", path])["results"]
+    assert length(expected) == 2
+    assert NativeCatalogResolverPeer.output(overflow) == Enum.at(expected, 0)["decision"]
+    assert NativeCatalogResolverPeer.output(reopened) == Enum.at(expected, 1)["decision"]
+  end
+
+  defp artifact_json(catalog, signer),
+    do: catalog |> CatalogTrustVectors.sign_catalog(signer) |> CatalogTrustVectors.artifact_json()
+
   defp permutations(state, prefix, reason) do
     Enum.map([:histories, :catalogs, :rotations], fn field ->
       %{

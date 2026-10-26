@@ -25,6 +25,10 @@ Permit row reordering, retain original raw frame values, and let the normal fold
 produce canonical indexes. Preserve input immutability and compare complete
 public decisions, details, retained state, heads and routes. Reordering may require
 an ordinary canonicalizing proposal; it never grants new evidence or authority.
+The existing wholly-unadmitted overflow and durable-freeze fallback paths retain
+original catalog/rotation/proof arrays together, including row order, in both
+owners. Preserve that behavior: canonicalizing only BEAM's restored inventory
+would introduce drift and exceed this keyed-set admission correction.
 
 Do not relax the canonical distinct indexes used by reviewed bootstrap inventory,
 cutoff proofs, blocked witness indexes, witness frontiers, operation IDs or trigger
