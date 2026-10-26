@@ -44,6 +44,15 @@ regression agrees without changing its expected result. The separately reviewed 
 hosted gates are green at source tip 8342c5b7b.
 Thread policy/projection is a component, not full application/catalog or installed parity.
 
+## Current chain STOP
+
+The structural chain WIP exposes a new public source disagreement: a correctly
+signed no-op rotation retaining its parent key is invalid_catalog_transition in
+BEAM but invalid_possession in TypeScript. Both public runtimes reproduce this.
+Separate plan274 owns the source correction from green source178 bab44c97e.
+Hold native chain signoff until it passes review/hosted gates and is adopted;
+keep the native transition reason unchanged. Preserve the local chain WIP.
+
 ## Source adoption
 
 The codec, exporter and continuation alias foundations are merged. The evaluator
