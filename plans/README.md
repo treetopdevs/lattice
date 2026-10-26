@@ -449,7 +449,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 270 | [Treehouse text and lineage parity](270-thread-malformed-lineage-parity.md) | P1 | M | Fresh native policy discrepancy; before plan 267 adoption | IN PROGRESS: preserve literal UTF-8 and align malformed-edit traversal; bidirectional state/reason regressions pass; final review/gates remain. |
 | 271 | [Shared lifecycle quarantine](271-shared-lifecycle-quarantine.md) | P1 | M | Native policy review; before plan 267 closure | IN PROGRESS: restore the shared root-only lifecycle predicate and reciprocal complete quarantine maps; review and gates remain. |
 | 272 | [Common strict Ed25519 verification](272-strict-signature-parity.md) | P1 | M | Reproduced native/source consent mismatch | IN PROGRESS: shared strict verifiers and fresh three-runtime/ordinary invitation controls pass; final review and gates remain. |
-| 273 | [Shared catalog artifact integer profile](273-catalog-artifact-integer-profile.md) | P1 | M | 272; reproduced artifact reader disagreement | IN PROGRESS: shared readers and fresh reciprocal tests pass; full local checks and reviews green; final hosted gate remains. |
+| 273 | [Shared catalog artifact integer profile](273-catalog-artifact-integer-profile.md) | P1 | M | 272; reproduced artifact reader disagreement | DONE: #178 bab44c97e passes both hosted gates; approved family cleanup included and adopted at41406bfc3. PR remains open. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
