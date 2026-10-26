@@ -38,6 +38,15 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
                 "tsx",
                 "test/support/native_catalog_chain_peer.ts",
             ]);
+        } else if mode == "entry-priority" || mode == "entry-priority-multi" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/catalog_entry_priority_peer.ts",
+            ]);
+            if mode == "entry-priority-multi" {
+                command.arg("multi");
+            }
         } else if mode == "snapshot-shapes" {
             command.args([
                 "--import",

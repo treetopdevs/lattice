@@ -92,7 +92,7 @@ fn fresh_source_entry_observations_match_complete_native_facts_and_refusals() {
         let output = catalog_peer::output(runtime, "entries-produce", None, 4 * 1024 * 1024);
         let table = decode_peer(&output);
         let cases = table["cases"].as_array().unwrap();
-        assert_eq!(cases.len(), if runtime == "beam" { 17 } else { 13 });
+        assert_eq!(cases.len(), if runtime == "beam" { 19 } else { 13 });
         for case in cases {
             let artifact =
                 artifact::parse(case["catalogJson"].as_str().unwrap().as_bytes()).unwrap();
@@ -130,7 +130,9 @@ fn fresh_source_entry_observations_match_complete_native_facts_and_refusals() {
                     | "unsupported-plus-forgery"
                     | "same-frame-unsupported-forgery"
                     | "forged-depth65-invalid" => Some("invalid_verified_history"),
-                    "wrong-root"
+                    "genesis-refused-command"
+                    | "creation-refused-authority"
+                    | "wrong-root"
                     | "genesis-is-creation"
                     | "creation-is-genesis"
                     | "wrong-reference"
@@ -500,4 +502,325 @@ fn space_reference_binding_is_checked_before_missing_histories() {
         entries::observe(&altered, &[]).unwrap_err(),
         "malformed_catalog"
     );
+}
+
+#[test]
+fn bootstrap_graph_survives_incomplete_inventory_and_facts_keep_refusals_separate() {
+    use std::collections::BTreeSet;
+    use treehouse_tauri_shell::catalog_eval::{chains, histories::AuthenticatedHistories};
+    for runtime in ["beam", "ts"] {
+        let table = decode_peer(&catalog_peer::output(
+            runtime,
+            "entries-produce",
+            None,
+            4 * 1024 * 1024,
+        ));
+        let mut checked = 0;
+        let mut saw_pending = false;
+        let mut saw_invalid = false;
+        let mut saw_refused = false;
+        for case in table["cases"].as_array().unwrap() {
+            let artifact =
+                artifact::parse(case["catalogJson"].as_str().unwrap().as_bytes()).unwrap();
+            let raw = case["histories"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|h| {
+                    (
+                        h["name"].as_str().unwrap(),
+                        serde_json::to_vec(&h["raw"]).unwrap(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let refs = raw
+                .iter()
+                .map(|(name, bytes)| (*name, bytes.as_slice()))
+                .collect::<Vec<_>>();
+            let Ok(histories) = AuthenticatedHistories::authenticate(&refs) else {
+                continue;
+            };
+            let catalog = artifact.term().atom_field("catalog").unwrap();
+            let get_text = |name| match catalog.atom_field(name).unwrap() {
+                treehouse_tauri_shell::catalog_eval::canonical::Term::Binary(bytes) => {
+                    std::str::from_utf8(bytes).unwrap()
+                }
+                _ => panic!("catalog identifier"),
+            };
+            let bootstrap = entries::BootstrapObservation::observe(
+                &histories,
+                get_text("space"),
+                get_text("bootstrap"),
+            )
+            .unwrap();
+            assert_eq!(bootstrap.source().id(), bootstrap.id());
+            assert_eq!(bootstrap.source().replica(), get_text("space"));
+            assert!(entries::BootstrapObservation::observe(
+                &histories,
+                get_text("space"),
+                "absent"
+            )
+            .is_err());
+            let graph = chains::observe_bootstrap(&bootstrap, &[], &[]).unwrap();
+            assert_eq!(
+                serde_json::to_value(&graph).unwrap()["binding_heads"],
+                serde_json::json!([bootstrap.id()])
+            );
+            let facts = bootstrap.entry_facts(&artifact).unwrap();
+            let structural = if facts.iter().any(|f| f.invalid()) {
+                "invalid"
+            } else if facts.iter().any(|f| !f.pending().is_empty()) {
+                "pending"
+            } else {
+                "complete"
+            };
+            let first_invalid = facts
+                .iter()
+                .find(|f| f.invalid() || !f.refused().is_empty());
+            if runtime == "beam" {
+                assert_eq!(
+                    structural,
+                    case["structureStatus"].as_str().unwrap(),
+                    "{}",
+                    case["name"]
+                );
+                if let Some(fact) = first_invalid {
+                    assert_eq!(
+                        serde_json::to_value(fact.refused()).unwrap(),
+                        case["result"]["refused"],
+                        "{}",
+                        case["name"]
+                    );
+                }
+            }
+            for fact in &facts {
+                assert_eq!(
+                    fact.pending()
+                        .iter()
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                    fact.pending()
+                );
+                assert_eq!(
+                    fact.refused()
+                        .iter()
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                    fact.refused()
+                );
+            }
+            if case["name"] == "missing-child" {
+                saw_pending = true;
+                assert_eq!(structural, "pending");
+                assert!(first_invalid.is_none());
+                assert_eq!(
+                    entries::observe(&artifact, &refs).unwrap_err(),
+                    "trust_pending"
+                );
+                // Graph topology can be constructed without inventing complete
+                // entry approval. The graph supplies no eligible routes.
+                assert!(chains::observe_bootstrap(
+                    &bootstrap,
+                    &[artifact::parse(artifact.bytes()).unwrap()],
+                    &[]
+                )
+                .is_ok());
+            }
+            if case["name"] == "pending-cannot-hide-invalid-entry" {
+                saw_invalid = true;
+                assert!(facts.iter().any(|f| !f.pending().is_empty()));
+                assert!(facts.iter().any(|f| f.invalid()));
+            }
+            if case["name"] == "refused-creation" || case["name"] == "refused-reference" {
+                saw_refused = true;
+                assert_eq!(structural, "complete");
+                assert!(first_invalid.is_some_and(|f| !f.invalid() && !f.refused().is_empty()));
+            }
+            checked += 1;
+        }
+        assert!(checked >= 9);
+        assert!(saw_pending && saw_invalid);
+        if runtime == "beam" {
+            assert!(saw_refused);
+        }
+    }
+}
+
+#[test]
+fn rich_entry_facts_match_actual_priority_decisions_and_first_refusal_ids() {
+    use treehouse_tauri_shell::catalog_eval::{
+        canonical::Term, envelope, histories::AuthenticatedHistories,
+    };
+    for (mode, expected_count) in [("entry-priority", 18), ("entry-priority-multi", 8)] {
+        let table = decode_peer(&catalog_peer::output("ts", mode, None, 32 * 1024 * 1024));
+        let cases = table["bundle"]["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), expected_count);
+        for (index, case) in cases.iter().enumerate() {
+            let artifact =
+                artifact::parse(case["catalogJson"].as_str().unwrap().as_bytes()).unwrap();
+            for reverse in [false, true] {
+                let raw = case["histories"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|h| {
+                        let mut h = h.clone();
+                        if reverse {
+                            h["frames"].as_array_mut().unwrap().reverse();
+                        }
+                        (
+                            h["replica"].as_str().unwrap().to_owned(),
+                            serde_json::to_vec(&h).unwrap(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let mut refs = raw
+                    .iter()
+                    .map(|(name, bytes)| (name.as_str(), bytes.as_slice()))
+                    .collect::<Vec<_>>();
+                if reverse {
+                    refs.reverse();
+                }
+                let expected = &table["results"][index]["orders"][usize::from(reverse)]["decision"];
+                let histories = match AuthenticatedHistories::authenticate(&refs) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        assert_eq!(Some(e.reason), expected["reason"].as_str());
+                        continue;
+                    }
+                };
+                let bootstrap = entries::BootstrapObservation::observe(
+                    &histories,
+                    table["bundle"]["review"]["space"].as_str().unwrap(),
+                    table["bundle"]["review"]["bootstrapId"].as_str().unwrap(),
+                )
+                .unwrap();
+                let facts = bootstrap.entry_facts(&artifact).unwrap();
+                if let Some(first) = facts
+                    .iter()
+                    .find(|f| f.invalid() || !f.refused().is_empty())
+                {
+                    assert_eq!(
+                        expected["reason"], "invalid_catalog_transition",
+                        "{} reverse={reverse}",
+                        case["name"]
+                    );
+                    let Term::Binary(key) = bootstrap.record().atom_field("catalog_key").unwrap()
+                    else {
+                        panic!("catalog key")
+                    };
+                    let catalog = envelope::verify(artifact.bytes(), key).unwrap();
+                    let mut ids = vec![catalog.id().to_owned()];
+                    ids.extend(first.refused().iter().cloned());
+                    ids.sort();
+                    ids.dedup();
+                    assert_eq!(
+                        serde_json::to_value(ids).unwrap(),
+                        expected["detail"]["ids"],
+                        "{} reverse={reverse}",
+                        case["name"]
+                    );
+                } else if facts.iter().any(|f| !f.pending().is_empty()) {
+                    assert_eq!(expected["reason"], "trust_pending", "{}", case["name"]);
+                    assert!(expected["next"]["accepted"].is_null());
+                } else {
+                    assert!(expected["reason"].is_null(), "{}", case["name"]);
+                    assert!(!expected["next"]["accepted"].is_null());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn authentic_but_refused_bootstrap_is_diagnostic_and_cannot_issue_complete_entries() {
+    use ed25519_dalek::SigningKey;
+    use treehouse_tauri_shell::catalog_eval::{chains, histories::AuthenticatedHistories};
+    let table = decode_peer(&catalog_peer::output(
+        "ts",
+        "artifact-profile-produce",
+        None,
+        4 * 1024 * 1024,
+    ));
+    let bundle = &table["bundle"];
+    let space = bundle["review"]["space"].as_str().unwrap();
+    let bootstrap_id = bundle["review"]["bootstrapId"].as_str().unwrap();
+    let mut histories = bundle["histories"].as_array().unwrap().clone();
+    let history = histories
+        .iter_mut()
+        .find(|h| h["replica"] == space)
+        .unwrap();
+    let original = history["frames"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|op| op["id"] == bootstrap_id)
+        .unwrap()
+        .clone();
+    let deps = original["deps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|id| id.as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    let refused = catalog_author::signed(
+        &SigningKey::from_bytes(&[217; 32]),
+        space,
+        &deps,
+        "command",
+        original["body"].clone(),
+        original["cap"].clone(),
+    );
+    let refused_id = refused["id"].as_str().unwrap().to_owned();
+    history["frames"].as_array_mut().unwrap().push(refused);
+    let raw = histories
+        .iter()
+        .map(|h| {
+            (
+                h["replica"].as_str().unwrap(),
+                serde_json::to_vec(h).unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let refs = raw
+        .iter()
+        .map(|(name, bytes)| (*name, bytes.as_slice()))
+        .collect::<Vec<_>>();
+    let authenticated = AuthenticatedHistories::authenticate(&refs).unwrap();
+    let bootstrap =
+        entries::BootstrapObservation::observe(&authenticated, space, &refused_id).unwrap();
+    assert!(bootstrap.current_refusal().is_some());
+    assert_eq!(bootstrap.source().id(), refused_id);
+    assert!(chains::observe_bootstrap(&bootstrap, &[], &[]).is_ok());
+    let mut catalog: serde_json::Value =
+        serde_json::from_str(bundle["catalogJson"].as_str().unwrap()).unwrap();
+    let record = carrier_field_mut(&mut catalog, "catalog");
+    *carrier_field_mut(record, "bootstrap") = catalog_author::text(&refused_id);
+    for entry in carrier_field_mut(record, "entries")[1]
+        .as_array_mut()
+        .unwrap()
+    {
+        if carrier_field_mut(entry, "kind") == &serde_json::json!(["atom", "space"]) {
+            *carrier_field_mut(entry, "reference") = catalog_author::text(&refused_id);
+        }
+    }
+    let json = serde_json::to_string(&catalog).unwrap();
+    let artifact = artifact::parse(json.as_bytes()).unwrap();
+    assert_eq!(
+        entries::observe(&artifact, &refs).unwrap_err(),
+        "invalid_catalog_transition"
+    );
+    // The actual BEAM complete-entry owner independently refuses this signed
+    // operation. Neither entry owner selects or verifies the catalog signer.
+    let public = decode_peer(&catalog_peer::output(
+        "beam",
+        "entries-consume",
+        Some(&serde_json::json!({"cases":[{"catalogJson":json,"histories":histories}]})),
+        4 * 1024 * 1024,
+    ));
+    assert_eq!(public["results"][0]["reason"], "invalid_catalog_transition");
 }
