@@ -4,6 +4,8 @@
 
 DESIGN ONLY: discrepancy reproduced and capture alternatives reviewed. The
 operator's hidden-array-metadata choice gates production implementation.
+An executable fresh full-size source regression now pins the unresolved RED;
+it compares every planned complete decision and retains failure evidence.
 This protected source packet precedes native maximum-density adoption under267.
 It does not complete native resource accounting, installation or real-relay proof.
 Evidence and review dispositions belong in the running HTML log and source PR.
