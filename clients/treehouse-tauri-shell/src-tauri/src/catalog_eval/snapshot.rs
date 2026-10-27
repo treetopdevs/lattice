@@ -24,7 +24,13 @@ impl UnverifiedSnapshot {
             return Err(RECOVERY);
         }
         let raw = json::parse_observation(bytes).map_err(|_| RECOVERY)?;
-        if !within_source_depth(&raw) || !state_valid(&raw) {
+        Self::observe(raw)
+    }
+    // Pure retained evidence has logical source bounds. Store byte admission is
+    // deliberately kept in parse(); an observed value grants no stored provenance.
+    pub(super) fn observe(raw: Value) -> Result<Self, &'static str> {
+        if !json::within_observation(&raw, 205) || !within_source_depth(&raw) || !state_valid(&raw)
+        {
             return Err(RECOVERY);
         }
         Ok(Self { raw })

@@ -360,11 +360,11 @@ Retain 128 KiB artifact, 1,024/16 MiB artifact-store, 64,000-byte push-frame,
 existing depth/node limits. Bound complete-input parsing before allocation without
 clipping evaluator-valid maximum-size history. Frame-set authentication accounts
 for encoded frame bytes and array separators before allocating verified state.
-Whole-page parsing and persisted snapshot checks remain separate later seams.
+Pure values retain 64 MiB logical bounds; 32 MiB store and 64 MiB transport byte adapters stay separate.
 Before exposing the full owner, account peak simultaneous owned JSON, merged
 history/frame serialization, proof fingerprint indexes and transient policy views;
 a finite input cap alone is not proof of acceptable native memory/CPU cost.
-Measure large authenticated inputs and repeated proof/view cases. In one immutable
+Measure large authenticated inputs and repeated proof/view cases, including frozen/fallback maxima. In one immutable
 proof-observation context, reuse only exactly matching validated raw rows; changed
 metadata and new histories must revalidate. Preserve first raw representation and
 canonical output order; borrow comparisons and move owned output rows. Build

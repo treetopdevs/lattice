@@ -54,6 +54,16 @@ pub(super) fn parse(bytes: &[u8]) -> Result<Value, &'static str> {
     Ok(page)
 }
 
+// Values can be produced by a bounded internal merge whose serialized spelling
+// exceeds one transport page. This constructor supplies shape/budget checks only.
+pub(super) fn observe(page: Value) -> Result<Value, &'static str> {
+    page_header::validate_value(&page)?;
+    if !json::within_observation(&page, 205) {
+        return Err("invalid_verified_history");
+    }
+    Ok(page)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,6 +79,25 @@ mod tests {
     fn wrapper(proof: &str) -> String {
         format!("{{\"catalogs\":[],\"rotations\":[],\"histories\":[],\"cutoffProofs\":[{proof}]}}")
     }
+    #[test]
+    fn value_page_logical_edge_and_shape_precedence() {
+        let mut page = json!({"catalogs":[],"rotations":[],"histories":[],"cutoffProofs":[]});
+        let keys: usize = page.as_object().unwrap().keys().map(String::len).sum();
+        page["catalogs"] =
+            json!(["x".repeat(super::super::super::canonical::MAX_OBSERVATION_INPUT - keys)]);
+        let mut page = observe(page).unwrap();
+        let Value::String(text) = &mut page["catalogs"][0] else {
+            unreachable!()
+        };
+        text.push('x');
+        assert!(matches!(
+            observe(page.clone()),
+            Err("invalid_verified_history")
+        ));
+        page["histories"] = json!({});
+        assert!(matches!(observe(page), Err("malformed_catalog")));
+    }
+
     #[test]
     fn projection_keeps_valid_cutoff_metadata_and_defers_malformed_rows_in_order() {
         let input = json!({"catalogs":[],"rotations":[],"histories":[],"cutoffProofs":[

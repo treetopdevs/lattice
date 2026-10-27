@@ -21,7 +21,9 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
             "run",
             "--no-compile",
             "--no-start",
-            if mode == "number-input-produce" {
+            if mode == "capacity-consume" {
+                "scripts/treehouse_native_catalog_capacity_peer.exs"
+            } else if mode == "number-input-produce" {
                 "scripts/treehouse_native_catalog_number_input_peer.exs"
             } else if mode == "full-input-produce" {
                 "scripts/treehouse_native_catalog_full_input_peer.exs"
@@ -44,6 +46,12 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
                 "tsx",
                 "test/support/native_catalog_resolver_peer.ts",
                 "consume",
+            ]);
+        } else if mode == "capacity-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_capacity_peer.ts",
             ]);
         } else if mode == "refusal-resource-produce" {
             command.args([

@@ -161,6 +161,53 @@ pub(super) fn validate(bytes: &[u8]) -> Result<(), &'static str> {
     Ok(())
 }
 
+// Mirror only the raw preflight's structural stage for already-owned values.
+// Grammar/encoded-byte admission belongs exclusively to validate(bytes).
+pub(super) fn validate_value(page: &serde_json::Value) -> Result<(), &'static str> {
+    use super::closed_json;
+    if !closed_json(
+        page,
+        &["catalogs", "rotations", "histories", "cutoffProofs"],
+    ) || ["catalogs", "rotations", "histories", "cutoffProofs"]
+        .iter()
+        .any(|name| !page[*name].is_array())
+    {
+        return Err(MALFORMED);
+    }
+    let catalogs = page["catalogs"].as_array().unwrap();
+    let rotations = page["rotations"].as_array().unwrap();
+    if catalogs.len() + rotations.len() > 32 {
+        return Err("control_history_limit");
+    }
+    if catalogs
+        .iter()
+        .chain(rotations)
+        .any(|value| !value.is_string())
+    {
+        return Err(MALFORMED);
+    }
+    let mut wrong_family = false;
+    for raw in page["histories"].as_array().unwrap() {
+        if !closed_json(raw, &["replica", "frames", "rejected"])
+            || !raw["replica"].as_str().is_some_and(|name| !name.is_empty())
+            || !raw["frames"].is_array()
+            || !raw["rejected"].is_array()
+        {
+            return Err(MALFORMED);
+        }
+        for row in raw["rejected"].as_array().unwrap() {
+            if !closed_json(row, &["frame", "reason"]) || row["reason"] != "bad_signature" {
+                return Err(MALFORMED);
+            }
+        }
+        wrong_family |= !histories::catalog_family(raw["replica"].as_str().unwrap());
+    }
+    if wrong_family {
+        return Err("wrong_catalog_scope");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,5 +252,52 @@ mod tests {
         assert_eq!(validate(&raw), Ok(()));
         raw.push(b' ');
         assert_eq!(validate(&raw), Err("invalid_verified_history"));
+    }
+}
+
+#[cfg(test)]
+mod value_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn owned_header_keeps_raw_structural_precedence() {
+        let empty = json!({"catalogs":[],"rotations":[],"histories":[],"cutoffProofs":[]});
+        let mut cases = vec![empty.clone(), json!(null), json!([]), json!({})];
+        for value in [json!(null), json!(0), json!(false), json!("x"), json!({})] {
+            for name in ["catalogs", "rotations", "histories", "cutoffProofs"] {
+                let mut page = empty.clone();
+                page[name] = value.clone();
+                cases.push(page);
+            }
+        }
+        for count in [0, 31, 32, 33] {
+            for member in [json!("x"), json!(0)] {
+                let mut page = empty.clone();
+                page["catalogs"] = json!(vec![member; count]);
+                cases.push(page);
+            }
+        }
+        let foreign = json!({"replica":"foreign","frames":[],"rejected":[]});
+        for bad in [
+            json!({}),
+            json!({"replica":"foreign","frames":[],"rejected":[{"frame":null,"reason":"other"}]}),
+            json!({"replica":"","frames":[],"rejected":[]}),
+        ] {
+            for rows in [
+                vec![foreign.clone(), bad.clone()],
+                vec![bad.clone(), foreign.clone()],
+            ] {
+                let mut page = empty.clone();
+                page["histories"] = json!(rows);
+                cases.push(page);
+            }
+        }
+        for page in cases {
+            assert_eq!(
+                validate_value(&page),
+                validate(&serde_json::to_vec(&page).unwrap()),
+                "{page}"
+            );
+        }
     }
 }

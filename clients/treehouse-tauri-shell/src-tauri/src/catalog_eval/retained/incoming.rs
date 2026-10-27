@@ -19,11 +19,30 @@ fn reject(error: ChainError) -> Value {
 }
 
 pub(super) fn evaluate(snapshot: &[u8], expected: &Value, incoming: &[u8]) -> Value {
-    let original = match OriginalEvidence::read(snapshot).and_then(OriginalEvidence::validate) {
+    evaluate_original(OriginalEvidence::read(snapshot), expected, || {
+        super::page_observation::parse(incoming)
+    })
+}
+
+// Internal value-plane evaluation, distinct from store/transport byte admission.
+// Every value remains untrusted and must replay the same original-only owner.
+// No IPC command accepts this interface or a caller-provided validation receipt.
+pub(super) fn evaluate_observation(snapshot: Value, expected: &Value, incoming: Value) -> Value {
+    evaluate_original(OriginalEvidence::observe(snapshot), expected, || {
+        super::page_observation::observe(incoming)
+    })
+}
+
+fn evaluate_original(
+    original: Result<OriginalEvidence, ChainError>,
+    expected: &Value,
+    page: impl FnOnce() -> Result<Value, &'static str>,
+) -> Value {
+    let original = match original.and_then(OriginalEvidence::validate) {
         Ok(original) => original,
         Err(error) => return reject(error),
     };
-    match evaluate_validated(original, expected, incoming) {
+    match evaluate_validated(original, expected, page) {
         Ok(decision) => decision,
         Err(error) => reject(error),
     }
@@ -32,7 +51,7 @@ pub(super) fn evaluate(snapshot: &[u8], expected: &Value, incoming: &[u8]) -> Va
 fn evaluate_validated(
     owner: ValidatedOriginal,
     expected: &Value,
-    bytes: &[u8],
+    read_page: impl FnOnce() -> Result<Value, &'static str>,
 ) -> Result<Value, ChainError> {
     if !closed_json(expected, &["trustRevision", "historyGeneration"])
         || ["trustRevision", "historyGeneration"]
@@ -41,7 +60,7 @@ fn evaluate_validated(
     {
         return Err(fail("malformed_catalog"));
     }
-    let page = super::page_observation::parse(bytes).map_err(fail)?;
+    let page = read_page().map_err(fail)?;
     let original = owner.evidence.snapshot.raw();
     let histories = super::super::histories::AuthenticatedHistories::authenticate_union(
         &original["histories"],
@@ -197,7 +216,15 @@ impl IncomingContext<'_, '_> {
         let original = self.original;
         let mut next = json!({"version":original["version"],"review":original["review"],"accepted":original["accepted"]});
         let fields = next.as_object_mut().unwrap();
-        fields.insert("histories".into(), Value::Array(self.histories.iter().map(|(_, history)| history.raw().clone()).collect()));
+        fields.insert(
+            "histories".into(),
+            Value::Array(
+                self.histories
+                    .iter()
+                    .map(|(_, history)| history.raw().clone())
+                    .collect(),
+            ),
+        );
         fields.insert("catalogs".into(), catalogs);
         fields.insert("rotations".into(), rotations);
         fields.insert("cutoffProofs".into(), cutoff_proofs);

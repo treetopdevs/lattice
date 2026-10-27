@@ -421,6 +421,13 @@ impl OriginalEvidence {
             ids: Vec::new(),
         };
         let snapshot = super::snapshot::UnverifiedSnapshot::parse(bytes).map_err(|_| recovery())?;
+        Self::from_snapshot(snapshot)
+    }
+    fn observe(raw: Value) -> Result<Self, ChainError> {
+        let snapshot = super::snapshot::UnverifiedSnapshot::observe(raw).map_err(|_| recovery())?;
+        Self::from_snapshot(snapshot)
+    }
+    fn from_snapshot(snapshot: super::snapshot::UnverifiedSnapshot) -> Result<Self, ChainError> {
         validate_original_artifact_ids(snapshot.raw())?;
         let histories = super::histories::AuthenticatedHistories::authenticate_union(
             &snapshot.raw()["histories"],
@@ -1080,6 +1087,188 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn genuine_logical_capacity_matches_both_public_owners() {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        let directory = tempfile::TempDir::new().unwrap();
+        let isolated = std::env::var_os("LATTICE_NATIVE_CAPACITY_MANIFEST");
+        let manifest: Value = if let Some(path) = &isolated {
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+        } else {
+            let request = json!({"directory":directory.path()});
+            let manifest: Value = serde_json::from_slice(&catalog_peer::output(
+                "ts",
+                "capacity-produce",
+                Some(&request),
+                16 * 1024,
+            ))
+            .unwrap();
+            let beam: Value = serde_json::from_slice(&catalog_peer::output(
+                "beam",
+                "capacity-consume",
+                Some(&manifest),
+                16 * 1024,
+            ))
+            .unwrap();
+            assert_eq!(
+                manifest["cases"], beam["cases"],
+                "full source decisions at the genuine logical maximum"
+            );
+            manifest
+        };
+        assert_eq!(manifest["cases"].as_array().unwrap().len(), 4);
+        for (row, name) in manifest["cases"].as_array().unwrap().iter().zip([
+            "accepted",
+            "reopened",
+            "proposedOver",
+            "savedOver",
+        ]) {
+            assert_eq!(row["name"], name);
+        }
+        let path = manifest["path"].as_str().unwrap();
+        assert!(std::fs::metadata(path).unwrap().len() <= 128 * 1024 * 1024);
+        let bytes = std::fs::read(path).unwrap();
+        assert!(bytes.len() <= 128 * 1024 * 1024);
+        let raw: Value = serde_json::from_slice(&bytes).unwrap();
+        let expected = json!({"trustRevision":0,"historyGeneration":0});
+        let empty = json!({"catalogs":[],"rotations":[],"histories":[],"cutoffProofs":[]});
+        let check = |index: usize, decision: &Value| {
+            let row = &manifest["cases"][index];
+            assert_eq!(decision["kind"], row["kind"], "{}", row["name"]);
+            assert_eq!(decision["reason"], row["reason"], "{}", row["name"]);
+            assert_eq!(
+                URL_SAFE_NO_PAD.encode(proof_row_digest(decision)),
+                row["decisionSha256"].as_str().unwrap(),
+                "{}",
+                row["name"]
+            );
+        };
+        let mut page = empty.clone();
+        page["histories"] = json!([raw["at"]]);
+        assert!(super::super::json::within_observation(&page, 205));
+        let encoded_page = serde_json::to_vec(&page).unwrap();
+        assert!(encoded_page.len() > 64 * 1024 * 1024);
+        let transport_refusal = incoming::evaluate(
+            &serde_json::to_vec(&raw["initial"]).unwrap(),
+            &expected,
+            &encoded_page,
+        );
+        assert_eq!(
+            transport_refusal["reason"], "invalid_verified_history",
+            "transport byte admission stays separate"
+        );
+        drop(encoded_page);
+        let started = std::time::Instant::now();
+        let mut accepted = incoming::evaluate_observation(raw["initial"].clone(), &expected, page);
+        check(0, &accepted);
+        assert_eq!(accepted["kind"], "propose");
+        assert_eq!(
+            accepted["next"]["histories"][0]["frames"]
+                .as_array()
+                .unwrap()
+                .len() as u64,
+            manifest["frameCount"].as_u64().unwrap()
+        );
+        assert_eq!(accepted["next"]["accepted"], raw["initial"]["accepted"]);
+        assert_eq!(
+            accepted["next"]["cutoffProofs"].as_array().unwrap().len(),
+            1
+        );
+        let saved_bytes = serde_json::to_vec(&accepted["next"]).unwrap();
+        assert!(saved_bytes.len() > 32 * 1024 * 1024);
+        assert_eq!(
+            super::super::snapshot::UnverifiedSnapshot::parse(&saved_bytes).unwrap_err(),
+            "trust_recovery_required",
+            "store admission stays separate"
+        );
+        let mut reopened =
+            incoming::evaluate_observation(accepted["next"].take(), &expected, empty.clone());
+        check(1, &reopened);
+        assert_eq!(reopened["kind"], "unchanged");
+        drop(reopened["next"].take());
+        let mut over = raw["at"].clone();
+        *over["frames"].as_array_mut().unwrap().last_mut().unwrap() = raw["overFrame"].clone();
+        let mut page = empty.clone();
+        page["histories"] = json!([over]);
+        drop(over);
+        assert!(
+            super::super::json::within_observation(&page, 205),
+            "candidate aggregate, not page admission, must refuse the extra byte"
+        );
+        let proposed_over = incoming::evaluate_observation(raw["initial"].clone(), &expected, page);
+        check(2, &proposed_over);
+        assert_eq!(proposed_over["reason"], "invalid_verified_history");
+        let mut original_over = raw["initial"].clone();
+        original_over["histories"] = json!([raw["at"]]);
+        *original_over["histories"][0]["frames"]
+            .as_array_mut()
+            .unwrap()
+            .last_mut()
+            .unwrap() = raw["overFrame"].clone();
+        assert!(!super::super::json::within_observation(&original_over, 205));
+        let mut saved_over_page = empty;
+        saved_over_page["histories"] = json!([raw["baseline"]]);
+        let saved_over = incoming::evaluate_observation(original_over, &expected, saved_over_page);
+        check(3, &saved_over);
+        assert_eq!(saved_over["reason"], "trust_recovery_required");
+        println!(
+            "CAPACITY_RESOURCE {}",
+            json!({"fixtureMode":if isolated.is_some() {"isolated-input"} else {"live-owners"},
+            "bundleBytes":bytes.len(),"savedBytes":saved_bytes.len(),"frames":manifest["frameCount"],
+            "evaluateMicros":started.elapsed().as_micros(),"cases":manifest["cases"]})
+        );
+        std::hint::black_box((
+            &raw,
+            &bytes,
+            &saved_bytes,
+            &accepted,
+            &reopened,
+            &proposed_over,
+            &saved_over,
+        ));
+    }
+
+    #[test]
+    fn owned_snapshot_matches_byte_shape_and_source_depth_edges() {
+        use super::super::snapshot::UnverifiedSnapshot;
+        use serde::Deserialize;
+        let corpus: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "snapshot-shapes",
+            None,
+            4 * 1024 * 1024,
+        ))
+        .unwrap();
+        for row in corpus["depthCases"].as_array().unwrap() {
+            let bytes = row["json"].as_str().unwrap().as_bytes();
+            let mut decoder = serde_json::Deserializer::from_slice(bytes);
+            decoder.disable_recursion_limit();
+            let raw = Value::deserialize(&mut decoder).unwrap();
+            decoder.end().unwrap();
+            let stored = UnverifiedSnapshot::parse(bytes);
+            let observed = UnverifiedSnapshot::observe(raw);
+            assert_eq!(
+                stored.is_ok(),
+                row["withinSourceBounds"].as_bool().unwrap(),
+                "{}",
+                row["name"]
+            );
+            assert_eq!(
+                stored.map(|v| v.raw().clone()),
+                observed.map(|v| v.raw().clone()),
+                "{}",
+                row["name"]
+            );
+        }
+        for raw in corpus["states"].as_array().unwrap() {
+            let bytes = serde_json::to_vec(raw).unwrap();
+            assert_eq!(
+                UnverifiedSnapshot::parse(&bytes).map(|v| v.raw().clone()),
+                UnverifiedSnapshot::observe(raw.clone()).map(|v| v.raw().clone())
+            );
+        }
+    }
+
+    #[test]
     fn malformed_proof_resource_process_envelope() {
         use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
         let path = std::env::var_os("LATTICE_NATIVE_REFUSAL_INPUT");
@@ -1151,7 +1340,10 @@ mod tests {
         let started = std::time::Instant::now();
         let decision = incoming::evaluate(&saved, &input["expected"], &page);
         let elapsed = started.elapsed();
-        assert!(matches!(decision["kind"].as_str(), Some("propose" | "unchanged" | "retain_blocked")));
+        assert!(matches!(
+            decision["kind"].as_str(),
+            Some("propose" | "unchanged" | "retain_blocked")
+        ));
         if decision["kind"] == "retain_blocked" {
             assert_eq!(decision["reason"], "authority_changed");
             assert!(decision["routes"].as_array().unwrap().is_empty());
@@ -1531,6 +1723,20 @@ mod tests {
                 &input["expected"],
                 incoming_bytes,
             );
+            // A Value cannot express duplicate keys or a caller's numeric/escape
+            // spelling. Those incomingJson controls intentionally stay byte-only.
+            if request.get("incomingJson").is_none() {
+                let observed = incoming::evaluate_observation(
+                    input["installed"].clone(),
+                    &input["expected"],
+                    input["incoming"].clone(),
+                );
+                assert!(
+                    equal(&native, &observed),
+                    "byte/value planes disagree: {}",
+                    request["name"]
+                );
+            }
             if native.get("next").is_some() {
                 for history in input["installed"]["histories"].as_array().unwrap() {
                     let retained = native["next"]["histories"]
