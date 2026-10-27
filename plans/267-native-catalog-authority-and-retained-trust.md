@@ -104,6 +104,17 @@ original-state failures to recovery before considering incoming repair.
 
 ## Next integration: original-state validation and graph trust
 
+Plans281–282 SOURCE STOP: a saved authentic raw frame with JSON version1.0 is accepted
+by TypeScript but requires recovery in BEAM. The native original-only work is
+preserved in its separate resolver worktree. Review and gate the catalog-scoped
+numeric-value correction independently before native incoming adoption; ordinary
+wire admission, artifact lexical parsing and canonical bytes stay unchanged.
+A separate original-only mutation probe also proves that a singleton saved
+catalog-fork witness is rejected by TypeScript but retained by BEAM. Plan282
+requires an independent witness-integrity correction and source gate; keep the
+native regression unchanged until source adoption.
+
+
 STOP on full-resolver source adoption: fresh public owners disagree on reordered
 unique saved history/artifact indexes. Plan 280 owns the isolated source correction.
 Preserve completed native components; do not select one oracle in Rust.
