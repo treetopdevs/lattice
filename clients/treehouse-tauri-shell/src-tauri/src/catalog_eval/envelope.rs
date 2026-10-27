@@ -51,11 +51,11 @@ impl AuthenticCatalog {
 }
 
 pub fn verify(bytes: &[u8], expected_catalog_key: &[u8]) -> Result<AuthenticCatalog> {
-    let value = super::json::parse(bytes)?;
-    let envelope = Term::from_carrier(&value)?;
-    closed(&envelope, &["catalog", "signature"])?;
-    let catalog = field(&envelope, "catalog")?;
-    let signature = binary(field(&envelope, "signature")?, 64)?;
+    let artifact = super::artifact::parse(bytes).map_err(|_| INVALID)?;
+    let envelope = artifact.term();
+    closed(envelope, &["catalog", "signature"])?;
+    let catalog = field(envelope, "catalog")?;
+    let signature = binary(field(envelope, "signature")?, 64)?;
     let signing_bytes = signing_bytes(catalog)?;
     verify_signature(expected_catalog_key, &signing_bytes, signature)?;
     Ok(AuthenticCatalog {

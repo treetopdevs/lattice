@@ -1,21 +1,21 @@
 //! Signature/hash authenticity only. A verified frame may still be unauthorized,
 //! quarantined, causally incomplete or outside the catalog's replica scope.
-//! Atom vocabulary/admission belongs to the later portability stage, as in TS
-//! `verifyCarrierOp`; unknown signed names are not signature failures.
-use super::canonical::{base64, encode_op_payload, Result, Term};
+use super::canonical::{base64, encode_op_payload, observation_base64, Result, Term};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use sha2::{Digest, Sha256};
 
 pub const MAX_FRAME_BYTES: usize = 64_000;
 const INVALID: &str = "catalog_envelope_invalid";
 
-/// Signature/hash authenticity only, never wire admission or authority.
-/// The product reader must enforce vocabulary/admission before any fold or trust decision.
 #[derive(Debug)]
 pub struct AuthenticFrame {
     id: String,
     replica: String,
     payload: Vec<u8>,
+    author: Vec<u8>,
+    deps: Vec<String>,
+    supplied_deps: Vec<String>,
+    kind: String,
     body: Term,
     cap: Term,
 }
@@ -28,6 +28,20 @@ impl AuthenticFrame {
     }
     pub fn payload(&self) -> &[u8] {
         &self.payload
+    }
+    pub fn author(&self) -> &[u8] {
+        &self.author
+    }
+    pub fn deps(&self) -> &[String] {
+        &self.deps
+    }
+    // Signatures bind the normalized set, not list order or multiplicity.
+    // Retain transport evidence separately; authority uses the normalized signed set.
+    pub(crate) fn supplied_deps(&self) -> &[String] {
+        &self.supplied_deps
+    }
+    pub fn kind(&self) -> &str {
+        &self.kind
     }
     pub fn body(&self) -> &Term {
         &self.body
@@ -42,6 +56,53 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
         return Err(INVALID);
     }
     let value = super::json::parse(bytes)?;
+    let inspected = inspect_value_inner(&value, false)?;
+    if !inspected.authentic() {
+        return Err(INVALID);
+    }
+    Ok(AuthenticFrame {
+        id: inspected.id,
+        replica: inspected.replica,
+        payload: inspected.payload,
+        author: inspected.author,
+        deps: inspected.deps,
+        supplied_deps: value["deps"]
+            .as_array()
+            .expect("inspected deps array")
+            .iter()
+            .map(|id| id.as_str().expect("inspected dependency text").to_owned())
+            .collect(),
+        kind: inspected.kind,
+        body: inspected.body,
+        cap: inspected.cap,
+    })
+}
+
+// Unverified contents are deliberately a distinct crate-private type. Retained
+// structural rejection evidence must never become an AuthenticFrame.
+pub(crate) struct InspectedFrame {
+    pub id: String,
+    pub replica: String,
+    pub payload: Vec<u8>,
+    pub author: Vec<u8>,
+    pub deps: Vec<String>,
+    pub kind: String,
+    pub body: Term,
+    pub cap: Term,
+    pub signature: Vec<u8>,
+}
+impl InspectedFrame {
+    pub fn authentic(&self) -> bool {
+        URL_SAFE_NO_PAD.encode(Sha256::digest(&self.payload)) == self.id
+            && verify_signature(&self.author, &self.payload, &self.signature).is_ok()
+    }
+}
+
+pub(crate) fn inspect_value(value: &serde_json::Value) -> Result<InspectedFrame> {
+    inspect_value_inner(value, true)
+}
+
+fn inspect_value_inner(value: &serde_json::Value, observation: bool) -> Result<InspectedFrame> {
     let fields = value.as_object().ok_or(INVALID)?;
     const KEYS: [&str; 9] = [
         "v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig",
@@ -53,14 +114,21 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
         return Err(INVALID);
     }
     let text = |key: &str| -> Result<&str> {
-        value[key].as_str().filter(|s| !s.is_empty()).ok_or(INVALID)
+        value[key]
+            .as_str()
+            .filter(|s| observation || !s.is_empty())
+            .ok_or(INVALID)
     };
     let id = text("id")?;
     let replica = text("replica")?;
     let author = base64(text("author")?, Some(32))?;
-    let signature = base64(text("sig")?, Some(64))?;
+    let signature = if observation {
+        observation_base64(text("sig")?, None)?
+    } else {
+        base64(text("sig")?, Some(64))?
+    };
     let kind = text("kind")?;
-    if !["command", "authority", "inbox", "tombstone"].contains(&kind) {
+    if !observation && !["command", "authority", "inbox", "tombstone"].contains(&kind) {
         return Err(INVALID);
     }
     let mut deps = value["deps"]
@@ -70,13 +138,22 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
         .map(|v| v.as_str().ok_or(INVALID))
         .collect::<Result<Vec<_>>>()?;
     for dep in &deps {
-        identifier(dep)?;
+        if !observation {
+            identifier(dep)?;
+        }
     }
     deps.sort_unstable();
     deps.dedup();
-    let body = Term::from_carrier(&value["body"])?;
-    let cap = Term::from_carrier(&value["cap"])?;
-    let payload = encode_op_payload(&[
+    let term = |value: &serde_json::Value| {
+        if observation {
+            Term::from_observation(value)
+        } else {
+            Term::from_carrier(value)
+        }
+    };
+    let body = term(&value["body"])?;
+    let cap = term(&value["cap"])?;
+    let payload_fields = vec![
         Term::Binary(b"lattice-op-v2".to_vec()),
         Term::Binary(replica.as_bytes().to_vec()),
         Term::Binary(author.clone()),
@@ -88,17 +165,18 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
         Term::Atom(kind.to_owned()),
         body.clone(),
         cap.clone(),
-    ])?;
-    if URL_SAFE_NO_PAD.encode(Sha256::digest(&payload)) != id {
-        return Err(INVALID);
-    }
-    verify_signature(&author, &payload, &signature)?;
-    Ok(AuthenticFrame {
+    ];
+    let payload = encode_op_payload(&payload_fields, observation)?;
+    Ok(InspectedFrame {
         id: id.to_owned(),
         replica: replica.to_owned(),
         payload,
+        author,
+        deps: deps.into_iter().map(str::to_owned).collect(),
+        kind: kind.to_owned(),
         body,
         cap,
+        signature,
     })
 }
 
