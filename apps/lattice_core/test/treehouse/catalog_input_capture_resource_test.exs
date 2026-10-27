@@ -7,6 +7,15 @@ defmodule Treehouse.CatalogInputCaptureResourceTest do
 
   @tag timeout: 300_000
   test "full encoded array/object capture preserves complete public decisions and security fallback" do
+    assert_source_corpus("dense", ~w(array-unblocked array-frozen object-unblocked object-frozen))
+  end
+
+  @tag timeout: 300_000
+  test "full encoded distinct composites preserve the security freeze beyond a single tracker table" do
+    assert_source_corpus("composites", ["composites-frozen"])
+  end
+
+  defp assert_source_corpus(profile, names) do
     directory =
       Path.join(
         System.tmp_dir!(),
@@ -15,7 +24,7 @@ defmodule Treehouse.CatalogInputCaptureResourceTest do
 
     File.mkdir!(directory)
     request = Path.join(directory, "request.json")
-    File.write!(request, Jason.encode!(%{directory: directory}))
+    File.write!(request, Jason.encode!(%{directory: directory, profile: profile}))
 
     {output, status} =
       System.cmd(
@@ -26,7 +35,7 @@ defmodule Treehouse.CatalogInputCaptureResourceTest do
       )
 
     File.write!(Path.join(directory, "producer.log"), output)
-    # A fresh failing producer retains all four observations. Compare both
+    # A fresh failing producer retains every observation. Compare both
     # actual owners before reporting the RED; status still must be zero to pass.
     # The unique directory forbids substituting a corpus from another attempt.
     manifest_bytes = read_bounded(Path.join(directory, "manifest.json"), 1024 * 1024)
@@ -34,20 +43,32 @@ defmodule Treehouse.CatalogInputCaptureResourceTest do
     assert manifest["version"] == 1
     assert manifest["targetBytes"] == @maximum
     assert manifest["expected"] == %{"trustRevision" => 0, "historyGeneration" => 0}
-    assert length(manifest["cases"]) == 4
+    assert length(manifest["cases"]) == length(names)
     assert manifest["snapshot"]["path"] == Path.join(directory, "snapshot.json")
     installed = manifest["snapshot"] |> read_pinned(32 * 1024 * 1024) |> Jason.decode!()
 
-    names = ~w(array-unblocked array-frozen object-unblocked object-frozen)
     assert Enum.map(manifest["cases"], & &1["name"]) == names
 
     results =
       for {row, index} <- Enum.with_index(manifest["cases"]) do
         assert row["page"]["path"] == Path.join(directory, row["name"] <> ".json")
         assert row["page"]["bytes"] == @maximum
-        assert row["frozen"] == (rem(index, 2) == 1)
-        assert row["shape"] == if(index < 2, do: "array", else: "object")
+        assert row["frozen"] == (profile == "composites" or rem(index, 2) == 1)
+
+        assert row["shape"] ==
+                 if(profile == "composites",
+                   do: "composites",
+                   else: if(index < 2, do: "array", else: "object")
+                 )
+
         incoming = row["page"] |> read_pinned(@maximum) |> Jason.decode!()
+
+        if profile == "composites" do
+          [values] = incoming["cutoffProofs"]
+          assert length(values) == row["entries"]
+          assert length(values) > 16_777_216
+          assert Enum.all?(values, &(&1 == []))
+        end
 
         beam =
           %{"installed" => installed, "expected" => manifest["expected"], "incoming" => incoming}

@@ -9,7 +9,9 @@ import {prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust} from
 
 const MAX = 64 * 1024 * 1024;
 const request = JSON.parse(readFileSync(process.argv[2] ?? 0, "utf8"));
-assert.deepEqual(Object.keys(request).sort(), request.targetBytes === undefined ? ["directory"] : ["directory", "targetBytes"]);
+assert.ok(Object.keys(request).includes("directory") && Object.keys(request).every(key => ["directory", "targetBytes", "profile"].includes(key)));
+const profile = request.profile ?? "dense";
+assert.ok(profile === "dense" || profile === "composites");
 const target = request.targetBytes ?? MAX;
 assert.ok(Number.isSafeInteger(target) && target >= 16 * 1024 && target <= MAX);
 const directory = resolve(request.directory);
@@ -38,9 +40,9 @@ function digits(n: number): number {
   return total;
 }
 function payloadBytes(n: number, shape: string): number {
-  return n === 0 ? 2 : shape === "array" ? 2 * n + 1 : 1 + digits(n) + 5 * n;
+  return n === 0 ? 2 : shape === "array" ? 2 * n + 1 : shape === "composites" ? 3 * n + 1 : 1 + digits(n) + 5 * n;
 }
-async function generate(shape: "array" | "object", frozen: boolean) {
+async function generate(shape: "array" | "object" | "composites", frozen: boolean) {
   const name = `${shape}-${frozen ? "frozen" : "unblocked"}`;
   const prefix = Buffer.from(`{"catalogs":[],"rotations":[],"histories":${JSON.stringify(frozen ? [changed] : [])},"cutoffProofs":[`);
   const suffix = Buffer.from("]}");
@@ -62,13 +64,13 @@ async function generate(shape: "array" | "object", frozen: boolean) {
   };
   try {
     append(prefix);
-    append(shape === "array" ? "[" : "{");
+    append(shape === "object" ? "{" : "[");
     for (let start = 0; start < lo; start += 8192) {
       const fields: string[] = [];
-      for (let i = start; i < Math.min(lo, start + 8192); i++) fields.push(`${i === 0 ? "" : ","}${shape === "array" ? "0" : `"${i}":0`}`);
+      for (let i = start; i < Math.min(lo, start + 8192); i++) fields.push(`${i === 0 ? "" : ","}${shape === "array" ? "0" : shape === "composites" ? "[]" : `"${i}":0`}`);
       append(fields.join(""));
     }
-    append(shape === "array" ? "]" : "}");
+    append(shape === "object" ? "}" : "]");
     append(suffix);
     append(" ".repeat(available - payloadBytes(lo, shape)));
   } finally { closeSync(fd); }
@@ -77,11 +79,12 @@ async function generate(shape: "array" | "object", frozen: boolean) {
   const incoming = JSON.parse(raw.toString("utf8"));
   const decision = await evaluateTreehouseCatalogTrust({installed, expected, incoming});
   write(`${name}-source-decision.json`, Buffer.from(JSON.stringify(decision)));
-  return {name, shape, frozen, entries: lo, payloadNodes: shape === "array" ? lo + 1 : 2 * lo + 1,
-    keyBytes: shape === "array" ? 0 : digits(lo), page: {path, bytes: raw.length, sha256: digest(raw)}, decision};
+  return {name, shape, frozen, entries: lo, payloadNodes: shape === "object" ? 2 * lo + 1 : lo + 1,
+    keyBytes: shape === "object" ? digits(lo) : 0, page: {path, bytes: raw.length, sha256: digest(raw)}, decision};
 }
 const cases = [];
-for (const shape of ["array", "object"] as const) for (const frozen of [false, true]) cases.push(await generate(shape, frozen));
+if (profile === "composites") cases.push(await generate("composites", true));
+else for (const shape of ["array", "object"] as const) for (const frozen of [false, true]) cases.push(await generate(shape, frozen));
 const manifest = write("manifest.json", Buffer.from(JSON.stringify({version: 1, targetBytes: target, snapshot, expected, cases})));
 assert.ok(manifest.bytes <= 1024 * 1024);
 // Retain all planned controls before reporting semantic mismatches. An owner

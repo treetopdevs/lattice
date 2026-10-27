@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { trustFixture, fixtureSigner } from "./support/export_treehouse_catalog_trust";
 import { authorTreehouseRoleTransfer } from "../src/treehouse";
 import { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust } from "../src/treehouse_catalog_trust";
+import { copyCatalogInput } from "../src/treehouse_catalog_input_copy";
 const expected = { trustRevision: 0, historyGeneration: 0 };
 async function setup() {
     const f = await trustFixture(0);
@@ -119,6 +120,57 @@ test("only array enumeration RangeError permits ignored hidden decorations, with
                 detail: { ids: [], coreReason: null, pendingProofIds: [] } });
         }
         assert.equal(calls, 0);
+    }
+    finally {
+        Reflect.ownKeys = ownKeys;
+    }
+});
+test("engine-ceiling capture never visits a proxy in an array prototype chain", async () => {
+    const fixture = await setup();
+    const baseline = await evaluateTreehouseCatalogTrust({ ...fixture, expected });
+    const token = { ...expected };
+    let trapCalls = 0, getterCalls = 0;
+    const prototype = new Proxy({}, { ownKeys() {
+            trapCalls++;
+            Object.defineProperty(token, "trustRevision", { enumerable: true, configurable: true,
+                get() { getterCalls++; return 0; } });
+            return [];
+        } });
+    const row = Object.setPrototypeOf([0], prototype);
+    const ownKeys = Reflect.ownKeys;
+    try {
+        Reflect.ownKeys = (value) => {
+            if (value === row)
+                throw new RangeError("enumeration ceiling");
+            return ownKeys(value);
+        };
+        const actual = await evaluateTreehouseCatalogTrust({ ...fixture, expected: token,
+            incoming: { ...fixture.incoming, cutoffProofs: [row] } });
+        assert.deepEqual(actual, baseline);
+        assert.equal(trapCalls, 0);
+        assert.equal(getterCalls, 0);
+    }
+    finally {
+        Reflect.ownKeys = ownKeys;
+    }
+});
+test("engine-ceiling capture preserves composite aliases and holes without changing the input", () => {
+    const shared = { values: [1] };
+    const row = [shared, , shared];
+    const ownKeys = Reflect.ownKeys;
+    try {
+        Reflect.ownKeys = (value) => {
+            if (value === row)
+                throw new RangeError("enumeration ceiling");
+            return ownKeys(value);
+        };
+        const copy = copyCatalogInput(row);
+        assert.deepEqual(copy, row);
+        assert.notEqual(copy, row);
+        assert.equal(copy[0], copy[2]);
+        assert.notEqual(copy[0], shared);
+        assert.equal(Object.hasOwn(copy, "1"), false);
+        assert.equal(Object.hasOwn(row, "1"), false);
     }
     finally {
         Reflect.ownKeys = ownKeys;

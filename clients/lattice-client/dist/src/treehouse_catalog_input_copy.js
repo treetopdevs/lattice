@@ -1,5 +1,26 @@
 import { CATALOG_RAW_NODE_LIMIT } from "./treehouse_catalog_raw_bounds";
 function malformed() { throw new Error("malformed_catalog"); }
+// Storage buckets, not an input limit. Keep each weak table small even when
+// a valid observation contains millions of distinct composite values.
+class CompletedObjects {
+    buckets = [new WeakSet()];
+    entries = 0;
+    has(value) {
+        for (let index = this.buckets.length - 1; index >= 0; index--) {
+            if (this.buckets[index].has(value))
+                return true;
+        }
+        return false;
+    }
+    add(value) {
+        if (this.entries === 1_000_000) {
+            this.buckets.push(new WeakSet());
+            this.entries = 0;
+        }
+        this.buckets[this.buckets.length - 1].add(value);
+        this.entries++;
+    }
+}
 function* children(value) {
     const array = Array.isArray(value);
     let keys;
@@ -10,16 +31,15 @@ function* children(value) {
         if (!array || !(error instanceof RangeError))
             throw error;
         // Only this engine failure permits the operator-approved exception for
-        // hidden non-index decorations. Neither descriptors nor for-in read them;
+        // hidden non-index decorations. Own enumerable keys and descriptors never read them;
         // structuredClone drops them. Ordinary arrays keep all-own-key validation.
         const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
         if (!Number.isSafeInteger(length) || length < 0 || length > CATALOG_RAW_NODE_LIMIT)
             malformed();
         if (Object.getOwnPropertySymbols(value).length !== 0)
             malformed();
-        for (const key in value) {
-            if (!Object.hasOwn(value, key))
-                continue;
+        // Own-only enumeration avoids executing traps on an array's prototype.
+        for (const key of Object.keys(value)) {
             const index = Number(key);
             if (!Number.isInteger(index) || index < 0 || index >= length || String(index) !== key)
                 malformed();
@@ -48,7 +68,7 @@ function* children(value) {
 // JSON ownership only: this performs no signature, authority or trust validation.
 export function copyCatalogInput(input) {
     const pending = [{ values: [input].values() }];
-    const active = new Set(), finished = new Set();
+    const active = new WeakSet(), finished = new CompletedObjects();
     while (pending.length > 0) {
         const current = pending[pending.length - 1], next = current.values.next();
         if (next.done) {
