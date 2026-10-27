@@ -215,7 +215,7 @@ impl IncomingContext<'_, '_> {
         graph.complete_cutoffs(&proofs);
         next["catalogs"] = json!(catalogs.rows);
         next["rotations"] = json!(rotations.rows);
-        next["cutoffProofs"] = json!(proofs.rows);
+        next["cutoffProofs"] = Value::Array(proofs.rows);
         next["blocked"] = derived_block(original, &graph, bootstrap_ids, histories);
         validate_routes(&catalogs.artifacts, &graph)?;
         validate_watermark(original, &graph)?;

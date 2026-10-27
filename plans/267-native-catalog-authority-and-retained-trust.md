@@ -365,9 +365,13 @@ Whole-page parsing and persisted snapshot checks remain separate later seams.
 Before exposing the full owner, account peak simultaneous owned JSON, merged
 history/frame serialization, proof fingerprint indexes and transient policy views;
 a finite input cap alone is not proof of acceptable native memory/CPU cost.
-Measure large authenticated inputs and repeated proof/view cases, avoid repeated
-whole-history policy/encoding work, and enforce the planned aggregate temporary
-budget without narrowing source-valid wire or canonical evidence. These resource
+Measure large authenticated inputs and repeated proof/view cases. In one immutable
+proof-observation context, reuse only exactly matching validated raw rows; changed
+metadata and new histories must revalidate. Preserve first raw representation and
+canonical output order; borrow comparisons and move owned output rows. Count actual
+cutoff derivations rather than pinning a
+wall-clock threshold; isolate process measurements and disclose caller buffers. Avoid repeated whole-history policy/encoding work and enforce aggregate temporary
+budgets without narrowing source-valid wire/canonical evidence. These resource
 gates remain unfinished; no complete bounded incoming owner is claimed.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal

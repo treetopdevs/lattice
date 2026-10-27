@@ -236,6 +236,30 @@ fn accepted_refusals(
     Ok(refused)
 }
 
+#[cfg(test)]
+std::thread_local! {
+    static PROOF_DERIVATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+// This fingerprint indexes raw JSON variants only. It is neither a canonical
+// cutoff id nor a validity receipt; every hit still requires full Value equality.
+struct ProofRowDigest(Sha256);
+impl std::io::Write for ProofRowDigest {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+fn proof_row_digest(value: &Value) -> [u8; 32] {
+    let mut sink = ProofRowDigest(Sha256::new());
+    serde_json::to_writer(&mut sink, value)
+        .expect("bounded JSON Value serializes into an infallible digest sink");
+    sink.0.finalize().into()
+}
+
 /// Only this owner constructs proof membership from actual raw history evidence.
 /// A matching digest string supplied by a caller is not a verified cutoff.
 pub(super) struct Proofs {
@@ -248,7 +272,12 @@ impl Proofs {
         histories: &super::histories::AuthenticatedHistories,
     ) -> Result<Self, ChainError> {
         let fail = |reason, ids| ChainError { reason, ids };
-        let mut proofs = BTreeMap::new();
+        // Borrow validated rows until emission: no second owned history copy is
+        // needed while validating later proofs in this immutable context.
+        let mut proofs: BTreeMap<String, &Value> = BTreeMap::new();
+        // Metadata and references only, bounded by this call's supplied rows.
+        // Keep all validated raw variants without cloning their histories.
+        let mut validated: BTreeMap<[u8; 32], Vec<&Value>> = BTreeMap::new();
         let mut members = BTreeMap::new();
         for proof in saved.iter().chain(incoming) {
             if !closed_json(proof, &["cutoff", "history"]) || !valid_cutoff(&proof["cutoff"]) {
@@ -263,9 +292,24 @@ impl Proofs {
             {
                 return Err(fail("recovery_incomplete", Vec::new()));
             }
+            let claimed = &proof["cutoff"];
+            // Construct a bounded key only for a claim matching the already
+            // checked history family. A mismatched claim retains its original
+            // derivation/error precedence and cannot cause a large key allocation.
+            let key = (claimed["replica"].as_str() == Some(name))
+                .then(|| format!("{name}:{}", claimed["logDigest"].as_str().unwrap()));
+            let raw_digest = key.as_ref().map(|_| proof_row_digest(proof));
+            if raw_digest
+                .as_ref()
+                .and_then(|digest| validated.get(digest))
+                .is_some_and(|rows| rows.iter().any(|previous| *previous == proof))
+            {
+                continue;
+            }
+            #[cfg(test)]
+            PROOF_DERIVATIONS.with(|count| count.set(count.get() + 1));
             let observed = super::cutoff::derive_value(raw)
                 .map_err(|_| fail("recovery_incomplete", Vec::new()))?;
-            let claimed = &proof["cutoff"];
             let ids = vec![claimed["logDigest"].as_str().unwrap().to_owned()];
             if claimed
                 != &serde_json::json!({"replica":observed.replica(),"frontier":observed.frontier(),"logDigest":observed.log_digest()})
@@ -312,11 +356,15 @@ impl Proofs {
                     }
                 }
             }
-            let key = format!("{}:{}", observed.replica(), observed.log_digest());
-            proofs.entry(key).or_insert_with(|| proof.clone());
+            let key = key.expect("derived cutoff matches its checked history family");
+            proofs.entry(key).or_insert(proof);
+            validated
+                .entry(raw_digest.expect("checked scoped proof has a raw index"))
+                .or_default()
+                .push(proof);
         }
         Ok(Self {
-            rows: proofs.into_values().collect(),
+            rows: proofs.into_values().cloned().collect(),
         })
     }
 }
@@ -401,7 +449,7 @@ impl OriginalEvidence {
         let bootstrap_ids = honored_bootstraps(&bootstrap);
         let derived = derived_block(original, &graph, &bootstrap_ids, &self.histories);
         self.validate_saved_block(&graph, &derived)?;
-        if original["cutoffProofs"] != serde_json::json!(proofs.rows) {
+        if original["cutoffProofs"].as_array() != Some(&proofs.rows) {
             return Err(recovery());
         }
         Ok(())
@@ -1026,6 +1074,215 @@ mod tests {
     use super::super::histories::AuthenticatedHistories;
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn authenticated_resource_process_envelope() {
+        // The explicit fixture path keeps Node/BEAM producers outside a measured
+        // child process. Ordinary test runs still exercise a fresh real input.
+        let fixture = std::env::var_os("LATTICE_NATIVE_RESOURCE_INPUT");
+        let isolated = fixture.is_some();
+        let input: Value = if let Some(path) = fixture {
+            let bytes = std::fs::read(path).unwrap();
+            assert!(bytes.len() <= 64 * 1024 * 1024);
+            serde_json::from_slice(&bytes).unwrap()
+        } else {
+            let table: Value = serde_json::from_slice(&catalog_peer::output(
+                "ts",
+                "resource-produce",
+                None,
+                8 * 1024 * 1024,
+            ))
+            .unwrap();
+            let request =
+                json!({"name":"authenticated-resource-context","input":table["cases"][0]["input"]});
+            assert_full_decisions(&[request.clone()], 8 * 1024 * 1024);
+            request["input"].clone()
+        };
+        let saved = serde_json::to_vec(&input["installed"]).unwrap();
+        let page = serde_json::to_vec(&input["incoming"]).unwrap();
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let started = std::time::Instant::now();
+        let decision = incoming::evaluate(&saved, &input["expected"], &page);
+        let elapsed = started.elapsed();
+        assert_eq!(decision["kind"], "propose");
+        assert!(decision["reason"].is_null());
+        assert_eq!(decision["routes"].as_array().unwrap().len(), 1);
+        assert_eq!(decision["next"]["accepted"], input["installed"]["accepted"]);
+        let copies = input["incoming"]["cutoffProofs"].as_array().unwrap().len();
+        assert_eq!(
+            decision["next"]["cutoffProofs"].as_array().unwrap().len(),
+            usize::from(copies > 0)
+        );
+        let output = serde_json::to_vec(&decision["next"]).unwrap();
+        assert!(output.len() <= 32 * 1024 * 1024);
+        println!(
+            "RESOURCE {}",
+            json!({"fixtureMode":if isolated {"isolated-input"} else {"live-owners"},
+            "savedBytes":saved.len(),"incomingBytes":page.len(),"nextBytes":output.len(),
+            "frames":input["incoming"]["histories"][0]["frames"].as_array().unwrap().len(),
+            "proofCopies":copies,"proofDerivations":PROOF_DERIVATIONS.with(|count| count.get()),
+            "evaluateMicros":elapsed.as_micros(),"nextSha256":format!("{:x}",Sha256::digest(&output))})
+        );
+        std::hint::black_box((&input, &saved, &page, &decision, &output));
+    }
+
+    #[test]
+    fn exact_proof_reuse_is_bounded_to_one_immutable_observation_context() {
+        let table: Value = serde_json::from_slice(&catalog_peer::output(
+            "beam",
+            "full-input-produce",
+            None,
+            16 * 1024 * 1024,
+        ))
+        .unwrap();
+        let input = table["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|case| case["name"] == "beam-complete-rotation")
+            .unwrap()["orders"][0]["input"]
+            .clone();
+        let original_proofs = input["incoming"]["cutoffProofs"].as_array().unwrap();
+        assert_eq!(original_proofs.len(), 2);
+        let proof = original_proofs[0].clone();
+        let other = original_proofs[1].clone();
+        let mut alias = proof.clone();
+        let frame = alias["history"]["frames"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|f| !f["deps"].as_array().unwrap().is_empty())
+            .unwrap();
+        let dep = frame["deps"][0].clone();
+        frame["deps"].as_array_mut().unwrap().push(dep);
+        let mut invalid = proof.clone();
+        invalid["history"]["frames"][0]["sig"] = json!("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==");
+        let mut requests = Vec::new();
+        for (name, extra, kind, reason) in [
+            (
+                "resource-exact-proof-repeat",
+                vec![proof.clone(); 3],
+                "propose",
+                Value::Null,
+            ),
+            (
+                "resource-same-cutoff-different-raw",
+                vec![alias.clone()],
+                "propose",
+                Value::Null,
+            ),
+            (
+                "resource-tampered-proof-lookalike",
+                vec![invalid.clone()],
+                "reject",
+                json!("recovery_incomplete"),
+            ),
+        ] {
+            let mut request = input.clone();
+            request["incoming"]["cutoffProofs"]
+                .as_array_mut()
+                .unwrap()
+                .extend(extra);
+            requests.push(
+                json!({"name":name,"input":request,"expectedKind":kind,"expectedReason":reason}),
+            );
+        }
+        let mut alias_first = input.clone();
+        alias_first["incoming"]["cutoffProofs"]
+            .as_array_mut()
+            .unwrap()
+            .insert(0, alias.clone());
+        requests.push(json!({"name":"resource-alias-first","input":alias_first,"expectedKind":"propose","expectedReason":null}));
+        let mut alias_repeats = input.clone();
+        alias_repeats["incoming"]["cutoffProofs"]
+            .as_array_mut()
+            .unwrap()
+            .extend(vec![alias.clone(); 3]);
+        requests.push(json!({"name":"resource-nonfirst-variant-repeats","input":alias_repeats,"expectedKind":"propose","expectedReason":null}));
+        assert_full_decisions(&requests, 16 * 1024 * 1024);
+        let histories = AuthenticatedHistories::authenticate_union(
+            &input["installed"]["histories"],
+            &input["incoming"]["histories"],
+        )
+        .unwrap();
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let observed = Proofs::observe(&[], &vec![proof.clone(); 4], &histories).unwrap();
+        assert_eq!(observed.rows, vec![proof.clone()]);
+        assert_eq!(
+            PROOF_DERIVATIONS.with(|count| count.get()),
+            1,
+            "exact duplicates must not repeat cutoff derivation"
+        );
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let observed =
+            Proofs::observe(&[], &[proof.clone(), other, proof.clone()], &histories).unwrap();
+        assert_eq!(observed.rows.len(), 2);
+        assert_eq!(PROOF_DERIVATIONS.with(|count| count.get()), 2);
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let observed = Proofs::observe(&[proof.clone()], &[proof.clone()], &histories).unwrap();
+        assert_eq!(observed.rows, vec![proof.clone()]);
+        assert_eq!(PROOF_DERIVATIONS.with(|count| count.get()), 1);
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let observed = Proofs::observe(&[], &[alias.clone(), proof.clone()], &histories).unwrap();
+        assert_eq!(observed.rows, vec![alias.clone()]);
+        assert_eq!(PROOF_DERIVATIONS.with(|count| count.get()), 2);
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let observed = Proofs::observe(
+            &[],
+            &[proof.clone(), alias.clone(), alias.clone(), alias.clone()],
+            &histories,
+        )
+        .unwrap();
+        assert_eq!(observed.rows, vec![proof.clone()]);
+        assert_eq!(
+            PROOF_DERIVATIONS.with(|count| count.get()),
+            2,
+            "each previously validated raw variant must be reused"
+        );
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let observed = Proofs::observe(&[], &[proof.clone(), alias], &histories).unwrap();
+        assert_eq!(observed.rows, vec![proof.clone()]);
+        assert_eq!(
+            PROOF_DERIVATIONS.with(|count| count.get()),
+            2,
+            "raw aliases must be independently validated"
+        );
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let error = Proofs::observe(&[], &[proof.clone(), invalid], &histories)
+            .err()
+            .unwrap();
+        assert_eq!(error.reason, "recovery_incomplete");
+        assert_eq!(PROOF_DERIVATIONS.with(|count| count.get()), 2);
+        for claimed_replica in [
+            original_proofs[1]["cutoff"]["replica"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            "z".repeat(4 * 1024 * 1024),
+        ] {
+            let mut mismatch = proof.clone();
+            mismatch["cutoff"]["replica"] = json!(claimed_replica);
+            PROOF_DERIVATIONS.with(|count| count.set(0));
+            let error = Proofs::observe(&[], &[proof.clone(), mismatch], &histories)
+                .err()
+                .unwrap();
+            assert_eq!(error.reason, "recovery_incomplete");
+            assert_eq!(
+                error.ids,
+                vec![proof["cutoff"]["logDigest"].as_str().unwrap().to_owned()]
+            );
+            assert_eq!(PROOF_DERIVATIONS.with(|count| count.get()), 2);
+        }
+        let empty = AuthenticatedHistories::authenticate_union(&json!([]), &json!([])).unwrap();
+        PROOF_DERIVATIONS.with(|count| count.set(0));
+        let error = Proofs::observe(&[], &[proof], &empty).err().unwrap();
+        assert_eq!(error.reason, "recovery_incomplete");
+        assert_eq!(
+            PROOF_DERIVATIONS.with(|count| count.get()),
+            1,
+            "a new history context cannot inherit proof validation"
+        );
+    }
 
     #[test]
     fn incoming_full_decisions_match_both_actual_public_owners() {
