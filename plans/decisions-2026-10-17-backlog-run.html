@@ -1728,6 +1728,31 @@ filters; evidence is /tmp/lattice-catalog-input-capture-trust.log. Independent
 Spec and Standards reviews of d494da215 report no confirmed finding.
 These baseline controls do not fix or supersede the full-size source RED.</p>
 </section>
+<section id="d176"><h2>D176 — Complete the planned full-size source controls without masking the RED</h2>
+<p>Improve the private density producer in a9778edb1 to retain all four planned
+cases and their complete source decisions before asserting expected semantics.
+The producer still exits nonzero on any mismatch and emits no successful
+descriptor; ordinary native execution cannot substitute these saved results.
+The SDK builds and the16KiB wiring run passes. An initial standalone launch
+from the wrong directory failed to load tsx before executing any case; preserve
+that prerequisite failure separately from the corrected client-directory run.</p>
+<p>The corrected fresh maximum run retains four67,108,864-byte pages at
+/tmp/lattice-density-all-controls.CYrpcR. Its manifest SHA256 is
+64e127b8554ad3a97eaea06d45680ba2734d5adb25a9c2e2d95ffe3419d0a557.
+The TS producer exits1 for the known array-frozen semantic mismatch. The actual
+BEAM consumer exits0 after checking every pinned file and echoes the same
+manifest digest. Complete decisions agree for array-unblocked, object-unblocked
+and object-frozen. Only array-frozen differs: TS rejects malformed_catalog,
+BEAM retains authority_changed. Its bytes match the original failing page.</p>
+<p>The object controls contain5,684,992 and5,684,473unique decimal keys; their
+separate key-byte and node counts stay in the manifest. This is actual source
+agreement on the full objects, not native memory evidence. Summary and full
+decisions are retained at /tmp/lattice-density-all-controls-source-summary.json,
+the corpus manifest and /tmp/lattice-density-all-controls-beam.json. No native
+evaluation or isolated native memory measurement occurred. Source implementation
+still awaits the pending operator metadata rule; the original maximum RED and
+earlier intermittent refusal remain open.</p>
+</section>
 </main>
 </body>
 </html>
