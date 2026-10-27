@@ -9,7 +9,7 @@ defmodule Treehouse.CatalogRetainedIndexOrderTest do
   @tag timeout: 300_000
   test "fresh TypeScript full decisions match BEAM across retained row order" do
     table = peer([])
-    assert length(table["cases"]) == 10
+    assert length(table["cases"]) == 11
 
     for item <- table["cases"], {order, index} <- Enum.with_index(item["orders"]) do
       decision = order["input"] |> NativeCatalogResolverPeer.input() |> CatalogTrust.evaluate()
