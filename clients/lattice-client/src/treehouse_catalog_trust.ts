@@ -531,7 +531,7 @@ async function validateStoredBlock(state: InstalledTreehouseCatalogTrustV1, deri
   if (saved.catalogs.some((a) => !saved.catalogs.some((b) => a !== b && catalogConflict(a, b)))) fail("trust_recovery_required");
   if (saved.reason === "control_history_limit") {
     if (!independentBindings || saved.bindings.length <= 2 || saved.bootstrapIds.length > 0) fail("trust_recovery_required");
-  } else if (!independentBindings && saved.catalogs.length === 0 && saved.bootstrapIds.length === 0) fail("trust_recovery_required");
+  } else if (saved.catalogs.length === 0 && saved.bootstrapIds.length === 0 && (!independentBindings || saved.bindings.length !== 2)) fail("trust_recovery_required");
 }
 async function validateBootstrapWitnesses(state: InstalledTreehouseCatalogTrustV1, histories: Map<string, ObservedHistory>) {
   const history = histories.get(state.review.space);
