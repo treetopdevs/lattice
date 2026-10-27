@@ -245,14 +245,23 @@ fn observe_record(
         catalog_heads,
     })
 }
+pub(super) fn check_scope(
+    bootstrap: &Term,
+    bootstrap_id: &str,
+    record: &Term,
+    id: &str,
+) -> Result<(), ChainError> {
+    if field(record, "space") != field(bootstrap, "space")
+        || field(record, "bootstrap").and_then(text) != Some(bootstrap_id)
+    {
+        return Err(failure("wrong_catalog_scope", id));
+    }
+    Ok(())
+}
+
 impl Context<'_> {
     fn scope(&self, record: &Term, id: &str) -> Result<(), ChainError> {
-        if field(record, "space") != field(self.bootstrap, "space")
-            || field(record, "bootstrap").and_then(text) != Some(self.bootstrap_id)
-        {
-            return Err(failure("wrong_catalog_scope", id));
-        }
-        Ok(())
+        check_scope(self.bootstrap, self.bootstrap_id, record, id)
     }
     fn resolve(
         &mut self,

@@ -73,10 +73,7 @@ impl AuthenticatedHistories {
         for list in [saved_rows, incoming_rows] {
             for raw in list {
                 let name = raw["replica"].as_str().expect("history shape");
-                if !super::delegations::bounded_family(name)
-                    || !(name.starts_with("replica:treehouse:space:")
-                        || name.starts_with("replica:treehouse:thread:"))
-                {
+                if !catalog_family(name) {
                     return Err(error("wrong_catalog_scope"));
                 }
             }
@@ -336,6 +333,12 @@ fn merge_frames(
         }
     }
     Ok(merged.into_values().cloned().collect())
+}
+
+pub(super) fn catalog_family(name: &str) -> bool {
+    super::delegations::bounded_family(name)
+        && (name.starts_with("replica:treehouse:space:")
+            || name.starts_with("replica:treehouse:thread:"))
 }
 
 // Portability can refuse a representable observation before returning a cutoff.

@@ -76,9 +76,10 @@ sequences plans 001–009 into gated phases (DX/CI foundation → v2 engine hygi
 hardening & docs), defines the single end-state and global validation loop, and records
 the integration/branch strategy. The direction spikes 010–013 are out of that goal.
 
-Plan281 is another protected source correction because its raw JSON number-value
-disagreement cannot be fixed by a generic native compatibility layer; plan267
-requires a separately reviewed source gate. It is not a platform/probe ladder.
+Plans280–283 correct independent row-retention, numeric-value, saved-witness and
+collection-order contracts. They are not a platform/probe ladder: a generic
+native compatibility layer cannot equate conflicting public-owner decisions.
+Plan267 requires separately reviewed source gates before adopting corrections.
 
 ## Execution order & status
 
@@ -448,7 +449,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 264 | [Guarded Thread listing and initial receipt](264-guarded-thread-listing-and-initial-receipt.md) | P1 | L | 263 / PR #168 merged | DONE (#169; exact-tip hosted gate passed; merge tree matches; native trust and field gates remain) |
 | 265 | [Native catalog codec and signature parity](265-native-catalog-codec-and-signature-parity.md) | P1 | L | 245 PR 1 / #164 | DONE (#170; exact-tip CI and requested/independent reviews passed; no installed trust) |
 | 266 | [Catalog evidence exporter](266-catalog-evidence-exporter.md) | P1 | L | 245 PR 4; listing parent before integration | DONE (#171; exact-tip Linux/hosted and browser gates pass; matching merge tree; no installed trust) |
-| 267 | [Native catalog authority and retained trust](267-native-catalog-authority-and-retained-trust.md) | P1 | XL | 245 PR 3; #170 codec dependency | IN PROGRESS: internal union, graph/entry/cutoff and original witness stages implemented; full original/incoming decisions, resource gates and hosted gate remain. |
+| 267 | [Native catalog authority and retained trust](267-native-catalog-authority-and-retained-trust.md) | P1 | XL | 245 PR 3; #170 codec dependency | IN PROGRESS: private incoming fold matches138 full decisions; source283 ordering RED, numeric adoption and aggregate resource/final gates remain. |
 | 268 | [Canonical continuation dependency aliases](268-canonical-continuation-dependency-aliases.md) | P1 | M | Separate protected-core correction before native evaluator closure | DONE (#173; exact-tip run 40196864012 and browser proof pass; merge tree matches; native adoption belongs to 267) |
 | 269 | [Incoming catalog refusal order](269-incoming-catalog-refusal-order.md) | P1 | L | Protected source review; pending evaluator PR 172 | IN PROGRESS: shared reader guards and proof parity implemented; capacity/freeze/native adoption and final review/gates remain. |
 | 270 | [Treehouse text and lineage parity](270-thread-malformed-lineage-parity.md) | P1 | M | Fresh native policy discrepancy; before plan 267 adoption | IN PROGRESS: preserve literal UTF-8 and align malformed-edit traversal; bidirectional state/reason regressions pass; final review/gates remain. |
@@ -464,6 +465,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 280 | [Retained catalog index order parity](280-retained-catalog-index-order-parity.md) | P1 | M | Before full native retained resolver | DONE: #184 gated at 010c563f4 and adopted; 119 source tests plus 16 ordinary/16 tracing native regressions pass. Full resolver remains plan267. |
 | 281 | [Catalog raw JSON number-value parity](281-catalog-raw-json-number-values.md) | P1 | M | Before native incoming adoption | IN PROGRESS: fresh v1.0 saved-frame source mismatch reproduced; bounded catalog-only view planned; ordinary wire/artifact profiles preserved. |
 | 282 | [Saved catalog-trust witness integrity](282-saved-catalog-fork-witness-integrity.md) | P1 | M | Before native retained adoption | IN PROGRESS: source #186 published; 84 actual-owner decisions/reviews pass; native adoption awaits source gates. |
+| 283 | [Catalog decision ordering](283-catalog-decision-order.md) | P1 | M | Before native incoming adoption | TODO: reproduce collection preflight, route-conflict blame and fork-witness precedence gaps; consolidate source ordering rules before native adoption. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

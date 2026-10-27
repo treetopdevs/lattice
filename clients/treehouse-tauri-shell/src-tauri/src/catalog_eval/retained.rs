@@ -11,6 +11,9 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod incoming;
+mod page_header;
+
 pub(super) struct Graph {
     pub(super) links: ChainObservation,
     pub(super) catalog_pending: BTreeMap<String, BTreeSet<String>>,
@@ -33,39 +36,7 @@ impl Graph {
         validate_original_artifact_ids(original)?;
         // Reclassify accepted evidence from the actual union before candidates;
         // source output is never an input to native authority classification.
-        let mut refused = BTreeSet::new();
-        if bootstrap.current_refusal().is_some() {
-            refused.insert(bootstrap.id().to_owned());
-        }
-        if let Some(accepted) = original["accepted"]["catalog"].as_str() {
-            let saved = original["catalogs"]
-                .as_array()
-                .and_then(|rows| rows.iter().find(|row| row["id"].as_str() == Some(accepted)))
-                .ok_or_else(|| fail("trust_recovery_required", Vec::new()))?;
-            let artifact = super::artifact::parse(
-                saved["json"]
-                    .as_str()
-                    .ok_or_else(|| fail("trust_recovery_required", Vec::new()))?
-                    .as_bytes(),
-            )
-            .map_err(|_| fail("trust_recovery_required", Vec::new()))?;
-            let catalog = field(artifact.term(), "catalog")
-                .ok_or_else(|| fail("trust_recovery_required", Vec::new()))?;
-            if digest("lattice-treehouse-transport-catalog-v1", catalog).as_deref()
-                != Some(accepted)
-            {
-                return Err(fail("trust_recovery_required", Vec::new()));
-            }
-            for fact in bootstrap
-                .entry_facts(&artifact)
-                .map_err(|_| fail("trust_recovery_required", Vec::new()))?
-            {
-                if fact.invalid() || !fact.pending().is_empty() {
-                    return Err(fail("trust_recovery_required", Vec::new()));
-                }
-                refused.extend(fact.refused().iter().cloned());
-            }
-        }
+        let refused = accepted_refusals(bootstrap, original)?;
         let authority_changed =
             !refused.is_empty() || original["blocked"]["reason"] == "authority_changed";
         let mut by_catalog = BTreeMap::new();
@@ -222,6 +193,47 @@ impl Graph {
             }
         }
     }
+}
+
+// Current accepted-target policy is observed before any candidate artifact is
+// parsed, so an established security freeze cannot be hidden by a bad artifact.
+fn accepted_refusals(
+    bootstrap: &BootstrapObservation<'_>,
+    original: &Value,
+) -> Result<BTreeSet<String>, ChainError> {
+    let fail = |reason, ids| ChainError { reason, ids };
+    let mut refused = BTreeSet::new();
+    if bootstrap.current_refusal().is_some() {
+        refused.insert(bootstrap.id().to_owned());
+    }
+    if let Some(accepted) = original["accepted"]["catalog"].as_str() {
+        let saved = original["catalogs"]
+            .as_array()
+            .and_then(|rows| rows.iter().find(|row| row["id"].as_str() == Some(accepted)))
+            .ok_or_else(|| fail("trust_recovery_required", Vec::new()))?;
+        let artifact = super::artifact::parse(
+            saved["json"]
+                .as_str()
+                .ok_or_else(|| fail("trust_recovery_required", Vec::new()))?
+                .as_bytes(),
+        )
+        .map_err(|_| fail("trust_recovery_required", Vec::new()))?;
+        let catalog = field(artifact.term(), "catalog")
+            .ok_or_else(|| fail("trust_recovery_required", Vec::new()))?;
+        if digest("lattice-treehouse-transport-catalog-v1", catalog).as_deref() != Some(accepted) {
+            return Err(fail("trust_recovery_required", Vec::new()));
+        }
+        for fact in bootstrap
+            .entry_facts(&artifact)
+            .map_err(|_| fail("trust_recovery_required", Vec::new()))?
+        {
+            if fact.invalid() || !fact.pending().is_empty() {
+                return Err(fail("trust_recovery_required", Vec::new()));
+            }
+            refused.extend(fact.refused().iter().cloned());
+        }
+    }
+    Ok(refused)
 }
 
 /// Only this owner constructs proof membership from actual raw history evidence.
@@ -901,26 +913,26 @@ fn block(
     serde_json::json!({"reason":reason,"bindings":sorted(bindings),"catalogs":sorted(catalogs),"bootstrapIds":sorted(bootstrap_ids),
         "opIds":sorted(op_ids),"pendingProofIds":sorted(pending),"triggers":[],"authorityWitnesses":[]})
 }
-fn derived_block(
+fn security_block(
     original: &Value,
-    graph: &Graph,
+    refused: &BTreeSet<String>,
     bootstrap_ids: &[String],
     histories: &super::histories::AuthenticatedHistories,
 ) -> Value {
     let mut next = original["blocked"].clone();
-    if !graph.refused.is_empty() && next["reason"] != "authority_changed" {
+    if !refused.is_empty() && next["reason"] != "authority_changed" {
         let triggers = next["triggers"].as_array().cloned().unwrap_or_default();
         next = block(
             "authority_changed",
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            graph.refused.iter().cloned().collect(),
+            refused.iter().cloned().collect(),
             Vec::new(),
         );
         next["triggers"] = serde_json::json!(triggers);
         next["authorityWitnesses"] = serde_json::json!(histories.iter().filter_map(|(replica,history)| {
-            let ids:Vec<_> = graph.refused.iter().filter(|id|history.dag().frame(id).is_some()).cloned().collect();
+            let ids:Vec<_> = refused.iter().filter(|id|history.dag().frame(id).is_some()).cloned().collect();
             (!ids.is_empty()).then(||serde_json::json!({"replica":replica,"frontier":history.dag().frontier(),"opIds":ids}))
         }).collect::<Vec<_>>());
     }
@@ -945,6 +957,16 @@ fn derived_block(
             Vec::new(),
         );
     }
+    next
+}
+
+fn derived_block(
+    original: &Value,
+    graph: &Graph,
+    bootstrap_ids: &[String],
+    histories: &super::histories::AuthenticatedHistories,
+) -> Value {
+    let mut next = security_block(original, &graph.refused, bootstrap_ids, histories);
     let mut forks: BTreeSet<String> = graph
         .links
         .catalog_heads
@@ -1006,6 +1028,341 @@ mod tests {
     use super::super::histories::AuthenticatedHistories;
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn incoming_full_decisions_match_both_actual_public_owners() {
+        let mut requests = Vec::new();
+        for mode in ["resolver-produce", "witness-produce", "incoming-produce"] {
+            let table: Value =
+                serde_json::from_slice(&catalog_peer::output("ts", mode, None, 128 * 1024 * 1024))
+                    .unwrap();
+            for case in table["cases"].as_array().unwrap() {
+                for (order, row) in case["orders"].as_array().unwrap().iter().enumerate() {
+                    requests.push(serde_json::json!({"name":format!("{}:{order}",case["name"].as_str().unwrap()),"input":row["input"]}));
+                }
+            }
+        }
+        assert_eq!(requests.len(), 108);
+        assert_full_decisions(&requests, 128 * 1024 * 1024);
+    }
+
+    fn assert_full_decisions(requests: &[Value], max_bytes: usize) {
+        let request = serde_json::json!({"cases":&requests});
+        let ts: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "resolver-consume",
+            Some(&request),
+            max_bytes,
+        ))
+        .unwrap();
+        let beam: Value = serde_json::from_slice(&catalog_peer::output(
+            "beam",
+            "resolver-consume",
+            Some(&request),
+            max_bytes,
+        ))
+        .unwrap();
+        let ts = ts["results"].as_array().unwrap();
+        let beam = beam["results"].as_array().unwrap();
+        assert_eq!(ts.len(), requests.len());
+        assert_eq!(beam.len(), requests.len());
+        let mut source_mismatches = Vec::new();
+        for ((request, ts), beam) in requests.iter().zip(ts).zip(beam) {
+            if ts["decision"] != beam["decision"] {
+                source_mismatches.push(request["name"].clone());
+                let label = request["name"].as_str().unwrap().replace(':', "-");
+                for (name, value) in [
+                    ("request", request),
+                    ("ts", &ts["decision"]),
+                    ("beam", &beam["decision"]),
+                ] {
+                    std::fs::write(
+                        format!("/tmp/lattice-native-source-{label}-{name}.json"),
+                        serde_json::to_vec(value).unwrap(),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        assert!(
+            source_mismatches.is_empty(),
+            "full source decisions differ: {source_mismatches:?}"
+        );
+        for ((request, ts), _beam) in requests.iter().zip(ts).zip(beam) {
+            if let Some(kind) = request["expectedKind"].as_str() {
+                assert_eq!(ts["decision"]["kind"], kind, "{}", request["name"]);
+            }
+            if let Some(reason) = request.get("expectedReason") {
+                assert_eq!(&ts["decision"]["reason"], reason, "{}", request["name"]);
+            }
+            if request["name"] == "native-signed-catalog-advance" {
+                assert_eq!(ts["decision"]["next"]["accepted"]["revision"], 1);
+                assert_eq!(ts["decision"]["routes"].as_array().unwrap().len(), 2);
+            }
+            let input = &request["input"];
+            let encoded = serde_json::to_vec(&input["incoming"]).unwrap();
+            let incoming_bytes = if let Some(raw) = request["incomingJson"].as_str() {
+                let actual: Value = serde_json::from_str(raw).unwrap();
+                assert_eq!(actual, input["incoming"]);
+                raw.as_bytes()
+            } else {
+                encoded.as_slice()
+            };
+            let native = incoming::evaluate(
+                &serde_json::to_vec(&input["installed"]).unwrap(),
+                &input["expected"],
+                incoming_bytes,
+            );
+            if native != ts["decision"] {
+                for (name, value) in [
+                    ("request", request),
+                    ("native", &native),
+                    ("expected", &ts["decision"]),
+                ] {
+                    std::fs::write(
+                        format!("/tmp/lattice-native-incoming-mismatch-{name}.json"),
+                        serde_json::to_vec(value).unwrap(),
+                    )
+                    .unwrap();
+                }
+                panic!("full native decision differs: {}", request["name"]);
+            }
+        }
+    }
+
+    #[test]
+    fn source_catalog_decision_order_requires_agreement() {
+        let table: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "decision-order-produce",
+            None,
+            16 * 1024 * 1024,
+        ))
+        .unwrap();
+        assert_eq!(table["cases"].as_array().unwrap().len(), 3);
+        let mut requests = Vec::new();
+        for case in table["cases"].as_array().unwrap() {
+            for (order, row) in case["orders"].as_array().unwrap().iter().enumerate() {
+                requests.push(json!({"name":format!("{}:{order}",case["name"].as_str().unwrap()),"input":row["input"]}));
+            }
+        }
+        assert_eq!(requests.len(), 6);
+        assert_full_decisions(&requests, 16 * 1024 * 1024);
+    }
+
+    #[test]
+    fn incoming_shape_and_scope_precede_observation_limits() {
+        let table: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "resolver-produce",
+            None,
+            32 * 1024 * 1024,
+        ))
+        .unwrap();
+        let input = table["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|case| case["name"] == "accepted-reopen")
+            .unwrap()["orders"][0]["input"]
+            .clone();
+        let mut deep = Value::Null;
+        for _ in 0..206 {
+            deep = json!([deep]);
+        }
+        let mut requests = Vec::new();
+        for (name, reason) in [
+            ("deep-proof-wrong-family", "wrong_catalog_scope"),
+            ("deep-proof-page-limit", "control_history_limit"),
+            ("deep-proof-malformed-history", "malformed_catalog"),
+        ] {
+            let mut input = input.clone();
+            input["incoming"]["cutoffProofs"] = json!([deep]);
+            match name {
+                "deep-proof-wrong-family" => {
+                    input["incoming"]["histories"] =
+                        json!([{"replica":"foreign","frames":[],"rejected":[]}])
+                }
+                "deep-proof-page-limit" => {
+                    input["incoming"]["catalogs"] = json!(vec!["not JSON"; 33])
+                }
+                _ => {
+                    input["incoming"]["histories"] =
+                        json!([{"replica":"","frames":[],"rejected":[]}])
+                }
+            }
+            requests.push(
+                json!({"name":name,"input":input,"expectedKind":"reject","expectedReason":reason}),
+            );
+        }
+        let space = input["installed"]["review"]["space"].as_str().unwrap();
+        let replica_escaped = format!(
+            r#"{{"catalogs":[],"rotations":[],"histories":[{{"replica":"\u0072{}","frames":[],"rejected":[]}}],"cutoffProofs":[]}}"#,
+            &space[1..]
+        );
+        for (name,raw) in [("escaped-root-field",r#"{"\u0063atalogs":[],"rotations":[],"histories":[],"cutoffProofs":[]}"#.to_owned()),
+            ("whitespace-array-headers","{ \n \"catalogs\": [ ], \"rotations\": [ ], \"histories\": [ ], \"cutoffProofs\": [ ] }".replace("\\n","\n").replace("\\\"","\"")),
+            ("escaped-replica-header",replica_escaped)] {
+            let mut input=input.clone();input["incoming"]=serde_json::from_str(&raw).unwrap();
+            requests.push(json!({"name":name,"input":input,"incomingJson":raw,"expectedKind":"unchanged","expectedReason":null}));
+        }
+        assert_eq!(requests.len(), 6);
+        assert_full_decisions(&requests, 16 * 1024 * 1024);
+    }
+
+    #[test]
+    fn incoming_beam_authored_full_inputs_match_all_three_owners() {
+        let table: Value = serde_json::from_slice(&catalog_peer::output(
+            "beam",
+            "full-input-produce",
+            None,
+            16 * 1024 * 1024,
+        ))
+        .unwrap();
+        assert_eq!(table["cases"].as_array().unwrap().len(), 8);
+        let mut requests = Vec::new();
+        for case in table["cases"].as_array().unwrap() {
+            for (order, row) in case["orders"].as_array().unwrap().iter().enumerate() {
+                requests.push(serde_json::json!({"name":format!("{}:{order}",case["name"].as_str().unwrap()),"input":row["input"]}));
+            }
+        }
+        assert_eq!(requests.len(), 16);
+        assert_full_decisions(&requests, 16 * 1024 * 1024);
+    }
+
+    #[test]
+    fn incoming_rust_authored_frames_and_catalog_match_both_public_owners() {
+        use super::super::canonical::{encode, Term};
+        use base64::{
+            engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+            Engine,
+        };
+        use ed25519_dalek::{Signer, SigningKey};
+        let table: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "resolver-produce",
+            None,
+            32 * 1024 * 1024,
+        ))
+        .unwrap();
+        let input = table["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|case| case["name"] == "accepted-reopen")
+            .unwrap()["orders"][0]["input"]
+            .clone();
+        let original = &input["installed"];
+        let space = original["review"]["space"].as_str().unwrap();
+        let histories =
+            AuthenticatedHistories::authenticate_union(&original["histories"], &json!([])).unwrap();
+        let key = SigningKey::from_bytes(&Sha256::digest(b"r11a-trust-ts:space-root").into());
+        assert_eq!(
+            STANDARD.encode(key.verifying_key().to_bytes()),
+            original["review"]["spaceRoot"]
+        );
+        let author = |deps: Vec<String>, key: &SigningKey| {
+            let body = json!(["tuple", [["atom", "beacon"], ["int", 17]]]);
+            let payload = encode(&Term::List(vec![
+                bin("lattice-op-v2"),
+                bin(space),
+                Term::Binary(key.verifying_key().to_bytes().to_vec()),
+                Term::List(deps.iter().map(|id| bin(id)).collect()),
+                Term::Atom("authority".into()),
+                Term::from_carrier(&body).unwrap(),
+                Term::Nil,
+            ]))
+            .unwrap();
+            json!({"v":1,"id":URL_SAFE_NO_PAD.encode(Sha256::digest(&payload)),"replica":space,"author":STANDARD.encode(key.verifying_key().to_bytes()),
+                "deps":deps,"kind":"authority","body":body,"cap":["nil"],"sig":STANDARD.encode(key.sign(&payload).to_bytes())})
+        };
+        let beacon = author(
+            histories.get(space).unwrap().dag().frontier().to_vec(),
+            &key,
+        );
+        let partial = author(
+            vec![URL_SAFE_NO_PAD.encode(Sha256::digest(b"native-incoming-missing"))],
+            &key,
+        );
+        let mut forged = beacon.clone();
+        forged["sig"] = json!(STANDARD.encode([0u8; 64]));
+        let mut duplicated = beacon.clone();
+        let dep = duplicated["deps"][0].clone();
+        duplicated["deps"].as_array_mut().unwrap().push(dep);
+        let stranger = SigningKey::from_bytes(&[151u8; 32]);
+        let foreign = author(
+            histories.get(space).unwrap().dag().frontier().to_vec(),
+            &stranger,
+        );
+        let mut requests = Vec::new();
+        for (name, frame, rejected) in [
+            ("native-complete-beacon", beacon.clone(), false),
+            ("native-authentic-partial", partial, false),
+            ("native-forged-accepted", forged.clone(), false),
+            ("native-bad-signature-rejected", forged, true),
+            ("native-authentic-cannot-be-rejected", beacon, true),
+            ("native-signed-identity-duplicate-header", duplicated, false),
+            ("native-authentic-foreign-author", foreign, false),
+        ] {
+            let mut input = input.clone();
+            input["incoming"]["histories"] = if rejected {
+                json!([{"replica":space,"frames":[],"rejected":[{"frame":frame,"reason":"bad_signature"}]}])
+            } else {
+                json!([{"replica":space,"frames":[frame],"rejected":[]}])
+            };
+            let kind = if [
+                "native-authentic-partial",
+                "native-forged-accepted",
+                "native-authentic-cannot-be-rejected",
+            ]
+            .contains(&name)
+            {
+                "reject"
+            } else {
+                "propose"
+            };
+            requests.push(json!({"name":name,"input":input,"expectedKind":kind}));
+        }
+        let mut envelope: Value =
+            serde_json::from_str(original["catalogs"][0]["json"].as_str().unwrap()).unwrap();
+        let catalog = envelope[1]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|pair| pair[0] == json!(["atom", "catalog"]))
+            .unwrap();
+        for pair in catalog[1][1].as_array_mut().unwrap() {
+            if pair[0] == json!(["atom", "revision"]) {
+                pair[1] = json!(["int", 1]);
+            }
+            if pair[0] == json!(["atom", "previous"]) {
+                pair[1] = json!([
+                    "bin",
+                    STANDARD.encode(original["accepted"]["catalog"].as_str().unwrap())
+                ]);
+            }
+        }
+        let artifact =
+            super::super::artifact::parse(&serde_json::to_vec(&envelope).unwrap()).unwrap();
+        let payload =
+            super::super::envelope::signing_bytes(field(artifact.term(), "catalog").unwrap())
+                .unwrap();
+        let catalog_key = SigningKey::from_bytes(&Sha256::digest(b"r11a-trust-ts:catalog").into());
+        let signature = STANDARD.encode(catalog_key.sign(&payload).to_bytes());
+        envelope[1]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|pair| pair[0] == json!(["atom", "signature"]))
+            .unwrap()[1] = json!(["bin", signature]);
+        let mut input = input.clone();
+        input["incoming"]["catalogs"] = json!([serde_json::to_string(&envelope).unwrap()]);
+        requests.push(
+            json!({"name":"native-signed-catalog-advance","input":input,"expectedKind":"propose"}),
+        );
+        assert_eq!(requests.len(), 8);
+        assert_full_decisions(&requests, 16 * 1024 * 1024);
+    }
 
     #[test]
     fn integrated_graph_entry_and_cutoff_stages_match_fresh_full_source_requests() {

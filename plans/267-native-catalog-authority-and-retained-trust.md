@@ -116,6 +116,11 @@ PR185 (numeric values) and PR186 (saved-witness integrity) are published and
 reviewed; their hosted gates remain pending. Keep the native67-case regression
 unchanged until adopting those protected source corrections.
 
+Plan283 independently gates mixed-fault page ordering: a duplicate-signature
+conflict followed by a foreign-scope catalog differs across actual owners.
+Keep the native source-agreement RED and correct the protected collection stage
+before adopting its catalog-preflight/merge rule; no native reason exception.
+
 The isolated plan 280 source correction is reviewed, hosted-gated and adopted.
 Both owners agree on unique saved row permutations and preserve original arrays
 on wholly unadmitted overflow paths. The source adoption STOP is cleared; keep
@@ -248,6 +253,15 @@ The reciprocal contract tests compare both complete source owners and separately
 assert native union/graph/proof/replay stages; they do not claim complete native
 decision parity. Keep that distinction when extending them into the full fold.
 
+The private incoming fold now emits complete decisions after an owned
+ValidatedOriginal pass: canonical history union, early security checkpoint,
+shared graph/cutoff evaluation, accepted watermark and route candidates, sticky
+freeze fallback and wholly unadmitted overflow. Reciprocal controls use fresh
+TypeScript and independent BEAM inputs plus Rust-authored frames/catalogs.
+This remains private, without IPC or installation.
+Numeric source adoption and the complete aggregate resource/reciprocal gates
+remain required; no full resolver or installed-app completion is claimed.
+
 The first full-resolver tests must exercise an empty installed inventory, genuinely
 pending entries, complete acceptance, first-invalid refusal IDs, frozen sibling
 reopen and corrupt original evidence plus otherwise repairing incoming input.
@@ -359,6 +373,9 @@ Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.
 This accommodates aggregate cutoff records without widening public artifact bounds.
+Encoded JSON retains duplicate-name, trailing-byte and malformed Unicode
+refusal before semantic interpretation. Borrowed metadata preflight does not
+widen that transport grammar; its scratch/string costs remain in peak accounting.
 Operation payload encoding excludes the fixed wrapper from the depth-64 domain.
 Fresh depth-limit and large signed-observation peers must prove byte parity. Empty
 delegation text is representable data in both existing codecs; retain it for later

@@ -21,7 +21,9 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
             "run",
             "--no-compile",
             "--no-start",
-            if mode == "resolver-consume" {
+            if mode == "full-input-produce" {
+                "scripts/treehouse_native_catalog_full_input_peer.exs"
+            } else if mode == "resolver-consume" {
                 "scripts/treehouse_native_catalog_resolver_peer.exs"
             } else if mode == "chains-produce" {
                 "scripts/treehouse_native_catalog_chain_peer.exs"
@@ -40,6 +42,18 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
                 "tsx",
                 "test/support/native_catalog_resolver_peer.ts",
                 "consume",
+            ]);
+        } else if mode == "decision-order-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/catalog_decision_order_peer.ts",
+            ]);
+        } else if mode == "incoming-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_incoming_peer.ts",
             ]);
         } else if mode == "resolver-produce" || mode == "witness-produce" {
             command.args([
