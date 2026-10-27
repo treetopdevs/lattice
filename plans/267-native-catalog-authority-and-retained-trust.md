@@ -371,7 +371,7 @@ canonical output order; borrow comparisons and move owned output rows. Build
 candidate fields once; borrow first union fragments until merged rows need ownership;
 materialize security fallback only after refusal. Count derivations, not timing thresholds.
 Measure saved/incoming/refusal processes, disclose buffers and avoid repeated policy/encoding.
-Validate complete JSON without owning its tree before projecting malformed proof roots;
+Validate complete JSON before projecting malformed proof/cutoff schemas without owned trees;
 retain syntax/depth precedence and deferred refusal. Full temporary budgets remain unfinished.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal

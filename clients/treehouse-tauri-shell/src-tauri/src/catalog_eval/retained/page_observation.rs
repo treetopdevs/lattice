@@ -1,7 +1,7 @@
-//! Grammar-preserving ownership projection. A malformed proof root is a deferred
+//! Grammar-preserving ownership projection. Malformed proof metadata is a deferred
 //! refusal marker, never a skipped authentication stage or a validity receipt.
 //! Exact page bytes stay caller-owned; this projection is not an input digest.
-use super::{super::json, page_header};
+use super::{super::json, page_header, proof_metadata};
 use serde_json::{Map, Value};
 
 fn refusal(reason: &'static str) -> &'static str {
@@ -32,10 +32,12 @@ pub(super) fn parse(bytes: &[u8]) -> Result<Value, &'static str> {
     }
     let mut proofs = Vec::new();
     page_header::each(fields["cutoffProofs"], |raw| {
-        let value = if page_header::object(raw.get().as_bytes(), &["cutoff", "history"]).is_ok() {
+        let readable = page_header::object(raw.get().as_bytes(), &["cutoff", "history"])
+            .is_ok_and(|fields| proof_metadata::shape_valid(fields["cutoff"]));
+        let value = if readable {
             json::parse_observation(raw.get().as_bytes()).map_err(refusal)?
         } else {
-            // Closed root shape already guarantees the ordinary proof stage
+            // Malformed cutoff/root shape guarantees the ordinary proof stage
             // returns malformed_catalog with no proof-derived ids. Keep the row
             // position; earlier proof or graph faults and security fallback still
             // execute at their original stages.
@@ -68,10 +70,10 @@ mod tests {
         format!("{{\"catalogs\":[],\"rotations\":[],\"histories\":[],\"cutoffProofs\":[{proof}]}}")
     }
     #[test]
-    fn projection_keeps_closed_roots_and_defers_malformed_rows_in_order() {
+    fn projection_keeps_valid_cutoff_metadata_and_defers_malformed_rows_in_order() {
         let input = json!({"catalogs":[],"rotations":[],"histories":[],"cutoffProofs":[
             [],{"unexpected":[[],[]]},null,true,7,"text",
-            {"cutoff":{"number":1.0},"history":{"raw":[-0.0,1.5,-1]}}
+            {"cutoff":{"replica":"claimed","frontier":[],"logDigest":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},"history":{"raw":[-0.0,1.5,-1]}}
         ]});
         let bytes = serde_json::to_vec(&input).unwrap();
         let result = parse(&bytes).unwrap();
@@ -124,7 +126,8 @@ mod tests {
         for depth in 0..210 {
             for leaf in ["[]", "[null]", "{}", "{\"x\":1.0}"] {
                 let nested = format!("{}{}{}", "[".repeat(depth), leaf, "]".repeat(depth));
-                let proof = wrapper(&format!("{{\"cutoff\":{nested},\"history\":{{}}}}"));
+                let cutoff = r#"{"replica":"claimed","frontier":[],"logDigest":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}"#;
+                let proof = wrapper(&format!("{{\"cutoff\":{cutoff},\"history\":{nested}}}"));
                 let history = format!("{{\"catalogs\":[],\"rotations\":[],\"histories\":[{{\"replica\":\"replica:treehouse:space:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"frames\":[{nested}],\"rejected\":[]}}],\"cutoffProofs\":[]}}");
                 for raw in [proof, history] {
                     if depth == 0 {

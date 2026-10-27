@@ -14,6 +14,9 @@ use std::collections::{BTreeMap, BTreeSet};
 mod incoming;
 mod page_header;
 mod page_observation;
+mod proof_metadata;
+
+const CUTOFF_FIELDS: [&str; 3] = ["replica", "frontier", "logDigest"];
 
 pub(super) struct Graph {
     pub(super) links: ChainObservation,
@@ -375,7 +378,7 @@ fn closed_json(value: &Value, names: &[&str]) -> bool {
     })
 }
 fn valid_cutoff(value: &Value) -> bool {
-    closed_json(value, &["replica", "frontier", "logDigest"])
+    closed_json(value, &CUTOFF_FIELDS)
         && value["replica"].as_str().is_some_and(|s| !s.is_empty())
         && value["logDigest"]
             .as_str()
@@ -1094,7 +1097,7 @@ mod tests {
             ))
             .unwrap();
             let cases = table["cases"].as_array().unwrap();
-            assert_eq!(cases.len(), 16);
+            assert_eq!(cases.len(), 37);
             assert_full_decisions(cases, 8 * 1024 * 1024);
             cases[0].clone()
         };
