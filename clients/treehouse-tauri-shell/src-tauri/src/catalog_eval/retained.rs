@@ -1088,13 +1088,31 @@ mod tests {
 
     #[test]
     fn genuine_logical_capacity_matches_both_public_owners() {
+        assert_genuine_capacity(false);
+    }
+
+    #[test]
+    fn genuine_frozen_capacity_matches_both_public_owners() {
+        assert_genuine_capacity(true);
+    }
+
+    fn assert_genuine_capacity(frozen: bool) {
+        // Keep full-size native contexts serial without weakening their bounds.
+        static CAPACITY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _capacity = CAPACITY_LOCK
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
         let directory = tempfile::TempDir::new().unwrap();
-        let isolated = std::env::var_os("LATTICE_NATIVE_CAPACITY_MANIFEST");
+        let isolated = std::env::var_os(if frozen {
+            "LATTICE_NATIVE_FROZEN_CAPACITY_MANIFEST"
+        } else {
+            "LATTICE_NATIVE_CAPACITY_MANIFEST"
+        });
         let manifest: Value = if let Some(path) = &isolated {
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
         } else {
-            let request = json!({"directory":directory.path()});
+            let request = json!({"directory":directory.path(), "frozen":frozen});
             let manifest: Value = serde_json::from_slice(&catalog_peer::output(
                 "ts",
                 "capacity-produce",
@@ -1115,24 +1133,47 @@ mod tests {
             );
             manifest
         };
-        assert_eq!(manifest["cases"].as_array().unwrap().len(), 4);
-        for (row, name) in manifest["cases"].as_array().unwrap().iter().zip([
+        assert_eq!(manifest["frozen"].as_bool().unwrap_or(false), frozen);
+        let mut names = vec![
             "accepted",
             "reopened",
             "proposedOver",
             "savedOver",
-        ]) {
+            "modelReopened",
+        ];
+        if frozen {
+            names.extend([
+                "catalogFallbackAt",
+                "catalogFallbackOver",
+                "proofFallbackAt",
+                "proofFallbackOver",
+                "savedCatalogFallbackAt",
+                "savedProofFallbackAt",
+            ]);
+        }
+        assert_eq!(manifest["cases"].as_array().unwrap().len(), names.len());
+        for (row, name) in manifest["cases"].as_array().unwrap().iter().zip(names) {
             assert_eq!(row["name"], name);
         }
         let path = manifest["path"].as_str().unwrap();
         assert!(std::fs::metadata(path).unwrap().len() <= 128 * 1024 * 1024);
         let bytes = std::fs::read(path).unwrap();
         assert!(bytes.len() <= 128 * 1024 * 1024);
+        assert_eq!(
+            format!("{:x}", Sha256::digest(&bytes)),
+            manifest["bundleSha256"].as_str().expect("capacity manifest predates bundle pinning; regenerate it with the current source peer"),
+            "capacity corpus bytes must match the source-verified manifest"
+        );
         let raw: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(raw["frozen"].as_bool().unwrap_or(false), frozen);
         let expected = json!({"trustRevision":0,"historyGeneration":0});
         let empty = json!({"catalogs":[],"rotations":[],"histories":[],"cutoffProofs":[]});
         let check = |index: usize, decision: &Value| {
             let row = &manifest["cases"][index];
+            println!(
+                "CAPACITY_CASE {}",
+                json!({"name":row["name"],"kind":decision["kind"],"reason":decision["reason"],"detail":decision["detail"],"decisionSha256":URL_SAFE_NO_PAD.encode(proof_row_digest(decision))})
+            );
             assert_eq!(decision["kind"], row["kind"], "{}", row["name"]);
             assert_eq!(decision["reason"], row["reason"], "{}", row["name"]);
             assert_eq!(
@@ -1145,22 +1186,36 @@ mod tests {
         let mut page = empty.clone();
         page["histories"] = json!([raw["at"]]);
         assert!(super::super::json::within_observation(&page, 205));
-        let encoded_page = serde_json::to_vec(&page).unwrap();
-        assert!(encoded_page.len() > 64 * 1024 * 1024);
-        let transport_refusal = incoming::evaluate(
-            &serde_json::to_vec(&raw["initial"]).unwrap(),
-            &expected,
-            &encoded_page,
-        );
-        assert_eq!(
-            transport_refusal["reason"], "invalid_verified_history",
-            "transport byte admission stays separate"
-        );
-        drop(encoded_page);
+        // The unchanged byte adapter is exercised by the ordinary maximum;
+        // frozen mode targets the distinct witness and saved-block paths.
+        if !frozen {
+            let encoded_page = serde_json::to_vec(&page).unwrap();
+            assert!(encoded_page.len() > 64 * 1024 * 1024);
+            let transport_refusal = incoming::evaluate(
+                &serde_json::to_vec(&raw["initial"]).unwrap(),
+                &expected,
+                &encoded_page,
+            );
+            assert_eq!(
+                transport_refusal["reason"], "invalid_verified_history",
+                "transport byte admission stays separate"
+            );
+            drop(encoded_page);
+        }
         let started = std::time::Instant::now();
         let mut accepted = incoming::evaluate_observation(raw["initial"].clone(), &expected, page);
         check(0, &accepted);
-        assert_eq!(accepted["kind"], "propose");
+        assert_eq!(
+            accepted["kind"],
+            if frozen { "retain_blocked" } else { "propose" }
+        );
+        assert_eq!(
+            accepted["routes"].as_array().unwrap().len(),
+            if frozen { 0 } else { 1 }
+        );
+        if frozen {
+            assert_eq!(accepted["reason"], "authority_changed");
+        }
         assert_eq!(
             accepted["next"]["histories"][0]["frames"]
                 .as_array()
@@ -1173,6 +1228,7 @@ mod tests {
             accepted["next"]["cutoffProofs"].as_array().unwrap().len(),
             1
         );
+        let accepted_next_digest = proof_row_digest(&accepted["next"]);
         let saved_bytes = serde_json::to_vec(&accepted["next"]).unwrap();
         assert!(saved_bytes.len() > 32 * 1024 * 1024);
         assert_eq!(
@@ -1183,8 +1239,36 @@ mod tests {
         let mut reopened =
             incoming::evaluate_observation(accepted["next"].take(), &expected, empty.clone());
         check(1, &reopened);
-        assert_eq!(reopened["kind"], "unchanged");
+        assert_eq!(
+            reopened["kind"],
+            if frozen {
+                "retain_blocked"
+            } else {
+                "unchanged"
+            }
+        );
+        assert_eq!(
+            reopened["routes"].as_array().unwrap().len(),
+            if frozen { 0 } else { 1 }
+        );
+        assert_eq!(reopened["next"]["accepted"], raw["initial"]["accepted"]);
         drop(reopened["next"].take());
+        let mut modeled = raw["initial"].clone();
+        modeled["histories"] = json!([raw["at"]]);
+        if frozen {
+            modeled["blocked"] = raw["blockedAt"].clone();
+        }
+        let mut model_page = empty.clone();
+        model_page["histories"] = json!([raw["baseline"]]);
+        println!(
+            "CAPACITY_MODEL_INPUT {}",
+            json!({"frozen":frozen,"originalSha256":URL_SAFE_NO_PAD.encode(proof_row_digest(&modeled)),"expectedSha256":URL_SAFE_NO_PAD.encode(proof_row_digest(&expected)),"pageSha256":URL_SAFE_NO_PAD.encode(proof_row_digest(&model_page))})
+        );
+        let modeled = incoming::evaluate_observation(modeled, &expected, model_page);
+        check(4, &modeled);
+        assert_ne!(modeled["kind"], "reject");
+        assert_eq!(proof_row_digest(&modeled["next"]), accepted_next_digest);
+        drop(modeled);
         let mut over = raw["at"].clone();
         *over["frames"].as_array_mut().unwrap().last_mut().unwrap() = raw["overFrame"].clone();
         let mut page = empty.clone();
@@ -1204,16 +1288,78 @@ mod tests {
             .unwrap()
             .last_mut()
             .unwrap() = raw["overFrame"].clone();
+        if frozen {
+            original_over["blocked"] = raw["blockedOver"].clone();
+        }
         assert!(!super::super::json::within_observation(&original_over, 205));
-        let mut saved_over_page = empty;
+        let mut saved_over_page = empty.clone();
         saved_over_page["histories"] = json!([raw["baseline"]]);
         let saved_over = incoming::evaluate_observation(original_over, &expected, saved_over_page);
         check(3, &saved_over);
         assert_eq!(saved_over["reason"], "trust_recovery_required");
+        if frozen {
+            for (offset, (proof, over_limit)) in
+                [(false, false), (false, true), (true, false), (true, true)]
+                    .into_iter()
+                    .enumerate()
+            {
+                let mut history = raw["at"].clone();
+                if over_limit {
+                    *history["frames"]
+                        .as_array_mut()
+                        .unwrap()
+                        .last_mut()
+                        .unwrap() = raw["overFrame"].clone();
+                }
+                let mut page = empty.clone();
+                page["histories"] = Value::Array(vec![history]);
+                if proof {
+                    page["cutoffProofs"] = json!([{}]);
+                } else {
+                    page["catalogs"] = json!(["not JSON"]);
+                }
+                let decision =
+                    incoming::evaluate_observation(raw["initial"].clone(), &expected, page);
+                check(5 + offset, &decision);
+                if over_limit {
+                    assert_eq!(decision["reason"], "invalid_verified_history");
+                } else {
+                    assert_eq!(decision["kind"], "retain_blocked");
+                    assert_eq!(decision["reason"], "authority_changed");
+                    assert!(decision["routes"].as_array().unwrap().is_empty());
+                    assert_eq!(decision["next"]["accepted"], raw["initial"]["accepted"]);
+                    assert!(super::super::json::within_observation(
+                        &decision["next"],
+                        205
+                    ));
+                }
+                // Each completed decision is checked whole, then dropped before
+                // the next context; do not measure four artificial result copies.
+                drop(decision);
+            }
+            for (offset, proof) in [false, true].into_iter().enumerate() {
+                // This is this test's own serialized successful candidate, not
+                // persisted-byte admission or a caller assertion of trust.
+                let original: Value = serde_json::from_slice(&saved_bytes).unwrap();
+                let mut page = empty.clone();
+                if proof {
+                    page["cutoffProofs"] = json!([{}]);
+                } else {
+                    page["catalogs"] = json!(["not JSON"]);
+                }
+                let decision = incoming::evaluate_observation(original, &expected, page);
+                check(9 + offset, &decision);
+                assert_eq!(decision["kind"], "retain_blocked");
+                assert_eq!(decision["reason"], "authority_changed");
+                assert!(decision["routes"].as_array().unwrap().is_empty());
+                assert_eq!(proof_row_digest(&decision["next"]), accepted_next_digest);
+                drop(decision);
+            }
+        }
         println!(
             "CAPACITY_RESOURCE {}",
             json!({"fixtureMode":if isolated.is_some() {"isolated-input"} else {"live-owners"},
-            "bundleBytes":bytes.len(),"savedBytes":saved_bytes.len(),"frames":manifest["frameCount"],
+            "frozen":frozen,"bundleBytes":bytes.len(),"savedBytes":saved_bytes.len(),"frames":manifest["frameCount"],
             "evaluateMicros":started.elapsed().as_micros(),"cases":manifest["cases"]})
         );
         std::hint::black_box((

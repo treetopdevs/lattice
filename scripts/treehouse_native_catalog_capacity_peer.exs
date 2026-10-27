@@ -39,7 +39,16 @@ end
 manifest = IO.read(:stdio, :eof) |> Jason.decode!()
 %{size: size} = File.stat!(manifest["path"])
 true = size <= 128 * 1024 * 1024
-raw = File.read!(manifest["path"]) |> Jason.decode!()
+bytes = File.read!(manifest["path"])
+
+unless is_binary(manifest["bundleSha256"]),
+  do: raise("capacity manifest predates bundle pinning; regenerate with the current source peer")
+
+unless Base.encode16(:crypto.hash(:sha256, bytes), case: :lower) == manifest["bundleSha256"],
+  do: raise("capacity corpus bytes do not match the source-verified manifest")
+
+raw = Jason.decode!(bytes)
+true = Map.get(raw, "frozen", false) == Map.get(manifest, "frozen", false)
 expected = %{"trustRevision" => 0, "historyGeneration" => 0}
 empty = %{"catalogs" => [], "rotations" => [], "histories" => [], "cutoffProofs" => []}
 
@@ -56,15 +65,65 @@ over = %{raw["at"] | "frames" => Enum.drop(raw["at"]["frames"], -1) ++ [raw["ove
 proposed_over = evaluate.(raw["initial"], %{empty | "histories" => [over]})
 
 saved_over =
-  evaluate.(%{raw["initial"] | "histories" => [over]}, %{empty | "histories" => [raw["baseline"]]})
+  evaluate.(
+    %{
+      raw["initial"]
+      | "histories" => [over],
+        "blocked" => Map.get(raw, "blockedOver", raw["initial"]["blocked"])
+    },
+    %{empty | "histories" => [raw["baseline"]]}
+  )
+
+modeled =
+  evaluate.(
+    %{
+      raw["initial"]
+      | "histories" => [raw["at"]],
+        "blocked" => Map.get(raw, "blockedAt", raw["initial"]["blocked"])
+    },
+    %{empty | "histories" => [raw["baseline"]]}
+  )
+
+decisions = [
+  {"accepted", accepted},
+  {"reopened", reopened},
+  {"proposedOver", proposed_over},
+  {"savedOver", saved_over},
+  {"modelReopened", modeled}
+]
+
+fallbacks =
+  if manifest["frozen"] == true do
+    for kind <- ["catalog", "proof"], {history, suffix} <- [{raw["at"], "At"}, {over, "Over"}] do
+      incoming = %{empty | "histories" => [history]}
+
+      incoming =
+        if kind == "catalog",
+          do: %{incoming | "catalogs" => ["not JSON"]},
+          else: %{incoming | "cutoffProofs" => [%{}]}
+
+      {kind <> "Fallback" <> suffix, evaluate.(raw["initial"], incoming)}
+    end
+  else
+    []
+  end
+
+saved_fallbacks =
+  if manifest["frozen"] == true do
+    for kind <- ["catalog", "proof"] do
+      incoming =
+        if kind == "catalog",
+          do: %{empty | "catalogs" => ["not JSON"]},
+          else: %{empty | "cutoffProofs" => [%{}]}
+
+      {"saved" <> String.capitalize(kind) <> "FallbackAt", evaluate.(accepted["next"], incoming)}
+    end
+  else
+    []
+  end
 
 results =
-  for {name, decision} <- [
-        {"accepted", accepted},
-        {"reopened", reopened},
-        {"proposedOver", proposed_over},
-        {"savedOver", saved_over}
-      ] do
+  for {name, decision} <- decisions ++ fallbacks ++ saved_fallbacks do
     %{
       "name" => name,
       "kind" => decision["kind"],

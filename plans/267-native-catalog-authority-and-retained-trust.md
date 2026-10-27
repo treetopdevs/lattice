@@ -364,7 +364,7 @@ Pure values retain 64 MiB logical bounds; 32 MiB store and 64 MiB transport byte
 Before exposing the full owner, account peak simultaneous owned JSON, merged
 history/frame serialization, proof fingerprint indexes and transient policy views;
 a finite input cap alone is not proof of acceptable native memory/CPU cost.
-Measure large authenticated inputs and repeated proof/view cases, including frozen/fallback maxima. In one immutable
+Prove genuine ordinary/frozen/fallback logical maxima and +1 refusals; measure repeated proof/view costs. In one immutable
 proof-observation context, reuse only exactly matching validated raw rows; changed
 metadata and new histories must revalidate. Preserve first raw representation and
 canonical output order; borrow comparisons and move owned output rows. Build

@@ -1,7 +1,8 @@
 // Fresh maximum-size source values; files keep large evidence out of the IPC response.
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { produce, check } from "./catalog_valid_capacity_fixture";
 function digest(value) {
@@ -28,11 +29,38 @@ function digest(value) {
     walk(value);
     return hash.digest("base64url");
 }
-const { directory } = JSON.parse(readFileSync(0, "utf8"));
+const { directory, frozen = false } = JSON.parse(readFileSync(0, "utf8"));
+assert.equal(typeof frozen, "boolean");
 assert.equal(typeof directory, "string");
-const bundle = await produce(), results = await check(bundle);
+async function wireBundle() {
+    const produced = await produce(frozen), sourcePath = join(directory, "source.json");
+    // Preserve failed inputs too; no manifest is emitted until every check passes.
+    writeFileSync(sourcePath, JSON.stringify(produced), { flag: "wx" });
+    const decoded = JSON.parse(readFileSync(sourcePath, "utf8"));
+    assert.deepEqual(decoded, produced, "capacity fixture must be a lossless JSON value");
+    return decoded;
+}
+// All source decisions use the same wire values consumed by the other peers.
+const bundle = await wireBundle();
+const cases = [];
+const results = await check(bundle, (name, decision) => cases.push({ name, kind: decision.kind, reason: decision.reason, decisionSha256: digest(decision) })).catch(error => {
+    // Native callers remove their temporary directory on panic. Keep failed inputs
+    // outside that directory so a fresh-peer failure remains independently replayable.
+    const retained = mkdtempSync(join(tmpdir(), "treehouse-capacity-failure-"));
+    const sourcePath = join(retained, "source.json");
+    copyFileSync(join(directory, "source.json"), sourcePath);
+    writeFileSync(join(retained, "decisions.json"), JSON.stringify(cases), { flag: "wx" });
+    console.error(JSON.stringify({ capacityFailureSource: sourcePath, sourceSha256: createHash("sha256").update(readFileSync(sourcePath)).digest("hex") }));
+    throw error;
+});
 const path = join(directory, "capacity.json");
-writeFileSync(path, JSON.stringify({ ...bundle, initial: results.initial.next }), { flag: "wx" });
-const names = ["accepted", "reopened", "proposedOver", "savedOver"];
-console.log(JSON.stringify({ path, frameCount: bundle.frameCount, cases: names.map(name => ({ name,
-        kind: results[name].kind, reason: results[name].reason, decisionSha256: digest(results[name]) })) }));
+const encoded = JSON.stringify({ ...bundle, initial: results.initial.next, blockedAt: results.blockedAt, blockedOver: results.blockedOver });
+const wire = JSON.parse(encoded);
+assert.deepEqual(wire.initial, results.initial.next);
+assert.deepEqual(wire.blockedAt, results.blockedAt);
+assert.deepEqual(wire.blockedOver, results.blockedOver);
+for (const [key, value] of Object.entries(bundle))
+    assert.deepEqual(wire[key], value);
+writeFileSync(path, encoded, { flag: "wx" });
+const bundleSha256 = createHash("sha256").update(encoded).digest("hex");
+console.log(JSON.stringify({ path, bundleSha256, frozen, frameCount: bundle.frameCount, cases }));
