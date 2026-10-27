@@ -2,8 +2,10 @@
 
 ## Status
 
-Source changes implemented; independent verification, review, publication and
-exact-tip hosted gating remain. Native adoption stays stopped until that gate.
+Source implementation, independent review and local verification are complete.
+The source PR is published. Its documentation update still requires an exact-tip
+hosted gate; native adoption also requires the parent saved-witness correction.
+Run and review evidence lives in the source PR and running decision log.
 The correction resolves observable collection-preflight, route-collision blame
 and saved-fork witness precedence disagreements between the public owners.
 
