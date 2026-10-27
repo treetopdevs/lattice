@@ -357,7 +357,7 @@ trust reasons and authority semantics are parity oracles, not editable targets.
 ## Resources and acceptance
 
 Retain 128 KiB artifact, 1,024/16 MiB artifact-store, 64,000-byte push-frame,
-64 MiB transport and 32 MiB retained snapshot limits. Canonical terms retain the
+64 MiB transport and 32 MiB local retained-store input limits. Canonical terms retain the
 existing depth/node limits. Bound complete-input parsing before allocation without
 clipping evaluator-valid maximum-size history. Frame-set authentication accounts
 for encoded frame bytes and array separators before allocating verified state.
@@ -368,11 +368,11 @@ a finite input cap alone is not proof of acceptable native memory/CPU cost.
 Measure large authenticated inputs and repeated proof/view cases. In one immutable
 proof-observation context, reuse only exactly matching validated raw rows; changed
 metadata and new histories must revalidate. Preserve first raw representation and
-canonical output order; borrow comparisons and move owned output rows. Count actual
-cutoff derivations rather than pinning a
-wall-clock threshold; isolate process measurements and disclose caller buffers. Avoid repeated whole-history policy/encoding work and enforce aggregate temporary
-budgets without narrowing source-valid wire/canonical evidence. These resource
-gates remain unfinished; no complete bounded incoming owner is claimed.
+canonical output order; borrow comparisons and move owned output rows. Build
+candidate fields once and materialize security fallback only after candidate refusal;
+never keep a spare full snapshot on success. Count derivations, not timing thresholds.
+Measure saved reopen/incoming processes and disclose caller buffers; avoid repeated policy/encoding.
+Enforce temporary budgets without narrowing source-valid evidence. Full resource gates remain unfinished.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.

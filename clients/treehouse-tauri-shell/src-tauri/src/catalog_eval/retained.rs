@@ -1077,6 +1077,7 @@ mod tests {
 
     #[test]
     fn authenticated_resource_process_envelope() {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
         // The explicit fixture path keeps Node/BEAM producers outside a measured
         // child process. Ordinary test runs still exercise a fresh real input.
         let fixture = std::env::var_os("LATTICE_NATIVE_RESOURCE_INPUT");
@@ -1093,10 +1094,10 @@ mod tests {
                 8 * 1024 * 1024,
             ))
             .unwrap();
-            let request =
-                json!({"name":"authenticated-resource-context","input":table["cases"][0]["input"]});
-            assert_full_decisions(&[request.clone()], 8 * 1024 * 1024);
-            request["input"].clone()
+            let requests = table["cases"].as_array().unwrap();
+            assert_eq!(requests.len(), 5);
+            assert_full_decisions(requests, 8 * 1024 * 1024);
+            requests[0]["input"].clone()
         };
         let saved = serde_json::to_vec(&input["installed"]).unwrap();
         let page = serde_json::to_vec(&input["incoming"]).unwrap();
@@ -1104,24 +1105,31 @@ mod tests {
         let started = std::time::Instant::now();
         let decision = incoming::evaluate(&saved, &input["expected"], &page);
         let elapsed = started.elapsed();
-        assert_eq!(decision["kind"], "propose");
-        assert!(decision["reason"].is_null());
-        assert_eq!(decision["routes"].as_array().unwrap().len(), 1);
+        assert!(matches!(decision["kind"].as_str(), Some("propose" | "unchanged" | "retain_blocked")));
+        if decision["kind"] == "retain_blocked" {
+            assert_eq!(decision["reason"], "authority_changed");
+            assert!(decision["routes"].as_array().unwrap().is_empty());
+        } else {
+            assert!(decision["reason"].is_null());
+            assert_eq!(decision["routes"].as_array().unwrap().len(), 1);
+        }
         assert_eq!(decision["next"]["accepted"], input["installed"]["accepted"]);
         let copies = input["incoming"]["cutoffProofs"].as_array().unwrap().len();
+        let saved_proofs = input["installed"]["cutoffProofs"].as_array().unwrap().len();
         assert_eq!(
             decision["next"]["cutoffProofs"].as_array().unwrap().len(),
-            usize::from(copies > 0)
+            usize::from(copies + saved_proofs > 0)
         );
         let output = serde_json::to_vec(&decision["next"]).unwrap();
         assert!(output.len() <= 32 * 1024 * 1024);
         println!(
             "RESOURCE {}",
             json!({"fixtureMode":if isolated {"isolated-input"} else {"live-owners"},
-            "savedBytes":saved.len(),"incomingBytes":page.len(),"nextBytes":output.len(),
-            "frames":input["incoming"]["histories"][0]["frames"].as_array().unwrap().len(),
-            "proofCopies":copies,"proofDerivations":PROOF_DERIVATIONS.with(|count| count.get()),
-            "evaluateMicros":elapsed.as_micros(),"nextSha256":format!("{:x}",Sha256::digest(&output))})
+            "kind":decision["kind"],"savedBytes":saved.len(),"incomingBytes":page.len(),"nextBytes":output.len(),
+            "frames":input["incoming"]["histories"].as_array().unwrap().first().or_else(|| input["installed"]["histories"].as_array().unwrap().first()).unwrap()["frames"].as_array().unwrap().len(),
+            "proofCopies":copies,"savedProofs":saved_proofs,"proofDerivations":PROOF_DERIVATIONS.with(|count| count.get()),
+            "evaluateMicros":elapsed.as_micros(),"nextSha256":format!("{:x}",Sha256::digest(&output)),
+            "decisionSha256":URL_SAFE_NO_PAD.encode(proof_row_digest(&decision))})
         );
         std::hint::black_box((&input, &saved, &page, &decision, &output));
     }

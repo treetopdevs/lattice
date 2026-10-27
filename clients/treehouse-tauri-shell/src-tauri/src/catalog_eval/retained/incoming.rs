@@ -74,15 +74,9 @@ fn evaluate_validated(
         });
     let bootstrap_ids = honored_bootstraps(&bootstrap);
     let refused = accepted_refusals(&bootstrap, original)?;
-    let mut next = original.clone();
-    next["histories"] = json!(histories
-        .iter()
-        .map(|(_, history)| history.raw())
-        .collect::<Vec<_>>());
-    next["blocked"] = security_block(original, &refused, &bootstrap_ids, &histories);
-    // The fallback checkpoint exists only after candidate history authentication
+    let security = security_block(original, &refused, &bootstrap_ids, &histories);
+    // Capture fallback eligibility only after candidate history authentication
     // and actual current accepted-target policy have completed successfully.
-    let frozen = (!next["blocked"].is_null()).then(|| next.clone());
     let context = IncomingContext {
         original,
         expected,
@@ -92,10 +86,18 @@ fn evaluate_validated(
         replacement,
         bootstrap_ids: &bootstrap_ids,
     };
-    match context.candidate(next) {
+    match context.candidate() {
         Ok(decision) => Ok(decision),
         Err(error) => {
-            if let Some(frozen) = frozen {
+            if !security.is_null() {
+                // The immutable authenticated context supplies the same fallback
+                // only when needed; successful candidates retain no spare copy.
+                let frozen = context.checkpoint(
+                    original["catalogs"].clone(),
+                    original["rotations"].clone(),
+                    original["cutoffProofs"].clone(),
+                    security,
+                );
                 let heads = frozen["blocked"]["bindings"].clone();
                 let reason = frozen["blocked"]["reason"].clone();
                 context.issue(
@@ -193,7 +195,27 @@ struct IncomingContext<'a, 'dag> {
     bootstrap_ids: &'a [String],
 }
 impl IncomingContext<'_, '_> {
-    fn candidate(&self, mut next: Value) -> Result<Value, ChainError> {
+    // Copy each output field once. Never clone a saved history or inventory just
+    // to overwrite it with the authenticated union or newly validated rows.
+    fn checkpoint(
+        &self,
+        catalogs: Value,
+        rotations: Value,
+        cutoff_proofs: Value,
+        blocked: Value,
+    ) -> Value {
+        let original = self.original;
+        let mut next = json!({"version":original["version"],"review":original["review"],"accepted":original["accepted"]});
+        let fields = next.as_object_mut().unwrap();
+        fields.insert("histories".into(), Value::Array(self.histories.iter().map(|(_, history)| history.raw().clone()).collect()));
+        fields.insert("catalogs".into(), catalogs);
+        fields.insert("rotations".into(), rotations);
+        fields.insert("cutoffProofs".into(), cutoff_proofs);
+        fields.insert("blocked".into(), blocked);
+        next
+    }
+
+    fn candidate(&self) -> Result<Value, ChainError> {
         let original = self.original;
         let page = self.page;
         let histories = self.histories;
@@ -213,10 +235,12 @@ impl IncomingContext<'_, '_> {
             histories,
         )?;
         graph.complete_cutoffs(&proofs);
-        next["catalogs"] = json!(catalogs.rows);
-        next["rotations"] = json!(rotations.rows);
-        next["cutoffProofs"] = Value::Array(proofs.rows);
-        next["blocked"] = derived_block(original, &graph, bootstrap_ids, histories);
+        let mut next = self.checkpoint(
+            Value::Array(catalogs.rows),
+            Value::Array(rotations.rows),
+            Value::Array(proofs.rows),
+            derived_block(original, &graph, bootstrap_ids, histories),
+        );
         validate_routes(&catalogs.artifacts, &graph)?;
         validate_watermark(original, &graph)?;
         let heads = json!(graph.links.binding_heads);
@@ -389,9 +413,9 @@ impl IncomingContext<'_, '_> {
             .as_array()
             .cloned()
             .unwrap_or_default();
-        Ok(
-            json!({"kind":kind,"expected":expected,"next":next,"reason":reason,"replacementConfigured":replacement,
-        "observed":{"bootstrapIds":bootstrap_ids,"bindingHeads":heads,"catalogHeads":catalog_heads},"detail":{"ids":ids,"coreReason":null,"pendingProofIds":pending},"routes":routes}),
-        )
+        let mut decision = json!({"kind":kind,"expected":expected,"reason":reason,"replacementConfigured":replacement,
+        "observed":{"bootstrapIds":bootstrap_ids,"bindingHeads":heads,"catalogHeads":catalog_heads},"detail":{"ids":ids,"coreReason":null,"pendingProofIds":pending},"routes":routes});
+        decision["next"] = next;
+        Ok(decision)
     }
 }
