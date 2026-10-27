@@ -577,6 +577,9 @@ impl OriginalEvidence {
                     .iter()
                     .all(|b| !binding_ancestor(a, b, graph) && !binding_ancestor(b, a, graph))
             });
+        if bindings.len() > 1 && !independent {
+            return Err(recovery());
+        }
         if catalogs.iter().any(|a| {
             !catalogs
                 .iter()
@@ -588,7 +591,9 @@ impl OriginalEvidence {
             if !independent || bindings.len() <= 2 || !bootstrap_ids.is_empty() {
                 return Err(recovery());
             }
-        } else if !independent && catalogs.is_empty() && bootstrap_ids.is_empty() {
+        } else if bindings.len() > 2
+            || (!independent && catalogs.is_empty() && bootstrap_ids.is_empty())
+        {
             return Err(recovery());
         }
         Ok(())
@@ -1999,15 +2004,38 @@ mod tests {
             16 * 1024 * 1024,
         ))
         .unwrap();
-        assert_eq!(table["cases"].as_array().unwrap().len(), 3);
+        assert_eq!(table["cases"].as_array().unwrap().len(), 18);
         let mut requests = Vec::new();
         for case in table["cases"].as_array().unwrap() {
             for (order, row) in case["orders"].as_array().unwrap().iter().enumerate() {
                 requests.push(json!({"name":format!("{}:{order}",case["name"].as_str().unwrap()),"input":row["input"]}));
             }
         }
-        assert_eq!(requests.len(), 6);
+        assert_eq!(requests.len(), 36);
         assert_full_decisions(&requests, 16 * 1024 * 1024);
+    }
+
+    #[test]
+    fn supplied_saved_witness_lists_match_both_actual_public_owners() {
+        let table: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "saved-witness-produce",
+            None,
+            32 * 1024 * 1024,
+        ))
+        .unwrap();
+        let cases = table["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 51);
+        let mut requests = Vec::new();
+        for case in cases {
+            let orders = case["orders"].as_array().unwrap();
+            assert_eq!(orders.len(), 2);
+            for (order, row) in orders.iter().enumerate() {
+                requests.push(json!({"name":format!("{}:{order}",case["name"].as_str().unwrap()),"input":row["input"]}));
+            }
+        }
+        assert_eq!(requests.len(), 102);
+        assert_full_decisions(&requests, 32 * 1024 * 1024);
     }
 
     #[test]

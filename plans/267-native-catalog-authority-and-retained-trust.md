@@ -110,16 +110,14 @@ The original JSON1.0 disagreement is corrected by a catalog-only bounded numeric
 view. Ordinary native frame/artifact parsing stays strict; retain the original-only
 canonical-input proof and the independent witness/order regressions unchanged.
 
-Plan282 also gates adoption: the expanded original-only mutation proof exposes
-BEAM accepting a singleton saved fork witness that TypeScript rejects. Source
-PR185's numeric source gate is complete and adopted; PR186's mixed-witness
-review remains open. Keep the native67-case regression unchanged until adopting
-that protected witness correction.
-
-Plan283 independently gates mixed-fault page ordering: a duplicate-signature
-conflict followed by a foreign-scope catalog differs across actual owners.
-Keep the native source-agreement RED and correct the protected collection stage
-before adopting its catalog-preflight/merge rule; no native reason exception.
+Plans282–283 source corrections are reviewed, hosted-gated and integrated as
+explicit dependencies. Every supplied saved witness list is independently
+validated, and catalog collection preflight, route blame and first-fork witness
+precedence agree across the source owners. Native witness guards and expanded
+agreement verification remain in progress. Preserve the native67-case
+original-only matrix and ordering regression; add the complete source witness
+matrix without a native reason exception. Aggregate resource, ordinary/tracing,
+repository, review and exact-tip native gates remain required.
 
 The isolated plan 280 source correction is reviewed, hosted-gated and adopted.
 Both owners agree on unique saved row permutations and preserve original arrays

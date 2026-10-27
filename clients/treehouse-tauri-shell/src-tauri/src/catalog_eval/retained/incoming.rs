@@ -147,6 +147,20 @@ fn inventory(
                 .iter()
                 .map(|v| v.as_str().unwrap()),
         );
+    let mut preflight = Vec::new();
+    let mut merge_row = |id, artifact, raw: &str, signature| {
+        if let Some((_, _, prior_signature)) = records.get(&id) {
+            if signature != *prior_signature {
+                return Err(ChainError {
+                    reason: "invalid_catalog_signature",
+                    ids: vec![id],
+                });
+            }
+        } else {
+            records.insert(id, (artifact, raw.into(), signature));
+        }
+        Ok(())
+    };
     for raw in sources {
         let artifact = super::super::artifact::parse(raw.as_bytes()).map_err(fail)?;
         let (id, signature) = if name == "catalogs" {
@@ -174,16 +188,16 @@ fn inventory(
             )?;
             (id, None)
         };
-        if let Some((_, _, prior_signature)) = records.get(&id) {
-            if signature != *prior_signature {
-                return Err(ChainError {
-                    reason: "invalid_catalog_signature",
-                    ids: vec![id],
-                });
-            }
+        if name == "catalogs" {
+            // Complete catalog parsing/schema/scope before duplicate-signature
+            // reduction. Keep encounter order and borrow the first raw spelling.
+            preflight.push((id, artifact, raw, signature));
         } else {
-            records.insert(id, (artifact, raw.into(), signature));
+            merge_row(id, artifact, raw, signature)?;
         }
+    }
+    for (id, artifact, raw, signature) in preflight {
+        merge_row(id, artifact, raw, signature)?;
     }
     let mut artifacts = Vec::with_capacity(records.len());
     let mut rows = Vec::with_capacity(records.len());

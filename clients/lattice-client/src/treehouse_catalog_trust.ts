@@ -196,9 +196,14 @@ async function evaluateSnapshot(value: {
 
     const catalogs = new Map<string, CatalogNode>(), rotations = new Map<string, RotationNode>();
     const retainedCatalogIds = new Set(original.catalogs.map((row) => row.id));
-    for (const saved of original.catalogs) addCatalog(catalogs, saved.json, bootstrap, original.review.bootstrapId, saved.id);
+    // Preflight the whole catalog collection before duplicate-signature checks.
+    // A later scope/shape fault cannot be hidden by an earlier signed-id conflict.
+    const parsedCatalogs = [
+      ...original.catalogs.map((saved) => catalogNode(saved.json, bootstrap, original.review.bootstrapId, saved.id)),
+      ...value.incoming.catalogs.map((json) => catalogNode(json, bootstrap, original.review.bootstrapId)),
+    ];
+    for (const node of parsedCatalogs) addCatalog(catalogs, node);
     for (const saved of original.rotations) addRotation(rotations, saved.json, bootstrap, original.review.bootstrapId, saved.id);
-    for (const json of value.incoming.catalogs) addCatalog(catalogs, json, bootstrap, original.review.bootstrapId);
     for (const json of value.incoming.rotations) addRotation(rotations, json, bootstrap, original.review.bootstrapId);
     const acceptedCatalogIds = new Set<string>(), acceptedBindingIds = new Set<string>();
     const pendingCatalogs = original.accepted === null ? [] : [original.accepted.catalog];
@@ -316,7 +321,7 @@ async function evaluateSnapshot(value: {
     else if (next.blocked === null && (heads.length > 1 || forks.length > 0)) next.blocked = block("catalog_fork", heads, forks, [], [], pendingIds);
     // Pending signed nodes are retained but their unproven entries reserve no route.
     const routesUsed = new Map<string, string>();
-    for (const node of catalogs.values()) if (node.pending.length === 0) for (const entry of node.envelope.catalog.entries) {
+    for (const node of [...catalogs.values()].sort(byId)) if (node.pending.length === 0) for (const entry of node.envelope.catalog.entries) {
       const previous = routesUsed.get(entry.route);
       if (previous !== undefined && previous !== entry.replica) fail("invalid_catalog_transition", [node.id]);
       routesUsed.set(entry.route, entry.replica);
@@ -516,6 +521,7 @@ async function validateStoredBlock(state: InstalledTreehouseCatalogTrustV1, deri
     return false;
   };
   const independentBindings = saved.bindings.length > 1 && saved.bindings.every((a, i) => saved.bindings.slice(i + 1).every((b) => !bindingAncestor(a, b) && !bindingAncestor(b, a)));
+  if (saved.bindings.length > 1 && !independentBindings) fail("trust_recovery_required");
   const catalogConflict = (a: string, b: string): boolean => {
     const ca = catalogs.get(a)!.envelope.catalog, cb = catalogs.get(b)!.envelope.catalog;
     if (ca.binding !== cb.binding) return false;
@@ -526,7 +532,7 @@ async function validateStoredBlock(state: InstalledTreehouseCatalogTrustV1, deri
   if (saved.catalogs.some((a) => !saved.catalogs.some((b) => a !== b && catalogConflict(a, b)))) fail("trust_recovery_required");
   if (saved.reason === "control_history_limit") {
     if (!independentBindings || saved.bindings.length <= 2 || saved.bootstrapIds.length > 0) fail("trust_recovery_required");
-  } else if (!independentBindings && saved.catalogs.length === 0 && saved.bootstrapIds.length === 0) fail("trust_recovery_required");
+  } else if (saved.bindings.length > 2 || (saved.catalogs.length === 0 && saved.bootstrapIds.length === 0 && !independentBindings)) fail("trust_recovery_required");
 }
 async function validateBootstrapWitnesses(state: InstalledTreehouseCatalogTrustV1, histories: Map<string, ObservedHistory>) {
   const history = histories.get(state.review.space);
@@ -713,12 +719,16 @@ function parseCatalog(json: string): CatalogEnvelope {
 interface CatalogNode {id: string; json: string; envelope: CatalogEnvelope; authenticated: boolean; pending: string[];}
 interface RotationNode {id: string; json: string; envelope: CatalogRotationEnvelope; authenticated: boolean;}
 interface Binding {id: string; generation: number; key: string; parent: string | null; prior: string | null; inventory: string | null; pending: string[];}
-function addCatalog(map: Map<string, CatalogNode>, json: string, bootstrap: CatalogBootstrap, bootstrapId: string, savedId?: string) {
+function catalogNode(json: string, bootstrap: CatalogBootstrap, bootstrapId: string, savedId?: string): CatalogNode {
   const envelope = parseCatalog(json), id = transportCatalogId(envelope.catalog);
   if (savedId !== undefined && savedId !== id) fail("trust_recovery_required");
   if (envelope.catalog.space !== bootstrap.space || envelope.catalog.bootstrap !== bootstrapId) fail("wrong_catalog_scope", [id]);
-  if (!map.has(id)) map.set(id, {id, json, envelope, authenticated: false, pending: []});
-  else if (map.get(id)!.envelope.signature !== envelope.signature) fail("invalid_catalog_signature", [id]);
+  return {id, json, envelope, authenticated: false, pending: []};
+}
+function addCatalog(map: Map<string, CatalogNode>, node: CatalogNode) {
+  const previous = map.get(node.id);
+  if (previous === undefined) map.set(node.id, node);
+  else if (previous.envelope.signature !== node.envelope.signature) fail("invalid_catalog_signature", [node.id]);
 }
 function addRotation(map: Map<string, RotationNode>, json: string, bootstrap: CatalogBootstrap, bootstrapId: string, savedId?: string) {
   const envelope = catalogRotationEnvelopeFromCarrierTerm(parseJson(json));

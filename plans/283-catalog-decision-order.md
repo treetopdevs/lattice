@@ -2,18 +2,15 @@
 
 ## Status
 
-TODO; SOURCE STOP for complete native incoming adoption. A fresh signed page
-containing a conflicting signature for an already retained catalog, followed by
-an out-of-scope catalog, gives TypeScript invalid_catalog_signature but BEAM
-wrong_catalog_scope. Reversing the two inputs gives wrong_catalog_scope in both.
-Two more actual-owner cases differ: route-collision detail.ids follow insertion
-order in TypeScript versus BEAM map order; a saved graph fork followed by a new
-honored bootstrap retains the first witness in TypeScript but replaces it in
-BEAM. Fresh requests reproduce the same disagreements on the gated source owner. Both owners
-close eligibility; the disagreements are observable refusal/witness precedence.
-The native chain component already preflights scopes before duplicate signatures,
-while the new incoming inventory follows TypeScript's immediate insertion order.
-Do not add a native exception that selects one public owner.
+The source ordering implementation is published. The current follow-up integrates
+the operator-approved independent saved-witness-list correction. Integrated
+review and the exact-tip hosted source gate are complete. Native collection
+preflight is integrated locally and the expanded ordering comparison passes;
+combined native verification remains under plan267. The parent saved-witness
+source gate is clear.
+Run and review evidence lives in the source PR and running decision log.
+The correction resolves observable collection-preflight, route-collision blame
+and saved-fork witness precedence disagreements between the public owners.
 
 ## Decision and scope
 

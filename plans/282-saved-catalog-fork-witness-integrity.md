@@ -2,39 +2,42 @@
 
 ## Status
 
-IN PROGRESS; SOURCE STOP for native retained adoption. A fresh saved historical catalog
-fork with a singleton blocked.catalogs index is rejected by TypeScript as
-trust_recovery_required, but BEAM retains catalog_fork. The underlying signed
-catalog graph still contains a fork; that does not prove the corrupted saved
-witness index is valid. Keep the native original-only regression RED until the
-protected source contract is independently corrected and hosted-gated.
-The singleton regression and three metadata cases first reproduce actual source
-mismatches. The final 42 fresh scenarios pass 84 full public-owner comparisons,
-including a 340-catalog bounded-time smoke control. SDK build and independent
-specification/standards plus actual first-party Sonnet 5.5 High delta reviews pass.
-The final repository check and hosted source gate remain before native adoption.
+IN PROGRESS; the operator-approved source correction is reviewed and hosted-gated.
+The original reproduction showed TypeScript rejecting a saved historical catalog
+fork with a singleton blocked.catalogs index while BEAM retained catalog_fork.
+An underlying signed graph fork does not prove that its saved witness index is
+valid. Both source owners now independently validate all supplied witness lists.
+The native guards are integrated locally and their focused comparison passes;
+the unchanged original-only regression also passes after source adoption.
+Combined native verification and remaining resource proof stay under plan267.
+The dependent ordering source gate is complete. Evidence is recorded in the PR
+and running decision log.
 
 ## Decision and scope
 
 Saved block indexes are authenticated-history witnesses, not a cached winner or
 a license to substitute any current graph fork. Require each saved catalog ID to
 have a conflicting partner in the saved catalog witness index; require recorded
-binding witnesses to be mutually independent when they are the sole fork
-witness or establish a three-head control limit. Require each authority witness
-to name a nonempty historical frontier and refused-op index; the enclosing op
+binding witnesses to be mutually independent whenever multiple are supplied,
+even alongside a genuine catalog or bootstrap fork. A catalog fork allows at most
+two named bindings; with no catalog or bootstrap witness it requires exactly two.
+A three-head control witness mislabeled as a catalog fork requires recovery in both
+source owners. Genuine zero- or one-binding catalog forks remain valid. Require each authority
+witness to name a nonempty historical frontier and refused-op index; the enclosing op
 index must equal the combined named targets. A rotation overflow trigger cannot
 name an already installed binding, including the bootstrap. Preserve historical
 bootstrap-slice and authority-refusal replay, canonical distinct indexes,
 pending-ID membership and unadmitted overflow budget validation.
 
-Tighten BEAM to the existing TypeScript witness contract; do not loosen TypeScript
+Tighten BEAM to the TypeScript witness contract and tighten both owners for
+independently invalid witness lists or misclassified binding counts; do not loosen TypeScript
 or compensate in native. A historical fork remains valid when its named records
 acquire descendants, so compare retained relations rather than current-head-list
 equality. Changes affect corrupted saved metadata only and keep routes closed.
 No canonical encoding, signature, artifact shape, wire admission, reason enum,
-authority policy, incoming admission, storage or installed-trust change is intended.
-The metadata guards tighten only unsupported saved witnesses to the existing
-TypeScript contract; authentic historical authority replay is unchanged.
+authority policy, incoming admission or storage change is intended.
+The metadata guards reject unsupported saved witnesses; authentic historical
+authority replay is unchanged.
 
 This source disagreement is independent of plan281 JSON numeric interpretation.
 Use a separate protected source gate rather than bundle witness-policy changes
@@ -55,7 +58,10 @@ into that normalization correction or a generic native compatibility layer.
    overflow triggers, bootstrap forks and reopen. Corrupt singleton, unrelated,
    ancestor-related, duplicate/noncanonical and unknown indexes must require
    recovery before any incoming repair. Include exact rotation-prior ancestor
-   pairs, valid binding witnesses combined with corrupt catalog witnesses, genuine
+   pairs, valid binding witnesses combined with corrupt catalog witnesses,
+   genuine catalog/bootstrap witnesses combined with ancestor-related bindings,
+   genuine catalog witnesses combined with relabeled three-head controls,
+   valid mixed witness lists, zero/one-binding catalog forks, genuine
    authority replay, empty witnesses and installed-bootstrap triggers. A 340-record
    late-rotation witness must reopen within 60 seconds per actual BEAM call. This
    is a generous smoke guard for one bounded case, not a tight performance

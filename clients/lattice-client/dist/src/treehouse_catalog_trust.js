@@ -160,12 +160,16 @@ async function evaluateSnapshot(value, originalOnly) {
             frozen = { next: structuredClone(next), expected: value.expected, replacement, bootstrapIds };
         const catalogs = new Map(), rotations = new Map();
         const retainedCatalogIds = new Set(original.catalogs.map((row) => row.id));
-        for (const saved of original.catalogs)
-            addCatalog(catalogs, saved.json, bootstrap, original.review.bootstrapId, saved.id);
+        // Preflight the whole catalog collection before duplicate-signature checks.
+        // A later scope/shape fault cannot be hidden by an earlier signed-id conflict.
+        const parsedCatalogs = [
+            ...original.catalogs.map((saved) => catalogNode(saved.json, bootstrap, original.review.bootstrapId, saved.id)),
+            ...value.incoming.catalogs.map((json) => catalogNode(json, bootstrap, original.review.bootstrapId)),
+        ];
+        for (const node of parsedCatalogs)
+            addCatalog(catalogs, node);
         for (const saved of original.rotations)
             addRotation(rotations, saved.json, bootstrap, original.review.bootstrapId, saved.id);
-        for (const json of value.incoming.catalogs)
-            addCatalog(catalogs, json, bootstrap, original.review.bootstrapId);
         for (const json of value.incoming.rotations)
             addRotation(rotations, json, bootstrap, original.review.bootstrapId);
         const acceptedCatalogIds = new Set(), acceptedBindingIds = new Set();
@@ -315,7 +319,7 @@ async function evaluateSnapshot(value, originalOnly) {
             next.blocked = block("catalog_fork", heads, forks, [], [], pendingIds);
         // Pending signed nodes are retained but their unproven entries reserve no route.
         const routesUsed = new Map();
-        for (const node of catalogs.values())
+        for (const node of [...catalogs.values()].sort(byId))
             if (node.pending.length === 0)
                 for (const entry of node.envelope.catalog.entries) {
                     const previous = routesUsed.get(entry.route);
@@ -574,6 +578,8 @@ async function validateStoredBlock(state, derived, catalogs, bindings, histories
         return false;
     };
     const independentBindings = saved.bindings.length > 1 && saved.bindings.every((a, i) => saved.bindings.slice(i + 1).every((b) => !bindingAncestor(a, b) && !bindingAncestor(b, a)));
+    if (saved.bindings.length > 1 && !independentBindings)
+        fail("trust_recovery_required");
     const catalogConflict = (a, b) => {
         const ca = catalogs.get(a).envelope.catalog, cb = catalogs.get(b).envelope.catalog;
         if (ca.binding !== cb.binding)
@@ -589,7 +595,7 @@ async function validateStoredBlock(state, derived, catalogs, bindings, histories
         if (!independentBindings || saved.bindings.length <= 2 || saved.bootstrapIds.length > 0)
             fail("trust_recovery_required");
     }
-    else if (!independentBindings && saved.catalogs.length === 0 && saved.bootstrapIds.length === 0)
+    else if (saved.bindings.length > 2 || (saved.catalogs.length === 0 && saved.bootstrapIds.length === 0 && !independentBindings))
         fail("trust_recovery_required");
 }
 async function validateBootstrapWitnesses(state, histories) {
@@ -834,16 +840,20 @@ function parseCatalog(json) {
         fail("malformed_catalog");
     return value;
 }
-function addCatalog(map, json, bootstrap, bootstrapId, savedId) {
+function catalogNode(json, bootstrap, bootstrapId, savedId) {
     const envelope = parseCatalog(json), id = transportCatalogId(envelope.catalog);
     if (savedId !== undefined && savedId !== id)
         fail("trust_recovery_required");
     if (envelope.catalog.space !== bootstrap.space || envelope.catalog.bootstrap !== bootstrapId)
         fail("wrong_catalog_scope", [id]);
-    if (!map.has(id))
-        map.set(id, { id, json, envelope, authenticated: false, pending: [] });
-    else if (map.get(id).envelope.signature !== envelope.signature)
-        fail("invalid_catalog_signature", [id]);
+    return { id, json, envelope, authenticated: false, pending: [] };
+}
+function addCatalog(map, node) {
+    const previous = map.get(node.id);
+    if (previous === undefined)
+        map.set(node.id, node);
+    else if (previous.envelope.signature !== node.envelope.signature)
+        fail("invalid_catalog_signature", [node.id]);
 }
 function addRotation(map, json, bootstrap, bootstrapId, savedId) {
     const envelope = catalogRotationEnvelopeFromCarrierTerm(parseJson(json));

@@ -900,6 +900,7 @@ defmodule Treehouse.CatalogTrust do
     _routes =
       context.catalogs
       |> Map.values()
+      |> Enum.sort_by(& &1.id)
       |> Enum.filter(&(&1.pending == []))
       |> Enum.reduce(%{}, fn node, used ->
         Enum.reduce(node.envelope.catalog.entries, used, fn entry, routes ->
@@ -1103,30 +1104,99 @@ defmodule Treehouse.CatalogTrust do
       do: refuse(:trust_recovery_required)
   end
 
-  defp validate_saved_block!(state, context, histories, bootstrap_ids) do
+  defp validate_saved_block!(state, context, histories, _bootstrap_ids) do
     block = state.blocked
-    security = security_block(state, histories, bootstrap_ids)
-    graph = graph_block(context)
     validate_block_indexes!(state, context, histories)
 
     valid =
-      case block.reason do
-        :authority_changed ->
+      cond do
+        block.reason == :authority_changed ->
           block.authority_witnesses != [] and
             (block.triggers == [] or overflow_witness?(state, block.triggers))
 
-        :catalog_fork ->
-          block.bootstrap_ids != [] or
-            (security != nil and security.reason == :catalog_fork) or
-            (graph != nil and graph.reason == :catalog_fork)
+        block.triggers != [] ->
+          overflow_witness?(state, block.triggers)
 
-        :control_history_limit ->
-          (graph != nil and graph.reason == :control_history_limit) or
-            (block.bindings == [] and block.catalogs == [] and
-               overflow_witness?(state, block.triggers))
+        true ->
+          saved_graph_witness?(block, context)
       end
 
     if not valid, do: refuse(:trust_recovery_required)
+  end
+
+  defp saved_graph_witness?(block, context) do
+    binding_count = length(block.bindings)
+
+    bindings_valid =
+      binding_count < 2 or independent_binding_witnesses?(block.bindings, context.bindings)
+
+    bindings_valid and saved_catalog_witnesses?(block.catalogs, context) and
+      if block.reason == :control_history_limit do
+        binding_count > 2 and block.bootstrap_ids == []
+      else
+        binding_count <= 2 and
+          (block.catalogs != [] or block.bootstrap_ids != [] or binding_count == 2)
+      end
+  end
+
+  defp saved_catalog_witnesses?([], _context), do: true
+
+  defp saved_catalog_witnesses?(ids, context) do
+    ancestors =
+      Map.new(ids, fn id ->
+        chain =
+          Stream.unfold(id, fn
+            nil -> nil
+            cursor -> {cursor, Map.fetch!(context.catalogs, cursor).envelope.catalog.previous}
+          end)
+          |> Stream.take(@max_artifacts + 1)
+          |> MapSet.new()
+
+        {id, chain}
+      end)
+
+    priors =
+      Enum.reduce(context.bindings, %{}, fn {_id, binding}, acc ->
+        Map.update(
+          acc,
+          binding.parent,
+          MapSet.new([binding.prior]),
+          &MapSet.put(&1, binding.prior)
+        )
+      end)
+
+    facts = %{catalogs: context.catalogs, ancestors: ancestors, priors: priors}
+
+    Enum.all?(ids, fn a ->
+      Enum.any?(ids, fn b -> a != b and catalog_conflict?(a, b, facts) end)
+    end)
+  end
+
+  defp independent_binding_witnesses?(ids, bindings) do
+    saved = MapSet.new(ids)
+
+    length(ids) > 1 and
+      Enum.all?(ids, fn id ->
+        Stream.unfold(Map.fetch!(bindings, id).parent, fn
+          nil -> nil
+          cursor -> {cursor, Map.fetch!(bindings, cursor).parent}
+        end)
+        |> Stream.take(@max_artifacts + 1)
+        |> Enum.all?(&(not MapSet.member?(saved, &1)))
+      end)
+  end
+
+  defp catalog_conflict?(a, b, facts) do
+    ca = Map.fetch!(facts.catalogs, a).envelope.catalog
+    cb = Map.fetch!(facts.catalogs, b).envelope.catalog
+    a_before_b = MapSet.member?(Map.fetch!(facts.ancestors, b), a)
+    b_before_a = MapSet.member?(Map.fetch!(facts.ancestors, a), b)
+    priors = Map.get(facts.priors, ca.binding, MapSet.new())
+
+    ca.binding == cb.binding and
+      ((not a_before_b and not b_before_a) or
+         (MapSet.member?(priors, a) and a_before_b) or
+         (MapSet.member?(priors, b) and b_before_a))
   end
 
   defp validate_block_indexes!(state, context, histories) do
@@ -1162,7 +1232,8 @@ defmodule Treehouse.CatalogTrust do
 
     present =
       MapSet.new(
-        Enum.map(state.catalogs, &{:catalog, &1.id}) ++
+        [{:rotation, state.review.bootstrap_id}] ++
+          Enum.map(state.catalogs, &{:catalog, &1.id}) ++
           Enum.map(state.rotations, &{:rotation, &1.id})
       )
 
@@ -1257,7 +1328,8 @@ defmodule Treehouse.CatalogTrust do
   defp merge_security_block(%{triggers: [_ | _]} = previous, _current), do: previous
 
   defp merge_security_block(previous, nil), do: previous
-  defp merge_security_block(_previous, current), do: current
+  defp merge_security_block(nil, current), do: current
+  defp merge_security_block(previous, _current), do: previous
 
   defp merge_graph_block(nil, current), do: current
   defp merge_graph_block(%{reason: :authority_changed} = previous, _current), do: previous
@@ -1970,8 +2042,9 @@ defmodule Treehouse.CatalogTrust do
   defp validate_witness!(witness) do
     require_fields!(witness, [:replica, :frontier, :op_ids], :trust_recovery_required)
 
-    if not text?(witness.replica) or not ids?(witness.frontier) or not ids?(witness.op_ids),
-      do: refuse(:trust_recovery_required)
+    if not text?(witness.replica) or not ids?(witness.frontier) or witness.frontier == [] or
+         not ids?(witness.op_ids) or witness.op_ids == [],
+       do: refuse(:trust_recovery_required)
   end
 
   defp validate_block_relationships!(value, witness_ids) do

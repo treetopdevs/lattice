@@ -72,6 +72,12 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
                 "test/support/catalog_raw_number_peer.ts",
                 "metadata",
             ]);
+        } else if mode == "saved-witness-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/catalog_saved_witness_peer.ts",
+            ]);
         } else if mode == "decision-order-produce" {
             command.args([
                 "--import",
