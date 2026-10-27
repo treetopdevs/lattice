@@ -1255,6 +1255,22 @@ at/tmp/lattice-native-adoption-consumer-proof.json. This verifies the batch
 transport seam and avoids widening a helper limit; it is not native parity or
 a new hosted source gate. No source merge or Rust port has occurred.</p>
 </section>
+<section id="d167"><h2>D167 — Retry the timed-out prerequisite job without changing its gate</h2>
+<p>PR187 tip4032b6abb completes CodeRabbit, browser and every other Flagship job
+successfully. Unit job122337975021 in run40546345656 passes the full suite,
+including26 properties/937 core tests, generated vectors/dist, catalog/profile
+observations and shell checks, then fails its15-minute Linux prerequisite step.
+The terminal log reports65.0MB fetched in15min8s at71.6kB/s from the Azure Ubuntu
+mirror; this is a download/install timeout, not an assertion failure. The final
+native command-core and security steps have not run and remain required.</p>
+<p>The existing always-run cache save succeeds with partial-40546345656-1.
+After confirming terminal failure, retry only failed jobs at the unchanged head
+through GitHub's failed-job rerun operation. Attempt2 is confirmed active.
+Preserve the first failure and excerpt at/tmp/lattice-pr187-unit-prerequisite-failure.log.
+No workflow, timeout, test exclusion, source predicate or successful job is
+changed. The full source gate remains closed; no source merge or native port is
+performed while the retry runs. A further retry needs its own terminal diagnosis.</p>
+</section>
 </main>
 </body>
 </html>
