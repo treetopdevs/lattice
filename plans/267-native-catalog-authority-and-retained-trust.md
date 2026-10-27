@@ -369,8 +369,8 @@ Measure large authenticated inputs and repeated proof/view cases. In one immutab
 proof-observation context, reuse only exactly matching validated raw rows; changed
 metadata and new histories must revalidate. Preserve first raw representation and
 canonical output order; borrow comparisons and move owned output rows. Build
-candidate fields once and materialize security fallback only after candidate refusal;
-never keep a spare full snapshot on success. Count derivations, not timing thresholds.
+candidate fields once; borrow first union fragments until merged rows need ownership;
+materialize security fallback only after refusal. Count derivations, not timing thresholds.
 Measure saved reopen/incoming processes and disclose caller buffers; avoid repeated policy/encoding.
 Enforce temporary budgets without narrowing source-valid evidence. Full resource gates remain unfinished.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;

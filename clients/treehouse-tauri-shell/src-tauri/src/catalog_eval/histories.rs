@@ -12,7 +12,10 @@ use super::{
     json,
     reader::ReadableFrame,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 
 const HISTORY: &str = "invalid_verified_history";
 
@@ -89,7 +92,10 @@ impl AuthenticatedHistories {
             authenticate_frames(raw).map_err(error)?;
         }
         validate_rejected(incoming_rows)?;
-        let mut union: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
+        // Borrow first fragments until ownership is actually needed. A shared
+        // family builds its merged rows directly instead of cloning the saved
+        // history and then replacing both of its frame arrays.
+        let mut union: BTreeMap<&str, Cow<'_, serde_json::Value>> = BTreeMap::new();
         for list in [saved_rows, incoming_rows] {
             let mut seen = BTreeSet::new();
             for raw in list {
@@ -98,20 +104,27 @@ impl AuthenticatedHistories {
                     return Err(error(HISTORY));
                 }
                 if let Some(prior) = union.get_mut(name) {
-                    for (field, rejected) in [("frames", false), ("rejected", true)] {
-                        prior[field] = merge_frames(
-                            prior[field].as_array().expect("history shape"),
-                            raw[field].as_array().expect("history shape"),
-                            rejected,
-                        )?
-                        .into();
-                    }
+                    let frames = merge_frames(
+                        prior["frames"].as_array().expect("history shape"),
+                        raw["frames"].as_array().expect("history shape"),
+                        false,
+                    )?;
+                    let rejected = merge_frames(
+                        prior["rejected"].as_array().expect("history shape"),
+                        raw["rejected"].as_array().expect("history shape"),
+                        true,
+                    )?;
+                    *prior = Cow::Owned(serde_json::Value::Object(serde_json::Map::from_iter([
+                        ("replica".into(), serde_json::Value::String(name.to_owned())),
+                        ("frames".into(), serde_json::Value::Array(frames)),
+                        ("rejected".into(), serde_json::Value::Array(rejected)),
+                    ])));
                 } else {
-                    union.insert(name, raw.clone());
+                    union.insert(name, Cow::Borrowed(raw));
                 }
             }
         }
-        let merged = serde_json::Value::Array(union.into_values().collect());
+        let merged = serde_json::Value::Array(union.into_values().map(Cow::into_owned).collect());
         if !json::within_observation(&merged, 203) {
             return Err(error(HISTORY));
         }
