@@ -47,7 +47,7 @@ impl<'de> Visitor<'de> for Object {
         Ok(fields)
     }
 }
-fn object<'de>(
+pub(super) fn object<'de>(
     bytes: &'de [u8],
     names: &'static [&'static str],
 ) -> Result<Fields<'de>, &'static str> {
@@ -81,7 +81,7 @@ where
         Ok(())
     }
 }
-fn each<'de>(
+pub(super) fn each<'de>(
     raw: &'de RawValue,
     mut visit: impl FnMut(&'de RawValue) -> Result<(), &'static str>,
 ) -> Result<(), &'static str> {

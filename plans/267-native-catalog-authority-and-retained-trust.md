@@ -355,9 +355,8 @@ trust reasons and authority semantics are parity oracles, not editable targets.
    the dependent PR and pass one final exact-tip hosted gate before completion.
 
 ## Resources and acceptance
-
 Retain 128 KiB artifact, 1,024/16 MiB artifact-store, 64,000-byte push-frame,
-64 MiB transport and 32 MiB local retained-store input limits. Canonical terms retain the
+64 MiB transport and 32 MiB local retained-store input limits. Canonical terms retain
 existing depth/node limits. Bound complete-input parsing before allocation without
 clipping evaluator-valid maximum-size history. Frame-set authentication accounts
 for encoded frame bytes and array separators before allocating verified state.
@@ -371,8 +370,9 @@ metadata and new histories must revalidate. Preserve first raw representation an
 canonical output order; borrow comparisons and move owned output rows. Build
 candidate fields once; borrow first union fragments until merged rows need ownership;
 materialize security fallback only after refusal. Count derivations, not timing thresholds.
-Measure saved reopen/incoming processes and disclose caller buffers; avoid repeated policy/encoding.
-Enforce temporary budgets without narrowing source-valid evidence. Full resource gates remain unfinished.
+Measure saved/incoming/refusal processes, disclose buffers and avoid repeated policy/encoding.
+Validate complete JSON without owning its tree before projecting malformed proof roots;
+retain syntax/depth precedence and deferred refusal. Full temporary budgets remain unfinished.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.

@@ -45,6 +45,12 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
                 "test/support/native_catalog_resolver_peer.ts",
                 "consume",
             ]);
+        } else if mode == "refusal-resource-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_refusal_resource_peer.ts",
+            ]);
         } else if mode == "resource-produce" {
             command.args([
                 "--import",

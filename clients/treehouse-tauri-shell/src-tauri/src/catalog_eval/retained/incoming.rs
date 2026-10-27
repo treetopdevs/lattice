@@ -41,17 +41,7 @@ fn evaluate_validated(
     {
         return Err(fail("malformed_catalog"));
     }
-    super::page_header::validate(bytes).map_err(fail)?;
-    let page = super::super::json::parse_observation(bytes).map_err(|reason| {
-        fail(if reason == "observation_limit" {
-            "invalid_verified_history"
-        } else {
-            "malformed_catalog"
-        })
-    })?;
-    if !super::super::json::within_observation(&page, 205) {
-        return Err(fail("invalid_verified_history"));
-    }
+    let page = super::page_observation::parse(bytes).map_err(fail)?;
     let original = owner.evidence.snapshot.raw();
     let histories = super::super::histories::AuthenticatedHistories::authenticate_union(
         &original["histories"],

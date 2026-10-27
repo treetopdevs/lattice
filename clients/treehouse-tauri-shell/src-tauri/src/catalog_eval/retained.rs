@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 mod incoming;
 mod page_header;
+mod page_observation;
 
 pub(super) struct Graph {
     pub(super) links: ChainObservation,
@@ -1074,6 +1075,48 @@ mod tests {
     use super::super::histories::AuthenticatedHistories;
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn malformed_proof_resource_process_envelope() {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        let path = std::env::var_os("LATTICE_NATIVE_REFUSAL_INPUT");
+        let isolated = path.is_some();
+        let case: Value = if let Some(path) = path {
+            let bytes = std::fs::read(path).unwrap();
+            assert!(bytes.len() <= 64 * 1024 * 1024);
+            serde_json::from_slice(&bytes).unwrap()
+        } else {
+            let table: Value = serde_json::from_slice(&catalog_peer::output(
+                "ts",
+                "refusal-resource-produce",
+                None,
+                8 * 1024 * 1024,
+            ))
+            .unwrap();
+            let cases = table["cases"].as_array().unwrap();
+            assert_eq!(cases.len(), 16);
+            assert_full_decisions(cases, 8 * 1024 * 1024);
+            cases[0].clone()
+        };
+        let input = &case["input"];
+        let saved = serde_json::to_vec(&input["installed"]).unwrap();
+        let page = serde_json::to_vec(&input["incoming"]).unwrap();
+        let started = std::time::Instant::now();
+        let decision = incoming::evaluate(&saved, &input["expected"], &page);
+        let elapsed = started.elapsed();
+        assert_eq!(decision, case["decision"], "{}", case["name"]);
+        println!(
+            "REFUSAL_RESOURCE {}",
+            json!({
+                "fixtureMode":if isolated {"isolated-input"} else {"live-owners"},
+                "name":case["name"],"incomingBytes":page.len(),"savedBytes":saved.len(),
+                "kind":decision["kind"],"reason":decision["reason"],
+                "evaluateMicros":elapsed.as_micros(),
+                "decisionSha256":URL_SAFE_NO_PAD.encode(proof_row_digest(&decision))
+            })
+        );
+        std::hint::black_box((&case, &saved, &page, &decision));
+    }
 
     #[test]
     fn authenticated_resource_process_envelope() {
