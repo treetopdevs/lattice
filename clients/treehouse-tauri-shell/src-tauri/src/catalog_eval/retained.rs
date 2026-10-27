@@ -799,11 +799,9 @@ fn honored_bootstraps(bootstrap: &BootstrapObservation<'_>) -> Vec<String> {
         .collect()
 }
 fn counter(value: &Value) -> Option<u64> {
-    value
-        .as_f64()
-        .filter(|n| n.is_finite() && *n >= 0.0 && *n <= HORIZON as f64 && n.fract() == 0.0)
-        .map(|n| n as u64)
+    super::raw_numbers::safe_integer(value)
 }
+
 fn validate_watermark(original: &Value, graph: &Graph) -> Result<(), ChainError> {
     let saved = &original["accepted"];
     if saved.is_null() {
@@ -1046,7 +1044,81 @@ mod tests {
         assert_full_decisions(&requests, 128 * 1024 * 1024);
     }
 
+    #[test]
+    fn catalog_number_values_match_both_public_owners_without_rewriting_saved_frames() {
+        let table: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "number-values-produce",
+            None,
+            32 * 1024 * 1024,
+        ))
+        .unwrap();
+        let mut requests = Vec::new();
+        for case in table["cases"].as_array().unwrap() {
+            for (index, row) in case["orders"].as_array().unwrap().iter().enumerate() {
+                let input: Value =
+                    serde_json::from_str(row["requestJson"].as_str().unwrap()).unwrap();
+                requests.push(json!({"name": format!("{}:{index}", case["name"].as_str().unwrap()), "input": input}));
+            }
+        }
+        assert_eq!(requests.len(), 88);
+        let beam: Value = serde_json::from_slice(&catalog_peer::output(
+            "beam",
+            "number-input-produce",
+            None,
+            8 * 1024 * 1024,
+        ))
+        .unwrap();
+        assert_eq!(beam["cases"].as_array().unwrap().len(), 4);
+        requests.extend(beam["cases"].as_array().unwrap().iter().cloned());
+        // These authentic observation aliases must remain refused by the
+        // ordinary strict frame decoder, even though catalog replay accepts them.
+        for request in &requests {
+            let name = request["name"].as_str().unwrap();
+            if name.starts_with("saved-version-") || name.starts_with("beam-saved-version") {
+                let frame = request["input"]["installed"]["histories"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .flat_map(|h| h["frames"].as_array().unwrap())
+                    .find(|f| f["v"].is_f64())
+                    .unwrap();
+                assert!(
+                    super::super::frame::verify(&serde_json::to_vec(frame).unwrap()).is_err(),
+                    "ordinary wire accepted alias: {name}"
+                );
+            }
+        }
+        assert_eq!(requests.len(), 92);
+        assert_full_decisions_by(&requests, 32 * 1024 * 1024, json_number_values_equal);
+    }
+
+    // JavaScript JSON numbers have value semantics. Keep every other JSON type,
+    // string (including opaque artifact text), field and array position exact.
+    fn json_number_values_equal(a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::Number(a), Value::Number(b)) => a.as_f64() == b.as_f64(),
+            (Value::Array(a), Value::Array(b)) => {
+                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| json_number_values_equal(a, b))
+            }
+            (Value::Object(a), Value::Object(b)) => {
+                a.len() == b.len()
+                    && a.iter()
+                        .all(|(key, a)| b.get(key).is_some_and(|b| json_number_values_equal(a, b)))
+            }
+            _ => a == b,
+        }
+    }
+
     fn assert_full_decisions(requests: &[Value], max_bytes: usize) {
+        assert_full_decisions_by(requests, max_bytes, |a, b| a == b);
+    }
+
+    fn assert_full_decisions_by(
+        requests: &[Value],
+        max_bytes: usize,
+        equal: fn(&Value, &Value) -> bool,
+    ) {
         let request = serde_json::json!({"cases":&requests});
         let ts: Value = serde_json::from_slice(&catalog_peer::output(
             "ts",
@@ -1068,7 +1140,7 @@ mod tests {
         assert_eq!(beam.len(), requests.len());
         let mut source_mismatches = Vec::new();
         for ((request, ts), beam) in requests.iter().zip(ts).zip(beam) {
-            if ts["decision"] != beam["decision"] {
+            if !equal(&ts["decision"], &beam["decision"]) {
                 source_mismatches.push(request["name"].clone());
                 let label = request["name"].as_str().unwrap().replace(':', "-");
                 for (name, value) in [
@@ -1113,7 +1185,90 @@ mod tests {
                 &input["expected"],
                 incoming_bytes,
             );
-            if native != ts["decision"] {
+            if native.get("next").is_some() {
+                for history in input["installed"]["histories"].as_array().unwrap() {
+                    let retained = native["next"]["histories"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|row| row["replica"] == history["replica"])
+                        .unwrap();
+                    for frame in history["frames"].as_array().unwrap() {
+                        let kept = retained["frames"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .find(|row| row["id"] == frame["id"])
+                            .unwrap();
+                        assert_eq!(
+                            kept, frame,
+                            "saved frame representation changed: {}",
+                            request["name"]
+                        );
+                    }
+                }
+            }
+            let name = request["name"].as_str().unwrap();
+            if native.get("next").is_some() && name.starts_with("incoming-version-decimal:") {
+                for history in input["incoming"]["histories"].as_array().unwrap() {
+                    let kept = native["next"]["histories"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|row| row["replica"] == history["replica"])
+                        .unwrap();
+                    for frame in history["frames"].as_array().unwrap() {
+                        let retained = kept["frames"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .find(|row| row["id"] == frame["id"])
+                            .unwrap();
+                        assert_eq!(
+                            retained, frame,
+                            "incoming frame representation changed: {name}"
+                        );
+                    }
+                }
+            }
+            if native.get("next").is_some() && name.starts_with("rejected-signature-version-alias:")
+            {
+                for history in input["incoming"]["histories"].as_array().unwrap() {
+                    let kept = native["next"]["histories"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|row| row["replica"] == history["replica"])
+                        .unwrap();
+                    for row in history["rejected"].as_array().unwrap() {
+                        let retained = kept["rejected"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .find(|r| {
+                                r["frame"]["id"] == row["frame"]["id"]
+                                    && r["frame"]["sig"] == row["frame"]["sig"]
+                            })
+                            .unwrap();
+                        assert_eq!(
+                            retained, row,
+                            "rejected frame representation changed: {name}"
+                        );
+                    }
+                }
+            }
+            if native.get("next").is_some() && name.starts_with("cutoff-proof-version-alias:") {
+                for proof in input["incoming"]["cutoffProofs"].as_array().unwrap() {
+                    let kept = native["next"]["cutoffProofs"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|row| row["cutoff"] == proof["cutoff"])
+                        .unwrap();
+                    assert_eq!(kept, proof, "proof frame representation changed: {name}");
+                }
+            }
+            if !equal(&native, &ts["decision"]) {
                 for (name, value) in [
                     ("request", request),
                     ("native", &native),

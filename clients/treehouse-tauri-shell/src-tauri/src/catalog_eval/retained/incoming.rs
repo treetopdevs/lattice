@@ -319,7 +319,7 @@ impl IncomingContext<'_, '_> {
             Value::Null
         };
         let routes = route_candidates(&next["accepted"], &catalogs.artifacts, &graph, bootstrap)?;
-        let kind = if next == *original {
+        let kind = if super::super::raw_numbers::values_equal(&next, original) {
             "unchanged"
         } else {
             "propose"

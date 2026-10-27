@@ -184,6 +184,11 @@ fn inspect(raw: &Value, replica: &str, accepted: bool) -> Result<Option<Record>,
             Ok(None)
         }
     };
+    let view = match super::raw_numbers::frame_view(raw) {
+        Ok(view) => view,
+        Err(_) => return malformed(),
+    };
+    let raw = view.as_ref();
     if !header(raw, replica) {
         return malformed();
     }
@@ -245,7 +250,7 @@ fn header(raw: &Value, replica: &str) -> bool {
         &[
             "v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig",
         ],
-    ) && raw["v"].as_u64() == Some(1)
+    ) && super::raw_numbers::safe_integer(&raw["v"]) == Some(1)
         && raw["replica"].as_str() == Some(replica)
         && ["id", "author", "sig", "kind"]
             .iter()

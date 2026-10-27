@@ -104,17 +104,17 @@ original-state failures to recovery before considering incoming repair.
 
 ## Next integration: original-state validation and graph trust
 
-Plan281 source is gated and adopted separately; native numeric port remains:
-TypeScript accepts a saved authentic raw frame whose version is JSON1.0, while
-BEAM requires recovery for the same numeric value. Preserve the original-only
-native implementation and its canonical-input proof; independently review and
-port the gated catalog-scoped numeric-value correction without widening ordinary wire admission.
+Plan281 source is gated and adopted separately; the private native numeric view
+is implemented with raw evidence retention; reviews and full gates remain.
+The original JSON1.0 disagreement is corrected by a catalog-only bounded numeric
+view. Ordinary native frame/artifact parsing stays strict; retain the original-only
+canonical-input proof and the independent witness/order regressions unchanged.
 
 Plan282 also gates adoption: the expanded original-only mutation proof exposes
 BEAM accepting a singleton saved fork witness that TypeScript rejects. Source
-PR185 (numeric values) and PR186 (saved-witness integrity) are published and
-reviewed; their hosted gates remain pending. Keep the native67-case regression
-unchanged until adopting those protected source corrections.
+PR185's numeric source gate is complete and adopted; PR186's mixed-witness
+review remains open. Keep the native67-case regression unchanged until adopting
+that protected witness correction.
 
 Plan283 independently gates mixed-fault page ordering: a duplicate-signature
 conflict followed by a foreign-scope catalog differs across actual owners.
@@ -230,7 +230,7 @@ accepted watermarks and saved block/trigger/bootstrap/authority witnesses before
 creating a private ValidatedOriginal owner. It matches50 fresh original-only
 requests through both public source owners. Incoming union sequencing, full decision
 emission, sticky incoming/overflow handling and final resource gates remain unfinished;
-plan281 numeric-value source is gated; its native observation-only port remains pending.
+plan281 numeric-value source is gated; its private native port awaits final verification.
 The original-only replay owner accepts snapshot bytes alone, retaining both its
 unverified snapshot and original authenticated histories. Witness allowed IDs
 come only from its owned accepted catalog after the existing record-schema gate;

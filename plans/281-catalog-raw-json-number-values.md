@@ -2,14 +2,11 @@
 
 ## Status
 
-IMPLEMENTED locally. The focused regression passes90 complete decisions across
-actual TypeScript and BEAM public owners, including independently BEAM-authored
-histories. Intended frame and wrapper-metadata RED assertions precede the fixes.
-Specification, standards and actual first-party Sonnet5.5High reviews have no
-confirmed remaining findings. Full mix check and both boundary scans pass.
-The dependent source PR and its exact-tip hosted gate remain;
-SOURCE STOP before native adoption. Preserve the unfinished native retained
-replay and the independent saved-witness correction under plan282.
+Source correction implemented and independently gated. The private native
+observation-only numeric view is implemented; independent/adversarial review,
+full ordinary/tracing and repository checks remain. Preserve the independent
+saved-witness and source-ordering stops and the unfinished aggregate resource,
+installation and ordinary relay work under plan267.
 
 ## Decision and scope
 

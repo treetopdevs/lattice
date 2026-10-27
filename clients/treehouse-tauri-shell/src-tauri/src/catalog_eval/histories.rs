@@ -223,7 +223,10 @@ impl AuthenticatedHistories {
                 .as_array()
                 .ok_or_else(|| error(HISTORY))?
                 .iter()
-                .map(|frame| serde_json::to_vec(frame).map_err(|_| error(HISTORY)))
+                .map(|frame| {
+                    let view = super::raw_numbers::frame_view(frame).map_err(|_| error(HISTORY))?;
+                    serde_json::to_vec(view.as_ref()).map_err(|_| error(HISTORY))
+                })
                 .collect::<Result<_, _>>()?;
             let refs: Vec<&[u8]> = frames.iter().map(Vec::as_slice).collect();
             let dag = AuthenticDag::authenticate_accounted(&name, &refs)?;
