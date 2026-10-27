@@ -9,7 +9,7 @@ defmodule Treehouse.CatalogRawNumberTest do
   @tag timeout: 300_000
   test "fresh numeric JSON spellings preserve complete actual public decisions" do
     table = peer([])
-    assert length(table["cases"]) == 30
+    assert length(table["cases"]) == 33
 
     for item <- table["cases"], {order, index} <- Enum.with_index(item["orders"]) do
       input = order["requestJson"] |> Jason.decode!() |> NativeCatalogResolverPeer.input()
@@ -46,9 +46,9 @@ defmodule Treehouse.CatalogRawNumberTest do
   @tag timeout: 300_000
   test "catalog wrapper watermarks and tokens use the same safe numeric-value profile" do
     table = peer(["metadata"])
-    assert length(table["cases"]) == 44
+    assert length(table["cases"]) == 47
 
-    for item <- Enum.drop(table["cases"], 30),
+    for item <- Enum.drop(table["cases"], 33),
         {order, index} <- Enum.with_index(item["orders"]) do
       input = order["requestJson"] |> Jason.decode!() |> NativeCatalogResolverPeer.input()
       decision = CatalogTrust.evaluate(input)

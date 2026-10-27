@@ -1061,7 +1061,7 @@ mod tests {
                 requests.push(json!({"name": format!("{}:{index}", case["name"].as_str().unwrap()), "input": input}));
             }
         }
-        assert_eq!(requests.len(), 88);
+        assert_eq!(requests.len(), 94);
         let beam: Value = serde_json::from_slice(&catalog_peer::output(
             "beam",
             "number-input-produce",
@@ -1088,8 +1088,30 @@ mod tests {
                     "ordinary wire accepted alias: {name}"
                 );
             }
+            if name.starts_with("incoming-int-zero:")
+                || name.starts_with("incoming-int-negative-zero:")
+                || name.starts_with("incoming-int-safe-edge:")
+                || name.starts_with("delegation-expiry-alias:")
+            {
+                let frame = &request["input"]["incoming"]["histories"][0]["frames"][0];
+                assert!(
+                    super::super::frame::inspect_value(frame)
+                        .unwrap()
+                        .authentic(),
+                    "control must be authentic: {name}"
+                );
+                assert!(
+                    super::super::frame::verify(&serde_json::to_vec(frame).unwrap()).is_err(),
+                    "ordinary wire accepted payload alias: {name}"
+                );
+            }
         }
-        assert_eq!(requests.len(), 92);
+        assert!(!json_number_values_equal(
+            &json!(9_007_199_254_740_992u64),
+            &json!(9_007_199_254_740_993u64)
+        ));
+        assert!(!json_number_values_equal(&json!("1"), &json!(1)));
+        assert_eq!(requests.len(), 98);
         assert_full_decisions_by(&requests, 32 * 1024 * 1024, json_number_values_equal);
     }
 
@@ -1097,7 +1119,20 @@ mod tests {
     // string (including opaque artifact text), field and array position exact.
     fn json_number_values_equal(a: &Value, b: &Value) -> bool {
         match (a, b) {
-            (Value::Number(a), Value::Number(b)) => a.as_f64() == b.as_f64(),
+            (Value::Number(a), Value::Number(b)) => {
+                let safe = |n: &serde_json::Number| {
+                    n.as_f64().filter(|n| {
+                        n.is_finite()
+                            && *n >= 0.0
+                            && *n <= 9_007_199_254_740_991.0
+                            && n.fract() == 0.0
+                    })
+                };
+                match (safe(a), safe(b)) {
+                    (Some(a), Some(b)) => a == b,
+                    _ => a == b,
+                }
+            }
             (Value::Array(a), Value::Array(b)) => {
                 a.len() == b.len() && a.iter().zip(b).all(|(a, b)| json_number_values_equal(a, b))
             }
@@ -1209,7 +1244,11 @@ mod tests {
                 }
             }
             let name = request["name"].as_str().unwrap();
-            if native.get("next").is_some() && name.starts_with("incoming-version-decimal:") {
+            if native.get("next").is_some()
+                && (name.starts_with("incoming-version-decimal:")
+                    || name.starts_with("incoming-int-")
+                    || name.starts_with("delegation-expiry-alias:"))
+            {
                 for history in input["incoming"]["histories"].as_array().unwrap() {
                     let kept = native["next"]["histories"]
                         .as_array()
@@ -1257,7 +1296,10 @@ mod tests {
                     }
                 }
             }
-            if native.get("next").is_some() && name.starts_with("cutoff-proof-version-alias:") {
+            if native.get("next").is_some()
+                && (name.starts_with("cutoff-proof-version-alias:")
+                    || name.starts_with("cutoff-proof-integer-alias:"))
+            {
                 for proof in input["incoming"]["cutoffProofs"].as_array().unwrap() {
                     let kept = native["next"]["cutoffProofs"]
                         .as_array()

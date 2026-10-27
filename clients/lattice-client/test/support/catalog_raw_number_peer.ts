@@ -87,6 +87,9 @@ if(process.argv[2]==="consume") {
  const grant=await authorCarrierOp({replica:f.space.replica,signer:f.space.signer,deps:[f.bootstrap.id],kind:"authority",cap:["nil"],body:["tuple",[["atom","grant"],["delegation",delegation]]]});
  ((grant.body as ["tuple",CarrierTerm[]])[1][1] as ["delegation",{expires_epoch:unknown}])[1].expires_epoch=marker;
  add("delegation-expiry-alias",accepted.next,{...empty(),histories:[{replica:f.space.replica,frames:[grant],rejected:[]}]},null,"1.0","propose");
+ for(const [name,spelling] of [["fraction","0.5"],["negative","-1.0"],["unsafe","9007199254740992.0"]]) {
+  add(`delegation-expiry-${name}`,accepted.next,{...empty(),histories:[{replica:f.space.replica,frames:[structuredClone(grant)],rejected:[]}]},"invalid_verified_history",spelling,"reject");
+ }
  const corrupt=structuredClone(accepted.next);markVersion(corrupt.histories[0]!.frames[0]);
  add("corrupt-original-before-repair",corrupt,{...empty(),histories:f.histories},"trust_recovery_required","1.5","reject");
  for(const [name,spelling] of [["fractional-token","1.0"],["negative-zero-token","-0"]]) {
@@ -138,6 +141,6 @@ if(process.argv[2]==="consume") {
   }
   cases.push({name:item.name,orders});
  }
- assert.equal(cases.length,process.argv[2]==="metadata"?44:30);
+ assert.equal(cases.length,process.argv[2]==="metadata"?47:33);
  console.log(JSON.stringify({cases}));
 }
