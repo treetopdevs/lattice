@@ -764,34 +764,56 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
   end
 
   test "helper death before ACK cannot release the BEAM callback value", f do
-    {:ok, bytes} = encode(f)
+    {bytes, package, genesis, signed, envelope} = signing_boundary!(f)
     dir = f.fixture[:ceremony_dir]
-    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
-    {:ok, genesis} = initialize_ledger(bytes, dir)
+    assert signed.head_bytes != genesis.head_bytes
+    assert length(signed.chain) == 1
+    reset_boundary!(dir, genesis, envelope)
+    assert {:ok, reset} = SignCatalog.status(bytes, dir)
+    assert reset.head_bytes == genesis.head_bytes
+    assert reset.chain == []
     parent = self()
 
-    task =
-      Task.async(fn ->
-        SigningLedger.transact(dir, package.binding, "open", fn state ->
-          send(parent, :waiting_for_helper_ack)
+    {worker, monitor} =
+      spawn_monitor(fn ->
+        result =
+          SigningLedger.transact(dir, package.binding, "open", fn state ->
+            send(parent, {:waiting_for_helper_ack, self(), state.head_bytes})
 
-          receive do
-            :finish_callback -> :ok
-          end
+            receive do
+              :finish_callback -> :ok
+            end
 
-          {:ok, state.head_bytes, nil, :must_not_escape_without_ack}
-        end)
+            {:ok, signed.head_bytes, envelope, :must_not_escape_without_ack}
+          end)
+
+        send(parent, {:helper_result, self(), result})
       end)
 
-    assert_receive :waiting_for_helper_ack, 5000
-    {:links, links} = Process.info(task.pid, :links)
+    on_exit(fn ->
+      cleanup_monitor = Process.monitor(worker)
+      if Process.alive?(worker), do: Process.exit(worker, :kill)
+      assert_receive {:DOWN, ^cleanup_monitor, :process, ^worker, _}, 5000
+    end)
+
+    assert_receive {:waiting_for_helper_ack, ^worker, initial_head}, 5000
+    assert initial_head == genesis.head_bytes
+    {:links, links} = Process.info(worker, :links)
     [port] = Enum.filter(links, &is_port/1)
-    assert Port.info(port, :connected) == {:connected, task.pid}
+    assert Port.info(port, :connected) == {:connected, worker}
     {:os_pid, pid} = Port.info(port, :os_pid)
     assert is_integer(pid) and pid > 0
+    port_monitor = Port.monitor(port)
     {_, 0} = System.cmd("kill", ["-KILL", Integer.to_string(pid)])
-    send(task.pid, :finish_callback)
-    assert {:error, _} = Task.await(task, 10_000)
+    assert_receive {:DOWN, ^port_monitor, :port, ^port, _}, 5000
+    assert Port.info(port) == nil
+    send(worker, :finish_callback)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}, 10_000
+    # The helper is already gone before the callback resumes: a port signal
+    # cannot hide a premature successful return before this worker reports it.
+    assert_receive {:helper_result, ^worker, {:error, :catalog_ledger_failed}}, 0
+    refute_received {:helper_result, ^worker, _}
+
     assert {:ok, state} = SignCatalog.status(bytes, dir)
     assert state.head_bytes == genesis.head_bytes
     assert state.chain == []
