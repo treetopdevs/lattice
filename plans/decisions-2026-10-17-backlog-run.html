@@ -1204,6 +1204,33 @@ failing loop while checking before/after fingerprints; its first two calls pass
 with no captured exceptions. The active diagnostics and earlier failed runs remain
 part of the evidence; no test is skipped and no refusal policy is changed.</p>
 </section>
+<section id="d158"><h2>D158 — Preserve negative replay diagnostics without clearing the failure</h2>
+<p>All four final Node22.15.1 diagnostic loops finish20 calls successfully: the
+unmodified owner with freshly parsed requests, the original-module-URL catch
+recorder with fresh requests, the same recorder with one reused request, and the
+debugger observer with a reused request. Request SHA-256 remains
+1c6590f3856e740df109bd0464716930efffb54dfeb01f1cbefa10f7d75aa7ea and the inputs remain
+unchanged. Both catch recorders and the debugger observe zero caught exceptions;
+the recorder also detects no WebCrypto/independent Node SHA-256 mismatch. Injected
+decoder-error and caught-exception controls prove the observers can record their
+target events. The copied-source exact-return trace separately passes20 calls.
+These successes do not explain or supersede the preserved genuine rejections.</p>
+<p>A human-requested complementary helper experiment at immutablee8529729 observes
+strict-signature false verdicts during full replay, with independent Node crypto
+comparison only on false. It completes three calls and41175 successful strict
+verifications with zero false verdicts; its fourth call is interrupted at the
+explicit300-second experiment bound. One deliberately corrupted-signature control
+is captured and independently refused, but it is control data, not a replay
+failure. Evidence remains in /tmp/lattice-helper-false-observer/REPORT.md. No
+actual failing signature tuple is captured and no crypto defect is established.</p>
+<p>Stop extending identical successful loops without a new discriminating probe.
+Keep the intermittent source refusal open under plan267, preserve the original
+failing logs and exact input corpora, and retain every production refusal/budget.
+No runtime upgrade, normalization, skipped control or native publication is
+justified. All parent diagnostic processes are terminal. The operator has now
+approved the independent mixed-witness-list correction in PR186; its source
+implementation and renewed gates proceed separately before native adoption.</p>
+</section>
 </main>
 </body>
 </html>
