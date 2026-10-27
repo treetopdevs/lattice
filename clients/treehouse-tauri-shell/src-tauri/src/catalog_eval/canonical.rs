@@ -4,12 +4,32 @@ use serde_json::Value;
 
 pub const MAX_BYTES: usize = 128 * 1024;
 pub const MAX_DEPTH: usize = 64;
-// Three wrappers per carrier map, plus the frame object and flat delegation metadata.
+// Three wrappers per map, then the frame and flat metadata leaf.
 pub const MAX_JSON_DEPTH: usize = MAX_DEPTH * 3 + 4;
 pub const MAX_NODES: usize = 32_768;
-const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+pub(super) const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 pub type Result<T> = std::result::Result<T, &'static str>;
 const INVALID: &str = "catalog_envelope_invalid";
+pub(crate) const MAX_OBSERVATION_INPUT: usize = 64 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+struct Bounds {
+    bytes: usize,
+    nodes: usize,
+    depth: usize,
+}
+const ARTIFACT: Bounds = Bounds {
+    bytes: MAX_BYTES,
+    nodes: MAX_NODES,
+    depth: MAX_DEPTH,
+};
+// A bounded source history may emit a larger canonical observation. This is an
+// internal transient budget; artifact and persisted/transport limits do not move.
+const OBSERVATION: Bounds = Bounds {
+    bytes: MAX_OBSERVATION_INPUT * 2,
+    nodes: MAX_OBSERVATION_INPUT,
+    depth: MAX_DEPTH + 1,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Term {
@@ -27,10 +47,18 @@ pub enum Term {
 
 impl Term {
     pub fn from_carrier(value: &Value) -> Result<Self> {
-        preflight(value)?;
+        Self::from_bounded_carrier(value, ARTIFACT)
+    }
+
+    pub(crate) fn from_observation(value: &Value) -> Result<Self> {
+        Self::from_bounded_carrier(value, OBSERVATION)
+    }
+
+    fn from_bounded_carrier(value: &Value, bounds: Bounds) -> Result<Self> {
+        preflight(value, bounds)?;
         let mut nodes = 0;
-        let term = parse(value, 0, &mut nodes)?;
-        encode(&term)?;
+        let term = parse(value, 0, &mut nodes, bounds)?;
+        encode_bounded(&term, bounds)?;
         Ok(term)
     }
 
@@ -49,7 +77,17 @@ impl Term {
 }
 
 pub fn base64(value: &str, length: Option<usize>) -> Result<Vec<u8>> {
-    if value.len() > MAX_BYTES * 2 {
+    base64_bounded(value, length, ARTIFACT)
+}
+
+pub(crate) fn observation_base64(value: &str, length: Option<usize>) -> Result<Vec<u8>> {
+    base64_bounded(value, length, OBSERVATION)
+}
+
+fn base64_bounded(value: &str, length: Option<usize>, bounds: Bounds) -> Result<Vec<u8>> {
+    if value.len() > bounds.bytes * 2
+        || length.is_some_and(|n| n.div_ceil(3).checked_mul(4) != Some(value.len()))
+    {
         return Err(INVALID);
     }
     let bytes = STANDARD.decode(value).map_err(|_| INVALID)?;
@@ -59,9 +97,9 @@ pub fn base64(value: &str, length: Option<usize>) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn parse(value: &Value, depth: usize, nodes: &mut usize) -> Result<Term> {
+fn parse(value: &Value, depth: usize, nodes: &mut usize, bounds: Bounds) -> Result<Term> {
     *nodes += 1;
-    if depth > MAX_DEPTH || *nodes > MAX_NODES {
+    if depth > bounds.depth || *nodes > bounds.nodes {
         return Err(INVALID);
     }
     let tagged = value.as_array().ok_or(INVALID)?;
@@ -76,25 +114,29 @@ fn parse(value: &Value, depth: usize, nodes: &mut usize) -> Result<Term> {
     Ok(match tag {
         "bool" => Term::Bool(argument.as_bool().ok_or(INVALID)?),
         "int" => Term::Integer(integer(argument)?),
-        "bin" => Term::Binary(base64(argument.as_str().ok_or(INVALID)?, None)?),
+        "bin" => Term::Binary(base64_bounded(
+            argument.as_str().ok_or(INVALID)?,
+            None,
+            bounds,
+        )?),
         "atom" => {
             let name = argument.as_str().ok_or(INVALID)?;
-            if name.len() > MAX_BYTES {
+            if name.len() > bounds.bytes {
                 return Err(INVALID);
             }
             Term::Atom(name.to_owned())
         }
         "list" | "tuple" | "mapset" => {
-            if depth >= MAX_DEPTH {
+            if depth >= bounds.depth {
                 return Err(INVALID);
             }
             let values = argument.as_array().ok_or(INVALID)?;
-            if values.len() > MAX_NODES {
+            if values.len() > bounds.nodes {
                 return Err(INVALID);
             }
             let terms = values
                 .iter()
-                .map(|v| parse(v, depth + 1, nodes))
+                .map(|v| parse(v, depth + 1, nodes, bounds))
                 .collect::<Result<Vec<_>>>()?;
             match tag {
                 "list" => Term::List(terms),
@@ -103,29 +145,29 @@ fn parse(value: &Value, depth: usize, nodes: &mut usize) -> Result<Term> {
             }
         }
         "map" => {
-            if depth >= MAX_DEPTH {
+            if depth >= bounds.depth {
                 return Err(INVALID);
             }
             let values = argument.as_array().ok_or(INVALID)?;
-            if values.len() > MAX_NODES / 2 {
+            if values.len() > bounds.nodes / 2 {
                 return Err(INVALID);
             }
             let mut pairs = Vec::with_capacity(values.len());
             for pair in values {
                 let pair = pair.as_array().filter(|p| p.len() == 2).ok_or(INVALID)?;
                 pairs.push((
-                    parse(&pair[0], depth + 1, nodes)?,
-                    parse(&pair[1], depth + 1, nodes)?,
+                    parse(&pair[0], depth + 1, nodes, bounds)?,
+                    parse(&pair[1], depth + 1, nodes, bounds)?,
                 ));
             }
             Term::Map(pairs)
         }
-        "delegation" => Term::Delegation(delegation(argument, nodes)?),
+        "delegation" => Term::Delegation(delegation(argument, nodes, bounds)?),
         _ => return Err(INVALID),
     })
 }
 
-fn integer(value: &Value) -> Result<u64> {
+pub(super) fn integer(value: &Value) -> Result<u64> {
     if let Some(text) = value.as_str() {
         if text.is_empty()
             || text.len() > 20
@@ -143,7 +185,14 @@ fn integer(value: &Value) -> Result<u64> {
     }
 }
 
-fn delegation(value: &Value, nodes: &mut usize) -> Result<Vec<Term>> {
+/// Raw catalog scalar representation, separate from the broader typed decoder.
+/// Safe values use JSON numbers; decimal text is reserved for larger uint64s.
+pub(super) fn portable_integer(value: &Value) -> Result<bool> {
+    let number = integer(value)?;
+    Ok(!value.is_string() || number > MAX_SAFE_INTEGER)
+}
+
+fn delegation(value: &Value, nodes: &mut usize, bounds: Bounds) -> Result<Vec<Term>> {
     let object = value.as_object().ok_or(INVALID)?;
     const REQUIRED: [&str; 9] = [
         "id",
@@ -166,14 +215,15 @@ fn delegation(value: &Value, nodes: &mut usize) -> Result<Vec<Term>> {
     let text = |key: &str| -> Result<Term> {
         let text = object[key]
             .as_str()
-            .filter(|s| s.len() <= MAX_BYTES)
+            .filter(|s| s.len() <= bounds.bytes)
             .ok_or(INVALID)?;
         Ok(Term::Binary(text.as_bytes().to_vec()))
     };
     let binary = |key: &str, size| -> Result<Term> {
-        Ok(Term::Binary(base64(
+        Ok(Term::Binary(base64_bounded(
             object[key].as_str().ok_or(INVALID)?,
             Some(size),
+            bounds,
         )?))
     };
     let mut fields = vec![
@@ -189,12 +239,16 @@ fn delegation(value: &Value, nodes: &mut usize) -> Result<Vec<Term>> {
     ];
     for key in ["ops", "roles"] {
         let values = object[key].as_array().ok_or(INVALID)?;
-        if values.len() > MAX_NODES {
+        if values.len() > bounds.nodes {
             return Err(INVALID);
         }
         let mut names = values
             .iter()
-            .map(|v| v.as_str().filter(|s| s.len() <= MAX_BYTES).ok_or(INVALID))
+            .map(|v| {
+                v.as_str()
+                    .filter(|s| s.len() <= bounds.bytes)
+                    .ok_or(INVALID)
+            })
             .collect::<Result<Vec<_>>>()?;
         names.sort_unstable();
         names.dedup();
@@ -211,29 +265,24 @@ fn delegation(value: &Value, nodes: &mut usize) -> Result<Vec<Term>> {
         fields.push(Term::Integer(integer(epoch)?));
     }
     *nodes += fields.len();
-    if *nodes > MAX_NODES {
+    if *nodes > bounds.nodes {
         return Err(INVALID);
     }
     Ok(fields)
 }
 
 pub fn encode(term: &Term) -> Result<Vec<u8>> {
-    let mut writer = Writer {
-        bytes: Vec::new(),
-        nodes: 0,
-    };
-    writer.term(term, 0)?;
-    Ok(writer.bytes)
+    encode_bounded(term, ARTIFACT)
 }
 
-// The signed operation tuple is a protocol wrapper, not another level in body/cap.
-pub(crate) fn encode_op_payload(fields: &[Term]) -> Result<Vec<u8>> {
+pub(crate) fn encode_op_payload(fields: &[Term], observation: bool) -> Result<Vec<u8>> {
     if fields.len() != 7 {
         return Err(INVALID);
     }
     let mut writer = Writer {
         bytes: Vec::new(),
         nodes: 1,
+        bounds: if observation { OBSERVATION } else { ARTIFACT },
     };
     writer.major(4, fields.len() as u64)?;
     for field in fields {
@@ -241,14 +290,28 @@ pub(crate) fn encode_op_payload(fields: &[Term]) -> Result<Vec<u8>> {
     }
     Ok(writer.bytes)
 }
+pub(crate) fn encode_observation(term: &Term) -> Result<Vec<u8>> {
+    encode_bounded(term, OBSERVATION)
+}
+
+fn encode_bounded(term: &Term, bounds: Bounds) -> Result<Vec<u8>> {
+    let mut writer = Writer {
+        bytes: Vec::new(),
+        nodes: 0,
+        bounds,
+    };
+    writer.term(term, 0)?;
+    Ok(writer.bytes)
+}
 
 struct Writer {
     bytes: Vec<u8>,
     nodes: usize,
+    bounds: Bounds,
 }
 impl Writer {
     fn put(&mut self, bytes: &[u8]) -> Result<()> {
-        if bytes.len() > MAX_BYTES.saturating_sub(self.bytes.len()) {
+        if bytes.len() > self.bounds.bytes.saturating_sub(self.bytes.len()) {
             return Err(INVALID);
         }
         self.bytes.extend_from_slice(bytes);
@@ -282,9 +345,9 @@ impl Writer {
     }
     fn term(&mut self, term: &Term, depth: usize) -> Result<()> {
         self.nodes += 1;
-        if depth > MAX_DEPTH
-            || self.nodes > MAX_NODES
-            || (depth == MAX_DEPTH
+        if depth > self.bounds.depth
+            || self.nodes > self.bounds.nodes
+            || (depth == self.bounds.depth
                 && matches!(
                     term,
                     Term::List(_) | Term::Tuple(_) | Term::Set(_) | Term::Map(_)
@@ -313,7 +376,6 @@ impl Writer {
             Term::Delegation(values) => {
                 validate_delegation(values)?;
                 self.major(6, 60_003)?;
-                // Validated flat metadata is a leaf in the carrier term grammar.
                 self.array(values, 0)
             }
             Term::Set(values) => {
@@ -336,7 +398,7 @@ impl Writer {
                     let key = self.child(key, depth)?;
                     let value = self.child(value, depth)?;
                     total = total.checked_add(key.len() + value.len()).ok_or(INVALID)?;
-                    if total > MAX_BYTES {
+                    if total > self.bounds.bytes {
                         return Err(INVALID);
                     }
                     encoded.push((key, value));
@@ -358,6 +420,7 @@ impl Writer {
         let mut child = Writer {
             bytes: Vec::new(),
             nodes: self.nodes,
+            bounds: self.bounds,
         };
         child.term(term, depth + 1)?;
         self.nodes = child.nodes;
@@ -373,7 +436,7 @@ impl Writer {
         for value in values {
             let value = self.child(value, depth)?;
             total = total.checked_add(value.len()).ok_or(INVALID)?;
-            if total > MAX_BYTES {
+            if total > self.bounds.bytes {
                 return Err(INVALID);
             }
             encoded.push(value);
@@ -515,7 +578,6 @@ impl<'a> Reader<'a> {
             _ => Err(INVALID),
         }
     }
-
     fn delegation_fields(&mut self, size: usize) -> Result<Vec<Term>> {
         let mut fields = Vec::with_capacity(size);
         for index in 0..size {
@@ -563,13 +625,13 @@ impl<'a> Reader<'a> {
 
 // The Value entry point is also used by trusted native callers. Bound its whole
 // shape before cloning any buffers; raw JSON parsing has its own byte cap.
-fn preflight(value: &Value) -> Result<()> {
+fn preflight(value: &Value, bounds: Bounds) -> Result<()> {
     let mut stack = vec![(value, 0)];
     let mut nodes = 0usize;
     let mut text_bytes = 0usize;
     while let Some((value, depth)) = stack.pop() {
         nodes += 1;
-        if nodes > MAX_NODES * 4 || depth > MAX_JSON_DEPTH {
+        if nodes > bounds.nodes * 4 || depth > bounds.depth * 3 + 4 {
             return Err(INVALID);
         }
         match value {
@@ -577,13 +639,13 @@ fn preflight(value: &Value) -> Result<()> {
                 text_bytes = text_bytes.checked_add(text.len()).ok_or(INVALID)?
             }
             Value::Array(values) => {
-                if values.len() + stack.len() > MAX_NODES * 4 {
+                if values.len() + stack.len() > bounds.nodes * 4 {
                     return Err(INVALID);
                 }
                 stack.extend(values.iter().map(|v| (v, depth + 1)));
             }
             Value::Object(values) => {
-                if values.len() + stack.len() > MAX_NODES * 4 {
+                if values.len() + stack.len() > bounds.nodes * 4 {
                     return Err(INVALID);
                 }
                 for (key, value) in values {
@@ -593,7 +655,7 @@ fn preflight(value: &Value) -> Result<()> {
             }
             _ => {}
         }
-        if text_bytes > MAX_BYTES {
+        if text_bytes > bounds.bytes {
             return Err(INVALID);
         }
     }

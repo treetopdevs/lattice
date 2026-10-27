@@ -2,15 +2,15 @@
 
 ## Status
 
-IN PROGRESS. Available-fact classification and precise refusal detail are
+DONE for the shared source correction. Available-fact classification and precise refusal detail are
 implemented while preserving the legacy observation API. Fresh bidirectional
 public-owner tests cover ordinary, multiple-entry, Space and frozen diagnostic
 cases, both delivery orders and saved-state reopening. Structural invalidity stays
 separate from current policy refusal so an existing authority freeze retains its
 diagnostics without granting routes. The source checkpoint full checks, combined affected tests and review dispositions
 pass. Refresh on the reviewed CI-budget scheduling correction, preserving all
-production/client/config bytes. Both refreshed exact-tip gates remain required
-before native adoption; installer failures are not green source gates.
+production/client/config bytes. Both refreshed source gates pass and the correction is adopted into the native
+checkpoint. Rich native entry folding and retained trust remain separate work.
 
 ## Contract
 

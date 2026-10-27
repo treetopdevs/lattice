@@ -1571,7 +1571,10 @@ defmodule Treehouse.CatalogTrust do
 
   defp classify_scanned_op(mode, valid?, op, frame)
        when (mode == :accepted and valid?) or (mode == :rejected and not valid?) do
-    if portable_frame_size?(frame), do: {:ok, op, frame}, else: {:unsupported, op.id}
+    if portable_frame_size?(frame) and
+         (mode == :rejected or Treehouse.CatalogProductReader.readable_frame?(frame)),
+       do: {:ok, op, frame},
+       else: {:unsupported, op.id}
   end
 
   defp classify_scanned_op(_mode, _valid?, op, _frame), do: {:invalid, op.id}

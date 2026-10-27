@@ -1,3 +1,5 @@
+Code.require_file("support/native_peer_output.exs", __DIR__)
+
 alias Lattice.Identity
 
 case System.argv() do
@@ -28,7 +30,7 @@ case System.argv() do
       encode.("beam-short-signature", key.pub, message, <<0>>, false)
     ]
 
-    IO.puts(Jason.encode!(%{cases: cases}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{cases: cases}))
 
   ["consume"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -42,5 +44,5 @@ case System.argv() do
         )
       end)
 
-    IO.puts(Jason.encode!(%{decisions: decisions}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{decisions: decisions}))
 end
