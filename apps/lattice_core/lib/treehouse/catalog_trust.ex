@@ -9,7 +9,15 @@ defmodule Treehouse.CatalogTrust do
   alias Lattice.{Authority, Canonical, Identity, Log, Op}
   alias Lattice.Authority.{Continuation, ContinuationCertificate}
   alias Lattice.Carrier.{RawObservationBounds, Uint64, Wire}
-  alias Treehouse.{CatalogBootstrap, CatalogCutoff, CatalogEntries, Space, TransportCatalog}
+
+  alias Treehouse.{
+    CatalogBootstrap,
+    CatalogCutoff,
+    CatalogEntries,
+    CatalogRawJson,
+    Space,
+    TransportCatalog
+  }
 
   @history_fields [:replica, :frames, :rejected]
   @review_fields [
@@ -1477,7 +1485,7 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp authenticate_incoming_frame!(frame, replica) do
-    case Wire.authenticate_observation(frame) do
+    case CatalogRawJson.authenticate_frame(frame) do
       {:ok, %{replica: ^replica} = proof} ->
         if Enum.all?(proof.deps, &text?/1), do: proof, else: refuse(:invalid_verified_history)
 
@@ -1504,7 +1512,7 @@ defmodule Treehouse.CatalogTrust do
             not MapSet.member?(ids, frame["id"])
 
         result =
-          if not valid or match?({:ok, _}, Wire.authenticate_observation(frame)),
+          if not valid or match?({:ok, _}, CatalogRawJson.authenticate_frame(frame)),
             do: {:invalid, history.replica},
             else: scan_rejected(record, history.replica)
 
@@ -1547,37 +1555,43 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp scan_frame(frame, replica, mode) do
-    cond do
-      not is_map(frame) or Enum.sort(Map.keys(frame)) != Enum.sort(@frame_fields) ->
-        {:invalid, nil}
-
-      not closed_wire_term?(frame["body"], 64) or not closed_wire_term?(frame["cap"], 64) ->
-        {:unsupported, Map.get(frame, "id")}
-
-      true ->
-        with {:ok, op} <- Wire.decode_op(frame),
-             true <- canonical_b64?(frame["author"], op.author),
-             true <- canonical_b64?(frame["sig"], op.sig),
-             true <- op.replica == replica do
-          classify_scanned_op(mode, Op.valid?(op), op, frame)
-        else
-          {:error, :malformed_op} -> {:unsupported, Map.get(frame, "id")}
-          _ -> {:invalid, Map.get(frame, "id")}
-        end
+    if not is_map(frame) or Enum.sort(Map.keys(frame)) != Enum.sort(@frame_fields) do
+      {:invalid, nil}
+    else
+      case CatalogRawJson.frame_view(frame) do
+        {:ok, view} -> scan_frame_view(frame, view, replica, mode)
+        _ -> {:unsupported, Map.get(frame, "id")}
+      end
     end
   rescue
     _ -> {:invalid, nil}
   end
 
-  defp classify_scanned_op(mode, valid?, op, frame)
+  defp scan_frame_view(frame, view, replica, mode) do
+    if not closed_wire_term?(view["body"], 64) or not closed_wire_term?(view["cap"], 64) do
+      {:unsupported, Map.get(frame, "id")}
+    else
+      with {:ok, op} <- Wire.decode_op(view),
+           true <- canonical_b64?(frame["author"], op.author),
+           true <- canonical_b64?(frame["sig"], op.sig),
+           true <- op.replica == replica do
+        classify_scanned_op(mode, Op.valid?(op), op, frame, view)
+      else
+        {:error, :malformed_op} -> {:unsupported, Map.get(frame, "id")}
+        _ -> {:invalid, Map.get(frame, "id")}
+      end
+    end
+  end
+
+  defp classify_scanned_op(mode, valid?, op, frame, view)
        when (mode == :accepted and valid?) or (mode == :rejected and not valid?) do
-    if portable_frame_size?(frame) and
-         (mode == :rejected or Treehouse.CatalogProductReader.readable_frame?(frame)),
+    if portable_frame_size?(view) and
+         (mode == :rejected or Treehouse.CatalogProductReader.readable_frame?(view)),
        do: {:ok, op, frame},
        else: {:unsupported, op.id}
   end
 
-  defp classify_scanned_op(_mode, _valid?, op, _frame), do: {:invalid, op.id}
+  defp classify_scanned_op(_mode, _valid?, op, _frame, _view), do: {:invalid, op.id}
 
   defp scan_rejected(value, replica) do
     if fields?(value, [:frame, :reason]) and value.reason == :bad_signature,
@@ -1688,8 +1702,8 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp equivalent_frame?(left, right) do
-    with {:ok, left_op} <- Wire.decode_op(left),
-         {:ok, right_op} <- Wire.decode_op(right) do
+    with {:ok, left_op} <- CatalogRawJson.decode_frame(left),
+         {:ok, right_op} <- CatalogRawJson.decode_frame(right) do
       equivalent_op?(left_op, right_op)
     else
       _ -> false
@@ -2082,9 +2096,10 @@ defmodule Treehouse.CatalogTrust do
   defp validate_token!(token) do
     require_fields!(token, @token_fields, :malformed_catalog)
 
-    if safe?(token.trust_revision) and safe?(token.history_generation),
-      do: token,
-      else: refuse(:malformed_catalog)
+    if safe?(token.trust_revision) and safe?(token.history_generation) and
+         token.trust_revision < @max_safe_integer and token.history_generation < @max_safe_integer,
+       do: token,
+       else: refuse(:malformed_catalog)
   end
 
   defp validate_cutoff!(cutoff) do
@@ -2317,7 +2332,7 @@ defmodule Treehouse.CatalogTrust do
   defp ids?(value),
     do: proper_list?(value) and Enum.all?(value, &id?/1) and value == sorted(Enum.uniq(value))
 
-  defp safe?(value), do: is_integer(value) and value >= 0 and value <= @max_safe_integer
+  defp safe?(value), do: CatalogRawJson.safe_integer?(value)
   defp text?(value), do: is_binary(value) and byte_size(value) > 0 and String.valid?(value)
   defp bytes?(value, count), do: is_binary(value) and byte_size(value) == count
   defp id?(value), do: ContinuationCertificate.id?(value)

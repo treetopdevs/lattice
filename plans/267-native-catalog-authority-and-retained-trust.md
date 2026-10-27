@@ -104,11 +104,11 @@ original-state failures to recovery before considering incoming repair.
 
 ## Next integration: original-state validation and graph trust
 
-A new plan281 SOURCE STOP applies before further native incoming adoption:
+Plan281 source is gated and adopted separately; native numeric port remains:
 TypeScript accepts a saved authentic raw frame whose version is JSON1.0, while
 BEAM requires recovery for the same numeric value. Preserve the original-only
 native implementation and its canonical-input proof; independently review and
-gate the catalog-scoped numeric-value correction before native adoption.
+port the gated catalog-scoped numeric-value correction without widening ordinary wire admission.
 
 Plan282 also gates adoption: the expanded original-only mutation proof exposes
 BEAM accepting a singleton saved fork witness that TypeScript rejects. Source
@@ -230,7 +230,7 @@ accepted watermarks and saved block/trigger/bootstrap/authority witnesses before
 creating a private ValidatedOriginal owner. It matches50 fresh original-only
 requests through both public source owners. Incoming union sequencing, full decision
 emission, sticky incoming/overflow handling and final resource gates remain unfinished;
-plan281 numeric-value source adoption is blocked pending its independent gate.
+plan281 numeric-value source is gated; its native observation-only port remains pending.
 The original-only replay owner accepts snapshot bytes alone, retaining both its
 unverified snapshot and original authenticated histories. Witness allowed IDs
 come only from its owned accepted catalog after the existing record-schema gate;

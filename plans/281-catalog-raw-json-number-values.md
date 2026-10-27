@@ -2,16 +2,18 @@
 
 ## Status
 
-SOURCE STOP before further native incoming adoption. A fresh authentic saved
-frame with JSON version1.0 reopens in the TypeScript public owner as unchanged /
-trust_pending, while BEAM rejects it as trust_recovery_required. The same signed
-operation and payload are used; no signature or dependency is changed. Preserve
-the native saved-state replay work and correct the protected source contract in
-an isolated worktree before native adoption.
+IMPLEMENTED locally. The focused regression passes90 complete decisions across
+actual TypeScript and BEAM public owners, including independently BEAM-authored
+histories. Intended frame and wrapper-metadata RED assertions precede the fixes.
+Specification, standards and actual first-party Sonnet5.5High reviews have no
+confirmed remaining findings. Full mix check and both boundary scans pass.
+The dependent source PR and its exact-tip hosted gate remain;
+SOURCE STOP before native adoption. Preserve the unfinished native retained
+replay and the independent saved-witness correction under plan282.
 
 ## Decision and scope
 
-Raw catalog histories are JSON values, and JavaScript represents an integral
+Raw catalog histories and their unsigned wrapper counters are JSON values, and JavaScript represents an integral
 number such as1.0 or1e0 as the same number as1. In the catalog observation owner,
 interpret finite nonnegative integral numeric values up to Number.MAX_SAFE_INTEGER
 as those integer values. Preserve fractions, negative values and unsafe numbers
@@ -20,7 +22,10 @@ subject to the existing bounded uint64 profile. Numeric strings are untouched.
 
 Use a bounded catalog-scoped numeric view for authentication, portable decoding,
 product reading, signed-identity comparison and serialized push-size observation.
-Retain the original parsed raw frame in the snapshot. Do not reinterpret artifact
+Retain the original parsed raw frame in the snapshot. Reuse the same checked
+safe-number predicate for catalog wrapper watermarks and tokens. A caller token
+must remain strictly below Number.MAX_SAFE_INTEGER in both fields, matching the
+TypeScript requirement that the adapter can advance the next generation. Do not reinterpret artifact
 JSON strings: their strict lexical integer profile stays unchanged. Ordinary
 Wire.decode_op / wire admission, canonical encoding and signatures are unchanged.
 The view supplies no authority, eligibility, freshness or installation receipt.
@@ -48,7 +53,8 @@ source gate before adopting a changed source contract.
    saved reopen, incoming union, duplicate signed-identity aliases, rejected
    bad-signature evidence, cutoff-proof membership and available-invalid before
    missing evidence. Include version, tagged int and delegation integer metadata,
-   safe edges, zero/negative-zero, fractions, negative and unsafe numbers, and
+   safe edges, zero/negative-zero, fractions, negative and unsafe numbers,
+   wrapper version/watermark/token values and exhausted token boundaries, and
    otherwise repairing incoming evidence after original corruption.
 4. Preserve original raw values and input immutability. Numeric JSON values are
    compared semantically (1 and1.0 are the same value), while strings, term tags,
