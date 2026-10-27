@@ -8,11 +8,9 @@ trust_recovery_required, but BEAM retains catalog_fork. The underlying signed
 catalog graph still contains a fork; that does not prove the corrupted saved
 witness index is valid. Keep the native original-only regression RED until the
 protected source contract is independently corrected and hosted-gated.
-The singleton regression and three metadata cases first reproduce actual source
-mismatches. The final 42 fresh scenarios pass 84 full public-owner comparisons,
-including a 340-catalog bounded-time smoke control. SDK build and independent
-specification/standards plus actual first-party Sonnet 5.5 High delta reviews pass.
-The final repository check and hosted source gate remain before native adoption.
+The source correction is implemented and its code passed the required reviews
+and repository/hosted gates. Native adoption and the remaining plan267 proof
+are still required. Run evidence is recorded in the PR and running decision log.
 
 ## Decision and scope
 
