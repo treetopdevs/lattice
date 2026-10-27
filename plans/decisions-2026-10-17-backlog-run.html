@@ -969,6 +969,44 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>CodeRabbit disposition</dt><dd>The included CodeRabbit retry completes on the same tip, finding only a stale plan Status section (4384719263): it lists already completed independent review, verification and publication as pending. Update plan283 and its index row to distinguish completed source work from remaining gates, without placing run counts or review-result evidence inside the plan. No production code changes. This documentation tip requires its own hosted gate.</dd>
 <dt>Remaining source dependency</dt><dd>PR186 ea4a2d7d0 also passes its renewed full local check, security scans and exact-tip Flagship40437779994/browser40437780031. Its later mixed-witness finding4384500966 remains open and reproduced in both public owners; the broader operator design answer is pending. Do not clear full native adoption or merge readiness merely because current CI is green. The independently gated numeric source can be ported separately under plan281, while witness/order adoption and complete resource/installation/ordinary-relay gates remain explicit.</dd>
 </dl></section>
+<section id="d157"><h2><span>D-157</span> Validate every supplied saved witness list independently</h2><dl>
+<dt>Operator decision</dt><dd>The human explicitly approved the broader PR186 correction after plans/README rule3 required a design decision. Whenever multiple bindings are supplied, require them to be mutually independent even beside genuine catalog or bootstrap witnesses. A saved catalog fork permits at most two bindings; a binding-only fork requires exactly two. A graph-control witness requires more than two independent bindings. Preserve genuine zero/one-binding catalog forks, valid mixed lists, historical subsets, authority replay and overflow policy.</dd>
+<dt>Implementation and proof</dt><dd>Both source validators apply binding independence before another witness list can establish a fork, and apply the reason's binding-count guard regardless of supplied catalog evidence. Existing catalog conflict-partner and bootstrap-slice checks remain mandatory. Eight new signed scenarios exercise ancestor bindings hidden by catalog/bootstrap evidence, a relabeled three-head control hidden by catalog evidence, reviewed-bootstrap corruption beside a catalog fork, and genuine zero/one-binding and mixed-list controls in both delivery orders. The regression first fails at the intended recovery assertion: corrupt saved bindings are accepted and incoming rotations change the reason to control_history_limit. The positive mixed-control fixture is obtained from the actual public owner so its complete recorded catalog witness is preserved rather than guessed. Renewed focused/full/security/build checks, independent and requested adversarial reviews, and a new exact-tip hosted gate remain required. Native adoption is not yet cleared.</dd>
+<dt>Review and local evidence</dt><dd>The focused test passes51 scenarios in both orders, comparing102 complete actual-owner decisions; all57 client trust tests pass. SDK and desktop builds and both boundary scans pass. Replaying the three original preserved reproduction inputs directly in BEAM now rejects both corrupt mixed witnesses and preserves the honest single-binding catalog fork, /tmp/lattice-mixed-witness-preserved-after.log. Independent specification and standards reviews find no actionable defect. Actual first-party Sonnet5.5High also finds no confirmed actionable finding, /tmp/lattice-mixed-witness-sonnet.json; Argon remains quota-unavailable and the human-authorized fallback is used. Its optional bootstrap/mixed-control test variants share the unconditional independence and reason-count guards already exercised, so no additional scenario ladder is added. This change makes no new maximum-cost claim: the TypeScript pairwise ancestry computation already ran before this correction. Full source checks and exact-tip hosted CI remain pending. The first full local run was interrupted without a terminal result and is not credited. Its preserved retry passes26 properties/935 core tests but reports carrier persistence/readiness failures; /tmp/lattice-mixed-witness-check2.log retains them. A direct macOS global sync takes3.6827seconds against the existing4-second persistence bound, consistent with storage pressure but not proof of every failure cause. No production timeout or durability policy is changed. Publish this reviewed correction with the local gate explicitly red and require the supported Linux exact-tip suite before any source/native closure.</dd>
+</dl></section>
+<section id="d159"><h2>D159 — Prepare the dependent source integration</h2>
+<p>Start a separate managed worktree at the current published PR187 tip and
+integrate the operator-approved PR186 witness-list correction. Keep both source
+PR heads unchanged during preparation; this is a local dependency integration,
+not native adoption or a pull-request merge. Production files combine without a
+conflict. Resolve the plan-index conflict using the updated witness status and
+an explicit pending integration status for ordering; preserve both D148 and D157
+with their own section closures. The earlier operator question is now answered,
+while the current source gates remain pending.</p>
+<p>Prepare owned client/Mix prerequisites, compare the combined ordering and saved
+witness families through both actual public owners, and obtain an integration
+delta review. Hold publication until the parent source gate is clear. The local
+macOS persistence/readiness failures and the unrelated intermittent maximum-size
+source replay refusal remain separate, explicit validation limits.</p>
+<p>The combined focused run passes three tests and154 complete public-owner
+decisions. SDK/desktop builds,57 client trust tests and both boundary security
+scans pass; the full integration check is active. The source parent's same-seed
+carrier rerun passes643 tests after its earlier failed combined run, which remains
+recorded. A fresh first-party Sonnet5.5High integration review does not execute:
+the CLI reports its weekly limit and a2a.m. reset, with no model usage/review
+result. Earlier Sonnet reviews cover each input change independently. The human
+is asked whether to use two available independent reviewers for this combined
+review or hold publication for a preferred reviewer. No substitute review or
+publication is inferred from an unanswered preference. Parent documentation tip
+52d52f85b is production-byte-identical todb185; integrate its formal ancestry after
+finishing the current local merge.</p>
+<p>The full local integration check finishes successfully:26 properties/937 core
+tests,643 carrier tests and every other umbrella suite pass, with formatting and
+strict Credo. The carrier suite retains its baseline190 skips/two exclusions; no
+new exclusion or timeout is added. Save the resolved local merge as a private
+checkpoint while the combined-review choice and parent exact-tip gate remain
+pending. This does not publish PR187 or adopt the source into native.</p>
+</section>
 </main>
 </body>
 </html>

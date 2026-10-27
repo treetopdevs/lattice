@@ -8,8 +8,8 @@ trust_recovery_required, but BEAM retains catalog_fork. The underlying signed
 catalog graph still contains a fork; that does not prove the corrupted saved
 witness index is valid. Keep the native original-only regression RED until the
 protected source contract is independently corrected and hosted-gated.
-The source correction is implemented; the shared binding-only reason guard
-requires renewed verification, review and an exact-tip hosted gate. Native
+The source correction is implemented; the operator-approved independent validation
+of all supplied witness lists still requires a green full-suite gate and exact-tip hosted verification. Native
 adoption and the remaining plan267 proof are still required. Run evidence is recorded in the PR and running decision log.
 
 ## Decision and scope
@@ -17,10 +17,11 @@ adoption and the remaining plan267 proof are still required. Run evidence is rec
 Saved block indexes are authenticated-history witnesses, not a cached winner or
 a license to substitute any current graph fork. Require each saved catalog ID to
 have a conflicting partner in the saved catalog witness index; require recorded
-binding witnesses to be mutually independent when they are the sole fork
-witness or establish a three-head control limit. A binding-only catalog fork
-requires exactly two named bindings; a three-head control witness mislabeled as
-a catalog fork requires recovery in both source owners. Require each authority
+binding witnesses to be mutually independent whenever multiple are supplied,
+even alongside a genuine catalog or bootstrap fork. A catalog fork allows at most
+two named bindings; with no catalog or bootstrap witness it requires exactly two.
+A three-head control witness mislabeled as a catalog fork requires recovery in both
+source owners. Genuine zero- or one-binding catalog forks remain valid. Require each authority
 witness to name a nonempty historical frontier and refused-op index; the enclosing op
 index must equal the combined named targets. A rotation overflow trigger cannot
 name an already installed binding, including the bootstrap. Preserve historical
@@ -28,7 +29,7 @@ bootstrap-slice and authority-refusal replay, canonical distinct indexes,
 pending-ID membership and unadmitted overflow budget validation.
 
 Tighten BEAM to the TypeScript witness contract and tighten both owners for
-misclassified binding-only witnesses; do not loosen TypeScript
+independently invalid witness lists or misclassified binding counts; do not loosen TypeScript
 or compensate in native. A historical fork remains valid when its named records
 acquire descendants, so compare retained relations rather than current-head-list
 equality. Changes affect corrupted saved metadata only and keep routes closed.
@@ -56,7 +57,10 @@ into that normalization correction or a generic native compatibility layer.
    overflow triggers, bootstrap forks and reopen. Corrupt singleton, unrelated,
    ancestor-related, duplicate/noncanonical and unknown indexes must require
    recovery before any incoming repair. Include exact rotation-prior ancestor
-   pairs, valid binding witnesses combined with corrupt catalog witnesses, genuine
+   pairs, valid binding witnesses combined with corrupt catalog witnesses,
+   genuine catalog/bootstrap witnesses combined with ancestor-related bindings,
+   genuine catalog witnesses combined with relabeled three-head controls,
+   valid mixed witness lists, zero/one-binding catalog forks, genuine
    authority replay, empty witnesses and installed-bootstrap triggers. A 340-record
    late-rotation witness must reopen within 60 seconds per actual BEAM call. This
    is a generous smoke guard for one bounded case, not a tight performance

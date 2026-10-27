@@ -101,6 +101,33 @@ const bootstrap=await authorTreehouseCommand({product:"Treehouse.Space",replica:
 const bootstrapFork=await evaluateTreehouseCatalogTrust({installed:accepted.next,expected,incoming:{...empty(),histories:[{...f.histories[0]!,frames:[...f.space.frames,bootstrap]}]}});
 assert.equal(bootstrapFork.kind,"retain_blocked");assert.equal(bootstrapFork.reason,"catalog_fork");assert.deepEqual(bootstrapFork.next.blocked!.bootstrapIds,[bootstrap.id]);
 add("historical-bootstrap-fork-unchanged",bootstrapFork.next,"catalog_fork");
+// Every supplied list must stand on its own, even beside another genuine fork.
+const mergeCatalogWitnesses=(state:InstalledTreehouseCatalogTrustV1)=>{
+  state.catalogs=[...new Map([...state.catalogs,...siblings.next.catalogs].map(c=>[c.id,c])).values()].sort((a,b)=>Buffer.compare(Buffer.from(a.id),Buffer.from(b.id)));
+  state.blocked!.catalogs=[lateId,branchId].sort();
+  return state;
+};
+assert.equal(frozen.next.blocked!.bindings.length,1);
+add("one-binding-genuine-catalog-fork",frozen.next,"catalog_fork");
+const zeroBindings=structuredClone(siblings.next);zeroBindings.blocked!.bindings=[];
+add("zero-binding-genuine-catalog-fork",zeroBindings,"catalog_fork");
+const mixedAncestors=structuredClone(frozen.next);
+mixedAncestors.blocked!.bindings=[f.bootstrap.id,rotationId(f.rotationJson)].sort();
+add("catalog-fork-cannot-hide-ancestor-bindings",mixedAncestors,"trust_recovery_required",{...empty(),rotations,cutoffProofs:f.cutoffProofs});
+const mixedControl=await evaluateTreehouseCatalogTrust({installed:accepted.next,expected,incoming:{...empty(),catalogs:[lateJson,branchJson],rotations,cutoffProofs:f.cutoffProofs}});
+assert.equal(mixedControl.kind,"retain_blocked");assert.equal(mixedControl.reason,"control_history_limit");
+assert.equal(mixedControl.next.blocked!.bindings.length,3);assert.ok(mixedControl.next.blocked!.catalogs.length>1);
+const mixedThreeHeads=mixedControl.next;
+add("three-head-control-with-catalog-witness",mixedThreeHeads,"control_history_limit");
+const mixedRelabeled=structuredClone(mixedThreeHeads);mixedRelabeled.blocked!.reason="catalog_fork";
+add("catalog-fork-cannot-hide-relabeled-three-head-control",mixedRelabeled,"trust_recovery_required",{...empty(),catalogs:[lateJson,branchJson],rotations,cutoffProofs:f.cutoffProofs});
+add("independent-bindings-and-catalog-witnesses",mergeCatalogWitnesses(structuredClone(bindingFork.next)),"catalog_fork");
+const bootstrapAncestors=structuredClone(bootstrapFork.next);
+bootstrapAncestors.rotations=structuredClone(rotated.next.rotations);bootstrapAncestors.cutoffProofs=structuredClone(rotated.next.cutoffProofs);
+bootstrapAncestors.blocked!.bindings=[f.bootstrap.id,rotationId(f.rotationJson)].sort();
+add("bootstrap-fork-cannot-hide-ancestor-bindings",bootstrapAncestors,"trust_recovery_required",{...empty(),rotations,cutoffProofs:f.cutoffProofs});
+const catalogBadBootstrap=structuredClone(frozen.next);catalogBadBootstrap.blocked!.bootstrapIds=[f.bootstrap.id];
+add("catalog-fork-cannot-hide-reviewed-bootstrap",catalogBadBootstrap,"trust_recovery_required");
 const reviewed=structuredClone(bootstrapFork.next);reviewed.blocked!.bootstrapIds=[f.bootstrap.id];
 add("reviewed-bootstrap-is-not-a-fork-witness",reviewed,"trust_recovery_required");
 // Authenticate the whole overflow page, then reopen the recorded unadmitted

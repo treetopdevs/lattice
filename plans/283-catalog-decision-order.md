@@ -2,9 +2,10 @@
 
 ## Status
 
-Source implementation, independent review and local verification are complete.
-The source PR is published. Its documentation update still requires an exact-tip
-hosted gate; native adoption also requires the parent saved-witness correction.
+The source ordering implementation is published. The current follow-up integrates
+the operator-approved independent saved-witness-list correction. Integrated
+review, the parent source gate and a new exact-tip hosted gate remain before
+native adoption.
 Run and review evidence lives in the source PR and running decision log.
 The correction resolves observable collection-preflight, route-collision blame
 and saved-fork witness precedence disagreements between the public owners.
