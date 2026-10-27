@@ -1124,14 +1124,17 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp saved_graph_witness?(block, context) do
-    saved_catalog_witnesses?(block.catalogs, context) and
+    binding_count = length(block.bindings)
+
+    bindings_valid =
+      binding_count < 2 or independent_binding_witnesses?(block.bindings, context.bindings)
+
+    bindings_valid and saved_catalog_witnesses?(block.catalogs, context) and
       if block.reason == :control_history_limit do
-        length(block.bindings) > 2 and block.bootstrap_ids == [] and
-          independent_binding_witnesses?(block.bindings, context.bindings)
+        binding_count > 2 and block.bootstrap_ids == []
       else
-        block.catalogs != [] or block.bootstrap_ids != [] or
-          (length(block.bindings) == 2 and
-             independent_binding_witnesses?(block.bindings, context.bindings))
+        binding_count <= 2 and
+          (block.catalogs != [] or block.bootstrap_ids != [] or binding_count == 2)
       end
   end
 

@@ -16,7 +16,7 @@ defmodule Treehouse.CatalogSavedWitnessTest do
 
     assert status == 0, json
     table = Jason.decode!(json)
-    assert length(table["cases"]) == 43
+    assert length(table["cases"]) == 51
 
     mismatches =
       for item <- table["cases"], {order, index} <- Enum.with_index(item["orders"]), reduce: [] do
