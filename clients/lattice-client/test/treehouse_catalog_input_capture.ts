@@ -28,8 +28,9 @@ test("capture refuses visible/index accessors and symbols without executing gett
   const indexed = Object.defineProperty([], "0", {get: getter, enumerable: true});
   const hiddenIndex = Object.defineProperty([], "0", {get: getter, enumerable: false});
   const decorated = Object.defineProperty([0], "decoration", {get: getter, enumerable: true});
+  const hiddenDecoration = Object.defineProperty([0], "decoration", {get: getter, enumerable: false});
   const symbol = Object.defineProperty([0], Symbol("decoration"), {value: 0, enumerable: false});
-  for (const row of [indexed, hiddenIndex, decorated, symbol]) {
+  for (const row of [indexed, hiddenIndex, decorated, hiddenDecoration, symbol]) {
     const decision = await evaluateTreehouseCatalogTrust({...fixture, expected,
       incoming: {...fixture.incoming, cutoffProofs: [row]}} as never);
     assert.deepEqual(decision, {kind: "reject", reason: "malformed_catalog",
@@ -79,4 +80,46 @@ test("both origins are captured before caller mutations during asynchronous orig
   input.incoming.cutoffProofs.length = 0;
   input.expected.trustRevision = 1;
   assert.deepEqual(await pending, baseline);
+});
+
+test("only array enumeration RangeError permits ignored hidden decorations, with unsafe metadata still refused", async () => {
+  const fixture = await setup();
+  const baseline = await evaluateTreehouseCatalogTrust({...fixture, expected} as never);
+  assert.equal(baseline.kind, "retain_blocked");
+  let calls = 0;
+  const getter = () => { calls++; throw Error("engine-ceiling getter executed"); };
+  const hidden = Object.defineProperty([0], "hidden", {get: getter, enumerable: false});
+  const inherited = Object.setPrototypeOf([0], Object.defineProperty(Object.create(Array.prototype), "inherited", {get: getter, enumerable: true}));
+  const index = Object.defineProperty([], "0", {get: getter, enumerable: true});
+  const hiddenIndex = Object.defineProperty([], "0", {get: getter, enumerable: false});
+  const visible = Object.defineProperty([0], "visible", {get: getter, enumerable: true});
+  const extra = Object.assign([0], {extra: 0});
+  const symbol = Object.defineProperty([0], Symbol("hidden"), {value: 0});
+  const cycle: unknown[] = []; cycle.push(cycle);
+  const ordinaryObject = {};
+  const otherFailure = [0];
+  const rejected = [index, hiddenIndex, visible, extra, symbol, cycle, ordinaryObject, otherFailure];
+  const ceiling = new WeakSet<object>([hidden, inherited, ...rejected]);
+  const ownKeys = Reflect.ownKeys;
+  try {
+    // Fault injection covers hostile metadata cheaply; the separate full-size
+    // actual-owner regression proves the engine ceiling on genuine raw JSON.
+    Reflect.ownKeys = (value: object) => {
+      if (value === otherFailure) throw Error("unrelated enumeration failure");
+      if (ceiling.has(value)) throw new RangeError("enumeration ceiling");
+      return ownKeys(value);
+    };
+    for (const row of [hidden, inherited]) {
+      const decision = await evaluateTreehouseCatalogTrust({...fixture, expected,
+        incoming: {...fixture.incoming, cutoffProofs: [row]}} as never);
+      assert.deepEqual(decision, baseline);
+    }
+    for (const row of rejected) {
+      const decision = await evaluateTreehouseCatalogTrust({...fixture, expected,
+        incoming: {...fixture.incoming, cutoffProofs: [row]}} as never);
+      assert.deepEqual(decision, {kind: "reject", reason: "malformed_catalog",
+        detail: {ids: [], coreReason: null, pendingProofIds: []}});
+    }
+    assert.equal(calls, 0);
+  } finally { Reflect.ownKeys = ownKeys; }
 });

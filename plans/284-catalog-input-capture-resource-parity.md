@@ -2,8 +2,8 @@
 
 ## Status
 
-DESIGN ONLY: discrepancy reproduced and capture alternatives reviewed. The
-operator's hidden-array-metadata choice gates production implementation.
+IN PROGRESS: the operator approved the exception only after the engine's
+array-key enumeration ceiling; ordinary all-own-key checks remain strict.
 An executable fresh full-size source regression now pins the unresolved RED;
 it compares every planned complete decision and retains failure evidence.
 This protected source packet precedes native maximum-density adoption under267.
@@ -39,8 +39,8 @@ complete public-source decisions.
    await. Subsequent caller mutation cannot alter authentication or decisions.
    Original-only corruption retains recovery priority over candidate errors.
 3. Preserve descriptor-based no-getter-execution, symbol/index-accessor/cycle and
-   nonplain-object refusals. Explicitly settle the unobservable hidden-array
-   metadata exception before implementation. Shared acyclic values,
+   nonplain-object refusals. Only an array own-key enumeration RangeError allows
+   hidden non-index decorations to be ignored, never read or copied. Shared acyclic values,
    sparse arrays, enumerable/nonenumerable fields, null prototypes and unusual
    array properties must retain their existing observable outcome and phase.
 4. Retain the exact logical node/string/depth bounds, byte-adapter separation,

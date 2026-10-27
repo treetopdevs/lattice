@@ -466,7 +466,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 281 | [Catalog raw JSON number-value parity](281-catalog-raw-json-number-values.md) | P1 | M | Before native incoming adoption | IN PROGRESS: bounded numeric view/wrapper checks pass90 public-owner comparisons; independent/Sonnet reviews, full check/scans pass; hosted gate remains. |
 | 282 | [Saved catalog-trust witness integrity](282-saved-catalog-fork-witness-integrity.md) | P1 | M | Before native retained adoption | IN PROGRESS: Source guard published in #186; current gate evidence is in the PR. Native adoption and original-only replay remain under267. |
 | 283 | [Catalog decision ordering](283-catalog-decision-order.md) | P1 | M | Before native incoming adoption | IN PROGRESS: Integrated source passes local checks and Sonnet review; parent gate is clear. A new #187 exact-tip hosted gate remains before native adoption. |
-| 284 | [Catalog input capture resource parity](284-catalog-input-capture-resource-parity.md) | P1 | M | Operator array-metadata decision | BLOCKED: Design reviewed; operator hidden-array metadata choice gates implementation. Source correction precedes native density adoption. |
+| 284 | [Catalog input capture resource parity](284-catalog-input-capture-resource-parity.md) | P1 | M | Before native maximum-density adoption | IN PROGRESS: Operator approved the engine-ceiling-only exception. Capture correction, full-size proof and source gates are underway. |
 
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)

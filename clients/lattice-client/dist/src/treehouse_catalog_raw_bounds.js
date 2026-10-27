@@ -1,7 +1,7 @@
 import { canonicalUint64Scalar } from "./uint64";
 // Raw observation is wider than wire admission (64 generic composites), so a
 // signed depth-65 refusal can still be authenticated. Neither result is authority.
-const MAX_NODES = 64 * 1024 * 1024;
+export const CATALOG_RAW_NODE_LIMIT = 64 * 1024 * 1024;
 const MAX_STRING_BYTES = 64 * 1024 * 1024;
 const MAX_DEPTH = 65;
 // A map uses term-array, pairs-array and pair-array wrappers; a flat
@@ -35,7 +35,7 @@ function withinJsonBounds(frame, maxDepth) {
                 pending.pop();
                 continue;
             }
-            if (++nodes > MAX_NODES)
+            if (++nodes > CATALOG_RAW_NODE_LIMIT)
                 return false;
             const value = next.value;
             if (typeof value === "string") {
