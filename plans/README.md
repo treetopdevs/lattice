@@ -465,7 +465,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 280 | [Retained catalog index order parity](280-retained-catalog-index-order-parity.md) | P1 | M | Before full native retained resolver | IN PROGRESS: #184; 37 fresh comparisons, local source/native gates and reviews pass; final hosted gate remains. |
 | 281 | [Catalog raw JSON number-value parity](281-catalog-raw-json-number-values.md) | P1 | M | Before native incoming adoption | IN PROGRESS: bounded numeric view/wrapper checks pass90 public-owner comparisons; independent/Sonnet reviews, full check/scans pass; hosted gate remains. |
 | 282 | [Saved catalog-trust witness integrity](282-saved-catalog-fork-witness-integrity.md) | P1 | M | Before native retained adoption | IN PROGRESS: Source guard published in #186; current gate evidence is in the PR. Native adoption and original-only replay remain under267. |
-| 283 | [Catalog decision ordering](283-catalog-decision-order.md) | P1 | M | Before native incoming adoption | IN PROGRESS: Private witness/order integration passes local checks; combined review, parent gate and a new hosted gate remain before native adoption. |
+| 283 | [Catalog decision ordering](283-catalog-decision-order.md) | P1 | M | Before native incoming adoption | IN PROGRESS: Private integration passes local checks and parent gate is clear; combined review and a new hosted gate remain before native adoption. |
 
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)

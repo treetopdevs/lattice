@@ -2,15 +2,14 @@
 
 ## Status
 
-IN PROGRESS; SOURCE STOP for native retained adoption. A fresh saved historical catalog
-fork with a singleton blocked.catalogs index is rejected by TypeScript as
-trust_recovery_required, but BEAM retains catalog_fork. The underlying signed
-catalog graph still contains a fork; that does not prove the corrupted saved
-witness index is valid. Keep the native original-only regression RED until the
-protected source contract is independently corrected and hosted-gated.
-The source correction is implemented; the operator-approved independent validation
-of all supplied witness lists still requires a green full-suite gate and exact-tip hosted verification. Native
-adoption and the remaining plan267 proof are still required. Run evidence is recorded in the PR and running decision log.
+IN PROGRESS; the operator-approved source correction is reviewed and hosted-gated.
+The original reproduction showed TypeScript rejecting a saved historical catalog
+fork with a singleton blocked.catalogs index while BEAM retained catalog_fork.
+An underlying signed graph fork does not prove that its saved witness index is
+valid. Both source owners now independently validate all supplied witness lists.
+Native adoption, the unchanged original-only regression and remaining plan267
+proof are still required. The dependent ordering integration retains its own
+review and hosted gates. Evidence is recorded in the PR and running decision log.
 
 ## Decision and scope
 
