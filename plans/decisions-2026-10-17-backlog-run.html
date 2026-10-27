@@ -1245,6 +1245,15 @@ Tracked runtime/test files remain unchanged. Source parent186 is verified; the
 new combined187 source tip4032b6abb and manual CodeRabbit review are still active.
 Preserve the native original-only and ordering REDs until the source gate clears;
 do not treat successful preparation as source adoption or evaluator closure.</p>
+<p>Before native adoption, run the existing real TypeScript and BEAM consumer
+protocols in the reviewed combined source checkout with all102 saved-witness
+requests. Both complete successfully and every full decision equals the original
+producer expectation. Each actual response is7,117,822 bytes, below the existing
+32MiB cap; object key serialization differs, so compare decoded values rather
+than claim byte identity. Retain both raw outputs, terminal exit codes and hashes
+at/tmp/lattice-native-adoption-consumer-proof.json. This verifies the batch
+transport seam and avoids widening a helper limit; it is not native parity or
+a new hosted source gate. No source merge or Rust port has occurred.</p>
 </section>
 </main>
 </body>
