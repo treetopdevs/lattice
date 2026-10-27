@@ -1130,7 +1130,8 @@ defmodule Treehouse.CatalogTrust do
           independent_binding_witnesses?(block.bindings, context.bindings)
       else
         block.catalogs != [] or block.bootstrap_ids != [] or
-          independent_binding_witnesses?(block.bindings, context.bindings)
+          (length(block.bindings) == 2 and
+             independent_binding_witnesses?(block.bindings, context.bindings))
       end
   end
 

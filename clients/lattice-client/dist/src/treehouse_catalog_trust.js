@@ -589,7 +589,7 @@ async function validateStoredBlock(state, derived, catalogs, bindings, histories
         if (!independentBindings || saved.bindings.length <= 2 || saved.bootstrapIds.length > 0)
             fail("trust_recovery_required");
     }
-    else if (!independentBindings && saved.catalogs.length === 0 && saved.bootstrapIds.length === 0)
+    else if (saved.catalogs.length === 0 && saved.bootstrapIds.length === 0 && (!independentBindings || saved.bindings.length !== 2))
         fail("trust_recovery_required");
 }
 async function validateBootstrapWitnesses(state, histories) {

@@ -70,6 +70,8 @@ add("independent-binding-fork",bindingFork.next,"catalog_fork");
 const control=await evaluateTreehouseCatalogTrust({installed:accepted.next,expected,incoming:{...empty(),rotations,cutoffProofs:f.cutoffProofs}});
 assert.equal(control.kind,"retain_blocked");assert.equal(control.reason,"control_history_limit");assert.equal(control.next.blocked!.bindings.length,3);
 add("three-independent-binding-control-witness",control.next,"control_history_limit");
+const mislabeledControl=structuredClone(control.next);mislabeledControl.blocked!.reason="catalog_fork";
+add("three-head-control-cannot-be-relabeled-as-binding-fork",mislabeledControl,"trust_recovery_required",{...empty(),rotations,cutoffProofs:f.cutoffProofs});
 const tooFew=structuredClone(control.next);tooFew.blocked!.bindings=tooFew.blocked!.bindings.slice(0,2);
 add("control-requires-three-independent-bindings",tooFew,"trust_recovery_required");
 for(const [label,state] of [["fork",bindingFork.next],["control",control.next]] as const){
