@@ -372,16 +372,16 @@ candidate fields once; borrow first union fragments until merged rows need owner
 materialize security fallback only after refusal. Count derivations, not timing thresholds.
 Measure saved/incoming/refusal processes, disclose buffers and avoid repeated policy/encoding.
 Validate complete JSON before projecting malformed proof/cutoff schemas without owned trees;
-retain syntax/depth precedence and deferred refusal. Full temporary budgets remain unfinished.
+retain syntax/depth precedence and deferred refusal. Internal cutoff summaries stream the
+shared canonical encoder into SHA-256; public observations retain their exact bytes.
+Publish no digest before validation completes; preserve scratch, bounds and refusals. Budgets remain unfinished.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.
-This accommodates aggregate cutoff records without widening public artifact bounds.
-Encoded JSON retains duplicate-name, trailing-byte and malformed Unicode
-refusal before semantic interpretation. Borrowed metadata preflight does not
-widen that transport grammar; its scratch/string costs remain in peak accounting.
-Operation payload encoding excludes the fixed wrapper from the depth-64 domain.
-Fresh depth-limit and large signed-observation peers must prove byte parity. Empty
+This accommodates aggregate cutoff records without widening public artifact bounds. Encoded
+JSON retains duplicate-name, trailing-byte and malformed Unicode refusal before interpretation. Borrowed metadata preflight does not widen that transport grammar; its scratch/string costs remain in peak accounting.
+Operation payload encoding excludes the fixed wrapper from depth-64; fresh depth-limit
+and large signed-observation peers must prove byte parity. Empty
 delegation text is representable data in both existing codecs; retain it for later
 authority refusal instead of confusing shape with a semantic grant.
 
