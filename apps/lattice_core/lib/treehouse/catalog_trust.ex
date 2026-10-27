@@ -775,7 +775,7 @@ defmodule Treehouse.CatalogTrust do
     if byte_size(json) > @max_artifact_bytes, do: refuse(:control_history_limit)
 
     value =
-      with {:ok, raw} <- Jason.decode(json),
+      with {:ok, raw} <- Treehouse.CatalogJSON.decode(json),
            true <- closed_wire_term?(raw, 64),
            {:ok, decoded} <- Wire.decode_value(raw) do
         decoded
@@ -2128,7 +2128,7 @@ defmodule Treehouse.CatalogTrust do
   end
 
   defp parse_json_value(json) do
-    with {:ok, raw} <- Jason.decode(json),
+    with {:ok, raw} <- Treehouse.CatalogJSON.decode(json),
          true <- closed_wire_term?(raw, 64),
          {:ok, value} <- Wire.decode_value(raw),
          do: value,
@@ -2171,14 +2171,7 @@ defmodule Treehouse.CatalogTrust do
     end
   end
 
-  defp closed_wire_term?(["int", value], _depth) when is_integer(value), do: safe?(value)
-
-  defp closed_wire_term?(["int", value], _depth) when is_binary(value) do
-    case Uint64.parse_text(value) do
-      {:ok, integer} -> integer > @max_safe_integer
-      :error -> false
-    end
-  end
+  defp closed_wire_term?(["int", value], _depth), do: Uint64.portable_scalar?(value)
 
   defp closed_wire_term?(["atom", value], _depth) when is_binary(value),
     do: Map.has_key?(@cutoff_atom_by_name, value)

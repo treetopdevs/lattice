@@ -764,3 +764,40 @@ test("continuity vocabulary remains authenticated raw evidence across catalog in
             store: { kind: "verified_fresh", expected } }), "invalid_verified_history");
     }
 });
+function rawInteger(json, field, token) {
+    const pattern = new RegExp(`(\\["atom","${field}"\\],\\["int",)[^\\]]+`);
+    const changed = json.replace(pattern, (_whole, prefix) => prefix + token);
+    assert.notEqual(changed, json, field);
+    return changed;
+}
+test("artifact integer spellings refuse before normalization, including saved recovery", async () => {
+    const f = await trustFixture(), prepared = await prepare(f), first = await installed(f);
+    const rotation = catalogRotationEnvelopeFromCarrierTerm(JSON.parse(f.rotationJson));
+    const rotatedJson = await signedCatalog({ ...f.catalog, binding: catalogRotationId(rotation) }, f.nextCatalogSigner);
+    const rotated = await evaluate(first, { rotations: [f.rotationJson], catalogs: [rotatedJson], cutoffProofs: f.cutoffProofs });
+    assert.equal(rotated.kind, "propose");
+    assert.equal(rotated.next.accepted?.generation, 1);
+    for (const [field, original, rotationCase] of [["version", f.catalogJson, false], ["revision", f.catalogJson, false], ["generation", f.rotationJson, true]]) {
+        const value = field === "revision" ? 0 : 1;
+        for (const token of [JSON.stringify(String(value)), `${value}.0`, `${value}e0`, "-0", "9007199254740992", "9".repeat(10000)]) {
+            const json = rawInteger(original, field, token);
+            const incoming = rotationCase ? { rotations: [json], catalogs: [rotatedJson], cutoffProofs: f.cutoffProofs } : { catalogs: [json], histories: f.histories };
+            const states = rotationCase ? [first, rotated.next] : [prepared, first];
+            for (const state of states) {
+                const before = JSON.stringify(state);
+                const result = await evaluate(state, incoming);
+                assert.equal(result.kind, "reject", `${field}:${token.slice(0, 25)}`);
+                refused(result, "malformed_catalog");
+                assert.equal(JSON.stringify(state), before);
+            }
+            const corrupted = structuredClone(rotationCase ? rotated.next : first);
+            if (rotationCase)
+                corrupted.rotations[0].json = json;
+            else
+                corrupted.catalogs[0].json = json;
+            const recovered = await evaluate(corrupted, { catalogs: [f.catalogJson, rotatedJson], rotations: [f.rotationJson], histories: f.histories, cutoffProofs: f.cutoffProofs });
+            assert.equal(recovered.kind, "reject");
+            refused(recovered, "trust_recovery_required");
+        }
+    }
+});

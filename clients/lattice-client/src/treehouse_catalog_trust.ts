@@ -1,3 +1,5 @@
+import {parseCatalogArtifactJson} from "./treehouse_catalog_json";
+import {portableUint64Scalar} from "./uint64";
 import {verifyEd25519} from "./signature";
 import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
 import type { CatalogCutoff } from "./treehouse_catalog_codec";
@@ -690,9 +692,19 @@ function hash(bytes: Uint8Array): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 function parseJson(json: string): unknown {
-  if (typeof json !== "string") fail("malformed_catalog");
-  if (encoder.encode(json).length > 128 * 1024) fail("control_history_limit");
-  try { return JSON.parse(json); } catch { fail("malformed_catalog"); }
+  const parsed=parseCatalogArtifactJson(json);
+  if(!parsed.ok)fail(parsed.reason);
+  const pending:unknown[]=[parsed.value];
+  while(pending.length>0){
+    const value=pending.pop();
+    if(Array.isArray(value)){
+      if(value[0]==="int"&&(value.length!==2||!portableUint64Scalar(value[1])))fail("malformed_catalog");
+      for(const item of value)pending.push(item);
+    }else if(value!==null&&typeof value==="object"){
+      for(const item of Object.values(value))pending.push(item);
+    }
+  }
+  return parsed.value;
 }
 function parseCatalog(json: string): CatalogEnvelope {
   const value = catalogEnvelopeFromCarrierTerm(parseJson(json));

@@ -243,6 +243,39 @@ fn completed_identity_is_reviewed_then_presence_signed_and_publicly_projected() 
 
 #[test]
 fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains() {
+    // Each case deliberately blocks its fake native callbacks. Run independent
+    // fixtures sequentially so they cannot exhaust the shared test runtime.
+    for close_owner in [false, true] {
+        dropped_caller_drain_case(close_owner, false);
+    }
+}
+
+async fn release_callback(gate: mpsc::Receiver<()>) {
+    tauri::async_runtime::spawn_blocking(move || gate.recv().unwrap())
+        .await
+        .unwrap();
+}
+
+fn wait_for_drain_state(condition: impl Fn() -> bool, message: &str) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline && !condition() {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(condition(), "{message}");
+}
+
+// These two tests deliberately hold a synchronous owner query on a runtime
+// worker. Serialize their gates so a two-worker runtime can still launch the
+// cancellation task whose ordering each independent fixture is proving.
+static OWNER_CHECK_GATE: Mutex<()> = Mutex::new(());
+
+#[test]
+fn cancelled_receiver_owner_check_finishes_before_slot_release() {
+    let _gate = OWNER_CHECK_GATE.lock().unwrap();
+    dropped_caller_drain_case(false, true);
+}
+
+fn dropped_caller_drain_case(close_owner: bool, gate_receiver: bool) {
     let app = tauri::test::mock_builder()
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
@@ -269,6 +302,7 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     owner
         .page_load(&view, PageLoadEvent::Finished, &url)
         .unwrap();
+    let observed_session = owner.snapshot(&view).unwrap();
     let operations = Arc::new(witness_operation::test_adapter::registry(|| {
         Ok(Bytes32([9; 32]))
     }));
@@ -281,7 +315,18 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     let (cancel_release_tx, cancel_release_rx) = mpsc::channel();
     let cancel_release = Arc::new(Mutex::new(Some(cancel_release_rx)));
     let (kinds_tx, kinds_rx) = mpsc::channel();
+    let observed_operations = operations.clone();
+    let (receiver_held_tx, receiver_held_rx) = mpsc::channel();
+    let (receiver_release_tx, receiver_release_rx) = mpsc::channel();
+    let receiver_release = Arc::new(Mutex::new(Some(receiver_release_rx)));
+    let receiver_owner = owner.clone();
+    let receiver_view = view.clone();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
+        let receiver_owner = receiver_owner.clone();
+        let receiver_view = receiver_view.clone();
+        let receiver_release = receiver_release.clone();
+        let receiver_held = receiver_held_tx.clone();
+        let checks = std::sync::atomic::AtomicUsize::new(0);
         let release = release.clone();
         let register = register.clone();
         let cancel_release = cancel_release.clone();
@@ -302,25 +347,36 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
             request,
             move |_| async move {
                 let status = if kind == ResponseKind::Identity {
-                    if let Some(release) = release.lock().unwrap().take() {
+                    let gate = release.lock().unwrap().take();
+                    if let Some(release) = gate {
                         started.send(()).unwrap();
-                        release.recv().unwrap();
+                        release_callback(release).await;
                     }
                     TerminalStatus::Missing
                 } else {
-                    cancel_release
-                        .lock()
-                        .unwrap()
-                        .take()
-                        .unwrap()
-                        .recv()
-                        .unwrap();
+                    let gate = cancel_release.lock().unwrap().take().unwrap();
+                    release_callback(gate).await;
                     TerminalStatus::Cancelled
                 };
                 let terminal = TerminalResponse::terminal(kind, operation_id, status).unwrap();
                 Ok(serde_json::from_slice(&encode_terminal_response(&terminal).unwrap()).unwrap())
             },
-            move || current(),
+            move || {
+                if gate_receiver
+                    && kind == ResponseKind::Cancel
+                    && checks.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 1
+                {
+                    witness_owner::test_adapter::snapshot_after_gate(
+                        &receiver_owner,
+                        &receiver_view,
+                        receiver_held.clone(),
+                        receiver_release.lock().unwrap().take().unwrap(),
+                    )
+                    .is_ok()
+                } else {
+                    current()
+                }
+            },
         );
         if kind == ResponseKind::Cancel {
             cancel_launch.send(()).unwrap();
@@ -355,10 +411,8 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
     drop_returned_rx
         .recv_timeout(Duration::from_secs(1))
         .expect("caller drop must return while cancel dispatch factory is blocked");
-    // Let the original callback finish while start_cancel is between launch
-    // and drain registration. The operation must remain reserved.
-    release_tx.send(()).unwrap();
-    std::thread::sleep(Duration::from_millis(20));
+    // The callbacks are still blocked: a public busy check cannot overlap any
+    // owner recheck yet. Later probes observe registry state instead.
     assert!(flow
         .execute(
             view.clone(),
@@ -366,32 +420,81 @@ fn dropping_caller_sends_private_cancel_but_holds_slot_until_blocked_call_drains
             Arc::new(|_, _| Ok(()))
         )
         .is_err());
+    if close_owner {
+        flow.owner_destroyed();
+        assert!(!witness_operation::test_adapter::is_idle(
+            &observed_operations
+        ));
+    }
+    // Observe entry into finalization while cancellation registration is blocked.
+    // The final owner check occurs only after all cancellation work completes.
+    release_tx.send(()).unwrap();
+    wait_for_drain_state(
+        || witness_flow::test_adapter::run_finished(&flow),
+        "the original run must finish before cancellation registration",
+    );
+    assert!(
+        !witness_operation::test_adapter::is_idle(&observed_operations),
+        "slot must stay reserved before cancellation drain registration"
+    );
+    assert!(observed_operations.begin(&observed_session).is_err());
     register_tx.send(()).unwrap();
     dropper.join().unwrap();
-    assert!(flow
-        .execute(
-            view.clone(),
-            witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| Ok(()))
-        )
-        .is_err());
+    wait_for_drain_state(
+        || witness_flow::test_adapter::cancellation_registered(&flow),
+        "cancellation drain must register before its callback is released",
+    );
+    assert!(
+        !witness_operation::test_adapter::is_idle(&observed_operations),
+        "slot must stay reserved until the cancellation callback drains"
+    );
+    assert!(observed_operations.begin(&observed_session).is_err());
     cancel_release_tx.send(()).unwrap();
-    // Worker scheduling is not the contract. Wait for the observed slot-release
-    // condition with a bounded deadline, rather than assuming 100 one-ms sleeps
-    // are enough while hosted runners compile and run the full native suite.
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while std::time::Instant::now() < deadline {
-        if let Ok(next) = flow.execute(
-            view.clone(),
-            witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| Ok(())),
-        ) {
-            assert!(block_on(next.receive()).is_ok());
-            return;
+    if gate_receiver {
+        receiver_held_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+        // The consumer holds the real owner snapshot lock. Observe finalization
+        // waiting after physical drain without issuing another owner query.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while std::time::Instant::now() < deadline
+            && !witness_flow::test_adapter::waiting_for_cancel_consumer(&flow)
+            && !witness_operation::test_adapter::is_idle(&observed_operations)
+        {
+            std::thread::sleep(Duration::from_millis(1));
         }
-        std::thread::sleep(Duration::from_millis(1));
+        let waiting = witness_flow::test_adapter::waiting_for_cancel_consumer(&flow);
+        let reserved = !witness_operation::test_adapter::is_idle(&observed_operations);
+        receiver_release_tx.send(()).unwrap();
+        assert!(
+            waiting,
+            "finalization must wait for the cancellation consumer after callback drain"
+        );
+        assert!(
+            reserved,
+            "the live owner must retain its slot while its receiver checks it"
+        );
     }
-    panic!("operation slot was not released after the original callback drained");
+    // Observe the registry directly: probing execute() also queries the owner
+    // and can permanently refuse it on read contention. Keep the same deadline.
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "operation slot was not released after the original callback drained",
+    );
+    let next = flow.execute(
+        view,
+        witness_public::PublicRequest::Identity,
+        Arc::new(|_, _| Ok(())),
+    );
+    if close_owner {
+        assert!(
+            next.is_err(),
+            "owner closure remains separate from slot release"
+        );
+    } else {
+        let next = next.expect("a current owner can reuse the drained slot");
+        assert!(block_on(next.receive()).is_ok());
+    }
 }
 
 #[test]
@@ -429,6 +532,7 @@ fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
     let attempt = Bytes32([3; 32]);
     let challenge = Bytes32([4; 32]);
     let (kinds_tx, kinds_rx) = mpsc::channel();
+    let observed_operations = operations.clone();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
         let kinds = kinds_tx.clone();
         witness_mobile::test_adapter::dispatch(
@@ -492,9 +596,13 @@ fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
         kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
         "cancel"
     );
-    for _ in 0..100 {
-        if let Ok(next) = flow.execute(
-            view.clone(),
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "malformed prepared cleanup did not release after cancel drained",
+    );
+    let next = flow
+        .execute(
+            view,
             witness_public::PublicRequest::Proof(witness_public::ProofPublicRequest {
                 replica: "replica:test".into(),
                 enrollment_id: Bytes32([1; 32]),
@@ -502,21 +610,17 @@ fn malformed_prepared_claim_dispatches_cancel_and_never_reaches_signing() {
                 fresh_validator_nonce: Bytes32([6; 32]),
             }),
             Arc::new(|_, _| Err("emit_failed")),
-        ) {
-            assert!(block_on(next.receive()).is_err());
-            assert_eq!(
-                kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-                "identity"
-            );
-            assert_eq!(
-                kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-                "cancel"
-            );
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(1));
-    }
-    panic!("malformed prepared cleanup did not release after cancel drained");
+        )
+        .expect("the drained slot admits the next public proof request");
+    assert!(block_on(next.receive()).is_err());
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "identity"
+    );
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "cancel"
+    );
 }
 
 #[test]
@@ -547,12 +651,14 @@ fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
     owner
         .page_load(&view, PageLoadEvent::Finished, &url)
         .unwrap();
+    let observed_session = owner.snapshot(&view).unwrap();
     let operations = Arc::new(witness_operation::test_adapter::registry(|| {
         Ok(Bytes32([9; 32]))
     }));
     let (started_tx, started_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let release = Arc::new(Mutex::new(Some(release_rx)));
+    let observed_operations = operations.clone();
     let flow = witness_flow::test_adapter::flow(owner, operations, move |request, current| {
         if matches!(request, witness_bridge::PrivateRequest::Cancel(_)) {
             panic!("unknown whether a mobile callback launched before transport panic");
@@ -567,7 +673,8 @@ fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
             request,
             move |_| async move {
                 started.send(()).unwrap();
-                release.lock().unwrap().take().unwrap().recv().unwrap();
+                let gate = release.lock().unwrap().take().unwrap();
+                release_callback(gate).await;
                 let terminal = TerminalResponse::terminal(
                     ResponseKind::Identity,
                     operation_id,
@@ -587,16 +694,28 @@ fn unknown_cancel_dispatch_failure_is_a_failed_drain_and_retains_slot() {
         )
         .unwrap();
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-    drop(pending);
-    release_tx.send(()).unwrap();
-    std::thread::sleep(Duration::from_millis(20));
+    // Both callbacks are blocked, so this public guard cannot overlap a recheck.
     assert!(flow
         .execute(
             view,
             witness_public::PublicRequest::Identity,
-            Arc::new(|_, _| Ok(())),
+            Arc::new(|_, _| Ok(()))
         )
         .is_err());
+    drop(pending);
+    release_tx.send(()).unwrap();
+    wait_for_drain_state(
+        || witness_flow::test_adapter::run_finished(&flow),
+        "the original run must finish after its callback",
+    );
+    wait_for_drain_state(
+        || witness_flow::test_adapter::cancellation_registered(&flow),
+        "the unknown dispatch outcome must record its failed drain",
+    );
+    assert!(!witness_operation::test_adapter::is_idle(
+        &observed_operations
+    ));
+    assert!(observed_operations.begin(&observed_session).is_err());
 }
 
 #[test]
@@ -633,6 +752,7 @@ fn known_unlaunched_cancel_entropy_panic_does_not_wedge_after_original_drain() {
     let (started_tx, started_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let release = Arc::new(Mutex::new(Some(release_rx)));
+    let observed_operations = operations.clone();
     let flow = witness_flow::test_adapter::flow_with_cancel_entropy(
         owner,
         operations,
@@ -646,9 +766,10 @@ fn known_unlaunched_cancel_entropy_panic_does_not_wedge_after_original_drain() {
             witness_mobile::test_adapter::dispatch(
                 request,
                 move |_| async move {
-                    if let Some(gate) = release.lock().unwrap().take() {
+                    let gate = release.lock().unwrap().take();
+                    if let Some(gate) = gate {
                         started.send(()).unwrap();
-                        gate.recv().unwrap();
+                        release_callback(gate).await;
                     }
                     let terminal = TerminalResponse::terminal(
                         ResponseKind::Identity,
@@ -676,18 +797,18 @@ fn known_unlaunched_cancel_entropy_panic_does_not_wedge_after_original_drain() {
     started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
     drop(pending);
     release_tx.send(()).unwrap();
-    for _ in 0..100 {
-        if let Ok(next) = flow.execute(
-            view.clone(),
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "known no-launch entropy failure wedged the registry",
+    );
+    let next = flow
+        .execute(
+            view,
             witness_public::PublicRequest::Identity,
             Arc::new(|_, _| Ok(())),
-        ) {
-            assert!(block_on(next.receive()).is_ok());
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(1));
-    }
-    panic!("known no-launch entropy failure wedged the registry");
+        )
+        .expect("a known unlaunched cancel does not retain the slot");
+    assert!(block_on(next.receive()).is_ok());
 }
 
 #[test]
@@ -753,7 +874,8 @@ fn lifecycle_hook_latches_owner_and_cancels_without_a_retrieved_webview() {
             move |_| async move {
                 if kind == ResponseKind::Identity {
                     started.send(()).unwrap();
-                    release.lock().unwrap().take().unwrap().recv().unwrap();
+                    let gate = release.lock().unwrap().take().unwrap();
+                    release_callback(gate).await;
                 }
                 let status = if kind == ResponseKind::Identity {
                     TerminalStatus::Missing
@@ -876,9 +998,11 @@ fn terminal_publication_race(cancel_with_command: bool) {
         )
         .unwrap();
     ready_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-    // Let finish reach its drain wait. The operation must remain cancellable
-    // throughout that wait, independent of executor scheduling.
-    std::thread::sleep(Duration::from_millis(20));
+    // Observe the completed run while its native acknowledgement remains gated.
+    wait_for_drain_state(
+        || witness_flow::test_adapter::run_finished(&flow),
+        "the run must reach its drain before cancellation competes with publication",
+    );
 
     if cancel_with_command {
         let cancelled = flow
@@ -1032,4 +1156,149 @@ fn prepare_refuses_before_review_if_cancel_id_cannot_be_delivered() {
 #[test]
 fn generate_refuses_before_review_if_cancel_id_cannot_be_delivered() {
     creation_review_notice(true, true);
+}
+
+#[test]
+fn cancellation_reserved_during_final_owner_check_waits_before_dispatch() {
+    let _gate = OWNER_CHECK_GATE.lock().unwrap();
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::External("http://tauri.localhost/".parse().unwrap()),
+    )
+    .build()
+    .unwrap();
+    let view = window.as_ref().clone();
+    let owner = Arc::new(witness_owner::test_adapter::from_entropy({
+        let mut n = 0u8;
+        move || {
+            n += 1;
+            Ok(Bytes32([n; 32]))
+        }
+    }));
+    let url = "http://tauri.localhost/".parse().unwrap();
+    owner.navigation_requested(&view, &url);
+    owner
+        .page_load(&view, PageLoadEvent::Started, &url)
+        .unwrap();
+    owner
+        .page_load(&view, PageLoadEvent::Finished, &url)
+        .unwrap();
+    let session = owner.snapshot(&view).unwrap();
+    let operations = Arc::new(witness_operation::test_adapter::registry(|| {
+        Ok(Bytes32([9; 32]))
+    }));
+    let observed_operations = operations.clone();
+    let (release_tx, release_rx) = mpsc::channel();
+    let release = Arc::new(Mutex::new(Some(release_rx)));
+    let (kinds_tx, kinds_rx) = mpsc::channel();
+    let flow =
+        witness_flow::test_adapter::flow(owner.clone(), operations, move |request, current| {
+            let release = release.clone();
+            let (kind, id) = match &request {
+                witness_bridge::PrivateRequest::Identity(v) => {
+                    (ResponseKind::Identity, v.operation_id)
+                }
+                witness_bridge::PrivateRequest::Cancel(v) => (ResponseKind::Cancel, v.operation_id),
+                _ => panic!("unexpected phase"),
+            };
+            kinds_tx.send(kind).unwrap();
+            witness_mobile::test_adapter::dispatch(
+                request,
+                move |_| async move {
+                    if kind == ResponseKind::Identity {
+                        let gate = release.lock().unwrap().take();
+                        if let Some(gate) = gate {
+                            release_callback(gate).await;
+                        }
+                    }
+                    let status = if kind == ResponseKind::Identity {
+                        TerminalStatus::Missing
+                    } else {
+                        TerminalStatus::Cancelled
+                    };
+                    let terminal = TerminalResponse::terminal(kind, id, status).unwrap();
+                    Ok(
+                        serde_json::from_slice(&encode_terminal_response(&terminal).unwrap())
+                            .unwrap(),
+                    )
+                },
+                move || current(),
+            )
+        });
+    let pending = flow
+        .execute(
+            view.clone(),
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .unwrap();
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ResponseKind::Identity
+    );
+    let (held_tx, held_rx) = mpsc::channel();
+    let (owner_release_tx, owner_release_rx) = mpsc::channel();
+    witness_flow::test_adapter::replace_final_current(&flow, {
+        let owner = owner.clone();
+        let view = view.clone();
+        let session = session.clone();
+        let first = std::sync::atomic::AtomicBool::new(true);
+        let release = Mutex::new(Some(owner_release_rx));
+        move || {
+            if first.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                witness_owner::test_adapter::snapshot_after_gate(
+                    &owner,
+                    &view,
+                    held_tx.clone(),
+                    release.lock().unwrap().take().unwrap(),
+                )
+                .is_ok_and(|fresh| fresh == session)
+            } else {
+                owner.current(&view, &session)
+            }
+        }
+    });
+    release_tx.send(()).unwrap();
+    held_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    // Dropping the original caller reserves cancellation without querying owner.
+    drop(pending);
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < deadline
+        && !witness_flow::test_adapter::cancellation_waits_for_owner_check(&flow)
+    {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let waiting = witness_flow::test_adapter::cancellation_waits_for_owner_check(&flow);
+    let undispatched = matches!(kinds_rx.try_recv(), Err(mpsc::TryRecvError::Empty));
+    let reserved = !witness_operation::test_adapter::is_idle(&observed_operations);
+    owner_release_tx.send(()).unwrap();
+    assert!(
+        waiting,
+        "cancellation must wait at the final owner-check handshake"
+    );
+    assert!(
+        undispatched,
+        "no cancellation callback may read the owner during finalization's snapshot"
+    );
+    assert!(reserved);
+    assert_eq!(
+        kinds_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ResponseKind::Cancel
+    );
+    wait_for_drain_state(
+        || witness_operation::test_adapter::is_idle(&observed_operations),
+        "cancellation must finish after the owner check is released",
+    );
+    let next = flow
+        .execute(
+            view,
+            witness_public::PublicRequest::Identity,
+            Arc::new(|_, _| Ok(())),
+        )
+        .expect("the live owner survives cancellation during its final check");
+    assert!(block_on(next.receive()).is_ok());
 }

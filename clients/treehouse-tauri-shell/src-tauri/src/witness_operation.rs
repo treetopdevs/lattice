@@ -146,6 +146,10 @@ impl CancellationTarget {
 pub(crate) mod test_adapter {
     use super::*;
 
+    pub(crate) fn is_idle(registry: &WitnessOperationRegistry) -> bool {
+        registry.state.lock().unwrap().active.is_none()
+    }
+
     pub(crate) fn registry(
         entropy: impl FnMut() -> Result<Bytes32, &'static str> + Send + 'static,
     ) -> WitnessOperationRegistry {

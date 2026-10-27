@@ -3,7 +3,7 @@ defmodule Treehouse.TransportCatalog do
 
   alias Lattice.{Canonical, Identity}
   alias Lattice.Authority.ContinuationCertificate
-  alias Lattice.Carrier.Wire
+  alias Lattice.Carrier.{Uint64, Wire}
 
   @catalog_fields ~w(version product space bootstrap binding revision previous entries)a
   @entry_fields ~w(product replica kind schema root genesis creation reference route service_id service_key)a
@@ -156,7 +156,7 @@ defmodule Treehouse.TransportCatalog do
     do: {:error, :control_history_limit}
 
   defp decode_artifact(bytes) when is_binary(bytes) do
-    with {:ok, raw} <- Jason.decode(bytes),
+    with {:ok, raw} <- Treehouse.CatalogJSON.decode(bytes),
          true <- closed_raw_maps?(raw, 64),
          {:ok, value} <- Wire.decode_value(raw) do
       {:ok, value}
@@ -187,7 +187,7 @@ defmodule Treehouse.TransportCatalog do
   defp closed_raw_maps?(["int", value], _) when is_integer(value), do: integer?(value)
 
   defp closed_raw_maps?(["int", value], _) when is_binary(value),
-    do: Regex.match?(~r/^(0|[1-9][0-9]*)$/, value)
+    do: match?({:ok, _}, Uint64.parse_text(value))
 
   defp closed_raw_maps?(["atom", value], _) when is_binary(value), do: true
   defp closed_raw_maps?(["nil"], _), do: true
