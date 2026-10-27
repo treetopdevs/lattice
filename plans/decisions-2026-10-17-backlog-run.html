@@ -1776,6 +1776,14 @@ and /var/folders/23/g72t27fx1wxgd8d5xlynnv940000gn/T/treehouse-capture-dmgXGhNH4
 This confirms the actual source fault rather than a Node/Mix prerequisite
 failure. This worktree owns its own installed client/shell/Mix dependencies;
 SDK build and fresh backend compilation pass.</p>
+<p>The final shared-path run at aa6651219 also exits2 with exactly the same
+array-frozen discrepancy: one test, one failure in54.1seconds. Its new fresh
+corpus remains at
+/var/folders/23/g72t27fx1wxgd8d5xlynnv940000gn/T/treehouse-capture-BwtcBaLiSuwnr4ZI;
+log is /tmp/lattice-capture-resource-source-red-final.log. The SDK rebuild and
+complete formatting check exit0. Independent Spec and Standards reviews of
+the reproduction commit report no confirmed finding. No prior failed run is
+relabeled green.</p>
 <p>This commits a RED regression while plan284 remains a design packet. It
 does not claim the source correction, full repository green status or native
 resource acceptance. Production source remains byte-identical to the gated
