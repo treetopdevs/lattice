@@ -76,10 +76,10 @@ sequences plans 001–009 into gated phases (DX/CI foundation → v2 engine hygi
 hardening & docs), defines the single end-state and global validation loop, and records
 the integration/branch strategy. The direction spikes 010–013 are out of that goal.
 
-Plans281–282 correct independent raw JSON value and saved witness-integrity
-source disagreements that cannot be fixed by a generic native compatibility
-layer; plan267 requires separate protected source gates. They are not a platform
-or probe ladder.
+Plans280–283 correct independent row-retention, numeric-value, saved-witness and
+collection-order contracts. They are not a platform/probe ladder: a generic
+native compatibility layer cannot equate conflicting public-owner decisions.
+Plan267 requires separately reviewed source gates before adopting corrections.
 
 ## Execution order & status
 
@@ -465,6 +465,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 280 | [Retained catalog index order parity](280-retained-catalog-index-order-parity.md) | P1 | M | Before full native retained resolver | IN PROGRESS: #184; 37 fresh comparisons, local source/native gates and reviews pass; final hosted gate remains. |
 | 281 | [Catalog raw JSON number-value parity](281-catalog-raw-json-number-values.md) | P1 | M | Before native incoming adoption | IN PROGRESS: bounded numeric view/wrapper checks pass90 public-owner comparisons; independent/Sonnet reviews, full check/scans pass; hosted gate remains. |
 | 282 | [Saved catalog-trust witness integrity](282-saved-catalog-fork-witness-integrity.md) | P1 | M | Before native retained adoption | SOURCE GATED at a12699f17; native adoption and remaining plan267 proof are pending. |
+| 283 | [Catalog decision ordering](283-catalog-decision-order.md) | P1 | M | Before native incoming adoption | Source correction implemented/reviewed; final repository check and exact-tip hosted gate required before native adoption. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 

@@ -900,6 +900,7 @@ defmodule Treehouse.CatalogTrust do
     _routes =
       context.catalogs
       |> Map.values()
+      |> Enum.sort_by(& &1.id)
       |> Enum.filter(&(&1.pending == []))
       |> Enum.reduce(%{}, fn node, used ->
         Enum.reduce(node.envelope.catalog.entries, used, fn entry, routes ->
@@ -1323,7 +1324,8 @@ defmodule Treehouse.CatalogTrust do
   defp merge_security_block(%{triggers: [_ | _]} = previous, _current), do: previous
 
   defp merge_security_block(previous, nil), do: previous
-  defp merge_security_block(_previous, current), do: current
+  defp merge_security_block(nil, current), do: current
+  defp merge_security_block(previous, _current), do: previous
 
   defp merge_graph_block(nil, current), do: current
   defp merge_graph_block(%{reason: :authority_changed} = previous, _current), do: previous
