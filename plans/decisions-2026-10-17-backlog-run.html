@@ -1231,6 +1231,21 @@ justified. All parent diagnostic processes are terminal. The operator has now
 approved the independent mixed-witness-list correction in PR186; its source
 implementation and renewed gates proceed separately before native adoption.</p>
 </section>
+<section id="d166"><h2>D166 — Prepare the native adoption worktree</h2>
+<p>While published source PR187 runs its new exact-tip gate, prepare a separate
+managed worktree from the latest preserved private native checkpoint2cfb87053.
+The earlier native checkout is absent, but its branch and commit remain intact;
+use that immutable commit without restoring or changing another checkout.
+Preparation advances ahead of D162's original sequence only for owned dependency
+installation and compilation: it performs no source merge or native port.</p>
+<p>Branch codex/treehouse-native-source-adoption owns its SDK and desktop npm
+dependencies and Mix dependencies/build. SDK build and test-environment BEAM
+compile complete successfully, recorded at/tmp/lattice-native-source-adoption-prereqs.log.
+Tracked runtime/test files remain unchanged. Source parent186 is verified; the
+new combined187 source tip4032b6abb and manual CodeRabbit review are still active.
+Preserve the native original-only and ordering REDs until the source gate clears;
+do not treat successful preparation as source adoption or evaluator closure.</p>
+</section>
 </main>
 </body>
 </html>
