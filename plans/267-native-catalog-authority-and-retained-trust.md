@@ -105,7 +105,7 @@ original-state failures to recovery before considering incoming repair.
 ## Next integration: original-state validation and graph trust
 
 Plan281 source is gated and adopted separately; the private native numeric view
-is implemented with raw evidence retention; reviews and full gates remain.
+is implemented and reviewed with raw evidence retention; combined full gates remain.
 The original JSON1.0 disagreement is corrected by a catalog-only bounded numeric
 view. Ordinary native frame/artifact parsing stays strict; retain the original-only
 canonical-input proof and the independent witness/order regressions unchanged.

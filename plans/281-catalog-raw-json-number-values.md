@@ -3,10 +3,11 @@
 ## Status
 
 Source correction implemented and independently gated. The private native
-observation-only numeric view is implemented; independent/adversarial review,
-full ordinary/tracing and repository checks remain. Preserve the independent
-saved-witness and source-ordering stops and the unfinished aggregate resource,
-installation and ordinary relay work under plan267.
+observation-only numeric view is implemented and reviewed; scoped ordinary and
+tracing verification is complete. Combined native/repository/publication gates
+remain behind the independent saved-witness and source-ordering corrections.
+Preserve those stops and the unfinished aggregate resource, installation and
+ordinary relay work under plan267.
 
 ## Decision and scope
 
