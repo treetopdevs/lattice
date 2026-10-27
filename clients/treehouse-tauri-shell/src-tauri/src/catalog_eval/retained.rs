@@ -16,6 +16,7 @@ pub(super) struct Graph {
     pub(super) catalog_pending: BTreeMap<String, BTreeSet<String>>,
     pub(super) binding_pending: BTreeMap<String, BTreeSet<String>>,
     required_cutoffs: BTreeMap<String, Vec<Value>>,
+    refused: BTreeSet<String>,
 }
 
 impl Graph {
@@ -32,7 +33,10 @@ impl Graph {
         validate_original_artifact_ids(original)?;
         // Reclassify accepted evidence from the actual union before candidates;
         // source output is never an input to native authority classification.
-        let mut refused = bootstrap.current_refusal().is_some();
+        let mut refused = BTreeSet::new();
+        if bootstrap.current_refusal().is_some() {
+            refused.insert(bootstrap.id().to_owned());
+        }
         if let Some(accepted) = original["accepted"]["catalog"].as_str() {
             let saved = original["catalogs"]
                 .as_array()
@@ -59,10 +63,11 @@ impl Graph {
                 if fact.invalid() || !fact.pending().is_empty() {
                     return Err(fail("trust_recovery_required", Vec::new()));
                 }
-                refused |= !fact.refused().is_empty();
+                refused.extend(fact.refused().iter().cloned());
             }
         }
-        let authority_changed = refused || original["blocked"]["reason"] == "authority_changed";
+        let authority_changed =
+            !refused.is_empty() || original["blocked"]["reason"] == "authority_changed";
         let mut by_catalog = BTreeMap::new();
         for artifact in catalogs {
             let catalog = field(artifact.term(), "catalog")
@@ -182,6 +187,7 @@ impl Graph {
             links,
             catalog_pending,
             binding_pending,
+            refused,
             required_cutoffs: by_rotation.into_iter().map(|(id,node)| (id,node.rotation.cutoffs.into_iter().map(|cutoff| {
                 serde_json::json!({"replica":cutoff.replica,"frontier":cutoff.frontier,"logDigest":cutoff.log_digest})
             }).collect())).collect(),
@@ -339,6 +345,11 @@ struct OriginalEvidence {
     snapshot: super::snapshot::UnverifiedSnapshot,
     histories: super::histories::AuthenticatedHistories,
 }
+/// Constructed only after the original-only graph, proofs, watermark and saved
+/// block have all replayed. A candidate origin cannot construct this receipt.
+struct ValidatedOriginal {
+    evidence: OriginalEvidence,
+}
 impl OriginalEvidence {
     fn read(bytes: &[u8]) -> Result<Self, ChainError> {
         let recovery = || ChainError {
@@ -356,6 +367,198 @@ impl OriginalEvidence {
             snapshot,
             histories,
         })
+    }
+    fn validate(self) -> Result<ValidatedOriginal, ChainError> {
+        self.validate_inner().map_err(|_| recovery())?;
+        Ok(ValidatedOriginal { evidence: self })
+    }
+    fn validate_inner(&self) -> Result<(), ChainError> {
+        let original = self.snapshot.raw();
+        let bootstrap = reviewed_bootstrap(&self.histories, &original["review"])?;
+        let catalogs = original_inventory(original, "catalogs")?;
+        let rotations = original_inventory(original, "rotations")?;
+        let mut graph = Graph::observe(&bootstrap, &catalogs, &rotations, original)?;
+        let proofs = Proofs::observe(
+            original["cutoffProofs"].as_array().ok_or_else(recovery)?,
+            &[],
+            &self.histories,
+        )?;
+        graph.complete_cutoffs(&proofs);
+        validate_routes(&catalogs, &graph)?;
+        validate_watermark(original, &graph)?;
+        let bootstrap_ids = honored_bootstraps(&bootstrap);
+        let derived = derived_block(original, &graph, &bootstrap_ids, &self.histories);
+        self.validate_saved_block(&graph, &derived)?;
+        if original["cutoffProofs"] != serde_json::json!(proofs.rows) {
+            return Err(recovery());
+        }
+        Ok(())
+    }
+    fn validate_saved_block(&self, graph: &Graph, derived: &Value) -> Result<(), ChainError> {
+        let original = self.snapshot.raw();
+        let saved = &original["blocked"];
+        if saved.is_null() {
+            return if derived.is_null() {
+                Ok(())
+            } else {
+                Err(recovery())
+            };
+        }
+        let indexes = [
+            "bindings",
+            "catalogs",
+            "bootstrapIds",
+            "opIds",
+            "pendingProofIds",
+        ];
+        for name in indexes {
+            canonical_strings(&saved[name]).ok_or_else(recovery)?;
+        }
+        let strings = |name| canonical_strings(&saved[name]).ok_or_else(recovery);
+        let bindings = strings("bindings")?;
+        let catalogs = strings("catalogs")?;
+        let bootstrap_ids = strings("bootstrapIds")?;
+        let op_ids = strings("opIds")?;
+        let pending = strings("pendingProofIds")?;
+        if bindings
+            .iter()
+            .any(|id| !graph.links.bindings.contains_key(id))
+            || catalogs
+                .iter()
+                .chain(pending.iter())
+                .any(|id| !graph.links.catalogs.contains_key(id))
+        {
+            return Err(recovery());
+        }
+        let empty_indexes = indexes
+            .iter()
+            .all(|name| saved[*name].as_array().is_some_and(Vec::is_empty));
+        let triggers = saved["triggers"].as_array().ok_or_else(recovery)?;
+        let reason = saved["reason"].as_str().ok_or_else(recovery)?;
+        if !triggers.is_empty() {
+            let keys: Vec<_> = triggers
+                .iter()
+                .map(|t| {
+                    format!(
+                        "{}:{}",
+                        t["kind"].as_str().unwrap_or(""),
+                        t["id"].as_str().unwrap_or("")
+                    )
+                })
+                .collect();
+            if !["control_history_limit", "authority_changed"].contains(&reason)
+                || (reason == "control_history_limit" && !empty_indexes)
+                || triggers.len() > 32
+                || !keys.windows(2).all(|pair| pair[0] < pair[1])
+            {
+                return Err(recovery());
+            }
+            let mut extra_bytes = 0u64;
+            for trigger in triggers {
+                let bytes = counter(&trigger["bytes"]).ok_or_else(recovery)?;
+                let id = trigger["id"].as_str().ok_or_else(recovery)?;
+                let retained = if trigger["kind"] == "catalog" {
+                    graph.links.catalogs.contains_key(id)
+                } else {
+                    graph.links.bindings.contains_key(id)
+                };
+                if bytes == 0 || bytes > 128 * 1024 || retained {
+                    return Err(recovery());
+                }
+                extra_bytes += bytes;
+            }
+            let count = original["catalogs"].as_array().unwrap().len()
+                + original["rotations"].as_array().unwrap().len();
+            let bytes: usize = ["catalogs", "rotations"]
+                .iter()
+                .flat_map(|name| original[*name].as_array().unwrap())
+                .map(|row| row["json"].as_str().unwrap().len())
+                .sum();
+            if count + triggers.len() <= 1024 && bytes as u64 + extra_bytes <= 16 * 1024 * 1024 {
+                return Err(recovery());
+            }
+        }
+        if reason == "authority_changed" {
+            if op_ids.is_empty()
+                || bindings.len() + catalogs.len() + bootstrap_ids.len() + pending.len() != 0
+            {
+                return Err(recovery());
+            }
+            return self.validate_authority_witnesses();
+        }
+        if !saved["authorityWitnesses"]
+            .as_array()
+            .ok_or_else(recovery)?
+            .is_empty()
+        {
+            return Err(recovery());
+        }
+        if !triggers.is_empty() {
+            return Ok(());
+        }
+        if !op_ids.is_empty() {
+            return Err(recovery());
+        }
+        self.validate_bootstrap_witnesses(&bootstrap_ids)?;
+        let independent = bindings.len() > 1
+            && bindings.iter().enumerate().all(|(index, a)| {
+                bindings[index + 1..]
+                    .iter()
+                    .all(|b| !binding_ancestor(a, b, graph) && !binding_ancestor(b, a, graph))
+            });
+        if catalogs.iter().any(|a| {
+            !catalogs
+                .iter()
+                .any(|b| a != b && catalog_conflict(a, b, graph))
+        }) {
+            return Err(recovery());
+        }
+        if reason == "control_history_limit" {
+            if !independent || bindings.len() <= 2 || !bootstrap_ids.is_empty() {
+                return Err(recovery());
+            }
+        } else if !independent && catalogs.is_empty() && bootstrap_ids.is_empty() {
+            return Err(recovery());
+        }
+        Ok(())
+    }
+    fn validate_bootstrap_witnesses(&self, ids: &[String]) -> Result<(), ChainError> {
+        let review = &self.snapshot.raw()["review"];
+        let space = review["space"].as_str().ok_or_else(recovery)?;
+        let history = self.histories.get(space).ok_or_else(recovery)?;
+        let root =
+            super::canonical::base64(review["spaceRoot"].as_str().ok_or_else(recovery)?, Some(32))
+                .map_err(|_| recovery())?;
+        for id in ids {
+            if review["observedBootstrapIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| v.as_str() == Some(id))
+            {
+                return Err(recovery());
+            }
+            let slice = history
+                .dag()
+                .causal_slice(std::slice::from_ref(id))
+                .ok_or_else(recovery)?;
+            let policy =
+                super::space_policy::SpacePolicy::analyze(&slice).map_err(|_| recovery())?;
+            let command = policy
+                .preflight
+                .command(id)
+                .filter(|c| c.name() == "catalog_bootstrap_v1")
+                .ok_or_else(recovery)?;
+            let record =
+                super::bootstrap::Bootstrap::decode(&command.args()[0]).ok_or_else(recovery)?;
+            if policy.command_reasons().get(id) != Some(&None)
+                || record.space != space
+                || record.root != root
+            {
+                return Err(recovery());
+            }
+        }
+        Ok(())
     }
     fn validate_authority_witnesses(&self) -> Result<(), ChainError> {
         let original = self.snapshot.raw();
@@ -511,6 +714,280 @@ fn validate_original_artifact_ids(original: &Value) -> Result<(), ChainError> {
         }
     }
     Ok(())
+}
+fn recovery() -> ChainError {
+    ChainError {
+        reason: "trust_recovery_required",
+        ids: Vec::new(),
+    }
+}
+fn original_inventory(original: &Value, name: &str) -> Result<Vec<Artifact>, ChainError> {
+    original[name]
+        .as_array()
+        .ok_or_else(recovery)?
+        .iter()
+        .map(|row| {
+            super::artifact::parse(row["json"].as_str().ok_or_else(recovery)?.as_bytes())
+                .map_err(|_| recovery())
+        })
+        .collect()
+}
+fn reviewed_bootstrap<'a>(
+    histories: &'a super::histories::AuthenticatedHistories,
+    review: &Value,
+) -> Result<BootstrapObservation<'a>, ChainError> {
+    let space = review["space"].as_str().ok_or_else(recovery)?;
+    let id = review["bootstrapId"].as_str().ok_or_else(recovery)?;
+    let bootstrap = BootstrapObservation::observe(histories, space, id).map_err(|_| recovery())?;
+    let record = super::bootstrap::Bootstrap::decode(bootstrap.record()).ok_or_else(recovery)?;
+    let root =
+        super::canonical::base64(review["spaceRoot"].as_str().ok_or_else(recovery)?, Some(32))
+            .map_err(|_| recovery())?;
+    if record.space != space
+        || record.root != root
+        || bootstrap
+            .policy()
+            .preflight
+            .authority()
+            .static_delegations
+            .root()
+            != Some(root.as_slice())
+    {
+        return Err(recovery());
+    }
+    for id in review["observedBootstrapIds"]
+        .as_array()
+        .ok_or_else(recovery)?
+    {
+        if !bootstrap
+            .policy()
+            .preflight
+            .command(id.as_str().ok_or_else(recovery)?)
+            .is_some_and(|c| c.name() == "catalog_bootstrap_v1")
+        {
+            return Err(recovery());
+        }
+    }
+    Ok(bootstrap)
+}
+fn honored_bootstraps(bootstrap: &BootstrapObservation<'_>) -> Vec<String> {
+    bootstrap
+        .policy()
+        .command_reasons()
+        .iter()
+        .filter(|(id, reason)| {
+            reason.is_none()
+                && bootstrap
+                    .policy()
+                    .preflight
+                    .command(id)
+                    .is_some_and(|command| command.name() == "catalog_bootstrap_v1")
+        })
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+fn counter(value: &Value) -> Option<u64> {
+    value
+        .as_f64()
+        .filter(|n| n.is_finite() && *n >= 0.0 && *n <= HORIZON as f64 && n.fract() == 0.0)
+        .map(|n| n as u64)
+}
+fn validate_watermark(original: &Value, graph: &Graph) -> Result<(), ChainError> {
+    let saved = &original["accepted"];
+    if saved.is_null() {
+        return Ok(());
+    }
+    let id = saved["catalog"].as_str().ok_or_else(recovery)?;
+    let binding_id = saved["binding"].as_str().ok_or_else(recovery)?;
+    let catalog = graph.links.catalogs.get(id).ok_or_else(recovery)?;
+    let binding = graph.links.bindings.get(binding_id).ok_or_else(recovery)?;
+    if catalog.binding != binding_id
+        || Some(catalog.revision) != counter(&saved["revision"])
+        || Some(binding.generation) != counter(&saved["generation"])
+        || !graph.catalog_pending[id].is_empty()
+        || !graph.binding_pending[binding_id].is_empty()
+    {
+        return Err(recovery());
+    }
+    Ok(())
+}
+fn validate_routes(catalogs: &[Artifact], graph: &Graph) -> Result<(), ChainError> {
+    let mut used = BTreeMap::new();
+    for artifact in catalogs {
+        let catalog = field(artifact.term(), "catalog").ok_or_else(recovery)?;
+        let id = digest("lattice-treehouse-transport-catalog-v1", catalog).ok_or_else(recovery)?;
+        if !graph.catalog_pending[&id].is_empty() {
+            continue;
+        }
+        for entry in list(field(catalog, "entries").ok_or_else(recovery)?).ok_or_else(recovery)? {
+            let replica = field(entry, "replica")
+                .and_then(text)
+                .ok_or_else(recovery)?;
+            let route = field(entry, "route").and_then(text).ok_or_else(recovery)?;
+            if used
+                .insert(route, replica)
+                .is_some_and(|previous| previous != replica)
+            {
+                return Err(ChainError {
+                    reason: "invalid_catalog_transition",
+                    ids: vec![id],
+                });
+            }
+        }
+    }
+    Ok(())
+}
+fn catalog_ancestor(older: &str, newer: &str, graph: &Graph) -> bool {
+    let mut seen = BTreeSet::new();
+    let mut cursor = Some(newer);
+    while let Some(id) = cursor {
+        if id == older {
+            return true;
+        }
+        if !seen.insert(id) {
+            return false;
+        }
+        cursor = graph
+            .links
+            .catalogs
+            .get(id)
+            .and_then(|c| c.previous.as_deref());
+    }
+    false
+}
+fn binding_ancestor(older: &str, newer: &str, graph: &Graph) -> bool {
+    let mut cursor = Some(newer);
+    while let Some(id) = cursor {
+        if id == older {
+            return true;
+        }
+        cursor = graph
+            .links
+            .bindings
+            .get(id)
+            .and_then(|b| b.parent.as_deref());
+    }
+    false
+}
+fn catalog_conflict(a: &str, b: &str, graph: &Graph) -> bool {
+    let left = &graph.links.catalogs[a];
+    let right = &graph.links.catalogs[b];
+    if left.binding != right.binding {
+        return false;
+    }
+    if !catalog_ancestor(a, b, graph) && !catalog_ancestor(b, a, graph) {
+        return true;
+    }
+    graph.links.bindings.values().any(|binding| {
+        binding.parent.as_deref() == Some(left.binding.as_str())
+            && ((binding.prior.as_deref() == Some(a) && a != b && catalog_ancestor(a, b, graph))
+                || (binding.prior.as_deref() == Some(b) && a != b && catalog_ancestor(b, a, graph)))
+    })
+}
+fn block(
+    reason: &str,
+    bindings: Vec<String>,
+    catalogs: Vec<String>,
+    bootstrap_ids: Vec<String>,
+    op_ids: Vec<String>,
+    pending: Vec<String>,
+) -> Value {
+    let sorted = |ids: Vec<String>| {
+        ids.into_iter()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+    };
+    serde_json::json!({"reason":reason,"bindings":sorted(bindings),"catalogs":sorted(catalogs),"bootstrapIds":sorted(bootstrap_ids),
+        "opIds":sorted(op_ids),"pendingProofIds":sorted(pending),"triggers":[],"authorityWitnesses":[]})
+}
+fn derived_block(
+    original: &Value,
+    graph: &Graph,
+    bootstrap_ids: &[String],
+    histories: &super::histories::AuthenticatedHistories,
+) -> Value {
+    let mut next = original["blocked"].clone();
+    if !graph.refused.is_empty() && next["reason"] != "authority_changed" {
+        let triggers = next["triggers"].as_array().cloned().unwrap_or_default();
+        next = block(
+            "authority_changed",
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            graph.refused.iter().cloned().collect(),
+            Vec::new(),
+        );
+        next["triggers"] = serde_json::json!(triggers);
+        next["authorityWitnesses"] = serde_json::json!(histories.iter().filter_map(|(replica,history)| {
+            let ids:Vec<_> = graph.refused.iter().filter(|id|history.dag().frame(id).is_some()).cloned().collect();
+            (!ids.is_empty()).then(||serde_json::json!({"replica":replica,"frontier":history.dag().frontier(),"opIds":ids}))
+        }).collect::<Vec<_>>());
+    }
+    let unseen: Vec<_> = bootstrap_ids
+        .iter()
+        .filter(|id| {
+            !original["review"]["observedBootstrapIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| v.as_str() == Some(id))
+        })
+        .cloned()
+        .collect();
+    if next.is_null() && !unseen.is_empty() {
+        next = block(
+            "catalog_fork",
+            Vec::new(),
+            Vec::new(),
+            unseen,
+            Vec::new(),
+            Vec::new(),
+        );
+    }
+    let mut forks: BTreeSet<String> = graph
+        .links
+        .catalog_heads
+        .values()
+        .filter(|ids| ids.len() > 1)
+        .flatten()
+        .cloned()
+        .collect();
+    for binding in graph.links.bindings.values() {
+        if let (Some(parent), Some(prior)) = (&binding.parent, &binding.prior) {
+            for (id, catalog) in &graph.links.catalogs {
+                if &catalog.binding == parent && id != prior && catalog_ancestor(prior, id, graph) {
+                    forks.extend([id.clone(), prior.clone()]);
+                }
+            }
+        }
+    }
+    let pending = graph
+        .catalog_pending
+        .iter()
+        .filter(|(_, ids)| !ids.is_empty())
+        .map(|(id, _)| id.clone())
+        .collect();
+    if graph.links.binding_heads.len() > 2 && next["reason"] != "authority_changed" {
+        next = block(
+            "control_history_limit",
+            graph.links.binding_heads.clone(),
+            forks.into_iter().collect(),
+            Vec::new(),
+            Vec::new(),
+            pending,
+        );
+    } else if next.is_null() && (graph.links.binding_heads.len() > 1 || !forks.is_empty()) {
+        next = block(
+            "catalog_fork",
+            graph.links.binding_heads.clone(),
+            forks.into_iter().collect(),
+            Vec::new(),
+            Vec::new(),
+            pending,
+        );
+    }
+    next
 }
 fn canonical_strings(value: &Value) -> Option<Vec<String>> {
     let ids = value
@@ -815,5 +1292,223 @@ mod tests {
             .and_then(|owner| owner.validate_authority_witnesses())
             .unwrap_err();
         assert_eq!(error.reason, "trust_recovery_required");
+    }
+    #[test]
+    fn complete_original_replay_matches_both_actual_public_owners_before_incoming() {
+        let mut requests = Vec::new();
+        for mode in ["resolver-produce", "witness-produce"] {
+            let table: Value =
+                serde_json::from_slice(&catalog_peer::output("ts", mode, None, 32 * 1024 * 1024))
+                    .unwrap();
+            for case in table["cases"].as_array().unwrap() {
+                for (order, row) in case["orders"].as_array().unwrap().iter().enumerate() {
+                    requests.push(json!({"name":format!("{}:{order}",case["name"].as_str().unwrap()),"input":{
+                        "installed":row["input"]["installed"],"expected":{"trustRevision":0,"historyGeneration":0},
+                        "incoming":{"catalogs":[],"rotations":[],"histories":[],"cutoffProofs":[]}
+                    }}));
+                }
+            }
+        }
+        assert_eq!(requests.len(), 50);
+        let accepted_input = requests
+            .iter()
+            .find(|row| row["name"] == "accepted-reopen:0")
+            .unwrap()["input"]
+            .clone();
+        let blocked_input = requests
+            .iter()
+            .find(|row| row["name"] == "blocked-reopen:0")
+            .unwrap()["input"]
+            .clone();
+        for name in [
+            "watermark-revision",
+            "watermark-generation",
+            "watermark-binding",
+            "watermark-catalog",
+            "missing-accepted-catalog",
+            "saved-catalog-signature",
+            "saved-row-label",
+            "review-root",
+            "observed-non-command",
+            "unproved-overflow-trigger",
+        ] {
+            let mut input = accepted_input.clone();
+            let original = &mut input["installed"];
+            match name {
+                "watermark-revision" => original["accepted"]["revision"] = json!(99),
+                "watermark-generation" => original["accepted"]["generation"] = json!(99),
+                "watermark-binding" => {
+                    original["accepted"]["binding"] = original["accepted"]["catalog"].clone()
+                }
+                "watermark-catalog" => {
+                    original["accepted"]["catalog"] = original["review"]["bootstrapId"].clone()
+                }
+                "missing-accepted-catalog" => original["catalogs"] = json!([]),
+                "saved-catalog-signature" => {
+                    let mut artifact: Value =
+                        serde_json::from_str(original["catalogs"][0]["json"].as_str().unwrap())
+                            .unwrap();
+                    let pair = artifact[1]
+                        .as_array_mut()
+                        .unwrap()
+                        .iter_mut()
+                        .find(|p| p[0] == json!(["atom", "signature"]))
+                        .unwrap();
+                    pair[1] = json!(["bin","AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="]);
+                    original["catalogs"][0]["json"] =
+                        json!(serde_json::to_string(&artifact).unwrap());
+                }
+                "saved-row-label" => {
+                    original["catalogs"][0]["id"] = original["review"]["bootstrapId"].clone()
+                }
+                "review-root" => {
+                    original["review"]["spaceRoot"] =
+                        json!("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+                }
+                "observed-non-command" => {
+                    let authority = original["histories"][0]["frames"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|frame| frame["kind"] == "authority")
+                        .unwrap()["id"]
+                        .clone();
+                    let mut ids = vec![original["review"]["bootstrapId"].clone(), authority];
+                    ids.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+                    original["review"]["observedBootstrapIds"] = json!(ids);
+                }
+                "unproved-overflow-trigger" => {
+                    original["blocked"] = json!({"reason":"control_history_limit","bindings":[],"catalogs":[],"bootstrapIds":[],"opIds":[],"pendingProofIds":[],"authorityWitnesses":[],
+                        "triggers":[{"kind":"catalog","id":original["review"]["bootstrapId"],"digest":original["review"]["bootstrapId"],"bytes":1}]});
+                }
+                _ => unreachable!(),
+            }
+            requests.push(json!({"name":name,"input":input}));
+        }
+        for name in [
+            "proof-index-order",
+            "cutoff-digest",
+            "duplicate-fork-index",
+            "singleton-fork-witness",
+            "reviewed-bootstrap-is-not-fork",
+            "unknown-pending-index",
+            "false-control-head-limit",
+        ] {
+            let mut input = blocked_input.clone();
+            let original = &mut input["installed"];
+            match name {
+                "proof-index-order" => {
+                    assert_eq!(original["cutoffProofs"].as_array().unwrap().len(), 2);
+                    original["cutoffProofs"].as_array_mut().unwrap().reverse();
+                }
+                "cutoff-digest" => {
+                    original["cutoffProofs"][0]["cutoff"]["logDigest"] =
+                        original["review"]["bootstrapId"].clone()
+                }
+                "duplicate-fork-index" => {
+                    let id = original["blocked"]["catalogs"][0].clone();
+                    original["blocked"]["catalogs"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(id);
+                }
+                "singleton-fork-witness" => {
+                    original["blocked"]["catalogs"] = json!([original["blocked"]["catalogs"][0]])
+                }
+                "reviewed-bootstrap-is-not-fork" => {
+                    original["blocked"]["bootstrapIds"] = json!([original["review"]["bootstrapId"]])
+                }
+                "unknown-pending-index" => {
+                    original["blocked"]["pendingProofIds"] =
+                        json!([original["review"]["bootstrapId"]])
+                }
+                "false-control-head-limit" => {
+                    original["blocked"]["reason"] = json!("control_history_limit")
+                }
+                _ => unreachable!(),
+            }
+            requests.push(json!({"name":name,"input":input}));
+        }
+        assert_eq!(requests.len(), 67);
+        let input = json!({"cases":&requests});
+        let ts: Value = serde_json::from_slice(&catalog_peer::output(
+            "ts",
+            "resolver-consume",
+            Some(&input),
+            32 * 1024 * 1024,
+        ))
+        .unwrap();
+        let beam: Value = serde_json::from_slice(&catalog_peer::output(
+            "beam",
+            "resolver-consume",
+            Some(&input),
+            32 * 1024 * 1024,
+        ))
+        .unwrap();
+        let ts_rows = ts["results"].as_array().unwrap();
+        let beam_rows = beam["results"].as_array().unwrap();
+        assert_eq!(ts_rows.len(), requests.len());
+        assert_eq!(beam_rows.len(), requests.len());
+        for ((request, ts), beam) in requests.iter().zip(ts_rows).zip(beam_rows) {
+            if ts["decision"] != beam["decision"] {
+                std::fs::write(
+                    "/tmp/lattice-native-original-source-mismatch-request.json",
+                    serde_json::to_vec(&json!({"cases":[request]})).unwrap(),
+                )
+                .unwrap();
+                std::fs::write(
+                    "/tmp/lattice-native-original-source-mismatch-ts.json",
+                    serde_json::to_vec(ts).unwrap(),
+                )
+                .unwrap();
+                std::fs::write(
+                    "/tmp/lattice-native-original-source-mismatch-beam.json",
+                    serde_json::to_vec(beam).unwrap(),
+                )
+                .unwrap();
+                panic!(
+                    "actual owners disagree for {}: TS {}/{}; BEAM {}/{}",
+                    request["name"],
+                    ts["decision"]["kind"],
+                    ts["decision"]["reason"],
+                    beam["decision"]["kind"],
+                    beam["decision"]["reason"]
+                );
+            }
+        }
+        let mut accepted = 0;
+        let mut rejected = 0;
+        for (request, row) in requests.iter().zip(ts["results"].as_array().unwrap()) {
+            let result = OriginalEvidence::read(
+                &serde_json::to_vec(&request["input"]["installed"]).unwrap(),
+            )
+            .and_then(OriginalEvidence::validate);
+            if row["decision"]["kind"] == "reject" {
+                assert_eq!(
+                    row["decision"]["reason"], "trust_recovery_required",
+                    "{}",
+                    request["name"]
+                );
+                let error = match result {
+                    Ok(_) => panic!("corrupt original accepted: {}", request["name"]),
+                    Err(error) => error,
+                };
+                assert_eq!(
+                    error.reason, "trust_recovery_required",
+                    "{}",
+                    request["name"]
+                );
+                rejected += 1;
+            } else {
+                let valid = result.unwrap_or_else(|error| panic!("{}: {error:?}", request["name"]));
+                assert_eq!(
+                    valid.evidence.snapshot.raw(),
+                    &request["input"]["installed"]
+                );
+                accepted += 1;
+            }
+        }
+        assert!(accepted >= 20);
+        assert!(rejected >= 16);
     }
 }
