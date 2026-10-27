@@ -169,3 +169,18 @@ test("engine-ceiling capture preserves composite aliases and holes without chang
     assert.equal(Object.hasOwn(row, "1"), false);
   } finally { Reflect.ownKeys = ownKeys; }
 });
+
+test("completed aliases in an older storage bucket are not inspected again", () => {
+  let inspections = 0;
+  const shared = new Proxy({value: 0}, {ownKeys(value) {
+    inspections++;
+    return Reflect.ownKeys(value);
+  }});
+  const rows: object[] = [shared];
+  for (let index = 0; index < 1_000_001; index++) rows.push([]);
+  rows.push(shared);
+  // Proxy input is never cloneable. Its metadata probe counts derivations
+  // before that refusal, so rewalking an old alias cannot silently pass.
+  assert.throws(() => copyCatalogInput(rows), {name: "DataCloneError"});
+  assert.equal(inspections, 1);
+});

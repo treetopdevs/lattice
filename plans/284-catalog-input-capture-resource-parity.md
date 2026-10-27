@@ -6,9 +6,13 @@ IN PROGRESS: the operator approved the exception only after the engine's
 array-key enumeration ceiling; ordinary all-own-key checks remain strict.
 The executable fresh full-size regression preserves the original RED; the
 corrected owner passes its focused GREEN across every planned complete decision.
+The engine-ceiling component passes local source gates and independent/adversarial
+review. Its exact-tip hosted source gate still precedes native adoption.
 Aggregate node/string/depth admission before every large clone in requirement4
 remains unproven. Keep this obligation open; iterator traversal and one fallback
 width check do not complete it or establish acceptable resource cost.
+This includes over-depth invalid inputs reaching the active ancestor tracker
+before the existing depth check; valid JSON evidence has bounded nesting.
 This protected source packet precedes native maximum-density adoption under267.
 It does not complete native resource accounting, installation or real-relay proof.
 Evidence and review dispositions belong in the running HTML log and source PR.
