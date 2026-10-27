@@ -1117,6 +1117,25 @@ measured serialized values, not a fresh consumer execution or memory budget;
 they supply no reason to widen the current32MiB response cap. Preserve all cases
 when adding the actual consumer/native regression after the source gates.</p>
 </section>
+<section id="d165"><h2>D165 — Complete the requested combined review and publish</h2>
+<p>The human confirms Sonnet5.5High is available again. A fresh first-party
+claude-sonnet-5-5 high-effort review of immutable88da0ce4b completes successfully,
+using only Read/Grep and no delegation. The result reports no confirmed defect
+in witness validation parity, first-fork precedence, source/generated agreement
+or the dependency merge. Preserve the actual response and model/provider usage
+at/tmp/lattice-witness-order-resumed-sonnet.json; the earlier quota response is
+not credited as review.</p>
+<p>Two observations need no production change: the reviewed-bootstrap corruption
+control deliberately exercises the existing independent bootstrap guard rather
+than the new binding guard, and D159's quota hold is historical. This entry
+supersedes that hold. Both individual changes and their combined delta now have
+the requested review, while existing independent source reviews remain recorded.
+Update the plan/index status without changing runtime or test bytes; verify
+identity to the fully locally checked integration and keep the original failure
+history. Publish by fast-forwarding the existing PR187 branch only if its remote
+head still matches the known published tip. No public PR merge or native adoption
+is authorized. The new exact-tip hosted gate remains required.</p>
+</section>
 </main>
 </body>
 </html>
