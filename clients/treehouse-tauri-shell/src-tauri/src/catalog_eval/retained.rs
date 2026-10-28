@@ -1109,7 +1109,7 @@ mod tests {
             .unwrap_or_else(|poison| poison.into_inner());
         use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
         let directory = tempfile::TempDir::new().unwrap();
-        let isolated = std::env::var_os(if frozen {
+        let isolated = catalog_peer::fixture_path(if frozen {
             "LATTICE_NATIVE_FROZEN_CAPACITY_MANIFEST"
         } else {
             "LATTICE_NATIVE_CAPACITY_MANIFEST"
@@ -1422,7 +1422,7 @@ mod tests {
     #[test]
     fn malformed_proof_resource_process_envelope() {
         use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-        let path = std::env::var_os("LATTICE_NATIVE_REFUSAL_INPUT");
+        let path = catalog_peer::fixture_path("LATTICE_NATIVE_REFUSAL_INPUT");
         let isolated = path.is_some();
         let case: Value = if let Some(path) = path {
             let bytes = std::fs::read(path).unwrap();
@@ -1466,7 +1466,7 @@ mod tests {
         use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
         // The explicit fixture path keeps Node/BEAM producers outside a measured
         // child process. Ordinary test runs still exercise a fresh real input.
-        let fixture = std::env::var_os("LATTICE_NATIVE_RESOURCE_INPUT");
+        let fixture = catalog_peer::fixture_path("LATTICE_NATIVE_RESOURCE_INPUT");
         let isolated = fixture.is_some();
         let input: Value = if let Some(path) = fixture {
             let bytes = std::fs::read(path).unwrap();

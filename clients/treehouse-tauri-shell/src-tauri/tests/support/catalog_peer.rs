@@ -4,6 +4,11 @@ use std::{path::PathBuf, process::Command};
 #[path = "peer_response.rs"]
 mod peer_response;
 
+/// Optional local resource fixtures belong to test support, never production.
+pub fn fixture_path(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name)
+}
+
 pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")

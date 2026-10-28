@@ -5,8 +5,8 @@
 IN PROGRESS. Authenticated DAGs, portable cutoffs, static delegation analysis,
 bounded roles/continuation, command pre-policy, strict product readability and
 causal Thread application policy/projection are implemented. Space application policy/projection and member-certificate consent checks are now
-implemented as a component. Catalog graph evaluation, retained trust and the full
-incoming/resource integration remain unfinished. Closed rotation records and
+implemented as a component. Private catalog graph, retained replay and incoming decision folds are implemented;
+aggregate resource closure and native publication remain unfinished. Closed rotation records and
 dual-purpose signature/binding-id evaluation are implemented as graph inputs;
 parent/head, cutoff-completeness and transition authority remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
@@ -16,7 +16,7 @@ The operator-approved witness completion barrier is also gated and adopted;
 it serializes cancellation consumption and final owner checks while preserving
 the existing conservative refusal policy. Its test-family cleanup preserves
 physical callback-drain behavior and successful public reuse controls.
-Full native signoff still requires the remaining graph/retained/incoming work.
+Full native signoff still requires aggregate resource closure and publication gates.
 
 An explicit strict raw-artifact profile gate now precedes typed catalog/rotation
 normalization. It preserves original bytes and refuses unsafe numeric tokens,
@@ -113,11 +113,13 @@ canonical-input proof and the independent witness/order regressions unchanged.
 Plans282–283 source corrections are reviewed, hosted-gated and integrated as
 explicit dependencies. Every supplied saved witness list is independently
 validated, and catalog collection preflight, route blame and first-fork witness
-precedence agree across the source owners. Native witness guards and expanded
-agreement verification remain in progress. Preserve the native67-case
-original-only matrix and ordering regression; add the complete source witness
-matrix without a native reason exception. Aggregate resource, ordinary/tracing,
-repository, review and exact-tip native gates remain required.
+precedence agree across the source owners. Native witness guards and the complete
+102-request saved-witness matrix are implemented alongside the 67-case original-only and 36-decision ordering matrices.
+A separate ordering regression requires corrupt originals to return recovery
+before expected-token validation or opening incoming evaluation, and requires
+valid historical controls to reach the incoming boundary. These component checks
+do not establish aggregate resource closure or installed trust. Resource closure
+and the final exact-tip hosted native publication gate remain required.
 
 The isolated plan 280 source correction is reviewed, hosted-gated and adopted.
 Both owners agree on unique saved row permutations and preserve original arrays
@@ -212,9 +214,9 @@ compare actual public BEAM/TypeScript decisions before any native port. Later
 history preserves the first recorded frontier. Fresh concurrent issuer revocation
 also re-honors the selected bootstrap in both actual public owners while the
 original historical freeze stays closed; a substituted current honored frontier
-requires recovery. Native consumption and the remaining full acceptance/resource
-matrix still need proof. Source-gate
-waiting does not establish native adoption or implement the retained resolver.
+requires recovery. Native historical witness consumption is implemented and
+compared through the public owners. Remaining aggregate acceptance/resource
+proof and native publication stay separate from these component results.
 
 The internal retained module now joins rich entry facts at iterative graph-node
 completion, derives exact cutoff proof membership from raw evidence, and replays
@@ -225,10 +227,10 @@ is separate from external encoded transport limits. These stages are not a publi
 evaluate API. A complete original-only pass now validates reviewed bootstrap/root,
 graph signatures/support, cutoff proofs, canonical proof indexes, route reservation,
 accepted watermarks and saved block/trigger/bootstrap/authority witnesses before
-creating a private ValidatedOriginal owner. It matches50 fresh original-only
-requests through both public source owners. Incoming union sequencing, full decision
-emission, sticky incoming/overflow handling and final resource gates remain unfinished;
-plan281 numeric-value source is gated; its private native port awaits final verification.
+creating a private ValidatedOriginal owner. It matches67 fresh original-only
+requests through both public source owners. The private incoming fold below owns
+subsequent union sequencing, full decisions and sticky incoming/overflow handling;
+final aggregate resource and publication gates remain unfinished.
 The original-only replay owner accepts snapshot bytes alone, retaining both its
 unverified snapshot and original authenticated histories. Witness allowed IDs
 come only from its owned accepted catalog after the existing record-schema gate;
@@ -257,8 +259,8 @@ shared graph/cutoff evaluation, accepted watermark and route candidates, sticky
 freeze fallback and wholly unadmitted overflow. Reciprocal controls use fresh
 TypeScript and independent BEAM inputs plus Rust-authored frames/catalogs.
 This remains private, without IPC or installation.
-Numeric source adoption and the complete aggregate resource/reciprocal gates
-remain required; no full resolver or installed-app completion is claimed.
+Numeric source adoption is implemented; complete aggregate resource and publication
+gates remain required. No installed-app completion is claimed.
 
 The first full-resolver tests must exercise an empty installed inventory, genuinely
 pending entries, complete acceptance, first-invalid refusal IDs, frozen sibling

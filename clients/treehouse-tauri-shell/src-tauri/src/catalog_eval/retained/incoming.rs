@@ -450,3 +450,61 @@ impl IncomingContext<'_, '_> {
         Ok(decision)
     }
 }
+
+#[cfg(test)]
+mod original_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn corrupt_saved_witnesses_never_open_incoming_evaluation() {
+        let table: Value = serde_json::from_slice(&super::super::catalog_peer::output(
+            "ts",
+            "saved-witness-produce",
+            None,
+            32 * 1024 * 1024,
+        ))
+        .unwrap();
+        let mut rejected = 0;
+        let mut valid_controls = 0;
+        for case in table["cases"].as_array().unwrap() {
+            for row in case["orders"].as_array().unwrap() {
+                let original = OriginalEvidence::read(
+                    &serde_json::to_vec(&row["input"]["installed"]).unwrap(),
+                );
+                if row["decision"]["reason"] == "trust_recovery_required" {
+                    // Even a malformed expected token must not outrank corrupt
+                    // original evidence. The producer supplies authentic incoming
+                    // repairs for catalog, binding and overflow witness mutations;
+                    // none may be observed before the original owner validates.
+                    let decision = evaluate_original(original, &Value::Null, || {
+                        panic!("incoming opened for corrupt original: {}", case["name"])
+                    });
+                    assert_eq!(
+                        decision,
+                        json!({"kind":"reject","reason":"trust_recovery_required",
+                        "detail":{"ids":[],"coreReason":null,"pendingProofIds":[]}}),
+                        "{}",
+                        case["name"]
+                    );
+                    rejected += 1;
+                } else {
+                    let opened = std::cell::Cell::new(false);
+                    let decision = evaluate_original(original, &row["input"]["expected"], || {
+                        opened.set(true);
+                        Err("malformed_catalog")
+                    });
+                    assert!(
+                        opened.get(),
+                        "valid historical witness refused: {}",
+                        case["name"]
+                    );
+                    assert_eq!(decision["reason"], "malformed_catalog");
+                    valid_controls += 1;
+                }
+            }
+        }
+        assert_eq!(rejected + valid_controls, 102);
+        assert!(rejected >= 40);
+        assert!(valid_controls >= 10);
+    }
+}
