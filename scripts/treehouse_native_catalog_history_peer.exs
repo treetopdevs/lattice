@@ -484,6 +484,12 @@ case System.argv() do
           {"refused-creation",
            change.(f.catalog, first.replica, %{creation: refused_creation.id}),
            Map.put(histories, first.replica, Log.append!(first.log, refused_creation))},
+          {"genesis-refused-command",
+           change.(f.catalog, first.replica, %{genesis: refused_creation.id}),
+           Map.put(histories, first.replica, Log.append!(first.log, refused_creation))},
+          {"creation-refused-authority",
+           change.(f.catalog, first.replica, %{creation: false_genesis.id}),
+           Map.put(histories, first.replica, false_genesis_log)},
           {"unrelated-genesis", change.(f.catalog, first.replica, %{genesis: unrelated.id}),
            Map.put(histories, first.replica, Log.append!(first.log, unrelated))},
           {"wrong-genesis-author",
@@ -516,7 +522,7 @@ case System.argv() do
     results =
       Enum.map(cases, fn {name, catalog, logs} ->
         result =
-          case CatalogEntries.observe(catalog, logs) do
+          case CatalogEntries.observe_with_detail(catalog, logs) do
             {:ok, observation} ->
               %{
                 ok: true,
@@ -525,14 +531,15 @@ case System.argv() do
                 bootstrapId: observation.bootstrap.id
               }
 
-            {:error, reason} ->
-              %{ok: false, reason: reason}
+            {:error, reason, refused} ->
+              %{ok: false, reason: reason, refused: refused}
           end
 
         {:ok, _} = TransportCatalog.normalize_catalog(catalog)
 
         %{
           name: name,
+          structureStatus: CatalogEntries.structure_status(catalog, logs),
           catalogJson:
             CatalogTrustVectors.artifact_json(
               CatalogTrustVectors.sign_catalog(catalog, f.space.catalog)

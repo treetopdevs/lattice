@@ -81,19 +81,43 @@ pub fn observe(
     catalogs: &[Artifact],
     rotations: &[Artifact],
 ) -> Result<ChainObservation, ChainError> {
-    let record = bootstrap.bootstrap();
+    observe_record(
+        bootstrap.bootstrap_id(),
+        bootstrap.bootstrap(),
+        catalogs,
+        rotations,
+    )
+}
+
+/// Structural graph observation before catalog entries are complete. The sealed
+/// bootstrap is authenticated; current refusal stays diagnostic. This establishes no
+/// reviewed pin, entry eligibility, retained trust, freshness or usable route.
+pub fn observe_bootstrap(
+    bootstrap: &super::entries::BootstrapObservation<'_>,
+    catalogs: &[Artifact],
+    rotations: &[Artifact],
+) -> Result<ChainObservation, ChainError> {
+    observe_record(bootstrap.id(), bootstrap.record(), catalogs, rotations)
+}
+
+fn observe_record(
+    bootstrap_id: &str,
+    record: &Term,
+    catalogs: &[Artifact],
+    rotations: &[Artifact],
+) -> Result<ChainObservation, ChainError> {
     let key = field(record, "catalog_key")
         .and_then(key)
         .ok_or_else(|| failure(MALFORMED, ""))?;
     let mut context = Context {
-        bootstrap_id: bootstrap.bootstrap_id(),
+        bootstrap_id,
         bootstrap: record,
         catalogs: BTreeMap::new(),
         rotations: BTreeMap::new(),
         ready: BTreeSet::new(),
         visiting: BTreeSet::new(),
         bindings: BTreeMap::from([(
-            bootstrap.bootstrap_id().into(),
+            bootstrap_id.into(),
             BindingObservation {
                 generation: 0,
                 key: key.into(),

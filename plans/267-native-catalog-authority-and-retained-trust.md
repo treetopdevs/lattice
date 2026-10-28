@@ -110,7 +110,7 @@ job and cold-process scheduling correction. The source adoption stop is cleared.
 Preserve the completed input/graph components and use the corrected common rule
 when implementing richer native entry folding; do not add a divergent Rust rule.
 The bounded groundwork can be reviewed independently of the full retained resolver;
-its combined native checkpoint still requires its own exact-tip hosted gate.
+its native checkpoint is now exact-tip hosted-verified.
 
 The next implementation consumes the historical-view foundation inside the full
 retained resolver; a standalone caller-supplied witness checker is insufficient.
@@ -155,6 +155,46 @@ Keep this in the existing native evaluator workstream. No new IPC, storage,
 installation, dial or freshness claim is introduced before the full resolver and
 its required gates are complete. A source discrepancy stops adoption and gets an
 independently reviewed correction rather than a native compatibility exception.
+
+## Retained resolver integration interfaces
+
+Keep the next implementation in one full resolver, with typed internal evidence
+rather than a caller-supplied status or standalone witness verdict. The current
+structural chain component originally required complete EntryObservation merely
+to obtain its bootstrap. Its sealed bootstrap input now exists before all catalog
+entry proof is complete and retains the actual authenticated source. The full
+resolver must still bind that observation to the selected Space/root/bootstrap;
+a parsed Bootstrap record alone is insufficient. Preserve complete-only entry
+observation as a compatibility projection of the richer facts.
+
+Use one graph/proof fold for original-only validation and incoming union. Its
+internal context owns the authenticated histories, decoded artifact inventory,
+reviewed bootstrap, per-view entry facts, exact cutoff proofs, accepted support
+and saved-witness replay. Construct the incoming context only after original-only
+validation succeeds; no public boolean may designate supplied input trusted.
+Keep current-policy refusals distinct from structural invalidity for the existing
+frozen-diagnostic path. Only complete eligible proof reserves historical routes.
+
+The bootstrap/entry coupling is removed: a sealed borrowed observation
+retains the authenticated source DAG and its Space policy independently of entry
+completeness. It supplies structural chains with bootstrap evidence even when
+inventory is empty or pending. It does not select a reviewed pin or prove the
+observed-bootstrap inventory/profile; those remain original-state obligations.
+Entry facts separately retain structural invalidity, sorted missing IDs and
+sorted current-policy refusal IDs. The complete-only entry observer projects
+those facts and preserves invalid-over-pending behavior. Frozen diagnostics can
+later consume structure without treating current refusal as structural corruption.
+This component supplies no standalone retained validator or routes.
+
+The first full-resolver tests must exercise an empty installed inventory, genuinely
+pending entries, complete acceptance, first-invalid refusal IDs, frozen sibling
+reopen and corrupt original evidence plus otherwise repairing incoming input.
+Extend the same fresh public-owner harness to historical witness re-honor, exact
+frontier equality, watermark rollback and fork/overflow ordering before closure.
+Do not expose a partial resolver through IPC or installation while those cases and
+aggregate input/temporary-view budgets remain incomplete. The original-only pass,
+historical witnesses, incoming union and full gates remain required before any
+retained resolver is exposed.
 
 ## Source adoption
 
