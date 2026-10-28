@@ -2,14 +2,12 @@
 
 ## Status
 
-IN PROGRESS. The protected source correction is implemented locally. Fresh
-public-owner comparisons now match for accepted and blocked index permutations;
-independent and adversarial review are clear. Pertinent ordinary/tracing native
-checks pass. The full repository check and hosted gate remain.
-The initial full-resolver probe found TypeScript reopening a saved
-accepted state with reordered unique history rows while BEAM required recovery.
-This blocks native full-resolver adoption; no Rust compatibility rule is allowed.
-This source correction does not complete plan 267 or establish installed trust.
+Source correction reviewed and exact-tip hosted-gated; adopted into the isolated
+native resolver worktree. Adopted source and ordinary/tracing component regression
+replays pass; this source correction is complete. Unique row permutations match across both owners; canonical proof,
+witness and trigger indexes remain strict. Whole-page overflow/fallback retains
+original inventory arrays in both owners. This does not complete plan 267 or
+establish installed trust.
 
 ## Problem and decision
 

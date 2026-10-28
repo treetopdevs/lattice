@@ -520,6 +520,16 @@ impl<'a> AuthorityEvidence<'a> {
     pub fn reasons(&self) -> &BTreeMap<String, &'static str> {
         &self.reasons
     }
+    /// Current whole-view profile observation only, not replacement readiness.
+    pub(super) fn binding_current(&self) -> Option<(&[u8], &str, String, &str)> {
+        let pin = self.pins.last()?;
+        Some((
+            self.static_delegations.root()?,
+            &pin.op_id,
+            digest("lattice-continuation-profile-v1", &pin.profile.term)?,
+            &pin.profile.kind,
+        ))
+    }
     pub(super) fn binding_at(&self, op_id: &str) -> Option<(&[u8], &str, String, &str)> {
         let visible = self.static_delegations.dag.ancestors(op_id)?;
         let pin = self

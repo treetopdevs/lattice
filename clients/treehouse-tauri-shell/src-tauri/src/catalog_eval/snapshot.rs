@@ -12,7 +12,6 @@ use std::collections::BTreeSet;
 const RECOVERY: &str = "trust_recovery_required";
 const MAX_SNAPSHOT_BYTES: usize = 32 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
-const MAX_SAFE: f64 = 9_007_199_254_740_991.0;
 
 pub struct UnverifiedSnapshot {
     raw: Value,
@@ -25,7 +24,13 @@ impl UnverifiedSnapshot {
             return Err(RECOVERY);
         }
         let raw = json::parse_observation(bytes).map_err(|_| RECOVERY)?;
-        if !within_source_depth(&raw) || !state_valid(&raw) {
+        Self::observe(raw)
+    }
+    // Pure retained evidence has logical source bounds. Store byte admission is
+    // deliberately kept in parse(); an observed value grants no stored provenance.
+    pub(super) fn observe(raw: Value) -> Result<Self, &'static str> {
+        if !json::within_observation(&raw, 205) || !within_source_depth(&raw) || !state_valid(&raw)
+        {
             return Err(RECOVERY);
         }
         Ok(Self { raw })
@@ -99,10 +104,9 @@ fn key(value: &Value) -> bool {
     })
 }
 fn safe(value: &Value) -> bool {
-    value
-        .as_f64()
-        .is_some_and(|n| n.is_finite() && n >= 0.0 && n <= MAX_SAFE && n.fract() == 0.0)
+    super::raw_numbers::safe_integer(value).is_some()
 }
+
 fn one(value: &Value) -> bool {
     safe(value) && value.as_f64() == Some(1.0)
 }

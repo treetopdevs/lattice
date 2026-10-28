@@ -25,4 +25,6 @@ pub mod space_policy;
 pub mod space_projection;
 pub mod thread_policy;
 
+mod raw_numbers;
+mod retained;
 pub mod rotation;

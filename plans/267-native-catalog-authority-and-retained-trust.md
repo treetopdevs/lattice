@@ -5,8 +5,8 @@
 IN PROGRESS. Authenticated DAGs, portable cutoffs, static delegation analysis,
 bounded roles/continuation, command pre-policy, strict product readability and
 causal Thread application policy/projection are implemented. Space application policy/projection and member-certificate consent checks are now
-implemented as a component. Catalog graph evaluation, retained trust and the full
-incoming/resource integration remain unfinished. Closed rotation records and
+implemented as a component. Private catalog graph, retained replay and incoming decision folds are implemented;
+aggregate resource closure and native publication remain unfinished. Closed rotation records and
 dual-purpose signature/binding-id evaluation are implemented as graph inputs;
 parent/head, cutoff-completeness and transition authority remain unfinished.
 No component checkpoint completes this plan or grants installed trust/freshness.
@@ -16,7 +16,7 @@ The operator-approved witness completion barrier is also gated and adopted;
 it serializes cancellation consumption and final owner checks while preserving
 the existing conservative refusal policy. Its test-family cleanup preserves
 physical callback-drain behavior and successful public reuse controls.
-Full native signoff still requires the remaining graph/retained/incoming work.
+Full native signoff still requires aggregate resource closure and publication gates.
 
 An explicit strict raw-artifact profile gate now precedes typed catalog/rotation
 normalization. It preserves original bytes and refuses unsafe numeric tokens,
@@ -104,27 +104,27 @@ original-state failures to recovery before considering incoming repair.
 
 ## Next integration: original-state validation and graph trust
 
-Plan283 SOURCE STOP: complete public decisions disagree on catalog collection
-preflight, historical route-collision blame and preserving an existing fork
-witness when a new bootstrap is honored. Adopt its separately reviewed, hosted
-gated source correction before native incoming integration; keep the fresh
-source agreement regression unchanged. Aggregate native resources and final
-installation/relay gates remain required.
+Plan281 source is gated and adopted separately; the private native numeric view
+is implemented and reviewed with raw evidence retention; combined full gates remain.
+The original JSON1.0 disagreement is corrected by a catalog-only bounded numeric
+view. Ordinary native frame/artifact parsing stays strict; retain the original-only
+canonical-input proof and the independent witness/order regressions unchanged.
 
-Plans281–282 SOURCE STOP: a saved authentic raw frame with JSON version1.0 is accepted
-by TypeScript but requires recovery in BEAM. The native original-only work is
-preserved in its separate resolver worktree. Review and gate the catalog-scoped
-numeric-value correction independently before native incoming adoption; ordinary
-wire admission, artifact lexical parsing and canonical bytes stay unchanged.
-A separate original-only mutation probe also proves that a singleton saved
-catalog-fork witness is rejected by TypeScript but retained by BEAM. Plan282
-requires an independent witness-integrity correction and source gate; keep the
-native regression unchanged until source adoption.
+Plans282–283 source corrections are reviewed, hosted-gated and integrated as
+explicit dependencies. Every supplied saved witness list is independently
+validated, and catalog collection preflight, route blame and first-fork witness
+precedence agree across the source owners. Native witness guards and the complete
+102-request saved-witness matrix are implemented alongside the 67-case original-only and 36-decision ordering matrices.
+A separate ordering regression requires corrupt originals to return recovery
+before expected-token validation or opening incoming evaluation, and requires
+valid historical controls to reach the incoming boundary. These component checks
+do not establish aggregate resource closure or installed trust. Resource closure
+and the final exact-tip hosted native publication gate remain required.
 
-
-STOP on full-resolver source adoption: fresh public owners disagree on reordered
-unique saved history/artifact indexes. Plan 280 owns the isolated source correction.
-Preserve completed native components; do not select one oracle in Rust.
+The isolated plan 280 source correction is reviewed, hosted-gated and adopted.
+Both owners agree on unique saved row permutations and preserve original arrays
+on wholly unadmitted overflow paths. The source adoption STOP is cleared; keep
+the discrepancy STOP below for any new mismatch.
 
 The shared available-invalid versus missing-entry source correction is reviewed,
 hosted-verified and adopted, together with the independently required native CI
@@ -207,6 +207,60 @@ sorted current-policy refusal IDs. The complete-only entry observer projects
 those facts and preserves invalid-over-pending behavior. Frozen diagnostics can
 later consume structure without treating current refusal as structural corruption.
 This component supplies no standalone retained validator or routes.
+
+Preparatory full-input runtime peers now cover ordinary accepted/pending/recovery
+cases and historical authority freeze/reopen/witness-corruption requests. They
+compare actual public BEAM/TypeScript decisions before any native port. Later
+history preserves the first recorded frontier. Fresh concurrent issuer revocation
+also re-honors the selected bootstrap in both actual public owners while the
+original historical freeze stays closed; a substituted current honored frontier
+requires recovery. Native historical witness consumption is implemented and
+compared through the public owners. Remaining aggregate acceptance/resource
+proof and native publication stay separate from these component results.
+
+The internal retained module now joins rich entry facts at iterative graph-node
+completion, derives exact cutoff proof membership from raw evidence, and replays
+original-only authority witnesses through transient causal slices. Incoming raw
+history fragments authenticate before merge; complete union keeps the first raw
+representation and canonicalizes indexes. Aggregate node/string/depth accounting
+is separate from external encoded transport limits. These stages are not a public
+evaluate API. A complete original-only pass now validates reviewed bootstrap/root,
+graph signatures/support, cutoff proofs, canonical proof indexes, route reservation,
+accepted watermarks and saved block/trigger/bootstrap/authority witnesses before
+creating a private ValidatedOriginal owner. It matches67 fresh original-only
+requests through both public source owners. The private incoming fold below owns
+subsequent union sequencing, full decisions and sticky incoming/overflow handling;
+final aggregate resource and publication gates remain unfinished.
+The original-only replay owner accepts snapshot bytes alone, retaining both its
+unverified snapshot and original authenticated histories. Witness allowed IDs
+come only from its owned accepted catalog after the existing record-schema gate;
+no external catalog/history can supply missing original support. The graph derives
+current authority refusal from the selected bootstrap and actual accepted entry
+facts, never a source-runtime block reason. Required cutoff claims remain owned
+by the resolved graph; proof completion accepts no replacement rotation slice.
+Saved catalog/rotation row labels are checked against schema-valid actual artifact
+IDs before supplying diagnostic membership or witness allowed IDs. The public DAG
+keeps its external encoded-input cap; an internal already-accounted union path
+preserves frame bounds/authenticity/closure without reapplying that transport cap.
+A native signed 1,300-frame regression proves the distinction and rejects a forged
+last frame. An actual large request (73,381,291 encoded frame bytes, split across
+16,933,991 saved and 56,447,301 incoming bytes) is proposed as trust_pending by both
+public source owners; native union authenticates that same request and retains
+all 1,300 Thread frames. This proves the input-profile distinction, not complete
+native decision parity or acceptable peak-cost closure. Aggregate cost evidence
+and remaining exact resource boundaries still precede any public boundary.
+The reciprocal contract tests compare both complete source owners and separately
+assert native union/graph/proof/replay stages; they do not claim complete native
+decision parity. Keep that distinction when extending them into the full fold.
+
+The private incoming fold now emits complete decisions after an owned
+ValidatedOriginal pass: canonical history union, early security checkpoint,
+shared graph/cutoff evaluation, accepted watermark and route candidates, sticky
+freeze fallback and wholly unadmitted overflow. Reciprocal controls use fresh
+TypeScript and independent BEAM inputs plus Rust-authored frames/catalogs.
+This remains private, without IPC or installation.
+Numeric source adoption is implemented; complete aggregate resource and publication
+gates remain required. No installed-app completion is claimed.
 
 The first full-resolver tests must exercise an empty installed inventory, genuinely
 pending entries, complete acceptance, first-invalid refusal IDs, frozen sibling
@@ -301,19 +355,33 @@ trust reasons and authority semantics are parity oracles, not editable targets.
    the dependent PR and pass one final exact-tip hosted gate before completion.
 
 ## Resources and acceptance
-
 Retain 128 KiB artifact, 1,024/16 MiB artifact-store, 64,000-byte push-frame,
-64 MiB transport and 32 MiB retained snapshot limits. Canonical terms retain the
+64 MiB transport and 32 MiB local retained-store input limits. Canonical terms retain
 existing depth/node limits. Bound complete-input parsing before allocation without
 clipping evaluator-valid maximum-size history. Frame-set authentication accounts
 for encoded frame bytes and array separators before allocating verified state.
-Whole-page parsing and persisted snapshot checks remain separate later seams.
+Pure values retain 64 MiB logical bounds; 32 MiB store and 64 MiB transport byte adapters stay separate.
+Before exposing the full owner, account peak simultaneous owned JSON, merged
+history/frame serialization, parsed catalog preflight rows, proof indexes and policy views;
+a finite input cap alone is not proof of acceptable native memory/CPU cost.
+Prove genuine ordinary/frozen/fallback logical maxima and +1 refusals; measure repeated proof/view costs. In one immutable
+proof-observation context, reuse only exactly matching validated raw rows; changed
+metadata and new histories must revalidate. Preserve first raw representation and
+canonical output order; borrow comparisons and move owned output rows. Build
+candidate fields once; borrow first union fragments until merged rows need ownership;
+materialize security fallback only after refusal. Count derivations, not timing thresholds.
+Measure saved/incoming/refusal processes, disclose buffers and avoid repeated policy/encoding.
+Validate complete JSON before projecting malformed proof/cutoff schemas without owned trees;
+retain syntax/depth precedence and deferred refusal. Internal cutoff summaries stream the
+shared canonical encoder into SHA-256; public observations retain their exact bytes.
+Publish no digest before validation completes; preserve scratch, bounds and refusals. Budgets remain unfinished.
 Raw-observation JSON has fixed 64 MiB input/node and wrapper-depth-205 bounds;
 it can retain malformed scalar types only to classify a refusal. A separate internal
 canonical observation context permits 128 MiB of temporary output and 64 MiB nodes.
-This accommodates aggregate cutoff records without widening public artifact bounds.
-Operation payload encoding excludes the fixed wrapper from the depth-64 domain.
-Fresh depth-limit and large signed-observation peers must prove byte parity. Empty
+This accommodates aggregate cutoff records without widening public artifact bounds. Encoded
+JSON retains duplicate-name, trailing-byte and malformed Unicode refusal before interpretation. Borrowed metadata preflight does not widen that transport grammar; its scratch/string costs remain in peak accounting.
+Operation payload encoding excludes the fixed wrapper from depth-64; fresh depth-limit
+and large signed-observation peers must prove byte parity. Empty
 delegation text is representable data in both existing codecs; retain it for later
 authority refusal instead of confusing shape with a semantic grant.
 

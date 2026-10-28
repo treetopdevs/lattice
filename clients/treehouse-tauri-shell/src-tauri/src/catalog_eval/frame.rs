@@ -99,7 +99,8 @@ impl InspectedFrame {
 }
 
 pub(crate) fn inspect_value(value: &serde_json::Value) -> Result<InspectedFrame> {
-    inspect_value_inner(value, true)
+    let view = super::raw_numbers::frame_view(value)?;
+    inspect_value_inner(view.as_ref(), true)
 }
 
 fn inspect_value_inner(value: &serde_json::Value, observation: bool) -> Result<InspectedFrame> {

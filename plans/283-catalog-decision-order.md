@@ -4,8 +4,10 @@
 
 The source ordering implementation is published. The current follow-up integrates
 the operator-approved independent saved-witness-list correction. Integrated
-review is complete; a new exact-tip hosted gate remains before native adoption.
-The parent saved-witness source gate is clear.
+review and the exact-tip hosted source gate are complete. Native collection
+preflight is integrated locally and the expanded ordering comparison passes;
+combined native verification remains under plan267. The parent saved-witness
+source gate is clear.
 Run and review evidence lives in the source PR and running decision log.
 The correction resolves observable collection-preflight, route-collision blame
 and saved-fork witness precedence disagreements between the public owners.

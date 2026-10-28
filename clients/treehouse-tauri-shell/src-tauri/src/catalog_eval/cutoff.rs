@@ -51,13 +51,12 @@ struct Record {
     signature: Vec<u8>,
 }
 #[derive(Debug)]
-pub struct CutoffObservation {
+pub(super) struct CutoffSummary {
     replica: String,
     frontier: Vec<String>,
     log_digest: String,
-    canonical_bytes: Vec<u8>,
 }
-impl CutoffObservation {
+impl CutoffSummary {
     pub fn replica(&self) -> &str {
         &self.replica
     }
@@ -66,6 +65,23 @@ impl CutoffObservation {
     }
     pub fn log_digest(&self) -> &str {
         &self.log_digest
+    }
+}
+
+#[derive(Debug)]
+pub struct CutoffObservation {
+    summary: CutoffSummary,
+    canonical_bytes: Vec<u8>,
+}
+impl CutoffObservation {
+    pub fn replica(&self) -> &str {
+        self.summary.replica()
+    }
+    pub fn frontier(&self) -> &[String] {
+        self.summary.frontier()
+    }
+    pub fn log_digest(&self) -> &str {
+        self.summary.log_digest()
     }
     pub fn canonical_bytes(&self) -> &[u8] {
         &self.canonical_bytes
@@ -86,7 +102,33 @@ pub fn derive(bytes: &[u8]) -> Result<CutoffObservation, CutoffError> {
             INVALID
         })
     })?;
-    if !closed(&raw, &["replica", "frames", "rejected"]) {
+    let (replica, frontier, term) = prepare_value(&raw)?;
+    let canonical_bytes = canonical::encode_observation(&term).map_err(|_| error(UNSUPPORTED))?;
+    let log_digest = URL_SAFE_NO_PAD.encode(Sha256::digest(&canonical_bytes));
+    Ok(CutoffObservation {
+        summary: CutoffSummary {
+            replica,
+            frontier,
+            log_digest,
+        },
+        canonical_bytes,
+    })
+}
+
+// The retained union already owns and accounts parsed observations. Do not
+// serialize it through a single external transport limit a second time.
+pub(super) fn derive_value(raw: &Value) -> Result<CutoffSummary, CutoffError> {
+    let (replica, frontier, term) = prepare_value(raw)?;
+    let digest = canonical::hash_observation(&term).map_err(|_| error(UNSUPPORTED))?;
+    Ok(CutoffSummary {
+        replica,
+        frontier,
+        log_digest: URL_SAFE_NO_PAD.encode(digest),
+    })
+}
+
+fn prepare_value(raw: &Value) -> Result<(String, Vec<String>, Term), CutoffError> {
+    if !closed(raw, &["replica", "frames", "rejected"]) {
         return Err(error(INVALID));
     }
     let replica = raw["replica"]
@@ -160,14 +202,7 @@ pub fn derive(bytes: &[u8]) -> Result<CutoffObservation, CutoffError> {
         Term::List(ops.into_iter().map(|op| record(op, false)).collect()),
         Term::List(refusals.into_iter().map(|op| record(op, true)).collect()),
     ]);
-    let canonical_bytes = canonical::encode_observation(&term).map_err(|_| error(UNSUPPORTED))?;
-    let log_digest = URL_SAFE_NO_PAD.encode(Sha256::digest(&canonical_bytes));
-    Ok(CutoffObservation {
-        replica: replica.to_owned(),
-        frontier,
-        log_digest,
-        canonical_bytes,
-    })
+    Ok((replica.to_owned(), frontier, term))
 }
 
 fn inspect(raw: &Value, replica: &str, accepted: bool) -> Result<Option<Record>, CutoffError> {
@@ -178,6 +213,11 @@ fn inspect(raw: &Value, replica: &str, accepted: bool) -> Result<Option<Record>,
             Ok(None)
         }
     };
+    let view = match super::raw_numbers::frame_view(raw) {
+        Ok(view) => view,
+        Err(_) => return malformed(),
+    };
+    let raw = view.as_ref();
     if !header(raw, replica) {
         return malformed();
     }
@@ -239,7 +279,7 @@ fn header(raw: &Value, replica: &str) -> bool {
         &[
             "v", "id", "replica", "author", "deps", "kind", "body", "cap", "sig",
         ],
-    ) && raw["v"].as_u64() == Some(1)
+    ) && super::raw_numbers::safe_integer(&raw["v"]) == Some(1)
         && raw["replica"].as_str() == Some(replica)
         && ["id", "author", "sig", "kind"]
             .iter()
@@ -374,4 +414,39 @@ fn push_fits(raw: &Value) -> bool {
         raw,
     )
     .is_ok()
+}
+
+#[cfg(test)]
+mod digest_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn internal_summary_matches_public_bytes_for_source_vectors() {
+        let vectors: Value = serde_json::from_str(include_str!(
+            "../../../../lattice-client/test/vectors/catalog/cutoff_default_pre_member_continuity.json"
+        )).unwrap();
+        for case in vectors["vectors"].as_array().unwrap() {
+            let raw = json!({"replica":case["replica"], "frames":case["frames"], "rejected":case["rejected"]});
+            match (
+                derive(&serde_json::to_vec(&raw).unwrap()),
+                derive_value(&raw),
+            ) {
+                (Ok(public), Ok(summary)) => {
+                    assert_eq!(public.replica(), summary.replica());
+                    assert_eq!(public.frontier(), summary.frontier());
+                    assert_eq!(public.log_digest(), summary.log_digest());
+                    assert_eq!(
+                        summary.log_digest(),
+                        URL_SAFE_NO_PAD.encode(Sha256::digest(public.canonical_bytes()))
+                    );
+                }
+                (Err(public), Err(internal)) => assert_eq!(public, internal),
+                pair => panic!(
+                    "public/internal disagreement for {}: {pair:?}",
+                    case["name"]
+                ),
+            }
+        }
+    }
 }

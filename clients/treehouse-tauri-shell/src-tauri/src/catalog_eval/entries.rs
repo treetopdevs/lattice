@@ -4,10 +4,15 @@
 //! complete-page/snapshot budgets belong to the unfinished incoming boundary.
 //! It is not an IPC boundary.
 use super::{
-    artifact::Artifact, canonical::Term, delegations::Delegation, envelope, evidence_terms::*,
-    histories::AuthenticatedHistories, history::AuthenticDag, space_policy::SpacePolicy,
-    thread_policy,
+    artifact::Artifact, canonical::Term, commands::CommandPreflight, delegations::Delegation,
+    envelope, evidence_terms::*, histories::AuthenticatedHistories, history::AuthenticDag,
+    space_policy::SpacePolicy, thread_policy,
 };
+
+use std::{collections::BTreeMap, sync::OnceLock};
+
+type ThreadAnalysis<'a> = (CommandPreflight<'a>, BTreeMap<String, Option<&'static str>>);
+type ThreadAnalysisCell<'a> = OnceLock<Result<ThreadAnalysis<'a>, &'static str>>;
 
 const INVALID: &str = "invalid_catalog_transition";
 const PENDING: &str = "trust_pending";
@@ -40,6 +45,7 @@ pub struct BootstrapObservation<'a> {
     record: &'a Term,
     space: &'a AuthenticDag,
     policy: SpacePolicy<'a>,
+    thread_policies: BTreeMap<&'a str, ThreadAnalysisCell<'a>>,
 }
 impl<'a> BootstrapObservation<'a> {
     pub fn observe(
@@ -60,6 +66,10 @@ impl<'a> BootstrapObservation<'a> {
         }
         Ok(Self {
             histories,
+            thread_policies: histories
+                .iter()
+                .map(|(name, _)| (name, OnceLock::new()))
+                .collect(),
             id: op.id(),
             record,
             space,
@@ -79,6 +89,9 @@ impl<'a> BootstrapObservation<'a> {
             .get(self.id)
             .copied()
             .flatten()
+    }
+    pub(super) fn policy(&self) -> &SpacePolicy<'a> {
+        &self.policy
     }
     pub fn source(&self) -> &super::frame::AuthenticFrame {
         self.space.frame(self.id).expect("sealed bootstrap source")
@@ -140,7 +153,7 @@ impl EntryFact {
         &self.refused
     }
 }
-impl BootstrapObservation<'_> {
+impl<'a> BootstrapObservation<'a> {
     /// All entries are inspected, including available proof after a missing item.
     /// Facts preserve catalog inventory order; each ID set is sorted and unique.
     pub fn entry_facts(&self, artifact: &Artifact) -> Result<Vec<EntryFact>, &'static str> {
@@ -192,11 +205,20 @@ impl BootstrapObservation<'_> {
         let reference = self.space.frame(reference_id);
         let root = key(get("root")?).ok_or(INVALID)?;
         let thread_analysis = if kind == "thread" {
-            Some(thread_policy::analyze_with_preflight(dag).map_err(|_| INVALID)?)
+            // Cache only demanded policy under this immutable history owner.
+            // Unrelated histories retain their existing observation semantics.
+            Some(
+                self.thread_policies
+                    .get(replica)
+                    .expect("authenticated history index")
+                    .get_or_init(|| thread_policy::analyze_with_preflight(dag).map_err(|_| INVALID))
+                    .as_ref()
+                    .map_err(|reason| *reason)?,
+            )
         } else {
             None
         };
-        let (authority, reasons) = match &thread_analysis {
+        let (authority, reasons) = match thread_analysis {
             Some((preflight, reasons)) => (preflight.authority(), reasons),
             None => (
                 self.policy.preflight.authority(),

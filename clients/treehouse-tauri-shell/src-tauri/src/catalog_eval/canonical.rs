@@ -1,6 +1,7 @@
 //! Bounded `lattice-cbor-v1` terms, independent of the webview and authority fold.
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 pub const MAX_BYTES: usize = 128 * 1024;
 pub const MAX_DEPTH: usize = 64;
@@ -281,6 +282,7 @@ pub(crate) fn encode_op_payload(fields: &[Term], observation: bool) -> Result<Ve
     }
     let mut writer = Writer {
         bytes: Vec::new(),
+        written: 0,
         nodes: 1,
         bounds: if observation { OBSERVATION } else { ARTIFACT },
     };
@@ -297,6 +299,7 @@ pub(crate) fn encode_observation(term: &Term) -> Result<Vec<u8>> {
 fn encode_bounded(term: &Term, bounds: Bounds) -> Result<Vec<u8>> {
     let mut writer = Writer {
         bytes: Vec::new(),
+        written: 0,
         nodes: 0,
         bounds,
     };
@@ -304,17 +307,47 @@ fn encode_bounded(term: &Term, bounds: Bounds) -> Result<Vec<u8>> {
     Ok(writer.bytes)
 }
 
-struct Writer {
-    bytes: Vec<u8>,
+// Private sinks publish a digest only after the same encoder has validated the
+// entire term. Sorting scratch and every observation bound remain unchanged.
+// Map/set roots still buffer their children; cutoff list roots stream record by record.
+pub(crate) fn hash_observation(term: &Term) -> Result<[u8; 32]> {
+    let mut writer = Writer {
+        bytes: Sha256::new(),
+        written: 0,
+        nodes: 0,
+        bounds: OBSERVATION,
+    };
+    writer.term(term, 0)?;
+    Ok(writer.bytes.finalize().into())
+}
+
+trait Sink {
+    fn append(&mut self, bytes: &[u8]);
+}
+impl Sink for Vec<u8> {
+    fn append(&mut self, bytes: &[u8]) {
+        self.extend_from_slice(bytes);
+    }
+}
+impl Sink for Sha256 {
+    fn append(&mut self, bytes: &[u8]) {
+        self.update(bytes);
+    }
+}
+
+struct Writer<S> {
+    bytes: S,
+    written: usize,
     nodes: usize,
     bounds: Bounds,
 }
-impl Writer {
+impl<S: Sink> Writer<S> {
     fn put(&mut self, bytes: &[u8]) -> Result<()> {
-        if bytes.len() > self.bounds.bytes.saturating_sub(self.bytes.len()) {
+        if bytes.len() > self.bounds.bytes.saturating_sub(self.written) {
             return Err(INVALID);
         }
-        self.bytes.extend_from_slice(bytes);
+        self.bytes.append(bytes);
+        self.written += bytes.len();
         Ok(())
     }
     fn major(&mut self, major: u8, size: u64) -> Result<()> {
@@ -419,6 +452,7 @@ impl Writer {
     fn child(&mut self, term: &Term, depth: usize) -> Result<Vec<u8>> {
         let mut child = Writer {
             bytes: Vec::new(),
+            written: 0,
             nodes: self.nodes,
             bounds: self.bounds,
         };
@@ -705,4 +739,162 @@ fn validate_delegation(fields: &[Term]) -> Result<()> {
         return Err(INVALID);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod sink_tests {
+    use super::*;
+
+    fn compare(term: &Term, bounds: Bounds) -> Result<Vec<u8>> {
+        let bytes = encode_bounded(term, bounds);
+        let mut hash = Writer {
+            bytes: Sha256::new(),
+            written: 0,
+            nodes: 0,
+            bounds,
+        };
+        let result = hash.term(term, 0);
+        assert_eq!(bytes.as_ref().map(|_| ()), result.as_ref().map(|_| ()));
+        if let Ok(bytes) = &bytes {
+            assert_eq!(hash.written, bytes.len());
+            assert_eq!(
+                hash.bytes.finalize().as_slice(),
+                Sha256::digest(bytes).as_slice()
+            );
+        }
+        bytes
+    }
+
+    #[test]
+    fn digest_sink_matches_bytes_and_refusals() {
+        let terms = vec![
+            Term::Nil,
+            Term::Bool(false),
+            Term::Bool(true),
+            Term::Integer(23),
+            Term::Integer(24),
+            Term::Integer(255),
+            Term::Integer(256),
+            Term::Integer(65535),
+            Term::Integer(65536),
+            Term::Integer(u32::MAX as u64),
+            Term::Integer(u64::MAX),
+            Term::Binary(vec![0, 255, 42]),
+            Term::Atom("author".into()),
+            Term::List(vec![Term::Nil, Term::Bool(true)]),
+            Term::Tuple(vec![Term::Integer(1)]),
+            Term::Set(vec![Term::Integer(24), Term::Integer(1)]),
+            Term::Set(vec![Term::Nil, Term::Nil]),
+            Term::Map(vec![
+                (Term::Integer(24), Term::Nil),
+                (Term::Integer(1), Term::Bool(true)),
+            ]),
+            Term::Map(vec![(Term::Nil, Term::Nil), (Term::Nil, Term::Bool(true))]),
+            Term::Delegation(vec![]),
+            Term::Delegation(vec![
+                Term::Binary(vec![]),
+                Term::Binary(vec![]),
+                Term::Binary(vec![0; 32]),
+                Term::Binary(vec![1; 32]),
+                Term::Nil,
+                Term::List(vec![]),
+                Term::List(vec![]),
+                Term::Bool(false),
+                Term::Binary(vec![0; 64]),
+            ]),
+        ];
+        for term in &terms {
+            for bytes in 0..32 {
+                for nodes in 0..8 {
+                    for depth in 0..4 {
+                        let _ = compare(
+                            term,
+                            Bounds {
+                                bytes,
+                                nodes,
+                                depth,
+                            },
+                        );
+                    }
+                }
+            }
+            let result = compare(term, OBSERVATION);
+            assert_eq!(
+                hash_observation(term),
+                result.map(|bytes| Sha256::digest(bytes).into())
+            );
+        }
+    }
+
+    #[test]
+    fn cutoff_record_child_buffers_keep_exact_byte_accounting() {
+        let record = |rejected| {
+            let mut fields = vec![
+                (Term::Atom("id".into()), Term::Binary(vec![1; 43])),
+                (Term::Atom("bytes".into()), Term::Binary(vec![2; 4096])),
+                (Term::Atom("sig".into()), Term::Binary(vec![3; 64])),
+            ];
+            if rejected {
+                fields.push((
+                    Term::Atom("reason".into()),
+                    Term::Atom("bad_signature".into()),
+                ));
+            }
+            Term::Map(fields)
+        };
+        let term = Term::List(vec![
+            Term::Binary(b"lattice-treehouse-recovery-cutoff-v1".to_vec()),
+            Term::Binary(b"replica".to_vec()),
+            Term::List(vec![record(false), record(false)]),
+            Term::List(vec![record(true)]),
+        ]);
+        let size = encode_observation(&term).unwrap().len();
+        for bytes in [size - 1, size, size + 1] {
+            for nodes in 0..40 {
+                for depth in 0..7 {
+                    let _ = compare(
+                        &term,
+                        Bounds {
+                            bytes,
+                            nodes,
+                            depth,
+                        },
+                    );
+                }
+            }
+        }
+        assert!(compare(
+            &term,
+            Bounds {
+                bytes: size - 1,
+                ..OBSERVATION
+            }
+        )
+        .is_err());
+        assert!(compare(
+            &term,
+            Bounds {
+                bytes: size,
+                ..OBSERVATION
+            }
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn digest_sink_keeps_observation_limits_separate() {
+        let large = Term::Binary(vec![42; MAX_BYTES]);
+        assert!(compare(&large, ARTIFACT).is_err());
+        assert!(encode(&large).is_err());
+        assert_eq!(
+            hash_observation(&large).unwrap().as_slice(),
+            Sha256::digest(encode_observation(&large).unwrap()).as_slice()
+        );
+        let mut term = Term::Nil;
+        for _ in 0..=MAX_DEPTH + 1 {
+            let _ = compare(&term, ARTIFACT);
+            let _ = compare(&term, OBSERVATION);
+            term = Term::List(vec![term]);
+        }
+    }
 }

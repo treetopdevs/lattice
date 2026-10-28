@@ -7,9 +7,11 @@ The original reproduction showed TypeScript rejecting a saved historical catalog
 fork with a singleton blocked.catalogs index while BEAM retained catalog_fork.
 An underlying signed graph fork does not prove that its saved witness index is
 valid. Both source owners now independently validate all supplied witness lists.
-Native adoption, the unchanged original-only regression and remaining plan267
-proof are still required. The dependent ordering integration retains its own
-review and hosted gates. Evidence is recorded in the PR and running decision log.
+The native guards are integrated locally and their focused comparison passes;
+the unchanged original-only regression also passes after source adoption.
+Combined native verification and remaining resource proof stay under plan267.
+The dependent ordering source gate is complete. Evidence is recorded in the PR
+and running decision log.
 
 ## Decision and scope
 

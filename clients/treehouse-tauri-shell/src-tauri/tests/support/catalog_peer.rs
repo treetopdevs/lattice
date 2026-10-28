@@ -4,6 +4,11 @@ use std::{path::PathBuf, process::Command};
 #[path = "peer_response.rs"]
 mod peer_response;
 
+/// Optional local resource fixtures belong to test support, never production.
+pub fn fixture_path(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name)
+}
+
 pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -21,7 +26,15 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
             "run",
             "--no-compile",
             "--no-start",
-            if mode == "chains-produce" {
+            if mode == "capacity-consume" {
+                "scripts/treehouse_native_catalog_capacity_peer.exs"
+            } else if mode == "number-input-produce" {
+                "scripts/treehouse_native_catalog_number_input_peer.exs"
+            } else if mode == "full-input-produce" {
+                "scripts/treehouse_native_catalog_full_input_peer.exs"
+            } else if mode == "resolver-consume" {
+                "scripts/treehouse_native_catalog_resolver_peer.exs"
+            } else if mode == "chains-produce" {
                 "scripts/treehouse_native_catalog_chain_peer.exs"
             } else {
                 "scripts/treehouse_native_catalog_history_peer.exs"
@@ -32,7 +45,67 @@ pub fn output(runtime: &str, mode: &str, input: Option<&Value>, max_bytes: usize
     } else {
         let mut command = Command::new("node");
         command.current_dir(root().join("clients/lattice-client"));
-        if mode == "chains-produce" {
+        if mode == "resolver-consume" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_resolver_peer.ts",
+                "consume",
+            ]);
+        } else if mode == "capacity-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_capacity_peer.ts",
+            ]);
+        } else if mode == "refusal-resource-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_refusal_resource_peer.ts",
+            ]);
+        } else if mode == "resource-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_resource_peer.ts",
+            ]);
+        } else if mode == "number-values-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/catalog_raw_number_peer.ts",
+                "metadata",
+            ]);
+        } else if mode == "saved-witness-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/catalog_saved_witness_peer.ts",
+            ]);
+        } else if mode == "decision-order-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/catalog_decision_order_peer.ts",
+            ]);
+        } else if mode == "incoming-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                "test/support/native_catalog_incoming_peer.ts",
+            ]);
+        } else if mode == "resolver-produce" || mode == "witness-produce" {
+            command.args([
+                "--import",
+                "tsx",
+                if mode == "resolver-produce" {
+                    "test/support/native_catalog_resolver_peer.ts"
+                } else {
+                    "test/support/native_catalog_witness_peer.ts"
+                },
+            ]);
+        } else if mode == "chains-produce" {
             command.args([
                 "--import",
                 "tsx",

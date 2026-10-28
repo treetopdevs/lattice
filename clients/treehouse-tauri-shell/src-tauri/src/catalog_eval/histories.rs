@@ -12,7 +12,10 @@ use super::{
     json,
     reader::ReadableFrame,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 
 const HISTORY: &str = "invalid_verified_history";
 
@@ -38,19 +41,119 @@ pub struct AuthenticatedHistories {
     histories: BTreeMap<String, AuthenticatedHistory>,
 }
 impl AuthenticatedHistories {
+    /// Authenticate raw history fragments after a first-representation-preserving
+    /// union. Neither input is designated trusted. A retained resolver must first
+    /// validate its original snapshot independently; this component cannot prove
+    /// watermarks, historical witnesses, installed provenance or eligibility.
+    pub fn authenticate_union(
+        saved: &serde_json::Value,
+        incoming: &serde_json::Value,
+    ) -> Result<Self, HistoryError> {
+        let error = |reason| HistoryError {
+            reason,
+            ids: Vec::new(),
+        };
+        let lists = [saved.as_array(), incoming.as_array()];
+        let [Some(saved_rows), Some(incoming_rows)] = lists else {
+            return Err(error(HISTORY));
+        };
+        for list in [saved_rows, incoming_rows] {
+            for raw in list {
+                if !closed_object(raw, &["replica", "frames", "rejected"])
+                    || !raw["replica"].as_str().is_some_and(|s| !s.is_empty())
+                    || !raw["frames"].is_array()
+                    || !raw["rejected"].as_array().is_some_and(|rows| {
+                        rows.iter().all(|row| {
+                            closed_object(row, &["frame", "reason"])
+                                && row["reason"] == "bad_signature"
+                        })
+                    })
+                {
+                    return Err(error(HISTORY));
+                }
+            }
+        }
+        for list in [saved_rows, incoming_rows] {
+            for raw in list {
+                let name = raw["replica"].as_str().expect("history shape");
+                if !catalog_family(name) {
+                    return Err(error("wrong_catalog_scope"));
+                }
+            }
+        }
+        for value in [saved, incoming] {
+            if !json::within_observation(value, 203) {
+                return Err(error(HISTORY));
+            }
+        }
+        // Incoming authenticity and rejected portability precede the merge. An
+        // accepted fragment need not be closed or portable until retained union.
+        for raw in incoming_rows {
+            authenticate_frames(raw).map_err(error)?;
+        }
+        validate_rejected(incoming_rows)?;
+        // Borrow first fragments until ownership is actually needed. A shared
+        // family builds its merged rows directly instead of cloning the saved
+        // history and then replacing both of its frame arrays.
+        let mut union: BTreeMap<&str, Cow<'_, serde_json::Value>> = BTreeMap::new();
+        for list in [saved_rows, incoming_rows] {
+            let mut seen = BTreeSet::new();
+            for raw in list {
+                let name = raw["replica"].as_str().expect("history shape");
+                if !seen.insert(name) {
+                    return Err(error(HISTORY));
+                }
+                if let Some(prior) = union.get_mut(name) {
+                    let frames = merge_frames(
+                        prior["frames"].as_array().expect("history shape"),
+                        raw["frames"].as_array().expect("history shape"),
+                        false,
+                    )?;
+                    let rejected = merge_frames(
+                        prior["rejected"].as_array().expect("history shape"),
+                        raw["rejected"].as_array().expect("history shape"),
+                        true,
+                    )?;
+                    *prior = Cow::Owned(serde_json::Value::Object(serde_json::Map::from_iter([
+                        ("replica".into(), serde_json::Value::String(name.to_owned())),
+                        ("frames".into(), serde_json::Value::Array(frames)),
+                        ("rejected".into(), serde_json::Value::Array(rejected)),
+                    ])));
+                } else {
+                    union.insert(name, Cow::Borrowed(raw));
+                }
+            }
+        }
+        let merged = serde_json::Value::Array(union.into_values().map(Cow::into_owned).collect());
+        if !json::within_observation(&merged, 203) {
+            return Err(error(HISTORY));
+        }
+        let serde_json::Value::Array(merged_rows) = merged else {
+            unreachable!("array union")
+        };
+        let mut observed = Self::authenticate_values(merged_rows, false)?;
+        // Source canonicalizes row/frame indexes while preserving each first raw
+        // frame object, including its supplied dependency representation.
+        for history in observed.histories.values_mut() {
+            history.raw["frames"]
+                .as_array_mut()
+                .unwrap()
+                .sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+            history.raw["rejected"]
+                .as_array_mut()
+                .unwrap()
+                .sort_by(|a, b| a["frame"]["id"].as_str().cmp(&b["frame"]["id"].as_str()));
+        }
+        Ok(observed)
+    }
+
     pub fn authenticate(raw_histories: &[(&str, &[u8])]) -> Result<Self, HistoryError> {
         let error = |reason| HistoryError {
             reason,
             ids: Vec::new(),
         };
-        let mut histories = BTreeMap::new();
+        let mut values = Vec::with_capacity(raw_histories.len());
         let mut unsupported = false;
-        let mut names = BTreeSet::new();
-        let mut parsed = Vec::with_capacity(raw_histories.len());
-        let mut missing = BTreeSet::new();
-        // Raw authentication of the entire set precedes fetch/portability results.
-        // Do not run the strict DAG reader yet: authentic depth-65 observation
-        // must retain its cutoff refusal rather than becoming a frame error.
         for (name, bytes) in raw_histories {
             let raw = match json::parse_observation(bytes) {
                 Ok(raw) => raw,
@@ -60,9 +163,34 @@ impl AuthenticatedHistories {
                 }
                 Err(_) => return Err(error(HISTORY)),
             };
+            if raw["replica"].as_str() != Some(*name) {
+                return Err(error(HISTORY));
+            }
+            values.push(raw);
+        }
+        Self::authenticate_values(values, unsupported)
+    }
+
+    fn authenticate_values(
+        values: Vec<serde_json::Value>,
+        mut unsupported: bool,
+    ) -> Result<Self, HistoryError> {
+        let error = |reason| HistoryError {
+            reason,
+            ids: Vec::new(),
+        };
+        let mut histories = BTreeMap::new();
+        let mut names = BTreeSet::new();
+        let mut parsed = Vec::with_capacity(values.len());
+        let mut missing = BTreeSet::new();
+        // Authenticate the entire union before pending/portable classification.
+        for raw in values {
+            let name = raw["replica"]
+                .as_str()
+                .ok_or_else(|| error(HISTORY))?
+                .to_owned();
             if !closed_object(&raw, &["replica", "frames", "rejected"])
-                || raw["replica"].as_str() != Some(*name)
-                || !names.insert(*name)
+                || !names.insert(name.clone())
             {
                 return Err(error(HISTORY));
             }
@@ -74,16 +202,13 @@ impl AuthenticatedHistories {
                 .expect("authenticated shape")
                 .is_empty()
             {
-                let rejected =
-                    serde_json::json!({"replica":name,"frames":[],"rejected":raw["rejected"]});
-                let bytes = serde_json::to_vec(&rejected).map_err(|_| error(HISTORY))?;
-                match cutoff::derive(&bytes) {
+                match rejected_portability(&raw) {
                     Ok(_) => {}
                     Err(e) if e.reason == "unsupported_cutoff" => unsupported = true,
                     Err(_) => return Err(error(HISTORY)),
                 }
             }
-            parsed.push((*name, *bytes, raw));
+            parsed.push((name, raw));
         }
         if unsupported {
             return Err(error("unsupported_cutoff"));
@@ -95,8 +220,8 @@ impl AuthenticatedHistories {
             });
         }
         // Only complete evidence reaches the unchanged closed cutoff primitive.
-        for (name, bytes, raw) in parsed {
-            let observation = match cutoff::derive(bytes) {
+        for (name, raw) in parsed {
+            let observation = match cutoff::derive_value(&raw) {
                 Ok(observation) => observation,
                 Err(cutoff_error) if cutoff_error.reason == "unsupported_cutoff" => {
                     unsupported = true;
@@ -111,10 +236,13 @@ impl AuthenticatedHistories {
                 .as_array()
                 .ok_or_else(|| error(HISTORY))?
                 .iter()
-                .map(|frame| serde_json::to_vec(frame).map_err(|_| error(HISTORY)))
+                .map(|frame| {
+                    let view = super::raw_numbers::frame_view(frame).map_err(|_| error(HISTORY))?;
+                    serde_json::to_vec(view.as_ref()).map_err(|_| error(HISTORY))
+                })
                 .collect::<Result<_, _>>()?;
             let refs: Vec<&[u8]> = frames.iter().map(Vec::as_slice).collect();
-            let dag = AuthenticDag::authenticate(name, &refs)?;
+            let dag = AuthenticDag::authenticate_accounted(&name, &refs)?;
             let mut readable = true;
             for frame in &frames {
                 match ReadableFrame::verify(frame) {
@@ -146,6 +274,89 @@ impl AuthenticatedHistories {
     }
 }
 
+fn rejected_portability(raw: &serde_json::Value) -> Result<(), cutoff::CutoffError> {
+    let rejected =
+        serde_json::json!({"replica":raw["replica"],"frames":[],"rejected":raw["rejected"]});
+    cutoff::derive_value(&rejected).map(|_| ())
+}
+
+fn validate_rejected(rows: &[serde_json::Value]) -> Result<(), HistoryError> {
+    let mut unsupported = false;
+    for raw in rows {
+        match rejected_portability(raw) {
+            Ok(_) => {}
+            Err(error) if error.reason == "unsupported_cutoff" => unsupported = true,
+            Err(_) => {
+                return Err(HistoryError {
+                    reason: HISTORY,
+                    ids: Vec::new(),
+                })
+            }
+        }
+    }
+    if unsupported {
+        Err(HistoryError {
+            reason: "unsupported_cutoff",
+            ids: Vec::new(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn merge_frames(
+    saved: &[serde_json::Value],
+    incoming: &[serde_json::Value],
+    rejected: bool,
+) -> Result<Vec<serde_json::Value>, HistoryError> {
+    let mut merged: BTreeMap<&str, &serde_json::Value> = BTreeMap::new();
+    fn frame(value: &serde_json::Value, rejected: bool) -> &serde_json::Value {
+        if rejected {
+            &value["frame"]
+        } else {
+            value
+        }
+    }
+    for list in [saved, incoming] {
+        let mut seen = BTreeSet::new();
+        for item in list {
+            let raw = frame(item, rejected);
+            let id = raw["id"].as_str().ok_or_else(|| HistoryError {
+                reason: HISTORY,
+                ids: Vec::new(),
+            })?;
+            if !seen.insert(id) {
+                return Err(HistoryError {
+                    reason: HISTORY,
+                    ids: Vec::new(),
+                });
+            }
+            if let Some(prior) = merged.get(id) {
+                let fingerprint = |raw| {
+                    super::frame::inspect_value(raw)
+                        .map(|proof| (proof.payload, raw["sig"].clone()))
+                };
+                if !matches!((fingerprint(frame(prior, rejected)), fingerprint(raw)), (Ok(a), Ok(b)) if a == b)
+                {
+                    return Err(HistoryError {
+                        reason: HISTORY,
+                        ids: vec![id.to_owned()],
+                    });
+                }
+            } else {
+                merged.insert(id, item);
+            }
+        }
+    }
+    Ok(merged.into_values().cloned().collect())
+}
+
+pub(super) fn catalog_family(name: &str) -> bool {
+    super::delegations::bounded_family(name)
+        && (name.starts_with("replica:treehouse:space:")
+            || name.starts_with("replica:treehouse:thread:"))
+}
+
 // Portability can refuse a representable observation before returning a cutoff.
 // Accepted evidence must already have authentic signed content; rejected evidence
 // must not relabel an authentic operation as a bad signature. Unrepresentable
@@ -155,7 +366,11 @@ fn closed_object(value: &serde_json::Value, keys: &[&str]) -> bool {
         fields.len() == keys.len() && keys.iter().all(|key| fields.contains_key(*key))
     })
 }
-fn authenticate_frames(raw: &serde_json::Value) -> Result<BTreeSet<String>, &'static str> {
+// Shared authenticity-only stage for incoming fragments. A missing dependency
+// is an observation, not a portability/closure verdict before retained union.
+pub(super) fn authenticate_frames(
+    raw: &serde_json::Value,
+) -> Result<BTreeSet<String>, &'static str> {
     let replica = raw["replica"].as_str().ok_or(HISTORY)?;
     let mut ids = BTreeSet::new();
     let mut dependencies = BTreeSet::new();

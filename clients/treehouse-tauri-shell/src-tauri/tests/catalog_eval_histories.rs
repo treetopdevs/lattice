@@ -81,3 +81,124 @@ fn owned_histories_keep_raw_transport_separate_from_normalized_authenticated_fra
         expected["frames"].as_array().unwrap().len()
     );
 }
+
+#[test]
+fn union_authenticates_fragments_before_fetch_and_retains_first_signed_alias() {
+    let replica = "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    let signer = ed25519_dalek::SigningKey::from_bytes(&[73; 32]);
+    let parent = catalog_author::signed(
+        &signer,
+        replica,
+        &[],
+        "command",
+        json!([
+            "tuple",
+            [["atom", "post"], ["list", [catalog_author::text("parent")]]]
+        ]),
+        json!(["nil"]),
+    );
+    let id = parent["id"].as_str().unwrap().to_owned();
+    let child = catalog_author::signed(
+        &signer,
+        replica,
+        std::slice::from_ref(&id),
+        "command",
+        json!([
+            "tuple",
+            [["atom", "post"], ["list", [catalog_author::text("child")]]]
+        ]),
+        json!(["nil"]),
+    );
+    let saved = json!([{"replica":replica,"frames":[parent],"rejected":[]}]);
+    let mut alias = child.clone();
+    alias["deps"].as_array_mut().unwrap().push(json!(id));
+    let incoming = json!([{"replica":replica,"frames":[alias],"rejected":[]}]);
+    let observed = AuthenticatedHistories::authenticate_union(&saved, &incoming).unwrap();
+    let kept = observed.get(replica).unwrap().raw()["frames"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["id"] == child["id"])
+        .unwrap();
+    assert_eq!(kept["deps"], json!([id.clone(), id.clone()]));
+    // A later authentic alias coalesces by signed identity without replacing
+    // the already retained raw representation.
+    let reopened = json!([observed.get(replica).unwrap().raw()]);
+    let canonical = json!([{"replica":replica,"frames":[child.clone()],"rejected":[]}]);
+    assert_eq!(
+        AuthenticatedHistories::authenticate_union(&reopened, &canonical)
+            .unwrap()
+            .get(replica)
+            .unwrap()
+            .raw(),
+        observed.get(replica).unwrap().raw()
+    );
+    let missing = AuthenticatedHistories::authenticate_union(&json!([]), &canonical).unwrap_err();
+    assert_eq!(missing.reason, "trust_pending");
+    assert_eq!(missing.ids, vec![id]);
+    let mut forged = canonical.clone();
+    forged[0]["frames"][0]["sig"] = json!(
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+    );
+    assert_eq!(
+        AuthenticatedHistories::authenticate_union(&json!([]), &forged)
+            .unwrap_err()
+            .reason,
+        "invalid_verified_history"
+    );
+    let duplicate = json!([incoming[0].clone(), incoming[0].clone()]);
+    assert_eq!(
+        AuthenticatedHistories::authenticate_union(&saved, &duplicate)
+            .unwrap_err()
+            .reason,
+        "invalid_verified_history"
+    );
+    let duplicates_in_origin =
+        json!([{"replica":replica,"frames":[child.clone(),child],"rejected":[]}]);
+    assert_eq!(
+        AuthenticatedHistories::authenticate_union(&saved, &duplicates_in_origin)
+            .unwrap_err()
+            .reason,
+        "invalid_verified_history"
+    );
+}
+
+#[test]
+fn rejected_union_detects_same_claimed_id_with_different_signed_content() {
+    let replica = "replica:treehouse:thread:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#authority:bounded-continuation-v1#root:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    let signer = ed25519_dalek::SigningKey::from_bytes(&[74; 32]);
+    let author = |message| {
+        catalog_author::signed(
+            &signer,
+            replica,
+            &[],
+            "command",
+            json!([
+                "tuple",
+                [["atom", "post"], ["list", [catalog_author::text(message)]]]
+            ]),
+            json!(["nil"]),
+        )
+    };
+    let mut left = author("left");
+    let mut right = author("right");
+    // Both are valid bad-hash evidence under one diagnostic claimed id. Payload
+    // and signature, rather than the unverified claimed id, must detect conflict.
+    left["id"] = json!("diagnostic");
+    right["id"] = left["id"].clone();
+    let history = |frame| json!([{"replica":replica,"frames":[],"rejected":[{"frame":frame,"reason":"bad_signature"}]}]);
+    let saved = history(left.clone());
+    let before = saved.clone();
+    let error = AuthenticatedHistories::authenticate_union(&saved, &history(right)).unwrap_err();
+    assert_eq!(error.reason, "invalid_verified_history");
+    assert_eq!(error.ids, vec!["diagnostic"]);
+    assert_eq!(saved, before);
+    assert_eq!(
+        AuthenticatedHistories::authenticate_union(&saved, &history(left))
+            .unwrap()
+            .get(replica)
+            .unwrap()
+            .raw(),
+        &saved[0]
+    );
+}
