@@ -81,3 +81,44 @@ fn owned_histories_keep_raw_transport_separate_from_normalized_authenticated_fra
         expected["frames"].as_array().unwrap().len()
     );
 }
+
+#[test]
+fn empty_history_replica_is_invalid_not_pending() {
+    // A correctly signed partial history under an empty replica name must be
+    // refused as malformed, as the BEAM owner's history_shape? does, rather than
+    // reported as waiting for its missing dependency.
+    let key = ed25519_dalek::SigningKey::from_bytes(&[67; 32]);
+    let missing = "A".repeat(43);
+    let frame = catalog_author::signed(
+        &key,
+        "",
+        &[missing.clone()],
+        "command",
+        json!(["nil"]),
+        json!(["nil"]),
+    );
+    let raw = json!({"replica": "", "frames": [frame], "rejected": []});
+    let encoded = serde_json::to_vec(&raw).unwrap();
+    let error = AuthenticatedHistories::authenticate(&[("", &encoded)])
+        .err()
+        .expect("empty replica must be refused");
+    assert_eq!(error.reason, "invalid_verified_history");
+    assert!(error.ids.is_empty());
+
+    // Control: the same partial shape under a real replica name stays pending.
+    let named = catalog_author::signed(
+        &key,
+        "r",
+        &[missing.clone()],
+        "command",
+        json!(["nil"]),
+        json!(["nil"]),
+    );
+    let raw = json!({"replica": "r", "frames": [named], "rejected": []});
+    let encoded = serde_json::to_vec(&raw).unwrap();
+    let error = AuthenticatedHistories::authenticate(&[("r", &encoded)])
+        .err()
+        .expect("partial history is pending");
+    assert_eq!(error.reason, "trust_pending");
+    assert_eq!(error.ids, vec![missing]);
+}

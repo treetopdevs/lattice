@@ -60,7 +60,9 @@ impl AuthenticatedHistories {
                 }
                 Err(_) => return Err(error(HISTORY)),
             };
-            if !closed_object(&raw, &["replica", "frames", "rejected"])
+            // An empty history identity is malformed, never repairable (BEAM text?).
+            if name.is_empty()
+                || !closed_object(&raw, &["replica", "frames", "rejected"])
                 || raw["replica"].as_str() != Some(*name)
                 || !names.insert(*name)
             {
