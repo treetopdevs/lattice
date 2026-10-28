@@ -2,7 +2,7 @@ import { parseCatalogArtifactJson } from "./treehouse_catalog_json";
 import { portableUint64Scalar } from "./uint64";
 import { verifyEd25519 } from "./signature";
 import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
-import { copyCatalogInput } from "./treehouse_catalog_input_copy";
+import { copyCatalogInput, CatalogInputResourceError } from "./treehouse_catalog_input_copy";
 // This module proposes decisions over an adapter-owned complete snapshot. It
 // performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
 // installation receipt. The expected token is reflected for the trusted adapter
@@ -60,7 +60,7 @@ export async function evaluateTreehouseCatalogTrust(input) {
             fail("malformed_catalog");
         let original;
         try {
-            original = copyInput(ownValue(input, "installed"));
+            original = copyCatalogInput(ownValue(input, "installed"), "snapshot");
             if (!stateValid(original))
                 fail("trust_recovery_required");
         }
@@ -71,7 +71,13 @@ export async function evaluateTreehouseCatalogTrust(input) {
         // saved corruption, nor may callers mutate a page while saved validation awaits.
         let candidate, candidateError;
         try {
-            candidate = copyInput({ expected: ownValue(input, "expected"), incoming: ownValue(input, "incoming") });
+            const origins = { expected: ownValue(input, "expected"), incoming: ownValue(input, "incoming") };
+            try {
+                candidate = copyCatalogInput(origins, "incoming");
+            }
+            catch (error) {
+                throw error instanceof CatalogInputResourceError ? candidateResourceRefusal(origins) : error;
+            }
         }
         catch (error) {
             candidateError = error;
@@ -428,6 +434,44 @@ function ownValue(value, key) {
     if (descriptor === undefined || !Object.hasOwn(descriptor, "value"))
         fail("malformed_catalog");
     return descriptor.value;
+}
+// Used only after a proven resource refusal, while still synchronous. Read
+// bounded outer shape facts without getters; retain no caller data for later use.
+function shallowOwnData(value, names) {
+    if (value === null || typeof value !== "object" || Array.isArray(value))
+        return null;
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null)
+        return null;
+    const result = Object.create(null);
+    let count = 0;
+    for (const key in value) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (descriptor === undefined || !descriptor.enumerable)
+            continue;
+        if (++count > names.length || !names.includes(key) || !Object.hasOwn(descriptor, "value"))
+            return null;
+        result[key] = descriptor.value;
+    }
+    return count === names.length ? result : null;
+}
+function candidateResourceRefusal(origins) {
+    try {
+        const token = shallowOwnData(origins.expected, ["trustRevision", "historyGeneration"]);
+        const page = shallowOwnData(origins.incoming, ["catalogs", "rotations", "histories", "cutoffProofs"]);
+        if (!tokenValid(token) || page === null || !Object.values(page).every(Array.isArray))
+            return new Refusal("malformed_catalog");
+        const catalogCount = Object.getOwnPropertyDescriptor(page.catalogs, "length")?.value;
+        const rotationCount = Object.getOwnPropertyDescriptor(page.rotations, "length")?.value;
+        if (!safe(catalogCount) || !safe(rotationCount))
+            return new Refusal("malformed_catalog");
+        if (catalogCount + rotationCount > 32)
+            return new Refusal("control_history_limit");
+        return new Refusal("invalid_verified_history");
+    }
+    catch {
+        return new Refusal("malformed_catalog");
+    }
 }
 function copyInput(input) {
     return copyCatalogInput(input);

@@ -1,46 +1,102 @@
-import {CATALOG_RAW_NODE_LIMIT} from "./treehouse_catalog_raw_bounds";
+import {CATALOG_RAW_NODE_LIMIT, CATALOG_RAW_STRING_LIMIT, CATALOG_RAW_EVIDENCE_DEPTH_LIMIT} from "./treehouse_catalog_raw_bounds";
 
 function malformed(): never { throw new Error("malformed_catalog"); }
+export class CatalogInputResourceError extends Error {}
 
-// Storage buckets, not an input limit. Keep each weak table small even when
-// a valid observation contains millions of distinct composite values.
+// Small summaries fit a small integer; larger summaries use a single bigint.
+// No summary object is allocated for each of millions of small composites.
+type Summary = number | bigint;
+const metricBits = BigInt(Math.ceil(Math.log2(Math.max(CATALOG_RAW_NODE_LIMIT, CATALOG_RAW_STRING_LIMIT) + 2)));
+const metricMask = (1n << metricBits) - 1n;
+function summary(nodes: number, bytes: number, depth: number): Summary {
+  return nodes < 1024 && bytes < 1024 && depth < 256 ? nodes * 256 + depth + bytes * 262144 :
+    BigInt(nodes) | (BigInt(bytes) << metricBits) | (BigInt(depth) << (2n * metricBits));
+}
+const nodeCount = (v: Summary): number => typeof v === "number" ? Math.floor(v / 256) % 1024 : Number(v & metricMask);
+const stringCount = (v: Summary): number => typeof v === "number" ? Math.floor(v / 262144) : Number((v >> metricBits) & metricMask);
+const containerDepth = (v: Summary): number => typeof v === "number" ? v % 256 : Number(v >> (2n * metricBits));
+
 class CompletedObjects {
-  private readonly buckets = [new WeakSet<object>()];
+  private readonly buckets = [new WeakMap<object, Summary>()];
   private entries = 0;
-  has(value: object): boolean {
+  get(value: object): Summary | undefined {
     for (let index = this.buckets.length - 1; index >= 0; index--) {
-      if (this.buckets[index]!.has(value)) return true;
+      const found = this.buckets[index]!.get(value);
+      if (found !== undefined) return found;
     }
-    return false;
+    return undefined;
   }
-  add(value: object): void {
-    if (this.entries === 1_000_000) { this.buckets.push(new WeakSet<object>()); this.entries = 0; }
-    this.buckets[this.buckets.length - 1]!.add(value);
+  add(value: object, metrics: Summary): void {
+    if (this.entries === 1_000_000) { this.buckets.push(new WeakMap<object, Summary>()); this.entries = 0; }
+    this.buckets[this.buckets.length - 1]!.set(value, metrics);
     this.entries++;
   }
 }
 
-function* children(value: object): Generator<unknown> {
+// Count UTF-8 bytes without allocating an input-sized Uint8Array. Lone
+// surrogates cost the encoder's replacement bytes; validation still owns refusal.
+function stringBytes(value: string): number {
+  if (value.length > CATALOG_RAW_STRING_LIMIT) return CATALOG_RAW_STRING_LIMIT + 1;
+  let bytes = 0;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) bytes++;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length &&
+      value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) { bytes += 4; index++; }
+    else bytes += 3;
+    if (bytes > CATALOG_RAW_STRING_LIMIT) return CATALOG_RAW_STRING_LIMIT + 1;
+  }
+  return bytes;
+}
+interface Frame {
+  values: Iterator<unknown>; owner?: object; json: boolean; visible: boolean; depth: number;
+  nodes: number; bytes: number; height: number; activate: boolean; incomingRoot: boolean;
+}
+interface Budget { nodes: number; bytes: number; }
+class CaptureFrame implements Frame {
+  values: Iterator<unknown>;
+  json = false;
+  nodes = 1;
+  bytes = 0;
+  height = 0;
+  activate = false;
+  constructor(readonly owner: object, readonly visible: boolean, readonly depth: number,
+    readonly incomingRoot: boolean, budget: Budget | undefined) {
+    this.values = children(owner, this, budget);
+  }
+}
+
+function charge(budget: Budget, nodes: number, bytes: number): void {
+  budget.nodes += nodes; budget.bytes += bytes;
+  if (budget.nodes > CATALOG_RAW_NODE_LIMIT || budget.bytes > CATALOG_RAW_STRING_LIMIT) throw new CatalogInputResourceError();
+}
+function add(frame: Frame, nodes: number, bytes: number, height = 0): void {
+  frame.nodes = Math.min(CATALOG_RAW_NODE_LIMIT + 1, frame.nodes + nodes);
+  frame.bytes = Math.min(CATALOG_RAW_STRING_LIMIT + 1, frame.bytes + bytes);
+  frame.height = Math.min(CATALOG_RAW_EVIDENCE_DEPTH_LIMIT, Math.max(frame.height, height));
+}
+function* children(value: object, frame: Frame, budget: Budget | undefined): Generator<unknown> {
   const array = Array.isArray(value);
   let keys: (string | symbol)[];
   try { keys = Reflect.ownKeys(value); }
   catch (error) {
     if (!array || !(error instanceof RangeError)) throw error;
-    // Only this engine failure permits the operator-approved exception for
-    // hidden non-index decorations. Own enumerable keys and descriptors never read them;
-    // structuredClone drops them. Ordinary arrays keep all-own-key validation.
+    // Preserve the operator-approved engine-ceiling exception. This early
+    // capture failure is not reclassified as a later resource observation.
     const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
     if (!Number.isSafeInteger(length) || length < 0 || length > CATALOG_RAW_NODE_LIMIT) malformed();
     if (Object.getOwnPropertySymbols(value).length !== 0) malformed();
-    // Own-only enumeration avoids executing traps on an array's prototype.
     for (const key of Object.keys(value)) {
       const index = Number(key);
       if (!Number.isInteger(index) || index < 0 || index >= length || String(index) !== key) malformed();
     }
     for (let index = 0; index < length; index++) {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-      if (descriptor === undefined) continue; // Preserve sparse-array clone semantics.
+      if (descriptor === undefined) continue;
       if (!Object.hasOwn(descriptor, "value")) malformed();
+      frame.activate = false;
+      frame.json = descriptor.enumerable === true;
       yield descriptor.value;
     }
     return;
@@ -50,27 +106,66 @@ function* children(value: object): Generator<unknown> {
     if (typeof key !== "string") malformed();
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor === undefined || !Object.hasOwn(descriptor, "value")) malformed();
+    const index = array && budget !== undefined ? Number(key) : 0;
+    frame.activate = frame.incomingRoot && key === "incoming";
+    frame.json = budget !== undefined && descriptor.enumerable === true && (!array ||
+      (Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === key));
+    if (budget !== undefined && frame.json && !array) {
+      const bytes = stringBytes(key); add(frame, 1, bytes);
+      if (frame.visible) charge(budget, 1, bytes);
+    }
     yield descriptor.value;
   }
 }
 
-// JSON ownership only: this performs no signature, authority or trust validation.
-export function copyCatalogInput<T>(input: T): T {
-  const pending: {values: Iterator<unknown>; owner?: object}[] = [{values: [input].values()}];
+// JSON ownership only: no signature, authority or trust validation. Evidence
+// accounting is opt-in. Sparse holes remain unreadable at normal validation;
+// ignored metadata, copied array decorations and engine key-array costs stay open.
+export function copyCatalogInput<T>(input: T, evidenceBounds?: "snapshot" | "incoming"): T {
+  const budget: Budget | undefined = evidenceBounds !== undefined ? {nodes: 0, bytes: 0} : undefined;
+  const pending: Frame[] = [{values: [input].values(), json: true, visible: evidenceBounds === "snapshot", depth: -1, nodes: 0, bytes: 0, height: 0, activate: false, incomingRoot: false}];
   const active = new WeakSet<object>(), finished = new CompletedObjects();
   while (pending.length > 0) {
     const current = pending[pending.length - 1]!, next = current.values.next();
     if (next.done) {
-      if (current.owner !== undefined) { active.delete(current.owner); finished.add(current.owner); }
+      if (current.owner !== undefined) {
+        active.delete(current.owner);
+        const metrics = budget === undefined ? 0 : summary(current.nodes, current.bytes, current.height);
+        finished.add(current.owner, metrics);
+        const parent = pending[pending.length - 2]!;
+        if (budget !== undefined && parent.json) add(parent, current.nodes, current.bytes, current.height + 1);
+      }
       pending.pop(); continue;
     }
-    const value = next.value;
-    if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") continue;
+    const value = next.value, visible = current.activate || (current.visible && current.json);
+    if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") {
+      if (budget !== undefined && current.json) {
+        const bytes = typeof value === "string" ? stringBytes(value) : 0;
+        add(current, 1, bytes); if (visible) charge(budget, 1, bytes);
+      }
+      continue;
+    }
     if (typeof value !== "object" || active.has(value)) malformed();
-    if (finished.has(value)) continue;
+    const cached = finished.get(value);
+    if (cached !== undefined) {
+      if (budget !== undefined && current.json) {
+        const nodes = nodeCount(cached), bytes = stringCount(cached), height = containerDepth(cached);
+        add(current, nodes, bytes, height + 1);
+        if (visible) {
+          if ((current.activate ? 0 : current.depth + 1) + height >= CATALOG_RAW_EVIDENCE_DEPTH_LIMIT) throw new CatalogInputResourceError();
+          charge(budget, nodes, bytes);
+        }
+      }
+      continue;
+    }
     if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) malformed();
-    active.add(value);
-    pending.push({values: children(value), owner: value});
+    const depth = visible && !current.activate ? current.depth + 1 : 0;
+    if (budget !== undefined && visible) {
+      if (depth >= CATALOG_RAW_EVIDENCE_DEPTH_LIMIT) throw new CatalogInputResourceError();
+      charge(budget, 1, 0);
+    }
+    const frame = new CaptureFrame(value, visible, depth, evidenceBounds === "incoming" && value === input, budget);
+    active.add(value); pending.push(frame);
   }
   return structuredClone(input);
 }

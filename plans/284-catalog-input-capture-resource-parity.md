@@ -3,11 +3,12 @@
 ## Status
 
 IN PROGRESS: the operator approved the exception only after the engine's
-array-key enumeration ceiling; ordinary all-own-key checks remain strict.
+array-key enumeration ceiling; admitted-input own-key checks remain strict.
 The executable fresh full-size regression preserves the original RED; the
 corrected owner passes its focused GREEN across every planned complete decision.
-The engine-ceiling component passes local source gates and independent/adversarial
-review. Its exact-tip hosted source gate still precedes native adoption.
+The engine-ceiling component passes its local and hosted source gates.
+The separately approved [early admission design](research/284-preclone-admission-design.md)
+is implemented as a source component; its full gates and reviews remain open.
 Aggregate node/string/depth admission before every large clone in requirement4
 remains unproven. Keep this obligation open; iterator traversal and one fallback
 width check do not complete it or establish acceptable resource cost.
@@ -29,7 +30,8 @@ intermittent source history refusal.
 
 Correct the source capture mechanism, not native refusal reasons or limits.
 Scope the TypeScript catalog owner and a private capture helper if needed,
-its real public-owner regressions and generated SDK mirror, reciprocal BEAM
+its real public-owner regressions and generated SDK mirror, shared BEAM
+resource refusal priority and its unchanged boolean raw-bound APIs, reciprocal BEAM
 test support, and these plan/decision records. Keep authority, canonical bytes,
 reason enums, storage, installation and native production code unchanged.
 This is a generic input-ownership correction, not another witness/order case
@@ -51,7 +53,11 @@ complete public-source decisions.
    sparse arrays, enumerable/nonenumerable fields, null prototypes and unusual
    array properties must retain their existing observable outcome and phase.
 4. Retain the exact logical node/string/depth bounds, byte-adapter separation,
-   authentication-before-fetch and security-fallback stages. Validate bounds
+   authentication-before-fetch and security-fallback stages for admitted input.
+   The separately approved early resource refusal may outrank later candidate
+   diagnostics once overflow is proven; bounded outer checks and independent
+   saved recovery stay first. Earlier strict capture errors retain their priority.
+   Validate bounds
    before a large allocation, without requiring a fully populated per-element
    pending worklist or duplicating every container's property metadata.
 5. Do not call an index loop or for-in a complete solution unless it also

@@ -191,3 +191,68 @@ test("completed aliases in an older storage bucket are not inspected again", () 
     assert.throws(() => copyCatalogInput(rows), { name: "DataCloneError" });
     assert.equal(inspections, 1);
 });
+test("over-budget candidate refusal precedes later hidden metadata errors after saved recovery", async () => {
+    const fixture = await setup();
+    let getters = 0;
+    const catalogs = Object.defineProperty(["x".repeat(64 * 1024 * 1024 + 1)], "decoration", {
+        get() { getters++; throw Error("over-budget metadata getter executed"); },
+    });
+    const incoming = { ...fixture.incoming, catalogs };
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected, incoming }), {
+        kind: "reject", reason: "invalid_verified_history",
+        detail: { ids: [], coreReason: null, pendingProofIds: [] },
+    });
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: { ...fixture.installed, histories: [] }, expected, incoming }), {
+        kind: "reject", reason: "trust_recovery_required",
+        detail: { ids: [], coreReason: null, pendingProofIds: [] },
+    });
+    assert.equal(getters, 0);
+});
+test("UTF-8 bytes and repeated composite occurrences preserve admitted freezes and reject later over-budget metadata", async () => {
+    const fixture = await setup();
+    const baseline = await evaluateTreehouseCatalogTrust({ ...fixture, expected });
+    assert.equal(baseline.kind, "retain_blocked");
+    for (const payload of ["é".repeat(1_048_576), "🙂".repeat(524_288)]) {
+        const shared = { payload };
+        const within = { ...fixture.incoming, cutoffProofs: Array(31).fill(shared) };
+        assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected, incoming: within }), baseline);
+        let getters = 0;
+        const over = Object.defineProperty(Array(32).fill(shared), "decoration", {
+            get() { getters++; throw Error("later metadata getter executed"); },
+        });
+        assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected,
+            incoming: { ...fixture.incoming, cutoffProofs: over } }), {
+            kind: "reject", reason: "invalid_verified_history",
+            detail: { ids: [], coreReason: null, pendingProofIds: [] },
+        });
+        assert.equal(getters, 0);
+    }
+});
+test("expected and incoming keep one ownership walk for shared hidden metadata", async () => {
+    const fixture = await setup();
+    const baseline = await evaluateTreehouseCatalogTrust({ ...fixture, expected });
+    let inspections = 0;
+    const shared = new Proxy({ value: 0 }, { ownKeys(value) { inspections++; return Reflect.ownKeys(value); } });
+    const token = Object.defineProperty({ ...expected }, "hidden", { value: shared });
+    const incoming = Object.defineProperty({ ...fixture.incoming }, "hidden", { value: shared });
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected: token, incoming }), baseline);
+    assert.equal(inspections, 1);
+});
+test("earlier capture errors and ignored decoration data retain their existing outcomes", async () => {
+    const fixture = await setup();
+    const baseline = await evaluateTreehouseCatalogTrust({ ...fixture, expected });
+    const large = "x".repeat(64 * 1024 * 1024 + 1);
+    const hidden = Object.defineProperty({ ...fixture.incoming }, "decoration", { value: large });
+    const array = Object.assign([], { decoration: large });
+    for (const incoming of [hidden, { ...fixture.incoming, cutoffProofs: [array] }]) {
+        assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected, incoming }), baseline);
+    }
+    let getters = 0;
+    const early = Object.defineProperty([], "decoration", { get() { getters++; throw Error("early getter executed"); } });
+    const incoming = { cutoffProofs: [early], catalogs: [large], rotations: [], histories: fixture.incoming.histories };
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected, incoming }), {
+        kind: "reject", reason: "malformed_catalog",
+        detail: { ids: [], coreReason: null, pendingProofIds: [] },
+    });
+    assert.equal(getters, 0);
+});
