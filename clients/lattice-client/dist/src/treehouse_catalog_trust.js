@@ -574,6 +574,8 @@ async function validateStoredBlock(state, derived, catalogs, bindings, histories
         return false;
     };
     const independentBindings = saved.bindings.length > 1 && saved.bindings.every((a, i) => saved.bindings.slice(i + 1).every((b) => !bindingAncestor(a, b) && !bindingAncestor(b, a)));
+    if (saved.bindings.length > 1 && !independentBindings)
+        fail("trust_recovery_required");
     const catalogConflict = (a, b) => {
         const ca = catalogs.get(a).envelope.catalog, cb = catalogs.get(b).envelope.catalog;
         if (ca.binding !== cb.binding)
@@ -589,7 +591,7 @@ async function validateStoredBlock(state, derived, catalogs, bindings, histories
         if (!independentBindings || saved.bindings.length <= 2 || saved.bootstrapIds.length > 0)
             fail("trust_recovery_required");
     }
-    else if (!independentBindings && saved.catalogs.length === 0 && saved.bootstrapIds.length === 0)
+    else if (saved.bindings.length > 2 || (saved.catalogs.length === 0 && saved.bootstrapIds.length === 0 && !independentBindings))
         fail("trust_recovery_required");
 }
 async function validateBootstrapWitnesses(state, histories) {
