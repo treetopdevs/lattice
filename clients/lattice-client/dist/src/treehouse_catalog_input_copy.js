@@ -11,8 +11,10 @@ function summary(nodes, bytes, depth) {
 const nodeCount = (v) => typeof v === "number" ? Math.floor(v / 256) % 1024 : Number(v & metricMask);
 const stringCount = (v) => typeof v === "number" ? Math.floor(v / 262144) : Number((v >> metricBits) & metricMask);
 const containerDepth = (v) => typeof v === "number" ? v % 256 : Number(v >> (2n * metricBits));
-class CompletedObjects {
+class CaptureMemo {
     buckets = [new WeakMap()];
+    stringBuckets = [];
+    stringEntries = 0;
     entries = 0;
     get(value) {
         for (let index = this.buckets.length - 1; index >= 0; index--) {
@@ -21,6 +23,25 @@ class CompletedObjects {
                 return found;
         }
         return undefined;
+    }
+    byteLength(value) {
+        // This is a cache threshold, not admission. Repeated long strings in ignored
+        // metadata must not be rescanned through every distinct containing object.
+        if (value.length < 1024 || value.length > CATALOG_RAW_STRING_LIMIT)
+            return stringBytes(value);
+        for (let index = this.stringBuckets.length - 1; index >= 0; index--) {
+            const bytes = this.stringBuckets[index].get(value);
+            if (bytes !== undefined)
+                return bytes;
+        }
+        const bytes = stringBytes(value);
+        if (this.stringBuckets.length === 0 || this.stringEntries === 1_000_000) {
+            this.stringBuckets.push(new Map());
+            this.stringEntries = 0;
+        }
+        this.stringBuckets[this.stringBuckets.length - 1].set(value, bytes);
+        this.stringEntries++;
+        return bytes;
     }
     add(value, metrics) {
         if (this.entries === 1_000_000) {
@@ -55,6 +76,11 @@ function stringBytes(value) {
     }
     return bytes;
 }
+function exhaust(budget) {
+    const error = new CatalogInputResourceError();
+    budget.failure = error;
+    throw error;
+}
 class CaptureFrame {
     owner;
     visible;
@@ -66,26 +92,26 @@ class CaptureFrame {
     bytes = 0;
     height = 0;
     activate = false;
-    constructor(owner, visible, depth, incomingRoot, budget) {
+    constructor(owner, visible, depth, incomingRoot, budget, memo) {
         this.owner = owner;
         this.visible = visible;
         this.depth = depth;
         this.incomingRoot = incomingRoot;
-        this.values = children(owner, this, budget);
+        this.values = children(owner, this, budget, memo);
     }
 }
 function charge(budget, nodes, bytes) {
     budget.nodes += nodes;
     budget.bytes += bytes;
     if (budget.nodes > CATALOG_RAW_NODE_LIMIT || budget.bytes > CATALOG_RAW_STRING_LIMIT)
-        throw new CatalogInputResourceError();
+        exhaust(budget);
 }
 function add(frame, nodes, bytes, height = 0) {
     frame.nodes = Math.min(CATALOG_RAW_NODE_LIMIT + 1, frame.nodes + nodes);
     frame.bytes = Math.min(CATALOG_RAW_STRING_LIMIT + 1, frame.bytes + bytes);
     frame.height = Math.min(CATALOG_RAW_EVIDENCE_DEPTH_LIMIT, Math.max(frame.height, height));
 }
-function* children(value, frame, budget) {
+function* children(value, frame, budget, memo) {
     const array = Array.isArray(value);
     let keys;
     try {
@@ -131,7 +157,7 @@ function* children(value, frame, budget) {
         frame.json = budget !== undefined && descriptor.enumerable === true && (!array ||
             (Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === key));
         if (budget !== undefined && frame.json && !array) {
-            const bytes = stringBytes(key);
+            const bytes = memo.byteLength(key);
             add(frame, 1, bytes);
             if (frame.visible)
                 charge(budget, 1, bytes);
@@ -139,20 +165,29 @@ function* children(value, frame, budget) {
         yield descriptor.value;
     }
 }
-// JSON ownership only: no signature, authority or trust validation. Evidence
-// accounting is opt-in. Sparse holes remain unreadable at normal validation;
-// ignored metadata, copied array decorations and engine key-array costs stay open.
 export function copyCatalogInput(input, evidenceBounds) {
     const budget = evidenceBounds !== undefined ? { nodes: 0, bytes: 0 } : undefined;
+    try {
+        return capture(input, evidenceBounds, budget);
+    }
+    catch (error) {
+        // Caller metadata may throw an error from another capture. Only this
+        // walk's own measured overflow can change the owner's refusal priority.
+        if (error instanceof CatalogInputResourceError && error !== budget?.failure)
+            malformed();
+        throw error;
+    }
+}
+function capture(input, evidenceBounds, budget) {
     const pending = [{ values: [input].values(), json: true, visible: evidenceBounds === "snapshot", depth: -1, nodes: 0, bytes: 0, height: 0, activate: false, incomingRoot: false }];
-    const active = new WeakSet(), finished = new CompletedObjects();
+    const active = new WeakSet(), memo = new CaptureMemo();
     while (pending.length > 0) {
         const current = pending[pending.length - 1], next = current.values.next();
         if (next.done) {
             if (current.owner !== undefined) {
                 active.delete(current.owner);
                 const metrics = budget === undefined ? 0 : summary(current.nodes, current.bytes, current.height);
-                finished.add(current.owner, metrics);
+                memo.add(current.owner, metrics);
                 const parent = pending[pending.length - 2];
                 if (budget !== undefined && parent.json)
                     add(parent, current.nodes, current.bytes, current.height + 1);
@@ -163,7 +198,7 @@ export function copyCatalogInput(input, evidenceBounds) {
         const value = next.value, visible = current.activate || (current.visible && current.json);
         if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") {
             if (budget !== undefined && current.json) {
-                const bytes = typeof value === "string" ? stringBytes(value) : 0;
+                const bytes = typeof value === "string" ? memo.byteLength(value) : 0;
                 add(current, 1, bytes);
                 if (visible)
                     charge(budget, 1, bytes);
@@ -172,14 +207,14 @@ export function copyCatalogInput(input, evidenceBounds) {
         }
         if (typeof value !== "object" || active.has(value))
             malformed();
-        const cached = finished.get(value);
+        const cached = memo.get(value);
         if (cached !== undefined) {
             if (budget !== undefined && current.json) {
                 const nodes = nodeCount(cached), bytes = stringCount(cached), height = containerDepth(cached);
                 add(current, nodes, bytes, height + 1);
                 if (visible) {
                     if ((current.activate ? 0 : current.depth + 1) + height >= CATALOG_RAW_EVIDENCE_DEPTH_LIMIT)
-                        throw new CatalogInputResourceError();
+                        exhaust(budget);
                     charge(budget, nodes, bytes);
                 }
             }
@@ -190,10 +225,10 @@ export function copyCatalogInput(input, evidenceBounds) {
         const depth = visible && !current.activate ? current.depth + 1 : 0;
         if (budget !== undefined && visible) {
             if (depth >= CATALOG_RAW_EVIDENCE_DEPTH_LIMIT)
-                throw new CatalogInputResourceError();
+                exhaust(budget);
             charge(budget, 1, 0);
         }
-        const frame = new CaptureFrame(value, visible, depth, evidenceBounds === "incoming" && value === input, budget);
+        const frame = new CaptureFrame(value, visible, depth, evidenceBounds === "incoming" && value === input, budget, memo);
         active.add(value);
         pending.push(frame);
     }

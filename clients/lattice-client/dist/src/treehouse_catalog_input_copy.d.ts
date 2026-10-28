@@ -1,3 +1,5 @@
 export declare class CatalogInputResourceError extends Error {
 }
-export declare function copyCatalogInput<T>(input: T, evidenceBounds?: "snapshot" | "incoming"): T;
+type EvidenceRoot = "snapshot" | "incoming";
+export declare function copyCatalogInput<T>(input: T, evidenceBounds?: EvidenceRoot): T;
+export {};

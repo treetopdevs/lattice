@@ -115,3 +115,8 @@ charged against JSON limits; the latter can still be copied by structuredClone.
 Initialization, expected-token payloads, engine enumeration allocations and whole
 owner costs therefore remain explicit requirement4 work. No broader decoration
 rule, new quota or completed resource-envelope claim is implied.
+
+Long immutable string byte lengths are cached per capture to avoid rescanning
+shared text through distinct hidden objects. Cache buckets are storage only.
+Resource exceptions are correlated to the current walk's own measured overflow;
+a caller throwing a signal from a different capture retains ordinary refusal.

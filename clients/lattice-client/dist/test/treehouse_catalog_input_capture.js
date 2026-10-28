@@ -256,3 +256,20 @@ test("earlier capture errors and ignored decoration data retain their existing o
     });
     assert.equal(getters, 0);
 });
+test("an earlier capture's resource error cannot impersonate overflow in an in-bound candidate", async () => {
+    const fixture = await setup();
+    let foreign;
+    try {
+        copyCatalogInput(["x".repeat(64 * 1024 * 1024 + 1)], "snapshot");
+    }
+    catch (error) {
+        foreign = error;
+    }
+    assert.ok(foreign instanceof Error);
+    const row = new Proxy([], { ownKeys() { throw foreign; } });
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({ ...fixture, expected,
+        incoming: { ...fixture.incoming, cutoffProofs: [row] } }), {
+        kind: "reject", reason: "malformed_catalog",
+        detail: { ids: [], coreReason: null, pendingProofIds: [] },
+    });
+});
