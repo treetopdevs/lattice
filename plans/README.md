@@ -76,6 +76,11 @@ sequences plans 001–009 into gated phases (DX/CI foundation → v2 engine hygi
 hardening & docs), defines the single end-state and global validation loop, and records
 the integration/branch strategy. The direction spikes 010–013 are out of that goal.
 
+Plans281–282 correct independent raw JSON value and saved witness-integrity
+source disagreements that cannot be fixed by a generic native compatibility
+layer; plan267 requires separate protected source gates. They are not a platform
+or probe ladder.
+
 ## Execution order & status
 
 | Plan | Title | Priority | Effort | Depends on | Status |
@@ -458,6 +463,8 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 278 | [Space initialization genesis shape](278-space-initialization-genesis-shape.md) | P1 | S | Fresh CodeRabbit source parity reproduction; before native adoption | IN PROGRESS: actual TS/BEAM/native disagreement reproduced; shared source shape correction and neutral replay controls; review/gates remain. |
 | 279 | [Raw catalog product integer readability](279-raw-catalog-product-integer-readability.md) | P1 | M | Actual raw source mismatch and native composition review | IN PROGRESS: reviewed shared reader adopted; detailed pending and accepted readability composed; fresh public-owner proof passes; combined gates remain. |
 | 280 | [Retained catalog index order parity](280-retained-catalog-index-order-parity.md) | P1 | M | Before full native retained resolver | IN PROGRESS: #184; 37 fresh comparisons, local source/native gates and reviews pass; final hosted gate remains. |
+| 281 | [Catalog raw JSON number-value parity](281-catalog-raw-json-number-values.md) | P1 | M | Before native incoming adoption | IN PROGRESS: bounded numeric view/wrapper checks pass90 public-owner comparisons; independent/Sonnet reviews, full check/scans pass; hosted gate remains. |
+| 282 | [Saved catalog-fork witness integrity](282-saved-catalog-fork-witness-integrity.md) | P1 | M | Before native retained adoption | TODO: singleton saved catalog-fork witness differs across sources; require retained conflict partners/independent bindings before native adoption. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
