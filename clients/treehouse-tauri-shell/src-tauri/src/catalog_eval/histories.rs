@@ -164,6 +164,11 @@ fn authenticate_frames(raw: &serde_json::Value) -> Result<BTreeSet<String>, &'st
         if !inspected.authentic() || inspected.replica != replica || !ids.insert(inspected.id) {
             return Err(HISTORY);
         }
+        // Match the BEAM owner's text? guard: an empty dependency is malformed
+        // evidence, never a repairable missing ID.
+        if inspected.deps.iter().any(String::is_empty) {
+            return Err(HISTORY);
+        }
         dependencies.extend(inspected.deps);
     }
     let mut rejected_ids = BTreeSet::new();

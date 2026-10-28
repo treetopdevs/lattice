@@ -147,6 +147,21 @@ fn raw_history_authentication_missing_and_product_readability_match_both_public_
             vec!["A".repeat(43), "B".repeat(43)],
         ));
     add("authentic-missing", pending.clone(), Some("trust_pending"));
+    for (name, deps) in [
+        ("empty-dependency", vec![String::new()]),
+        (
+            "empty-dependency-beside-missing",
+            vec![String::new(), "A".repeat(43)],
+        ),
+    ] {
+        let mut hs = histories.clone();
+        hs[thread]["frames"].as_array_mut().unwrap().push(frame(
+            json!(["nil"]),
+            json!(["nil"]),
+            deps,
+        ));
+        add(name, hs, Some("invalid_verified_history"));
+    }
     let mut empty_id = frame(json!(["nil"]), json!(["nil"]), vec![]);
     empty_id["id"] = json!("");
     empty_id["sig"] = json!(
@@ -317,7 +332,7 @@ fn raw_history_authentication_missing_and_product_readability_match_both_public_
     let mut hs = histories.clone();
     hs[thread]["rejected"] = json!([{"frame":rejected,"reason":"bad_signature"}]);
     add("unreadable-rejected-record", hs, None);
-    assert_eq!(cases.len(), 24);
+    assert_eq!(cases.len(), 26);
     let mut both_orders = Vec::new();
     for case in cases {
         let mut reverse = case.clone();

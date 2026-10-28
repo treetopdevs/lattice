@@ -24,7 +24,7 @@ small-text aliases and foreign delegation metadata. Legacy typed decoding is
 unchanged. Fresh signed BEAM/TS public-owner cases cover malformed scalar forms,
 nested foreign records and exact-size controls; escaped strings and duplicate
 object names are independently pinned. This supplies no signature, authority,
-freshness or graph verdict. Entry proofs and graph transitions follow in step5;
+freshness or graph verdict. Entry proofs and graph transitions follow in step 5;
 no new frontier-count cap is introduced.
 
 The entry-fact component now binds authenticated raw histories to honored bootstrap,
@@ -47,9 +47,9 @@ Thread policy/projection is a component, not full application/catalog or install
 
 ## Current chain checkpoint
 
-The source no-op rotation disagreement is corrected by reviewed/gated plan274
+The source no-op rotation disagreement is corrected by reviewed/gated plan 274
 and adopted locally. Native structural observations now match actual public
-owner heads, links and exact refusals across21 TypeScript and29 independent
+owner heads, links and exact refusals across 21 TypeScript and 29 independent
 BEAM cases, both delivery orders. This clears the source STOP without changing
 the native transition reason. Authentication, chain resolution and head
 observations still do not establish cutoff completeness, historical entry

@@ -109,9 +109,9 @@ override a dependency's direct result.
 
 ## Budgets and evidence boundary
 
-The previous35-minute serial budget expired after BEAM and ordinary native passed.
-The45-minute remaining unit and50-minute native allocations include cold-install
-headroom; apt remains capped at15minutes. These are provisional bounded allocations,
+The previous 35-minute serial budget expired after BEAM and ordinary native passed.
+The 45-minute remaining unit and 50-minute native allocations include cold-install
+headroom; apt remains capped at 15 minutes. These are provisional bounded allocations,
 not observed cold-run timings. The final hosted gate must complete both jobs and
 record their step timings before this slice or the native checkpoint can claim
 hosted success. Failed or cancelled gates stay failed or cancelled. This split
