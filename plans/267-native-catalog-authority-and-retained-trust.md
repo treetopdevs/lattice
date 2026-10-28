@@ -104,6 +104,13 @@ original-state failures to recovery before considering incoming repair.
 
 ## Next integration: original-state validation and graph trust
 
+Plan283 SOURCE STOP: complete public decisions disagree on catalog collection
+preflight, historical route-collision blame and preserving an existing fork
+witness when a new bootstrap is honored. Adopt its separately reviewed, hosted
+gated source correction before native incoming integration; keep the fresh
+source agreement regression unchanged. Aggregate native resources and final
+installation/relay gates remain required.
+
 Plans281–282 SOURCE STOP: a saved authentic raw frame with JSON version1.0 is accepted
 by TypeScript but requires recovery in BEAM. The native original-only work is
 preserved in its separate resolver worktree. Review and gate the catalog-scoped
