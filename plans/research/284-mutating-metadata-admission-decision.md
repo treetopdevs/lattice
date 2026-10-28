@@ -31,11 +31,14 @@ The unpublished second-pass prototype reads twice and returns a retained-blocked
 decision. This demonstrates changed capture behavior, not an authentication bypass
 or installed trust: both retained-blocked decisions have closed eligibility.
 The prototype was archived and all its helper/generated edits restored to769df3f8.
+A subsequent run on that restored draft confirms one history probe and a
+conservative invalid_verified_history rejection; the extra-read prototype alone
+changes that control into a retained-blocked decision.
 
 | Control | Legacy owner | Source draft | Extra-read prototype |
 |---|---|---|---|
 | Shrinking hidden alias | retain_blocked | reject/invalid_verified_history | retain_blocked |
-| History changes on second probe | reject/malformed_catalog | not measured | retain_blocked |
+| History changes on second probe | reject/malformed_catalog | reject/invalid_verified_history | retain_blocked |
 
 The local `/tmp/lattice-preclone-mutated-alias-*` and
 `/tmp/lattice-preclone-extra-probe-*` controls retain complete decisions, code
