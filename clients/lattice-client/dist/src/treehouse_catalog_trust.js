@@ -2,6 +2,7 @@ import { parseCatalogArtifactJson } from "./treehouse_catalog_json";
 import { portableUint64Scalar } from "./uint64";
 import { verifyEd25519 } from "./signature";
 import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
+import { copyCatalogInput } from "./treehouse_catalog_input_copy";
 // This module proposes decisions over an adapter-owned complete snapshot. It
 // performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
 // installation receipt. The expected token is reflected for the trusted adapter
@@ -429,37 +430,7 @@ function ownValue(value, key) {
     return descriptor.value;
 }
 function copyInput(input) {
-    const pending = [{ value: input, leave: false }];
-    const active = new Set(), finished = new Set();
-    while (pending.length > 0) {
-        const { value, leave } = pending.pop();
-        if (leave && typeof value === "object" && value !== null) {
-            active.delete(value);
-            finished.add(value);
-            continue;
-        }
-        if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number")
-            continue;
-        if (typeof value !== "object" || active.has(value))
-            fail("malformed_catalog");
-        if (finished.has(value))
-            continue;
-        active.add(value);
-        pending.push({ value, leave: true });
-        if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
-            fail("malformed_catalog");
-        for (const key of Reflect.ownKeys(value)) {
-            if (Array.isArray(value) && key === "length")
-                continue;
-            if (typeof key !== "string")
-                fail("malformed_catalog");
-            const descriptor = Object.getOwnPropertyDescriptor(value, key);
-            if (!Object.hasOwn(descriptor, "value"))
-                fail("malformed_catalog");
-            pending.push({ value: descriptor.value, leave: false });
-        }
-    }
-    return structuredClone(input);
+    return copyCatalogInput(input);
 }
 const safe = (n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
 const text = (v) => typeof v === "string" && v.length > 0 && new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(encoder.encode(v)) === v;
