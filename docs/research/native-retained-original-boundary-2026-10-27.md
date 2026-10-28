@@ -129,3 +129,29 @@ functional suites do not close density/pure-value/historical-view cost accountin
 the previously recorded intermittent maximum-source refusal investigation, or
 installation/commit, real-relay and deployment readiness. Neither parsed snapshots
 nor private validated evaluator owners become installed trust by this increment.
+
+
+## First hosted attempt and CI allowance — 2026-10-28
+
+PR 189 is published against PR 187's branch at native head `5bfbe3ade`.
+Flagship run 40677839500's native job 122780767247 is cancelled by GitHub's
+50-minute job limit; its Required checks aggregate fails. The annotation explicitly
+reports maximum execution time;
+this is not a passing native gate. All 50 library tests pass with zero failures,
+ignores or filters in 2,677.68 seconds before integration testing begins.
+Cancellation occurs during entry integration; the tracing command never starts.
+All other required application/repository jobs pass, as does browser run
+40677839299. The PR merge tree equals the submitted head tree
+`519d052e185a53b0d3e722da9bb643da50df287f`.
+
+Increase only the native job's CI allowance from 50 to 120 minutes so both
+unfiltered variants can complete after setup. Two roughly 50-minute variants
+plus setup cannot fit the old combined allowance. Keep the separate 15-minute
+apt cap, test commands, concurrency, fixture producers and product limits
+unchanged. This scheduling correction grants no resource-cost acceptance or
+installation readiness. Preserve the cancelled attempt and run a fresh gate on
+the new exact tip; do not reuse the old green jobs as final-tip evidence.
+
+Two independent adversarial reviews find no actionable issue in this scheduling
+change. YAML syntax and diff-whitespace checks pass. Neither review establishes
+that the extended hosted run will finish; that verdict remains with the new gate.

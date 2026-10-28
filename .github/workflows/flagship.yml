@@ -617,8 +617,9 @@ jobs:
     name: Treehouse native ordinary + tracing
     needs: changes
     runs-on: ubuntu-latest
-    # Cold apt is separately capped at 15m; allow compilation and both real-peer suites.
-    timeout-minutes: 50
+    # Cold apt is separately capped at 15m. Retained trust tests replay fresh
+    # maximum-capacity evidence through TS/BEAM/native in both complete variants.
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
