@@ -457,6 +457,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 277 | [Treehouse native CI budget](277-treehouse-native-ci-budget.md) | P1 | M | 274/275; timed-out native checkpoint | IN PROGRESS: #181 000dad638 passes browser40342045591/Flagship40342046082; adopted; combined native checkpoint gate remains. |
 | 278 | [Space initialization genesis shape](278-space-initialization-genesis-shape.md) | P1 | S | Fresh CodeRabbit source parity reproduction; before native adoption | IN PROGRESS: actual TS/BEAM/native disagreement reproduced; shared source shape correction and neutral replay controls; review/gates remain. |
 | 279 | [Raw catalog product integer readability](279-raw-catalog-product-integer-readability.md) | P1 | M | Actual raw source mismatch and native composition review | IN PROGRESS: reviewed shared reader adopted; detailed pending and accepted readability composed; fresh public-owner proof passes; combined gates remain. |
+| 280 | [Retained catalog index order parity](280-retained-catalog-index-order-parity.md) | P1 | M | Before full native retained resolver | IN PROGRESS: #184; 37 fresh comparisons, local source/native gates and reviews pass; final hosted gate remains. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
