@@ -443,6 +443,12 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   const iosKeyReuseSmoke = readText(
     "clients/township-tauri-shell/test/tauri_ios_key_reuse_smoke.ts",
   );
+  const iosSimulatorKeyProbeSupport = readText(
+    "clients/township-tauri-shell/test/support/ios_simulator_key_probe.ts",
+  );
+  const iosKeyEraseControlSmoke = readText(
+    "clients/township-tauri-shell/test/tauri_ios_key_erase_control_smoke.ts",
+  );
   const iosKeyReuseBuildSupport = readText(
     "clients/township-tauri-shell/test/support/build_tauri_ios_key_reuse_probe.ts",
   );
@@ -1882,9 +1888,87 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   assert.doesNotMatch(iosKeyReuseProbeContract, /Code_-34018/);
   assert.match(iosKeyReuseSmoke, /xcrun/);
   assert.match(iosKeyReuseSmoke, /simctl/);
-  assert.match(iosKeyReuseSmoke, /TOWNSHIP_IOS_SIMULATOR_UDID/);
-  assert.match(iosKeyReuseSmoke, /township-ios-key-reuse-probe/);
+  assert.match(
+    iosKeyReuseSmoke,
+    /from "\.\/support\/ios_simulator_key_probe"/,
+  );
+  assert.match(iosSimulatorKeyProbeSupport, /xcrun/);
+  assert.match(iosSimulatorKeyProbeSupport, /TOWNSHIP_IOS_SIMULATOR_UDID/);
+  assert.match(iosSimulatorKeyProbeSupport, /township-ios-key-reuse-probe/);
+  assert.match(
+    iosSimulatorKeyProbeSupport,
+    /Buffer\.from\([^)]*, "base64url"\)/,
+  );
+  assert.match(iosSimulatorKeyProbeSupport, /sectname __entitlements/);
+  assert.match(
+    iosSimulatorKeyProbeSupport,
+    /assert\.equal\(fields\.signature_bytes, "64"\)/,
+  );
+  assert.match(
+    iosSimulatorKeyProbeSupport,
+    /assert\.equal\(publicKey\.byteLength, 32/,
+  );
+  assert.match(
+    iosSimulatorKeyProbeSupport,
+    /device\?\.state === "Shutdown"/,
+    "simulator shutdown must wait for the Shutdown state before reboot",
+  );
+  assert.doesNotMatch(iosSimulatorKeyProbeSupport, /"erase"/);
   assert.match(iosKeyReuseSmoke, /publicKeyAfterRelaunch/);
+  assert.match(
+    iosKeyReuseSmoke,
+    /await terminateApp\(simulator\.udid\);\s+await shutdownSimulator\(simulator\.udid\);\s+await bootSimulator\(simulator\.udid\);\s+const third = await launchAndProbe\(simulator\.udid\)/,
+  );
+  assert.match(
+    iosKeyReuseSmoke,
+    /assert\.notEqual\(third\.pid, second\.pid/,
+  );
+  assert.match(
+    iosKeyReuseSmoke,
+    /assert\.equal\(\s*publicKeyAfterBootCycle,\s*first\.primaryPublicKeyBase64Url/,
+  );
+  assert.match(
+    iosKeyReuseSmoke,
+    /assert\.equal\(\s*controlPublicKeyAfterBootCycle,\s*first\.controlPublicKeyBase64Url/,
+  );
+  assert.doesNotMatch(iosKeyReuseSmoke, /"erase"/);
+  assert.equal(
+    pkg.scripts["tauri:ios:key-erase-control:smoke"],
+    "tsx test/tauri_ios_key_erase_control_smoke.ts",
+  );
+  assert.match(
+    iosKeyEraseControlSmoke,
+    /"simctl", "create", throwawayName/,
+  );
+  assert.match(
+    iosKeyEraseControlSmoke,
+    /assert\.notEqual\(throwawayUdid, template\.udid/,
+  );
+  assert.match(
+    iosKeyEraseControlSmoke,
+    /assert\.equal\(udid, throwawayUdid, "refusing to erase a simulator this control did not create"\);\s+await run\("xcrun", \["simctl", "erase", udid\]/,
+  );
+  assert.equal(
+    iosKeyEraseControlSmoke.match(/"erase"/g)?.length,
+    1,
+    "the erase control must have exactly one guarded simctl erase call",
+  );
+  assert.match(
+    iosKeyEraseControlSmoke,
+    /finally \{[\s\S]*"simctl", "delete", throwawayUdid/,
+  );
+  assert.match(
+    iosKeyEraseControlSmoke,
+    /assert\.notEqual\(\s*afterErase\.primaryPublicKeyBase64Url,\s*beforeErase\.primaryPublicKeyBase64Url/,
+  );
+  assert.match(
+    iosKeyEraseControlSmoke,
+    /assert\.notEqual\(\s*afterErase\.controlPublicKeyBase64Url,\s*beforeErase\.controlPublicKeyBase64Url/,
+  );
+  assert.doesNotMatch(
+    iosKeyEraseControlSmoke,
+    /spawnTownshipPeer|BEAM|physical.device/i,
+  );
   assert.match(iosKeyReuseSmoke, /controlPublicKeyAfterRelaunch/);
   assert.match(
     iosKeyReuseSmoke,
@@ -1898,7 +1982,6 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     iosKeyReuseSmoke,
     /assert\.notEqual\([^)]*controlPublicKeyBase64Url/,
   );
-  assert.match(iosKeyReuseSmoke, /Buffer\.from\([^)]*, "base64url"\)/);
   assert.match(iosKeyReuseSmoke, /terminate/);
   assert.doesNotMatch(
     iosKeyReuseSmoke,

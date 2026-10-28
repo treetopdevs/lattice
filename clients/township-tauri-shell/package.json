@@ -79,6 +79,7 @@
     "tauri:ios:init": "tauri ios init --ci --skip-targets-install",
     "tauri:ios:build:key-reuse-probe": "tsx test/support/build_tauri_ios_key_reuse_probe.ts",
     "tauri:ios:key-reuse:smoke": "tsx test/tauri_ios_key_reuse_smoke.ts",
+    "tauri:ios:key-erase-control:smoke": "tsx test/tauri_ios_key_erase_control_smoke.ts",
     "tauri:ios:key-reuse": "npm run tauri:ios:build:key-reuse-probe && npm run tauri:ios:key-reuse:smoke",
     "tauri:ios:build:device-key-reuse-probe": "npm run ios:native-probe-feature:contract && tsx test/support/build_tauri_ios_device_key_reuse_probe.ts",
     "tauri:ios:xcode:device-key-reuse-probe": "npm run ios:native-probe-feature:contract && tauri ios build --debug --open --features township-ios-key-reuse-native-probe",
