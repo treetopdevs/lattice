@@ -9,7 +9,7 @@ is a separate rule for candidates already outside existing logical resource boun
 It does not explain or fix the intermittent rejection of a valid full-size input.
 Execution remains under plan284; this document is a decision packet, not a new ledger.
 
-## Concrete current behavior
+## Preserved before-state
 
 A real public-owner control uses an existing signed, valid installed snapshot and
 an incoming catalog string of 67,108,865 ASCII bytes. With no decoration the owner
@@ -18,7 +18,11 @@ changes the rejection to `malformed_catalog`; the accessor executes zero times.
 The capture helper inspects that descriptor before the owner checks raw bounds.
 An early resource refusal would therefore change observable refusal precedence.
 
-Control: /tmp/lattice-preclone-admission-contract-control.mjs and its JSON receipt.
+Historical local control: /tmp/lattice-preclone-admission-contract-control.mjs
+and its JSON receipt. The committed public-owner regression is
+[ownership capture tests](../../clients/lattice-client/test/treehouse_catalog_input_capture.ts);
+the new shared controls are in
+[the reciprocal producer](../../clients/lattice-client/test/support/catalog_preclone_admission_peer.ts).
 This is a priority control using an existing fixture, not fresh maximum-size parity
 or a proposed implementation. Preserve both outcomes and the zero-getter count.
 
@@ -120,3 +124,8 @@ Long immutable string byte lengths are cached per capture to avoid rescanning
 shared text through distinct hidden objects. Cache buckets are storage only.
 Resource exceptions are correlated to the current walk's own measured overflow;
 a caller throwing a signal from a different capture retains ordinary refusal.
+
+The [mutating-metadata decision](284-mutating-metadata-admission-decision.md)
+now blocks publication: the current draft violates legacy callback behavior on a
+fitting input, and an extra-read repair also changes observable outcomes. No
+additional input precondition is assumed until the operator approves it.

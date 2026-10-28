@@ -8,7 +8,9 @@ The executable fresh full-size regression preserves the original RED; the
 corrected owner passes its focused GREEN across every planned complete decision.
 The engine-ceiling component passes its local and hosted source gates.
 The separately approved [early admission design](research/284-preclone-admission-design.md)
-is implemented as a source component; its full gates and reviews remain open.
+is implemented as a source draft; its local gates and reviews pass. Publication
+waits on the [mutating-metadata input rule](research/284-mutating-metadata-admission-decision.md).
+A fitting callback-mutated request exposes a new draft regression; keep it open.
 Aggregate node/string/depth admission before every large clone in requirement4
 remains unproven. Keep this obligation open; iterator traversal and one fallback
 width check do not complete it or establish acceptable resource cost.
