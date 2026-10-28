@@ -155,3 +155,38 @@ the new exact tip; do not reuse the old green jobs as final-tip evidence.
 Two independent adversarial reviews find no actionable issue in this scheduling
 change. YAML syntax and diff-whitespace checks pass. Neither review establishes
 that the extended hosted run will finish; that verdict remains with the new gate.
+
+
+## Second hosted attempt and variant scheduling — 2026-10-28
+
+At `166ec6a75`, Flagship run 40684873178 again exhausts the shared job allowance;
+GitHub explicitly reports the two-hour job limit. The ordinary command completes
+successfully, including every integration target. Tracing starts, passes its
+saved-witness, ordering and frozen-capacity checks, then is cancelled during the
+remaining logical-capacity case. No assertion failure is reported. Tracing is
+incomplete, the Required checks aggregate fails, and this is not native signoff.
+Browser run 40684873146 and all other required Flagship jobs pass at that tip.
+
+The serial combined job gives one variant's runtime control over the other's
+available execution window. Replace that scheduling with an explicit two-value
+ordinary/tracing matrix, with separate runners and the existing 120-minute bound
+per variant. Disable matrix fail-fast so one failure does not cancel the other
+variant. Each member runs its unchanged, complete cargo command, with no test
+filters or per-test concurrency change. Setup, fresh producers, apt cap, contents-
+read permission and product limits remain unchanged.
+
+Preserve the required check name `Treehouse native ordinary + tracing` as a small
+fan-in job. It runs even when a matrix member fails, is cancelled or is skipped,
+and exits successfully only when the combined matrix result is `success`.
+The existing repository Required checks job still depends on that named fan-in.
+This is bounded parallel scheduling, not test reduction or resource-cost closure.
+The next exact-tip gate must validate both members and the preserved aggregate;
+keep both cancelled attempts as failed evidence.
+
+Two independent reviews find no actionable issue in the matrix/fan-in change.
+Parsed-workflow comparison confirms every setup and Cargo step is unchanged
+apart from selecting its explicit variant, and all other jobs are identical.
+Executing the fan-in predicate accepts only success and rejects failure,
+cancellation, skipping, an empty result and an unknown result. YAML syntax,
+whitespace checks and all 108 existing enrollment workflow contract tests pass.
+The fresh hosted gate remains required; these checks are not native signoff.

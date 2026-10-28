@@ -613,13 +613,17 @@ jobs:
       - name: Sobelow (township_web)
         run: cd apps/township_web && mix sobelow --exit
 
-  treehouse_native:
-    name: Treehouse native ordinary + tracing
+  treehouse_native_variants:
+    name: Treehouse native ${{ matrix.variant }}
     needs: changes
     runs-on: ubuntu-latest
-    # Cold apt is separately capped at 15m. Retained trust tests replay fresh
-    # maximum-capacity evidence through TS/BEAM/native in both complete variants.
+    # Each complete variant owns its runner and bounded setup/test allowance.
+    # A slow variant must not consume the other variant's execution window.
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ordinary, tracing]
     permissions:
       contents: read
     steps:
@@ -742,12 +746,27 @@ jobs:
           path: ~/.cache/apt-archives
           key: ${{ steps.apt_cache.outputs.cache-primary-key }}${{ job.status != 'success' && format('-partial-{0}-{1}', github.run_id, github.run_attempt) || '' }}
       - name: Offline Treehouse native persistence and key boundaries
+        if: matrix.variant == 'ordinary'
         working-directory: clients/treehouse-tauri-shell/src-tauri
         run: cargo test --locked
       - name: Treehouse dev-trace identity seam
+        if: matrix.variant == 'tracing'
         # Plan 181 5b. The seam is compiled out of the ordinary build, so its tests run only here.
         working-directory: clients/treehouse-tauri-shell/src-tauri
         run: cargo test --locked --features treehouse-dev-trace
+
+  treehouse_native:
+    name: Treehouse native ordinary + tracing
+    needs: treehouse_native_variants
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions: {}
+    steps:
+      - name: Require both complete native variants
+        env:
+          NATIVE_RESULT: ${{ needs.treehouse_native_variants.result }}
+        run: test "$NATIVE_RESULT" = success
 
   packaged_macos:
     name: Packaged macOS convergence
