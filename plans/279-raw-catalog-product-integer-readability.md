@@ -51,6 +51,30 @@ closed portable-term/frame checks. Both apply it only to accepted frames. A late
 ## Compatibility
 
 Existing TypeScript rejection is the common portable boundary. A BEAM-only saved
-record containing unsafe ordinary integers may require recovery after this
-alignment; no deployed-state migration proof is claimed. The broader typed BEAM
+record containing an otherwise valid signed ordinary integer above
+`9_007_199_254_740_991` now requires recovery after this alignment: both
+`CatalogTrust.evaluate/1` and `resolve_route/1` refuse it as
+`trust_recovery_required`. The safe-boundary control remains readable. This is an
+intentional compatibility break in retained evidence, not corruption of its
+signature; no deployed-state migration proof is claimed. The broader typed BEAM
 helper remains unchanged and is not the raw public owner oracle.
+
+## PR 190 bounded CPU correction
+
+Complete accepted histories previously authenticated each frame in the initial
+observation scan, complete cutoff derivation, strict DAG construction, and product
+reader (four signature checks). The product reader also reparsed each frame twice.
+The strict DAG frame now caches one boolean computed from its exact parsed raw
+value after authentication, preserving numeric/text distinctions without retaining
+another JSON tree. The history owner consumes that private immutable proof after
+cutoff derivation. This removes the fourth signature verification and both reader
+parses; it does not skip strict frame bounds, DAG closure, cutoff validation or
+product refusal, and does not move refusal ahead of pending/cutoff precedence.
+
+The remaining observation, cutoff and strict DAG authentication passes are deferred.
+They enforce distinct observation/strict grammars and refusal precedence, including
+authentic depth-65 evidence and rejected-signature portability. Sharing their parsed
+proofs needs a separately reviewed representation that preserves those distinctions;
+passing an unverified JSON value or a cached caller verdict is not safe reuse.
+This correction makes no throughput or worst-case 64 MiB latency claim. Plan 267
+and this plan remain IN PROGRESS until their outstanding gates and scope are met.

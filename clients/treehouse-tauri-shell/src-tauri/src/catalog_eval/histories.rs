@@ -118,8 +118,8 @@ impl AuthenticatedHistories {
             let refs: Vec<&[u8]> = frames.iter().map(Vec::as_slice).collect();
             let dag = AuthenticDag::authenticate(name, &refs)?;
             let mut readable = true;
-            for frame in &frames {
-                match ReadableFrame::verify(frame) {
+            for id in dag.order() {
+                match ReadableFrame::check(dag.frame(id).expect("authenticated DAG member")) {
                     Ok(_) => {}
                     Err("unsupported_cutoff") => {
                         unsupported = true;

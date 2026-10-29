@@ -122,3 +122,42 @@ fn empty_history_replica_is_invalid_not_pending() {
     assert_eq!(error.reason, "trust_pending");
     assert_eq!(error.ids, vec![missing]);
 }
+
+#[test]
+fn cached_product_readability_preserves_raw_integer_distinctions() {
+    let key = ed25519_dalek::SigningKey::from_bytes(&[73; 32]);
+    for (integer, reason) in [
+        (json!(9007199254740991_u64), None),
+        (json!("9007199254740991"), Some("unsupported_cutoff")),
+        (
+            json!(9007199254740992_u64),
+            Some("invalid_verified_history"),
+        ),
+        (json!("9007199254740992"), Some("unsupported_cutoff")),
+    ] {
+        let mut frame = catalog_author::signed(
+            &key,
+            "cached-reader",
+            &[],
+            "command",
+            json!([
+                "int",
+                integer
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| integer.to_string())
+            ]),
+            json!(["nil"]),
+        );
+        frame["body"] = json!(["int", integer]);
+        let bytes = serde_json::to_vec(
+            &json!({"replica":"cached-reader", "frames":[frame], "rejected":[]}),
+        )
+        .unwrap();
+        let result = AuthenticatedHistories::authenticate(&[("cached-reader", &bytes)]);
+        match reason {
+            None => assert!(result.is_ok(), "{integer}: {result:?}"),
+            Some(reason) => assert_eq!(result.unwrap_err().reason, reason, "{integer}"),
+        }
+    }
+}

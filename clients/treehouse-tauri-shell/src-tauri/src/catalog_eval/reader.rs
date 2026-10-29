@@ -46,17 +46,27 @@ pub struct ReadableFrame(AuthenticFrame);
 impl ReadableFrame {
     pub fn verify(bytes: &[u8]) -> Result<Self, &'static str> {
         let frame = frame::verify(bytes)?;
-        // Preserve numeric-vs-text and null-vs-absent distinctions erased by
-        // canonical terms. Authentication and the existing frame cap run first.
-        let raw = super::json::parse(bytes)?;
-        if !body_readable(&raw) || !readable(&raw["cap"], Context::Strict) {
-            return Err("unsupported_cutoff");
-        }
+        Self::check(&frame)?;
         Ok(Self(frame))
+    }
+    /// Reuse only a privately constructed immutable authentication proof. The
+    /// raw numeric/text distinctions were checked while its parsed value existed.
+    pub(crate) fn check(frame: &AuthenticFrame) -> Result<(), &'static str> {
+        if frame.product_readable() {
+            Ok(())
+        } else {
+            Err("unsupported_cutoff")
+        }
     }
     pub fn frame(&self) -> &AuthenticFrame {
         &self.0
     }
+}
+
+// Pure classification, cached with the exact authenticated frame. Refusal is
+// still reported only after cutoff derivation by the incoming history owner.
+pub(crate) fn value_readable(raw: &Value) -> bool {
+    body_readable(raw) && readable(&raw["cap"], Context::Strict)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

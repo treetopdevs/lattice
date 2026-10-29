@@ -18,8 +18,12 @@ pub struct AuthenticFrame {
     kind: String,
     body: Term,
     cap: Term,
+    product_readable: bool,
 }
 impl AuthenticFrame {
+    pub(crate) fn product_readable(&self) -> bool {
+        self.product_readable
+    }
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -60,7 +64,9 @@ pub fn verify(bytes: &[u8]) -> Result<AuthenticFrame> {
     if !inspected.authentic() {
         return Err(INVALID);
     }
+    let product_readable = super::reader::value_readable(&value);
     Ok(AuthenticFrame {
+        product_readable,
         id: inspected.id,
         replica: inspected.replica,
         payload: inspected.payload,
