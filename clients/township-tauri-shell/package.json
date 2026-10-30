@@ -79,6 +79,7 @@
     "tauri:ios:init": "tauri ios init --ci --skip-targets-install",
     "tauri:ios:build:key-reuse-probe": "tsx test/support/build_tauri_ios_key_reuse_probe.ts",
     "tauri:ios:key-reuse:smoke": "tsx test/tauri_ios_key_reuse_smoke.ts",
+    "tauri:ios:key-erase-control:smoke": "tsx test/tauri_ios_key_erase_control_smoke.ts",
     "tauri:ios:key-reuse": "npm run tauri:ios:build:key-reuse-probe && npm run tauri:ios:key-reuse:smoke",
     "tauri:ios:build:device-key-reuse-probe": "npm run ios:native-probe-feature:contract && tsx test/support/build_tauri_ios_device_key_reuse_probe.ts",
     "tauri:ios:xcode:device-key-reuse-probe": "npm run ios:native-probe-feature:contract && tauri ios build --debug --open --features township-ios-key-reuse-native-probe",
@@ -139,8 +140,8 @@
   },
   "dependencies": {
     "@noble/curves": "^2.2.0",
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-deep-link": "^2.4.9",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-deep-link": "^2.6.3",
     "@treetopdevs/lattice-client": "file:../lattice-client",
     "@treetopdevs/lattice-mobile-core": "file:../lattice-mobile-core",
     "jsqr": "^1.4.0",
@@ -149,7 +150,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.53.0",
-    "@tauri-apps/cli": "^2.11.4",
+    "@tauri-apps/cli": "^2.12.4",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",

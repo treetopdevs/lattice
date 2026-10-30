@@ -1,61 +1,35 @@
 import assert from "node:assert/strict";
-import { execFile as execFileCallback } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import {
+  assertSimulatorAppReady,
+  bootSimulator,
+  installApp,
+  launchAndProbe,
+  selectSimulator,
+  shutdownSimulator,
+  terminateApp,
+  waitForBoot,
+} from "./support/ios_simulator_key_probe";
 
-interface SimulatorDevice {
-  isAvailable: boolean;
-  name: string;
-  runtime: string;
-  state: string;
-  udid: string;
-}
+// Plan 077: two independently named protected Keychain keys must differ, survive a process
+// terminate/relaunch, and survive a full simulator shutdown/boot cycle. Uses xcrun simctl only;
+// the destructive erase control lives in tauri_ios_key_erase_control_smoke.ts and never runs here.
 
-interface SimctlDeviceJson {
-  devices: Record<string, Array<Omit<SimulatorDevice, "runtime">>>;
-}
+console.log("\n▸ Township iOS simulator protected-key relaunch + shutdown/boot smoke");
 
-const execFile = promisify(execFileCallback);
-const here = dirname(fileURLToPath(import.meta.url));
-const shellRoot = resolve(here, "..");
-const appId = "dev.treetop.lattice.township";
-const probePrefix = "township-ios-key-reuse-probe";
-const appPath = resolve(
-  process.env.TOWNSHIP_IOS_APP ??
-    join(
-      shellRoot,
-      "src-tauri",
-      "gen",
-      "apple",
-      "build",
-      "township-tauri-shell_iOS.xcarchive",
-      "Products",
-      "Applications",
-      "Township.app",
-    ),
-);
-
-console.log("\n▸ Township iOS simulator protected-key relaunch smoke");
-
-assert.equal(process.platform, "darwin", "the iOS simulator smoke requires macOS");
-assert.ok(
-  existsSync(appPath),
-  `missing iOS simulator app at ${appPath}; run npm run tauri:ios:build:key-reuse-probe first`,
-);
-await assertSimulatorEntitlementsEmbedded(appPath);
+await assertSimulatorAppReady();
 
 const simulator = await selectSimulator();
-const bootedBySmoke = simulator.state !== "Booted";
+const initiallyBooted = simulator.state === "Booted";
+const bootedBySmoke = !initiallyBooted;
 
 try {
   if (bootedBySmoke) {
-    await run("xcrun", ["simctl", "boot", simulator.udid], 30_000);
+    await bootSimulator(simulator.udid);
+  } else {
+    await waitForBoot(simulator.udid);
   }
-  await run("xcrun", ["simctl", "bootstatus", simulator.udid, "-b"], 120_000);
   await terminateApp(simulator.udid).catch(() => undefined);
-  await run("xcrun", ["simctl", "install", simulator.udid, appPath], 60_000);
+  await installApp(simulator.udid);
 
   const first = await launchAndProbe(simulator.udid);
   await terminateApp(simulator.udid);
@@ -79,140 +53,39 @@ try {
     first.controlPublicKeyBase64Url,
     "control iOS protected key changed after process relaunch",
   );
+  console.log("  ✓ both protected keys survived process terminate/relaunch");
+
+  // Full simulator shutdown/boot cycle. The strict shutdown waits for the Shutdown state, so the
+  // third launch is a fresh process in a freshly booted simulator. That sequence, not a PID
+  // comparison, is the freshness proof: PIDs may legally be reused across boots.
+  await terminateApp(simulator.udid);
+  await shutdownSimulator(simulator.udid);
+  await bootSimulator(simulator.udid);
+  const third = await launchAndProbe(simulator.udid);
+  const publicKeyAfterBootCycle = third.primaryPublicKeyBase64Url;
+  const controlPublicKeyAfterBootCycle = third.controlPublicKeyBase64Url;
+
+  assert.equal(
+    publicKeyAfterBootCycle,
+    first.primaryPublicKeyBase64Url,
+    "primary iOS protected key changed after simulator shutdown/boot",
+  );
+  assert.equal(
+    controlPublicKeyAfterBootCycle,
+    first.controlPublicKeyBase64Url,
+    "control iOS protected key changed after simulator shutdown/boot",
+  );
+  console.log("  ✓ both protected keys survived simulator shutdown/boot");
 } finally {
   await terminateApp(simulator.udid).catch(() => undefined);
   if (bootedBySmoke) {
-    await run("xcrun", ["simctl", "shutdown", simulator.udid], 30_000).catch(() => undefined);
+    await shutdownSimulator(simulator.udid).catch(() => undefined);
+  } else {
+    // A failure mid-cycle can leave a simulator the user had booted shut down; boot it again.
+    await bootSimulator(simulator.udid).catch(() => undefined);
   }
 }
 
-console.log("\x1b[32m✓ Township iOS simulator protected keys survived process relaunch\x1b[0m");
-
-async function launchAndProbe(
-  udid: string,
-): Promise<{ controlPublicKeyBase64Url: string; pid: string; primaryPublicKeyBase64Url: string }> {
-  const output = await run("xcrun", ["simctl", "launch", udid, appId], 30_000);
-  const pid = output.match(/:\s+(\d+)\s*$/m)?.[1];
-  assert.ok(pid, `simctl launch did not return a process id: ${output.trim()}`);
-
-  const lines = await waitForProbeLines(udid, pid, 30_000);
-  const probes = new Map(
-    lines.map((line) => {
-      const fields = parseProbeFields(line);
-      return [fields.slot, { fields, line }] as const;
-    }),
-  );
-  const primaryPublicKeyBase64Url = assertReadyKeyProbe(probes.get("primary"), "township-resident");
-  const controlPublicKeyBase64Url = assertReadyKeyProbe(
-    probes.get("control"),
-    "township-ios-key-reuse-control",
-  );
-  assert.notEqual(primaryPublicKeyBase64Url, controlPublicKeyBase64Url);
-  return { controlPublicKeyBase64Url, pid, primaryPublicKeyBase64Url };
-}
-
-async function waitForProbeLines(udid: string, pid: string, timeoutMs: number): Promise<string[]> {
-  const deadline = Date.now() + timeoutMs;
-  const predicate = `processIdentifier == ${pid} AND eventMessage CONTAINS "${probePrefix}"`;
-
-  while (Date.now() < deadline) {
-    const logs = await run(
-      "xcrun",
-      ["simctl", "spawn", udid, "log", "show", "--last", "2m", "--style", "compact", "--predicate", predicate],
-      30_000,
-    );
-    const lines = logs
-      .split(/\r?\n/)
-      .filter((candidate) => candidate.includes(`LATTICE_PROBE: ${probePrefix} `))
-      .map((line) => line.slice(line.indexOf(probePrefix)));
-    const slots = new Set(lines.map((line) => parseProbeFields(line).slot));
-    if (slots.has("primary") && slots.has("control")) return lines;
-    await delay(250);
-  }
-
-  throw new Error(`timed out waiting for ${probePrefix} from Township pid ${pid}`);
-}
-
-function assertReadyKeyProbe(
-  probe: { fields: Record<string, string>; line: string } | undefined,
-  expectedKeyId: string,
-): string {
-  assert.ok(probe, `missing iOS protected-key probe for ${expectedKeyId}`);
-  const { fields, line } = probe;
-  assert.equal(fields.outcome, "ready", `iOS protected-key probe failed: ${line}`);
-  assert.equal(fields.store, "ios_protected_keychain");
-  assert.equal(fields.key_id, expectedKeyId);
-  assert.equal(fields.signature_bytes, "64");
-  assert.ok(fields.public_key_base64url, `probe omitted public key: ${line}`);
-
-  const publicKey = Buffer.from(fields.public_key_base64url, "base64url");
-  assert.equal(publicKey.byteLength, 32, "iOS protected carrier public key should be 32 bytes");
-  return fields.public_key_base64url;
-}
-
-function parseProbeFields(line: string): Record<string, string> {
-  return Object.fromEntries(
-    line
-      .trim()
-      .split(/\s+/)
-      .slice(1)
-      .map((field) => {
-        const separator = field.indexOf("=");
-        return separator === -1 ? [field, ""] : [field.slice(0, separator), field.slice(separator + 1)];
-      }),
-  );
-}
-
-async function assertSimulatorEntitlementsEmbedded(bundlePath: string): Promise<void> {
-  const executable = join(bundlePath, "Township");
-  const loadCommands = await run("otool", ["-l", executable], 30_000);
-  assert.match(
-    loadCommands,
-    /sectname __entitlements/,
-    "simulator app lacks embedded entitlements; rebuild with ENTITLEMENTS_ALLOWED=YES and APPLE_DEVELOPMENT_TEAM",
-  );
-}
-
-async function selectSimulator(): Promise<SimulatorDevice> {
-  const listed = JSON.parse(await run("xcrun", ["simctl", "list", "devices", "available", "-j"], 30_000)) as SimctlDeviceJson;
-  const devices = Object.entries(listed.devices).flatMap(([runtime, runtimeDevices]) =>
-    runtimeDevices.map((device) => ({ ...device, runtime })),
-  );
-  const requestedUdid = process.env.TOWNSHIP_IOS_SIMULATOR_UDID?.trim();
-  if (requestedUdid) {
-    const requested = devices.find((device) => device.udid === requestedUdid && device.isAvailable);
-    assert.ok(requested, `TOWNSHIP_IOS_SIMULATOR_UDID ${requestedUdid} is not available`);
-    return requested;
-  }
-
-  const iPhones = devices.filter((device) => device.isAvailable && device.name.startsWith("iPhone"));
-  const selected =
-    iPhones.find((device) => device.state === "Booted") ??
-    iPhones.find((device) => device.runtime.endsWith("iOS-18-6") && device.name === "iPhone 16 Pro") ??
-    iPhones[0];
-  assert.ok(selected, "no available iPhone simulator found; set TOWNSHIP_IOS_SIMULATOR_UDID");
-  return selected;
-}
-
-async function terminateApp(udid: string): Promise<void> {
-  await run("xcrun", ["simctl", "terminate", udid, appId], 30_000);
-}
-
-async function run(file: string, args: string[], timeoutMs: number): Promise<string> {
-  try {
-    const { stdout, stderr } = await execFile(file, args, {
-      cwd: shellRoot,
-      encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
-      timeout: timeoutMs,
-    });
-    return `${stdout}${stderr}`;
-  } catch (error) {
-    const failed = error as Error & { stdout?: string; stderr?: string };
-    throw new Error(`${file} ${args.join(" ")} failed: ${failed.stderr ?? failed.stdout ?? failed.message}`);
-  }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
-}
+console.log(
+  "\x1b[32m✓ Township iOS simulator protected keys survived process relaunch and simulator shutdown/boot\x1b[0m",
+);

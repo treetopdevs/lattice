@@ -58,10 +58,8 @@ const sdkVersion = execFileSync(
   { encoding: "utf8", env },
 ).trim();
 const sdkMajor = Number.parseInt(sdkVersion.split(".")[0] ?? "", 10);
-assert.ok(
-  Number.isInteger(sdkMajor) && sdkMajor < 27,
-  "the iOS native probe feature contract requires a pre-Xcode-27 SDK",
-);
+// Tauri 2.12 builds its Swift bridge against the Xcode 27 SDKs, so only a readable SDK is required.
+assert.ok(Number.isInteger(sdkMajor), "selected Xcode did not report an iPhoneOS SDK version");
 
 function build(extraArgs: string[]): void {
   execFileSync(
