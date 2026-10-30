@@ -157,7 +157,10 @@ defmodule LatticeCarrierServer.CourierTest do
     assert {:ok, snapshot} = Holder.courier_snapshot(holder)
     op = Op.new(author, @replica, [], :command, {:post, "timeout"})
     previous = Application.get_env(:lattice_carrier_server, :persistence_timeout_ms)
-    Application.put_env(:lattice_carrier_server, :persistence_timeout_ms, 25)
+    # The timeout covers the whole write, so it must outlast the worker's path to
+    # the post-rename directory sync on a loaded runner. The hang then blocks until
+    # the holder kills the worker, so a longer budget only lengthens this test.
+    Application.put_env(:lattice_carrier_server, :persistence_timeout_ms, 1_000)
     FaultSequence.arm(context.tmp_dir, {:hang, self()})
 
     on_exit(fn ->
@@ -173,6 +176,9 @@ defmodule LatticeCarrierServer.CourierTest do
     monitor = Process.monitor(worker)
     assert {:error, {:persistence_failed, :persistence_timeout}} = Task.await(task)
     assert_receive {:DOWN, ^monitor, :process, ^worker, _}
+    # The timeout fired after the rename: the op is already in the durable log.
+    assert {:ok, %{log: disk}} = Log.restore_verified(path)
+    assert disk.ops[op.id] == op
     before = File.read!(path)
     other = Op.new(author, @replica, [], :command, {:post, "later"})
     assert {:error, :persistence_ambiguous} = Holder.relay(holder, "author", other)
