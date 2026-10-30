@@ -1914,6 +1914,10 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     "simulator shutdown must wait for the Shutdown state before reboot",
   );
   assert.doesNotMatch(iosSimulatorKeyProbeSupport, /"erase"/);
+  // Probe records must come from the current launch: PIDs can be reused across a reboot.
+  assert.doesNotMatch(iosSimulatorKeyProbeSupport, /"--last"/);
+  assert.match(iosSimulatorKeyProbeSupport, /"--start",\s*logStartTime\(launchedAt\)/);
+  assert.match(iosSimulatorKeyProbeSupport, /logRecordTime\(candidate\) \?\? -Infinity\) >= launchedAt/);
   assert.match(iosKeyReuseSmoke, /publicKeyAfterRelaunch/);
   assert.match(
     iosKeyReuseSmoke,

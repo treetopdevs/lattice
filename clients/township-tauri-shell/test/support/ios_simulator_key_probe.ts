@@ -121,11 +121,14 @@ export async function terminateApp(udid: string): Promise<void> {
 }
 
 export async function launchAndProbe(udid: string): Promise<KeyProbeResult> {
+  // Only records logged after this launch count: a PID can be reused after a reboot, and the
+  // earlier launch's probe lines would otherwise match and pass with stale keys.
+  const launchedAt = Date.now();
   const output = await run("xcrun", ["simctl", "launch", udid, appId], 60_000);
   const pid = output.match(/:\s+(\d+)\s*$/m)?.[1];
   assert.ok(pid, `simctl launch did not return a process id: ${output.trim()}`);
 
-  const lines = await waitForProbeLines(udid, pid, 60_000);
+  const lines = await waitForProbeLines(udid, pid, launchedAt, 60_000);
   const probes = new Map(
     lines.map((line) => {
       const fields = parseProbeFields(line);
@@ -142,19 +145,38 @@ export async function launchAndProbe(udid: string): Promise<KeyProbeResult> {
   return { controlPublicKeyBase64Url, pid, primaryPublicKeyBase64Url };
 }
 
-async function waitForProbeLines(udid: string, pid: string, timeoutMs: number): Promise<string[]> {
+async function waitForProbeLines(
+  udid: string,
+  pid: string,
+  launchedAt: number,
+  timeoutMs: number,
+): Promise<string[]> {
   const deadline = Date.now() + timeoutMs;
   const predicate = `processIdentifier == ${pid} AND eventMessage CONTAINS "${probePrefix}"`;
 
   while (Date.now() < deadline) {
     const logs = await run(
       "xcrun",
-      ["simctl", "spawn", udid, "log", "show", "--last", "2m", "--style", "compact", "--predicate", predicate],
+      [
+        "simctl",
+        "spawn",
+        udid,
+        "log",
+        "show",
+        "--start",
+        logStartTime(launchedAt),
+        "--style",
+        "compact",
+        "--predicate",
+        predicate,
+      ],
       30_000,
     );
     const lines = logs
       .split(/\r?\n/)
       .filter((candidate) => candidate.includes(`LATTICE_PROBE: ${probePrefix} `))
+      // `--start` is whole seconds; drop records from earlier in that same second.
+      .filter((candidate) => (logRecordTime(candidate) ?? -Infinity) >= launchedAt)
       .map((line) => line.slice(line.indexOf(probePrefix)));
     const slots = new Set(lines.map((line) => parseProbeFields(line).slot));
     if (slots.has("primary") && slots.has("control")) return lines;
@@ -162,6 +184,18 @@ async function waitForProbeLines(udid: string, pid: string, timeoutMs: number): 
   }
 
   throw new Error(`timed out waiting for ${probePrefix} from Township pid ${pid}`);
+}
+
+// The simulator shares the host clock and `log show` reads and prints local time.
+function logStartTime(ms: number): string {
+  const at = new Date(ms);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
+}
+
+function logRecordTime(line: string): number | undefined {
+  const stamp = line.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3})/);
+  return stamp ? new Date(`${stamp[1]}T${stamp[2]}`).getTime() : undefined;
 }
 
 function assertReadyKeyProbe(
