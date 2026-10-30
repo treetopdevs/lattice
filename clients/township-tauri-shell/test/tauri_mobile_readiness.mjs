@@ -1919,9 +1919,12 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     iosKeyReuseSmoke,
     /await terminateApp\(simulator\.udid\);\s+await shutdownSimulator\(simulator\.udid\);\s+await bootSimulator\(simulator\.udid\);\s+const third = await launchAndProbe\(simulator\.udid\)/,
   );
+  // Freshness after the boot cycle comes from the strict shutdown/boot sequence; PIDs may be reused.
+  assert.doesNotMatch(iosKeyReuseSmoke, /third\.pid/);
   assert.match(
     iosKeyReuseSmoke,
-    /assert\.notEqual\(third\.pid, second\.pid/,
+    /\} else \{[^}]*await bootSimulator\(simulator\.udid\)\.catch\(\(\) => undefined\);\s+\}\s+\}/,
+    "a simulator the user had booted must be booted again after a failed boot cycle",
   );
   assert.match(
     iosKeyReuseSmoke,
@@ -1957,6 +1960,11 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     iosKeyEraseControlSmoke,
     /throwawayUdid = createOutput\.match\([\s\S]*\} finally \{[\s\S]*const throwaway = throwawayUdid \?\? throwawayName;[\s\S]*"simctl", "delete", throwaway\]/,
     "UDID parsing must sit inside the cleanup scope, and cleanup must fall back to the unique name",
+  );
+  assert.match(
+    iosKeyEraseControlSmoke,
+    /console\.error\(`failed to delete throwaway simulator[\s\S]*if \(!failed\) throw error;/,
+    "a failed throwaway delete must fail an otherwise passing run",
   );
   assert.match(
     iosKeyEraseControlSmoke,

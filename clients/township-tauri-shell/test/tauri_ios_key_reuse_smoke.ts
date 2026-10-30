@@ -19,7 +19,8 @@ console.log("\n▸ Township iOS simulator protected-key relaunch + shutdown/boot
 await assertSimulatorAppReady();
 
 const simulator = await selectSimulator();
-const bootedBySmoke = simulator.state !== "Booted";
+const initiallyBooted = simulator.state === "Booted";
+const bootedBySmoke = !initiallyBooted;
 
 try {
   if (bootedBySmoke) {
@@ -55,7 +56,8 @@ try {
   console.log("  ✓ both protected keys survived process terminate/relaunch");
 
   // Full simulator shutdown/boot cycle. The strict shutdown waits for the Shutdown state, so the
-  // third launch is a fresh process in a freshly booted simulator, not a reuse of the old one.
+  // third launch is a fresh process in a freshly booted simulator. That sequence, not a PID
+  // comparison, is the freshness proof: PIDs may legally be reused across boots.
   await terminateApp(simulator.udid);
   await shutdownSimulator(simulator.udid);
   await bootSimulator(simulator.udid);
@@ -63,7 +65,6 @@ try {
   const publicKeyAfterBootCycle = third.primaryPublicKeyBase64Url;
   const controlPublicKeyAfterBootCycle = third.controlPublicKeyBase64Url;
 
-  assert.notEqual(third.pid, second.pid, "iOS app process id did not change after shutdown/boot");
   assert.equal(
     publicKeyAfterBootCycle,
     first.primaryPublicKeyBase64Url,
@@ -79,6 +80,9 @@ try {
   await terminateApp(simulator.udid).catch(() => undefined);
   if (bootedBySmoke) {
     await shutdownSimulator(simulator.udid).catch(() => undefined);
+  } else {
+    // A failure mid-cycle can leave a simulator the user had booted shut down; boot it again.
+    await bootSimulator(simulator.udid).catch(() => undefined);
   }
 }
 

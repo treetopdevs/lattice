@@ -40,6 +40,8 @@ const createOutput = await run(
 // stdout and stderr, so take the UDID out of the output rather than expecting it alone.
 let throwawayUdid: string | undefined;
 
+let failed = false;
+
 try {
   throwawayUdid = createOutput.match(
     /\b[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\b/i,
@@ -68,6 +70,9 @@ try {
     beforeErase.controlPublicKeyBase64Url,
     "control iOS protected key survived simulator erase; persistence is not Keychain-backed",
   );
+} catch (error) {
+  failed = true;
+  throw error;
 } finally {
   // The name is unique to this run, so it still identifies the simulator if no UDID was parsed.
   const throwaway = throwawayUdid ?? throwawayName;
@@ -75,9 +80,13 @@ try {
     await terminateApp(throwawayUdid).catch(() => undefined);
     await shutdownSimulator(throwawayUdid).catch(() => undefined);
   }
-  await run("xcrun", ["simctl", "delete", throwaway], 60_000).catch((error: unknown) => {
+  try {
+    await run("xcrun", ["simctl", "delete", throwaway], 60_000);
+  } catch (error) {
     console.error(`failed to delete throwaway simulator ${throwaway}: ${String(error)}`);
-  });
+    // Keep an earlier failure as the reported one; otherwise a leaked simulator fails the run.
+    if (!failed) throw error;
+  }
 }
 
 console.log("\x1b[32m✓ Township iOS simulator erase regenerated both protected keys\x1b[0m");
