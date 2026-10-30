@@ -72,7 +72,7 @@ export declare function verifyCarrierOp(frame: CarrierOpFrame, verifier: Verifie
  * ignores malformed shapes (the decoders own those), except that an atom term's arity and
  * name type are checked here: the BEAM refuses the whole batch for a malformed atom term.
  */
-export declare function assertWireVocabularyTerm(term: unknown): void;
+export declare function assertWireVocabularyTerm(term: unknown, depth?: number): void;
 export declare function authorCarrierOp(input: AuthorCarrierOpInput): Promise<CarrierOpFrame>;
 export declare function canonicalBytesForCarrierDelegation(delegation: CarrierDelegationCore): Uint8Array;
 /** Canonical policy-id preimage shared with `Lattice.Authority.SuccessionCertificate`. */
@@ -102,6 +102,7 @@ export declare function canonicalCarrierTerm(term: CarrierTerm): CarrierTerm;
  * bytes. Grammar only; the wire vocabulary stays with `assertWireVocabularyTerm`.
  */
 export declare function carrierTermFromCanonicalBytes(input: Uint8Array): CarrierTerm;
+export declare const maxTermDepth = 64;
 /** Decode canonical standard Base64, refusing malformed text or an unexpected byte length. */
 export declare function canonicalBase64Bytes(value: unknown, length?: number): Uint8Array | null;
 /**

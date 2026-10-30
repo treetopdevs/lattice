@@ -300,6 +300,8 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       township_beacon_witnessed_certificate_metadata(),
       township_beacon_witnessed_high_integer_metadata(),
       township_wire_malformed_atom_refusal(),
+      township_wire_noncanonical_integer_refusal(),
+      township_wire_depth_refusal(),
       township_beacon_witnessed_high_legacy(),
       township_beacon_witnessed_high_nonroot(),
       township_beacon_witnessed_raw_duplicate_deps(),
@@ -3939,6 +3941,172 @@ defmodule Mix.Tasks.Lattice.ExportVectors do
       }
     )
   end
+
+  defp wire_posted_sim(replica_suffix) do
+    sim =
+      Sim.new(Matter, "replica:matter:#{replica_suffix}", ["clerk", "resident"],
+        seed: "township:#{replica_suffix}"
+      )
+
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, grant} = Sim.grant(sim, "clerk", "resident", ops: [:post])
+    sim = Sim.sync_all(sim)
+    {sim, post1} = Sim.command(sim, "resident", :post, ["first"], cap: grant.id)
+    {sim, post2} = Sim.command(sim, "resident", :post, ["second"], cap: grant.id)
+    sim = Sim.sync_all(sim)
+
+    {sim, Sim.log(sim, "clerk"), post2, CarrierWire.encode_op(post1),
+     CarrierWire.encode_op(post2)}
+  end
+
+  # Row 211: a non-canonical decimal integer string refuses the batch on the BEAM. Canonical
+  # values above 2^53-1 are deliberately absent (row 212: the TS side refuses them).
+  defp township_wire_noncanonical_integer_refusal do
+    {sim, log, post2, good1, good2} = wire_posted_sim("wire-noncanonical-integer")
+    arg = fn term -> ["tuple", [["atom", "post"], ["list", [term]]]] end
+    bad = fn term -> Map.put(good1, "body", arg.(term)) end
+
+    refused =
+      for s <- ["007", "+1", "-0", "00", "-1", "01"],
+          {order, frames} <- [
+            {"bad first", [bad.(["int", s]), good2]},
+            {"bad last", [good2, bad.(["int", s])]}
+          ] do
+        wire_case(
+          "body argument int #{inspect(s)} #{order}",
+          "body argument",
+          "malformed_op",
+          nil,
+          frames
+        )
+      end
+
+    controls =
+      for {label, term} <- [
+            {"string 0", ["int", "0"]},
+            {"string 2^53-1", ["int", "9007199254740991"]},
+            {"number 5", ["int", 5]}
+          ] do
+        wire_case("control #{label}", "control", "admit", nil, [bad.(term), good2])
+      end
+
+    capability_scenario_with_canonical_ops(
+      "township_wire_noncanonical_integer_refusal",
+      sim,
+      log,
+      %{
+        "case" => "wire_noncanonical_integer_refusal",
+        "honoredOperationId" => post2.id,
+        "wireCases" => refused ++ controls
+      }
+    )
+  end
+
+  # Row 215: container nesting beyond 64 refuses the batch; body and cap are budgeted separately.
+  defp township_wire_depth_refusal do
+    {sim, log, post2, good1, good2} = wire_posted_sim("wire-depth")
+
+    nest = fn
+      0, leaf, _kind, _self -> leaf
+      n, leaf, kind, self -> wrap_depth(kind, self.(n - 1, leaf, kind, self))
+    end
+
+    chain = fn n, kind -> nest.(n, ["nil"], kind, nest) end
+    body = fn k, kind -> ["tuple", [["atom", "post"], ["list", [chain.(k, kind)]]]] end
+    in_body = fn k, kind -> Map.put(good1, "body", body.(k, kind)) end
+    in_cap = fn n, kind -> Map.put(good1, "cap", chain.(n, kind)) end
+
+    refused =
+      for kind <- [:list, :tuple, :map_value],
+          {order, frames} <- [
+            {"bad first", [in_body.(63, kind), good2]},
+            {"bad last", [good2, in_body.(63, kind)]}
+          ] do
+        wire_case("body depth 65 #{kind} #{order}", "body argument", "malformed_op", nil, frames)
+      end
+
+    cap_refused =
+      for kind <- [:list, :map_value] do
+        wire_case("cap depth 65 #{kind}", "cap", "malformed_op", nil, [in_cap.(65, kind), good2])
+      end
+
+    controls =
+      for kind <- [:list, :map_value] do
+        [
+          wire_case("control body depth 64 #{kind}", "control", "admit", nil, [
+            in_body.(62, kind),
+            good2
+          ]),
+          wire_case("control cap depth 64 #{kind}", "control", "admit", nil, [
+            in_cap.(64, kind),
+            good2
+          ])
+        ]
+      end
+      |> List.flatten()
+
+    # The genesis body is split by hand on the TS side; pin its policy-value arithmetic here.
+    genesis =
+      log
+      |> Lattice.Log.topo_ops()
+      |> Enum.find(&(&1.kind == :authority and &1.deps == []))
+      |> CarrierWire.encode_op()
+
+    ["tuple", [genesis_head, genesis_deleg, _policies]] = genesis["body"]
+
+    in_policy = fn k, kind ->
+      ["tuple", [genesis_head, genesis_deleg, ["map", [[["atom", "post"], chain.(k, kind)]]]]]
+    end
+
+    genesis_with = fn k, kind -> Map.put(genesis, "body", in_policy.(k, kind)) end
+
+    genesis_refused =
+      for kind <- [:list, :tuple, :map_value] do
+        wire_case(
+          "genesis policy value depth 65 #{kind}",
+          "genesis body",
+          "malformed_op",
+          nil,
+          [genesis_with.(63, kind), good2]
+        )
+      end
+
+    genesis_controls =
+      for kind <- [:list, :tuple, :map_value] do
+        wire_case("control genesis policy value depth 64 #{kind}", "control", "admit", nil, [
+          genesis_with.(62, kind),
+          good2
+        ])
+      end
+
+    mapset_cases =
+      for {label, term, decode} <- [
+            {"mapset body depth 64", ["mapset", [chain.(61, :list)]], "admit"},
+            {"mapset body depth 65", ["mapset", [chain.(62, :list)]], "malformed_op"},
+            {"map key body depth 64", ["map", [[chain.(61, :list), ["nil"]]]], "admit"},
+            {"map key body depth 65", ["map", [[chain.(62, :list), ["nil"]]]], "malformed_op"}
+          ] do
+        frame = Map.put(good1, "body", ["tuple", [["atom", "post"], ["list", [term]]]])
+        wire_case(label, "body argument", decode, nil, [frame, good2])
+      end
+
+    capability_scenario_with_canonical_ops(
+      "township_wire_depth_refusal",
+      sim,
+      log,
+      %{
+        "case" => "wire_depth_refusal",
+        "honoredOperationId" => post2.id,
+        "wireCases" =>
+          refused ++
+            cap_refused ++ controls ++ genesis_refused ++ genesis_controls ++ mapset_cases
+      }
+    )
+  end
+
+  defp wrap_depth(:list, inner), do: ["list", [inner]]
+  defp wrap_depth(:tuple, inner), do: ["tuple", [inner]]
+  defp wrap_depth(:map_value, inner), do: ["map", [[["atom", "post"], inner]]]
 
   defp township_beacon_witnessed_advance do
     {sim, genesis} = beacon_sim("advance")

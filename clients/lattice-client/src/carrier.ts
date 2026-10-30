@@ -17,7 +17,7 @@ import type {
   WitnessedSuccessionSignatureEvidence,
 } from "./op";
 import { cmpHash } from "./op";
-import { assertWireVocabularyTerm, verifyCarrierOp } from "./codec";
+import { assertWireVocabularyTerm, maxTermDepth, verifyCarrierOp } from "./codec";
 import { WIRE_REPORT_REASONS, isWireVocabularyName } from "./wire_vocabulary";
 import { continuationFamily } from "./authority";
 import { continuationProfileFromCarrierTerm, continuationCertificateFromCarrierTerm } from "./continuation";
@@ -226,23 +226,26 @@ export function carrierDelegationsFromFrames(frames: readonly CarrierOpFrame[]):
   return frames.flatMap((frame) => carrierDelegationsFromTerm(frame.body));
 }
 
-function carrierDelegationsFromTerm(term: CarrierTerm): CarrierDelegation[] {
+function carrierDelegationsFromTerm(term: CarrierTerm, depth: number = maxTermDepth): CarrierDelegation[] {
   switch (term[0]) {
     case "delegation":
       return isCarrierDelegation(term[1]) ? [term[1]] : [];
     case "list":
     case "tuple":
     case "mapset":
+      // A non-throwing collector: stop descending; decodeCarrierOpFrame owns the refusal.
+      if (depth <= 0) return [];
       return Array.isArray(term[1])
-        ? term[1].flatMap(carrierDelegationsFromTerm)
+        ? term[1].flatMap((child) => carrierDelegationsFromTerm(child, depth - 1))
         : [];
     case "map":
+      if (depth <= 0) return [];
       return Array.isArray(term[1])
         ? term[1].flatMap((pair) =>
             Array.isArray(pair) && pair.length === 2
               ? [
-                  ...carrierDelegationsFromTerm(pair[0]),
-                  ...carrierDelegationsFromTerm(pair[1]),
+                  ...carrierDelegationsFromTerm(pair[0], depth - 1),
+                  ...carrierDelegationsFromTerm(pair[1], depth - 1),
                 ]
               : []
           )
@@ -1606,13 +1609,17 @@ function canonicalTuple(values: unknown[]): Uint8Array {
 // high uint64 epochs as decimal evidence; witnessed body/claim epochs stay safe integers.
 function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
   const body = op.body;
+  // This function splits the body tuple (and genesis policy map) by hand, so it spends the
+  // levels those containers would have spent in a recursive decode of the same body.
+  const inner = maxTermDepth - 1;
+  const innermost = maxTermDepth - 2;
   if (op.kind === "authority" && body[0] === "tuple" && body.length === 2 &&
       Array.isArray(body[1]) && body[1].length === 2 && body[1][0]?.[0] === "atom" &&
       body[1][0][1] === "beacon") {
     const epoch = body[1][1]!;
     if (epoch[0] === "int" && epoch.length === 2 && typeof epoch[1] === "string" &&
         canonicalHighUint64Text(epoch[1])) {
-      return {type: "tuple", values: [decodeCarrierTerm(body[1][0]),
+      return {type: "tuple", values: [decodeCarrierTerm(body[1][0], "strict", inner),
         {type: "legacy_beacon_epoch", decimal: epoch[1]}]};
     }
   }
@@ -1622,8 +1629,8 @@ function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
   }
   if (body[1][0][1] === "beacon") {
     return { type: "tuple", values: [
-      decodeCarrierTerm(body[1][0]), decodeCarrierTerm(body[1][1]!),
-      decodeCarrierTerm(body[1][2]!, "beacon_certificate"),
+      decodeCarrierTerm(body[1][0], "strict", inner), decodeCarrierTerm(body[1][1]!, "strict", inner),
+      decodeCarrierTerm(body[1][2]!, "beacon_certificate", inner),
     ] };
   }
   if (body[1][0][1] !== "genesis") return decodeCarrierTerm(body);
@@ -1633,18 +1640,22 @@ function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
     return decodeCarrierTerm(body);
   }
   return { type: "tuple", values: [
-    decodeCarrierTerm(body[1][0]), decodeCarrierTerm(body[1][1]!),
+    decodeCarrierTerm(body[1][0], "strict", inner), decodeCarrierTerm(body[1][1]!, "strict", inner),
     { type: "map", pairs: policies[1].map(([key, value]) => [
-      decodeCarrierTerm(key),
+      decodeCarrierTerm(key, "strict", innermost),
       key[0] === "atom" && key.length === 2 && key[1] === "__beacon__"
-        ? decodeCarrierTerm(value, "beacon_metadata") : decodeCarrierTerm(value),
+        ? decodeCarrierTerm(value, "beacon_metadata", innermost) : decodeCarrierTerm(value, "strict", innermost),
     ]) },
   ] };
 }
 
 type TermDecodeContext = "strict" | "beacon_metadata" | "beacon_certificate" | "beacon_claim";
 
-function decodeCarrierTerm(term: CarrierTerm, context: TermDecodeContext = "strict"): DecodedTerm {
+function decodeCarrierTerm(
+  term: CarrierTerm,
+  context: TermDecodeContext = "strict",
+  depth: number = maxTermDepth,
+): DecodedTerm {
   const [tag] = term;
   const expectedLength = tag === "nil" ? 1 : 2;
   if (term.length !== expectedLength) {
@@ -1675,14 +1686,17 @@ function decodeCarrierTerm(term: CarrierTerm, context: TermDecodeContext = "stri
       return { type: "atom", value: term[1] };
     }
     case "list": {
+      if (depth <= 0) throw new Error("malformed carrier term depth");
       if (!Array.isArray(term[1])) throw new Error("malformed list term");
-      return { type: "list", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
+      return { type: "list", values: term[1].map((value) => decodeCarrierTerm(value, childContext, depth - 1)) };
     }
     case "tuple": {
+      if (depth <= 0) throw new Error("malformed carrier term depth");
       if (!Array.isArray(term[1])) throw new Error("malformed tuple term");
-      return { type: "tuple", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
+      return { type: "tuple", values: term[1].map((value) => decodeCarrierTerm(value, childContext, depth - 1)) };
     }
     case "map": {
+      if (depth <= 0) throw new Error("malformed carrier term depth");
       if (!Array.isArray(term[1])) throw new Error("malformed map term");
       return {
         type: "map",
@@ -1697,15 +1711,16 @@ function decodeCarrierTerm(term: CarrierTerm, context: TermDecodeContext = "stri
             if (context === "beacon_claim" && key[1] === "epoch" && pair[1][0] === "int") valueContext = "strict";
           }
           return [
-            decodeCarrierTerm(key, childContext),
-            decodeCarrierTerm(pair[1], valueContext),
+            decodeCarrierTerm(key, childContext, depth - 1),
+            decodeCarrierTerm(pair[1], valueContext, depth - 1),
           ];
         }),
       };
     }
     case "mapset": {
+      if (depth <= 0) throw new Error("malformed carrier term depth");
       if (!Array.isArray(term[1])) throw new Error("malformed mapset term");
-      return { type: "mapset", values: term[1].map((value) => decodeCarrierTerm(value, childContext)) };
+      return { type: "mapset", values: term[1].map((value) => decodeCarrierTerm(value, childContext, depth - 1)) };
     }
     case "delegation": {
       if (!isCarrierDelegation(term[1])) {
