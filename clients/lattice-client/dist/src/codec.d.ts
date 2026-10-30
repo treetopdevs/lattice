@@ -63,8 +63,9 @@ export interface AuthorCarrierOpInput {
  *
  * The body and the cap each get their own `maxTermDepth` container budget, as in
  * `Lattice.Carrier.Wire.decode_op/1`; a deeper term throws `malformed carrier term depth`.
- * `depthBudget` exists only so test fixtures can sign deliberately over-deep frames;
- * production callers must not pass it.
+ * `depthBudget` widens that budget only where a caller authenticates frames beyond wire
+ * admission on purpose: catalog raw observation (depth 65, `treehouse_catalog_raw_bounds.ts`)
+ * and test fixtures that sign over-deep frames. Wire paths must not pass it.
  */
 export declare function canonicalBytesForCarrierOp(frame: CarrierOpFrame, depthBudget?: number): Uint8Array;
 /** Hash canonical signed bytes to the Lattice op id format. */

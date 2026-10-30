@@ -20,9 +20,16 @@ budget of 64, as in `Wire.decode_op/1`. `canonicalBytesForCarrierTerm` gets the 
   vectors stay green.
 - The authoring path already refused over-deep bodies through `assertWireVocabularyTerm`, so the
   new cap only matters when a caller verifies a frame that it built by hand and never decoded.
-- `canonicalBytesForCarrierOp(frame, depthBudget)` takes an optional second argument, which only
-  test fixtures use. `test/support/unchecked_author.ts` passes it so that the native catalog peers
-  can still sign the depth-65 frames they need on purpose. Production callers must not pass it.
+- `canonicalBytesForCarrierOp(frame, depthBudget)` takes an optional second argument for callers
+  that authenticate frames beyond wire admission on purpose. Catalog raw observation
+  (`treehouse_catalog_raw_bounds.ts`, `MAX_DEPTH = 65`) authenticates a signed depth-65 frame, so
+  that it is reported as `unsupported_cutoff` (complete history) or `trust_pending` (missing
+  dependencies) rather than `invalid_verified_history`. `treehouse_catalog_trust.ts` therefore
+  passes the exported `catalogRawObservationMaxDepth` in `authenticatedRawHeader` and
+  `fingerprint`. The Codex second review found that regression in the first cut. Test fixtures
+  (`test/support/unchecked_author.ts`) pass an unbounded budget to sign over-deep frames. Wire paths
+  must not pass it. The cutoff path (`treehouse_catalog_cutoff.ts`) already refuses past 64 before
+  it encodes, and every other `verifyCarrierOp` caller decodes first, so neither changes.
 
 **Collector decision.** `carrierDelegationsFromTerm` keeps stopping at depth 64 without
 throwing. `createJsonCarrierFrameStore.load` reloads frames with a bare `JSON.parse`, and
@@ -38,6 +45,8 @@ would ever admit, so it is never worth collecting.
   `canonicalBytesForCarrierOp`, `verifyCarrierOp` and `verifyCarrierOpHash`, never a `RangeError`.
 - The collector finds a delegation 64 containers deep beside a 200,000-deep sibling frame, and
   does not find one 65 containers deep.
+- `test/treehouse_catalog_trust.ts` pins catalog installation outcomes for signed frames at depths
+  64, 65 and 66. It fails if the trust path loses its depth-65 budget.
 
 ## Row 208 recheck
 
