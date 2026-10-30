@@ -11,7 +11,7 @@ set +a
 # Required paths must exist. A missing path fails the run instead of being left
 # out of a snapshot that still reports success.
 paths=""
-for p in /etc/caddy /var/lib/caddy /etc/restic; do
+for p in /etc/caddy /var/lib/caddy /etc/restic /var/lib/treehouse-relay; do
   if [ ! -e "$p" ]; then
     echo "required backup path missing: $p" >&2
     exit 1
@@ -19,10 +19,13 @@ for p in /etc/caddy /var/lib/caddy /etc/restic; do
   paths="$paths $p"
 done
 
-# /var/lib/treehouse-relay is reserved for the carrier's data directory. It stays
-# optional until R21b configures that path; then move it into the required list.
-if [ -e /var/lib/treehouse-relay ]; then
-  paths="$paths /var/lib/treehouse-relay"
+# The carrier service identity seed (created 2026-10-23, OD-1) is binding-critical
+# and restic is its only off-host copy. Fail rather than let retention prune the
+# last snapshot that still holds it.
+seed=/var/lib/treehouse-relay/service-identity.seed
+if [ ! -s "$seed" ]; then
+  echo "required backup file missing or empty: $seed" >&2
+  exit 1
 fi
 
 # A run makes up to four attempts, 30 minutes apart. Each attempt is limited to one

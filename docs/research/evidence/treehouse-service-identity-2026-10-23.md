@@ -138,6 +138,10 @@ machine can restore it; the PR #124 clean-machine drill covered the repository, 
 - The seed is now binding-critical (OD-1): once the root signs the binding, a lost seed means a
   new Space until R11c exists. Its only off-host copy is the restic repository, so the restic
   password and Spaces key in 1Password are binding-critical too.
+- `scripts/treehouse-relay/backup.sh` now fails the run if `/var/lib/treehouse-relay` or this
+  seed is missing, so retention cannot prune the last snapshot holding it. The host still runs
+  the older script, which treats the directory as optional; reinstall it with `install.sh`
+  before the root signs the binding.
 - If the droplet is rebuilt, restore this file from restic. Never generate a new one.
 - When the carrier is deployed (R21b), the manifest instance's `identity_file` points at this path,
   and the carrier runs as `treehouse-relay`. Check then that its `carrier_hello` key equals the
