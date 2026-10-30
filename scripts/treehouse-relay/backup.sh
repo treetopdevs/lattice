@@ -22,9 +22,28 @@ done
 # The carrier service identity seed (created 2026-10-23, OD-1) is binding-critical
 # and restic is its only off-host copy. Fail rather than let retention prune the
 # last snapshot that still holds it.
+# The seed must be a regular file of 64 lowercase hex characters plus a newline that
+# derives the public key the binding names (docs/research/evidence/
+# treehouse-service-identity-2026-10-23.md); a replaced or corrupt seed fails the run.
 seed=/var/lib/treehouse-relay/service-identity.seed
-if [ ! -s "$seed" ]; then
-  echo "required backup file missing or empty: $seed" >&2
+expected_public_key=qJ7tfzm+Gvc1O1lgfj/ZwdPgSAC/jcuxXMHoA2qVbB4=
+if [ ! -f "$seed" ] || [ -L "$seed" ] || [ "$(wc -c < "$seed")" -ne 65 ] ||
+  ! grep -Eqx '[0-9a-f]{64}' "$seed"; then
+  echo "service identity seed missing or malformed: $seed" >&2
+  exit 1
+fi
+# Wrap the raw seed in the Ed25519 PKCS#8 DER prefix and let OpenSSL derive the
+# public half. awk turns the hex into octal escapes so xxd is not needed.
+der_escapes=$({ printf '%s' 302e020100300506032b657004220420; tr -d '\n' < "$seed"; } |
+  awk '{ h = "0123456789abcdef"
+         for (i = 1; i < length($0); i += 2)
+           printf "\\%03o", (index(h, substr($0, i, 1)) - 1) * 16 + index(h, substr($0, i + 1, 1)) - 1 }')
+# shellcheck disable=SC2059
+actual_public_key=$(printf "$der_escapes" |
+  openssl pkey -inform DER -pubout -outform DER | tail -c 32 | base64)
+unset der_escapes
+if [ "$actual_public_key" != "$expected_public_key" ]; then
+  echo "service identity seed does not derive the bound public key" >&2
   exit 1
 fi
 
