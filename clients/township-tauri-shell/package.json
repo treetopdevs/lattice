@@ -140,8 +140,8 @@
   },
   "dependencies": {
     "@noble/curves": "^2.2.0",
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-deep-link": "^2.4.9",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-deep-link": "^2.6.3",
     "@treetopdevs/lattice-client": "file:../lattice-client",
     "@treetopdevs/lattice-mobile-core": "file:../lattice-mobile-core",
     "jsqr": "^1.4.0",
@@ -150,7 +150,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.53.0",
-    "@tauri-apps/cli": "^2.11.4",
+    "@tauri-apps/cli": "^2.12.4",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",

@@ -222,7 +222,7 @@ test("Vue source surfaces native invoke readiness from the Tauri workflow", () =
   const nativeWorkflow = readText("src/native_workflow.ts");
   const pkg = readJson("package.json");
 
-  assert.equal(pkg.dependencies["@tauri-apps/api"], "^2.11.1");
+  assert.equal(pkg.dependencies["@tauri-apps/api"], "^2.12.4");
   assert.equal(pkg.scripts["native:contract"], "tsx test/native_workflow.ts");
   assert.match(nativeWorkflow, /from "@tauri-apps\/api\/core"/);
   // Plan 158 seam extraction: the neutral workflow composition lives in
