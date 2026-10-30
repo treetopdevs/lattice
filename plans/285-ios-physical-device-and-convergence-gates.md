@@ -31,17 +31,21 @@ mobile secure-store done gates in `docs/township_mobile_secure_store_strategy.md
    relaunch.
 2. **Physical-device reboot.** Extend the device smoke with a device reboot cycle and record the
    Keychain accessibility class the protected store uses, including behavior before first unlock.
-3. **iOS persisted-cap onboarding and BEAM convergence.** Drive pairing, cap acquisition, op
-   authoring, and carrier sync through the iOS app path against a real BEAM peer, mirroring the
-   Android release convergence smokes.
-4. **Hosted CI decision.** The operator decides whether the signed simulator smoke, the erase
-   control, and any physical-device gate belong in hosted CI or stay local-only opt-in gates.
-5. **Physical multi-device LAN discovery smoke.**
+3. **iOS persisted-cap onboarding and BEAM convergence.** Add an iOS counterpart of
+   `tauri:android:release:browser-onboarding:smoke`: on the connected iPhone, the installed app
+   pairs, acquires a persisted cap, authors one op with its protected key and syncs it to a real BEAM
+   carrier peer. Pass criteria: the peer's materialized state equals `Lattice.Sim` for the same
+   scenario, and after an app relaunch the iPhone reuses the same key and cap. Evidence: the
+   device's public key, the op id, and the Sim comparison output.
+4. **Hosted CI decision.** The operator decides, for each of the simulator relaunch smoke and items
+   1-3, whether it runs in hosted CI (and on which runner) or stays a local opt-in gate. Record the
+   decision as a dated line in this plan and in the index row; this item adds no CI job by itself.
 
 ## Out of Scope
 
 - Changing the Plan 077 simulator contracts beyond what the device variants share.
 - Any claim of phone-grade persistence before items 1–3 are green.
+- Physical multi-device LAN discovery; it is parked separately in `TOWNSHIP_BUILD_MAP.md` §4a.
 
 ## STOP Conditions
 

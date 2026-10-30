@@ -31,17 +31,22 @@ assert.ok(
   `simulator ${template.udid} did not report a deviceTypeIdentifier`,
 );
 const throwawayName = `township-077-erase-control-${Date.now()}`;
-const throwawayUdid = (
-  await run(
-    "xcrun",
-    ["simctl", "create", throwawayName, template.deviceTypeIdentifier, template.runtime],
-    60_000,
-  )
-).trim();
-assert.match(throwawayUdid, /^[0-9A-F-]{36}$/, `simctl create returned ${throwawayUdid}`);
-assert.notEqual(throwawayUdid, template.udid, "erase control must not target the template simulator");
+const createOutput = await run(
+  "xcrun",
+  ["simctl", "create", throwawayName, template.deviceTypeIdentifier, template.runtime],
+  60_000,
+);
+// From here on the simulator exists, so every failure must reach the cleanup below. `run` joins
+// stdout and stderr, so take the UDID out of the output rather than expecting it alone.
+let throwawayUdid: string | undefined;
 
 try {
+  throwawayUdid = createOutput.match(
+    /\b[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\b/i,
+  )?.[0];
+  assert.ok(throwawayUdid, `simctl create returned no UDID: ${createOutput}`);
+  assert.notEqual(throwawayUdid, template.udid, "erase control must not target the template simulator");
+
   await bootSimulator(throwawayUdid, firstBootTimeoutMs);
   await installApp(throwawayUdid);
   const beforeErase = await launchAndProbe(throwawayUdid);
@@ -64,10 +69,14 @@ try {
     "control iOS protected key survived simulator erase; persistence is not Keychain-backed",
   );
 } finally {
-  await terminateApp(throwawayUdid).catch(() => undefined);
-  await shutdownSimulator(throwawayUdid).catch(() => undefined);
-  await run("xcrun", ["simctl", "delete", throwawayUdid], 60_000).catch((error: unknown) => {
-    console.error(`failed to delete throwaway simulator ${throwawayUdid}: ${String(error)}`);
+  // The name is unique to this run, so it still identifies the simulator if no UDID was parsed.
+  const throwaway = throwawayUdid ?? throwawayName;
+  if (throwawayUdid) {
+    await terminateApp(throwawayUdid).catch(() => undefined);
+    await shutdownSimulator(throwawayUdid).catch(() => undefined);
+  }
+  await run("xcrun", ["simctl", "delete", throwaway], 60_000).catch((error: unknown) => {
+    console.error(`failed to delete throwaway simulator ${throwaway}: ${String(error)}`);
   });
 }
 

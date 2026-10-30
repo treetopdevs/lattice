@@ -1955,7 +1955,8 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
   );
   assert.match(
     iosKeyEraseControlSmoke,
-    /finally \{[\s\S]*"simctl", "delete", throwawayUdid/,
+    /throwawayUdid = createOutput\.match\([\s\S]*\} finally \{[\s\S]*const throwaway = throwawayUdid \?\? throwawayName;[\s\S]*"simctl", "delete", throwaway\]/,
+    "UDID parsing must sit inside the cleanup scope, and cleanup must fall back to the unique name",
   );
   assert.match(
     iosKeyEraseControlSmoke,
