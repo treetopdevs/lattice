@@ -93,7 +93,9 @@ export async function selectSimulator(): Promise<SimulatorDevice> {
 }
 
 export async function bootSimulator(udid: string, bootTimeoutMs = 180_000): Promise<void> {
-  await run("xcrun", ["simctl", "boot", udid], 60_000);
+  // A first boot after create or erase can hold `simctl boot` itself for minutes; killing it
+  // part-way leaves the simulator shut down, so it gets the same budget as the boot wait.
+  await run("xcrun", ["simctl", "boot", udid], bootTimeoutMs);
   await waitForBoot(udid, bootTimeoutMs);
 }
 
@@ -120,7 +122,7 @@ export async function terminateApp(udid: string): Promise<void> {
   await run("xcrun", ["simctl", "terminate", udid, appId], 30_000);
 }
 
-export async function launchAndProbe(udid: string): Promise<KeyProbeResult> {
+export async function launchAndProbe(udid: string, probeTimeoutMs = 60_000): Promise<KeyProbeResult> {
   // Only records logged after this launch count: a PID can be reused after a reboot, and the
   // earlier launch's probe lines would otherwise match and pass with stale keys.
   const launchedAt = Date.now();
@@ -128,7 +130,7 @@ export async function launchAndProbe(udid: string): Promise<KeyProbeResult> {
   const pid = output.match(/:\s+(\d+)\s*$/m)?.[1];
   assert.ok(pid, `simctl launch did not return a process id: ${output.trim()}`);
 
-  const lines = await waitForProbeLines(udid, pid, launchedAt, 60_000);
+  const lines = await waitForProbeLines(udid, pid, launchedAt, probeTimeoutMs);
   const probes = new Map(
     lines.map((line) => {
       const fields = parseProbeFields(line);
@@ -154,7 +156,11 @@ async function waitForProbeLines(
   const deadline = Date.now() + timeoutMs;
   const predicate = `processIdentifier == ${pid} AND eventMessage CONTAINS "${probePrefix}"`;
 
+  let lastError: unknown;
+
   while (Date.now() < deadline) {
+    // On a freshly erased simulator's first boot the log store is still settling, so `log show`
+    // can fail or run long. Treat that as "not yet" and retry within the overall deadline.
     const logs = await run(
       "xcrun",
       [
@@ -170,8 +176,11 @@ async function waitForProbeLines(
         "--predicate",
         predicate,
       ],
-      30_000,
-    );
+      Math.max(5_000, Math.min(60_000, deadline - Date.now())),
+    ).catch((error: unknown) => {
+      lastError = error;
+      return "";
+    });
     const lines = logs
       .split(/\r?\n/)
       .filter((candidate) => candidate.includes(`LATTICE_PROBE: ${probePrefix} `))
@@ -183,7 +192,8 @@ async function waitForProbeLines(
     await delay(250);
   }
 
-  throw new Error(`timed out waiting for ${probePrefix} from Township pid ${pid}`);
+  const reason = lastError === undefined ? "" : `; last log read failed: ${String(lastError)}`;
+  throw new Error(`timed out waiting for ${probePrefix} from Township pid ${pid}${reason}`);
 }
 
 // The simulator shares the host clock and `log show` reads and prints local time.

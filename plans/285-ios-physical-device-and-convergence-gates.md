@@ -9,13 +9,21 @@ PROGRESS) proves the Xcode 26.6 simulator archive and two independently named pr
 that differ and survive process relaunch. It does not prove reboot, physical-device behavior, iOS
 BEAM convergence or CI enforcement.
 
-This plan's first change adds two simulator smokes that have not yet run green:
-`tauri:ios:key-reuse:smoke` now also requires both keys to survive a simulator shutdown/boot cycle,
-and `tauri:ios:key-erase-control:smoke` erases a throwaway simulator and requires new keys afterwards.
-On 2026-10-28 the probe archive did not build on this machine: Xcode 26.6 had been replaced by Xcode
-27.0 beta and 27.1, and both fail to resolve UIKit/AppKit/WebKit for Tauri 2.11.5's Swift package
-before any Township code compiles. Under Plan 077's stop rule that is a toolchain failure, not an app
-result. Run both smokes under Xcode 26.6 before claiming either proof.
+This plan's first change adds two simulator smokes and upgrades the Township shell to Tauri 2.12
+(tauri 2.12.5, CLI 2.12.4), whose swift-rs builds the iOS Swift bridge against the Xcode 27 SDKs;
+Tauri 2.11.5 could not (UIKit/AppKit/WebKit not found). Local results on 2026-10-30, macOS 27.2 host,
+Xcode 27.0 (27A5194q) archive:
+
+- `tauri:ios:key-reuse:smoke` passed on an iOS 27.0 and an iOS 26.5 iPhone 17 Pro simulator: both
+  protected keys survived process relaunch and a full simulator shutdown/boot.
+- `tauri:ios:key-erase-control:smoke` passed on a throwaway iOS 26.5 simulator: after `simctl erase`
+  both keys were regenerated, and the throwaway was deleted.
+- `ios:native-probe-feature:contract` builds the device library under Xcode 27.0, so the old
+  pre-Xcode-27 SDK ceiling is removed.
+
+Host caveats: a first boot after create or erase took about 8.5 minutes; this host has two iOS 27.0
+runtime images under one identifier, and simulators bound to it later failed to boot ("runtime path
+not found"). Neither run is enforced in CI, and none proves physical-device behavior.
 
 ## Objective
 

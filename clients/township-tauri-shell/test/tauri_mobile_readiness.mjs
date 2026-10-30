@@ -2329,7 +2329,8 @@ test("Tauri mobile targets are scaffolded without claiming phone-grade convergen
     /execFileSync\("\/usr\/bin\/xcode-select", \["-p"\]/,
   );
   assert.match(iosNativeProbeFeatureContract, /--show-sdk-version/);
-  assert.match(iosNativeProbeFeatureContract, /sdkMajor < 27/);
+  // Tauri 2.12 builds the Swift bridge against the Xcode 27 SDKs, so no SDK ceiling remains.
+  assert.doesNotMatch(iosNativeProbeFeatureContract, /sdkMajor < 27/);
   assert.match(iosNativeProbeFeatureContract, /existsSync\(swiftRsClang\)/);
   assert.match(iosDeviceKeyReuseBuildSupport, /ENTITLEMENTS_ALLOWED: "YES"/);
   assert.match(iosDeviceKeyReuseBuildSupport, /generatedSourceSnapshots/);

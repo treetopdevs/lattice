@@ -19,9 +19,9 @@ import {
 
 console.log("\n▸ Township iOS simulator protected-key erase control (throwaway simulator)");
 
-// A freshly created or erased simulator performs first-boot data migration, which can take
-// several minutes; the normal reboot in the reuse smoke stays on the shorter default.
-const firstBootTimeoutMs = 600_000;
+// A freshly created or erased simulator performs first-boot data migration, which took about
+// 8.5 minutes on a macOS 27 host; the normal reboot in the reuse smoke stays on the shorter default.
+const firstBootTimeoutMs = 900_000;
 
 await assertSimulatorAppReady();
 
@@ -51,14 +51,14 @@ try {
 
   await bootSimulator(throwawayUdid, firstBootTimeoutMs);
   await installApp(throwawayUdid);
-  const beforeErase = await launchAndProbe(throwawayUdid);
+  const beforeErase = await launchAndProbe(throwawayUdid, firstBootTimeoutMs);
   await terminateApp(throwawayUdid);
 
   await shutdownSimulator(throwawayUdid);
   await eraseThrowaway(throwawayUdid);
   await bootSimulator(throwawayUdid, firstBootTimeoutMs);
   await installApp(throwawayUdid);
-  const afterErase = await launchAndProbe(throwawayUdid);
+  const afterErase = await launchAndProbe(throwawayUdid, firstBootTimeoutMs);
 
   assert.notEqual(
     afterErase.primaryPublicKeyBase64Url,

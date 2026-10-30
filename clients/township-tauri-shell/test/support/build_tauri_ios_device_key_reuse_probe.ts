@@ -136,10 +136,6 @@ async function buildDeviceArchive(): Promise<void> {
     Number.isInteger(sdkMajor),
     "selected developer directory did not report an iPhoneOS SDK version",
   );
-  assert.ok(
-    sdkMajor < 27,
-    "Tauri 2.11.5 cannot compile its Swift bridge with the iPhoneOS 27 beta SDK; set TOWNSHIP_IOS_BUILD_DEVELOPER_DIR to a compatible stable Xcode",
-  );
 
   const cargoTargetDir = join(
     shellRoot,
