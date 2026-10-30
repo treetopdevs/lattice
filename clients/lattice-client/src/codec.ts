@@ -102,16 +102,24 @@ const witnessedSuccessionArtifactDomain = "lattice-succession-witness-artifact-v
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
  * narrow CBOR-shaped subset as `Lattice.Canonical.op_payload/1`.
+ *
+ * The body and the cap each get their own `maxTermDepth` container budget, as in
+ * `Lattice.Carrier.Wire.decode_op/1`; a deeper term throws `malformed carrier term depth`.
+ * `depthBudget` exists only so test fixtures can sign deliberately over-deep frames;
+ * production callers must not pass it.
  */
-export function canonicalBytesForCarrierOp(frame: CarrierOpFrame): Uint8Array {
+export function canonicalBytesForCarrierOp(
+  frame: CarrierOpFrame,
+  depthBudget: number = maxTermDepth,
+): Uint8Array {
   return encodeArray([
     encodeBinaryString(opTag),
     encodeBinaryString(frame.replica),
     encodeBytes(requireCanonicalBase64Bytes(frame.author, 32)),
     encodeArray(uniqueSorted(frame.deps).map(encodeBinaryString)),
     encodeAtom(frame.kind),
-    encodeCarrierTerm(frame.body),
-    encodeCarrierTerm(frame.cap),
+    encodeCarrierTerm(frame.body, depthBudget),
+    encodeCarrierTerm(frame.cap, depthBudget),
   ]);
 }
 
@@ -600,7 +608,10 @@ function readByte(reader: CanonicalReader): number {
   return value;
 }
 
-function encodeCarrierTerm(term: CarrierTerm): Uint8Array {
+// Row 286: the encoder spends the same container budget as the decoders (`maxTermDepth`, BEAM
+// `@max_decode_depth`) and refuses on descent, so a hand-built, never-decoded frame fails with a
+// typed error instead of a stack RangeError. No admitted term changes its canonical bytes.
+function encodeCarrierTerm(term: CarrierTerm, depth: number = maxTermDepth): Uint8Array {
   const [tag] = term;
 
   switch (tag) {
@@ -615,13 +626,13 @@ function encodeCarrierTerm(term: CarrierTerm): Uint8Array {
     case "atom":
       return encodeAtom(term[1]);
     case "list":
-      return encodeArray(term[1].map(encodeCarrierTerm));
+      return encodeArray(encodeChildren(term[1], depth));
     case "tuple":
-      return encodeTagged(tupleTag, encodeArray(term[1].map(encodeCarrierTerm)));
+      return encodeTagged(tupleTag, encodeArray(encodeChildren(term[1], depth)));
     case "map":
-      return encodeMap(term[1]);
+      return encodeMap(term[1], depth);
     case "mapset": {
-      const elements = term[1].map(encodeCarrierTerm).sort(compareBytes);
+      const elements = encodeChildren(term[1], depth).sort(compareBytes);
       for (let i = 1; i < elements.length; i++) {
         if (compareBytes(elements[i - 1]!, elements[i]!) === 0) {
           throw new Error("duplicate canonical mapset element");
@@ -632,6 +643,16 @@ function encodeCarrierTerm(term: CarrierTerm): Uint8Array {
     case "delegation":
       return encodeDelegation(term[1]);
   }
+}
+
+function enterContainer(depth: number): number {
+  if (depth <= 0) throw new Error("malformed carrier term depth");
+  return depth - 1;
+}
+
+function encodeChildren(children: CarrierTerm[], depth: number): Uint8Array[] {
+  const childDepth = enterContainer(depth);
+  return children.map((child) => encodeCarrierTerm(child, childDepth));
 }
 
 function encodeDelegation(delegation: CarrierDelegation): Uint8Array {
@@ -654,9 +675,10 @@ function encodeDelegation(delegation: CarrierDelegation): Uint8Array {
   return encodeTagged(delegationTermTag, encodeArray(fields));
 }
 
-function encodeMap(pairs: [CarrierTerm, CarrierTerm][]): Uint8Array {
+function encodeMap(pairs: [CarrierTerm, CarrierTerm][], depth: number): Uint8Array {
+  const childDepth = enterContainer(depth);
   const encoded = pairs
-    .map(([key, value]) => [encodeCarrierTerm(key), encodeCarrierTerm(value)] as const)
+    .map(([key, value]) => [encodeCarrierTerm(key, childDepth), encodeCarrierTerm(value, childDepth)] as const)
     .sort(([left], [right]) => compareBytes(left, right));
 
   for (let i = 1; i < encoded.length; i++) {

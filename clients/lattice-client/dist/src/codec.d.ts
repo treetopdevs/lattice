@@ -60,8 +60,13 @@ export interface AuthorCarrierOpInput {
 /**
  * Encode the signed/hashable core of a BEAM carrier op frame using the same
  * narrow CBOR-shaped subset as `Lattice.Canonical.op_payload/1`.
+ *
+ * The body and the cap each get their own `maxTermDepth` container budget, as in
+ * `Lattice.Carrier.Wire.decode_op/1`; a deeper term throws `malformed carrier term depth`.
+ * `depthBudget` exists only so test fixtures can sign deliberately over-deep frames;
+ * production callers must not pass it.
  */
-export declare function canonicalBytesForCarrierOp(frame: CarrierOpFrame): Uint8Array;
+export declare function canonicalBytesForCarrierOp(frame: CarrierOpFrame, depthBudget?: number): Uint8Array;
 /** Hash canonical signed bytes to the Lattice op id format. */
 export declare function canonicalHash(bytes: Uint8Array): Promise<string>;
 export declare function verifyCarrierOpHash(frame: CarrierOpFrame): Promise<boolean>;
