@@ -757,6 +757,86 @@ catch (error) {
     malformedDecodeFailure = error instanceof Error ? error.message : String(error);
 }
 check("decodeCarrierOpFrame refuses a malformed atom term", malformedRefusal.test(malformedDecodeFailure), true);
+function nestChain(tag, count, leaf = ["nil"]) {
+    let term = leaf;
+    for (let i = 0; i < count; i++) {
+        if (tag === "map-value")
+            term = ["map", [[["atom", "post"], term]]];
+        else if (tag === "map-key")
+            term = ["map", [[term, ["nil"]]]];
+        else
+            term = [tag, [term]];
+    }
+    return term;
+}
+const depthFrame = (id, set) => badAtomFrame(`depth-${id}`, set);
+const argBody = (inner) => ["tuple", [["atom", "post"], ["list", [inner]]]];
+const strictDecodeOutcome = (frame) => {
+    try {
+        decodeCarrierOpFrame(frame);
+        return "admit";
+    }
+    catch (error) {
+        return error instanceof Error && malformedRefusal.test(error.message) ? "refuse" : `other:${String(error)}`;
+    }
+};
+for (const tag of ["list", "tuple", "mapset", "map-value", "map-key"]) {
+    // Body: tuple + list consume 2, so 62 nested containers is the deepest admitted.
+    check(`depth ${tag} body 64 admitted`, strictDecodeOutcome(depthFrame(`${tag}-b64`, (f) => Reflect.set(f, "body", argBody(nestChain(tag, 62))))), "admit");
+    check(`depth ${tag} body 65 refused`, strictDecodeOutcome(depthFrame(`${tag}-b65`, (f) => Reflect.set(f, "body", argBody(nestChain(tag, 63))))), "refuse");
+    check(`depth ${tag} cap 64 admitted`, strictDecodeOutcome(depthFrame(`${tag}-c64`, (f) => Reflect.set(f, "cap", nestChain(tag, 64)))), "admit");
+    check(`depth ${tag} cap 65 refused`, strictDecodeOutcome(depthFrame(`${tag}-c65`, (f) => Reflect.set(f, "cap", nestChain(tag, 65)))), "refuse");
+}
+const deepGood = depthFrame("batch-good", (f) => Reflect.set(f, "body", argBody(nestChain("list", 62))));
+const deepBad = depthFrame("batch-bad", (f) => Reflect.set(f, "body", argBody(nestChain("list", 63))));
+check("depth 64 direct ingest yields one op per frame", carrierOpsToSemanticOps([deepGood, listedCommandFrame], vector.realmByPubkey).length, 2);
+refusedMalformed("depth 65 refuses the valid sibling (bad first)", [deepBad, listedCommandFrame]);
+refusedMalformed("depth 65 refuses the valid sibling (bad last)", [listedCommandFrame, deepBad]);
+// Delegation terms and scalar leaves consume no depth.
+check("scalar leaf under 64 containers admitted", strictDecodeOutcome(depthFrame("scalar", (f) => Reflect.set(f, "cap", nestChain("list", 64, ["int", 5])))), "admit");
+// Genesis and witnessed-beacon bodies are split by hand in decodeCarrierBody; pin their boundary.
+const genesisBody = (k) => ["tuple", [["atom", "genesis"], ["nil"], ["map", [[["atom", "post"], nestChain("list", k)]]]]];
+const beaconBody = (k) => ["tuple", [["atom", "beacon"], nestChain("list", k), ["map", [[["atom", "post"], ["nil"]]]]]];
+const authorityDepthFrame = (id, body) => depthFrame(id, (f) => { Reflect.set(f, "kind", "authority"); Reflect.set(f, "body", body); });
+check("genesis policy value at depth 64 admitted", strictDecodeOutcome(authorityDepthFrame("g64", genesisBody(62))), "admit");
+check("genesis policy value at depth 65 refused", strictDecodeOutcome(authorityDepthFrame("g65", genesisBody(63))), "refuse");
+check("beacon claim at depth 64 admitted", strictDecodeOutcome(authorityDepthFrame("k64", beaconBody(63))), "admit");
+check("beacon claim at depth 65 refused", strictDecodeOutcome(authorityDepthFrame("k65", beaconBody(64))), "refuse");
+// A hostile chain must refuse cleanly rather than overflow the stack, at every entry point.
+for (const depth of [10_000, 200_000]) {
+    const hostile = depthFrame(`hostile-${depth}`, (f) => Reflect.set(f, "body", argBody(nestChain("list", depth))));
+    const hostileCap = depthFrame(`hostile-cap-${depth}`, (f) => Reflect.set(f, "cap", nestChain("map-value", depth)));
+    for (const [label, frame] of [["body", hostile], ["cap", hostileCap]]) {
+        for (const [entry, run] of [
+            ["decodeCarrierOpFrame", () => decodeCarrierOpFrame(frame)],
+            ["carrierOpsToSemanticOps", () => carrierOpsToSemanticOps([frame], vector.realmByPubkey)],
+        ]) {
+            let outcome = "admitted";
+            try {
+                run();
+            }
+            catch (error) {
+                outcome = error instanceof RangeError ? "RangeError" : malformedRefusal.test(String(error)) ? "refused" : String(error);
+            }
+            check(`${depth}-deep ${label} refuses cleanly via ${entry}`, outcome, "refused");
+        }
+    }
+    let delegationsThrew = false;
+    try {
+        carrierDelegationsFromFrames([hostile]);
+    }
+    catch {
+        delegationsThrew = true;
+    }
+    check(`${depth}-deep body does not throw from carrierDelegationsFromFrames`, delegationsThrew, false);
+}
+// Row 211: only canonical decimal text is an integer; the BEAM decoder refuses the same strings.
+for (const text of ["007", "+1", "-0", "00", "01", "-1", " 1", "1_0", "0x1", ""]) {
+    check(`non-canonical integer ${JSON.stringify(text)} refused in argument position`, strictDecodeOutcome(depthFrame(`int-${text}`, (f) => Reflect.set(f, "body", argBody(["int", text])))), "refuse");
+}
+for (const value of ["0", "9007199254740991", 5]) {
+    check(`canonical integer ${JSON.stringify(value)} admitted in argument position`, strictDecodeOutcome(depthFrame(`int-ok-${value}`, (f) => Reflect.set(f, "body", argBody(["int", value])))), "admit");
+}
 function committedFrameNames(path, names) {
     const visit = (value) => {
         if (Array.isArray(value)) {
@@ -835,6 +915,16 @@ check("authorCarrierOp refuses a malformed atom term before signing", malformedR
 const listedAuthored = await authorCarrierOp(authoringInput("admin"));
 check("a listed name authors a hash-valid frame", await verifyCarrierOpHash(listedAuthored), true);
 check("a listed authored frame round-trips through semantic decode", carrierOpsToSemanticOps([listedAuthored], {}).map((op) => op.id), [listedAuthored.id]);
+let deepAuthoring = "";
+try {
+    await authorCarrierOp({ ...authoringInput("admin"), body: nestChain("list", 65) });
+    deepAuthoring = "signed";
+}
+catch (error) {
+    deepAuthoring = error instanceof Error ? error.message : String(error);
+}
+check("authorCarrierOp refuses a depth-65 body before signing", malformedRefusal.test(deepAuthoring), true);
+check("authorCarrierOp signs a depth-64 body", (await authorCarrierOp({ ...authoringInput("admin"), body: nestChain("list", 64) })).id.length > 0, true);
 const uncheckedAuthored = await authorCarrierOpUnchecked(authoringInput(offList));
 check("the test-only unchecked author still signs a hash-valid frame", await verifyCarrierOpHash(uncheckedAuthored), true);
 refused("a signed frame with an off-list name is still refused at ingest", [uncheckedAuthored]);

@@ -160,7 +160,9 @@ test("generic composite depth64 remains portable and depth65 refuses explicitly"
         let body = ["nil"];
         for (let i = 0; i < depth; i++)
             body = ["list", [body]];
-        const frame = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body });
+        // authorCarrierOp now refuses depth 65 before signing; the unchecked twin still signs it.
+        const author = depth === 64 ? authorCarrierOp : authorCarrierOpUnchecked;
+        const frame = await author({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body });
         const result = await derive({ replica: f.replica, frames: [frame], rejected: [] });
         if (depth === 64)
             assert.equal(result.ok, true);

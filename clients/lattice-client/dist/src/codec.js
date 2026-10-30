@@ -52,7 +52,7 @@ export async function verifyCarrierOp(frame, verifier) {
  * ignores malformed shapes (the decoders own those), except that an atom term's arity and
  * name type are checked here: the BEAM refuses the whole batch for a malformed atom term.
  */
-export function assertWireVocabularyTerm(term) {
+export function assertWireVocabularyTerm(term, depth = maxTermDepth) {
     if (!Array.isArray(term))
         return;
     const [tag, value] = term;
@@ -65,14 +65,20 @@ export function assertWireVocabularyTerm(term) {
         case "list":
         case "tuple":
         case "mapset":
+            // Entering a container spends one level, as `Lattice.Carrier.Wire` does; refuse on descent.
+            if (depth <= 0)
+                throw new Error("malformed carrier op");
             if (Array.isArray(value))
-                value.forEach(assertWireVocabularyTerm);
+                value.forEach((child) => assertWireVocabularyTerm(child, depth - 1));
             return;
         case "map":
+            if (depth <= 0)
+                throw new Error("malformed carrier op");
             if (Array.isArray(value)) {
-                for (const pair of value)
+                for (const pair of value) {
                     if (Array.isArray(pair))
-                        pair.forEach(assertWireVocabularyTerm);
+                        pair.forEach((child) => assertWireVocabularyTerm(child, depth - 1));
+                }
             }
             return;
         case "delegation":
@@ -244,7 +250,7 @@ export function carrierTermFromCanonicalBytes(input) {
     return term;
 }
 // Mirrors `Lattice.Carrier.Wire`'s @max_decode_depth container budget.
-const maxTermDepth = 64;
+export const maxTermDepth = 64;
 const maxJsonSafeInteger = BigInt(Number.MAX_SAFE_INTEGER);
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 function decodeCarrierTerm(reader, depth) {

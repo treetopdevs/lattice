@@ -1,0 +1,1396 @@
+{
+  "canonicalOps": [
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258597265706c6963613a6d61747465723a776972652d6e6f6e63616e6f6e6963616c2d696e746567657223726f6f743a7850593937655375556f74784e746a6d41686b5f4d30714c323254594a735f6174796339527375695453735820e2f1734cd42a6cea279df79dc71150f1edf029c7d6995c090ce0a6f4692a6ac380d9ea6049617574686f72697479d9ea6183d9ea604767656e65736973d9ea6389582b452d4b4969555774385232706277386a5f4e5543502d346b647767676b365533464a3556384f4c4473636b58597265706c6963613a6d61747465723a776972652d6e6f6e63616e6f6e6963616c2d696e746567657223726f6f743a7850593937655375556f74784e746a6d41686b5f4d30714c323254594a735f6174796339527375695453735820e2f1734cd42a6cea279df79dc71150f1edf029c7d6995c090ce0a6f4692a6ac35820e2f1734cd42a6cea279df79dc71150f1edf029c7d6995c090ce0a6f4692a6ac3f688d9ea604561646d6974d9ea604c636c6f73655f6d6174746572d9ea604d6c696e6b5f656c656374696f6ed9ea6044706f7374d9ea604d72656d6f76655f6d656d626572d9ea604d72656f70656e5f6d6174746572d9ea604b7365745f73756d6d617279d9ea60497365745f7469746c6581d9ea6045636c65726bf558402f05ab7a1bcbed6598c701cf591bf12f2d180bafe00bac4d1f88fd72cf2322cd1baaa02c1feb9f5a1b89e5ee86ec6e4f08477d1aa5d46ace31ddef44a1637604a0f6",
+      "hash": "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U",
+      "id": "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258597265706c6963613a6d61747465723a776972652d6e6f6e63616e6f6e6963616c2d696e746567657223726f6f743a7850593937655375556f74784e746a6d41686b5f4d30714c323254594a735f6174796339527375695453735820e2f1734cd42a6cea279df79dc71150f1edf029c7d6995c090ce0a6f4692a6ac381582b6e725a46724d4466543533474f39624675554747744c5133542d65776e734f52584754336c643432515f55d9ea6049617574686f72697479d9ea6182d9ea60456772616e74d9ea6389582b5774666a73627348594d6b792d337970566559564e51485a6734596a3165305f304d68394931345556387758597265706c6963613a6d61747465723a776972652d6e6f6e63616e6f6e6963616c2d696e746567657223726f6f743a7850593937655375556f74784e746a6d41686b5f4d30714c323254594a735f6174796339527375695453735820e2f1734cd42a6cea279df79dc71150f1edf029c7d6995c090ce0a6f4692a6ac35820c00343e5df4e99859ef63940c4f7a30d76610a951dd1dada2eb25e4464553dce582b452d4b4969555774385232706277386a5f4e5543502d346b647767676b365533464a3556384f4c4473636b81d9ea6044706f737480f45840a447269e98b598020efdcb8aba80267eb5c51be0a9c9f3c030909e55cb94b3d5738b83db42bbf21379362026dd0a6443f4e737fa55f9dd9265bab7805190fe03f6",
+      "hash": "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w",
+      "id": "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258597265706c6963613a6d61747465723a776972652d6e6f6e63616e6f6e6963616c2d696e746567657223726f6f743a7850593937655375556f74784e746a6d41686b5f4d30714c323254594a735f6174796339527375695453735820c00343e5df4e99859ef63940c4f7a30d76610a951dd1dada2eb25e4464553dce81582b586962626f4b4c697a65745857476f5476537845586144476b7363565f466d5f66566d306c4164374a3877d9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481456669727374582b5774666a73627348594d6b792d337970566559564e51485a6734596a3165305f304d683949313455563877",
+      "hash": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+      "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+      "suite": "lattice-cbor-v1"
+    },
+    {
+      "bytesHex": "874d6c6174746963652d6f702d763258597265706c6963613a6d61747465723a776972652d6e6f6e63616e6f6e6963616c2d696e746567657223726f6f743a7850593937655375556f74784e746a6d41686b5f4d30714c323254594a735f6174796339527375695453735820c00343e5df4e99859ef63940c4f7a30d76610a951dd1dada2eb25e4464553dce81582b326243394f716c54414f4a56356e664f6a6136664e6a764447554a7934344d694848426a5751796c536867d9ea6047636f6d6d616e64d9ea6182d9ea6044706f737481467365636f6e64582b5774666a73627348594d6b792d337970566559564e51485a6734596a3165305f304d683949313455563877",
+      "hash": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+      "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+      "suite": "lattice-cbor-v1"
+    }
+  ],
+  "capabilityCase": {
+    "case": "wire_noncanonical_integer_refusal",
+    "honoredOperationId": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+    "wireCases": [
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "007"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"007\" bad first",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "007"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"007\" bad last",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "+1"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"+1\" bad first",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "+1"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"+1\" bad last",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "-0"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"-0\" bad first",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "-0"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"-0\" bad last",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "00"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"00\" bad first",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "00"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"00\" bad last",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "-1"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"-1\" bad first",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "-1"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"-1\" bad last",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "01"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"01\" bad first",
+        "position": "body argument"
+      },
+      {
+        "decode": "malformed_op",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "01"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          }
+        ],
+        "name": "body argument int \"01\" bad last",
+        "position": "body argument"
+      },
+      {
+        "decode": "admit",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "0"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "control string 0",
+        "position": "control"
+      },
+      {
+        "decode": "admit",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      "9007199254740991"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "control string 2^53-1",
+        "position": "control"
+      },
+      {
+        "decode": "admit",
+        "frames": [
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "int",
+                      5
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+            ],
+            "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+            "v": 1
+          },
+          {
+            "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+            "body": [
+              "tuple",
+              [
+                [
+                  "atom",
+                  "post"
+                ],
+                [
+                  "list",
+                  [
+                    [
+                      "bin",
+                      "c2Vjb25k"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "cap": [
+              "bin",
+              "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+            ],
+            "deps": [
+              "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+            ],
+            "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+            "kind": "command",
+            "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+            "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+            "v": 1
+          }
+        ],
+        "name": "control number 5",
+        "position": "control"
+      }
+    ]
+  },
+  "expectAtFrontier": [],
+  "expectAtFullFrontier": {
+    "authorityQuarantine": [],
+    "quarantine": [],
+    "state": {
+      "clerk": "clerk",
+      "clerk_locked": false,
+      "members": [],
+      "posts": [
+        "first",
+        "second"
+      ],
+      "summary": "",
+      "title": ""
+    },
+    "winners": {
+      "clerk": "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U",
+      "clerk_locked": null,
+      "summary": null,
+      "title": null
+    }
+  },
+  "generatedBy": "Lattice.Sim",
+  "ops": [
+    {
+      "author": "clerk",
+      "command": "genesis clerk",
+      "deps": [],
+      "field": "clerk",
+      "hash": "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U",
+      "id": "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U",
+      "kind": "authority",
+      "mutation": "write",
+      "value": "clerk"
+    },
+    {
+      "author": "clerk",
+      "command": "grant resident",
+      "deps": [
+        "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U"
+      ],
+      "field": "__authority",
+      "hash": "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w",
+      "id": "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w",
+      "kind": "authority",
+      "mutation": "write",
+      "value": null
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+      ],
+      "field": "posts",
+      "hash": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+      "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+      "kind": "command",
+      "mutation": "append",
+      "value": "first"
+    },
+    {
+      "author": "resident",
+      "command": "post",
+      "deps": [
+        "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+      ],
+      "field": "posts",
+      "hash": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+      "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+      "kind": "command",
+      "mutation": "append",
+      "value": "second"
+    }
+  ],
+  "oracleCarrierOps": [
+    {
+      "author": "4vFzTNQqbOonnfedxxFQ8e3wKcfWmVwJDOCm9GkqasM=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "genesis"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "4vFzTNQqbOonnfedxxFQ8e3wKcfWmVwJDOCm9GkqasM=",
+              "id": "E-KIiUWt8R2pbw8j_NUCP-4kdwggk6U3FJ5V8OLDsck",
+              "issuer": "4vFzTNQqbOonnfedxxFQ8e3wKcfWmVwJDOCm9GkqasM=",
+              "live": true,
+              "ops": [
+                "admit",
+                "close_matter",
+                "link_election",
+                "post",
+                "remove_member",
+                "reopen_matter",
+                "set_summary",
+                "set_title"
+              ],
+              "parent_id": null,
+              "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+              "roles": [
+                "clerk"
+              ],
+              "sig": "LwWrehvL7WWYxwHPWRvxLy0YC6/gC6xNH4j9cs8jIs0bqqAsH+ufWhuJ5e6G7G5PCEd9GqXUas4x3e9EoWN2BA=="
+            }
+          ],
+          [
+            "map",
+            []
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [],
+      "id": "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U",
+      "kind": "authority",
+      "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+      "sig": "MlFSYDUmBBXTtud7vF2+V5Dh5IB6+TYc4OA8w9isvNoGOCeqt/681BHXGLXULJ0MrvWr5K690vG4hkpxQz5LDg==",
+      "v": 1
+    },
+    {
+      "author": "4vFzTNQqbOonnfedxxFQ8e3wKcfWmVwJDOCm9GkqasM=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "grant"
+          ],
+          [
+            "delegation",
+            {
+              "audience": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+              "id": "WtfjsbsHYMky-3ypVeYVNQHZg4Yj1e0_0Mh9I14UV8w",
+              "issuer": "4vFzTNQqbOonnfedxxFQ8e3wKcfWmVwJDOCm9GkqasM=",
+              "live": false,
+              "ops": [
+                "post"
+              ],
+              "parent_id": "E-KIiUWt8R2pbw8j_NUCP-4kdwggk6U3FJ5V8OLDsck",
+              "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+              "roles": [],
+              "sig": "pEcmnpi1mAIO/cuKuoAmfrXFG+CpyfPAMJCeVcuUs9Vzi4PbQrvyE3k2ICbdCmRD9Oc3+lX53ZJlureAUZD+Aw=="
+            }
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "nrZFrMDfT53GO9bFuUGGtLQ3T-ewnsORXGT3ld42Q_U"
+      ],
+      "id": "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w",
+      "kind": "authority",
+      "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+      "sig": "ZN7v0BoarnD5q+D8EV4wSe5n1HVBxSVlwmQrhq0tIQp6M4oo6ORSq7x6kX1MJ86u2tlkTBJIp6OoIDBRG9fRBA==",
+      "v": 1
+    },
+    {
+      "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "Zmlyc3Q="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+      ],
+      "deps": [
+        "XibboKLizetXWGoTvSxEXaDGkscV_Fm_fVm0lAd7J8w"
+      ],
+      "id": "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg",
+      "kind": "command",
+      "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+      "sig": "KfbsuMpTPWXy62/3v8SsQE958JQ6fPvXSBA+hBnx6gVeULeIjbUOXfs8KYrlJJXKb96FY2Rs2MdkiJbJBMUZBw==",
+      "v": 1
+    },
+    {
+      "author": "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "post"
+          ],
+          [
+            "list",
+            [
+              [
+                "bin",
+                "c2Vjb25k"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "V3RmanNic0hZTWt5LTN5cFZlWVZOUUhaZzRZajFlMF8wTWg5STE0VVY4dw=="
+      ],
+      "deps": [
+        "2bC9OqlTAOJV5nfOja6fNjvDGUJy44MiHHBjWQylShg"
+      ],
+      "id": "3cl9NQ-GGmXOITLFszdHGdjJh_OPOKsGjj5t7gB2YAQ",
+      "kind": "command",
+      "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+      "sig": "7qG8puCVMYdCxyzTJ0kWt1ABhP2UKIhxogA7j5C8pC+8UZB1EOvnmlwZMX6xfhjEXbP7g0pYOEmFR8QuiHEZCg==",
+      "v": 1
+    }
+  ],
+  "perspectives": [],
+  "realmByPubkey": {
+    "4vFzTNQqbOonnfedxxFQ8e3wKcfWmVwJDOCm9GkqasM=": "clerk",
+    "wAND5d9OmYWe9jlAxPejDXZhCpUd0draLrJeRGRVPc4=": "resident"
+  },
+  "replica": "replica:matter:wire-noncanonical-integer#root:xPY97eSuUotxNtjmAhk_M0qL22TYJs_atyc9RsuiTSs",
+  "scenario": "township_wire_noncanonical_integer_refusal",
+  "scenarioKind": "adversarial",
+  "schema": {
+    "fields": {
+      "clerk": {
+        "authority": "clerk"
+      },
+      "clerk_locked": {
+        "default": false,
+        "gatedBy": "clerk",
+        "merge": "lww"
+      },
+      "members": {
+        "merge": "or_set"
+      },
+      "posts": {
+        "merge": "causal_list"
+      },
+      "summary": {
+        "default": "",
+        "merge": "lww"
+      },
+      "title": {
+        "default": "",
+        "merge": "lww"
+      }
+    },
+    "name": "Township.Matter"
+  }
+}

@@ -367,17 +367,10 @@ defmodule Lattice.Carrier.Wire do
        when is_integer(value) and value >= 0 and value <= @max_json_safe_integer,
        do: {:ok, value}
 
-  defp decode_term(["int", value], _depth, :observation) when is_binary(value) do
+  defp decode_term(["int", value], _depth, _mode) when is_binary(value) do
     case Uint64.parse_text(value) do
       {:ok, integer} -> {:ok, integer}
       :error -> {:error, :malformed_term}
-    end
-  end
-
-  defp decode_term(["int", value], _depth, _mode) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, ""} when int >= 0 and int <= @max_canonical_integer -> {:ok, int}
-      _other -> {:error, :malformed_term}
     end
   end
 
