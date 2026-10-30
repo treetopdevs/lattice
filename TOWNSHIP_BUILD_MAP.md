@@ -345,11 +345,14 @@ variant" proofs in these areas** — in particular, no new `tauri:android:releas
 probe variants (plans 083–117 exhausted the useful emulator-provable surface). If one
 starts looking necessary, question the requirement, not the boundary (`CLAUDE.md`).
 
-- **iOS beyond local process relaunch** — stable Xcode 26.6 (Build 17F113) now builds the
+- **iOS beyond the simulator** — stable Xcode 26.6 (Build 17F113) now builds the
   entitlement-enabled simulator archive. Plan 077's local iOS 18.6 simulator smoke proves two
   independently named protected keys differ and both survive process relaunch. It does not prove
-  simulator or device reboot, physical-device behavior, iOS BEAM convergence, or CI enforcement;
-  those remaining iOS gates stay parked.
+  simulator or device reboot, physical-device behavior, iOS BEAM convergence, or CI enforcement.
+  Operator decision 2026-10-30: iOS *simulator* key-custody work is un-parked. Plan 285 adds the
+  shutdown/boot and erase-control simulator smokes, green locally under Xcode 27 with Tauri 2.12
+  but not enforced in CI. Physical-device behavior, iOS BEAM convergence and CI enforcement stay
+  parked.
 - **QR camera onboarding** — capture-to-draft is proven (plan 071); the rest is
   physical-device behavior.
 - **LAN discovery** — bounded UDP receive/advertise with loopback smoke is proven

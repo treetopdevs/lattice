@@ -21,6 +21,11 @@ Xcode 27.0 (27A5194q) archive:
 - `ios:native-probe-feature:contract` builds the device library under Xcode 27.0, so the old
   pre-Xcode-27 SDK ceiling is removed.
 
+Operator decision 2026-10-30: iOS simulator key-custody work is un-parked from
+`TOWNSHIP_BUILD_MAP.md` §4a, which covers these two smokes. Items 1-3 below still need a connected
+iPhone and item 4 needs the operator's CI decision, so under plans index rule 8 they stay parked
+until those inputs exist.
+
 Host caveats: a first boot after create or erase took about 8.5 minutes; this host has two iOS 27.0
 runtime images under one identifier, and simulators bound to it later failed to boot ("runtime path
 not found"). Neither run is enforced in CI, and none proves physical-device behavior.
