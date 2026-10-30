@@ -67,7 +67,7 @@ async function cutoffCases() {
   let deep: CarrierTerm = ["nil"];
   for (let i=0; i<64; i++) deep = ["list", [deep]];
   const depth64 = await authorCarrierOp({replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: deep});
-  const depth65 = await authorCarrierOp({replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["list", [deep]]});
+  const depth65 = await authorCarrierOpUnchecked({replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["list", [deep]]});
   cases.push({...base, name: "ts-depth64", frames: [depth64]}, {...base, name: "ts-depth65-unsupported", frames: [depth65]},
     {...base, name: "ts-bad-key-precedes-unsupported", frames: [{...depth65, author: ""}]},
     {...base, name: "ts-malformed-body-precedes-cap-depth", frames: [{...depth65, body: ["atom", 9], cap: ["list", [deep]]}]},

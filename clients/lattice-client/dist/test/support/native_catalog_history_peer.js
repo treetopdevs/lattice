@@ -59,7 +59,7 @@ async function cutoffCases() {
     for (let i = 0; i < 64; i++)
         deep = ["list", [deep]];
     const depth64 = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: deep });
-    const depth65 = await authorCarrierOp({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["list", [deep]] });
+    const depth65 = await authorCarrierOpUnchecked({ replica: f.replica, signer: f.signer, deps: [], kind: "command", cap: ["nil"], body: ["list", [deep]] });
     cases.push({ ...base, name: "ts-depth64", frames: [depth64] }, { ...base, name: "ts-depth65-unsupported", frames: [depth65] }, { ...base, name: "ts-bad-key-precedes-unsupported", frames: [{ ...depth65, author: "" }] }, { ...base, name: "ts-malformed-body-precedes-cap-depth", frames: [{ ...depth65, body: ["atom", 9], cap: ["list", [deep]] }] }, { ...base, name: "ts-malformed-rejected-scalar", frames: [], rejected: [{ frame: { ...f.forged, body: ["int", -1] }, reason: "bad_signature" }] });
     const large = await Promise.all(Array.from({ length: 32 }, (_, index) => authorCarrierOp({ replica: f.replica, signer: f.signer,
         deps: [f.genuine.id], kind: "command", cap: ["nil"], body: ["bin", Buffer.from(`${index}:` + "x".repeat(8192)).toString("base64")] })));

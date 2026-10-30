@@ -2,7 +2,7 @@
 // decisions remain attached as evidence, not a native graph-parity assertion.
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {authorCarrierOp} from "../../src/codec";
+import {authorCarrierOpUnchecked} from "./unchecked_author";
 import type {CarrierTerm} from "../../src/carrier";
 import {trustFixture, signedCatalog, fixtureId} from "./export_treehouse_catalog_trust";
 import {catalogEntryToCarrierTerm, catalogBootstrapToCarrierTerm} from "../../src/treehouse_catalog_codec";
@@ -31,7 +31,7 @@ const cases=[];
 const malformed: TreehouseCatalogRawHistory[]=f.histories.map(raw=>({...raw,frames:raw.replica===first.replica?raw.frames.map((frame,index)=>index===0?{...frame,body:["delegation",{}],sig:Buffer.alloc(64).toString("base64")}:frame):raw.frames}));
 let deep:CarrierTerm=["nil"];
 for(let i=0;i<65;i++) deep=["list",[deep]];
-const deepFrame=await authorCarrierOp({replica:first.replica,signer:first.signer,deps:[],kind:"command",cap:["nil"],body:deep});
+const deepFrame=await authorCarrierOpUnchecked({replica:first.replica,signer:first.signer,deps:[],kind:"command",cap:["nil"],body:deep});
 const deepHistories=f.histories.map(raw=>raw.replica===first.replica?{...raw,frames:[...raw.frames,deepFrame]}:raw);
 const forgedDeep=f.histories.map(raw=>raw.replica===first.replica?{...raw,frames:[...raw.frames,{...deepFrame,sig:Buffer.alloc(64).toString("base64")}]}:raw);
 const inputs:[string,TransportCatalog,TreehouseCatalogRawHistory[],string|null][]=[
