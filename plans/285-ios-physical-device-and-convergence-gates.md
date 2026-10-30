@@ -2,7 +2,7 @@
 
 ## Status
 
-TODO
+IN PROGRESS: simulator shutdown/boot and erase smokes green locally (2026-10-30); physical device, iOS BEAM convergence and CI stay parked.
 
 Filed 2026-10-20 for the iOS gates outside Plan 077's simulator scope. Plan 077 (still IN
 PROGRESS) proves the Xcode 26.6 simulator archive and two independently named protected Keychain keys
