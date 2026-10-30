@@ -207,7 +207,7 @@ async function evaluateSnapshot(value, originalOnly) {
                 fail("trust_pending", [id]);
             visiting.add(id);
             const r = node.envelope.rotation, parent = bindingFor(r.parent);
-            if (r.newCatalogKey === bootstrap.serviceKey || r.generation !== parent.generation + 1 || !safe(parent.generation + 1))
+            if (r.newCatalogKey === parent.key || r.newCatalogKey === bootstrap.serviceKey || r.generation !== parent.generation + 1 || !safe(parent.generation + 1))
                 fail("invalid_catalog_transition", [id]);
             if (!verifyCatalogRotationEnvelope(node.envelope, parent.key)) {
                 // Distinguish old signer authorization from possession under the new key.

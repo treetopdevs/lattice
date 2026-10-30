@@ -24,12 +24,25 @@ defmodule Treehouse.CatalogEntries do
 
   @spec observe(term(), term()) :: {:ok, map()} | {:error, refusal()}
   def observe(catalog, histories) do
+    case observe_with_detail(catalog, histories) do
+      {:error, reason, _refused} -> {:error, reason}
+      result -> result
+    end
+  end
+
+  @doc "Observed refusal IDs for the source trust owner; no catalog signer or route is established."
+  @spec observe_with_detail(term(), term()) ::
+          {:ok, map()} | {:error, refusal(), [binary()]}
+  def observe_with_detail(catalog, histories) do
     with {:ok, catalog} <- TransportCatalog.normalize_catalog(catalog),
          :ok <- authenticate_histories(histories),
          {:ok, space_log} <- fetch(histories, catalog.space),
          {:ok, bootstrap} <- bootstrap(space_log, catalog.bootstrap),
          :ok <- verify_entries(catalog.entries, histories, space_log, bootstrap.record) do
       {:ok, %{entries: catalog.entries, bootstrap: bootstrap}}
+    else
+      {:error, reason} -> {:error, reason, []}
+      {:error, reason, refused} -> {:error, reason, refused}
     end
   end
 
@@ -67,66 +80,144 @@ defmodule Treehouse.CatalogEntries do
     end
   end
 
-  defp verify_entries(entries, histories, space_log, record) do
-    space_analysis = Authority.analyze(Space, space_log)
-
-    entries
-    |> Enum.map(&verify_entry(&1, histories, space_log, space_analysis, record))
-    |> result()
+  @doc "Structural completeness for frozen diagnostics; this status cannot authorize a route."
+  @spec structure_status(term(), term()) :: :complete | :pending | :invalid
+  def structure_status(catalog, histories) do
+    with {:ok, catalog} <- TransportCatalog.normalize_catalog(catalog),
+         :ok <- authenticate_histories(histories),
+         {:ok, space_log} <- fetch(histories, catalog.space),
+         {:ok, bootstrap} <- structural_bootstrap(space_log, catalog.bootstrap) do
+      case catalog.entries
+           |> entry_facts(histories, space_log, bootstrap.record)
+           |> Enum.map(& &1.result)
+           |> result() do
+        :ok -> :complete
+        {:error, :trust_pending} -> :pending
+        _ -> :invalid
+      end
+    else
+      {:error, :trust_pending} -> :pending
+      _ -> :invalid
+    end
   end
 
-  defp verify_entry(entry, histories, space_log, space_analysis, record) do
+  defp structural_bootstrap(log, id) do
+    with {:ok, %Op{kind: :command, body: {:catalog_bootstrap_v1, [record]}}} <-
+           fetch(Log.ops(log), id),
+         {:ok, record} <- TransportCatalog.normalize_bootstrap(record) do
+      {:ok, %{id: id, record: record}}
+    else
+      {:error, :trust_pending} -> {:error, :trust_pending}
+      _ -> {:error, :invalid_catalog_transition}
+    end
+  end
+
+  defp verify_entries(entries, histories, space_log, record) do
+    entries
+    |> entry_facts(histories, space_log, record)
+    |> Enum.map(fn %{result: result, refused: refused} ->
+      case {result, refused} do
+        {_, [_ | _]} -> {:error, :invalid_catalog_transition, refused}
+        {:ok, []} -> :ok
+        {{:error, reason}, []} -> {:error, reason, []}
+      end
+    end)
+    |> entry_result()
+  end
+
+  defp entry_facts(entries, histories, space_log, record) do
+    space_analysis = Authority.analyze(Space, space_log)
+    Enum.map(entries, &entry_fact(&1, histories, space_log, space_analysis, record))
+  end
+
+  defp entry_fact(entry, histories, space_log, space_analysis, record) do
     with true <- Continuation.family(entry.replica) == {:bounded, entry.kind},
          true <- entry.service_id == record.service_id and entry.service_key == record.service_key,
-         {:ok, log} <- fetch(histories, entry.replica),
-         {:ok, genesis} <- fetch(Log.ops(log), entry.genesis),
-         {:ok, creation} <- fetch(Log.ops(log), entry.creation),
-         analysis = Authority.analyze(schema(entry.kind), log),
-         true <- valid_genesis?(genesis, entry, log, analysis),
-         true <- valid_creation?(creation, entry, log, analysis),
-         :ok <- reference(entry, space_log, space_analysis, record) do
-      :ok
+         {:ok, log} <- fetch(histories, entry.replica) do
+      # Keep structural validity, missing evidence and current policy refusal
+      # separate. Frozen diagnostics consume structure without granting eligibility.
+      analysis = if entry.kind == :space, do: space_analysis, else: Authority.analyze(Thread, log)
+      root = Authority.root(log)
+      ops = Log.ops(log)
+
+      checks = [
+        if(root == entry.root, do: :ok, else: {:error, :invalid_catalog_transition}),
+        check_known(ops, entry.genesis, &valid_genesis?(&1, entry, log, root)),
+        check_known(ops, entry.creation, &valid_creation?(&1, entry, log)),
+        reference(entry, space_log, record)
+      ]
+
+      %{
+        result: result(checks),
+        refused: refused_targets(entry, log, analysis, space_log, space_analysis)
+      }
     else
-      false -> {:error, :invalid_catalog_transition}
-      error -> error
+      false -> %{result: {:error, :invalid_catalog_transition}, refused: []}
+      {:error, reason} -> %{result: {:error, reason}, refused: []}
     end
+  end
+
+  defp check_known(ops, id, valid?) do
+    with {:ok, op} <- fetch(ops, id) do
+      if valid?.(op), do: :ok, else: {:error, :invalid_catalog_transition}
+    end
+  end
+
+  defp refused_targets(entry, log, analysis, space_log, space_analysis) do
+    [
+      {log, analysis, entry.genesis},
+      {log, analysis, entry.creation},
+      {space_log, space_analysis, entry.reference}
+    ]
+    |> Enum.filter(fn {history, policy, id} ->
+      Map.has_key?(Log.ops(history), id) and MapSet.member?(policy.quarantine, id)
+    end)
+    |> Enum.map(&elem(&1, 2))
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp entry_result(results) do
+    Enum.find(results, fn
+      {:error, reason, _} -> reason != :trust_pending
+      _ -> false
+    end) || Enum.find(results, &match?({:error, :trust_pending, _}, &1)) || :ok
   end
 
   defp valid_genesis?(
          %Op{kind: :authority, body: {:genesis, %Delegation{} = d, _}} = op,
          entry,
          log,
-         analysis
+         root
        ) do
-    root = Authority.root(log)
-
     root == entry.root and op.author == root and d.issuer == root and d.audience == root and
-      is_nil(d.parent_id) and Authority.verify_chain([d], log.replica) == :ok and
-      honored?(op, analysis)
+      is_nil(d.parent_id) and Authority.verify_chain([d], log.replica) == :ok
   end
 
   defp valid_genesis?(_op, _entry, _log, _analysis), do: false
 
-  defp valid_creation?(%Op{kind: :command, body: {command, [_title]}} = op, entry, log, analysis) do
-    command == creation_command(entry.kind) and honored?(op, analysis) and
-      MapSet.member?(Dag.ancestors(Log.ops(log), op.id), entry.genesis)
+  defp valid_creation?(%Op{kind: :command, body: {command, args}} = op, entry, log)
+       when is_list(args) do
+    command == creation_command(entry.kind) and
+      (not Map.has_key?(Log.ops(log), entry.genesis) or
+         MapSet.member?(Dag.ancestors(Log.ops(log), op.id), entry.genesis))
   end
 
-  defp valid_creation?(_op, _entry, _log, _analysis), do: false
+  defp valid_creation?(_op, _entry, _log), do: false
 
-  defp reference(%{kind: :space} = entry, log, _analysis, record) do
+  defp reference(%{kind: :space} = entry, log, record) do
     if entry.replica == log.replica and entry.replica == record.space and
          entry.root == record.space_root,
        do: :ok,
        else: {:error, :invalid_catalog_transition}
   end
 
-  defp reference(%{kind: :thread} = entry, log, analysis, _record) do
+  defp reference(%{kind: :thread} = entry, log, _record) do
     with {:ok, op} <- fetch(Log.ops(log), entry.reference) do
       case op do
         %Op{kind: :command, body: {:create_thread, [replica, _title]}}
         when replica == entry.replica ->
-          if honored?(op, analysis), do: :ok, else: {:error, :invalid_catalog_transition}
+          :ok
 
         _ ->
           {:error, :invalid_catalog_transition}
@@ -134,11 +225,8 @@ defmodule Treehouse.CatalogEntries do
     end
   end
 
-  defp schema(:space), do: Space
-  defp schema(:thread), do: Thread
   defp creation_command(:space), do: :create_space
   defp creation_command(:thread), do: :create_thread
-  defp honored?(op, analysis), do: not MapSet.member?(analysis.quarantine, op.id)
 
   defp fetch(values, key) do
     case Map.fetch(values, key) do

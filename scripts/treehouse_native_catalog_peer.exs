@@ -1,3 +1,5 @@
+Code.require_file("support/native_peer_output.exs", __DIR__)
+
 # Executable independent BEAM peer for native codec vectors. No trust installation.
 # Boundary crypto re-derivation is a test-local command oracle; actual wire
 # admission is independently observed through Wire.decode_op/1.
@@ -22,7 +24,7 @@ case System.argv() do
     vector = CatalogVectors.codec_vector()
     histories = CatalogTrustVectors.fixture().histories
     frames = Enum.flat_map(histories, & &1.frames)
-    IO.puts(Jason.encode!(Map.put(vector, :frames, frames)))
+    Lattice.NativePeerOutput.puts(Jason.encode!(Map.put(vector, :frames, frames)))
 
   ["boundaries"] ->
     input = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -70,7 +72,7 @@ case System.argv() do
         %{admitted: admitted, authentic: authentic}
       end)
 
-    IO.puts(Jason.encode!(%{terms: terms, frames: frames}))
+    Lattice.NativePeerOutput.puts(Jason.encode!(%{terms: terms, frames: frames}))
 
   ["consume"] ->
     vector = IO.read(:stdio, :eof) |> Jason.decode!()
@@ -97,7 +99,7 @@ case System.argv() do
     true =
       Base.encode64(TransportCatalog.catalog_bytes(envelope.catalog)) == vector["catalog_bytes"]
 
-    IO.puts(
+    Lattice.NativePeerOutput.puts(
       Jason.encode!(%{
         terms: length(vector["terms"]),
         frame: frame.id,

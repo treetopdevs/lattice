@@ -2,13 +2,11 @@
 
 ## Status
 
-IN PROGRESS. A fresh ordinary invitation demonstrates a source disagreement:
-BEAM admits a small-order recipient with an identity-point signature while the
-TypeScript owner refuses application_invalid_invitation. The common verifier correction and reciprocal primitive/application tests are
-implemented; independent reviews found no remaining implementation issue. Full
-local gates pass and actual Sonnet follow-up finds no confirmed verifier P1/P2.
-The separate source PR still needs its final exact-tip hosted gate and adoption. Plan 267 native signoff stops until this separate source correction is
-reviewed, verified and adopted. Previously reviewed source PRs stay frozen.
+IN PROGRESS. The shared verifier correction, reciprocal proof and requested
+reviews are complete. PR177 passed its final exact-tip hosted gates. The source
+is adopted here; native integration checks remain required before signoff.
+Plan273 separately owns the newly reproduced raw-artifact integer profile gap.
+Previously reviewed source PRs stay frozen.
 
 The exact common profile and provider/compatibility assumptions are in
 [ADR 0012](../docs/adr/0012-strict-ed25519-verification.md).

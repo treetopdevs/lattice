@@ -8,6 +8,47 @@ defmodule Treehouse.CatalogTrustTest do
 
   @expected %{trust_revision: 0, history_generation: 0}
 
+  test "historical signed ordinary integers outside the portable range require recovery" do
+    fixture = CatalogTrustVectors.fixture()
+    state = installed(fixture)
+    decision = evaluate(state, fixture)
+    [thread] = fixture.threads
+    foreign = Identity.from_seed("foreign", "historical-integer")
+
+    for value <- [9_007_199_254_740_991, 9_007_199_254_740_992] do
+      op = Op.new(foreign, thread.replica, [], :command, value)
+      assert Op.valid?(op)
+      log = Log.append!(thread.log, op)
+      raw = CatalogTrustVectors.raw_history(log)
+      frame = Enum.find(raw.frames, &(&1["id"] == op.id))
+      assert {:ok, _} = Wire.authenticate_observation(frame)
+
+      saved = %{
+        state
+        | histories:
+            Enum.map(state.histories, fn history ->
+              if history.replica == thread.replica, do: raw, else: history
+            end)
+      }
+
+      reopened = evaluate(saved, fixture)
+
+      route =
+        CatalogTrust.resolve_route(%{
+          decision: %{decision | next: saved},
+          replica: thread.replica
+        })
+
+      if value == 9_007_199_254_740_991 do
+        assert reopened.kind == :unchanged
+        assert route.ok
+      else
+        assert %{kind: :reject, reason: :trust_recovery_required} = reopened
+        assert %{ok: false, reason: :trust_recovery_required} = route
+      end
+    end
+  end
+
   @tag timeout: 120_000
   test "overflow witnesses survive a newly observed authentic bootstrap fork" do
     {fixture, frozen, _incoming} = overflow_rotation_fixture(1)

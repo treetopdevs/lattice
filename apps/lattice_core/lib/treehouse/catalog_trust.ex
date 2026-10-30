@@ -541,8 +541,8 @@ defmodule Treehouse.CatalogTrust do
     validate_catalog_scope!(catalog, context, id)
     context = resolve_catalog_parent!(catalog, binding, context, visiting, id)
     historical = historical_accepted_entry_proof?(id, context)
-    {context, entry_proof} = observe_entries(catalog, historical, context)
-    pending = catalog_pending!(entry_proof, catalog, node, context, id)
+    {context, entry_proof, refused} = observe_entries(catalog, historical, context)
+    pending = catalog_pending!(entry_proof, catalog, node, context, id, refused)
     node = %{node | ready: true, pending: pending}
     {%{context | catalogs: Map.put(context.catalogs, id, node)}, node}
   end
@@ -592,15 +592,18 @@ defmodule Treehouse.CatalogTrust do
     context
   end
 
-  defp catalog_pending!({:ok, _}, _catalog, _node, _context, _id), do: []
-  defp catalog_pending!({:error, :trust_pending}, _catalog, _node, _context, id), do: [id]
+  defp catalog_pending!({:ok, _}, _catalog, _node, _context, _id, _refused), do: []
+
+  defp catalog_pending!({:error, :trust_pending}, _catalog, _node, _context, id, _refused),
+    do: [id]
 
   defp catalog_pending!(
          {:error, :invalid_catalog_transition},
          catalog,
          node,
          context,
-         id
+         id,
+         refused
        ) do
     authority =
       if authority_frozen_context?(context),
@@ -609,7 +612,7 @@ defmodule Treehouse.CatalogTrust do
 
     cond do
       authority != :invalid and retained_diagnostic?(node, context, id) ->
-        pending_frozen_entry!(catalog, node, context, id)
+        pending_frozen_entry!(catalog, node, context, id, refused)
 
       authority == :pending ->
         [id]
@@ -618,11 +621,11 @@ defmodule Treehouse.CatalogTrust do
         []
 
       true ->
-        pending_frozen_entry!(catalog, node, context, id)
+        pending_frozen_entry!(catalog, node, context, id, refused)
     end
   end
 
-  defp catalog_pending!({:error, reason}, _catalog, _node, _context, id),
+  defp catalog_pending!({:error, reason}, _catalog, _node, _context, id, _refused),
     do: refuse(reason, [id])
 
   defp retained_diagnostic?(node, context, id),
@@ -634,8 +637,8 @@ defmodule Treehouse.CatalogTrust do
     key = {TransportCatalog.inventory_id(catalog.entries), historical}
 
     case Map.fetch(context.entry_proofs, key) do
-      {:ok, result} ->
-        {context, result}
+      {:ok, {result, refused}} ->
+        {context, result, refused}
 
       :error ->
         histories =
@@ -643,8 +646,14 @@ defmodule Treehouse.CatalogTrust do
             do: catalog_fact_histories(catalog, context.histories),
             else: context.histories
 
-        result = CatalogEntries.observe(catalog, histories)
-        {%{context | entry_proofs: Map.put(context.entry_proofs, key, result)}, result}
+        {result, refused} =
+          case CatalogEntries.observe_with_detail(catalog, histories) do
+            {:ok, _} = result -> {result, []}
+            {:error, reason, refused} -> {{:error, reason}, refused}
+          end
+
+        {%{context | entry_proofs: Map.put(context.entry_proofs, key, {result, refused})}, result,
+         refused}
     end
   end
 
@@ -924,24 +933,20 @@ defmodule Treehouse.CatalogTrust do
       end)
 
     if refused do
-      case CatalogEntries.observe(catalog, catalog_fact_histories(catalog, histories)) do
-        {:ok, _} -> :complete
-        {:error, :trust_pending} -> :pending
-        _other -> :invalid
-      end
+      CatalogEntries.structure_status(catalog, histories)
     else
       :invalid
     end
   end
 
-  defp pending_frozen_entry!(catalog, node, context, id) do
+  defp pending_frozen_entry!(catalog, node, context, id, refused) do
     if node.retained and context.state.blocked != nil and
          not supports_accepted_watermark?(id, context) do
       diagnostics = frozen_entry_diagnostics(catalog, context.histories)
 
       if diagnostics == [], do: [id], else: diagnostics
     else
-      refuse(:invalid_catalog_transition, [id])
+      refuse(:invalid_catalog_transition, [id | refused])
     end
   end
 
@@ -1566,7 +1571,10 @@ defmodule Treehouse.CatalogTrust do
 
   defp classify_scanned_op(mode, valid?, op, frame)
        when (mode == :accepted and valid?) or (mode == :rejected and not valid?) do
-    if portable_frame_size?(frame), do: {:ok, op, frame}, else: {:unsupported, op.id}
+    if portable_frame_size?(frame) and
+         (mode == :rejected or Treehouse.CatalogProductReader.readable_frame?(frame)),
+       do: {:ok, op, frame},
+       else: {:unsupported, op.id}
   end
 
   defp classify_scanned_op(_mode, _valid?, op, _frame), do: {:invalid, op.id}
