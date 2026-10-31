@@ -726,3 +726,35 @@ test("a no-op rotation compares with the resolved parent after a real key change
   assert.equal(returned.next.accepted?.generation, 2);
   assert.equal(returned.routes.length, 2);
 });
+
+test("row 286: raw observation still authenticates a signed depth-65 frame after the wire encode cap", async () => {
+  const f = await trustFixture(0);
+  const outcomes: string[] = [];
+  for (const depth of [64, 65, 66]) {
+    let body: CarrierTerm = ["nil"];
+    for (let i = 0; i < depth; i++) body = ["list", [body]];
+    for (const deps of [[], [fixtureId("review-missing-dep")]]) {
+      const frame = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps, kind: "command", body, cap: ["nil"] });
+      const result = await prepareTreehouseCatalogInstallation({ review: f.review, history: { replica: f.space.replica, frames: [frame], rejected: [] },
+        store: { kind: "verified_fresh", expected: { trustRevision: 0, historyGeneration: 0 } } });
+      outcomes.push(`${depth} ${deps.length > 0 ? "partial" : "complete"} ${result.kind}:${"reason" in result ? result.reason : ""}`);
+    }
+  }
+  assert.deepEqual(outcomes, [
+    "64 complete reject:trust_pending", "64 partial reject:trust_pending",
+    "65 complete reject:unsupported_cutoff", "65 partial reject:trust_pending",
+    "66 complete reject:invalid_verified_history", "66 partial reject:invalid_verified_history",
+  ]);
+});
+
+test("row 286: an over-depth frame that reuses a saved frame id is still invalid_verified_history", async () => {
+  // Incoming frames authenticate before the merge fingerprints them, so the collision changes nothing.
+  const f = await trustFixture(0), state = await prepare(f);
+  let body: CarrierTerm = ["nil"];
+  for (let i = 0; i < 66; i++) body = ["list", [body]];
+  const deep = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [], kind: "command", body, cap: ["nil"] });
+  const saved = f.histories[0]!.frames[0]!;
+  for (const frame of [deep, { ...deep, id: saved.id }]) {
+    refused(await evaluate(state, { histories: [{ replica: f.space.replica, frames: [frame], rejected: [] }] }), "invalid_verified_history");
+  }
+});

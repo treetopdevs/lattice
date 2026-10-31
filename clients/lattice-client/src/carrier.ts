@@ -233,7 +233,9 @@ function carrierDelegationsFromTerm(term: CarrierTerm, depth: number = maxTermDe
     case "list":
     case "tuple":
     case "mapset":
-      // A non-throwing collector: stop descending; decodeCarrierOpFrame owns the refusal.
+      // A non-throwing collector: stop descending; decodeCarrierOpFrame owns the refusal. Row 286
+      // kept this: the JSON frame store reloads frames undecoded, so a throw here would let one
+      // corrupt stored frame block cap selection for every other frame.
       if (depth <= 0) return [];
       return Array.isArray(term[1])
         ? term[1].flatMap((child) => carrierDelegationsFromTerm(child, depth - 1))
