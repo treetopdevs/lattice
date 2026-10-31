@@ -36,6 +36,10 @@ defmodule Lattice.Verdict do
   `:active`. A delegation that is on the log but not revoked, not lapsed and not valid
   (a bad chain, or an unactivated succession candidate) is `:invalid`. Only `:active`
   permits action; every other status is a refusal.
+
+  The status also names the delegation's `audience` (hex public key) and granted `ops`,
+  so a consumer can check that the delegation is addressed to the actor it is judging
+  and confers the action it is about to allow, without reading authority internals.
   """
 
   alias Jason.OrderedObject
@@ -63,6 +67,8 @@ defmodule Lattice.Verdict do
           schema: String.t(),
           delegation_id: String.t(),
           status: :active | :revoked | :lapsed | :invalid | :unknown,
+          audience: String.t() | nil,
+          ops: [atom()],
           revoked_by: Op.id() | nil,
           expires_epoch: non_neg_integer() | nil,
           latest_beacon_epoch: non_neg_integer() | nil,
@@ -142,10 +148,18 @@ defmodule Lattice.Verdict do
         true -> :invalid
       end
 
+    {audience, ops} =
+      case chain do
+        [%Delegation{} = d | _] -> {Base.encode16(d.audience, case: :lower), Enum.sort(d.ops)}
+        [] -> {nil, []}
+      end
+
     %{
       schema: @status_schema,
       delegation_id: delegation_id,
       status: status,
+      audience: audience,
+      ops: ops,
       revoked_by: revoked_by,
       expires_epoch: expires,
       latest_beacon_epoch: latest,
@@ -185,6 +199,8 @@ defmodule Lattice.Verdict do
       {"schema", status.schema},
       {"delegation_id", status.delegation_id},
       {"status", Atom.to_string(status.status)},
+      {"audience", status.audience},
+      {"ops", Enum.map(status.ops, &Atom.to_string/1)},
       {"revoked_by", status.revoked_by},
       {"expires_epoch", status.expires_epoch},
       {"latest_beacon_epoch", status.latest_beacon_epoch},

@@ -84,8 +84,16 @@ defmodule Lattice2.VerdictTest do
         assert peer.cited_delegation_id == cap
         assert peer.evidence == %{revoked_by: nil, lapsed_by_beacon: nil}
 
+        status = Verdict.delegation_status(Treehouse.Thread, log, cap)
+
         assert %{status: :lapsed, expires_epoch: 3, latest_beacon_epoch: 4, revoked_by: nil} =
-                 Verdict.delegation_status(Treehouse.Thread, log, cap)
+                 status
+
+        assert status.audience == Base.encode16(keys["agent"], case: :lower)
+        assert status.ops == [:post]
+
+        assert %{"audience" => _, "ops" => ["post"], "status" => "lapsed"} =
+                 Jason.decode!(Verdict.to_json(status))
       end
     end
 
