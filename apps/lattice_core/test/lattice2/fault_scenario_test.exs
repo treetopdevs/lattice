@@ -199,6 +199,82 @@ defmodule Lattice.FaultScenarioTest do
     end
   end
 
+  describe "handoff_lapse" do
+    test "holds: the agent keeps its attributed result and loses permission at the beacon",
+         %{tmp_dir: tmp} do
+      {first, logs, "held"} = write!(Path.join(tmp, "1"), "handoff_lapse")
+      {second, _logs, "held"} = write!(Path.join(tmp, "2"), "handoff_lapse")
+
+      assert Enum.all?(checks("handoff_lapse", logs), fn {_, ok} -> ok end)
+      assert files(first) == files(second)
+      assert {:ok, %{verdict: "held", checks: verified}} = Evidence.verify(first)
+      assert Enum.all?(verified, &(&1.ok and &1.source == :replay))
+
+      assert Map.keys(logs) |> Enum.sort() == ~w(thread.agent thread.peer thread.root)
+
+      reasons =
+        for {_name, log} <- logs,
+            reason <- Map.values(Authority.analyze(Treehouse.Thread, log).reasons),
+            do: reason
+
+      # One lapsed agent post and one misused citation in each of three logs.
+      assert Enum.frequencies(reasons) == %{lease_expired: 3, capability_wrong_audience: 3}
+    end
+
+    test "negative control: without the beacon only the lapse check is violated",
+         %{tmp_dir: tmp} do
+      {:ok, logs} = FaultScenario.run("handoff_lapse", "demo", variant: :no_beacon)
+      result = checks("handoff_lapse", logs)
+
+      assert result |> Enum.reject(fn {_, ok} -> ok end) |> Enum.map(&elem(&1, 0)) ==
+               ["post_lapse_quarantined_lease_expired"]
+
+      assert {:ok, "violated"} =
+               Evidence.write(Path.join(tmp, "control"), "handoff_lapse", "demo", logs)
+
+      # The seeded re-run produces the beacon, so control evidence never verifies.
+      assert {:error, [_ | _]} = Evidence.verify(Path.join(tmp, "control"))
+    end
+
+    test "a signed authority op with an empty body does not crash the checks" do
+      {:ok, logs} = FaultScenario.run("handoff_lapse", "demo")
+      root = logs["thread.root"]
+      who = Lattice.Identity.from_seed("stranger", "handoff:empty-body")
+      empty = Lattice.Op.new(who, root.replica, Log.frontier(root), :authority, {})
+      odd = Log.from_ops(root.replica, Map.put(Log.ops(root), empty.id, empty))
+
+      result = checks("handoff_lapse", Map.put(logs, "thread.root", odd))
+      assert result["beacon_honored"]
+    end
+
+    test "a log that drops the agent's pre-lapse post fails attribution and honor",
+         %{tmp_dir: tmp} do
+      {dir, logs, "held"} = write!(tmp, "handoff_lapse")
+      %{pre: pre} = FaultScenario.handoff_texts()
+      root = logs["thread.root"]
+
+      [pre_op] =
+        for %{kind: :command, body: {:post, [^pre]}} = op <- Map.values(Log.ops(root)), do: op
+
+      # Drop the post and everything that depends on it, so the log stays well-formed.
+      kept =
+        root
+        |> Log.ops()
+        |> Map.reject(fn {id, _op} ->
+          id == pre_op.id or MapSet.member?(Lattice.Dag.ancestors(Log.ops(root), id), pre_op.id)
+        end)
+
+      rebuilt = Log.from_ops(root.replica, kept)
+      result = checks("handoff_lapse", Map.put(logs, "thread.root", rebuilt))
+
+      refute result["pre_lapse_honored"]
+      refute result["pre_lapse_authored_by_agent"]
+
+      :ok = Log.dump(rebuilt, Path.join([dir, "logs", "thread.root.log"]))
+      assert {:error, [_ | _]} = Evidence.verify(dir)
+    end
+  end
+
   describe "report" do
     test "verified cards render, and a corrupted log turns its card unverified", %{tmp_dir: tmp} do
       for name <- FaultScenario.scenarios(), do: write!(tmp, name)
