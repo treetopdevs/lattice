@@ -128,8 +128,8 @@ defmodule Lattice.Authority.Continuation do
 
   defp authorized?(ctx, op, role, d, p, profile) do
     role == profile.role and op.author in [p.holder, profile.nominee] and
-      d.issuer == op.author and d.audience == op.author and MapSet.member?(d.roles, role) and
-      d.replica == op.replica and Delegation.valid_sig?(d) and
+      d.issuer == op.author and d.audience == op.author and d.replica == op.replica and
+      Delegation.valid_sig?(d) and MapSet.member?(d.roles, role) and
       match?(%{deleg: %Delegation{}}, ctx.delegations[p.delegation_id])
   end
 

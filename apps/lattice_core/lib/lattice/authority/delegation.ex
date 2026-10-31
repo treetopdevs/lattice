@@ -103,9 +103,24 @@ defmodule Lattice.Authority.Delegation do
     )
   end
 
-  @doc "True if the signature and id are internally consistent."
+  @doc """
+  True if the signature and id are internally consistent.
+
+  `ops` and `roles` must be `MapSet`s. Canonical encoding sorts either a list or
+  a set of the same names into identical bytes, so a list-shaped field can still
+  verify; the judge later calls `MapSet.subset?/2` and must not raise. A list is
+  therefore `:bad_delegation_sig`, never a crash (row 289).
+  """
   @spec valid_sig?(t()) :: boolean()
   def valid_sig?(%__MODULE__{} = d) do
+    mapset?(d.ops) and mapset?(d.roles) and consistent_sig?(d)
+  rescue
+    # Canonical rejects malformed terms with ArgumentError; keep this rescue
+    # aligned with that invariant if its refusal exception types ever change.
+    ArgumentError -> false
+  end
+
+  defp consistent_sig?(%__MODULE__{} = d) do
     encoding =
       encode(
         d.replica,
@@ -119,10 +134,6 @@ defmodule Lattice.Authority.Delegation do
       )
 
     d.id == hash(encoding) and Identity.verify(d.issuer, encoding, d.sig)
-  rescue
-    # Canonical rejects malformed terms with ArgumentError; keep this rescue
-    # aligned with that invariant if its refusal exception types ever change.
-    ArgumentError -> false
   end
 
   @doc """
@@ -132,7 +143,9 @@ defmodule Lattice.Authority.Delegation do
   """
   @spec attenuates?(t(), t()) :: boolean()
   def attenuates?(%__MODULE__{} = child, %__MODULE__{} = parent) do
-    child.parent_id == parent.id and
+    mapset?(child.ops) and mapset?(child.roles) and
+      mapset?(parent.ops) and mapset?(parent.roles) and
+      child.parent_id == parent.id and
       child.issuer == parent.audience and
       child.replica == parent.replica and
       MapSet.subset?(child.ops, parent.ops) and
@@ -140,6 +153,9 @@ defmodule Lattice.Authority.Delegation do
       (not child.live or parent.live) and
       expiry_within?(child, parent)
   end
+
+  defp mapset?(%MapSet{}), do: true
+  defp mapset?(_), do: false
 
   # nil = unbounded. An unbounded parent accepts anything; a leased parent
   # accepts only a child leased at or before its own expiry.
