@@ -175,6 +175,18 @@ defmodule LatticeCarrierServer.Operator.TreehouseBackupTest do
     refute log =~ "restic tag --set daily "
   end
 
+  test "a relative backup path is refused before restic runs", %{tmp_dir: tmp} do
+    ctx = prepare!(tmp, backup_ids: ["cafef00d"], dump_plan: ["ok"])
+    ctx = %{ctx | caddy_etc: "-f"}
+    {output, status, log} = run_backup(ctx)
+
+    assert status == 1
+    assert output =~ "not absolute"
+    refute log =~ "restic backup "
+    refute log =~ "restic tag --set daily "
+    assert stub_lines(ctx, "daily") == []
+  end
+
   test "a backup path with whitespace is refused before restic runs", %{tmp_dir: tmp} do
     ctx = prepare!(tmp, backup_ids: ["cafef00d"], dump_plan: ["ok"])
     spaced = Path.join(ctx.tmp, "caddy config")

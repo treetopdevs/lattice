@@ -64,8 +64,16 @@ fi
 # are refused so a TREEHOUSE_BACKUP_* override cannot split across restic argv.
 for p in "$caddy_etc" "$caddy_lib" "$restic_etc" "$relay_lib"; do
   case "$p" in
-    *[!/A-Za-z0-9._+-]*)
-      echo "required backup path has unsafe characters: $p" >&2
+    /*)
+      case "$p" in
+        *[!/A-Za-z0-9._+-]*)
+          echo "required backup path has unsafe characters: $p" >&2
+          exit 1
+          ;;
+      esac
+      ;;
+    *)
+      echo "required backup path is not absolute: $p" >&2
       exit 1
       ;;
   esac
@@ -141,7 +149,7 @@ while [ "$attempt" -le "$attempts" ]; do
     # A seed that changed since the last check stops the run; retrying cannot help.
     check_seed "$seed" || exit 1
     set +e
-    timeout --signal=INT --kill-after=10m 1h restic backup --tag pending \
+    timeout --signal=INT --kill-after=10m 1h restic backup --tag pending -- \
       "$caddy_etc" "$caddy_lib" "$restic_etc" "$relay_lib" \
       > "$snapshot_dir/backup.log" 2>&1
     status=$?
