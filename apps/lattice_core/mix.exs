@@ -5,10 +5,6 @@ defmodule LatticeCore.MixProject do
     [
       app: :lattice_core,
       version: "0.1.0",
-      build_path: "../../_build",
-      config_path: "../../config/config.exs",
-      deps_path: "../../deps",
-      lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -23,7 +19,22 @@ defmodule LatticeCore.MixProject do
           "../../docs/path_to_real.md"
         ]
       ]
-    ]
+    ] ++ umbrella_paths()
+  end
+
+  # Inside the umbrella, share its build, config, deps and lockfile. A sparse checkout
+  # of only apps/lattice_core has none of them, so it loads as a plain project instead.
+  defp umbrella_paths do
+    if File.exists?(Path.expand("../../config/config.exs", __DIR__)) do
+      [
+        build_path: "../../_build",
+        config_path: "../../config/config.exs",
+        deps_path: "../../deps",
+        lockfile: "../../mix.lock"
+      ]
+    else
+      []
+    end
   end
 
   # test/support holds compiled test infrastructure (e.g. the attestation seam
