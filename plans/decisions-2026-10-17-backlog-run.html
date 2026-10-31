@@ -950,6 +950,40 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>Confirm pass found no P1/P2. One P3: the pause message and plan 257 said saved history is unchanged when a route pauses for <code>preview_storage_limit</code>. That is false: <code>sync.ts</code> commits per round, so earlier acknowledgements survive and a later round can pause. Codex reproduced a rate-limited sync starting at 1,048,496 bytes whose first acknowledgement committed (1,048,542 bytes, acknowledgements 2 to 3) before a later round paused.</dd>
 <dt>Decision</dt><dd>Correct the feed route message, the panel summary, and plan 257: the refused merge writes nothing; earlier committed progress survives and history remains readable. Nearby feed tests assert that wording and that a later refused merge leaves the already-committed record intact. No production Rust, custody, or codec change.</dd>
 </dl></section>
+<section id="d134"><h2><span>D-134</span> Slice choice: row 289, the malformed-delegation judge crash</h2><dl>
+<dt>When</dt><dd>2026-10-31, from main <code>9cdc26566</code></dd>
+<dt>Context</dt><dd>Already merged: #195–#199. Excluded: Township and Toolshed under rule 10; rule 8 parked items (rows 077/285 device, 146 codesigning, 261/262 two Macs, 224/245 ceremony); row 256, an operator decision; plans 267–279, the native evaluator track already in flight; row 288, which needs a second <code>authority.ex</code> change and a design for exposing acquisition records; row 295, P2 backup tests deferred from #196.</dd>
+<dt>Options</dt><dd>(a) Row 289 (P1 S, malformed signed <code>ops</code>/<code>roles</code> crash the judge); (b) other open P1s that still need ceremony, a device, or two Macs; (c) row 295 (P2 backup.sh tests); (d) row 288 (P2 succession <code>:invalid</code>).</dd>
+<dt>Decision</dt><dd>(a).</dd>
+<dt>Reason</dt><dd>Highest-priority unblocked row that fits one reviewable PR. An authorized signer can crash every reader of a log, including <code>Lattice.Verdict</code>, while <code>Op.valid?/1</code> still passes. D-142 already assigned the fix to this row and forbade masking it in Verdict. It moves the live judge toward a working prototype: fail-closed on a malformed grant instead of taking the node down.</dd>
+</dl></section>
+<section id="d135"><h2><span>D-135</span> Row 289: refuse a non-MapSet at <code>valid_sig?/1</code>; do not coerce</h2><dl>
+<dt>When</dt><dd>2026-10-31</dd>
+<dt>Context</dt><dd><code>Canonical.delegation_bytes/8</code> sorts a list or a <code>MapSet</code> of the same names into identical bytes, so a grant whose <code>ops</code> or <code>roles</code> is a list still verifies. <code>Authority.analyze/2</code> then calls <code>MapSet.subset?/2</code> in <code>Delegation.attenuates?/2</code> and raises <code>FunctionClauseError</code>. <code>Delegation.new/4</code> always builds MapSets; the constructor is not the bug.</dd>
+<dt>Options</dt><dd>(a) Coerce a list to a MapSet at the judge; (b) refuse at <code>valid_sig?/1</code> as <code>:bad_delegation_sig</code> and also return false from <code>attenuates?/2</code> rather than raise; (c) catch the raise in <code>analyze/2</code> or Verdict.</dd>
+<dt>Decision</dt><dd>(b). Continuation's <code>authorized?/6</code> checks <code>valid_sig?/1</code> before <code>MapSet.member?/2</code>. No TypeScript change: the TS judge already stores ops and roles as arrays, so this crash is BEAM-only. Canonical bytes, wire, and <code>Op.valid?/1</code> stay unchanged. This is not a receipt-free W4 claim, not Phase G, and not a new authoring surface.</dd>
+<dt>Reason</dt><dd>Coercing would honor a second in-memory shape the constructor never emits and hide the same log from every other reader that still expects a MapSet. Catching in Verdict would leave <code>Sim</code>, reduction, and live paths crashing, which D-142 already rejected.</dd>
+</dl></section>
+<section id="d136"><h2><span>D-136</span> Row 289 Codex P1: same-id introductions still crashed the pin collector</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>562ddb98f</code></dd>
+<dt>Finding</dt><dd><code>Continuation.context/6</code> treated <code>valid[d.id] == :ok</code> as enough, then called <code>MapSet.size/1</code> on the raw genesis before checking that this op was a valid introduction. A malformed empty-scope, <code>live: false</code> genesis with <code>ops: []</code> or <code>roles: []</code> next to a valid MapSet-shaped intro of the same id therefore still raised, even after D-135. Codex reproduced it on a verified-restored log: both <code>Authority.analyze/2</code> and Verdict crashed. The first genesis test replaced the sole intro, so it missed coexistence.</dd>
+<dt>Decision</dt><dd>Fixed. The pin collector checks <code>op.id in delegations[d.id].op_ids</code> before any <code>MapSet</code> call, and also requires both fields to be MapSets. The malformed op is <code>:bad_delegation_sig</code>; the genuine same-id intro stays <code>:active</code>. Covered by a coexistence regression. No new plan-index row.</dd>
+</dl></section>
+<section id="d137"><h2><span>D-137</span> Row 289 Codex P2: continuation proofs need their own list-shaped regression</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>562ddb98f</code></dd>
+<dt>Finding</dt><dd>Reverting only the <code>authorized?/6</code> reorder left the six original tests green. Continuation proofs skip the ordinary introduction filter in <code>succession_event/4</code>, so a correctly signed bounded continuation whose <code>roles</code> or <code>ops</code> becomes a list still reached <code>MapSet.member?/2</code> / <code>MapSet.subset?/2</code> on that path. Existing tests covered only genesis and grants.</dd>
+<dt>Decision</dt><dd>Fixed with a bounded-continuation regression that rewrites the succeed op's <code>ops</code> or <code>roles</code> to a list, keeps <code>Op.valid?/1</code>, and requires analyze and Verdict not to raise. The D-135 <code>valid_sig?/1</code> check before <code>MapSet.member?/2</code> stays. No new plan-index row.</dd>
+</dl></section>
+<section id="d138"><h2><span>D-138</span> Row 289 Codex P1: refuse a MapSet whose <code>:sets</code> backing is not a map</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>350b95dd</code></dd>
+<dt>Finding</dt><dd><code>mapset?/1</code> accepted any <code>%MapSet{}</code> struct. A genesis whose <code>roles</code> wrapped an Erlang <code>:sets</code> v1 tuple with <code>maxn = 0</code> still enumerated the original names, so canonical bytes, id, signature, <code>Op.valid?/1</code>, and verified ETF restore all passed. <code>MapSet.member?/2</code> then raised <code>ArgumentError</code> in the role timeline. Ordinary JSON decoding rebuilds clean sets; this is a BEAM/ETF term shape.</dd>
+<dt>Decision</dt><dd>Fixed. <code>mapset?/1</code> requires the backing to be a map, which is the <code>:sets</code> v2 shape <code>Delegation.new/4</code> emits. A v1 or otherwise unusable backing is <code>:bad_delegation_sig</code>. Covered by a unit test and a genesis analyze/Verdict regression. No new plan-index row; not a W4 or Phase G claim.</dd>
+</dl></section>
+<section id="d139"><h2><span>D-139</span> Row 289 opens as PR #200; Codex confirm is the rule-3 second review</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/200">#200</a></dd>
+<dt>Context</dt><dd>The diff edits <code>apps/lattice_core/lib/lattice/authority/</code>. Working-policy rule 3 requires two independent reviews. Three Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P1/P2 (D-136, D-137), round 2 P1 (D-138), round 3 on tip <code>9aaaaad76</code> with no P1/P2/P3.</dd>
+<dt>Decision</dt><dd>Open #200 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128).</dd>
+</dl></section>
 </main>
 </body>
 </html>

@@ -44,14 +44,18 @@ defmodule Lattice.Authority.Continuation do
   def context(replica, ordered, delegations, valid, root, beacons) do
     family = family(replica)
 
+    # `valid[d.id]` is aggregate across introductions. Check this op is a
+    # valid intro before MapSet.size/1, or a list-shaped same-id genesis crashes
+    # the judge (row 289).
     pins =
       for %Op{kind: :authority, body: {:genesis, %Delegation{} = d, policies}} = op <- ordered,
           is_map(policies) and not is_struct(policies),
           valid[d.id] == :ok,
+          op.id in delegations[d.id].op_ids,
           op.author == root and d.issuer == root and d.audience == root,
           is_nil(d.parent_id) and is_nil(d.expires_epoch) and d.live == false,
+          is_struct(d.roles, MapSet) and is_struct(d.ops, MapSet),
           MapSet.size(d.roles) == 0 and MapSet.size(d.ops) == 0,
-          op.id in delegations[d.id].op_ids,
           {:ok, profile} <- [
             ContinuationCertificate.normalize_policy(policies[:__continuation__])
           ],
@@ -128,8 +132,8 @@ defmodule Lattice.Authority.Continuation do
 
   defp authorized?(ctx, op, role, d, p, profile) do
     role == profile.role and op.author in [p.holder, profile.nominee] and
-      d.issuer == op.author and d.audience == op.author and MapSet.member?(d.roles, role) and
-      d.replica == op.replica and Delegation.valid_sig?(d) and
+      d.issuer == op.author and d.audience == op.author and d.replica == op.replica and
+      Delegation.valid_sig?(d) and MapSet.member?(d.roles, role) and
       match?(%{deleg: %Delegation{}}, ctx.delegations[p.delegation_id])
   end
 
