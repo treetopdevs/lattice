@@ -964,6 +964,16 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>(b). Continuation's <code>authorized?/6</code> checks <code>valid_sig?/1</code> before <code>MapSet.member?/2</code>. No TypeScript change: the TS judge already stores ops and roles as arrays, so this crash is BEAM-only. Canonical bytes, wire, and <code>Op.valid?/1</code> stay unchanged. This is not a receipt-free W4 claim, not Phase G, and not a new authoring surface.</dd>
 <dt>Reason</dt><dd>Coercing would honor a second in-memory shape the constructor never emits and hide the same log from every other reader that still expects a MapSet. Catching in Verdict would leave <code>Sim</code>, reduction, and live paths crashing, which D-142 already rejected.</dd>
 </dl></section>
+<section id="d136"><h2><span>D-136</span> Row 289 Codex P1: same-id introductions still crashed the pin collector</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>562ddb98f</code></dd>
+<dt>Finding</dt><dd><code>Continuation.context/6</code> treated <code>valid[d.id] == :ok</code> as enough, then called <code>MapSet.size/1</code> on the raw genesis before checking that this op was a valid introduction. A malformed empty-scope, <code>live: false</code> genesis with <code>ops: []</code> or <code>roles: []</code> next to a valid MapSet-shaped intro of the same id therefore still raised, even after D-135. Codex reproduced it on a verified-restored log: both <code>Authority.analyze/2</code> and Verdict crashed. The first genesis test replaced the sole intro, so it missed coexistence.</dd>
+<dt>Decision</dt><dd>Fixed. The pin collector checks <code>op.id in delegations[d.id].op_ids</code> before any <code>MapSet</code> call, and also requires both fields to be MapSets. The malformed op is <code>:bad_delegation_sig</code>; the genuine same-id intro stays <code>:active</code>. Covered by a coexistence regression. No new plan-index row.</dd>
+</dl></section>
+<section id="d137"><h2><span>D-137</span> Row 289 Codex P2: continuation proofs need their own list-shaped regression</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>562ddb98f</code></dd>
+<dt>Finding</dt><dd>Reverting only the <code>authorized?/6</code> reorder left the six original tests green. Continuation proofs skip the ordinary introduction filter in <code>succession_event/4</code>, so a correctly signed bounded continuation whose <code>roles</code> or <code>ops</code> becomes a list still reached <code>MapSet.member?/2</code> / <code>MapSet.subset?/2</code> on that path. Existing tests covered only genesis and grants.</dd>
+<dt>Decision</dt><dd>Fixed with a bounded-continuation regression that rewrites the succeed op's <code>ops</code> or <code>roles</code> to a list, keeps <code>Op.valid?/1</code>, and requires analyze and Verdict not to raise. The D-135 <code>valid_sig?/1</code> check before <code>MapSet.member?/2</code> stays. No new plan-index row.</dd>
+</dl></section>
 </main>
 </body>
 </html>

@@ -2,13 +2,16 @@ defmodule Lattice2.MalformedDelegationTest do
   @moduledoc """
   Row 289: a correctly signed delegation whose `ops` or `roles` is a list, not a
   `MapSet`, must fail `Delegation.valid_sig?/1` and be judged `:bad_delegation_sig`.
-  `Authority.analyze/2` and `Lattice.Verdict` must not raise on that log.
+  `Authority.analyze/2` and `Lattice.Verdict` must not raise on that log, including
+  when a valid same-id introduction coexists with the malformed genesis, and when
+  a bounded continuation carries the list-shaped field.
   """
   use ExUnit.Case, async: true
 
   alias Lattice.{Authority, Identity, Log, Op, Sim, Verdict}
   alias Lattice.Authority.Delegation
   alias Lattice.Demo.Thread
+  alias Treehouse.ContinuationFixtures, as: Continuation
 
   @replica "replica:malformed-delegation"
   @module Thread
@@ -82,6 +85,42 @@ defmodule Lattice2.MalformedDelegationTest do
     assert %{status: :invalid} = Verdict.delegation_status(@module, log, d.id)
   end
 
+  test "a list-shaped empty genesis next to a valid same-id intro does not crash the judge" do
+    for field <- [:ops, :roles] do
+      {log, bad_pin, d} = same_id_empty_genesis_log(field)
+
+      assert Op.valid?(bad_pin)
+      assert {:ok, _} = log |> Log.dump_bytes() |> Log.restore_verified_bytes()
+
+      analysis = Authority.analyze(@module, log)
+      assert analysis.reasons[bad_pin.id] == :bad_delegation_sig
+
+      assert %{status: :active} = Verdict.delegation_status(@module, log, d.id)
+    end
+  end
+
+  test "a bounded continuation whose roles or ops is a list does not crash the judge" do
+    for field <- [:ops, :roles] do
+      {sim, _genesis} = Continuation.new(label: "row-289-#{field}")
+      {sim, pin, profile} = Continuation.pin(sim)
+      {sim, epoch} = Sim.beacon(sim, "founder", 0)
+      sim = Sim.sync_all(sim)
+      {sim, op} = Continuation.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
+      {:succeed, role, d, proof} = op.body
+      malformed = %{d | field => MapSet.to_list(Map.fetch!(d, field))}
+      rewritten = %{op | body: {:succeed, role, malformed, proof}}
+      assert Op.valid?(rewritten)
+
+      log = Sim.log(sim, "nominee")
+      log = Log.from_ops(log.replica, Map.put(log.ops, op.id, rewritten))
+      assert {:ok, _} = log |> Log.dump_bytes() |> Log.restore_verified_bytes()
+
+      analysis = Authority.analyze(sim.module, log)
+      assert analysis.reasons[rewritten.id] in [:bad_delegation_sig, :unauthorized_continuation]
+      assert %{status: :invalid} = Verdict.delegation_status(sim.module, log, d.id)
+    end
+  end
+
   defp grant_log(opts) do
     as_list = Keyword.fetch!(opts, :as_list)
     {cmd, args} = Keyword.fetch!(opts, :command)
@@ -98,4 +137,17 @@ defmodule Lattice2.MalformedDelegationTest do
   end
 
   defp carried_id(%Op{body: {:grant, %Delegation{id: id}}}), do: id
+
+  defp same_id_empty_genesis_log(field) do
+    sim = Sim.new(@module, "#{@replica}-#{field}", ["r0", "r1"], seed: "row-289-coexist-#{field}")
+    {sim, _genesis} = Sim.create_replica(sim, "r0")
+    root = Sim.identity(sim, "r0")
+    d = Delegation.genesis(root, sim.replica, ops: [], roles: [], live: false)
+    {sim, pin} = Sim.append(sim, "r0", :authority, {:genesis, d, %{}})
+    {sim, _grant} = Sim.append(sim, "r0", :authority, {:grant, d})
+    malformed = %{d | field => []}
+    bad_pin = %{pin | body: {:genesis, malformed, %{}}}
+    log = sim |> Sim.sync_all() |> Sim.log("r0")
+    {Log.from_ops(log.replica, Map.put(log.ops, pin.id, bad_pin)), bad_pin, d}
+  end
 end
