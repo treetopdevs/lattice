@@ -984,6 +984,20 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Context</dt><dd>The diff edits <code>apps/lattice_core/lib/lattice/authority/</code>. Working-policy rule 3 requires two independent reviews. Three Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P1/P2 (D-136, D-137), round 2 P1 (D-138), round 3 on tip <code>9aaaaad76</code> with no P1/P2/P3.</dd>
 <dt>Decision</dt><dd>Open #200 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128).</dd>
 </dl></section>
+<section id="d143"><h2><span>D-143</span> Slice choice: row 295, tracked <code>backup.sh</code> seed-guard tests</h2><dl>
+<dt>When</dt><dd>2026-10-31, from main <code>921d8474e</code></dd>
+<dt>Context</dt><dd>Already merged: #195–#199 and #200 (row 289, exact tip <code>d07349c34</code>). Excluded: Township and Toolshed under rule 10 (row 154); rule 8 parked items (rows 077/285 device, 146 codesigning, 261/262 two Macs, 224/245 ceremony); row 256, an operator decision; rows 255/257, which wait on plan 245 PR 6; plans 267–279, the native evaluator track already in flight; row 288, which needs an <code>authority.ex</code> edit and a second review (rule 3); row 300, which waits on 257; row 150, L and owned by R31.</dd>
+<dt>Options</dt><dd>(a) Row 295 (P2 S, D-140: parametrize <code>backup.sh</code> and run it under dash with synthetic seeds and a stubbed restic); (b) other open P1s that still need ceremony, a device, or two Macs; (c) row 288 (P2, rule 3).</dd>
+<dt>Decision</dt><dd>(a).</dd>
+<dt>Reason</dt><dd>Highest-priority unblocked row that fits one reviewable PR. No higher unblocked P1 that fits one PR is free of an operator ceremony, a physical device, or two Macs. D-140 already assigned the seed-guard tests here; the script's checks stay fail-closed. This does not claim the droplet is running the new script, production deployment, Phase G, or receipt-free W4.</dd>
+</dl></section>
+<section id="d144"><h2><span>D-144</span> Row 295: snapshot <code>TREEHOUSE_BACKUP_*</code> before sourcing restic/env</h2><dl>
+<dt>When</dt><dd>2026-10-31</dd>
+<dt>Context</dt><dd>D-140 said a tracked test first needs the hardcoded host paths and <code>/etc/restic/env</code> parametrized. Tests also need a throwaway expected public key, because the bound seed must not enter the repo, and a zero retry delay, because the production 1800 s sleep cannot run in CI.</dd>
+<dt>Options</dt><dd>(a) Read overrides after sourcing restic/env; (b) snapshot process-environment overrides into frozen names, source restic/env for restic credentials only, then restore the frozen names so that file cannot retarget paths, the retry budget, or the bound public key; (c) honor overrides only when a test sentinel file exists.</dd>
+<dt>Decision</dt><dd>(b). Production systemd does not set the variables; defaults remain the operator host paths, 1800 s, four attempts, and <code>qJ7tfzm+Gvc1O1lgfj/ZwdPgSAC/jcuxXMHoA2qVbB4=</code>. A test asserts a poisoned restic/env key does not change the bound key. Check_seed, exact-id promotion, and fail-closed dump/seed behaviour are unchanged. The droplet install remains an operator step.</dd>
+<dt>Reason</dt><dd>(a) would let a credentials file weaken the seed guard. (c) is extra mechanism; the freeze already stops restic/env from retargeting, and root who can set the process environment already owns the host.</dd>
+</dl></section>
 </main>
 </body>
 </html>
