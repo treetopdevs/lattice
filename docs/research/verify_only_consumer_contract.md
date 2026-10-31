@@ -59,6 +59,11 @@ then `mix lattice.fault verify`):
 - Accept the staleness this implies. A consumer that has not pulled since a revoke or a beacon will
   honor a revoked or lapsed delegate until it pulls. This is the consumer's non-claim, not
   Lattice's: the log is the truth, and the consumer's copy is a cache of it.
+- Pin the replica before judging. Configure the expected replica id out of band (for example
+  `Lattice.Authority.bind_replica(name, root_pub)` for a known root key) and refuse any log whose
+  `log.replica` differs, before computing or accepting a verdict. `restore_verified/1` proves only
+  that a log is internally authentic: a complete log rooted in someone else's key passes it and
+  can carry an `:active` delegation addressed to the consumer's actor.
 - Judge only logs it has verified (`restore_verified/1`, or the carrier's verified pull). A log that
   fails verification yields no verdict, not an `:active` one.
 - Load its replica module (for example `Code.ensure_loaded!(Treehouse.Thread)`) before

@@ -34,14 +34,14 @@ defmodule Lattice.Verdict do
 
   `delegation_status/3` judges a delegation as of the whole log, the way the live path
   does (everything on the log is "now"). Precedence matches the judge's: `:revoked`
-  before `:lapsed`. A delegation the log has never carried is `:unknown`, never
-  `:active`. A delegation is `:active` when `Authority.delegation_active?/2` accepts it,
-  or when it descends from a succession candidate the judge activated (the successor's
-  self-issued delegation, introduced by a `:succeed` op through which the judge
-  acquired the role, with every descendant on this replica and attenuating its
-  parent). Anything else on the log
-  that is not revoked or lapsed (a bad chain, an unactivated candidate) is `:invalid`.
-  Only `:active` permits action; every other status is a refusal.
+  before `:lapsed`, and, as in the judge's cap check, chain validity before both. A
+  delegation the log has never carried is `:unknown`, never `:active`. A delegation is
+  valid when `Authority.delegation_active?/2` accepts it apart from leases, or when it
+  descends from a succession candidate the judge activated (the successor's self-issued
+  delegation, introduced by a `:succeed` op through which the judge acquired the role,
+  with every descendant on this replica and attenuating its parent). Anything else on
+  the log (a bad chain, an unactivated candidate) is `:invalid`, revoked or not. Only
+  `:active` permits action; every other status is a refusal.
 
   The status also names the delegation's `audience` (hex public key) and granted `ops`,
   so a consumer can check that the delegation is addressed to the actor it is judging
@@ -145,14 +145,15 @@ defmodule Lattice.Verdict do
     revoked_by = first_revoke(ordered, chain, Authority.root(log), fn _revoke -> true end)
     latest = beacons |> Enum.map(& &1.epoch) |> Enum.max(fn -> nil end)
 
+    # Validity first, as the judge's cap check: a bad chain is :invalid even when a
+    # revoke or a beacon past its lease is also on the log.
     status =
       cond do
         chain == [] -> :unknown
+        not valid_chain?(module, log, delegation_id, chain, ordered, analysis) -> :invalid
         revoked_by != nil -> :revoked
         expires != nil and latest != nil and latest > expires -> :lapsed
-        Authority.delegation_active?(log, delegation_id) -> :active
-        succession_activated?(module, log, chain, ordered, analysis) -> :active
-        true -> :invalid
+        true -> :active
       end
 
     {audience, ops} =
@@ -275,6 +276,24 @@ defmodule Lattice.Verdict do
       _ -> []
     end
   end
+
+  # Structural validity apart from leases. `Authority.delegation_active?/2` also refuses
+  # a lapsed lease, so it is asked on the log without beacon ops: beacons decide only
+  # expiry, never chain validity.
+  defp valid_chain?(module, log, delegation_id, chain, ordered, analysis) do
+    Authority.delegation_active?(without_beacons(log), delegation_id) or
+      succession_activated?(module, log, chain, ordered, analysis)
+  end
+
+  defp without_beacons(log) do
+    kept = Map.reject(Log.ops(log), fn {_id, op} -> beacon?(op) end)
+    Log.from_ops(log.replica, kept)
+  end
+
+  defp beacon?(%Op{kind: :authority, body: body}) when is_tuple(body),
+    do: elem(body, 0) == :beacon
+
+  defp beacon?(_op), do: false
 
   # The judge's succession-candidate rule: the root is the successor's self-issued
   # delegation, valid only once the judge *acquired* the role through the `:succeed` op

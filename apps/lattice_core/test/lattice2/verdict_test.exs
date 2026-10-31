@@ -258,6 +258,35 @@ defmodule Lattice2.VerdictTest do
                Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
     end
 
+    test "a bad chain is invalid even when it is also revoked or lapsed" do
+      sim = demo_sim("verdict:bad-chain")
+
+      # Correctly signed, but its parent is not on the log.
+      bad =
+        Delegation.new(Sim.identity(sim, "r1"), sim.replica, Sim.identity(sim, "r2").pub,
+          ops: [:post],
+          parent_id: "missing-parent",
+          expires_epoch: 1
+        )
+
+      {sim, _} = Sim.append(sim, "r1", :authority, {:grant, bad})
+      sim = Sim.sync_all(sim)
+      {sim, post} = Sim.command(sim, "r2", :post, ["bad"], cap: bad.id)
+
+      for {variant, sim} <- [
+            revoked: elem(Sim.revoke(sim, "r0", bad.id), 0),
+            lapsed: elem(Sim.beacon(sim, "r0", 2), 0)
+          ] do
+        log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+        assert Authority.analyze(Lattice.Demo.Thread, log).reasons[post.id] ==
+                 :invalid_capability
+
+        assert %{status: :invalid} = Verdict.delegation_status(Lattice.Demo.Thread, log, bad.id),
+               "#{variant} bad chain"
+      end
+    end
+
     test "an unactivated succession candidate and its descendant are invalid" do
       sim =
         demo_sim("verdict:early", policies: %{moderator: %{successor: "r1", dormant_ticks: 2}})
