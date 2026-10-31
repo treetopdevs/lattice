@@ -984,6 +984,47 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Context</dt><dd>The diff edits <code>apps/lattice_core/lib/lattice/authority/</code>. Working-policy rule 3 requires two independent reviews. Three Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P1/P2 (D-136, D-137), round 2 P1 (D-138), round 3 on tip <code>9aaaaad76</code> with no P1/P2/P3.</dd>
 <dt>Decision</dt><dd>Open #200 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128).</dd>
 </dl></section>
+<section id="d143"><h2><span>D-143</span> Slice choice: row 295, tracked <code>backup.sh</code> seed-guard tests</h2><dl>
+<dt>When</dt><dd>2026-10-31, from main <code>921d8474e</code></dd>
+<dt>Context</dt><dd>Already merged: #195–#199 and #200 (row 289, exact tip <code>d07349c34</code>). Excluded: Township and Toolshed under rule 10 (row 154); rule 8 parked items (rows 077/285 device, 146 codesigning, 261/262 two Macs, 224/245 ceremony); row 256, an operator decision; rows 255/257, which wait on plan 245 PR 6; plans 267–279, the native evaluator track already in flight; row 288, which needs an <code>authority.ex</code> edit and a second review (rule 3); row 300, which waits on 257; row 150, L and owned by R31.</dd>
+<dt>Options</dt><dd>(a) Row 295 (P2 S, D-140: parametrize <code>backup.sh</code> and run it under dash with synthetic seeds and a stubbed restic); (b) other open P1s that still need ceremony, a device, or two Macs; (c) row 288 (P2, rule 3).</dd>
+<dt>Decision</dt><dd>(a).</dd>
+<dt>Reason</dt><dd>Highest-priority unblocked row that fits one reviewable PR. No higher unblocked P1 that fits one PR is free of an operator ceremony, a physical device, or two Macs. D-140 already assigned the seed-guard tests here; the script's checks stay fail-closed. This does not claim the droplet is running the new script, production deployment, Phase G, or receipt-free W4.</dd>
+</dl></section>
+<section id="d144"><h2><span>D-144</span> Row 295: snapshot <code>TREEHOUSE_BACKUP_*</code> before sourcing restic/env</h2><dl>
+<dt>When</dt><dd>2026-10-31</dd>
+<dt>Context</dt><dd>D-140 said a tracked test first needs the hardcoded host paths and <code>/etc/restic/env</code> parametrized. Tests also need a throwaway expected public key, because the bound seed must not enter the repo, and a zero retry delay, because the production 1800 s sleep cannot run in CI.</dd>
+<dt>Options</dt><dd>(a) Read overrides after sourcing restic/env; (b) snapshot process-environment overrides into frozen names, source restic/env for restic credentials only, then restore the frozen names so that file cannot retarget paths, the retry budget, or the bound public key; (c) honor overrides only when a test sentinel file exists.</dd>
+<dt>Decision</dt><dd>(b). Production systemd does not set the variables; defaults remain the operator host paths, 1800 s, four attempts, and <code>qJ7tfzm+Gvc1O1lgfj/ZwdPgSAC/jcuxXMHoA2qVbB4=</code>. A test asserts a poisoned restic/env key does not change the bound key. Check_seed, exact-id promotion, and fail-closed dump/seed behaviour are unchanged. The droplet install remains an operator step.</dd>
+<dt>Reason</dt><dd>(a) would let a credentials file weaken the seed guard. (c) is extra mechanism; the freeze already stops restic/env from retargeting, and root who can set the process environment already owns the host.</dd>
+</dl></section>
+<section id="d145"><h2><span>D-145</span> Row 295 Codex P2: readonly freeze, quoted backup argv, stale pending state</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>72c999141</code></dd>
+<dt>Finding</dt><dd>No P1, three P2. (1) Ordinary <code>__tb_*</code> names could still be overwritten by a sourced <code>__tb_expected_public_key=...</code> assignment, so D-144’s freeze was incomplete. (2) Configurable paths were concatenated and expanded unquoted, so a space in a <code>TREEHOUSE_BACKUP_*</code> override could drop a directory from the snapshot. (3) The exact-id test never created a leftover pending snapshot, so removing quarantine or promoting every pending tag would still pass.</dd>
+<dt>Decision</dt><dd>Fixed. Frozen names are <code>readonly</code> before restic/env is sourced (a sourced overwrite now fails closed). <code>restic backup</code> receives four quoted paths, and a path with whitespace or glob characters is refused. The restic stub keeps pending/incomplete/daily sets; tests seed <code>deadbeef</code>, require that only the verified id is daily, and cover a failed quarantine that must not start a backup. No new plan-index row.</dd>
+</dl></section>
+<section id="d146"><h2><span>D-146</span> Row 295 Codex confirm: no P1/P2; refuse non-absolute backup paths</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>ab612ee1a</code></dd>
+<dt>Finding</dt><dd>No P1/P2. One P3: the character whitelist still accepted <code>-f</code>, and <code>restic backup</code> had no <code>--</code>, so a process override <code>TREEHOUSE_BACKUP_CADDY_ETC=-f</code> could become a restic option and omit that directory after a successful seed check.</dd>
+<dt>Decision</dt><dd>Fixed. Required backup paths must be absolute, and the four paths follow <code>--</code>. A <code>-f</code> override is refused before restic runs. Production defaults were already absolute. This is not a droplet-install or W4 claim. No new plan-index row; no third Codex pass (P3 only).</dd>
+</dl></section>
+<section id="d147"><h2><span>D-147</span> Row 295 opens as PR #201</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/201">#201</a></dd>
+<dt>Context</dt><dd>Two Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P2 (D-145), confirm no P1/P2 plus a P3 (D-146). The diff is operator-script tests, not a rule-3 second-review path.</dd>
+<dt>Decision</dt><dd>Open #201 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). If Flagship fails the township witness-ceremony timeout on this docs/script-only delta, file a new flake row instead of stretching row 228.</dd>
+</dl></section>
+<section id="d148"><h2><span>D-148</span> PR #201 Flagship Maven 429 is a new flake, not a rerun</h2><dl>
+<dt>When</dt><dd>2026-10-31, exact tip <code>f8110b715</code>, Flagship run <code>41246517765</code> job <code>124676807118</code></dd>
+<dt>Context</dt><dd>Every other required Flagship job on that tip passed, including Unit + property, all packaged macOS gates, and Android emulator launch. The compile job failed at <code>:app:generateUniversalDebugUnitTestLintModel</code> because Maven Central returned HTTP 429 for <code>org.robolectric:nativeruntime-dist-compat:1.0.18</code>. The #201 diff has no Android or Kotlin files. Row 228 names hex.pm/GitHub setup, enrollment hint timeout, stress restart, and Play fonts — not Maven 429.</dd>
+<dt>Options</dt><dd>(a) <code>gh run rerun</code> the failed job and stretch row 228; (b) file a new flake row and leave the red exact-tip unmerged; (c) treat Maven 429 as the same class as row 228’s network-setup errors.</dd>
+<dt>Decision</dt><dd>(b). New row 301. Do not rerun run <code>41246517765</code>. A later docs commit that names this flake starts a new exact-tip run; that is not a rerun of the failed job. Merge only if that new exact-tip required CI is green.</dd>
+<dt>Reason</dt><dd>The slice rule is rerun only a proven flake and cite its row. This is the first recorded Maven 429 on this step. Stretching 228 would hide a distinct dependency-fetch failure.</dd>
+</dl></section>
+<section id="d149"><h2><span>D-149</span> CodeRabbit Minor: no <code>retry_seconds</code> duration cap in this slice</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/201#discussion_r4433490167">review comment</a></dd>
+<dt>Finding</dt><dd>Minor: a huge decimal <code>TREEHOUSE_BACKUP_RETRY_SECONDS</code> is <code>is_uint</code>-valid and can sleep until systemd <code>TimeoutStartSec=8h</code> kills the oneshot, starving remaining attempts. CodeRabbit asked for an explicit duration bound, not a nine-character length check.</dd>
+<dt>Decision</dt><dd>Deferred. Production systemd does not set the override; the script default remains 1800 s. <code>is_uint</code> already rejects non-digits. Coupling the dash script to the unit file’s 8h cap is a new operator-config contract, not a seed-guard gap. Not P1/P2; no new plan-index row.</dd>
+</dl></section>
 </main>
 </body>
 </html>

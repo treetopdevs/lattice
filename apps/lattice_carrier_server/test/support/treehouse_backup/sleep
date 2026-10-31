@@ -1,0 +1,12 @@
+#!/bin/sh
+# Record the requested delay and return immediately so retry tests cannot hang.
+set -eu
+log=${TREEHOUSE_BACKUP_STUB_DIR:?}/log
+{
+  printf 'sleep'
+  for a in "$@"; do
+    printf ' %s' "$a"
+  done
+  printf '\n'
+} >> "$log"
+exit 0
