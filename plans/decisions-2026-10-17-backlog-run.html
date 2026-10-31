@@ -1008,6 +1008,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>No P1/P2. One P3: the character whitelist still accepted <code>-f</code>, and <code>restic backup</code> had no <code>--</code>, so a process override <code>TREEHOUSE_BACKUP_CADDY_ETC=-f</code> could become a restic option and omit that directory after a successful seed check.</dd>
 <dt>Decision</dt><dd>Fixed. Required backup paths must be absolute, and the four paths follow <code>--</code>. A <code>-f</code> override is refused before restic runs. Production defaults were already absolute. This is not a droplet-install or W4 claim. No new plan-index row; no third Codex pass (P3 only).</dd>
 </dl></section>
+<section id="d147"><h2><span>D-147</span> Row 295 opens as PR #201</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/201">#201</a></dd>
+<dt>Context</dt><dd>Two Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P2 (D-145), confirm no P1/P2 plus a P3 (D-146). The diff is operator-script tests, not a rule-3 second-review path.</dd>
+<dt>Decision</dt><dd>Open #201 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). If Flagship fails the township witness-ceremony timeout on this docs/script-only delta, file a new flake row instead of stretching row 228.</dd>
+</dl></section>
 </main>
 </body>
 </html>
