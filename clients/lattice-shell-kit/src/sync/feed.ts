@@ -603,6 +603,8 @@ export function createFeedController(
       if (!running) launch();
       else {
         // A paused route's worker was cancelled and ends promptly; Sync now restarts it.
+        // Drain first so a queued dependent pause is in the snapshot, not skipped.
+        await draining;
         const paused = [...workers.values()].filter((w) => isFull(w.route.replica));
         await Promise.all(paused.map((w) => w.done));
         for (const [replica, worker] of workers)

@@ -2,9 +2,10 @@
 
 ## Status
 
-DONE in this PR for the shell's existing sync path. The native catalog owner's
-pre-install capacity check is carried by plan 245 PR 5 and PR 6 (rule 7), because
-neither exists yet.
+DONE in [PR #199](https://github.com/treetopdevs/lattice/pull/199): 1 MiB kept
+(D-130), the feed pauses a route at `full`, max-size gates in TS and native.
+The native catalog owner's pre-install capacity check is carried by plan 245
+PR 5 and PR 6 (rule 7), because neither exists yet. The exporter half is row 300.
 
 ## Problem
 
@@ -46,7 +47,11 @@ be its own plan.
 1. **Capacity is inclusive and identical on both sides.** A record of exactly
    `HISTORY_BYTES` is accepted by `parseState` and by the native `commit`; one byte
    more is `preview_storage_limit`, and the native record is unchanged after the
-   refused commit.
+   refused commit. Exception: while `intent.setup` is present, native `commit`
+   also reserves `THREAD_CREATION_RESERVE_BYTES` (131,072) and refuses above
+   917,504 bytes; `parseState` does not apply that reserve. The native boundary
+   test uses a space intent, so it pins the inclusive 1 MiB cap, not the setup
+   reserve.
 2. **The largest merge commits; the next step writes nothing.** A real two-device
    history (same key, `FakeRelay`) is merged through `mergeSync` with a local
    padding post sized so that the merged record is within one base64 step (4 bytes)
