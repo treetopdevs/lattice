@@ -746,3 +746,15 @@ test("row 286: raw observation still authenticates a signed depth-65 frame after
     "66 complete reject:invalid_verified_history", "66 partial reject:invalid_verified_history",
   ]);
 });
+
+test("row 286: an over-depth frame that reuses a saved frame id is still invalid_verified_history", async () => {
+  // Incoming frames authenticate before the merge fingerprints them, so the collision changes nothing.
+  const f = await trustFixture(0), state = await prepare(f);
+  let body: CarrierTerm = ["nil"];
+  for (let i = 0; i < 66; i++) body = ["list", [body]];
+  const deep = await authorCarrierOpUnchecked({ replica: f.space.replica, signer: f.root, deps: [], kind: "command", body, cap: ["nil"] });
+  const saved = f.histories[0]!.frames[0]!;
+  for (const frame of [deep, { ...deep, id: saved.id }]) {
+    refused(await evaluate(state, { histories: [{ replica: f.space.replica, frames: [frame], rejected: [] }] }), "invalid_verified_history");
+  }
+});
