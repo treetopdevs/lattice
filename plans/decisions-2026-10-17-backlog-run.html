@@ -1013,6 +1013,18 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Context</dt><dd>Two Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P2 (D-145), confirm no P1/P2 plus a P3 (D-146). The diff is operator-script tests, not a rule-3 second-review path.</dd>
 <dt>Decision</dt><dd>Open #201 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). If Flagship fails the township witness-ceremony timeout on this docs/script-only delta, file a new flake row instead of stretching row 228.</dd>
 </dl></section>
+<section id="d148"><h2><span>D-148</span> PR #201 Flagship Maven 429 is a new flake, not a rerun</h2><dl>
+<dt>When</dt><dd>2026-10-31, exact tip <code>f8110b715</code>, Flagship run <code>41246517765</code> job <code>124676807118</code></dd>
+<dt>Context</dt><dd>Every other required Flagship job on that tip passed, including Unit + property, all packaged macOS gates, and Android emulator launch. The compile job failed at <code>:app:generateUniversalDebugUnitTestLintModel</code> because Maven Central returned HTTP 429 for <code>org.robolectric:nativeruntime-dist-compat:1.0.18</code>. The #201 diff has no Android or Kotlin files. Row 228 names hex.pm/GitHub setup, enrollment hint timeout, stress restart, and Play fonts — not Maven 429.</dd>
+<dt>Options</dt><dd>(a) <code>gh run rerun</code> the failed job and stretch row 228; (b) file a new flake row and leave the red exact-tip unmerged; (c) treat Maven 429 as the same class as row 228’s network-setup errors.</dd>
+<dt>Decision</dt><dd>(b). New row 301. Do not rerun run <code>41246517765</code>. A later docs commit that names this flake starts a new exact-tip run; that is not a rerun of the failed job. Merge only if that new exact-tip required CI is green.</dd>
+<dt>Reason</dt><dd>The slice rule is rerun only a proven flake and cite its row. This is the first recorded Maven 429 on this step. Stretching 228 would hide a distinct dependency-fetch failure.</dd>
+</dl></section>
+<section id="d149"><h2><span>D-149</span> CodeRabbit Minor: no <code>retry_seconds</code> duration cap in this slice</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/201#discussion_r4433490167">review comment</a></dd>
+<dt>Finding</dt><dd>Minor: a huge decimal <code>TREEHOUSE_BACKUP_RETRY_SECONDS</code> is <code>is_uint</code>-valid and can sleep until systemd <code>TimeoutStartSec=8h</code> kills the oneshot, starving remaining attempts. CodeRabbit asked for an explicit duration bound, not a nine-character length check.</dd>
+<dt>Decision</dt><dd>Deferred. Production systemd does not set the override; the script default remains 1800 s. <code>is_uint</code> already rejects non-digits. Coupling the dash script to the unit file’s 8h cap is a new operator-config contract, not a seed-guard gap. Not P1/P2; no new plan-index row.</dd>
+</dl></section>
 </main>
 </body>
 </html>
