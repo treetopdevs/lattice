@@ -1,13 +1,15 @@
 import { authorCarrierOpUnchecked } from "./unchecked_author";
 import assert from "node:assert/strict";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { authorCarrierDelegation, canonicalBytesForCarrierDelegation, canonicalBytesForCarrierTerm, canonicalHash } from "../../src/codec";
+import { authorCarrierDelegation, canonicalBytesForCarrierDelegation, canonicalBytesForCarrierOp, canonicalHash } from "../../src/codec";
 const bin = (value) => ["bin", Buffer.from(value).toString("base64")];
 export async function boundaryCases(f) {
     const missing = "A".repeat(43);
     const cap = ["nil"];
     const raw = async (kind, body, deps = []) => {
-        const bytes = canonicalBytesForCarrierTerm(["list", [bin("lattice-op-v2"), bin(f.space.replica), bin(f.root.publicKey), ["list", [...new Set(deps)].sort().map(bin)], ["atom", kind], body, cap]]);
+        // Unbounded depth budget: these fixtures sign frames past the wire cap on purpose.
+        const author = Buffer.from(f.root.publicKey).toString("base64");
+        const bytes = canonicalBytesForCarrierOp({ v: 1, id: "", replica: f.space.replica, author, deps, kind, body, cap, sig: "" }, Number.MAX_SAFE_INTEGER);
         return { v: 1, id: await canonicalHash(bytes), replica: f.space.replica, author: Buffer.from(f.root.publicKey).toString("base64"), deps, kind, body, cap, sig: Buffer.from(await f.root.sign(bytes)).toString("base64") };
     };
     const atSize = async (size, deps = []) => {
