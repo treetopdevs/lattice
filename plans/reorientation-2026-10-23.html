@@ -301,7 +301,7 @@ npm --prefix clients/treehouse-tauri-shell ci
     <li><h3>Work loop</h3>
       <ul>
         <li>Write a failing test that shows the behaviour (RED), then implement until it passes (GREEN).</li>
-        <li>Run <code>~/.asdf/shims/mix check</code>, plus the client's <code>npm test</code> if TS changed.</li>
+        <li>Run <code>~/.asdf/shims/mix check</code>, plus, if TS in <code>clients/lattice-client</code> changed, <code>npm --prefix clients/lattice-client run build</code>, <code>run typecheck</code> and the named gate scripts for the area you touched (for example <code>run conformance</code>, <code>run canonical</code>, <code>run treehouse</code>). That package has no aggregate <code>npm test</code>.</li>
         <li>Get one adversarial review (Codex Sol 6.1 high). Add a second only for authority, canonical, carrier, custody or workflow diffs. If a third round finds the same class of issue, treat it as a design question for you.</li>
         <li>Open the PR, claiming exactly one evidence tier. The exact-tip hosted run is the gate.</li>
       </ul></li>

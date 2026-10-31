@@ -143,7 +143,19 @@ machine can restore it; the PR #124 clean-machine drill covered the repository, 
   cannot prune the last snapshot holding the bound seed. The host still runs
   the older script, which treats the directory as optional; reinstall it with `install.sh`
   before the root signs the binding.
-- If the droplet is rebuilt, restore this file from restic. Never generate a new one.
+- If the droplet is rebuilt, restore this file from restic. Never generate a new one. Restic
+  restores the old numeric uid/gid (995/986), and a fresh `useradd --system` may assign others,
+  while the carrier refuses a seed not owned by its effective uid or with any group/other bit.
+  So create the user first, restore, then fix ownership and modes, and check the public key:
+
+  ```bash
+  id treehouse-relay || useradd --system --home-dir /var/lib/treehouse-relay --shell /usr/sbin/nologin treehouse-relay
+  ```
+  ```bash
+  chown -R treehouse-relay:treehouse-relay /var/lib/treehouse-relay && chmod 0700 /var/lib/treehouse-relay && chmod 0600 /var/lib/treehouse-relay/service-identity.seed
+  ```
+
+  Then run the step 0 derivation as `treehouse-relay` and confirm it prints the public key above.
 - When the carrier is deployed (R21b), the manifest instance's `identity_file` points at this path,
   and the carrier runs as `treehouse-relay`. Check then that its `carrier_hello` key equals the
   public key above.
