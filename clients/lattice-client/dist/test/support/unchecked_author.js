@@ -1,7 +1,8 @@
 import { canonicalBytesForCarrierOp, canonicalHash, } from "../../src/index";
 /**
- * Test-only twin of `authorCarrierOp` that skips the plan 190 vocabulary refusal, so
- * adversarial fixtures can sign frames that name atoms outside `WIRE_VOCABULARY`. It is
+ * Test-only twin of `authorCarrierOp` that skips the plan 190 vocabulary refusal and the
+ * row 286 encode depth cap, so adversarial fixtures can sign frames that name atoms outside
+ * `WIRE_VOCABULARY` or nest past 64 containers. It is
  * built on the exported canonical encoders and is deliberately not exported from `src/`.
  */
 export async function authorCarrierOpUnchecked(input) {
@@ -16,7 +17,7 @@ export async function authorCarrierOpUnchecked(input) {
         cap: input.cap,
         sig: "",
     };
-    const canonicalBytes = canonicalBytesForCarrierOp(unsignedFrame);
+    const canonicalBytes = canonicalBytesForCarrierOp(unsignedFrame, Number.MAX_SAFE_INTEGER);
     const id = await canonicalHash(canonicalBytes);
     const signature = await input.signer.sign(canonicalBytes);
     return { ...unsignedFrame, id, sig: Buffer.from(signature).toString("base64") };

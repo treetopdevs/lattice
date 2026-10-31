@@ -1,7 +1,7 @@
 import { parseCatalogArtifactJson } from "./treehouse_catalog_json";
 import { portableUint64Scalar } from "./uint64";
 import { verifyEd25519 } from "./signature";
-import { withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
+import { catalogRawObservationMaxDepth, withinCatalogRawObservationBounds, withinCatalogRawHistoriesBounds, withinCatalogRawEvidenceBounds } from "./treehouse_catalog_raw_bounds";
 // This module proposes decisions over an adapter-owned complete snapshot. It
 // performs no I/O, proves no CAS/freshness/readiness, and never issues a durable
 // installation receipt. The expected token is reflected for the trusted adapter
@@ -712,7 +712,7 @@ async function authenticatedRawHeader(value, replica) {
             !withinCatalogRawObservationBounds(value))
             return null;
         const frame = value;
-        const bytes = canonicalBytesForCarrierOp(frame), key = canonicalBase64Bytes(frame.author, 32), sig = canonicalBase64Bytes(frame.sig, 64);
+        const bytes = canonicalBytesForCarrierOp(frame, catalogRawObservationMaxDepth), key = canonicalBase64Bytes(frame.author, 32), sig = canonicalBase64Bytes(frame.sig, 64);
         if (key === null || sig === null || await canonicalHash(bytes) !== frame.id || !verifyEd25519(sig, bytes, key))
             return null;
         return { id: frame.id, deps: frame.deps };
@@ -800,7 +800,7 @@ async function mergeHistories(saved, incoming) {
     return observed;
 }
 // Compare the signed payload and signature while retaining the first raw values.
-function fingerprint(f) { return `${f.id}:${hash(canonicalBytesForCarrierOp(f))}:${f.sig}`; }
+function fingerprint(f) { return `${f.id}:${hash(canonicalBytesForCarrierOp(f, catalogRawObservationMaxDepth))}:${f.sig}`; }
 function hash(bytes) {
     const digest = sha256(bytes);
     let binary = "";

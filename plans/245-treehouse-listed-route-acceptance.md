@@ -17,7 +17,9 @@ Design written 2026-10-23 (slice 22) against main bb40921f6; revised the same da
 reviews (dispositions in PR #162, rule 4). Parked under rule 8 for the final operator acceptance only. Part 1
 (PRs 1-7, fixtures and disposable keys) can start for PRs 1-5: OD-6 to OD-10 were decided as recommended (D-44). PR 6 also waits on row 256's client-realm decision. Part 2 (the operator's own
 run) needs the inputs under "Depends on" and is not a build PR.
-PR 1 landed (bounded Thread grammar, TS/Rust parity, kind-aware `verifyProfile` for row 258; PR TBD).
+PR 1 landed (bounded Thread grammar, TS/Rust parity, kind-aware `verifyProfile` for row 258; #164).
+Later build PRs run as their own plans (D-127): PR 2 is plan 265 (#170, DONE), PR 3 is plan 267 (IN PROGRESS),
+PR 4 is plan 266 (#171, DONE). PR 5 waits on plan 267; PRs 6-7 also wait on row 256.
 
 2026-10-24 integration: plan 261 implements bounded Thread grammar, independent native child-key
 custody and ordinary desktop creation locally (row 254), retaining merged PR #164 / row 258. Rebase later PRs on that implementation;
