@@ -355,6 +355,23 @@ defmodule Lattice2.VerdictTest do
       assert %{"kind" => %{"non_atom" => ~s("command")}} = Jason.decode!(Verdict.to_json(rec))
     end
 
+    test "non-UTF-8 ids serialize as tagged hex instead of crashing" do
+      sim = demo_sim("verdict:non-utf8-cap")
+      {sim, op} = Sim.command(sim, "r1", :post, ["x"], cap: <<255, 0>>)
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert {:quarantined, rec} = Verdict.explain(Lattice.Demo.Thread, log, op.id)
+      assert rec.cited_delegation_id == <<255, 0>>
+
+      assert %{"cited_delegation_id" => %{"non_utf8_hex" => "ff00"}} =
+               Jason.decode!(Verdict.to_json(rec))
+
+      status = Verdict.delegation_status(Lattice.Demo.Thread, log, <<255, 0>>)
+
+      assert %{"delegation_id" => %{"non_utf8_hex" => "ff00"}, "status" => "unknown"} =
+               Jason.decode!(Verdict.to_json(status))
+    end
+
     test "a bad chain is invalid even when it is also revoked or lapsed" do
       sim = demo_sim("verdict:bad-chain")
 
