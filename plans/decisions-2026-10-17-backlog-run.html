@@ -979,6 +979,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd><code>mapset?/1</code> accepted any <code>%MapSet{}</code> struct. A genesis whose <code>roles</code> wrapped an Erlang <code>:sets</code> v1 tuple with <code>maxn = 0</code> still enumerated the original names, so canonical bytes, id, signature, <code>Op.valid?/1</code>, and verified ETF restore all passed. <code>MapSet.member?/2</code> then raised <code>ArgumentError</code> in the role timeline. Ordinary JSON decoding rebuilds clean sets; this is a BEAM/ETF term shape.</dd>
 <dt>Decision</dt><dd>Fixed. <code>mapset?/1</code> requires the backing to be a map, which is the <code>:sets</code> v2 shape <code>Delegation.new/4</code> emits. A v1 or otherwise unusable backing is <code>:bad_delegation_sig</code>. Covered by a unit test and a genesis analyze/Verdict regression. No new plan-index row; not a W4 or Phase G claim.</dd>
 </dl></section>
+<section id="d139"><h2><span>D-139</span> Row 289 opens as PR #200; Codex confirm is the rule-3 second review</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/200">#200</a></dd>
+<dt>Context</dt><dd>The diff edits <code>apps/lattice_core/lib/lattice/authority/</code>. Working-policy rule 3 requires two independent reviews. Three Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P1/P2 (D-136, D-137), round 2 P1 (D-138), round 3 on tip <code>9aaaaad76</code> with no P1/P2/P3.</dd>
+<dt>Decision</dt><dd>Open #200 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128).</dd>
+</dl></section>
 </main>
 </body>
 </html>
