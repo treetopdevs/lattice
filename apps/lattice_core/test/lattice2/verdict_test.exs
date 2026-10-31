@@ -321,6 +321,16 @@ defmodule Lattice2.VerdictTest do
       end
     end
 
+    test "an accepted empty-tuple authority body does not crash a status query" do
+      sim = demo_sim("verdict:empty-tuple")
+      {sim, grant} = Sim.grant(sim, "r0", "r1", ops: [:post])
+      {sim, _} = Sim.append(Sim.sync_all(sim), "r2", :authority, {})
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert {:ok, _} = log |> Log.dump_bytes() |> Log.restore_verified_bytes()
+      assert %{status: :active} = Verdict.delegation_status(Lattice.Demo.Thread, log, grant.id)
+    end
+
     test "an unactivated succession candidate and its descendant are invalid" do
       sim =
         demo_sim("verdict:early", policies: %{moderator: %{successor: "r1", dormant_ticks: 2}})

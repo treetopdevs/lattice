@@ -17,7 +17,9 @@ A command cites a delegation. The judge (`Lattice.Authority.analyze/2`) quaranti
 that delegation's chain exists that the command is not causally before, and `:lease_expired` once
 an accepted beacon passes the chain's lease that the command is not causally before. A beacon is
 accepted when the replica root signs it or, under a witness policy pinned at genesis (plan 179), a
-threshold of witnesses certifies it; either way epochs are strictly monotonic. The judge checks the audience before the lease, so
+threshold of witnesses certifies it. Epochs increase strictly only along causal ancestry: concurrent
+accepted beacons may repeat or interleave epochs, so a consumer takes the maximum accepted epoch
+(`latest_beacon_epoch`) rather than assuming a total order. The judge checks the audience before the lease, so
 a realm that cites someone else's delegation is quarantined `:capability_wrong_audience`, lapsed or
 not. Receiving work confers no permission.
 

@@ -306,8 +306,9 @@ defmodule Lattice.Verdict do
     Log.from_ops(log.replica, kept)
   end
 
-  defp beacon?(%Op{kind: :authority, body: body}) when is_tuple(body),
-    do: elem(body, 0) == :beacon
+  defp beacon?(%Op{kind: :authority, body: body})
+       when is_tuple(body) and tuple_size(body) > 0,
+       do: elem(body, 0) == :beacon
 
   defp beacon?(_op), do: false
 
