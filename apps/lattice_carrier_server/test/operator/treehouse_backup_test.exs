@@ -34,15 +34,16 @@ defmodule LatticeCarrierServer.Operator.TreehouseBackupTest do
     tmp_dir: tmp
   } do
     id = "cafef00d"
-    ctx = prepare!(tmp, backup_ids: [id, "eeeeeeee"], dump_plan: ["ok"])
+    ctx = prepare!(tmp, backup_ids: [id], dump_plan: ["ok"], stale_pending: ["deadbeef"])
     {output, 0, log} = run_backup(ctx)
 
     assert output =~ "snapshot #{id} saved"
+    assert stub_lines(ctx, "daily") == [id]
+    assert "deadbeef" in stub_lines(ctx, "incomplete")
+    refute "deadbeef" in stub_lines(ctx, "daily")
     assert log =~ "restic tag --set daily #{id}\n"
     refute log =~ "restic tag --set daily deadbeef\n"
-    refute log =~ "restic tag --set daily eeeeeeee\n"
     assert log =~ "restic forget --tag daily "
-    assert log =~ "--prune"
     assert logged_backup_paths(log, ctx)
     assert log =~ "restic dump #{id} #{ctx.seed_path}"
   end
@@ -160,6 +161,45 @@ defmodule LatticeCarrierServer.Operator.TreehouseBackupTest do
     assert log =~ "restic tag --set daily b1000001\n"
   end
 
+  test "restic/env cannot overwrite the frozen __tb_* names", %{tmp_dir: tmp} do
+    ctx = prepare!(tmp, backup_ids: ["b1000002"], dump_plan: ["ok"])
+
+    File.write!(
+      ctx.restic_env,
+      "__tb_expected_public_key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
+    )
+
+    {_output, status, log} = run_backup(ctx)
+    assert status != 0
+    assert stub_lines(ctx, "daily") == []
+    refute log =~ "restic tag --set daily "
+  end
+
+  test "a backup path with whitespace is refused before restic runs", %{tmp_dir: tmp} do
+    ctx = prepare!(tmp, backup_ids: ["cafef00d"], dump_plan: ["ok"])
+    spaced = Path.join(ctx.tmp, "caddy config")
+    File.mkdir_p!(spaced)
+    ctx = %{ctx | caddy_etc: spaced}
+    {output, status, log} = run_backup(ctx)
+
+    assert status == 1
+    assert output =~ "unsafe characters"
+    refute log =~ "restic backup "
+    refute log =~ "restic tag --set daily "
+    assert stub_lines(ctx, "daily") == []
+  end
+
+  test "a failed pending quarantine does not promote a leftover snapshot", %{tmp_dir: tmp} do
+    ctx = prepare!(tmp, backup_ids: ["cafef00d"], dump_plan: ["ok"], stale_pending: ["deadbeef"])
+    {_output, status, log} = run_backup(ctx, %{"TREEHOUSE_BACKUP_STUB_QUARANTINE" => "fail"})
+
+    assert status == 1
+    assert stub_lines(ctx, "daily") == []
+    assert stub_lines(ctx, "pending") == ["deadbeef"]
+    refute log =~ "restic backup "
+    refute log =~ "restic tag --set daily "
+  end
+
   defp prepare!(tmp, opts) do
     {good_contents, good_key} = seed_and_key()
     {wrong_contents, _wrong_key} = seed_and_key()
@@ -197,6 +237,17 @@ defmodule LatticeCarrierServer.Operator.TreehouseBackupTest do
       Enum.join(Keyword.fetch!(opts, :dump_plan), "\n") <> "\n"
     )
 
+    File.write!(
+      Path.join(stub_dir, "pending"),
+      case Keyword.get(opts, :stale_pending, []) do
+        [] -> ""
+        ids -> Enum.join(ids, "\n") <> "\n"
+      end
+    )
+
+    File.write!(Path.join(stub_dir, "incomplete"), "")
+    File.write!(Path.join(stub_dir, "daily"), "")
+
     %{
       tmp: tmp,
       caddy_etc: caddy_etc,
@@ -211,26 +262,37 @@ defmodule LatticeCarrierServer.Operator.TreehouseBackupTest do
     }
   end
 
-  defp run_backup(ctx) do
-    env = %{
-      "PATH" => @stubs <> ":" <> System.get_env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
-      "TREEHOUSE_BACKUP_STUB_DIR" => ctx.stub_dir,
-      "TREEHOUSE_BACKUP_CADDY_ETC" => ctx.caddy_etc,
-      "TREEHOUSE_BACKUP_CADDY_LIB" => ctx.caddy_lib,
-      "TREEHOUSE_BACKUP_RESTIC_ETC" => ctx.restic_etc,
-      "TREEHOUSE_BACKUP_RELAY_LIB" => ctx.relay_lib,
-      "TREEHOUSE_BACKUP_RESTIC_ENV" => ctx.restic_env,
-      "TREEHOUSE_BACKUP_EXPECTED_PUBLIC_KEY" => ctx.expected_key,
-      "TREEHOUSE_BACKUP_SCRATCH_DIR" => ctx.scratch,
-      "TREEHOUSE_BACKUP_RETRY_SECONDS" => "0",
-      "TREEHOUSE_BACKUP_ATTEMPTS" => "4"
-    }
+  defp run_backup(ctx, extra_env \\ %{}) do
+    env =
+      Map.merge(
+        %{
+          "PATH" => @stubs <> ":" <> System.get_env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
+          "TREEHOUSE_BACKUP_STUB_DIR" => ctx.stub_dir,
+          "TREEHOUSE_BACKUP_CADDY_ETC" => ctx.caddy_etc,
+          "TREEHOUSE_BACKUP_CADDY_LIB" => ctx.caddy_lib,
+          "TREEHOUSE_BACKUP_RESTIC_ETC" => ctx.restic_etc,
+          "TREEHOUSE_BACKUP_RELAY_LIB" => ctx.relay_lib,
+          "TREEHOUSE_BACKUP_RESTIC_ENV" => ctx.restic_env,
+          "TREEHOUSE_BACKUP_EXPECTED_PUBLIC_KEY" => ctx.expected_key,
+          "TREEHOUSE_BACKUP_SCRATCH_DIR" => ctx.scratch,
+          "TREEHOUSE_BACKUP_RETRY_SECONDS" => "0",
+          "TREEHOUSE_BACKUP_ATTEMPTS" => "4"
+        },
+        extra_env
+      )
 
     {output, status} =
       System.cmd(@dash, [@script], env: env, stderr_to_stdout: true)
 
     log = File.read!(Path.join(ctx.stub_dir, "log"))
     {output, status, log}
+  end
+
+  defp stub_lines(ctx, name) do
+    ctx.stub_dir
+    |> Path.join(name)
+    |> File.read!()
+    |> String.split("\n", trim: true)
   end
 
   defp seed_and_key do

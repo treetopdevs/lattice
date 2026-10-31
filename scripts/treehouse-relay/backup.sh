@@ -16,6 +16,10 @@ __tb_expected_public_key=${TREEHOUSE_BACKUP_EXPECTED_PUBLIC_KEY:-qJ7tfzm+Gvc1O1l
 __tb_scratch_root=${TREEHOUSE_BACKUP_SCRATCH_DIR:-/run}
 __tb_retry_seconds=${TREEHOUSE_BACKUP_RETRY_SECONDS:-1800}
 __tb_attempts=${TREEHOUSE_BACKUP_ATTEMPTS:-4}
+# dash readonly: a sourced restic/env assignment cannot replace these.
+readonly __tb_caddy_etc __tb_caddy_lib __tb_restic_etc __tb_relay_lib \
+  __tb_restic_env __tb_expected_public_key __tb_scratch_root \
+  __tb_retry_seconds __tb_attempts
 
 set -a
 # shellcheck source=/dev/null
@@ -30,8 +34,6 @@ expected_public_key=$__tb_expected_public_key
 scratch_root=$__tb_scratch_root
 retry_seconds=$__tb_retry_seconds
 attempts=$__tb_attempts
-unset __tb_caddy_etc __tb_caddy_lib __tb_restic_etc __tb_relay_lib __tb_restic_env \
-  __tb_expected_public_key __tb_scratch_root __tb_retry_seconds __tb_attempts
 
 is_uint() {
   case "$1" in
@@ -58,14 +60,19 @@ if [ ! -d "$scratch_root" ] || [ -L "$scratch_root" ]; then
 fi
 
 # Required paths must exist. A missing path fails the run instead of being left
-# out of a snapshot that still reports success.
-paths=""
+# out of a snapshot that still reports success. Whitespace or glob characters
+# are refused so a TREEHOUSE_BACKUP_* override cannot split across restic argv.
 for p in "$caddy_etc" "$caddy_lib" "$restic_etc" "$relay_lib"; do
+  case "$p" in
+    *[!/A-Za-z0-9._+-]*)
+      echo "required backup path has unsafe characters: $p" >&2
+      exit 1
+      ;;
+  esac
   if [ ! -e "$p" ]; then
     echo "required backup path missing: $p" >&2
     exit 1
   fi
-  paths="$paths $p"
 done
 
 # restic archives a symlink without following it, so a linked carrier directory would
@@ -134,8 +141,8 @@ while [ "$attempt" -le "$attempts" ]; do
     # A seed that changed since the last check stops the run; retrying cannot help.
     check_seed "$seed" || exit 1
     set +e
-    # shellcheck disable=SC2086
-    timeout --signal=INT --kill-after=10m 1h restic backup --tag pending $paths \
+    timeout --signal=INT --kill-after=10m 1h restic backup --tag pending \
+      "$caddy_etc" "$caddy_lib" "$restic_etc" "$relay_lib" \
       > "$snapshot_dir/backup.log" 2>&1
     status=$?
     set -e

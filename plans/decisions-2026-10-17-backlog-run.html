@@ -998,6 +998,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>(b). Production systemd does not set the variables; defaults remain the operator host paths, 1800 s, four attempts, and <code>qJ7tfzm+Gvc1O1lgfj/ZwdPgSAC/jcuxXMHoA2qVbB4=</code>. A test asserts a poisoned restic/env key does not change the bound key. Check_seed, exact-id promotion, and fail-closed dump/seed behaviour are unchanged. The droplet install remains an operator step.</dd>
 <dt>Reason</dt><dd>(a) would let a credentials file weaken the seed guard. (c) is extra mechanism; the freeze already stops restic/env from retargeting, and root who can set the process environment already owns the host.</dd>
 </dl></section>
+<section id="d145"><h2><span>D-145</span> Row 295 Codex P2: readonly freeze, quoted backup argv, stale pending state</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>72c999141</code></dd>
+<dt>Finding</dt><dd>No P1, three P2. (1) Ordinary <code>__tb_*</code> names could still be overwritten by a sourced <code>__tb_expected_public_key=...</code> assignment, so D-144’s freeze was incomplete. (2) Configurable paths were concatenated and expanded unquoted, so a space in a <code>TREEHOUSE_BACKUP_*</code> override could drop a directory from the snapshot. (3) The exact-id test never created a leftover pending snapshot, so removing quarantine or promoting every pending tag would still pass.</dd>
+<dt>Decision</dt><dd>Fixed. Frozen names are <code>readonly</code> before restic/env is sourced (a sourced overwrite now fails closed). <code>restic backup</code> receives four quoted paths, and a path with whitespace or glob characters is refused. The restic stub keeps pending/incomplete/daily sets; tests seed <code>deadbeef</code>, require that only the verified id is daily, and cover a failed quarantine that must not start a backup. No new plan-index row.</dd>
+</dl></section>
 </main>
 </body>
 </html>
