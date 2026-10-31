@@ -12,6 +12,8 @@ export class FaultNative implements PreviewNative {
   seed: Uint8Array | null = null;
   writes = 0;
   failCommit = false;
+  /** When set, every commit throws this message, as a full native store throws `preview_storage_limit`. */
+  commitError: string | null = null;
   readonly trace: string[];
   drafts = new Map<string, Draft>();
   constructor(trace: string[] = []) {
@@ -35,6 +37,7 @@ export class FaultNative implements PreviewNative {
   async commit(expected: number, next: string) {
     this.trace.push("commit");
     if (this.failCommit) throw new Error("disk_write_refused");
+    if (this.commitError) throw new Error(this.commitError);
     if (parseState(this.record).revision !== expected) return false;
     this.record = next;
     this.writes++;

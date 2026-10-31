@@ -76,6 +76,7 @@ function hostOver(current: () => TreehouseWorkflow): ShellHost {
     decoders: (replica) => treehouseCommandDecoders(productOf(replica)),
     verifier: strictVerifier,
     mergeSync: (replica, pulled, ackedIds) => current().mergeSync(replica, pulled, ackedIds),
+    capacityReason: "preview_storage_limit",
     signer: () => treehouseCarrierSigner(current()),
   };
   return host;
@@ -206,6 +207,7 @@ const CONNECTION_LABELS: Record<TreehouseRouteConnection, string> = {
   live: "Live",
   reconnecting: "Reconnecting",
   refused: "Refused: this server is not the one saved for the route",
+  full: "Paused: this device's local storage is full",
 };
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -235,9 +237,11 @@ export function describeSyncStatus(feed: TreehouseFeedState): PanelSyncStatus {
   const acked = routes.reduce((n, r) => n + r.acked, 0);
   const summary = !feed.configured
     ? "No relay routes are saved yet."
-    : pending > 0
-      ? `${plural(pending, "operation")} waiting to be acknowledged by the relay.`
-      : `${plural(acked, "operation")} on this device ${acked === 1 ? "is" : "are"} acknowledged by the relay.`;
+    : routes.some((r) => r.connection === "full")
+      ? "Local storage could not hold the latest relay operations. The refused merge writes nothing; earlier committed progress survives and history remains readable."
+      : pending > 0
+        ? `${plural(pending, "operation")} waiting to be acknowledged by the relay.`
+        : `${plural(acked, "operation")} on this device ${acked === 1 ? "is" : "are"} acknowledged by the relay.`;
   return { configured: feed.configured, routes, summary };
 }
 

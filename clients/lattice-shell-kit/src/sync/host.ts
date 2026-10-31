@@ -46,6 +46,12 @@ export interface SyncHost {
    * the merge adds nothing.
    */
   mergeSync(replica: string, pulled: CarrierOpFrame[], ackedIds: string[]): Promise<unknown>;
+  /**
+   * The error message `mergeSync` raises when the local store cannot hold the merge (Treehouse:
+   * `preview_storage_limit`). The feed stops a route that fails with it at `full` instead of redialling;
+   * only a manual sync tries it again. Absent: no route is ever stopped for capacity.
+   */
+  readonly capacityReason?: string;
   /** The carrier session signer, read at each dial. Throws when the identity is unavailable. */
   signer(): CarrierSigner;
 }
