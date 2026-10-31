@@ -1039,6 +1039,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>(b). Public records are <code>%{op_id, holder, delegation_id}</code>, oldest first, with no author-asserted <code>at_tick</code>. Verdict treats a succession root as activated when any of those records carries its delegation id, matching the judge. <code>analyze/2</code> stays the seven-key map. Do not catch crashes in Verdict. No TypeScript change (plan 188 freeze). Not a W4 or Phase G claim.</dd>
 <dt>Reason</dt><dd>(a) would break the seven-key pin for a field consumers of <code>analyze/2</code> do not read. (c) was already rejected by D-142/D-141: the source of truth is the judge’s acquisition history.</dd>
 </dl></section>
+<section id="d152"><h2><span>D-152</span> Row 288 Codex: no P1/P2; this pass is the rule-3 second review</h2><dl>
+<dt>When</dt><dd>2026-10-31, tip <code>84c6735fb</code></dd>
+<dt>Finding</dt><dd>Codex Sol 6.1 xhigh, read-only, over <code>git diff origin/main...HEAD</code>: no P1/P2. It reproduced the handoff regression against the prior Verdict implementation, confirmed acquisition records omit <code>at_tick</code> and leave the seven-key <code>analyze/2</code> map unchanged, and found no custody or CLAUDE.md claim expansion. Working-policy rule 3: this Codex pass is the second independent review of the <code>authority.ex</code> edit.</dd>
+<dt>Decision</dt><dd>Open the PR against main. No confirm pass: there is no finding to confirm. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). If Flagship fails the township witness-ceremony timeout, file a new flake row instead of stretching row 228. If Android compile fails Maven 429, cite row 301 and do not silently rerun.</dd>
+</dl></section>
 </main>
 </body>
 </html>
