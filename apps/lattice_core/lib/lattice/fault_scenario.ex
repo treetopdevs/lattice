@@ -513,7 +513,7 @@ defmodule Lattice.FaultScenario do
 
   defp beacon_ops(log) do
     for %Op{kind: :authority, body: body} = op <- Map.values(Log.ops(log)),
-        is_tuple(body) and elem(body, 0) == :beacon,
+        is_tuple(body) and tuple_size(body) > 0 and elem(body, 0) == :beacon,
         do: op
   end
 

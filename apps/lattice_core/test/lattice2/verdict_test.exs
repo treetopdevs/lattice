@@ -292,6 +292,22 @@ defmodule Lattice2.VerdictTest do
                Verdict.delegation_status(Lattice.Demo.Thread, log, "never-carried")
     end
 
+    test "a non-atom scope serializes as an object, never as an action name" do
+      sim = demo_sim("verdict:binary-scope")
+
+      odd =
+        Delegation.new(Sim.identity(sim, "r0"), sim.replica, Sim.identity(sim, "r1").pub,
+          ops: ["post"]
+        )
+
+      {sim, _} = Sim.append(sim, "r0", :authority, {:grant, odd})
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+      status = Verdict.delegation_status(Lattice.Demo.Thread, log, odd.id)
+
+      assert %{"ops" => [%{"non_atom" => ~s("post")}]} = Jason.decode!(Verdict.to_json(status))
+      refute :post in status.ops
+    end
+
     test "a bad chain is invalid even when it is also revoked or lapsed" do
       sim = demo_sim("verdict:bad-chain")
 

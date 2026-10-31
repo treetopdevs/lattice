@@ -45,7 +45,8 @@ defmodule Lattice.Verdict do
   the log (a bad chain, an unactivated candidate) is `:invalid`, revoked or not. Only
   `:active` permits action; every other status is a refusal.
 
-  The status also names the delegation's `audience` (hex public key) and granted `ops`,
+  The status also names the delegation's `audience` (hex public key) and granted `ops`
+  (in JSON, a non-atom scope term is an object `{"non_atom": ...}`, never an action name),
   so a consumer can check that the delegation is addressed to the actor it is judging
   and confers the action it is about to allow, without reading authority internals.
   """
@@ -211,7 +212,7 @@ defmodule Lattice.Verdict do
       {"delegation_id", status.delegation_id},
       {"status", Atom.to_string(status.status)},
       {"audience", status.audience},
-      {"ops", Enum.map(status.ops, &Atom.to_string/1)},
+      {"ops", Enum.map(status.ops, &scope_json/1)},
       {"revoked_by", status.revoked_by},
       {"expires_epoch", status.expires_epoch},
       {"latest_beacon_epoch", status.latest_beacon_epoch},
@@ -221,6 +222,11 @@ defmodule Lattice.Verdict do
   end
 
   defp encode(object), do: Jason.encode!(object, pretty: true) <> "\n"
+
+  # A granted command is an atom. Any other signed scope term confers nothing in the
+  # judge, so it is encoded as an object that can never equal an action name.
+  defp scope_json(scope) when is_atom(scope), do: Atom.to_string(scope)
+  defp scope_json(scope), do: OrderedObject.new([{"non_atom", inspect(scope)}])
 
   defp atom_or_nil(nil), do: nil
   defp atom_or_nil(atom) when is_atom(atom), do: Atom.to_string(atom)

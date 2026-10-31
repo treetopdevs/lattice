@@ -236,6 +236,17 @@ defmodule Lattice.FaultScenarioTest do
       assert {:error, [_ | _]} = Evidence.verify(Path.join(tmp, "control"))
     end
 
+    test "a signed authority op with an empty body does not crash the checks" do
+      {:ok, logs} = FaultScenario.run("handoff_lapse", "demo")
+      root = logs["thread.root"]
+      who = Lattice.Identity.from_seed("stranger", "handoff:empty-body")
+      empty = Lattice.Op.new(who, root.replica, Log.frontier(root), :authority, {})
+      odd = Log.from_ops(root.replica, Map.put(Log.ops(root), empty.id, empty))
+
+      result = checks("handoff_lapse", Map.put(logs, "thread.root", odd))
+      assert result["beacon_honored"]
+    end
+
     test "a log that drops the agent's pre-lapse post fails attribution and honor",
          %{tmp_dir: tmp} do
       {dir, logs, "held"} = write!(tmp, "handoff_lapse")
