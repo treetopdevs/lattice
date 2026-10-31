@@ -157,6 +157,7 @@ machine can restore it; the PR #124 clean-machine drill covered the repository, 
   ```bash
   id treehouse-relay || useradd --system --home-dir /var/lib/treehouse-relay --shell /usr/sbin/nologin treehouse-relay
   ```
+
   ```bash
   chown -R treehouse-relay:treehouse-relay /var/lib/treehouse-relay && chmod 0700 /var/lib/treehouse-relay && chmod 0600 /var/lib/treehouse-relay/service-identity.seed
   ```

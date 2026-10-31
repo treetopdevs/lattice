@@ -27,23 +27,23 @@ if [ ! -d /var/lib/treehouse-relay ] || [ -L /var/lib/treehouse-relay ]; then
 fi
 
 # The carrier service identity seed (created 2026-10-23, OD-1) is binding-critical
-# and restic is its only off-host copy. check_seed passes only for a regular file of
-# 64 lowercase hex characters plus a newline that derives the public key the binding
-# names (docs/research/evidence/treehouse-service-identity-2026-10-23.md). It runs
-# before the first attempt, before every attempt, and again after a successful
-# backup, so a seed replaced during a long run never becomes a daily snapshot that
-# retention could keep in place of the bound one.
+# and restic is its only off-host copy. check_seed FILE passes only for a regular file
+# of 64 lowercase hex characters plus a newline that derives the public key the
+# binding names (docs/research/evidence/treehouse-service-identity-2026-10-23.md).
+# The live seed is checked before the first attempt and before every attempt. After
+# a successful backup, the seed is read back out of the pending snapshot and checked
+# there, so a snapshot only becomes daily if the copy it holds is the bound seed.
 seed=/var/lib/treehouse-relay/service-identity.seed
 expected_public_key=qJ7tfzm+Gvc1O1lgfj/ZwdPgSAC/jcuxXMHoA2qVbB4=
 check_seed() {
-  if [ ! -f "$seed" ] || [ -L "$seed" ] || [ "$(wc -c < "$seed")" -ne 65 ] ||
-    ! grep -Eqx '[0-9a-f]{64}' "$seed"; then
-    echo "service identity seed missing or malformed: $seed" >&2
+  if [ ! -f "$1" ] || [ -L "$1" ] || [ "$(wc -c < "$1")" -ne 65 ] ||
+    ! grep -Eqx '[0-9a-f]{64}' "$1"; then
+    echo "service identity seed missing or malformed: $1" >&2
     return 1
   fi
   # Wrap the raw seed in the Ed25519 PKCS#8 DER prefix and let OpenSSL derive the
   # public half. awk turns the hex into octal escapes so xxd is not needed.
-  der_escapes=$({ printf '%s' 302e020100300506032b657004220420; tr -d '\n' < "$seed"; } |
+  der_escapes=$({ printf '%s' 302e020100300506032b657004220420; tr -d '\n' < "$1"; } |
     awk '{ h = "0123456789abcdef"
            for (i = 1; i < length($0); i += 2)
              printf "\\%03o", (index(h, substr($0, i, 1)) - 1) * 16 + index(h, substr($0, i + 1, 1)) - 1 }')
@@ -52,11 +52,18 @@ check_seed() {
     openssl pkey -inform DER -pubout -outform DER | tail -c 32 | base64)
   unset der_escapes
   if [ "$actual_public_key" != "$expected_public_key" ]; then
-    echo "service identity seed does not derive the bound public key" >&2
+    echo "service identity seed does not derive the bound public key: $1" >&2
     return 1
   fi
 }
-check_seed || exit 1
+check_seed "$seed" || exit 1
+
+# Private scratch space on tmpfs for the snapshot's copy of the seed; removed on exit.
+snapshot_dir=$(mktemp -d /run/treehouse-backup.XXXXXX)
+trap 'rm -rf "$snapshot_dir"' EXIT
+# dash skips the EXIT trap when killed by a signal (systemd stop sends TERM), so turn
+# signals into an exit and let the trap remove any seed copy.
+trap 'exit 1' HUP INT TERM
 
 # A run makes up to four attempts, 30 minutes apart. Each attempt is limited to one
 # hour. timeout sends SIGINT, which restic handles by releasing its repository lock.
@@ -78,7 +85,7 @@ while [ "$attempt" -le "$attempts" ]; do
 
   if [ "$status" -eq 0 ]; then
     # A seed that changed since the last check stops the run; retrying cannot help.
-    check_seed || exit 1
+    check_seed "$seed" || exit 1
     set +e
     # shellcheck disable=SC2086
     timeout --signal=INT --kill-after=10m 1h restic backup --tag pending $paths
@@ -86,12 +93,15 @@ while [ "$attempt" -le "$attempts" ]; do
     set -e
 
     if [ "$status" -eq 0 ]; then
-      # The seed may have changed while restic read it. Quarantine the snapshot
-      # rather than promote it.
-      if ! check_seed; then
+      # The live seed may have changed while restic read it, so check the copy the
+      # snapshot actually holds. Quarantine the snapshot rather than promote it.
+      if ! (umask 077 && restic dump --tag pending latest "$seed" > "$snapshot_dir/seed") ||
+        ! check_seed "$snapshot_dir/seed"; then
+        rm -f "$snapshot_dir/seed"
         restic tag --tag pending --set incomplete || true
         exit 1
       fi
+      rm -f "$snapshot_dir/seed"
       break
     fi
     restic tag --tag pending --set incomplete || true
