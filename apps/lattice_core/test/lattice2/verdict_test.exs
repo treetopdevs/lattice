@@ -9,6 +9,7 @@ defmodule Lattice2.VerdictTest do
   @moduletag timeout: 300_000
 
   alias Lattice.{Authority, FaultScenario, Log, Op, Sim, Verdict}
+  alias Lattice.Authority.Delegation
 
   defp thread_logs(logs), do: for({"thread." <> _ = name, log} <- logs, do: {name, log})
 
@@ -225,6 +226,36 @@ defmodule Lattice2.VerdictTest do
                Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
 
       assert %{status: :invalid} = Verdict.delegation_status(Lattice.Demo.Thread, log, child.id)
+    end
+
+    test "a succession activated by a concurrent policy genesis is active" do
+      sim =
+        demo_sim("verdict:concurrent-policy",
+          policies: %{moderator: %{successor: "r1", dormant_ticks: 10}}
+        )
+
+      sim = Sim.partition(sim, "r0", "r1")
+      root = Sim.identity(sim, "r0")
+
+      # A root-signed, role-free genesis lowers the threshold, concurrent with the claim.
+      relax =
+        Delegation.genesis(root, sim.replica, ops: [], roles: [], live: true)
+
+      policies = %{
+        moderator: %{successor: Sim.identity(sim, "r1").pub, dormant_ticks: 2}
+      }
+
+      {sim, _} = Sim.append(sim, "r0", :authority, {:genesis, relax, policies})
+      {sim, succeed} = Sim.succeed(sim, "r1", :moderator, at_tick: 3)
+      log = sim |> Sim.heal("r0", "r1") |> Sim.sync_all() |> Sim.log("r0")
+
+      refute Map.has_key?(Authority.analyze(Lattice.Demo.Thread, log).reasons, succeed.id)
+
+      assert %{op_id: id} = Authority.holder_epoch(Lattice.Demo.Thread, log, :moderator)
+      assert id == succeed.id
+
+      assert %{status: :active} =
+               Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
     end
 
     test "an unactivated succession candidate and its descendant are invalid" do

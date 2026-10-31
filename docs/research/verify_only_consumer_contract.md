@@ -43,7 +43,9 @@ then `mix lattice.fault verify`):
   (`apps/lattice_core/test/standalone_dependency_test.exs`).
 - Refuse its own application-level action when the delegation's status is not `:active`. The
   status is fail-closed: `:revoked`, `:lapsed`, `:invalid` and `:unknown` all refuse, and a
-  delegation the log has never carried is `:unknown`, never `:active`.
+  delegation the log has never carried is `:unknown`, never `:active`. One known false refusal
+  remains: a successor activated by a concurrent policy genesis that has since handed its role on
+  reads `:invalid` (row 288).
 - Before allowing an action, check the status record's `audience` equals the actor's public key
   and its `ops` include the action. An `:active` delegation addressed to someone else permits that
   someone else, not the consumer's actor.

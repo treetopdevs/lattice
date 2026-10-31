@@ -279,9 +279,13 @@ defmodule Lattice.Verdict do
   # The judge's succession-candidate rule: the root is the successor's self-issued
   # delegation, valid only once the judge *acquired* the role through the `:succeed` op
   # that introduced it; each descendant must be on this replica and attenuate its parent.
-  # Acquisition is read from the judge, never inferred: on the op's causal past plus the
-  # op, its role's latest acquisition must be that op, and the op must not be quarantined
-  # on the full log. An undeclared role has no acquisition, so it never activates.
+  # Acquisition is read from the judge, never inferred: the op must not be quarantined on
+  # the full log, and the role's latest acquisition must be that op, either on the full
+  # log or on the op's causal past plus the op (for a successor that has since handed
+  # the role on). An undeclared role has no acquisition, so it never activates.
+  # Residual (row 288): the slice can drop a concurrent policy the full-log judge used,
+  # so such a successor that has since handed the role on reads :invalid, never
+  # :active; an exact answer needs the judge's acquisition records.
   defp succession_activated?(module, log, chain, ordered, analysis) do
     case Enum.reverse(chain) do
       [%Delegation{parent_id: nil, issuer: self, audience: self, id: root_id} | _] = links ->
@@ -289,7 +293,9 @@ defmodule Lattice.Verdict do
           Enum.all?(links, &(&1.replica == log.replica)) and attenuating?(links) and
           Enum.any?(ordered, fn
             %Op{kind: :authority, body: {:succeed, role, %Delegation{id: ^root_id}, _}} = op ->
-              not MapSet.member?(analysis.quarantine, op.id) and acquired?(module, log, op, role)
+              not MapSet.member?(analysis.quarantine, op.id) and
+                (latest_acquire?(analysis.holder_epochs, op, role) or
+                   acquired?(module, log, op, role))
 
             _op ->
               false
@@ -299,6 +305,9 @@ defmodule Lattice.Verdict do
         false
     end
   end
+
+  defp latest_acquire?(holder_epochs, op, role),
+    do: match?(%{op_id: id} when id == op.id, Map.get(holder_epochs, role))
 
   defp acquired?(module, log, op, role) when is_atom(role) do
     ops = Log.ops(log)
