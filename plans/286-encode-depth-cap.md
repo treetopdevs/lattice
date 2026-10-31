@@ -1,6 +1,10 @@
 # 286 — TS encode depth cap (and a row 208 recheck)
 
-Status: DONE for row 286. Row 208 stays an operator decision; this plan narrows it.
+Status: DONE for row 286 (2026-10-30, PR #198). Row 208 stays an operator decision; this plan
+narrows it.
+
+- **Planned at**: commit `254be0df0`, 2026-10-30
+- **Drift check**: `git diff --stat 254be0df0..HEAD -- clients/lattice-client/src/codec.ts clients/lattice-client/src/carrier.ts clients/lattice-client/src/treehouse_catalog_trust.ts clients/lattice-client/src/treehouse_catalog_raw_bounds.ts apps/lattice_carrier_server/lib/lattice_carrier_server/holder.ex apps/lattice_core/lib/lattice/carrier/wire.ex`
 
 ## Row 286
 
@@ -50,7 +54,8 @@ would ever admit, so it is never worth collecting.
 
 ## Row 208 recheck
 
-Row 208: `Holder.read_page` refuses a whole pull page when it reaches one persisted op that
+Row 208 (filed 2026-10-16 from the PR #127 review, ruled by-design there, verified at `a16e3d547`):
+`Holder.read_page` refuses a whole pull page when it reaches one persisted op that
 `Wire.encode_op_checked/1` will not serve, so one legacy op stalls every pull past it.
 
 A follow-up note proposed widening the row to cover relayed ops that were stored with a
