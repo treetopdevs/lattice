@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lattice Reorientation Guide</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -240,16 +242,16 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--rule);paddin
   <div class="tbl"><table>
     <thead><tr><th>Claim</th><th>Core</th><th>Packaged</th><th>Physical</th><th>Where</th></tr></thead>
     <tbody>
-      <tr><td>Peers converge; authority is sound; replay is byte-identical</td><td class="t"><span class="tier t-core" title="yes"></span></td><td class="t"><span class="tier t-pack" title="yes"></span></td><td class="t"><span class="tier t-none" title="no"></span></td><td><code>lattice2/</code>, packaged_macos job</td></tr>
-      <tr><td>Two Treehouse apps join, post, restart and converge</td><td class="t"><span class="tier t-core"></span></td><td class="t"><span class="tier t-pack"></span></td><td class="t"><span class="tier t-none"></span></td><td>R13-lite, dev-trace variant only</td></tr>
-      <tr><td>Treehouse offline preview survives restart</td><td class="t"><span class="tier t-core"></span></td><td class="t"><span class="tier t-pack"></span></td><td class="t"><span class="tier t-none"></span></td><td>R12, treehouse_packaged_macos</td></tr>
-      <tr><td>Group survives relay loss (AF-1)</td><td class="t"><span class="tier t-core"></span></td><td class="t"><span class="tier t-none"></span></td><td class="t"><span class="tier t-none"></span></td><td><code>relay_reseed_test.exs</code></td></tr>
-      <tr><td>Group survives founder loss (AF-2)</td><td class="t"><span class="tier t-core"></span></td><td class="t"><span class="tier t-none"></span></td><td class="t"><span class="tier t-none"></span></td><td>plan 179; "survived" copy not allowed</td></tr>
-      <tr><td>Member re-admitted after phone loss (AF-3)</td><td class="t"><span class="tier t-core"></span></td><td class="t"><span class="tier t-none"></span></td><td class="t"><span class="tier t-none"></span></td><td>R19b; R20 packaged is planned</td></tr>
-      <tr><td>Signed catalog routes a client can trust</td><td class="t"><span class="tier t-core" style="opacity:.5" title="partial"></span></td><td class="t"><span class="tier t-none"></span></td><td class="t"><span class="tier t-none"></span></td><td>R11a/b in progress</td></tr>
-      <tr><td>Township W0–W3 over the real carrier</td><td class="t"><span class="tier t-core"></span></td><td class="t"><span class="tier t-pack"></span></td><td class="t"><span class="tier t-none"></span></td><td>G1 test, packaged macOS gates</td></tr>
-      <tr><td>Keys held in the platform secure store</td><td class="t"><span class="tier t-core"></span></td><td class="t"><span class="tier t-pack"></span></td><td class="t"><span class="tier t-none"></span></td><td>Android emulator; iOS simulator (plan 077, 250)</td></tr>
-      <tr><td>Receipt-free voting</td><td class="t"><span class="tier t-none"></span></td><td class="t"><span class="tier t-none"></span></td><td class="t"><span class="tier t-none"></span></td><td>not claimed by design</td></tr>
+      <tr><td>Peers converge; authority is sound; replay is byte-identical</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td><code>lattice2/</code>, packaged_macos job</td></tr>
+      <tr><td>Two Treehouse apps join, post, restart and converge</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R13-lite, dev-trace variant only</td></tr>
+      <tr><td>Treehouse offline preview survives restart</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R12, treehouse_packaged_macos</td></tr>
+      <tr><td>Group survives relay loss (AF-1)</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td><code>relay_reseed_test.exs</code></td></tr>
+      <tr><td>Group survives founder loss (AF-2)</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>plan 179; "survived" copy not allowed</td></tr>
+      <tr><td>Member re-admitted after phone loss (AF-3)</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R19b; R20 packaged is planned</td></tr>
+      <tr><td>Signed catalog routes a client can trust</td><td class="t"><span class="tier t-core" style="opacity:.5" role="img" aria-label="partial" title="partial"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R11a/b in progress</td></tr>
+      <tr><td>Township W0–W3 over the real carrier</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>G1 test, packaged macOS gates</td></tr>
+      <tr><td>Keys held in the platform secure store</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>Android emulator; iOS simulator (plan 077, 250)</td></tr>
+      <tr><td>Receipt-free voting</td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>not claimed by design</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -314,6 +316,7 @@ npm --prefix clients/treehouse-tauri-shell ci
   <h2>Re-engagement list</h2>
   <p class="progress" id="progress" aria-live="polite">0 of 0 done</p>
   <p class="muted">Every item points at an existing row, plan or PR. Check marks are saved in this browser only.</p>
+  <p class="muted" id="save-warning" role="alert" hidden>This browser blocked saving, so check marks will be lost on reload.</p>
   <div class="todo">
 
     <div class="group">
@@ -374,7 +377,7 @@ npm --prefix clients/treehouse-tauri-shell ci
     if(saved[b.id])b.checked=true;
     b.addEventListener('change',function(){
       saved[b.id]=b.checked;
-      try{localStorage.setItem(key,JSON.stringify(saved))}catch(e){}
+      try{localStorage.setItem(key,JSON.stringify(saved))}catch(e){document.getElementById('save-warning').hidden=false}
       update();
     });
   });

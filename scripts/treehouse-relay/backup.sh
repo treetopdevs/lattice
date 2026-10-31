@@ -19,6 +19,13 @@ for p in /etc/caddy /var/lib/caddy /etc/restic /var/lib/treehouse-relay; do
   paths="$paths $p"
 done
 
+# restic archives a symlink without following it, so a linked carrier directory would
+# pass the seed checks below while the snapshot holds no seed.
+if [ ! -d /var/lib/treehouse-relay ] || [ -L /var/lib/treehouse-relay ]; then
+  echo "required backup path is not a real directory: /var/lib/treehouse-relay" >&2
+  exit 1
+fi
+
 # The carrier service identity seed (created 2026-10-23, OD-1) is binding-critical
 # and restic is its only off-host copy. check_seed passes only for a regular file of
 # 64 lowercase hex characters plus a newline that derives the public key the binding

@@ -29,7 +29,8 @@ used this key yet. Nothing here is catalogued, listed, or a production claim.
 | Restore check | Seed restored from `03c546e0` into a temp directory on the host: bytes identical, same public key; temp removed |
 
 The seed itself was never printed, copied off the host by hand, or seen by the agent. Every check
-below inspects metadata, a character count, or the derived public key.
+below inspects metadata, a character count, or the derived public key, except the restore check,
+which compares the restored bytes with `cmp -s` without printing them.
 
 ## Procedure and output
 
@@ -77,6 +78,7 @@ seed-created
 ### 3. Verify the file and derive the public key (14:50:57)
 
 ```sh
+F=/var/lib/treehouse-relay/service-identity.seed
 stat -c "%A %U:%G %s bytes %h link(s)" $F
 head -c 64 $F | tr -d 0-9a-f | wc -c          # non-hex characters in the first 64
 tail -c 1 $F | od -An -c                      # last byte
@@ -99,8 +101,8 @@ fingerprint_sha256: e8b7dae1343e84cf66322387b585ba35d7dad3e3433258a18c16ba25540d
 ### 4. Back up (14:51:06)
 
 `systemctl start restic-backup.service` ran `Result=success`, `ExecMainStatus=0`. The new snapshot
-covers `/etc/caddy /var/lib/caddy /etc/restic /var/lib/treehouse-relay` (`backup.sh` adds the last
-path when it exists).
+covers `/etc/caddy /var/lib/caddy /etc/restic /var/lib/treehouse-relay` (the `backup.sh` installed
+then added the last path only when it existed).
 
 ```
 03c546e0  2026-10-23 14:51:06  treehouse-relay-nyc3-1  daily
@@ -109,6 +111,8 @@ path when it exists).
 ```
 
 ### 5. Restore check (14:51:19)
+
+`T` is a temporary directory on the host, removed after the check.
 
 ```sh
 restic restore 03c546e0 --target $T --include /var/lib/treehouse-relay/service-identity.seed -q
@@ -127,8 +131,10 @@ machine can restore it; the PR #124 clean-machine drill covered the repository, 
 
 ## Observations
 
-- **Backup timer is still once a day.** `list-timers` shows the next run at 2026-10-24 00:17 UTC,
-  24 hours after the last one. The twice-daily unit from PR #124 is not installed on the host, so
+- **Backup timer is still once a day.** `list-timers` gave the next run as 2026-10-24 00:05:28 UTC
+  at step 1 (14:50:41) and as 00:17 UTC in a later reading; the installed unit's schedule (for
+  example a randomized delay) was not inspected, so the difference is unexplained. Both readings
+  put the next run about 24 hours after the last one (2026-10-23 00:20:43 UTC). The twice-daily unit from PR #124 is not installed on the host, so
   that R21b item stays open. This session did not change it.
 - **known_hosts lacks the DNS name.** SSH by name fails host-key verification; SSH by IP works.
   Adding the name to known_hosts after checking the key in the DigitalOcean console would fix that.
