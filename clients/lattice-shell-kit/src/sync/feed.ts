@@ -197,10 +197,12 @@ export function createFeedController(
   const capacity = (error: unknown): boolean =>
     host.capacityReason !== undefined && errorMessage(error) === host.capacityReason;
   const isFull = (replica: string): boolean => link.get(replica)?.connection === "full";
-  const pauseFull = (replica: string): void => {
+  const pauseFull = (replica: string, dependent: boolean): void => {
     setLink(replica, {
       connection: "full",
-      message: `Paused: local storage is full (${host.capacityReason}). Saved history is unchanged; Sync now tries again.`,
+      message: dependent
+        ? "Paused: this route syncs after its anchor route, which is paused because local storage is full. Sync now tries again."
+        : `Paused: local storage is full (${host.capacityReason}). Saved history is unchanged; Sync now tries again.`,
     });
     // The route's feed worker ends now, so no hint, reconnect or baseline sync pulls into the full store.
     const worker = workers.get(replica);
@@ -287,9 +289,16 @@ export function createFeedController(
     if (!host.isAnchor(route.replica) && !host.holdsAnchorProfile()) {
       const space = routes().find((r) => host.isAnchor(r.replica));
       if (space) {
+        // A paused anchor is not retried from here; the pause belongs to the anchor, this route only waits.
+        if (isFull(space.replica)) throw new AnchorPaused();
         const first = await syncOneRoute(host, space, sync).catch((error: unknown) => {
           forget(space.replica);
-          throw error;
+          if (!capacity(error)) throw error;
+          if (!stopped && at === epoch) {
+            pauseFull(space.replica, false);
+            emit();
+          }
+          throw new AnchorPaused();
         });
         record(space.replica, first);
         // A reconfigure or stop during the Space pre-sync ends this sync before it dials the next route.
@@ -321,6 +330,8 @@ export function createFeedController(
       try {
         if (waiter.epoch !== epoch) throw new Error("feed_reconfigured");
         if (!route) throw new Error("unknown_route_replica");
+        // Queued before the route paused (a poll behind an in-flight sync): it must not run now.
+        if (isFull(replica)) throw new Error(host.capacityReason);
         const result = await syncRoute(route, waiter.epoch);
         waiter.resolve(result);
         if (host.isAnchor(replica) && result.pulledFrames > 0 && waiter.epoch === epoch && !stopped)
@@ -330,8 +341,9 @@ export function createFeedController(
               emit();
             });
       } catch (error) {
-        if (capacity(error) && waiter.epoch === epoch && !stopped) {
-          pauseFull(replica);
+        const dependent = error instanceof AnchorPaused;
+        if ((dependent || capacity(error)) && waiter.epoch === epoch && !stopped && !isFull(replica)) {
+          pauseFull(replica, dependent);
           emit();
         }
         waiter.reject(error);
@@ -653,6 +665,13 @@ export function createFeedController(
       await teardown();
     },
   };
+}
+
+/** A route that syncs after its anchor (Treehouse: a Thread before its Space is held) found the anchor paused. */
+class AnchorPaused extends Error {
+  constructor() {
+    super("anchor_paused");
+  }
 }
 
 function liveMessage(submitStopped: string | null): string {

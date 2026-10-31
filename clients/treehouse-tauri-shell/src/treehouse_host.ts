@@ -238,7 +238,7 @@ export function describeSyncStatus(feed: TreehouseFeedState): PanelSyncStatus {
   const summary = !feed.configured
     ? "No relay routes are saved yet."
     : routes.some((r) => r.connection === "full")
-      ? "This device's local storage is full, so nothing new from the relay is kept. Saved history stays readable."
+      ? "Local storage could not hold the latest relay operations, so a paused route keeps nothing new. Saved history stays readable."
       : pending > 0
         ? `${plural(pending, "operation")} waiting to be acknowledged by the relay.`
         : `${plural(acked, "operation")} on this device ${acked === 1 ? "is" : "are"} acknowledged by the relay.`;

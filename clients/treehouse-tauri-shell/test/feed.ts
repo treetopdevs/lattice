@@ -903,7 +903,7 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   assert.equal(f.app.views.get(f.thread)!.posts.at(-1)!.id, mine, "saved history stays readable");
   const status = describeSyncStatus(h.last());
   assert.match(status.routes.find((r) => r.replica === f.thread)!.connectionLabel, /^Paused/);
-  assert.match(status.summary, /local storage is full/);
+  assert.match(status.summary, /Local storage could not hold/);
 
   // Paused means no redial, no hint sync and no poll sync of that route.
   const opened = h.sessionsOf(f.thread).length;
@@ -928,6 +928,82 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   assert.deepEqual(parseState(f.native.record).profiles.find((p) => p.replica === f.thread), savedThread);
   await feed.stop();
   console.log("PASS a pull past the record cap pauses its route: no redial, hint or poll sync; Sync now retries once");
+}
+
+// ---- 11c. a sync queued behind the one that pauses never runs; reconfigure clears the pause --------------
+{
+  const f = await founder();
+  const h = new Harness();
+  const twinNative = new FaultNative();
+  twinNative.seed = f.native.seed;
+  twinNative.record = f.native.record;
+  const twin = await fresh(twinNative);
+  const feed = h.controller(f.app, { pollMs: 60_000 });
+  await feed.start();
+  await until(() => live(h, f.thread) && live(h, f.space) && h.syncs.length === 2, "settled");
+  await until(() => h.routeState(f.thread).pending === 0, "baseline drained");
+  const route = twin.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  await twin.command(f.thread, { command: "post", text: "pulled later" });
+  await syncTreehouseRoute(twin, route, h.syncOptions());
+  const threadSyncs = () => h.syncs.filter((r) => r === f.thread).length;
+  const before = threadSyncs();
+  let release!: () => void;
+  h.syncLatch = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  f.native.commitError = "preview_storage_limit";
+  h.sessionsOf(f.thread).at(-1)!.hints.push(2);
+  await until(() => threadSyncs() === before + 1, "the hint sync is held in flight");
+  for (const tick of h.timerFns) tick();
+  h.syncLatch = null;
+  release();
+  await until(() => h.routeState(f.thread).connection === "full", "the in-flight sync pauses the route");
+  await quiet(60);
+  assert.equal(threadSyncs(), before + 1, "the poll's queued Thread sync never dials");
+
+  f.native.commitError = null;
+  await feed.reconfigure();
+  await until(() => live(h, f.thread), "reconfigure clears the pause");
+  await until(
+    () => f.app.state.profiles.find((p) => p.replica === f.thread)!.frames.length === twin.state.profiles.find((p) => p.replica === f.thread)!.frames.length,
+    "and the next baseline pulls what the pause held back",
+  );
+  await feed.stop();
+  console.log("PASS a queued sync behind the pausing one never runs; reconfigure clears the pause and syncs");
+}
+
+// ---- 11d. a Thread that must sync its Space first waits on a paused Space instead of blaming itself -------
+{
+  const f = await founder();
+  const h = new Harness();
+  for (const replica of [f.space, f.thread])
+    await syncTreehouseRoute(f.app, f.app.state.relay!.routes.find((r) => r.replica === replica)!, h.syncOptions());
+  // A confirmed joiner holding this key: routes saved, no profile yet.
+  const joined = parseState(f.native.record);
+  const joiner = new FaultNative();
+  joiner.seed = f.native.seed;
+  joiner.record = JSON.stringify({ ...joined, profiles: [], active: null, clearedDrafts: {} });
+  joiner.commitError = "preview_storage_limit";
+  const app = await fresh(joiner);
+  h.syncs = [];
+  const feed = h.controller(app);
+  await feed.start();
+  await until(
+    () => h.routeState(f.space)?.connection === "full" && h.routeState(f.thread)?.connection === "full",
+    "both routes pause",
+  );
+  await quiet(60);
+  assert.match(h.routeState(f.space).message, /local storage is full \(preview_storage_limit\)/);
+  assert.match(h.routeState(f.thread).message, /after its anchor route/, "the Thread names the paused Space");
+  assert.equal(h.syncs.filter((r) => r === f.thread).length, 0, "the Thread's own history is never dialled");
+  assert.equal(h.syncs.filter((r) => r === f.space).length, 1, "the paused Space is not retried by the Thread");
+
+  joiner.commitError = null;
+  await feed.syncNow();
+  await until(() => live(h, f.space) && live(h, f.thread), "Sync now restarts both routes");
+  await until(() => app.state.profiles.length === 2, "and both histories arrive");
+  await feed.stop();
+  console.log("PASS a Thread behind a paused Space pauses as dependent, never dials, and Sync now recovers both");
 }
 
 // ---- 12. build-time flags ------------------------------------------------------------------------------

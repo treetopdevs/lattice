@@ -58,12 +58,15 @@ be its own plan.
    `capacityReason` (Treehouse: `preview_storage_limit`). When a sync of a route
    fails with it, the feed marks the route `full`, cancels its worker and keeps its
    saved history unchanged. A paused route gets no reconnect, no hint sync, no poll
-   sync and no Space-triggered Thread sync. **Sync now** is the only retry: it
-   restarts the paused worker, which syncs once and pauses again if the store is
-   still full. A reconfigure clears the pause with the rest of the route state.
+   sync and no Space-triggered Thread sync, and a sync queued before the pause never
+   runs. A Thread that must sync its Space first (no Space held yet) never retries a
+   paused Space: it pauses as dependent, with a message naming the anchor, and never
+   dials its own history. **Sync now** is the only retry: it restarts the paused
+   workers, which sync once and pause again if the store is still full. A
+   reconfigure clears the pause with the rest of the route state.
 4. **Visible explanation.** The route label reads "Paused: this device's local
    storage is full", the route message names the reason, and the panel summary says
-   that nothing new from the relay is kept and saved history stays readable. The
+   that a paused route keeps nothing new and saved history stays readable. The
    existing `preview_storage_limit` message in `App.vue` still covers posting.
 5. **Plan 245 amendment (rule 7).** PR 5's native owner computes the serialized
    post-import record (profiles with metadata, outbox and acknowledgements) and
@@ -87,8 +90,8 @@ No production Rust, codec, carrier, authority or workflow file changes.
 - `npm run typecheck && npm run check` in `clients/lattice-shell-kit`
 - `cargo test --manifest-path clients/treehouse-tauri-shell/src-tauri/Cargo.toml --test storage_lifecycle`
 - `~/.asdf/shims/mix verify`
-- The new feed test fails on the previous `feed.ts` (it times out waiting for
-  `full`), and passes with this change.
+- The new feed tests fail on the previous `feed.ts` (the pause test times out waiting
+  for `full`; the queued-sync test sees the poll's sync dial), and pass with this change.
 
 Evidence tier: unit and contract (rule 1). No packaged, device or relay field claim.
 
@@ -97,7 +100,8 @@ Evidence tier: unit and contract (rule 1). No packaged, device or relay field cl
 - No larger capacity: the pilot still holds about 1 MiB of history across the Space
   and its Threads, on the order of a thousand short posts (a short post's frame and
   ids take about 700 bytes).
-- No catalog route capacity check yet: plan 245 PRs 5 and 6 carry it.
+- No catalog route capacity check yet: plan 245 PRs 5 and 6 carry the owner and shell
+  halves, and row 300 the exporter half (plan 261 D5 names both).
 - The `thread_storage_limit` check in `TreehouseWorkflow.command` (4,000 frames or
   8 MiB of one Thread) is unreachable under the 1 MiB record and is left as is.
 - A paused route's relay acknowledgements are not saved either, so its local posts
