@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { createPrivateKey, createPublicKey, createHash, sign as edSign } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { authorCarrierOp, carrierChallenge, carrierDelegationsFromFrames, carrierOpsToSemanticOps, carrierTranscriptHex, decodeCarrierOpFrame, integrate, materialize, signCarrierChallenge, syncCarrierOnce, townshipCarrierCommandNames, toRequest, toSend, verifyCarrierOpHash, } from "../src/index";
+import { authorCarrierOp, canonicalBytesForCarrierOp, canonicalBytesForCarrierTerm, carrierChallenge, carrierDelegationsFromFrames, carrierOpsToSemanticOps, carrierTranscriptHex, decodeCarrierOpFrame, integrate, materialize, signCarrierChallenge, syncCarrierOnce, townshipCarrierCommandNames, toRequest, toSend, verifyCarrierOp, verifyCarrierOpHash, } from "../src/index";
 import { WIRE_REPORT_REASONS, WIRE_VOCABULARY, isWireVocabularyName } from "../src/wire_vocabulary";
 import { authorCarrierOpUnchecked } from "./support/unchecked_author";
 const here = dirname(fileURLToPath(import.meta.url));
@@ -829,6 +829,71 @@ for (const depth of [10_000, 200_000]) {
         delegationsThrew = true;
     }
     check(`${depth}-deep body does not throw from carrierDelegationsFromFrames`, delegationsThrew, false);
+}
+// Row 286: the encoder spends the same budget, so a hand-built frame that was never decoded
+// refuses on descent with a typed error from every encode entry point, never a RangeError.
+const encodeOutcome = (run) => {
+    try {
+        run();
+        return "encoded";
+    }
+    catch (error) {
+        if (error instanceof RangeError)
+            return "RangeError";
+        return error instanceof Error && /malformed carrier term depth/.test(error.message) ? "refused" : `other:${String(error)}`;
+    }
+};
+const neverVerifies = { verify: async () => true };
+for (const tag of ["list", "tuple", "mapset", "map-value", "map-key"]) {
+    const ok = depthFrame(`enc-${tag}-64`, (f) => Reflect.set(f, "body", argBody(nestChain(tag, 62))));
+    const deep = depthFrame(`enc-${tag}-65`, (f) => Reflect.set(f, "body", argBody(nestChain(tag, 63))));
+    const okCap = depthFrame(`enc-${tag}-c64`, (f) => Reflect.set(f, "cap", nestChain(tag, 64)));
+    const deepCap = depthFrame(`enc-${tag}-c65`, (f) => Reflect.set(f, "cap", nestChain(tag, 65)));
+    check(`encode ${tag} body 64 admitted`, encodeOutcome(() => canonicalBytesForCarrierOp(ok)), "encoded");
+    check(`encode ${tag} body 65 refused`, encodeOutcome(() => canonicalBytesForCarrierOp(deep)), "refused");
+    check(`encode ${tag} cap 64 admitted`, encodeOutcome(() => canonicalBytesForCarrierOp(okCap)), "encoded");
+    check(`encode ${tag} cap 65 refused`, encodeOutcome(() => canonicalBytesForCarrierOp(deepCap)), "refused");
+    check(`encode ${tag} term 64 admitted`, encodeOutcome(() => canonicalBytesForCarrierTerm(nestChain(tag, 64))), "encoded");
+    check(`encode ${tag} term 65 refused`, encodeOutcome(() => canonicalBytesForCarrierTerm(nestChain(tag, 65))), "refused");
+}
+check("encode scalar leaf under 64 containers admitted", encodeOutcome(() => canonicalBytesForCarrierTerm(nestChain("list", 64, ["int", 5]))), "encoded");
+for (const depth of [10_000, 200_000]) {
+    const hostile = depthFrame(`enc-hostile-${depth}`, (f) => Reflect.set(f, "body", argBody(nestChain("list", depth))));
+    const hostileCap = depthFrame(`enc-hostile-cap-${depth}`, (f) => Reflect.set(f, "cap", nestChain("map-value", depth)));
+    for (const [label, frame] of [["body", hostile], ["cap", hostileCap]]) {
+        check(`${depth}-deep ${label} refuses cleanly via canonicalBytesForCarrierOp`, encodeOutcome(() => canonicalBytesForCarrierOp(frame)), "refused");
+        let verifyOutcome = "resolved";
+        try {
+            await verifyCarrierOp(frame, neverVerifies);
+        }
+        catch (error) {
+            verifyOutcome = error instanceof RangeError ? "RangeError"
+                : /malformed carrier term depth/.test(String(error)) ? "refused" : String(error);
+        }
+        check(`${depth}-deep ${label} refuses cleanly via verifyCarrierOp`, verifyOutcome, "refused");
+        let hashOutcome = "resolved";
+        try {
+            await verifyCarrierOpHash(frame);
+        }
+        catch (error) {
+            hashOutcome = error instanceof RangeError ? "RangeError"
+                : /malformed carrier term depth/.test(String(error)) ? "refused" : String(error);
+        }
+        check(`${depth}-deep ${label} refuses cleanly via verifyCarrierOpHash`, hashOutcome, "refused");
+    }
+}
+// Row 286 decision: the delegation collector keeps stopping, not throwing, past depth 64. The JSON
+// frame store reloads frames without decoding them (`createJsonCarrierFrameStore`), so throwing here
+// would let one corrupt stored frame block cap selection for every other frame. A delegation below
+// the budget is still found next to an over-deep sibling, and one above it is not.
+{
+    const delegation = carrierDelegationsFromFrames(vector.clientBaseCarrierOps)[0];
+    const buried = (count) => nestChain("list", count, ["delegation", delegation]);
+    const deepSibling = depthFrame("collector-deep", (f) => Reflect.set(f, "body", nestChain("list", 200_000)));
+    const at64 = depthFrame("collector-64", (f) => Reflect.set(f, "body", buried(64)));
+    const at65 = depthFrame("collector-65", (f) => Reflect.set(f, "body", buried(65)));
+    check("collector finds a delegation under 64 containers beside an over-deep frame", carrierDelegationsFromFrames([deepSibling, at64]).map((found) => found.id), [delegation.id]);
+    check("collector does not reach a delegation under 65 containers", carrierDelegationsFromFrames([at65]).length, 0);
 }
 // Row 211: only canonical decimal text is an integer; the BEAM decoder refuses the same strings.
 for (const text of ["007", "+1", "-0", "00", "01", "-1", " 1", "1_0", "0x1", ""]) {

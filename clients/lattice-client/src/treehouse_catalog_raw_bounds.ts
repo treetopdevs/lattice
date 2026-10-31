@@ -4,6 +4,8 @@ import { canonicalUint64Scalar } from "./uint64";
 const MAX_NODES = 64 * 1024 * 1024;
 const MAX_STRING_BYTES = 64 * 1024 * 1024;
 const MAX_DEPTH = 65;
+/** Row 286: the encode budget that authenticates a frame admitted by these raw bounds. */
+export const catalogRawObservationMaxDepth = MAX_DEPTH;
 // A map uses term-array, pairs-array and pair-array wrappers; a flat
 // delegation leaf adds array/object/names-array beneath the frame object.
 const MAX_JSON_DEPTH = MAX_DEPTH * 3 + 4;
