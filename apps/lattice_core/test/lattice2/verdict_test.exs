@@ -258,6 +258,67 @@ defmodule Lattice2.VerdictTest do
                Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
     end
 
+    test "a concurrent-policy successor and its post descendant stay active after the role is handed on" do
+      sim =
+        demo_sim("verdict:concurrent-policy-handoff",
+          policies: %{moderator: %{successor: "r1", dormant_ticks: 10}}
+        )
+
+      sim = Sim.partition(sim, "r0", "r1")
+      root = Sim.identity(sim, "r0")
+
+      relax = Delegation.genesis(root, sim.replica, ops: [], roles: [], live: true)
+
+      policies = %{
+        moderator: %{successor: Sim.identity(sim, "r1").pub, dormant_ticks: 2}
+      }
+
+      {sim, _} = Sim.append(sim, "r0", :authority, {:genesis, relax, policies})
+
+      {sim, succeed} =
+        Sim.succeed(sim, "r1", :moderator, ops: [:lock, :post, :unlock], at_tick: 3)
+
+      sim = sim |> Sim.heal("r0", "r1") |> Sim.sync_all()
+      {sim, child} = Sim.grant(sim, "r1", "r2", ops: [:post])
+      {sim, _transfer} = Sim.transfer(sim, "r1", "r0", :moderator, at_tick: 4)
+
+      {sim, successor_post} =
+        Sim.command(sim, "r1", :post, ["successor after handoff"], cap: carried(succeed).id)
+
+      {sim, child_post} =
+        Sim.command(Sim.sync_all(sim), "r2", :post, ["child after handoff"], cap: child.id)
+
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+      analysis = Authority.analyze(Lattice.Demo.Thread, log)
+      {same, beacons, records} = Authority.analyze_with_records(Lattice.Demo.Thread, log)
+
+      assert same == analysis
+      assert {same, beacons} == Authority.analyze_with_beacon_evidence(Lattice.Demo.Thread, log)
+
+      refute Map.has_key?(analysis.reasons, succeed.id)
+      refute Map.has_key?(analysis.reasons, successor_post.id)
+      refute Map.has_key?(analysis.reasons, child_post.id)
+
+      epoch = analysis.holder_epochs[:moderator]
+      refute epoch.op_id == succeed.id
+      assert epoch.holder == Sim.identity(sim, "r0").pub
+
+      assert Enum.any?(
+               records.moderator,
+               &(&1.op_id == succeed.id and &1.delegation_id == carried(succeed).id)
+             )
+
+      assert Enum.any?(
+               Authority.acquisitions(Lattice.Demo.Thread, log, :moderator),
+               &(&1.op_id == succeed.id)
+             )
+
+      assert %{status: :active} =
+               Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
+
+      assert %{status: :active} = Verdict.delegation_status(Lattice.Demo.Thread, log, child.id)
+    end
+
     test "an authority op cites its carried delegation, not an unrelated cap" do
       sim = demo_sim("verdict:carried-over-cap")
       {sim, d} = Sim.transfer(sim, "r0", "r1", :moderator, at_tick: 1)

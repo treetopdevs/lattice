@@ -56,8 +56,10 @@ defmodule Lattice.Authority do
       `command_op_status/2` remains a legacy compatibility target: the default
       `/3` calls it with `visible_ids`.
       `analyze_with_beacon_evidence/2` exposes the same globally accepted beacon
-      source set. Consumers must establish causal visibility before applying it
-      to an operation; the evidence list grants no authority.
+      source set. `analyze_with_records/2` adds the honored role-acquisition
+      records from that same pass. Consumers must establish causal visibility
+      before applying either to an operation; the evidence lists grant no
+      authority.
     * **Full-frontier command conflicts** (plan 158): once every op's
       individual verdict is final, `command_conflicts/3` runs one pass over
       the complete structurally accepted DAG and may declare deterministic
@@ -104,6 +106,21 @@ defmodule Lattice.Authority do
   @typedoc "Accepted beacon records sorted by raw op-id bytes in ascending order."
   @type beacon_evidence :: [valid_beacon_evidence()]
 
+  @typedoc """
+  One honored role acquisition from this analysis pass's existing timeline.
+
+  `at_tick` is omitted: it is author-asserted and untrusted. These records are
+  judgment evidence, not a capability.
+  """
+  @type acquisition :: %{
+          required(:op_id) => Op.id(),
+          required(:holder) => Identity.pubkey(),
+          required(:delegation_id) => String.t()
+        }
+
+  @typedoc "Honored acquisitions per role, oldest first. Empty list if none."
+  @type acquisition_records :: %{atom() => [acquisition()]}
+
   @doc "Set of op ids excluded from reduction by authority rules."
   @spec quarantine(module(), Log.t()) :: MapSet.t(Op.id())
   def quarantine(module, %Log{} = log), do: analyze(module, log).quarantine
@@ -117,6 +134,13 @@ defmodule Lattice.Authority do
           %{holder: Identity.pubkey(), op_id: Op.id()} | nil
   def holder_epoch(module, %Log{} = log, role),
     do: Map.get(analyze(module, log).holder_epochs, role)
+
+  @doc "Honored acquisition records for `role`, oldest first (empty if none)."
+  @spec acquisitions(module(), Log.t(), atom()) :: [acquisition()]
+  def acquisitions(module, %Log{} = log, role) when is_atom(role) do
+    {_analysis, _beacons, records} = do_analyze(module, log)
+    Map.get(records, role, [])
+  end
 
   @doc "Derive one continuation claim from complete, verified history and its exact current frontier."
   @spec continuation_review(
@@ -523,7 +547,7 @@ defmodule Lattice.Authority do
   @doc "Full authority analysis for `log` interpreted by Replica `module`."
   @spec analyze(module(), Log.t()) :: analysis()
   def analyze(module, %Log{} = log) do
-    {analysis, _beacons} = do_analyze(module, log)
+    {analysis, _beacons, _acquisitions} = do_analyze(module, log)
     analysis
   end
 
@@ -537,7 +561,24 @@ defmodule Lattice.Authority do
   or proof that a particular operation observed a beacon.
   """
   @spec analyze_with_beacon_evidence(module(), Log.t()) :: {analysis(), beacon_evidence()}
-  def analyze_with_beacon_evidence(module, %Log{} = log), do: do_analyze(module, log)
+  def analyze_with_beacon_evidence(module, %Log{} = log) do
+    {analysis, beacons, _acquisitions} = do_analyze(module, log)
+    {analysis, beacons}
+  end
+
+  @doc """
+  Runs the ordinary authority analysis once and returns its unchanged result with
+  the beacon records and the honored acquisition records from that same pass.
+
+  Acquisition records are `{op_id, holder, delegation_id}` per role, oldest first.
+  They are the judge's role-timeline acquires without author-asserted ticks. They
+  are global to `log`, grant no capability, and are not proof that a later
+  command observed the acquire. The analysis map is the same seven-key result
+  as `analyze/2`.
+  """
+  @spec analyze_with_records(module(), Log.t()) ::
+          {analysis(), beacon_evidence(), acquisition_records()}
+  def analyze_with_records(module, %Log{} = log), do: do_analyze(module, log)
 
   defp do_analyze(module, log) do
     ops = Log.ops(log)
@@ -582,10 +623,22 @@ defmodule Lattice.Authority do
 
     holders = Map.new(timelines, fn {role, tl} -> {role, tl.holder} end)
 
-    holder_epochs =
+    acquisitions =
       Map.new(timelines, fn {role, tl} ->
+        {role,
+         Enum.map(tl.acquires, fn acquire ->
+           %{
+             op_id: acquire.op_id,
+             holder: acquire.holder,
+             delegation_id: acquire.delegation_id
+           }
+         end)}
+      end)
+
+    holder_epochs =
+      Map.new(acquisitions, fn {role, records} ->
         epoch =
-          case List.last(tl.acquires) do
+          case List.last(records) do
             nil -> nil
             %{holder: holder, op_id: op_id} -> %{holder: holder, op_id: op_id}
           end
@@ -659,7 +712,7 @@ defmodule Lattice.Authority do
       requests: requests
     }
 
-    {analysis, Enum.sort_by(beacons, & &1.op_id)}
+    {analysis, Enum.sort_by(beacons, & &1.op_id), acquisitions}
   end
 
   defp unsupported_profile_ops(%{family: :unsupported}, ordered),

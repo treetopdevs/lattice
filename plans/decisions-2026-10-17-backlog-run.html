@@ -1025,6 +1025,20 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>Minor: a huge decimal <code>TREEHOUSE_BACKUP_RETRY_SECONDS</code> is <code>is_uint</code>-valid and can sleep until systemd <code>TimeoutStartSec=8h</code> kills the oneshot, starving remaining attempts. CodeRabbit asked for an explicit duration bound, not a nine-character length check.</dd>
 <dt>Decision</dt><dd>Deferred. Production systemd does not set the override; the script default remains 1800 s. <code>is_uint</code> already rejects non-digits. Coupling the dash script to the unit file’s 8h cap is a new operator-config contract, not a seed-guard gap. Not P1/P2; no new plan-index row.</dd>
 </dl></section>
+<section id="d150"><h2><span>D-150</span> Slice choice: row 288, Verdict succession acquisitions</h2><dl>
+<dt>When</dt><dd>2026-10-31, from main <code>3bc8fe5ef</code></dd>
+<dt>Context</dt><dd>Already merged: #195–#201. Row 295 is marked DONE here (PR #201, merge <code>3bc8fe5ef</code>, exact tip <code>b30b779cd</code>) without reopening the script. Excluded: Township and Toolshed under rule 10; rule 8 parked items (rows 077/285 device, 146 codesigning, 261/262 two Macs, 224/245 ceremony); row 256, an operator decision; plans 267–279, the native evaluator track already in flight; row 300, which waits on 257; row 301, a first Maven 429 (D-148), not a second occurrence.</dd>
+<dt>Options</dt><dd>(a) Row 288 (P2 S, D-141: expose the judge’s acquisition records so Verdict does not report an activated successor <code>:invalid</code> after handoff); (b) other open P1s that still need ceremony, a device, or two Macs; (c) row 300 (P2 exporter bound).</dd>
+<dt>Decision</dt><dd>(a).</dd>
+<dt>Reason</dt><dd>Highest-priority unblocked row that fits one reviewable PR. No higher unblocked P1 that fits one PR is free of an operator ceremony, a physical device, two Macs, or an in-flight Township/Toolshed freeze. D-141 already assigned the fix here and raised it to P2. The Codex adversarial review of the final substantive tip counts as rule 3’s second review. This is not a receipt-free W4 claim, not Phase G, and not a new authoring surface.</dd>
+</dl></section>
+<section id="d151"><h2><span>D-151</span> Row 288: return acquisition records beside <code>analyze/2</code>; do not grow the seven-key map</h2><dl>
+<dt>When</dt><dd>2026-10-31</dd>
+<dt>Context</dt><dd>Verdict infers succession activation from <code>holder_epochs</code> or a causal slice of the <code>:succeed</code> op. That slice omits a concurrent policy genesis the full-log judge used, so after the successor hands the role on, the successor’s self-issued delegation and its descendants read <code>:invalid</code> while posts citing them are honored. The judge already activates a candidate from <code>timeline.acquires</code> (<code>delegation_candidate_activated?/3</code>). <code>application_policy_beacon_context_test.exs</code> pins <code>analyze/2</code> as an exact seven-key map with a SHA-256 of the term.</dd>
+<dt>Options</dt><dd>(a) Add <code>acquisitions</code> to the public analysis map; (b) return the honored acquire records from the same <code>do_analyze/2</code> pass beside the unchanged analysis, the way <code>analyze_with_beacon_evidence/2</code> returns beacons; (c) catch or special-case in Verdict.</dd>
+<dt>Decision</dt><dd>(b). Public records are <code>%{op_id, holder, delegation_id}</code>, oldest first, with no author-asserted <code>at_tick</code>. Verdict treats a succession root as activated when any of those records carries its delegation id, matching the judge. <code>analyze/2</code> stays the seven-key map. Do not catch crashes in Verdict. No TypeScript change (plan 188 freeze). Not a W4 or Phase G claim.</dd>
+<dt>Reason</dt><dd>(a) would break the seven-key pin for a field consumers of <code>analyze/2</code> do not read. (c) was already rejected by D-142/D-141: the source of truth is the judge’s acquisition history.</dd>
+</dl></section>
 </main>
 </body>
 </html>

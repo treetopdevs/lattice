@@ -40,10 +40,11 @@ defmodule Lattice.Verdict do
   with a bad signature is `:invalid`. A delegation is
   valid when `Authority.delegation_active?/2` accepts it apart from leases, or when it
   descends from a succession candidate the judge activated (the successor's self-issued
-  delegation, introduced by a `:succeed` op through which the judge acquired the role,
-  with every descendant on this replica and attenuating its parent). Anything else on
-  the log (a bad chain, an unactivated candidate) is `:invalid`, revoked or not. Only
-  `:active` permits action; every other status is a refusal.
+  delegation, whose id appears on an honored acquisition record from
+  `Authority.analyze_with_records/2`, with every descendant on this replica and
+  attenuating its parent). Anything else on the log (a bad chain, an unactivated
+  candidate) is `:invalid`, revoked or not. Only `:active` permits action; every
+  other status is a refusal.
 
   The status also names the delegation's `audience` (hex public key) and granted `ops`
   (in JSON, a non-atom scope term is an object `{"non_atom": ...}`, never an action name,
@@ -136,12 +137,12 @@ defmodule Lattice.Verdict do
   @doc """
   The status of `delegation_id` as of the whole of `log`, interpreted by `module`.
 
-  `module` is needed because the accepted beacons come from the judge's own pass
-  (`Authority.analyze_with_beacon_evidence/2`).
+  `module` is needed because the accepted beacons and honored acquisitions come
+  from the judge's own pass (`Authority.analyze_with_records/2`).
   """
   @spec delegation_status(module(), Log.t(), String.t()) :: status()
   def delegation_status(module, %Log{} = log, delegation_id) when is_binary(delegation_id) do
-    {analysis, beacons} = Authority.analyze_with_beacon_evidence(module, log)
+    {_analysis, beacons, acquisitions} = Authority.analyze_with_records(module, log)
     ordered = Log.topo_ops(log)
     delegations = delegations(ordered)
     chain = chain(delegation_id, delegations)
@@ -155,7 +156,7 @@ defmodule Lattice.Verdict do
       cond do
         chain == [] and MapSet.member?(badly_signed_ids(ordered), delegation_id) -> :invalid
         chain == [] -> :unknown
-        not valid_chain?(module, log, delegation_id, chain, ordered, analysis) -> :invalid
+        not valid_chain?(log, delegation_id, chain, acquisitions) -> :invalid
         revoked_by != nil -> :revoked
         expires != nil and latest != nil and latest > expires -> :lapsed
         true -> :active
@@ -308,9 +309,9 @@ defmodule Lattice.Verdict do
   # Structural validity apart from leases. `Authority.delegation_active?/2` also refuses
   # a lapsed lease, so it is asked on the log without beacon ops: beacons decide only
   # expiry, never chain validity.
-  defp valid_chain?(module, log, delegation_id, chain, ordered, analysis) do
+  defp valid_chain?(log, delegation_id, chain, acquisitions) do
     Authority.delegation_active?(without_beacons(log), delegation_id) or
-      succession_activated?(module, log, chain, ordered, analysis)
+      succession_activated?(log, chain, acquisitions)
   end
 
   defp without_beacons(log) do
@@ -325,46 +326,28 @@ defmodule Lattice.Verdict do
   defp beacon?(_op), do: false
 
   # The judge's succession-candidate rule: the root is the successor's self-issued
-  # delegation, valid only once the judge *acquired* the role through the `:succeed` op
-  # that introduced it; each descendant must be on this replica and attenuate its parent.
-  # Acquisition is read from the judge, never inferred: the op must not be quarantined on
-  # the full log, and the role's latest acquisition must be that op, either on the full
-  # log or on the op's causal past plus the op (for a successor that has since handed
-  # the role on). An undeclared role has no acquisition, so it never activates.
-  # Residual (row 288): the slice can drop a concurrent policy the full-log judge used,
-  # so such a successor that has since handed the role on reads :invalid, never
-  # :active; an exact answer needs the judge's acquisition records.
-  defp succession_activated?(module, log, chain, ordered, analysis) do
+  # delegation, valid only once an honored acquisition record carries that id
+  # (`delegation_candidate_activated?/3`); each descendant must be on this replica
+  # and attenuate its parent. An undeclared role has no acquisition, so it never
+  # activates. Whole-log status does not re-slice the claim: the judge's records
+  # already include a concurrent policy genesis that enabled the succeed.
+  defp succession_activated?(log, chain, acquisitions) do
     case Enum.reverse(chain) do
       [%Delegation{parent_id: nil, issuer: self, audience: self, id: root_id} | _] = links ->
         Continuation.family(log.replica) != :unsupported and
           Enum.all?(links, &(&1.replica == log.replica)) and attenuating?(links) and
-          Enum.any?(ordered, fn
-            %Op{kind: :authority, body: {:succeed, role, %Delegation{id: ^root_id}, _}} = op ->
-              not MapSet.member?(analysis.quarantine, op.id) and
-                (latest_acquire?(analysis.holder_epochs, op, role) or
-                   acquired?(module, log, op, role))
-
-            _op ->
-              false
-          end)
+          acquired?(acquisitions, root_id)
 
       _other ->
         false
     end
   end
 
-  defp latest_acquire?(holder_epochs, op, role),
-    do: match?(%{op_id: id} when id == op.id, Map.get(holder_epochs, role))
-
-  defp acquired?(module, log, op, role) when is_atom(role) do
-    ops = Log.ops(log)
-    past = ops |> Dag.ancestors(op.id) |> MapSet.put(op.id) |> MapSet.to_list()
-    slice = Log.from_ops(log.replica, Map.take(ops, past))
-    match?(%{op_id: id} when id == op.id, Authority.holder_epoch(module, slice, role))
+  defp acquired?(acquisitions, root_id) do
+    Enum.any?(acquisitions, fn {_role, records} ->
+      Enum.any?(records, &(&1.delegation_id == root_id))
+    end)
   end
-
-  defp acquired?(_module, _log, _op, _role), do: false
 
   # Links ordered root first.
   defp attenuating?([parent, child | rest]),
