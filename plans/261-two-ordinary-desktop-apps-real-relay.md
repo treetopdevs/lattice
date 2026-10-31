@@ -32,7 +32,7 @@ The unified roadmap remains the execution ledger; this document supplies its des
 | Member permissions | `clients/lattice-client/src/treehouse_enrollment.ts` authors admission and exact-audience grants | Prove those helpers against bounded histories; grants are currently authored without an explicit lease |
 | Thread creation | Ordinary workflow creates independently rooted bounded Spaces/Threads | Hosted packaged, initial staging and field proof (254); grammar closed by #164 (258) |
 | Catalog trust | Elixir/TS evaluators; plan 245 native design | Native implementation; plan 245 first install is root-only |
-| Capacity | `src/treehouse_state.ts`: all profiles in a 1 MiB record | Shared import/evaluation/persistence budget (257) |
+| Capacity | `src/treehouse_state.ts`: all profiles in a 1 MiB record; sync pauses at `full` (plan 257) | Native owner pre-install check (plan 245 PR 5) |
 
 All shell-relative paths above are under `clients/treehouse-tauri-shell/`.
 Plan 224 PRs 1–3 are built; PRs 4–5 and plan 245 build PRs remain dependencies.
@@ -125,6 +125,10 @@ catalog/history fixtures must remain evaluator tests, but workflow acceptance te
 must exercise the adopted store limit. Do not mark row 257 done by adding an importer
 check while retaining contradictory large-import done criteria. If the operator wants
 the larger capacity now, shard storage first; that is the higher-cost alternative.
+
+Applied by plan 257 (D-130): the existing sync path pauses a route at `full` with a visible
+explanation, both stores accept exactly 1 MiB, and plan 245 PRs 5-6 now require the owner check
+and store-limit acceptance tests instead of large-import workflow criteria.
 
 ### D6: scope the milestone explicitly
 

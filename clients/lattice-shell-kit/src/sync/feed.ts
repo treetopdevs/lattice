@@ -25,7 +25,9 @@ export type RouteConnection =
   | "connecting"
   | "live"
   | "reconnecting"
-  | "refused";
+  | "refused"
+  /** The local store could not hold the last merge (`ShellHost.capacityReason`); paused until a manual sync. */
+  | "full";
 
 export interface RouteFeedState {
   replica: string;
@@ -190,6 +192,25 @@ export function createFeedController(
 
   const routes = (): CarrierRoute[] => host.relay()?.routes ?? [];
 
+  // A full local store only grows by an explicit user action elsewhere, never by retrying, so a capacity
+  // failure pauses the route: no redial, no hint or poll sync, the saved history stays as it was.
+  const capacity = (error: unknown): boolean =>
+    host.capacityReason !== undefined && errorMessage(error) === host.capacityReason;
+  const isFull = (replica: string): boolean => link.get(replica)?.connection === "full";
+  const pauseFull = (replica: string): void => {
+    setLink(replica, {
+      connection: "full",
+      message: `Paused: local storage is full (${host.capacityReason}). Saved history is unchanged; Sync now tries again.`,
+    });
+    // The route's feed worker ends now, so no hint, reconnect or baseline sync pulls into the full store.
+    const worker = workers.get(replica);
+    if (worker) cancel(worker);
+  };
+  /** A failed sync's message, unless the route is paused: the pause explains the failure already. */
+  const failed = (replica: string, what: string, error: unknown): void => {
+    if (!isFull(replica)) setLink(replica, { message: `${what}: ${errorMessage(error)}` });
+  };
+
   const counts = (replica: string) => {
     const profile = host.profile(replica);
     // An id the relay refused in the last sync is not acknowledged whatever the saved set says: a profile
@@ -303,19 +324,25 @@ export function createFeedController(
         const result = await syncRoute(route, waiter.epoch);
         waiter.resolve(result);
         if (host.isAnchor(replica) && result.pulledFrames > 0 && waiter.epoch === epoch && !stopped)
-          for (const thread of routes().filter((r) => !host.isAnchor(r.replica)))
+          for (const thread of routes().filter((r) => !host.isAnchor(r.replica) && !isFull(r.replica)))
             request(thread.replica).catch((error: unknown) => {
-              setLink(thread.replica, { message: `Sync failed: ${errorMessage(error)}` });
+              failed(thread.replica, "Sync failed", error);
               emit();
             });
       } catch (error) {
+        if (capacity(error) && waiter.epoch === epoch && !stopped) {
+          pauseFull(replica);
+          emit();
+        }
         waiter.reject(error);
       }
     }
   };
 
+  /** Queue one sync. A route paused at `full` syncs again only once Sync now respawns its worker. */
   const request = (replica: string): Promise<RouteSyncResult> => {
     if (stopped) return Promise.reject(new Error("feed_stopped"));
+    if (isFull(replica)) return Promise.reject(new Error(host.capacityReason));
     let waiter = queued.get(replica);
     if (!waiter) {
       let resolve!: (r: RouteSyncResult) => void;
@@ -338,11 +365,11 @@ export function createFeedController(
     if (pollMs <= 0 || pollHandle !== null) return;
     pollHandle = timers.set(() => {
       if (stopped) return;
-      for (const route of routes())
+      for (const route of routes().filter((r) => !isFull(r.replica)))
         request(route.replica).then(
           () => emit(),
           (error: unknown) => {
-            setLink(route.replica, { message: `Poll sync failed: ${errorMessage(error)}` });
+            failed(route.replica, "Poll sync failed", error);
             emit();
           },
         );
@@ -562,8 +589,11 @@ export function createFeedController(
       guard();
       if (!running) launch();
       else {
+        // A paused route's worker was cancelled and ends promptly; Sync now restarts it.
+        const paused = [...workers.values()].filter((w) => isFull(w.route.replica));
+        await Promise.all(paused.map((w) => w.done));
         for (const [replica, worker] of workers)
-          if (worker.ended && !worker.cancelled) {
+          if (worker.ended && (!worker.cancelled || paused.includes(worker))) {
             const route = routes().find((r) => r.replica === replica);
             if (route) spawn(route);
           }
@@ -580,7 +610,7 @@ export function createFeedController(
           try {
             await request(worker.route.replica);
           } catch (error) {
-            setLink(worker.route.replica, { message: `Sync failed: ${errorMessage(error)}` });
+            failed(worker.route.replica, "Sync failed", error);
           }
         }),
       );

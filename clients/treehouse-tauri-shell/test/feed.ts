@@ -8,6 +8,7 @@ import type {
 } from "@treetopdevs/lattice-client";
 import {
   createTreehouseFeedController,
+  describeSyncStatus,
   treehouseFeedEnv,
 } from "../src/treehouse_host";
 import type {
@@ -22,7 +23,7 @@ import {
 import { syncTreehouseRoute } from "../src/treehouse_host";
 import type { SyncTreehouseOptions } from "../src/treehouse_host";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
-import { parseState } from "../src/treehouse_state";
+import { HISTORY_BYTES, byteLength, parseState } from "../src/treehouse_state";
 import type { RelayRoute } from "../src/treehouse_state";
 import { FakeClock, FakeRelay } from "@treetopdevs/lattice-shell-kit/testing";
 import { FaultNative } from "./support/fault_native";
@@ -869,6 +870,64 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   assert.equal(g.sessions.size, 0);
   assert.equal(g.syncs.length, 0);
   console.log("PASS no routes or more than four routes refuses before any connection");
+}
+
+// ---- 11b. row 257: a pull the local record cannot hold pauses the route instead of redialling it --------
+{
+  const f = await founder();
+  const h = new Harness();
+  // A second device with the same key fills the Thread on the relay to near the record cap.
+  const twinNative = new FaultNative();
+  twinNative.seed = f.native.seed;
+  twinNative.record = f.native.record;
+  const twin = await fresh(twinNative);
+  const route = twin.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  while (byteLength(JSON.stringify(twin.state)) < HISTORY_BYTES - 50_000)
+    await twin.command(f.thread, { command: "post", text: "r".repeat(30_000) });
+  await syncTreehouseRoute(twin, route, h.syncOptions());
+  // This device's own unsynced post leaves no room for the twin's history.
+  const mine = await f.app.command(f.thread, { command: "post", text: "m".repeat(30_000) });
+  const saved = f.native.record;
+  h.syncs = [];
+  const feed = h.controller(f.app, { pollMs: 60_000 });
+  await feed.start();
+  await until(() => h.routeState(f.thread)?.connection === "full", "the Thread route pauses at full");
+  await until(() => live(h, f.space), "the Space route stays live");
+  const paused = h.routeState(f.thread);
+  assert.match(paused.message, /local storage is full \(preview_storage_limit\)/);
+  const thread = parseState(f.native.record).profiles.find((p) => p.replica === f.thread)!;
+  assert(thread.outbox.includes(mine) && !thread.acked.includes(mine), "the local post's relay ack was not saved either");
+  assert.equal(paused.pending, thread.outbox.length - thread.acked.length);
+  const savedThread = parseState(saved).profiles.find((p) => p.replica === f.thread)!;
+  assert.deepEqual(thread, savedThread, "nothing of the pull was written to the Thread");
+  assert.equal(f.app.views.get(f.thread)!.posts.at(-1)!.id, mine, "saved history stays readable");
+  const status = describeSyncStatus(h.last());
+  assert.match(status.routes.find((r) => r.replica === f.thread)!.connectionLabel, /^Paused/);
+  assert.match(status.summary, /local storage is full/);
+
+  // Paused means no redial, no hint sync and no poll sync of that route.
+  const opened = h.sessionsOf(f.thread).length;
+  const last = h.sessionsOf(f.thread).at(-1)!;
+  await until(() => last.closed, "the paused route's subscription is closed");
+  last.hints.push(9);
+  await quiet(60);
+  assert.equal(h.sessionsOf(f.thread).length, opened, "no reconnect");
+  const threadSyncs = () => h.syncs.filter((r) => r === f.thread).length;
+  const synced = threadSyncs();
+  for (const tick of h.timerFns) tick();
+  await until(() => h.syncs.filter((r) => r === f.space).length >= 2, "the poll still syncs the Space");
+  await quiet();
+  assert.equal(threadSyncs(), synced, "neither a hint nor the poll pulls the paused route");
+  assert.equal(h.routeState(f.thread).connection, "full");
+
+  // Sync now is the explicit retry: one fresh subscription, one sync, and it pauses again.
+  await feed.syncNow();
+  assert.equal(h.sessionsOf(f.thread).length, opened + 1);
+  assert.equal(threadSyncs(), synced + 1);
+  assert.equal(h.routeState(f.thread).connection, "full");
+  assert.deepEqual(parseState(f.native.record).profiles.find((p) => p.replica === f.thread), savedThread);
+  await feed.stop();
+  console.log("PASS a pull past the record cap pauses its route: no redial, hint or poll sync; Sync now retries once");
 }
 
 // ---- 12. build-time flags ------------------------------------------------------------------------------

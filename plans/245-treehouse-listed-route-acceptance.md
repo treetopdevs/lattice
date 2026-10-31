@@ -320,16 +320,20 @@ PR 5 edits `preview.rs` after PR 1 (disjoint hunks; PR 1 merges first).
   refusal, revoke/beacon lapse of a reference, route reservation, inventory growth) and the Rust decision, routes and
   reason equal Elixir and TS for each.
 - PR 4: `mix test` for the exporter: round-trip through `CatalogTrust.evaluate/1` to `reason: nil`; refuses
-  tampered, forked, gapped or over-cap chains and an existing output file or symlink; byte-identical on repeat; a maximum-size evaluator-valid fixture (16 MiB of artifacts plus histories to the 32 MiB snapshot cap) exports and imports within the 64 MiB cap, and one byte over it is `evidence_page_too_large`.
+  tampered, forked, gapped or over-cap chains and an existing output file or symlink; byte-identical on repeat; a maximum-size evaluator-valid fixture (16 MiB of artifacts plus histories to the 32 MiB snapshot cap) exports and imports within the 64 MiB cap, and one byte over it is `evidence_page_too_large`. That fixture is an evaluator and exporter test only: the workflow store holds 1 MiB (plan 257), so it is never a workflow acceptance input.
 - PR 5: `cargo test --test catalog_owner`: one test per owner refusal; crash on both sides of the bootstrap history commit rebuilds the binding record, no IPC call can write it; reopen returns the same receipt; the Design D
   race gate; delete row then reopen is `trust_recovery_required` with no sentinel; re-pin refused; a swapped page
   or reused token refused; blocked routes `[]`; a persistence failure injected after a verified fork or reclassification keeps routes `[]` until
   a commit succeeds; receipt reclassified after a history revoke and after restart;
   conflicting saved route refuses the install; contract exact sets and denial from remote origin and witness webview.
+  Capacity (plan 257, D-130): the owner computes the serialized post-import `PreviewState` record (every profile's
+  frames, outbox and acknowledgements plus metadata) and refuses `preview_storage_limit` before changing trust or
+  profile state when it exceeds `HISTORY_BYTES`; a history that fits to within one frame installs, the next refuses.
 - PR 6: typecheck and shell tests: reclassification removing a route closes its old socket before any later sync or
   reconnect (fake relay observes the close first); Accept unreachable before commit; failed or timed-out pull refuses; a pulled
   revoke turns the head into a refusal; replica/root/genesis mismatch drops the route; 13 retained entries open at
-  most four sockets; no hand-typed fallback; mapper absent from the release variant. Tier: unit and contract.
+  most four sockets; no hand-typed fallback; mapper absent from the release variant; catalog acceptance tests use the
+  adopted 1 MiB store limit (plan 257), and a catalog route whose pull exceeds it pauses at `full` like a saved route. Tier: unit and contract.
 - PR 7: hosted `treehouse_packaged_macos_enrollment` and the ordinary packaged job green on the exact tip: import,
   probe, commit, restart, routes persist, tampered page and pre-pull accept refused; ordinary desktop app shows no CSP
   violation for a `wss://` dial, and the merged Android config's `connect-src` equals the local-only ordinary
