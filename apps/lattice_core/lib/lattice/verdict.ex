@@ -37,8 +37,9 @@ defmodule Lattice.Verdict do
   before `:lapsed`. A delegation the log has never carried is `:unknown`, never
   `:active`. A delegation is `:active` when `Authority.delegation_active?/2` accepts it,
   or when it descends from a succession candidate the judge activated (the successor's
-  self-issued delegation, introduced by a `:succeed` op the judge honored, with every
-  descendant on this replica and attenuating its parent). Anything else on the log
+  self-issued delegation, introduced by a `:succeed` op through which the judge
+  acquired the role, with every descendant on this replica and attenuating its
+  parent). Anything else on the log
   that is not revoked or lapsed (a bad chain, an unactivated candidate) is `:invalid`.
   Only `:active` permits action; every other status is a refusal.
 
@@ -150,7 +151,7 @@ defmodule Lattice.Verdict do
         revoked_by != nil -> :revoked
         expires != nil and latest != nil and latest > expires -> :lapsed
         Authority.delegation_active?(log, delegation_id) -> :active
-        succession_activated?(chain, ordered, analysis, log.replica) -> :active
+        succession_activated?(module, log, chain, ordered, analysis) -> :active
         true -> :invalid
       end
 
@@ -275,24 +276,38 @@ defmodule Lattice.Verdict do
     end
   end
 
-  # The judge's succession-candidate rule (plan 149 leases aside, which `:lapsed`
-  # already covers): the root is the successor's self-issued delegation, valid only once
-  # the `:succeed` op that introduced it is honored; each descendant must be on this
-  # replica and attenuate its parent. Anything else is left to `delegation_active?/2`.
-  defp succession_activated?(chain, ordered, analysis, replica) do
+  # The judge's succession-candidate rule: the root is the successor's self-issued
+  # delegation, valid only once the judge *acquired* the role through the `:succeed` op
+  # that introduced it; each descendant must be on this replica and attenuate its parent.
+  # Acquisition is read from the judge, never inferred: on the op's causal past plus the
+  # op, its role's latest acquisition must be that op, and the op must not be quarantined
+  # on the full log. An undeclared role has no acquisition, so it never activates.
+  defp succession_activated?(module, log, chain, ordered, analysis) do
     case Enum.reverse(chain) do
       [%Delegation{parent_id: nil, issuer: self, audience: self, id: root_id} | _] = links ->
-        Continuation.family(replica) != :unsupported and
-          Enum.all?(links, &(&1.replica == replica)) and attenuating?(links) and
-          Enum.any?(ordered, fn op ->
-            match?(%Op{kind: :authority, body: {:succeed, _, %Delegation{id: ^root_id}, _}}, op) and
-              not MapSet.member?(analysis.quarantine, op.id)
+        Continuation.family(log.replica) != :unsupported and
+          Enum.all?(links, &(&1.replica == log.replica)) and attenuating?(links) and
+          Enum.any?(ordered, fn
+            %Op{kind: :authority, body: {:succeed, role, %Delegation{id: ^root_id}, _}} = op ->
+              not MapSet.member?(analysis.quarantine, op.id) and acquired?(module, log, op, role)
+
+            _op ->
+              false
           end)
 
       _other ->
         false
     end
   end
+
+  defp acquired?(module, log, op, role) when is_atom(role) do
+    ops = Log.ops(log)
+    past = ops |> Dag.ancestors(op.id) |> MapSet.put(op.id) |> MapSet.to_list()
+    slice = Log.from_ops(log.replica, Map.take(ops, past))
+    match?(%{op_id: id} when id == op.id, Authority.holder_epoch(module, slice, role))
+  end
+
+  defp acquired?(_module, _log, _op, _role), do: false
 
   # Links ordered root first.
   defp attenuating?([parent, child | rest]),

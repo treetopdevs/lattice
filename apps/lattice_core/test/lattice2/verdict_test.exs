@@ -206,6 +206,27 @@ defmodule Lattice2.VerdictTest do
       assert %{status: :active} = Verdict.delegation_status(Lattice.Demo.Thread, log, child.id)
     end
 
+    test "a succession naming an undeclared role is unquarantined but never active" do
+      sim = demo_sim("verdict:ghost-role")
+      # No timeline exists for :ghost, so the judge neither honors nor quarantines it.
+      {sim, succeed} = Sim.succeed(sim, "r1", :ghost, ops: [:post], at_tick: 3)
+      {sim, child} = Sim.grant(Sim.sync_all(sim), "r1", "r2", ops: [:post], roles: [:ghost])
+
+      {sim, post} =
+        Sim.command(Sim.sync_all(sim), "r1", :post, ["ghost"], cap: carried(succeed).id)
+
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+      reasons = Authority.analyze(Lattice.Demo.Thread, log).reasons
+
+      refute Map.has_key?(reasons, succeed.id)
+      assert reasons[post.id] == :invalid_capability
+
+      assert %{status: :invalid} =
+               Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
+
+      assert %{status: :invalid} = Verdict.delegation_status(Lattice.Demo.Thread, log, child.id)
+    end
+
     test "an unactivated succession candidate and its descendant are invalid" do
       sim =
         demo_sim("verdict:early", policies: %{moderator: %{successor: "r1", dormant_ticks: 2}})
