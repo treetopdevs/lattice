@@ -153,6 +153,77 @@ defmodule Lattice2.VerdictTest do
     end
   end
 
+  describe "authority ops and successions" do
+    defp demo_sim(seed, opts \\ []) do
+      {sim, _} =
+        Lattice.Demo.Thread
+        |> Sim.new("replica:verdict:authority", ["r0", "r1", "r2"], seed: seed)
+        |> Sim.create_replica("r0", opts)
+
+      Sim.sync_all(sim)
+    end
+
+    defp carried(%Op{body: {:succeed, _role, deleg, _tick}}), do: deleg
+
+    test "a transfer that re-carries a revoked delegation names that revoke" do
+      sim = demo_sim("verdict:retransfer")
+      {sim, d} = Sim.transfer(sim, "r0", "r1", :moderator, at_tick: 1)
+      {sim, revoke} = Sim.revoke(Sim.sync_all(sim), "r0", d.id)
+      {sim, again} = Sim.transfer(sim, "r0", "r1", :moderator, at_tick: 2)
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert again.id == d.id, "the delegation is content-addressed"
+
+      [op] =
+        for %Op{body: {:transfer, :moderator, _, 2}} = op <- Log.topo_ops(log), do: op
+
+      assert {:quarantined, rec} = Verdict.explain(Lattice.Demo.Thread, log, op.id)
+      assert rec.reason == :revoked_capability
+      assert rec.cited_delegation_id == d.id
+      assert rec.evidence.revoked_by == revoke.id
+    end
+
+    test "an activated succession delegation and its descendant are active" do
+      sim =
+        demo_sim("verdict:succession",
+          policies: %{moderator: %{successor: "r1", dormant_ticks: 2}}
+        )
+
+      {sim, succeed} = Sim.succeed(sim, "r1", :moderator, at_tick: 3)
+      sim = Sim.sync_all(sim)
+      {sim, child} = Sim.grant(sim, "r1", "r2", ops: [:lock], roles: [:moderator])
+      {sim, lock} = Sim.command(sim, "r1", :lock, [])
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+      reasons = Authority.analyze(Lattice.Demo.Thread, log).reasons
+
+      refute Map.has_key?(reasons, succeed.id)
+      refute Map.has_key?(reasons, lock.id)
+      assert lock.cap == carried(succeed).id
+
+      assert %{status: :active} =
+               Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
+
+      assert %{status: :active} = Verdict.delegation_status(Lattice.Demo.Thread, log, child.id)
+    end
+
+    test "an unactivated succession candidate and its descendant are invalid" do
+      sim =
+        demo_sim("verdict:early", policies: %{moderator: %{successor: "r1", dormant_ticks: 2}})
+
+      # Below the dormancy threshold, so the judge never honors the claim.
+      {sim, succeed} = Sim.succeed(sim, "r1", :moderator, at_tick: 1)
+      {sim, child} = Sim.grant(Sim.sync_all(sim), "r1", "r2", ops: [:lock], roles: [:moderator])
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert Map.has_key?(Authority.analyze(Lattice.Demo.Thread, log).reasons, succeed.id)
+
+      assert %{status: :invalid} =
+               Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
+
+      assert %{status: :invalid} = Verdict.delegation_status(Lattice.Demo.Thread, log, child.id)
+    end
+  end
+
   # --- Property: Verdict never disagrees with the judge ----------------------
   #
   # The action shapes follow the M1 convergence generators

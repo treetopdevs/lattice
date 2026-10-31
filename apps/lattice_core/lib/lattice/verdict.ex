@@ -21,8 +21,9 @@ defmodule Lattice.Verdict do
     tightest `expires_epoch` and that the op is not causally before. Both are `nil` on
     every honored op, even when the log also holds the revoke or beacon.
   * `cited_delegation_id` is the op's `cap`, or, for an authority op that carries a
-    delegation (grant, transfer, succession), that delegation's parent: the authority
-    the author exercised.
+    delegation (genesis, grant, transfer, succession), that carried delegation. The
+    judge decides a transfer or succession from the carried delegation's own chain, and
+    that chain includes the parent the author exercised.
   * `expires_epoch` is the tightest lease on the cited delegation's chain (`nil` when
     no link is leased or the delegation is not on the log).
   * `frontier` is the sorted frontier of the log the verdict was taken from. A verdict
@@ -34,9 +35,12 @@ defmodule Lattice.Verdict do
   `delegation_status/3` judges a delegation as of the whole log, the way the live path
   does (everything on the log is "now"). Precedence matches the judge's: `:revoked`
   before `:lapsed`. A delegation the log has never carried is `:unknown`, never
-  `:active`. A delegation that is on the log but not revoked, not lapsed and not valid
-  (a bad chain, or an unactivated succession candidate) is `:invalid`. Only `:active`
-  permits action; every other status is a refusal.
+  `:active`. A delegation is `:active` when `Authority.delegation_active?/2` accepts it,
+  or when it descends from a succession candidate the judge activated (the successor's
+  self-issued delegation, introduced by a `:succeed` op the judge honored, with every
+  descendant on this replica and attenuating its parent). Anything else on the log
+  that is not revoked or lapsed (a bad chain, an unactivated candidate) is `:invalid`.
+  Only `:active` permits action; every other status is a refusal.
 
   The status also names the delegation's `audience` (hex public key) and granted `ops`,
   so a consumer can check that the delegation is addressed to the actor it is judging
@@ -45,7 +49,7 @@ defmodule Lattice.Verdict do
 
   alias Jason.OrderedObject
   alias Lattice.{Authority, Dag, Log, Op}
-  alias Lattice.Authority.Delegation
+  alias Lattice.Authority.{Continuation, Delegation}
 
   @schema "lattice-verdict-v1"
   @status_schema "lattice-delegation-status-v1"
@@ -132,7 +136,7 @@ defmodule Lattice.Verdict do
   """
   @spec delegation_status(module(), Log.t(), String.t()) :: status()
   def delegation_status(module, %Log{} = log, delegation_id) when is_binary(delegation_id) do
-    {_analysis, beacons} = Authority.analyze_with_beacon_evidence(module, log)
+    {analysis, beacons} = Authority.analyze_with_beacon_evidence(module, log)
     ordered = Log.topo_ops(log)
     delegations = delegations(ordered)
     chain = chain(delegation_id, delegations)
@@ -146,6 +150,7 @@ defmodule Lattice.Verdict do
         revoked_by != nil -> :revoked
         expires != nil and latest != nil and latest > expires -> :lapsed
         Authority.delegation_active?(log, delegation_id) -> :active
+        succession_activated?(chain, ordered, analysis, log.replica) -> :active
         true -> :invalid
       end
 
@@ -223,7 +228,7 @@ defmodule Lattice.Verdict do
 
   defp cited_delegation_id(%Op{kind: :authority, body: body}) do
     case carried_delegation(body) do
-      %Delegation{parent_id: parent} -> parent
+      %Delegation{id: id} -> id
       nil -> nil
     end
   end
@@ -269,6 +274,31 @@ defmodule Lattice.Verdict do
       _ -> []
     end
   end
+
+  # The judge's succession-candidate rule (plan 149 leases aside, which `:lapsed`
+  # already covers): the root is the successor's self-issued delegation, valid only once
+  # the `:succeed` op that introduced it is honored; each descendant must be on this
+  # replica and attenuate its parent. Anything else is left to `delegation_active?/2`.
+  defp succession_activated?(chain, ordered, analysis, replica) do
+    case Enum.reverse(chain) do
+      [%Delegation{parent_id: nil, issuer: self, audience: self, id: root_id} | _] = links ->
+        Continuation.family(replica) != :unsupported and
+          Enum.all?(links, &(&1.replica == replica)) and attenuating?(links) and
+          Enum.any?(ordered, fn op ->
+            match?(%Op{kind: :authority, body: {:succeed, _, %Delegation{id: ^root_id}, _}}, op) and
+              not MapSet.member?(analysis.quarantine, op.id)
+          end)
+
+      _other ->
+        false
+    end
+  end
+
+  # Links ordered root first.
+  defp attenuating?([parent, child | rest]),
+    do: Delegation.attenuates?(child, parent) and attenuating?([child | rest])
+
+  defp attenuating?(_one_or_none), do: true
 
   defp tightest_lease(chain) do
     chain |> Enum.map(& &1.expires_epoch) |> Enum.reject(&is_nil/1) |> Enum.min(fn -> nil end)

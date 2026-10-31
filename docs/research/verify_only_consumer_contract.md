@@ -13,9 +13,11 @@ depend on Cadence.
 ## What the substrate already guarantees
 
 A command cites a delegation. The judge (`Lattice.Authority.analyze/2`) quarantines it
-`:revoked_capability` once an honored revoke of any link of that delegation's chain exists that the
-command is not causally before, and `:lease_expired` once a root-signed beacon passes the chain's
-lease that the command is not causally before. The judge checks the audience before the lease, so
+`:revoked_capability` once an effective revoke (by the link's issuer or the root) of any link of
+that delegation's chain exists that the command is not causally before, and `:lease_expired` once
+an accepted beacon passes the chain's lease that the command is not causally before. A beacon is
+accepted when the replica root signs it or, under a witness policy pinned at genesis (plan 179), a
+threshold of witnesses certifies it; either way epochs are strictly monotonic. The judge checks the audience before the lease, so
 a realm that cites someone else's delegation is quarantined `:capability_wrong_audience`, lapsed or
 not. Receiving work confers no permission.
 
@@ -60,8 +62,9 @@ then `mix lattice.fault verify`):
 
 ## Must not
 
-- Sign ops, hold member private keys, or author grants, revokes or beacons. Beacons are
-  root-signed logical ticks; the consumer reads them and never produces them.
+- Sign ops, hold member private keys, author grants, revokes or beacons, or act as a beacon
+  witness. Beacons are logical ticks signed by the root or certified under the replica's witness
+  policy; the consumer reads the ones the judge accepted and never produces them.
 - Infer a lapse from wall-clock time. A lease lapses only when a beacon on the log passes it.
 - Compute verdicts with a second implementation of the derivation rules. If a server later serves
   verdict records, it computes them with `Lattice.Verdict`; parity across runtimes is a separate
