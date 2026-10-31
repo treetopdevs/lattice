@@ -106,10 +106,12 @@ defmodule Lattice.Authority.Delegation do
   @doc """
   True if the signature and id are internally consistent.
 
-  `ops` and `roles` must be `MapSet`s. Canonical encoding sorts either a list or
-  a set of the same names into identical bytes, so a list-shaped field can still
-  verify; the judge later calls `MapSet.subset?/2` and must not raise. A list is
-  therefore `:bad_delegation_sig`, never a crash (row 289).
+  `ops` and `roles` must be `MapSet`s whose backing is a map (`:sets` v2, the
+  shape `Delegation.new/4` emits). Canonical encoding sorts a list, a MapSet, or
+  a MapSet wrapping a version-1 set of the same names into identical bytes, so
+  those shapes can still verify; the judge later calls `MapSet.member?/2` and
+  must not raise. A list or an unusable `:sets` v1 backing is therefore
+  `:bad_delegation_sig`, never a crash (row 289).
   """
   @spec valid_sig?(t()) :: boolean()
   def valid_sig?(%__MODULE__{} = d) do
@@ -154,7 +156,7 @@ defmodule Lattice.Authority.Delegation do
       expiry_within?(child, parent)
   end
 
-  defp mapset?(%MapSet{}), do: true
+  defp mapset?(%MapSet{map: set}) when is_map(set), do: true
   defp mapset?(_), do: false
 
   # nil = unbounded. An unbounded parent accepts anything; a leased parent

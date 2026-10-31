@@ -974,6 +974,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>Reverting only the <code>authorized?/6</code> reorder left the six original tests green. Continuation proofs skip the ordinary introduction filter in <code>succession_event/4</code>, so a correctly signed bounded continuation whose <code>roles</code> or <code>ops</code> becomes a list still reached <code>MapSet.member?/2</code> / <code>MapSet.subset?/2</code> on that path. Existing tests covered only genesis and grants.</dd>
 <dt>Decision</dt><dd>Fixed with a bounded-continuation regression that rewrites the succeed op's <code>ops</code> or <code>roles</code> to a list, keeps <code>Op.valid?/1</code>, and requires analyze and Verdict not to raise. The D-135 <code>valid_sig?/1</code> check before <code>MapSet.member?/2</code> stays. No new plan-index row.</dd>
 </dl></section>
+<section id="d138"><h2><span>D-138</span> Row 289 Codex P1: refuse a MapSet whose <code>:sets</code> backing is not a map</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>350b95dd</code></dd>
+<dt>Finding</dt><dd><code>mapset?/1</code> accepted any <code>%MapSet{}</code> struct. A genesis whose <code>roles</code> wrapped an Erlang <code>:sets</code> v1 tuple with <code>maxn = 0</code> still enumerated the original names, so canonical bytes, id, signature, <code>Op.valid?/1</code>, and verified ETF restore all passed. <code>MapSet.member?/2</code> then raised <code>ArgumentError</code> in the role timeline. Ordinary JSON decoding rebuilds clean sets; this is a BEAM/ETF term shape.</dd>
+<dt>Decision</dt><dd>Fixed. <code>mapset?/1</code> requires the backing to be a map, which is the <code>:sets</code> v2 shape <code>Delegation.new/4</code> emits. A v1 or otherwise unusable backing is <code>:bad_delegation_sig</code>. Covered by a unit test and a genesis analyze/Verdict regression. No new plan-index row; not a W4 or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>

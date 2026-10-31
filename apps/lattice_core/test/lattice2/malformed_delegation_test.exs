@@ -31,6 +31,14 @@ defmodule Lattice2.MalformedDelegationTest do
     refute Delegation.valid_sig?(%{d | roles: [:moderator]})
   end
 
+  test "valid_sig? is false when roles is a MapSet with unusable :sets v1 backing" do
+    d = Delegation.new(issuer(), @replica, audience().pub, roles: [:moderator])
+    malformed = %{d | roles: unusable_mapset([:moderator])}
+    assert MapSet.to_list(malformed.roles) == [:moderator]
+    assert Delegation.valid_sig?(d)
+    refute Delegation.valid_sig?(malformed)
+  end
+
   test "attenuates? is false, not a raise, when the child's ops is a list" do
     parent = Delegation.new(issuer(), @replica, audience().pub, ops: [:post], live: true)
 
@@ -68,6 +76,23 @@ defmodule Lattice2.MalformedDelegationTest do
     assert analysis.reasons[lock.id] == :invalid_capability
 
     assert %{status: :invalid} = Verdict.delegation_status(@module, log, carried_id(grant))
+  end
+
+  test "a genesis whose roles MapSet has unusable :sets v1 backing does not crash the judge" do
+    sim = Sim.new(@module, @replica, ["r0", "r1"], seed: "row-289-mapset-v1")
+    {sim, _genesis} = Sim.create_replica(sim, "r0")
+    log = Sim.log(sim, "r0")
+    genesis = Enum.find(Log.topo_ops(log), &match?(%Op{body: {:genesis, _, _}}, &1))
+    {:genesis, d, policies} = genesis.body
+    malformed = %{d | roles: unusable_mapset(MapSet.to_list(d.roles))}
+    rewritten = %{genesis | body: {:genesis, malformed, policies}}
+    assert Op.valid?(rewritten)
+
+    log = Log.from_ops(log.replica, Map.put(log.ops, genesis.id, rewritten))
+    assert {:ok, _} = log |> Log.dump_bytes() |> Log.restore_verified_bytes()
+    analysis = Authority.analyze(@module, log)
+    assert analysis.reasons[rewritten.id] == :bad_delegation_sig
+    assert %{status: :invalid} = Verdict.delegation_status(@module, log, d.id)
   end
 
   test "a genesis whose roles is a list does not crash the judge" do
@@ -137,6 +162,12 @@ defmodule Lattice2.MalformedDelegationTest do
   end
 
   defp carried_id(%Op{body: {:grant, %Delegation{id: id}}}), do: id
+
+  defp unusable_mapset(elements) do
+    v1 = :sets.from_list(elements, version: 1)
+    {:set, n, slots, _maxn, a, b, c, t1, t2} = v1
+    %MapSet{map: {:set, n, slots, 0, a, b, c, t1, t2}}
+  end
 
   defp same_id_empty_genesis_log(field) do
     sim = Sim.new(@module, "#{@replica}-#{field}", ["r0", "r1"], seed: "row-289-coexist-#{field}")
