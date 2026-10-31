@@ -99,17 +99,26 @@ while [ "$attempt" -le "$attempts" ]; do
       # restic's "snapshot <id> saved" line. A pending snapshot an earlier quarantine
       # failed to retag is never promoted. The live seed may have changed while restic
       # read it, so check the copy the snapshot actually holds; quarantine on failure.
+      # A missing id or a failed or timed-out dump is a failed attempt and is retried;
+      # a seed copy that fails check_seed stops the run, since retrying cannot help.
       snapshot_id=$(sed -n 's/^snapshot \([0-9a-f]\{8,64\}\) saved$/\1/p' "$snapshot_dir/backup.log" | tail -n 1)
-      if [ -z "$snapshot_id" ] ||
-        ! (umask 077 && restic dump "$snapshot_id" "$seed" > "$snapshot_dir/seed") ||
-        ! check_seed "$snapshot_dir/seed"; then
+      if [ -z "$snapshot_id" ]; then
+        echo "restic reported success but no snapshot id was found" >&2
+        status=1
+      elif ! (umask 077 && timeout --signal=INT --kill-after=1m 10m \
+        restic dump "$snapshot_id" "$seed" > "$snapshot_dir/seed"); then
+        echo "could not read the seed back from snapshot $snapshot_id" >&2
+        status=1
+      elif ! check_seed "$snapshot_dir/seed"; then
         rm -f "$snapshot_dir/seed"
-        echo "snapshot ${snapshot_id:-(id not found)} failed the seed check; quarantining" >&2
+        echo "snapshot $snapshot_id holds a seed that fails the check; quarantining" >&2
         restic tag --tag pending --set incomplete || true
         exit 1
+      else
+        rm -f "$snapshot_dir/seed"
+        break
       fi
       rm -f "$snapshot_dir/seed"
-      break
     fi
     restic tag --tag pending --set incomplete || true
   fi
