@@ -258,6 +258,40 @@ defmodule Lattice2.VerdictTest do
                Verdict.delegation_status(Lattice.Demo.Thread, log, carried(succeed).id)
     end
 
+    test "an authority op cites its carried delegation, not an unrelated cap" do
+      sim = demo_sim("verdict:carried-over-cap")
+      {sim, d} = Sim.transfer(sim, "r0", "r1", :moderator, at_tick: 1)
+      {sim, revoke} = Sim.revoke(Sim.sync_all(sim), "r0", d.id)
+
+      {sim, op} =
+        Sim.append(sim, "r0", :authority, {:transfer, :moderator, d, 2}, cap: "unrelated-cap")
+
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert {:quarantined, rec} = Verdict.explain(Lattice.Demo.Thread, log, op.id)
+      assert rec.reason == :revoked_capability
+      assert rec.cited_delegation_id == d.id
+      assert rec.evidence.revoked_by == revoke.id
+    end
+
+    test "a delegation carried only with a bad signature is invalid, not unknown" do
+      sim = demo_sim("verdict:bad-sig")
+      {_sim, good} = Sim.grant(sim, "r0", "r1", ops: [:post])
+      forged = %{good | sig: :binary.copy(<<0>>, byte_size(good.sig))}
+
+      {sim, _} = Sim.append(sim, "r0", :authority, {:grant, forged})
+      {sim, post} = Sim.command(Sim.sync_all(sim), "r1", :post, ["x"], cap: forged.id)
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert Authority.analyze(Lattice.Demo.Thread, log).reasons[post.id] == :invalid_capability
+
+      assert %{status: :invalid, audience: nil, ops: []} =
+               Verdict.delegation_status(Lattice.Demo.Thread, log, forged.id)
+
+      assert %{status: :unknown} =
+               Verdict.delegation_status(Lattice.Demo.Thread, log, "never-carried")
+    end
+
     test "a bad chain is invalid even when it is also revoked or lapsed" do
       sim = demo_sim("verdict:bad-chain")
 

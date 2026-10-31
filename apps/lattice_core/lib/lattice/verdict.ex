@@ -20,10 +20,11 @@ defmodule Lattice.Verdict do
     (`Authority.analyze_with_beacon_evidence/2`) that is greater than the chain's
     tightest `expires_epoch` and that the op is not causally before. Both are `nil` on
     every honored op, even when the log also holds the revoke or beacon.
-  * `cited_delegation_id` is the op's `cap`, or, for an authority op that carries a
-    delegation (genesis, grant, transfer, succession), that carried delegation. The
-    judge decides a transfer or succession from the carried delegation's own chain, and
-    that chain includes the parent the author exercised.
+  * `cited_delegation_id` is, for an authority op that carries a delegation (genesis,
+    grant, transfer, succession), that carried delegation, even if the op also names a
+    `cap`; otherwise it is the op's `cap`. The judge decides a transfer or succession
+    from the carried delegation's own chain, which includes the parent the author
+    exercised.
   * `expires_epoch` is the tightest lease on the cited delegation's chain (`nil` when
     no link is leased or the delegation is not on the log).
   * `frontier` is the sorted frontier of the log the verdict was taken from. A verdict
@@ -35,7 +36,8 @@ defmodule Lattice.Verdict do
   `delegation_status/3` judges a delegation as of the whole log, the way the live path
   does (everything on the log is "now"). Precedence matches the judge's: `:revoked`
   before `:lapsed`, and, as in the judge's cap check, chain validity before both. A
-  delegation the log has never carried is `:unknown`, never `:active`. A delegation is
+  delegation the log has never carried is `:unknown`, never `:active`; one carried only
+  with a bad signature is `:invalid`. A delegation is
   valid when `Authority.delegation_active?/2` accepts it apart from leases, or when it
   descends from a succession candidate the judge activated (the successor's self-issued
   delegation, introduced by a `:succeed` op through which the judge acquired the role,
@@ -149,6 +151,7 @@ defmodule Lattice.Verdict do
     # revoke or a beacon past its lease is also on the log.
     status =
       cond do
+        chain == [] and MapSet.member?(badly_signed_ids(ordered), delegation_id) -> :invalid
         chain == [] -> :unknown
         not valid_chain?(module, log, delegation_id, chain, ordered, analysis) -> :invalid
         revoked_by != nil -> :revoked
@@ -226,16 +229,19 @@ defmodule Lattice.Verdict do
 
   # --- Delegation chain ------------------------------------------------------
 
-  defp cited_delegation_id(%Op{cap: cap}) when is_binary(cap), do: cap
-
-  defp cited_delegation_id(%Op{kind: :authority, body: body}) do
+  # A carried delegation wins over any `cap` the op also names: the judge decides an
+  # authority op from the delegation it carries, never from its `cap`.
+  defp cited_delegation_id(%Op{kind: :authority, body: body} = op) do
     case carried_delegation(body) do
       %Delegation{id: id} -> id
-      nil -> nil
+      nil -> cap_id(op)
     end
   end
 
-  defp cited_delegation_id(_op), do: nil
+  defp cited_delegation_id(op), do: cap_id(op)
+
+  defp cap_id(%Op{cap: cap}) when is_binary(cap), do: cap
+  defp cap_id(_op), do: nil
 
   # The delegation shapes the judge introduces from authority bodies.
   defp carried_delegation({:genesis, %Delegation{} = d, _policies}), do: d
@@ -246,6 +252,16 @@ defmodule Lattice.Verdict do
 
   defp carried_delegation({:succeed, _role, %Delegation{} = d, _tick}), do: d
   defp carried_delegation(_body), do: nil
+
+  # Ids introduced only with a bad signature. The judge keeps them as invalid entries,
+  # so a status lookup must report them `:invalid`, not `:unknown`.
+  defp badly_signed_ids(ordered) do
+    for %Op{kind: :authority, body: body} <- ordered,
+        %Delegation{} = d <- [carried_delegation(body)],
+        not Delegation.valid_sig?(d),
+        into: MapSet.new(),
+        do: d.id
+  end
 
   # First correctly signed introduction of each id, in topological order.
   defp delegations(ordered) do
