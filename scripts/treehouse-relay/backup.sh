@@ -88,16 +88,23 @@ while [ "$attempt" -le "$attempts" ]; do
     check_seed "$seed" || exit 1
     set +e
     # shellcheck disable=SC2086
-    timeout --signal=INT --kill-after=10m 1h restic backup --tag pending $paths
+    timeout --signal=INT --kill-after=10m 1h restic backup --tag pending $paths \
+      > "$snapshot_dir/backup.log" 2>&1
     status=$?
     set -e
+    cat "$snapshot_dir/backup.log"
 
     if [ "$status" -eq 0 ]; then
-      # The live seed may have changed while restic read it, so check the copy the
-      # snapshot actually holds. Quarantine the snapshot rather than promote it.
-      if ! (umask 077 && restic dump --tag pending latest "$seed" > "$snapshot_dir/seed") ||
+      # Check and later promote only the snapshot this attempt wrote, named by
+      # restic's "snapshot <id> saved" line. A pending snapshot an earlier quarantine
+      # failed to retag is never promoted. The live seed may have changed while restic
+      # read it, so check the copy the snapshot actually holds; quarantine on failure.
+      snapshot_id=$(sed -n 's/^snapshot \([0-9a-f]\{8,64\}\) saved$/\1/p' "$snapshot_dir/backup.log" | tail -n 1)
+      if [ -z "$snapshot_id" ] ||
+        ! (umask 077 && restic dump "$snapshot_id" "$seed" > "$snapshot_dir/seed") ||
         ! check_seed "$snapshot_dir/seed"; then
         rm -f "$snapshot_dir/seed"
+        echo "snapshot ${snapshot_id:-(id not found)} failed the seed check; quarantining" >&2
         restic tag --tag pending --set incomplete || true
         exit 1
       fi
@@ -114,7 +121,7 @@ while [ "$attempt" -le "$attempts" ]; do
 done
 
 if [ "$status" -eq 0 ]; then
-  restic tag --tag pending --set daily
+  restic tag --set daily "$snapshot_id"
   restic forget --tag daily --group-by host --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
 fi
 
