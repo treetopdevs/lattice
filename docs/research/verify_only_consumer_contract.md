@@ -61,6 +61,9 @@ then `mix lattice.fault verify`):
   Lattice's: the log is the truth, and the consumer's copy is a cache of it.
 - Judge only logs it has verified (`restore_verified/1`, or the carrier's verified pull). A log that
   fails verification yields no verdict, not an `:active` one.
+- Load its replica module (for example `Code.ensure_loaded!(Treehouse.Thread)`) before
+  `restore_verified/1`. The decoder runs `:safe` and refuses atoms the VM has not interned, so a
+  fresh VM that has not loaded the replica's vocabulary gets `{:error, :unsafe_dump}`.
 
 ## Must not
 
