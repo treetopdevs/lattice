@@ -308,6 +308,53 @@ defmodule Lattice2.VerdictTest do
       refute :post in status.ops
     end
 
+    test "a non-binary audience refuses instead of crashing" do
+      sim = demo_sim("verdict:int-audience")
+      [genesis | _] = sim.caps["r0"]
+
+      odd =
+        Delegation.new(Sim.identity(sim, "r0"), sim.replica, 42,
+          ops: [:post],
+          parent_id: genesis.id
+        )
+
+      {sim, _} = Sim.append(sim, "r0", :authority, {:grant, odd})
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+      status = Verdict.delegation_status(Lattice.Demo.Thread, log, odd.id)
+
+      assert status.audience == nil
+      assert %{"audience" => nil} = Jason.decode!(Verdict.to_json(status))
+    end
+
+    test "a signed op with a non-atom kind serializes instead of crashing" do
+      sim = demo_sim("verdict:string-kind")
+      who = Sim.identity(sim, "r1")
+      log = Sim.log(sim, "r0")
+
+      unsigned = %Op{
+        id: nil,
+        sig: nil,
+        replica: log.replica,
+        author: who.pub,
+        deps: Log.frontier(log),
+        kind: "command",
+        body: {:post, ["x"]},
+        cap: nil
+      }
+
+      op = %{
+        unsigned
+        | id: Op.recompute_id(unsigned),
+          sig: Lattice.Identity.sign(who, Op.canonical_encoding(unsigned))
+      }
+
+      assert Op.valid?(op)
+      log = Log.from_ops(log.replica, Map.put(Log.ops(log), op.id, op))
+      {_verdict, rec} = Verdict.explain(Lattice.Demo.Thread, log, op.id)
+
+      assert %{"kind" => %{"non_atom" => ~s("command")}} = Jason.decode!(Verdict.to_json(rec))
+    end
+
     test "a bad chain is invalid even when it is also revoked or lapsed" do
       sim = demo_sim("verdict:bad-chain")
 

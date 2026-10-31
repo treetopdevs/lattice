@@ -3,9 +3,11 @@ defmodule LatticeCore.StandaloneDependencyTest do
   Plan 287 step 4: a consumer outside the umbrella can depend on `lattice_core` with
   `runtime: false` and call the pure modules without starting any Lattice process.
 
-  The test builds an empty Mix project in a temp dir that depends on this checkout by
-  path (jason by the umbrella's own path, so no network), then runs
-  `Lattice.Verdict.explain/3` over a restored `handoff_lapse` log in that project.
+  The test copies `apps/lattice_core` (its `mix.exs` and `lib`) into an isolated temp
+  dir with no umbrella around it, as a sparse checkout of that subtree would have it,
+  and checks the copy loads as a project of its own. It then builds an empty Mix
+  project that depends on the copy by path (jason by the umbrella's own path, so no
+  network) and runs `Lattice.Verdict.explain/3` over a restored `handoff_lapse` log.
   """
   use ExUnit.Case, async: true
 
@@ -41,19 +43,29 @@ defmodule LatticeCore.StandaloneDependencyTest do
   """
 
   setup do
-    dir = Path.join(System.tmp_dir!(), "lattice-standalone-#{System.unique_integer([:positive])}")
+    root =
+      Path.join(System.tmp_dir!(), "lattice-standalone-#{System.unique_integer([:positive])}")
+
+    dir = Path.join(root, "consumer")
+    core = Path.join([root, "sparse", "apps", "lattice_core"])
     File.mkdir_p!(Path.join(dir, "lib"))
-    on_exit(fn -> File.rm_rf(dir) end)
-    %{dir: dir}
+    File.mkdir_p!(core)
+    File.cp!(Path.join(@core_dir, "mix.exs"), Path.join(core, "mix.exs"))
+    File.cp_r!(Path.join(@core_dir, "lib"), Path.join(core, "lib"))
+    on_exit(fn -> File.rm_rf(root) end)
+    %{dir: dir, core: core}
   end
 
   test "lattice_core compiles as a runtime: false dependency and Verdict runs unstarted",
-       %{dir: dir} do
+       %{dir: dir, core: core} do
+    # Without the umbrella's config it must load as a plain project, not raise.
+    mix!(core, ["deps"])
+
     {:ok, logs} = FaultScenario.run("handoff_lapse", "demo")
     log_path = Path.join(dir, "thread.root.log")
     :ok = Log.dump(logs["thread.root"], log_path)
 
-    File.write!(Path.join(dir, "mix.exs"), consumer_mix_exs())
+    File.write!(Path.join(dir, "mix.exs"), consumer_mix_exs(core))
     File.write!(Path.join(dir, "check.exs"), @check)
 
     mix!(dir, ["deps.compile"])
@@ -66,7 +78,7 @@ defmodule LatticeCore.StandaloneDependencyTest do
                ~s({"quarantined:lease_expired", 1}])
   end
 
-  defp consumer_mix_exs do
+  defp consumer_mix_exs(core) do
     jason = Mix.Project.deps_paths() |> Map.fetch!(:jason)
 
     """
@@ -80,7 +92,7 @@ defmodule LatticeCore.StandaloneDependencyTest do
 
       defp deps do
         [
-          {:lattice_core, path: #{inspect(@core_dir)}, runtime: false},
+          {:lattice_core, path: #{inspect(core)}, runtime: false},
           {:jason, path: #{inspect(jason)}, override: true}
         ]
       end

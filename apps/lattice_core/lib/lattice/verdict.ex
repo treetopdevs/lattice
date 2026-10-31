@@ -46,7 +46,8 @@ defmodule Lattice.Verdict do
   `:active` permits action; every other status is a refusal.
 
   The status also names the delegation's `audience` (hex public key) and granted `ops`
-  (in JSON, a non-atom scope term is an object `{"non_atom": ...}`, never an action name),
+  (in JSON, a non-atom scope term is an object `{"non_atom": ...}`, never an action name,
+  and a non-binary audience is `null`),
   so a consumer can check that the delegation is addressed to the actor it is judging
   and confers the action it is about to allow, without reading authority internals.
   """
@@ -62,8 +63,8 @@ defmodule Lattice.Verdict do
           schema: String.t(),
           replica: String.t(),
           op_id: Op.id(),
-          author: String.t(),
-          kind: Op.kind(),
+          author: String.t() | nil,
+          kind: Op.kind() | term(),
           verdict: :honored | :quarantined,
           reason: atom() | nil,
           cited_delegation_id: String.t() | nil,
@@ -119,7 +120,7 @@ defmodule Lattice.Verdict do
       schema: @schema,
       replica: log.replica,
       op_id: op.id,
-      author: Base.encode16(op.author, case: :lower),
+      author: hex(op.author),
       kind: op.kind,
       verdict: verdict,
       reason: reason,
@@ -162,7 +163,7 @@ defmodule Lattice.Verdict do
 
     {audience, ops} =
       case chain do
-        [%Delegation{} = d | _] -> {Base.encode16(d.audience, case: :lower), Enum.sort(d.ops)}
+        [%Delegation{} = d | _] -> {hex(d.audience), Enum.sort(d.ops)}
         [] -> {nil, []}
       end
 
@@ -191,7 +192,7 @@ defmodule Lattice.Verdict do
       {"replica", record.replica},
       {"op_id", record.op_id},
       {"author", record.author},
-      {"kind", Atom.to_string(record.kind)},
+      {"kind", term_json(record.kind)},
       {"verdict", Atom.to_string(record.verdict)},
       {"reason", atom_or_nil(record.reason)},
       {"cited_delegation_id", record.cited_delegation_id},
@@ -212,7 +213,7 @@ defmodule Lattice.Verdict do
       {"delegation_id", status.delegation_id},
       {"status", Atom.to_string(status.status)},
       {"audience", status.audience},
-      {"ops", Enum.map(status.ops, &scope_json/1)},
+      {"ops", Enum.map(status.ops, &term_json/1)},
       {"revoked_by", status.revoked_by},
       {"expires_epoch", status.expires_epoch},
       {"latest_beacon_epoch", status.latest_beacon_epoch},
@@ -223,10 +224,15 @@ defmodule Lattice.Verdict do
 
   defp encode(object), do: Jason.encode!(object, pretty: true) <> "\n"
 
-  # A granted command is an atom. Any other signed scope term confers nothing in the
-  # judge, so it is encoded as an object that can never equal an action name.
-  defp scope_json(scope) when is_atom(scope), do: Atom.to_string(scope)
-  defp scope_json(scope), do: OrderedObject.new([{"non_atom", inspect(scope)}])
+  # Signed fields the judge reads as atoms (a granted command, an op kind) can hold any
+  # canonical term on an authentic log. A non-atom never confers anything, so it is
+  # encoded as an object that can never equal an action or kind name, never raised on.
+  defp term_json(term) when is_atom(term), do: Atom.to_string(term)
+  defp term_json(term), do: OrderedObject.new([{"non_atom", inspect(term)}])
+
+  # A key that is not a binary can never equal an actor's key; `nil` refuses.
+  defp hex(key) when is_binary(key), do: Base.encode16(key, case: :lower)
+  defp hex(_key), do: nil
 
   defp atom_or_nil(nil), do: nil
   defp atom_or_nil(atom) when is_atom(atom), do: Atom.to_string(atom)
