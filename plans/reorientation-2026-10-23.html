@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lattice Reorientation Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with full-width tables; a sticky section index on wide screens. */
+:root{
+  --bg:#f4f6f5; --surface:#ffffff; --ink:#18221f; --muted:#56635e; --rule:#d5ddd9;
+  --accent:#2e6a52; --accent-soft:#e2eee8;
+  --wait:#9a5b00; --wait-soft:#f7ecd9;
+  --core:#335c8a; --core-soft:#e3ebf5;
+  --pack:#2e6a52; --pack-soft:#e2eee8;
+  --none:#a3aea9;
+  --code-bg:#eaefec;
+  --f-display:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111816; --surface:#18211e; --ink:#e3ebe7; --muted:#9aa9a2; --rule:#2c3a35;
+  --accent:#7cc4a2; --accent-soft:#1f3a2f; --wait:#e2a650; --wait-soft:#3a2d17;
+  --core:#8fb4e0; --core-soft:#1e2c3d; --pack:#7cc4a2; --pack-soft:#1f3a2f; --none:#5d6b65; --code-bg:#1d2824; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111816; --surface:#18211e; --ink:#e3ebe7; --muted:#9aa9a2; --rule:#2c3a35;
+  --accent:#7cc4a2; --accent-soft:#1f3a2f; --wait:#e2a650; --wait-soft:#3a2d17;
+  --core:#8fb4e0; --core-soft:#1e2c3d; --pack:#7cc4a2; --pack-soft:#1f3a2f; --none:#5d6b65; --code-bg:#1d2824; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--f-body);margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:40px 80px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px}
+@media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr);gap:24px;padding-block:24px 64px}.toc{display:none}}
+.toc{position:sticky;top:calc(env(safe-area-inset-top, 0px) + 24px);align-self:start;font-size:13px}
+.toc a{display:block;color:var(--muted);text-decoration:none;padding:4px 0 4px 10px;border-left:2px solid var(--rule)}
+.toc a:hover,.toc a:focus-visible{color:var(--ink);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+section{display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(2rem,4.5vw,2.8rem);font-weight:650;letter-spacing:-.01em}
+h2{font-size:1.65rem;font-weight:650;padding-top:8px;border-top:1px solid var(--rule)}
+h3{font-size:1.15rem;font-weight:650}
+p{margin:0;max-width:68ch}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.12rem;color:var(--ink)}
+.muted{color:var(--muted)}
+a{color:var(--accent)}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+code{background:var(--code-bg);padding:1px 5px;border-radius:4px}
+pre{background:var(--code-bg);padding:14px 16px;border-radius:6px;overflow-x:auto;margin:0;font:13.5px/1.55 var(--f-mono)}
+ul,ol{margin:0;padding-left:1.3em;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+
+.callout{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;max-width:76ch}
+.callout.wait{border-color:var(--wait);background:var(--wait-soft)}
+.callout.key{border-color:var(--accent);background:var(--accent-soft)}
+.callout strong{font-weight:600}
+
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.facts div{background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.facts b{font:500 11px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.facts span{font-variant-numeric:tabular-nums}
+
+.tbl{overflow-x:auto;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--rule)}
+tr:last-child td{border-bottom:0}
+th{font:500 11.5px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+
+.pill{display:inline-block;font:500 11.5px/1 var(--f-mono);padding:4px 7px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+.p-done{background:var(--pack-soft);color:var(--pack)}
+.p-part{background:var(--core-soft);color:var(--core)}
+.p-research{background:var(--wait-soft);color:var(--wait)}
+.p-frozen{border-color:var(--rule);color:var(--muted)}
+.p-none{border:1px dashed var(--none);color:var(--muted)}
+
+/* layer stack */
+.stack{display:flex;flex-direction:column;gap:6px}
+.layer{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:12px 14px}
+.layer .lname{font:600 13px/1.35 var(--f-mono);color:var(--accent)}
+.layer .lbody{font-size:14.5px}
+.layer .lbody .mono{color:var(--muted)}
+@media (max-width:560px){.layer{grid-template-columns:minmax(0,1fr);gap:4px}}
+
+/* ladder */
+.ladder{display:flex;flex-direction:column;gap:10px}
+.rung{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:16px 18px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px}
+.rung h3{grid-column:1}
+.rung .pill{grid-column:2;grid-row:1;align-self:start}
+.rung .said{grid-column:1/-1;font:13px/1.4 var(--f-mono);color:var(--muted)}
+.rung p,.rung ul{grid-column:1/-1}
+.rung.focus{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+
+/* tiers */
+.tier{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px}
+.t-core{background:var(--core)} .t-pack{background:var(--pack)} .t-none{border:1.5px dashed var(--none)}
+td.t{text-align:center}
+
+/* steps */
+.steps{list-style:none;padding:0;counter-reset:s;gap:14px}
+.steps>li{counter-increment:s;display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 12px}
+.steps>li::before{content:counter(s);font:600 15px/34px var(--f-display);text-align:center;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);grid-row:1/span 3}
+.steps>li>*{grid-column:2;min-width:0}
+.steps h3{line-height:34px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+
+/* todo */
+.todo{display:flex;flex-direction:column;gap:22px}
+.group{display:flex;flex-direction:column;gap:8px}
+.group h3{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.group h3 .eyebrow{font-family:var(--f-mono)}
+.item{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;align-items:start}
+.item input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--accent)}
+.item label{cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0}
+.item label b{font-weight:600}
+.item label span{font-size:14px;color:var(--muted)}
+.item input:checked + label b{text-decoration:line-through;color:var(--muted)}
+.item input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.group.wait .item{border-left:3px solid var(--wait)}
+.progress{font:500 13px var(--f-mono);color:var(--muted)}
+footer{font-size:13px;color:var(--muted);border-top:1px solid var(--rule);padding-top:16px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Sections">
+  <a href="#today">Where it stands</a>
+  <a href="#system">What the system is</a>
+  <a href="#ladder">Vision ladder</a>
+  <a href="#evidence">Built vs. attempted</a>
+  <a href="#loops">Why it feels stuck</a>
+  <a href="#session">A focus session</a>
+  <a href="#todo">Re-engagement list</a>
+</nav>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:14px">
+  <span class="eyebrow">treetopdevs/lattice · snapshot 2026-10-23 · main @ 1557d5c0a</span>
+  <h1>Lattice Reorientation Guide</h1>
+  <p class="lede">You have built a working substrate: a signed, capability-checked operation log with CRDT state and a real WebSocket transport, running in both Elixir and TypeScript. On top of it there is a small-group chat app, Treehouse, that works between two app instances in CI. Nothing has run yet on a real phone with real people. The next step on the critical path waits on you, not on code: the catalog signer ceremony and the real-world inputs it needs.</p>
+  <p class="muted">This page is a reading guide into <code>plans/README.md</code> and <code>plans/roadmaps/treehouse-unified-2026-09-06.md</code>. It adds no new plan rows. Those two files remain the ledger.</p>
+</header>
+
+<section id="today">
+  <h2>Where it stands today</h2>
+  <div class="facts">
+    <div><b>main</b><span><code>1557d5c0a</code> · CI green (push run, 2026-10-20)</span></div>
+    <div><b>Open PRs</b><span>2 · #156 Dependabot vite bump · #157 ledger 5 (records D-37 to D-40)</span></div>
+    <div><b>History</b><span>~1,320 commits since May · 403 in October</span></div>
+    <div><b>Product focus</b><span>Treehouse (group chat), since 2026-09-01</span></div>
+    <div><b>Active ledger row</b><span>R11b · row 224, BLOCKED on your ceremony</span></div>
+    <div><b>Loose ends</b><span>6 worktrees · 1 stash · uncommitted iOS edits on main</span></div>
+  </div>
+  <div class="callout wait">
+    <strong>The bottleneck is operator input.</strong>
+    <p>Row 224 (the catalog's <em>catalogued</em> and <em>listed</em> phases) cannot be built until you run the signer ceremony in <code>docs/treehouse_catalog_signer_custody.md</code>. You already decided OD-1 to OD-5 on 2026-10-19 (D-39, all as recommended); PR #157 records them. Plan 224 PR 3 is running as slice 20 and PR 2 is unblocked, but PRs 4 and 5 need the ceremony report. R11c and then real enrollment (R13) are queued behind it.</p>
+  </div>
+</section>
+
+<section id="system">
+  <h2>What the system is</h2>
+  <p>Every change anyone makes is a <strong>signed operation</strong>. Operations link to their causal predecessors by hash, forming a DAG. A <strong>Replica</strong> is a schema written in a small DSL. Each field either merges as a CRDT (<code>:lww</code>, <code>:or_set</code>, <code>:causal_list</code>) or is an <strong>authority field</strong> that names who holds a role. Whether an operation counts is decided by replaying the log through the <strong>authority judge</strong>. The judge checks delegations, capability attenuation, leases, revocations and succession. Operations without valid authority are <strong>quarantined</strong> with a named reason, never silently dropped. Two peers holding the same operations materialize byte-identical state.</p>
+  <p>Transport is separate from authority. The <strong>carrier</strong> moves already-signed operations over WebSocket: frontier exchange, pull of missing operations, an opt-in relay that persists before it acknowledges, and an <code>ops_available</code> hint that triggers a pull. The relay server holds no participant keys and does not decide authority. It can read plaintext and can withhold service, and the copy rule D1 requires every hosting sentence to say so.</p>
+  <div class="stack" aria-label="Layer stack, top to bottom">
+    <div class="layer"><div class="lname">Products</div><div class="lbody">Treehouse group chat (focus) · Toolshed tool lending (custody v1 only) · Township civic matters + election foundation (frozen)<br><span class="mono">lib/treehouse · lib/toolshed · lib/township</span></div></div>
+    <div class="layer"><div class="lname">Apps &amp; shells</div><div class="lbody">Tauri + Vue apps holding native keys; a Phoenix LiveView read-only instrument; a shared shell kit (Treehouse only)<br><span class="mono">clients/treehouse-tauri-shell · clients/township-tauri-shell · apps/township_web · clients/lattice-shell-kit</span></div></div>
+    <div class="layer"><div class="lname">Transport</div><div class="lbody">Carrier server (read-only default, opt-in relay, pilot release), WebSocket client, closed wire vocabulary<br><span class="mono">apps/lattice_carrier_server · apps/lattice_web_socket · lib/lattice/carrier</span></div></div>
+    <div class="layer"><div class="lname">Core (×2 runtimes)</div><div class="lbody">Op · Log · DAG · Canonical bytes · Identity · Authority judge · Replica DSL + CRDTs · Reduce · <code>Lattice.Sim</code> oracle, written in Elixir and mirrored in TypeScript, kept equal by 91 vector files<br><span class="mono">apps/lattice_core/lib/lattice · clients/lattice-client</span></div></div>
+  </div>
+  <p class="muted">Underneath sits the May 2026 v1 "capability plane" (gateway, tabs, flagship demo). It is complete as a proof of concept and is now fenced as legacy in CI (<code>lattice_server</code>, <code>lattice_demo</code>, <code>lattice_stress</code>).</p>
+
+  <h3>Size of what exists</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Area</th><th class="num">Src files</th><th class="num">Src LOC</th><th class="num">Test LOC</th><th>State</th></tr></thead>
+    <tbody>
+      <tr><td><code>lattice_core</code> (substrate 14.7k · township 3.3k · treehouse 4.7k · toolshed 0.2k)</td><td class="num">131</td><td class="num">29.6k</td><td class="num">25.9k</td><td><span class="pill p-done">live</span></td></tr>
+      <tr><td><code>lattice-client</code> (TS mirror)</td><td class="num">29</td><td class="num">11.8k</td><td class="num">13.2k</td><td><span class="pill p-done">live</span></td></tr>
+      <tr><td><code>lattice_carrier_server</code></td><td class="num">35</td><td class="num">7.9k</td><td class="num">12.8k</td><td><span class="pill p-done">live</span></td></tr>
+      <tr><td><code>treehouse-tauri-shell</code></td><td class="num">40</td><td class="num">9.5k</td><td class="num">9.3k</td><td><span class="pill p-done">focus</span></td></tr>
+      <tr><td><code>township-tauri-shell</code></td><td class="num">53</td><td class="num">16.6k</td><td class="num">42.0k</td><td><span class="pill p-frozen">frozen</span></td></tr>
+      <tr><td><code>township_web</code> (instrument)</td><td class="num">14</td><td class="num">19.1k</td><td class="num">3.1k</td><td><span class="pill p-frozen">frozen</span></td></tr>
+      <tr><td><code>lattice-shell-kit</code> · <code>lattice-mobile-core</code></td><td class="num">29</td><td class="num">5.0k</td><td class="num">0.2k</td><td><span class="pill p-done">live</span></td></tr>
+      <tr><td><code>plans/</code> (for comparison, Round 6 count)</td><td class="num">—</td><td class="num">46.9k</td><td class="num">—</td><td><span class="pill p-research">prose</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Rough counts from <code>find</code>/<code>wc</code>, excluding build output. The plans figure is from the Round 6 audit (2026-10-08). That audit noted the planning prose had outgrown the core library.</p>
+</section>
+
+<section id="ladder">
+  <h2>The vision ladder, mapped to what exists</h2>
+  <p>The order flipped on 2026-09-01. Township used to be first. Now Treehouse comes first, then Toolshed as a module inside a group, then Township (plan 177; index policy rule 10). Below, each level shows what it promised and what is actually there.</p>
+  <div class="ladder">
+
+    <div class="rung focus">
+      <h3>A group you can join in person (Treehouse)</h3><span class="pill p-part">partial · current focus</span>
+      <div class="said">you said: "a bump to create a group" · repo: Treehouse, PD-002, unified roadmap G0–G6</div>
+      <p>An assisted, text-only community of 9–15 people (target 12). Members create or join, post and edit offline, converge after reconnecting, and manage roles and removals. The group survives loss of the relay (AF-1), the founder (AF-2) and a member's phone (AF-3).</p>
+      <ul>
+        <li><b>Built, Core tier:</b> Space/Thread/Invitation domain (R10), witnessed beacons for founder loss (R03 / plan 179), continued authority (R04), AF-3 re-admission semantics (R19b), AF-1 relay-reseed test, and member-continuity modules.</li>
+        <li><b>Built, Packaged tier:</b> an offline root-only preview app (R12, in progress). Two app instances invite, join, post and converge against a hand-configured fixture relay (R13-lite / plan 181). That build is a dev-trace test variant only, and the ordinary build has no enrollment panel.</li>
+        <li><b>In progress:</b> signed catalogs and route lifecycle (R11a, R11b). Ceremony tooling and bounded Space binding are merged (#147–#155).</li>
+        <li><b>Not built:</b> the in-person "bump" itself. QR camera onboarding and LAN discovery are parked, and Android camera/pairing scope is adopted (R01b) but unbuilt. Also unbuilt: real enrollment (R13), roles and renewal UI (R14), rollover (R15), the Android candidate (R22) and the 14-day pilot (R23).</li>
+      </ul>
+    </div>
+
+    <div class="rung">
+      <h3>Tool lending inside the group (Toolshed)</h3><span class="pill p-research">primitives only</span>
+      <div class="said">repo: Toolshed, PD-003, roadmap R24–R30</div>
+      <p>Neighbours lend tools. Custody is a per-field capability, handoffs are co-signed, and reputation is facts only, with no scores and no broadcast (D2). What exists is <code>lib/toolshed</code> custody v1 (3 files) and a demo script. Custody v2, QR co-signing and the household pilot are all planned work, gated after the Treehouse pilot.</p>
+    </div>
+
+    <div class="rung">
+      <h3>A town on the substrate (Township)</h3><span class="pill p-frozen">proved on Sim + carrier · frozen</span>
+      <div class="said">repo: Township, PD-001 milestone M5, workflows W0–W4</div>
+      <p>A civic instance for up to 10k participants, with durable deliberation, roles granted and revoked, and signed history held on members' devices; a relay can still read plaintext and withhold service. Workflows W0–W3 run on <code>Lattice.Sim</code> and over two real BEAM processes on the WebSocket carrier (G1 test). Packaged macOS CI gates cover pairing, relay, post handoff and push hints (plans 126–139). The LiveView instrument and audit bundle exist. Township has been frozen since Round 6, and its follow-on is R34, after the Treehouse pilot.</p>
+    </div>
+
+    <div class="rung">
+      <h3>Coercion-resistant voting</h3><span class="pill p-research">research foundation</span>
+      <div class="said">you said: "voting in Macy" · I read this as MACI. Correct me if you meant something else.</div>
+      <p>The original seam (<code>cast_vouch</code>, <code>tally</code>, <code>receipt_free?</code>) was retired by the M4 research verdict. <code>Lattice.Attestation.Stub</code> is frozen at <code>receipt_free? == false</code>. The replacement, <code>Township.Election</code>, is built as a research-safe foundation: board, projection, close evidence and offline replay. Every security claim in it is <code>:not_claimed</code>. The profile is pinned to the CHide threshold-trustee construction (<code>chide-es-r255-v1</code>). <strong>MACI was considered and rejected</strong>, because its coordinator holds the decryption key (<code>plans/zk-m4-election-path-findings.html</code>). Of the 13 M4 gates, 4 are closed decisions, G13 has a benchmark, 6 are open, and G12 needs an external reviewer.</p>
+    </div>
+
+    <div class="rung">
+      <h3>Federation across towns</h3><span class="pill p-none">deliberately not built</span>
+      <div class="said">repo: M6</div>
+      <p>Cross-town identity and a universal tally. This is intentionally last, and there is no sixth workflow. Cross-group reputation portability is parked behind it too.</p>
+    </div>
+
+    <div class="rung">
+      <h3>The substrate itself</h3><span class="pill p-done">done at Core tier</span>
+      <div class="said">repo: Lattice 2.0, M1 core + M2 carrier</div>
+      <p>Convergence, authority soundness, byte-identical replay and identical quarantine hold as properties. The real carrier, relay, push hints and pilot release exist. Out of scope by design: key rotation, recovery and E2EE (M3), and production compaction. Thread rollover (D3) is the pilot's stand-in for compaction.</p>
+    </div>
+  </div>
+</section>
+
+<section id="evidence">
+  <h2>Built vs. attempted, by evidence tier</h2>
+  <p>The repo has its own honesty scale (plan 182). <span class="tier t-core"></span> <b>Core</b> means the unit/property suite plus cross-runtime vectors. <span class="tier t-pack"></span> <b>Packaged</b> means a hosted CI job drives the real installed app. <span class="tier t-none"></span> <b>Physical</b> means an evidence record from a real device.</p>
+  <div class="callout key"><strong>No claim has Physical-tier evidence yet.</strong><p>Every proof so far is the Sim, the test suites, or a hosted CI job on macOS or an Android emulator. The inputs a physical claim needs (a second device, a release keystore, a host, code signing) waited 30–90 days without arriving. That gap is loop A8 below.</p></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Claim</th><th>Core</th><th>Packaged</th><th>Physical</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Peers converge; authority is sound; replay is byte-identical</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td><code>lattice2/</code>, packaged_macos job</td></tr>
+      <tr><td>Two Treehouse apps join, post, restart and converge</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R13-lite, dev-trace variant only</td></tr>
+      <tr><td>Treehouse offline preview survives restart</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R12, treehouse_packaged_macos</td></tr>
+      <tr><td>Group survives relay loss (AF-1)</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td><code>relay_reseed_test.exs</code></td></tr>
+      <tr><td>Group survives founder loss (AF-2)</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>plan 179; "survived" copy not allowed</td></tr>
+      <tr><td>Member re-admitted after phone loss (AF-3)</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R19b; R20 packaged is planned</td></tr>
+      <tr><td>Signed catalog routes a client can trust</td><td class="t"><span class="tier t-core" style="opacity:.5" role="img" aria-label="partial" title="partial"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>R11a/b in progress</td></tr>
+      <tr><td>Township W0–W3 over the real carrier</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>G1 test, packaged macOS gates</td></tr>
+      <tr><td>Keys held in the platform secure store</td><td class="t"><span class="tier t-core" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-pack" role="img" aria-label="yes" title="yes"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>Android emulator; iOS simulator (plan 077, 250)</td></tr>
+      <tr><td>Receipt-free voting</td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td class="t"><span class="tier t-none" role="img" aria-label="no" title="no"></span></td><td>not claimed by design</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="loops">
+  <h2>Why it feels stuck</h2>
+  <p>The Round 6 audit (2026-10-08) named the loops from the repo's own history. These are the patterns a focus session should avoid repeating.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Loop</th><th>What happened</th><th>Do instead</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">A1</td><td>Two runtimes judge the same semantics; six-plus parity plans fixed drift between them</td><td>Elixir judge stays canonical; no new TS judge arms (decided 2026-10-14)</td></tr>
+      <tr><td class="mono">A3</td><td>Hardest-later features built before the product loop: 2.3k-line catalog trust, 9k lines of witness validator with no device</td><td>Get the product loop working first, then harden it</td></tr>
+      <tr><td class="mono">A4</td><td>Evidence apparatus outweighs the product; PRs are mostly proof, not product</td><td>Evidence tier equals claim tier (policy rule 1)</td></tr>
+      <tr><td class="mono">A7</td><td>Ladders: 88 near-identical Tauri plans (033–120) written in three days</td><td>At most three plans of the same shape (rule 9)</td></tr>
+      <tr><td class="mono">A8</td><td>External inputs never arrived: Device B, keystore, host, codesigning</td><td>No plan whose exit needs an absent input (rule 8)</td></tr>
+      <tr><td class="mono">A9</td><td>Six roadmap layers stacked between July and September</td><td>One ledger: the unified roadmap (rule 12)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="session">
+  <h2>What a focus session looks like</h2>
+  <p>Pick the session type before you start. Most of what blocks progress now needs a decision session, not a build session.</p>
+  <div class="two">
+    <div class="callout wait"><strong>Decision session · 60–90 min, no code</strong><p>Read one plan section, decide its open OD/row questions, and write each answer as a one-line dated decision in the index or a decisions record. Claude drafts the options and a recommendation; you choose.</p></div>
+    <div class="callout key"><strong>Build session · one index row</strong><p>Take one row from RED test to merged PR. Claude implements and you review and steer. One row per session; anything else that comes up goes in its own row.</p></div>
+  </div>
+
+  <ol class="steps">
+    <li><h3>Orient (10 min)</h3>
+      <p>See what is in flight before touching anything. Other sessions may share this checkout.</p>
+<pre>git status --short --branch
+git worktree list
+gh pr list
+gh run list --branch main --event push --limit 1</pre>
+      <p class="muted">Then read the Working policy at the top of <code>plans/README.md</code> and the status cell of the row you plan to take.</p></li>
+    <li><h3>Prepare the toolchain (first session only)</h3>
+      <p>Use asdf's mix. The <code>mix</code> on <code>PATH</code> is a broken mise shim, and Homebrew Erlang leaks into child VMs.</p>
+<pre>export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"
+npm --prefix clients/lattice-client ci &amp;&amp; npm --prefix clients/lattice-client run build
+npm --prefix clients/treehouse-tauri-shell ci
+~/.asdf/shims/mix check</pre></li>
+    <li><h3>Touch the real thing (15 min)</h3>
+      <p>Run a narrated demo, so the session starts from behaviour rather than prose.</p>
+<pre>~/.asdf/shims/mix run scripts/treehouse_demo.exs
+~/.asdf/shims/mix run scripts/township_demo.exs</pre></li>
+    <li><h3>Pick exactly one row</h3>
+      <p>Read its plan file in full. Note its STOP conditions and the evidence tier it can claim. Tell Claude something like "focus session: row 248".</p></li>
+    <li><h3>Work loop</h3>
+      <ul>
+        <li>Write a failing test that shows the behaviour (RED), then implement until it passes (GREEN).</li>
+        <li>Run <code>~/.asdf/shims/mix check</code>, plus, if TS in <code>clients/lattice-client</code> changed, <code>npm --prefix clients/lattice-client run build</code>, <code>npm --prefix clients/lattice-client run typecheck</code> and the named gate scripts for the area you touched (for example <code>npm --prefix clients/lattice-client run conformance</code>, <code>… run canonical</code> or <code>… run treehouse</code>). That package has no aggregate <code>npm test</code>.</li>
+        <li>Get one adversarial review (Codex Sol 6.1 high). Add a second only for authority, canonical, carrier, custody or workflow diffs. If a third round finds the same class of issue, treat it as a design question for you.</li>
+        <li>Open the PR, claiming exactly one evidence tier. The exact-tip hosted run is the gate.</li>
+      </ul></li>
+    <li><h3>Close out (10 min)</h3>
+      <p>Update the row's status cell (one line, ≤200 characters). Evidence goes in the PR description, not the plan. File new findings as new rows; don't fix them in passing. Record a memory note for anything the next session must know.</p></li>
+  </ol>
+</section>
+
+<section id="todo">
+  <h2>Re-engagement list</h2>
+  <p class="progress" id="progress" aria-live="polite">0 of 0 done</p>
+  <p class="muted">Every item points at an existing row, plan or PR. Check marks are saved in this browser only.</p>
+  <p class="muted" id="save-warning" role="alert" hidden>This browser blocked saving, so check marks will be lost on reload.</p>
+  <div class="todo">
+
+    <div class="group">
+      <h3>Clear the desk <span class="eyebrow">one short session</span></h3>
+      <div class="item"><input type="checkbox" id="t1"><label for="t1"><b>Decide what happens to the uncommitted iOS key-probe work on main</b><span>3 modified files in <code>clients/township-tauri-shell/test</code>, 2 new probe files and untracked <code>plans/250</code>. Move them to a branch, or stash them.</span></label></div>
+      <div class="item"><input type="checkbox" id="t2"><label for="t2"><b>Prune finished worktrees</b><span>slices 16, 18, 19 and magical-bassi are merged (#151, #154, #155, #152); packaged-sqlite-busy-retry's PR #120 is closed; r11b-activation-crash-windows has no PR under that name, so check it first. Also check the stash on <code>claude/lucid-cerf-6af5a8</code>.</span></label></div>
+      <div class="item"><input type="checkbox" id="t3"><label for="t3"><b>Merge or close Dependabot PR #156</b><span>vite 8.2.2 → 8.3.5 in the Township shell.</span></label></div>
+    </div>
+
+    <div class="group wait">
+      <h3>Decisions only you can make <span class="eyebrow">the critical path</span></h3>
+      <div class="item"><input type="checkbox" id="t4"><label for="t4"><b>Run the catalog signer ceremony (row 224)</b><span>Runbook: <code>docs/treehouse_catalog_signer_custody.md</code>; tool: <code>mix treehouse.catalog_ceremony</code>. Its <code>verification-report.json</code> unblocks R11b. The app half was already rehearsed in CI (#152).</span></label></div>
+      <div class="item"><input type="checkbox" id="t5"><label for="t5"><b>Merge PR #157, which records OD-1 to OD-5 as decided (D-39)</b><span>You accepted all five recommendations on 2026-10-19. Before merging, note that its new index row 250 collides with the untracked <code>plans/250-ios-physical-device-and-convergence-gates.md</code>; renumber one of them.</span></label></div>
+      <div class="item"><input type="checkbox" id="t6"><label for="t6"><b>Settle the open design questions</b><span>rows 208 (one legacy op stalls pulls), 212 and 214 (BEAM/TS integer and delegation limits), 244 (superseding a lapsed reference) and 249 (ceremony FIFO race).</span></label></div>
+      <div class="item"><input type="checkbox" id="t7"><label for="t7"><b>Confirm plan 180's D4–D7</b><span>founder-grant leases, Toolshed countersign, AF-3 vouch shape, and the unleased hostile-member gap. No resolution record was found; they may be settled inside the roadmap's R-rows (R02, R01c, R19a). This "D4" is not the 2026-10-14 judge decision with the same label.</span></label></div>
+      <div class="item"><input type="checkbox" id="t8"><label for="t8"><b>Check branch protection on main</b><span>The Round 6 notes left this to you after PR #107. Current state not verified.</span></label></div>
+    </div>
+
+    <div class="group">
+      <h3>Re-learn the system <span class="eyebrow">reading, 2–3 hours</span></h3>
+      <div class="item"><input type="checkbox" id="t9"><label for="t9"><b>Read the design and the re-aim</b><span><code>docs/lattice2_design.md</code>, then <code>plans/177-group-first-antifragile-reaim.md</code>, then §1–3 of <code>plans/roadmaps/treehouse-unified-2026-09-06.md</code>.</span></label></div>
+      <div class="item"><input type="checkbox" id="t10"><label for="t10"><b>Run both narrated demos and the full check</b><span>See focus-session steps 2 and 3.</span></label></div>
+      <div class="item"><input type="checkbox" id="t11"><label for="t11"><b>Re-read the copy rules</b><span>D1 (say who can read and who can withhold), D2 (facts, not scores), and plan 178's frozen Treehouse contract. Anything you say publicly has to match these.</span></label></div>
+    </div>
+
+    <div class="group">
+      <h3>Build, once the decisions land <span class="eyebrow">in order</span></h3>
+      <div class="item"><input type="checkbox" id="t12"><label for="t12"><b>Plan 224 PR 2: realm, routes and relay (row 248)</b><span>unblocked now; PR 3 (journal and store) is already running as slice 20.</span></label></div>
+      <div class="item"><input type="checkbox" id="t13"><label for="t13"><b>Plan 224 PR 4 <code>catalogued</code> (row 246), then PR 5 <code>listed</code> (row 247)</b></label></div>
+      <div class="item"><input type="checkbox" id="t14"><label for="t14"><b>Write and build plan 224 PR 6: client acceptance of a listed route (row 245)</b><span>needs OD-4.</span></label></div>
+      <div class="item"><input type="checkbox" id="t15"><label for="t15"><b>R11c replacement trust, then R13 real enrollment</b></label></div>
+      <div class="item"><input type="checkbox" id="t16"><label for="t16"><b>Small rows you can take any time</b><span>211 (canonical decimal on BEAM), 215 (depth cap), 225 (journal rotation), 226 (probe session timeout), 229–231 (CI flakes and a LiveOps crash), 238 (quoted YAML keys).</span></label></div>
+    </div>
+
+    <div class="group">
+      <h3>Step back <span class="eyebrow">one decision session</span></h3>
+      <div class="item"><input type="checkbox" id="t17"><label for="t17"><b>Ask whether the pilot needs the whole catalog chain first</b><span>The road to 12 people on phones runs R11b → R11c → R13 → R14 → R15 → R22 → R23. R13-lite already shows two apps converging over a hand-configured route. The question is whether a small internal Android trial on that basis could come earlier, with the same honest claims, as loop A3 suggests. Answering it changes the ledger, so it is your call, not a build task.</span></label></div>
+      <div class="item"><input type="checkbox" id="t18"><label for="t18"><b>Decide what to do about physical evidence</b><span>Get a second Android device and a release keystore (unblocks R17c and R22), or accept that the next quarter stays at Packaged tier.</span></label></div>
+    </div>
+  </div>
+</section>
+
+<footer>Compiled 2026-10-23 from <code>plans/README.md</code>, the unified roadmap, plans 177–183 and 224, <code>TOWNSHIP_BUILD_MAP.md</code>, the M4 research notes, a source/test count, and GitHub PR and CI state. Not verified: D4–D7 resolution, branch protection, and why <code>lattice_web_socket</code> changed on 10-18.</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  var boxes=[].slice.call(document.querySelectorAll('.todo input[type=checkbox]'));
+  var key='lattice-reorient-todo';
+  var saved={};
+  try{saved=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){saved={}}
+  function update(){
+    var n=boxes.filter(function(b){return b.checked}).length;
+    document.getElementById('progress').textContent=n+' of '+boxes.length+' done';
+  }
+  boxes.forEach(function(b){
+    if(saved[b.id])b.checked=true;
+    b.addEventListener('change',function(){
+      saved[b.id]=b.checked;
+      try{localStorage.setItem(key,JSON.stringify(saved))}catch(e){document.getElementById('save-warning').hidden=false}
+      update();
+    });
+  });
+  update();
+})();
+</script>
