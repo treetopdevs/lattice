@@ -895,15 +895,18 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   await until(() => live(h, f.space), "the Space route stays live");
   const paused = h.routeState(f.thread);
   assert.match(paused.message, /local storage is full \(preview_storage_limit\)/);
+  assert.match(paused.message, /refused merge writes nothing/);
+  assert.match(paused.message, /earlier committed progress survives/);
   const thread = parseState(f.native.record).profiles.find((p) => p.replica === f.thread)!;
-  assert(thread.outbox.includes(mine) && !thread.acked.includes(mine), "the local post's relay ack was not saved either");
+  assert(thread.outbox.includes(mine) && !thread.acked.includes(mine), "the refused merge did not save that round's ack");
   assert.equal(paused.pending, thread.outbox.length - thread.acked.length);
   const savedThread = parseState(saved).profiles.find((p) => p.replica === f.thread)!;
-  assert.deepEqual(thread, savedThread, "nothing of the pull was written to the Thread");
-  assert.equal(f.app.views.get(f.thread)!.posts.at(-1)!.id, mine, "saved history stays readable");
+  assert.deepEqual(thread, savedThread, "the refused merge writes nothing of the pull");
+  assert.equal(f.app.views.get(f.thread)!.posts.at(-1)!.id, mine, "history remains readable");
   const status = describeSyncStatus(h.last());
   assert.match(status.routes.find((r) => r.replica === f.thread)!.connectionLabel, /^Paused/);
-  assert.match(status.summary, /Local storage could not hold/);
+  assert.match(status.summary, /refused merge writes nothing/);
+  assert.match(status.summary, /earlier committed progress survives/);
 
   // Paused means no redial, no hint sync and no poll sync of that route.
   const opened = h.sessionsOf(f.thread).length;
@@ -942,6 +945,7 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   await feed.start();
   await until(() => live(h, f.thread) && live(h, f.space) && h.syncs.length === 2, "settled");
   await until(() => h.routeState(f.thread).pending === 0, "baseline drained");
+  const committed = f.native.record;
   const route = twin.state.relay!.routes.find((r) => r.replica === f.thread)!;
   await twin.command(f.thread, { command: "post", text: "pulled later" });
   await syncTreehouseRoute(twin, route, h.syncOptions());
@@ -960,6 +964,7 @@ console.log("PASS nonce and protocol-version failures settle in refused instead 
   await until(() => h.routeState(f.thread).connection === "full", "the in-flight sync pauses the route");
   await quiet(60);
   assert.equal(threadSyncs(), before + 1, "the poll's queued Thread sync never dials");
+  assert.equal(f.native.record, committed, "earlier committed progress survives the refused merge");
 
   f.native.commitError = null;
   await feed.reconfigure();

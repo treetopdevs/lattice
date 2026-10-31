@@ -56,8 +56,9 @@ be its own plan.
    reach. The byte-exact edge is covered by item 1.
 3. **A full store pauses the route.** The kit's `SyncHost` gains an optional
    `capacityReason` (Treehouse: `preview_storage_limit`). When a sync of a route
-   fails with it, the feed marks the route `full`, cancels its worker and keeps its
-   saved history unchanged. A paused route gets no reconnect, no hint sync, no poll
+   fails with it, the feed marks the route `full` and cancels its worker. The refused
+   merge writes nothing; earlier committed progress survives and history remains
+   readable. A paused route gets no reconnect, no hint sync, no poll
    sync and no Space-triggered Thread sync, and a sync queued before the pause never
    runs. A Thread that must sync its Space first (no Space held yet) never retries a
    paused Space: it pauses as dependent, with a message naming the anchor, and never
@@ -66,7 +67,8 @@ be its own plan.
    reconfigure clears the pause with the rest of the route state.
 4. **Visible explanation.** The route label reads "Paused: this device's local
    storage is full", the route message names the reason, and the panel summary says
-   that a paused route keeps nothing new and saved history stays readable. The
+   that the refused merge writes nothing, earlier committed progress survives, and
+   history remains readable. The
    existing `preview_storage_limit` message in `App.vue` still covers posting.
 5. **Plan 245 amendment (rule 7).** PR 5's native owner computes the serialized
    post-import record (profiles with metadata, outbox and acknowledgements) and
@@ -104,6 +106,7 @@ Evidence tier: unit and contract (rule 1). No packaged, device or relay field cl
   halves, and row 300 the exporter half (plan 261 D5 names both).
 - The `thread_storage_limit` check in `TreehouseWorkflow.command` (4,000 frames or
   8 MiB of one Thread) is unreachable under the 1 MiB record and is left as is.
-- A paused route's relay acknowledgements are not saved either, so its local posts
-  stay pending while the store is full even when the relay holds them.
+- The refused merge does not save that round's acknowledgements, so a local post
+  whose ack was in the refused merge stays pending even when the relay holds it.
+  Acknowledgements committed in earlier rounds survive.
 - No eviction, compaction or archive: R14 lifecycle work, not this plan.

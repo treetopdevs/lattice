@@ -193,7 +193,8 @@ export function createFeedController(
   const routes = (): CarrierRoute[] => host.relay()?.routes ?? [];
 
   // A full local store only grows by an explicit user action elsewhere, never by retrying, so a capacity
-  // failure pauses the route: no redial, no hint or poll sync, the saved history stays as it was.
+  // failure pauses the route: no redial, no hint or poll sync. The refused merge writes nothing; earlier
+  // committed progress survives and history remains readable.
   const capacity = (error: unknown): boolean =>
     host.capacityReason !== undefined && errorMessage(error) === host.capacityReason;
   const isFull = (replica: string): boolean => link.get(replica)?.connection === "full";
@@ -202,7 +203,7 @@ export function createFeedController(
       connection: "full",
       message: dependent
         ? "Paused: this route syncs after its anchor route, which is paused because local storage is full. Sync now tries again."
-        : `Paused: local storage is full (${host.capacityReason}). Saved history is unchanged; Sync now tries again.`,
+        : `Paused: local storage is full (${host.capacityReason}). The refused merge writes nothing; earlier committed progress survives and history remains readable. Sync now tries again.`,
     });
     // The route's feed worker ends now, so no hint, reconnect or baseline sync pulls into the full store.
     const worker = workers.get(replica);
