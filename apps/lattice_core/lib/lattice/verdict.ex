@@ -12,9 +12,10 @@ defmodule Lattice.Verdict do
   * The verdict and `reason` come only from `Lattice.Authority.analyze/2`. This module
     never judges an op itself, so it cannot disagree with the judge.
   * Evidence is tied to the reason. `revoked_by` is set only when the reason is
-    `:revoked_capability`: the first honored `{:revoke, id}` authority op, in
-    topological order, whose `id` is a link of the cited delegation's chain and which
-    the op is not causally before. `lapsed_by_beacon` is set only when the reason is
+    `:revoked_capability`: the first effective `{:revoke, id}` authority op (authored
+    by that link's issuer or the replica root, the judge's predicate), in topological
+    order, whose `id` is a link of the cited delegation's chain and which the op is not
+    causally before. `lapsed_by_beacon` is set only when the reason is
     `:lease_expired`: the smallest epoch among the beacons the judge accepted
     (`Authority.analyze_with_beacon_evidence/2`) that is greater than the chain's
     tightest `expires_epoch` and that the op is not causally before. Both are `nil` on
@@ -98,7 +99,7 @@ defmodule Lattice.Verdict do
     evidence = %{
       revoked_by:
         if(reason == :revoked_capability,
-          do: first_revoke(ordered, chain, analysis, after_op?)
+          do: first_revoke(ordered, chain, Authority.root(log), after_op?)
         ),
       lapsed_by_beacon:
         if(reason == :lease_expired, do: lapsing_epoch(beacons, expires, after_op?))
@@ -126,17 +127,17 @@ defmodule Lattice.Verdict do
   @doc """
   The status of `delegation_id` as of the whole of `log`, interpreted by `module`.
 
-  `module` is needed because "honored revoke" and "accepted beacon" are facts of
-  `Authority.analyze/2`.
+  `module` is needed because the accepted beacons come from the judge's own pass
+  (`Authority.analyze_with_beacon_evidence/2`).
   """
   @spec delegation_status(module(), Log.t(), String.t()) :: status()
   def delegation_status(module, %Log{} = log, delegation_id) when is_binary(delegation_id) do
-    {analysis, beacons} = Authority.analyze_with_beacon_evidence(module, log)
+    {_analysis, beacons} = Authority.analyze_with_beacon_evidence(module, log)
     ordered = Log.topo_ops(log)
     delegations = delegations(ordered)
     chain = chain(delegation_id, delegations)
     expires = tightest_lease(chain)
-    revoked_by = first_revoke(ordered, chain, analysis, fn _revoke -> true end)
+    revoked_by = first_revoke(ordered, chain, Authority.root(log), fn _revoke -> true end)
     latest = beacons |> Enum.map(& &1.epoch) |> Enum.max(fn -> nil end)
 
     status =
@@ -232,7 +233,10 @@ defmodule Lattice.Verdict do
   # The delegation shapes the judge introduces from authority bodies.
   defp carried_delegation({:genesis, %Delegation{} = d, _policies}), do: d
   defp carried_delegation({:grant, %Delegation{} = d}), do: d
-  defp carried_delegation({:transfer, _role, %Delegation{} = d, _tick}), do: d
+
+  defp carried_delegation({:transfer, _role, %Delegation{} = d, tick}),
+    do: if(Authority.valid_tick?(tick), do: d)
+
   defp carried_delegation({:succeed, _role, %Delegation{} = d, _tick}), do: d
   defp carried_delegation(_body), do: nil
 
@@ -272,14 +276,20 @@ defmodule Lattice.Verdict do
 
   # --- Evidence --------------------------------------------------------------
 
-  defp first_revoke(ordered, chain, analysis, eligible?) do
-    ids = MapSet.new(chain, & &1.id)
+  # A revoke takes effect when its author is the revoked link's issuer or the replica
+  # root: the judge's own predicate, whatever reason the revoke op itself carries.
+  defp first_revoke(ordered, chain, root, eligible?) do
+    links = Map.new(chain, &{&1.id, &1})
 
     Enum.find_value(ordered, fn
       %Op{kind: :authority, body: {:revoke, target}} = op ->
-        if MapSet.member?(ids, target) and not MapSet.member?(analysis.quarantine, op.id) and
-             eligible?.(op.id),
-           do: op.id
+        case Map.fetch(links, target) do
+          {:ok, %Delegation{issuer: issuer}} ->
+            if (op.author == issuer or op.author == root) and eligible?.(op.id), do: op.id
+
+          :error ->
+            nil
+        end
 
       _op ->
         nil
