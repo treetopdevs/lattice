@@ -760,13 +760,13 @@ const harnessSource = readFileSync(resolve(shellRoot, "test/packaged_enrollment.
 
 function mutate(source, from, to) {
   assert.ok(source.includes(from), `mutation anchor not found: ${JSON.stringify(from)}`);
-  return source.replace(from, to);
+  return source.replace(from, () => to);
 }
 
 function mutateJob(text, fn) {
   const job = findJob(text, JOB);
   assert.ok(job, "the job must exist to mutate it");
-  return text.replace(job, fn(job));
+  return text.replace(job, () => fn(job));
 }
 
 test("the committed workflow satisfies the enrollment job contract", () => {
@@ -1544,8 +1544,30 @@ test("countYamlKey reads bare-tag, dotted-anchor, and alias if keys", () => {
 });
 
 test("shell-escaped GITHUB_ENV variant flag is refused by the hex-escape scan", () => {
-  const problems = check(mutations["shell-escaped variant flag written to GITHUB_ENV"](workflow), pkg, harnessSource);
+  const mutated = mutations["shell-escaped variant flag written to GITHUB_ENV"](workflow);
+  const doc = loadYamlDocument(mutated);
+  assert.equal(doc.errors.length, 0);
+  assert.match(mutated, /npm run packaged:enrollment/u);
+  const problems = check(mutated, pkg, harnessSource);
   assert.ok(problems.some((problem) => /VITE_TREEHOUSE_/u.test(problem)));
+});
+
+test("yamlSteps resolves an aliased preview conditional before the enrollment upload", () => {
+  const mutated = mutations["enrollment step aliased from a preview conditional"](workflow);
+  const doc = loadYamlDocument(mutated);
+  const ifSteps = yamlSteps(yamlJob(doc, JOB), doc).filter((step) => ownKeysFromMap(step, doc).includes("if"));
+  assert.ok(ifSteps.length > 1);
+  const problems = check(mutated, pkg, harnessSource);
+  assert.ok(problems.some((problem) => /exactly one step \(the evidence upload\) may carry an if/u.test(problem)));
+});
+
+test("yamlSteps resolves an aliased continue-on-error mapping", () => {
+  const mutated = mutations["enrollment step aliased from a continue-on-error mapping"](workflow);
+  const doc = loadYamlDocument(mutated);
+  const steps = yamlSteps(yamlJob(doc, JOB), doc);
+  assert.ok(steps.some((step) => ownKeysFromMap(step, doc).includes("continue-on-error")));
+  const problems = check(mutated, pkg, harnessSource);
+  assert.ok(problems.some((problem) => /continue-on-error/u.test(problem)));
 });
 
 test("full-document own keys see a shell alias defined outside the classification step", () => {

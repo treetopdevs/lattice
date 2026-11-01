@@ -1165,6 +1165,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>P2. <code>yamlSteps</code> dropped sequence items that were Alias nodes, so <code>- *conditional_step</code> before the enrollment upload never entered the decoded <code>if</code> / <code>continue-on-error</code> scan.</dd>
 <dt>Decision</dt><dd>Fixed. Resolve aliases on jobs, steps, skip-key counts, and variant-flag visits before judging decoded keys. Mutations added. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
+<section id="d175"><h2><span>D-175</span> PR #204 confirm-7 P3s: fixtures must pin the decoded guards</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>c9993df43</code></dd>
+<dt>Finding</dt><dd>P3. Confirm 7 reported no P1/P2. D-172's outer <code>mutateJob</code> still expanded <code>$'</code>, and D-174's mutations were rejected by digest/order checks even if <code>yamlSteps</code> dropped Alias items.</dd>
+<dt>Decision</dt><dd>Fixed. <code>mutate</code>/<code>mutateJob</code> use replacement callbacks. D-172 asserts valid YAML plus the retained harness. D-174 asserts resolved step membership and the specific skip-key violation. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
