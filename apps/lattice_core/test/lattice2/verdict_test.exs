@@ -426,6 +426,14 @@ defmodule Lattice2.VerdictTest do
       assert rec.cited_delegation_id == nil
       assert %{"cited_delegation_id" => nil} = Jason.decode!(Verdict.to_json(rec))
 
+      tagged = %{rec | replica: <<255, 1>>, frontier: [<<255, 0>>, :not_a_binary, "ok"]}
+      json = Jason.decode!(Verdict.to_json(tagged))
+
+      assert %{"non_utf8_hex" => "ff01"} = json["replica"]
+
+      assert [%{"non_utf8_hex" => "ff00"}, %{"non_binary" => ":not_a_binary"}, "ok"] =
+               json["frontier"]
+
       status = Verdict.delegation_status(Lattice.Demo.Thread, log, <<255, 0>>)
 
       assert %{"delegation_id" => %{"non_utf8_hex" => "ff00"}, "status" => "unknown"} =
