@@ -1075,6 +1075,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>No P1. One P2: the adjacent evaluator-valid fixtures serialized to 1,048,575 and 1,048,579 bytes, so changing <code>&lt;=</code> to <code>&lt;</code> still passed. Post bodies ride the wire as base64, which moves compact JSON in 4-byte steps.</dd>
 <dt>Decision</dt><dd>Fixed. The overflow test now requires a first-install record of exactly 1,048,576 bytes to be accepted and one more post-body byte to be refused. Three empty-dep prefix posts drop 45 JSON bytes each and shift the residue so a last-post body can land on the inclusive cap. <code>Packet.encode/4</code> still succeeds on both logs. Native owner capacity remains plan 245 PR 5. No new plan-index row.</dd>
 </dl></section>
+<section id="d158"><h2><span>D-158</span> Row 300 Codex confirm: no P1/P2; not a rule-3 path</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>8c3a745de</code></dd>
+<dt>Finding</dt><dd>No P1/P2. An in-memory <code>&lt;=</code> to <code>&lt;</code> mutation fails at the exact-size fixture. Fitting is 1,048,576 bytes; one more post-body byte is 1,048,580 and is refused. The three empty-dep prefix posts are authentic but quarantined <code>:capability_not_visible</code>; they still occupy the first-install record. The listed-export test covers ordinary frontier-dependent posts. This exporter/Elixir diff is not a working-policy rule-3 second-review path.</dd>
+<dt>Decision</dt><dd>Open the PR against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). If Flagship fails the township witness-ceremony timeout, file a new flake row instead of stretching row 228. If Android compile fails Maven 429, cite row 301 and do not silently rerun. If treehouse_native hangs in apt-verify, cite row 302 and do not rerun unless it happens again.</dd>
+</dl></section>
 </main>
 </body>
 </html>
