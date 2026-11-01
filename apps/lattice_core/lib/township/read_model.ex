@@ -8,6 +8,7 @@ defmodule Township.ReadModel do
   """
 
   alias Lattice.{Attestation, Authority, Identity, Log, Op}
+  alias Lattice.Authority.Delegation
   alias Lattice.Graph.ReplicaSnapshot
   alias Township.Matter
 
@@ -243,12 +244,34 @@ defmodule Township.ReadModel do
       case op.body do
         {:genesis, delegation, _policies} -> [{"genesis", delegation}]
         {:grant, delegation} -> [{"grant", delegation}]
-        {:transfer, role, delegation, _tick} -> [{"transfer:#{role}", delegation}]
-        {:succeed, role, delegation, _tick} -> [{"succeed:#{role}", delegation}]
+        {:transfer, role, delegation, _tick} -> role_event("transfer", role, delegation)
+        {:succeed, role, delegation, _tick} -> role_event("succeed", role, delegation)
         _other -> []
       end
     end)
+    # Row 305: an admitted but ill-formed body (list-form roles/ops, non-binary
+    # keys) contributes no node or edge rather than crashing the reader.
+    |> Enum.filter(fn {_kind, delegation} ->
+      Delegation.well_formed?(delegation) and pub_key?(delegation.issuer) and
+        pub_key?(delegation.audience)
+    end)
   end
+
+  # Ed25519 public keys are 32 bytes; a shorter binary would crash the fingerprint.
+  defp pub_key?(key), do: is_binary(key) and byte_size(key) == 32
+
+  # The role is attacker-shaped until proven a scalar: interpolate it only for a
+  # binary or atom role, or a legacy Lattice.Canonical.Atom wrapper persisted under
+  # PR #114 (same rule as SuccessionCertificate); drop any other shape before
+  # String.Chars can raise.
+  defp role_event(prefix, role, delegation) when is_binary(role) or is_atom(role),
+    do: [{"#{prefix}:#{role}", delegation}]
+
+  defp role_event(prefix, %Lattice.Canonical.Atom{name: name}, delegation)
+       when is_binary(name),
+       do: [{"#{prefix}:#{name}", delegation}]
+
+  defp role_event(_prefix, _role, _delegation), do: []
 
   defp delegation_edge_kind(kind, delegation) do
     roles =
