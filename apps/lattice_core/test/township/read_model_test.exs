@@ -130,6 +130,30 @@ defmodule Township.ReadModelTest do
     end
   end
 
+  test "observe survives a malformed role or non-binary audience in transfer/succeed/grant bodies" do
+    {baseline, _} = listform_log(nil)
+    base = ReadModel.observe(baseline, labels: %{}, vouches: [])
+
+    bodies = [
+      fn good -> {:transfer, %{}, %{good | roles: [:clerk]}, 0} end,
+      fn good -> {:succeed, %{}, %{good | roles: [:clerk]}, 0} end,
+      fn good -> {:grant, %{good | roles: [:clerk], audience: 7}} end,
+      fn good -> {:transfer, :clerk, %{good | audience: 7}, 0} end
+    ]
+
+    for build <- bodies do
+      sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+      {sim, _genesis} = Sim.create_replica(sim, "clerk")
+      {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+      {sim, _} = Sim.append(sim, "clerk", :authority, build.(good))
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      assert model.trust_graph.edges == base.trust_graph.edges
+      assert is_list(model.op_dag.nodes)
+    end
+  end
+
   defp listform_log(field) do
     sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
     {sim, _genesis} = Sim.create_replica(sim, "clerk")

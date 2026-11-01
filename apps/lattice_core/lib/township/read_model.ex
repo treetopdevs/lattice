@@ -244,8 +244,8 @@ defmodule Township.ReadModel do
       case op.body do
         {:genesis, delegation, _policies} -> [{"genesis", delegation}]
         {:grant, delegation} -> [{"grant", delegation}]
-        {:transfer, role, delegation, _tick} -> [{"transfer:#{role}", delegation}]
-        {:succeed, role, delegation, _tick} -> [{"succeed:#{role}", delegation}]
+        {:transfer, role, delegation, _tick} -> role_event("transfer", role, delegation)
+        {:succeed, role, delegation, _tick} -> role_event("succeed", role, delegation)
         _other -> []
       end
     end)
@@ -253,6 +253,13 @@ defmodule Township.ReadModel do
     # keys) contributes no node or edge rather than crashing the reader.
     |> Enum.filter(fn {_kind, delegation} -> Delegation.well_formed?(delegation) end)
   end
+
+  # The role is attacker-shaped until proven a scalar: interpolate it only for a
+  # binary or atom role, otherwise drop the event before String.Chars can raise.
+  defp role_event(prefix, role, delegation) when is_binary(role) or is_atom(role),
+    do: [{"#{prefix}:#{role}", delegation}]
+
+  defp role_event(_prefix, _role, _delegation), do: []
 
   defp delegation_edge_kind(kind, delegation) do
     roles =
