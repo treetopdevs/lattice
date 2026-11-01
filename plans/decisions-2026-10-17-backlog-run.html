@@ -1145,6 +1145,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>P2. YAML-only inspection accepted <code>echo $'VITE\x5fTREEHOUSE_ENROLLMENT=1' &gt;&gt; "$GITHUB_ENV"</code>. origin/main rejected it because its global hex-escape decode still saw <code>VITE_TREEHOUSE_</code> in the raw line.</dd>
 <dt>Decision</dt><dd>Fixed. Restore that text scan beside the decoded-YAML visit, so a shell ANSI-C escape cannot hide a variant flag. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
+<section id="d171"><h2><span>D-171</span> Row 238 opens as PR #204</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/204">#204</a></dd>
+<dt>Context</dt><dd>Row 300 is marked DONE on this branch (PR #203, merge <code>2ee21f740</code>). Codex: six read-only passes; remaining P1s fixed; last P2 (D-170) restored the origin/main hex-escape scan and was not re-reviewed. Contract/docs only, not a working-policy rule-3 second-review path.</dd>
+<dt>Decision</dt><dd>Open #204 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). Leave row 238 IN PROGRESS on the exact tip so the tip stays green; the next slice marks it DONE with the merge SHA.</dd>
+</dl></section>
 </main>
 </body>
 </html>
