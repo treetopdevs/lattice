@@ -1096,6 +1096,20 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>Minor: required evidence item 4 still said the 32 MiB retained-snapshot fixture must export/import, which now conflicts with <code>CatalogEvidence.export/4</code> refusing <code>preview_storage_limit</code>.</dd>
 <dt>Decision</dt><dd>Fixed. Item 4 keeps the fixture as an evaluator / <code>Packet.encode/4</code> proof under the 64 MiB transport cap. <code>CatalogEvidence.export/4</code> of that page is <code>preview_storage_limit</code>. No new plan-index row; evaluator caps unchanged.</dd>
 </dl></section>
+<section id="d162"><h2><span>D-162</span> Slice choice: row 238, quoted YAML skip keys in the enrollment CI contract</h2><dl>
+<dt>When</dt><dd>2026-10-31, from main <code>2ee21f740</code></dd>
+<dt>Context</dt><dd>Already merged: #195–#203. This slice’s first plan-index edit marks row 300 DONE (PR #203, merge <code>2ee21f740</code>, exact tip <code>d90c1e2cc</code>, Flagship <code>41265390624</code> green) without reopening the exporter. Excluded: Township and Toolshed under rule 10; rule 8 parked items (rows 077/285 device, 146 codesigning, 261/262 two Macs, 224/245 ceremony); row 256, an operator decision; plans 267–279, the native evaluator track already in flight; rows 301 and 302, first-occurrence flakes; row 303 until row 255 / plan 245 PR 5; do not reopen 288, 295, 289, 257, 300. No higher unblocked P1 that fits one PR is free of those parks: 255/259 wait on plan 245 PR 6; 154 is Township; 150 is L and owned by R31; 229 waits on the next enrollment-hint failure.</dd>
+<dt>Options</dt><dd>(a) Row 238 (P3 S, recommended: pin the ordinary classification and enrollment classification step bodies as exact text, and close quoted <code>if</code> / <code>continue-on-error</code> holes in the enrollment job scans); (b) a parked P1; (c) row 301 or 302 on first occurrence.</dd>
+<dt>Decision</dt><dd>(a).</dd>
+<dt>Reason</dt><dd>Row 238 is the recommended next slice: unblocked, S, and the residual of the row 236 quoted-YAML finding. This is not a rule-3 path (contract test only; no <code>.github/workflows</code>, custody, codec, or carrier edit).</dd>
+</dl></section>
+<section id="d163"><h2><span>D-163</span> Row 238: exact-text pins plus a quoted YAML key scan</h2><dl>
+<dt>When</dt><dd>2026-10-31</dd>
+<dt>Context</dt><dd>The ordinary classification line check and the enrollment job’s <code>if:</code> / <code>if: false</code> scans missed quoted keys such as <code>'if': false</code>. Row 236 closed that class on the export step by pinning the whole body as exact text. <code>continue-on-error</code> was already forbidden as a substring in the enrollment job.</dd>
+<dt>Options</dt><dd>(a) Digest-pin every enrollment step body; (b) pin the ordinary and dev-trace classification steps as exact text (row 236 form) and read quoted / escaped / explicit <code>? if</code> YAML keys in the enrollment job’s <code>if</code> scan; (c) only widen the regex.</dd>
+<dt>Decision</dt><dd>(b). Classification own keys stay exactly <code>name</code>, <code>working-directory</code>, <code>run</code>. The export step gets the same quoted-key skip scan so updating the pin and the workflow together cannot smuggle a skip key. No workflow step body changed; both packaged digests are unchanged. Do not weaken any existing pin. Not a W4, Phase G, or packaged-runtime claim.</dd>
+<dt>Reason</dt><dd>(a) would freeze Hex/Rebar retry and cache keys that the enrollment job still pins structurally. (c) alone would leave the classification step, which is excluded from <code>TREEHOUSE_PREVIEW_DIGEST</code>, without an exact body pin.</dd>
+</dl></section>
 </main>
 </body>
 </html>
