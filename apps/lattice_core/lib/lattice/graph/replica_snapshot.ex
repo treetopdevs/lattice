@@ -164,16 +164,18 @@ defmodule Lattice.Graph.ReplicaSnapshot do
     do: "#{short(op.id)} #{op.kind} #{summary(op.body)}"
 
   defp summary({:genesis, _deleg, _policies}), do: "genesis"
-  defp summary({:grant, deleg}), do: "grant -> #{Identity.fingerprint(deleg.audience)}"
+  defp summary({:grant, deleg}), do: "grant -> #{audience_fp(deleg)}"
 
   defp summary({:transfer, role, deleg, tick}),
-    do: "transfer #{inspect(role)} -> #{Identity.fingerprint(deleg.audience)} @t#{tick}"
+    do: "transfer #{inspect(role)} -> #{audience_fp(deleg)} @t#{tick_text(tick)}"
 
   defp summary({:succeed, role, _deleg, {:witnessed, _certificate}}),
     do: "succeed #{inspect(role)} via witnessed recovery"
 
-  defp summary({:succeed, role, _deleg, tick}), do: "succeed #{inspect(role)} @t#{tick}"
-  defp summary({:heartbeat, role, tick}), do: "heartbeat #{inspect(role)} @t#{tick}"
+  defp summary({:succeed, role, _deleg, tick}),
+    do: "succeed #{inspect(role)} @t#{tick_text(tick)}"
+
+  defp summary({:heartbeat, role, tick}), do: "heartbeat #{inspect(role)} @t#{tick_text(tick)}"
   defp summary({:revoke, deleg_id}), do: "revoke #{short(deleg_id)}"
   defp summary({:request, ref, _payload}), do: "request #{inspect(ref)}"
 
@@ -181,6 +183,17 @@ defmodule Lattice.Graph.ReplicaSnapshot do
     do: "#{inspect(cmd)} #{truncate(inspect(args))}"
 
   defp summary(body), do: truncate(inspect(body))
+
+  # Row 305: an admitted body can carry a non-binary audience; render a marker
+  # instead of raising in the fingerprint.
+  defp audience_fp(%{audience: pub}) when is_binary(pub) and byte_size(pub) == 32,
+    do: Identity.fingerprint(pub)
+
+  defp audience_fp(_malformed), do: "(malformed)"
+
+  # Row 305: an admitted tick can be any term; only integers interpolate.
+  defp tick_text(tick) when is_integer(tick), do: Integer.to_string(tick)
+  defp tick_text(tick), do: truncate(inspect(tick))
 
   defp truncate(text) do
     if String.length(text) > @label_summary_width,

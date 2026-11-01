@@ -116,6 +116,126 @@ defmodule Township.ReadModelTest do
              "| 122 | Township instrument read model | P1 | M | 121 | DONE |"
   end
 
+  test "observe tolerates ill-formed delegation fields and omits their trust-graph edge" do
+    {baseline, _} = listform_log(nil)
+    base_edges = ReadModel.observe(baseline, labels: %{}, vouches: []).trust_graph.edges
+
+    for field <- [:roles, :ops] do
+      {log, _} = listform_log(field)
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      graph = model.trust_graph
+
+      assert length(graph.edges) == length(base_edges), "field #{field}"
+      assert graph.edges == base_edges
+    end
+  end
+
+  test "observe survives a malformed role or non-binary audience in transfer/succeed/grant bodies" do
+    {baseline, _} = listform_log(nil)
+    base = ReadModel.observe(baseline, labels: %{}, vouches: [])
+
+    bodies = [
+      fn good -> {:transfer, %{}, %{good | roles: [:clerk]}, 0} end,
+      fn good -> {:succeed, %{}, %{good | roles: [:clerk]}, 0} end,
+      fn good -> {:grant, %{good | roles: [:clerk], audience: 7}} end,
+      fn good -> {:transfer, :clerk, %{good | audience: 7}, 0} end
+    ]
+
+    for build <- bodies do
+      sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+      {sim, _genesis} = Sim.create_replica(sim, "clerk")
+      {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+      {sim, _} = Sim.append(sim, "clerk", :authority, build.(good))
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      assert model.trust_graph.edges == base.trust_graph.edges
+      assert is_list(model.op_dag.nodes)
+    end
+  end
+
+  test "observe keeps the trust-graph edge for a legacy Canonical.Atom transfer/succeed role" do
+    for kind <- [:transfer, :succeed] do
+      edges =
+        for role <- [:clerk, %Lattice.Canonical.Atom{name: "clerk"}] do
+          sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+          {sim, _genesis} = Sim.create_replica(sim, "clerk")
+          {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+          {sim, _} = Sim.append(sim, "clerk", :authority, {kind, role, good, 0})
+          log = sim |> Sim.sync_all() |> Sim.log("clerk")
+          ReadModel.observe(log, labels: %{}, vouches: []).trust_graph.edges
+        end
+
+      [atom_edges, wrapped_edges] = edges
+      assert wrapped_edges == atom_edges
+      assert Enum.any?(wrapped_edges, &String.starts_with?(&1.kind, "#{kind}:clerk"))
+    end
+  end
+
+  test "observe and ReplicaSnapshot survive short-binary audience or issuer" do
+    {baseline, _} = listform_log(nil)
+    base = ReadModel.observe(baseline, labels: %{}, vouches: [])
+
+    for {build, marker} <- [
+          {fn good -> {:grant, %{good | audience: <<1>>}} end, "grant -> (malformed)"},
+          {fn good -> {:grant, %{good | issuer: <<1>>}} end, nil}
+        ] do
+      sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+      {sim, _genesis} = Sim.create_replica(sim, "clerk")
+      {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+      {sim, _} = Sim.append(sim, "clerk", :authority, build.(good))
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      assert model.trust_graph.edges == base.trust_graph.edges
+      labels = Enum.map(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes, & &1.label)
+
+      if marker, do: assert(Enum.any?(labels, &String.contains?(&1, marker)), inspect(labels))
+    end
+  end
+
+  test "observe survives non-integer transfer, succeed and heartbeat ticks" do
+    for {build, expected} <- [
+          {fn good -> {:transfer, :clerk, good, %{}} end, "transfer :clerk -> "},
+          {fn good -> {:succeed, :clerk, good, %{}} end, "succeed :clerk @t%{}"},
+          {fn _good -> {:heartbeat, :clerk, %{}} end, "heartbeat :clerk @t%{}"}
+        ] do
+      sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+      {sim, _genesis} = Sim.create_replica(sim, "clerk")
+      {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+      {sim, _} = Sim.append(sim, "clerk", :authority, build.(good))
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+      assert is_list(ReadModel.observe(log, labels: %{}, vouches: []).op_dag.nodes)
+      labels = Enum.map(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes, & &1.label)
+
+      assert Enum.any?(
+               labels,
+               &(String.contains?(&1, expected) and String.contains?(&1, "@t%{}"))
+             ),
+             inspect(labels)
+    end
+  end
+
+  defp listform_log(field) do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+
+    sim =
+      case field do
+        nil ->
+          sim
+
+        f ->
+          bad = %{good | f => MapSet.to_list(Map.fetch!(good, f))}
+          {sim, _} = Sim.append(sim, "clerk", :authority, {:grant, bad})
+          sim
+      end
+
+    {sim |> Sim.sync_all() |> Sim.log("clerk"), nil}
+  end
+
   defp denied_admission_log do
     sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model")
     {sim, _genesis} = Sim.create_replica(sim, "clerk")
