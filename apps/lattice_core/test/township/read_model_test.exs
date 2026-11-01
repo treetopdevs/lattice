@@ -154,6 +154,26 @@ defmodule Township.ReadModelTest do
     end
   end
 
+  test "observe and ReplicaSnapshot survive short-binary audience or issuer" do
+    {baseline, _} = listform_log(nil)
+    base = ReadModel.observe(baseline, labels: %{}, vouches: [])
+
+    for build <- [
+          fn good -> {:grant, %{good | roles: [:clerk], audience: <<1>>}} end,
+          fn good -> {:grant, %{good | issuer: <<1>>}} end
+        ] do
+      sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+      {sim, _genesis} = Sim.create_replica(sim, "clerk")
+      {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+      {sim, _} = Sim.append(sim, "clerk", :authority, build.(good))
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      assert model.trust_graph.edges == base.trust_graph.edges
+      assert is_list(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes)
+    end
+  end
+
   defp listform_log(field) do
     sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
     {sim, _genesis} = Sim.create_replica(sim, "clerk")

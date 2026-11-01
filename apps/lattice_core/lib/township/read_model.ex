@@ -251,8 +251,14 @@ defmodule Township.ReadModel do
     end)
     # Row 305: an admitted but ill-formed body (list-form roles/ops, non-binary
     # keys) contributes no node or edge rather than crashing the reader.
-    |> Enum.filter(fn {_kind, delegation} -> Delegation.well_formed?(delegation) end)
+    |> Enum.filter(fn {_kind, delegation} ->
+      Delegation.well_formed?(delegation) and pub_key?(delegation.issuer) and
+        pub_key?(delegation.audience)
+    end)
   end
+
+  # Ed25519 public keys are 32 bytes; a shorter binary would crash the fingerprint.
+  defp pub_key?(key), do: is_binary(key) and byte_size(key) == 32
 
   # The role is attacker-shaped until proven a scalar: interpolate it only for a
   # binary or atom role, otherwise drop the event before String.Chars can raise.

@@ -185,7 +185,9 @@ defmodule Lattice.Graph.ReplicaSnapshot do
 
   # Row 305: an admitted body can carry a non-binary audience; render a marker
   # instead of raising in the fingerprint.
-  defp audience_fp(%{audience: pub}) when is_binary(pub), do: Identity.fingerprint(pub)
+  defp audience_fp(%{audience: pub}) when is_binary(pub) and byte_size(pub) == 32,
+    do: Identity.fingerprint(pub)
+
   defp audience_fp(_malformed), do: "(malformed)"
 
   defp truncate(text) do
