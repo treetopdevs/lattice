@@ -70,7 +70,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.WorkflowTest do
     thread = hd(f.threads)
     {fitting, overflowing} = adjacent(f.space_log, histories, thread)
 
-    assert size(f.space_log, fitting) <= @history_bytes
+    assert size(f.space_log, fitting) == @history_bytes
     assert size(f.space_log, overflowing) > @history_bytes
     assert :ok = Workflow.fit(f.space_log, fitting)
     assert {:error, :preview_storage_limit} = Workflow.fit(f.space_log, overflowing)
@@ -86,29 +86,53 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.WorkflowTest do
       end)
 
     assert is_integer(count)
+    last_deps = [thread.creation.id]
 
-    prefix = posts(thread, count - 1, 36_000)
-    bytes = search(space, histories, thread, prefix, count, 0, 36_000)
-    fitting = put(histories, thread, grown(thread, prefix ++ [post(thread, count, bytes)]))
+    # Post bodies ride the wire as base64, so compact JSON moves in 4-byte
+    # steps. Three empty-dep prefix posts drop 45 bytes each and shift the
+    # residue so a last-post body can land on exactly 1_048_576.
+    {fitting, overflowing} =
+      Enum.find_value([3, 7], fn empty ->
+        Enum.find_value(max(count - 2, empty + 1)..(count + 2), fn n ->
+          prefix = posts(thread, n - 1, 36_000, empty)
+          bytes = search(space, histories, thread, prefix, n, last_deps, 0, 36_000)
 
-    overflowing =
-      put(histories, thread, grown(thread, prefix ++ [post(thread, count, bytes + 1)]))
+          fitted =
+            put(
+              histories,
+              thread,
+              grown(thread, prefix ++ [post(thread, n, bytes, last_deps)])
+            )
 
+          if size(space, fitted) == @history_bytes do
+            over =
+              put(
+                histories,
+                thread,
+                grown(thread, prefix ++ [post(thread, n, bytes + 1, last_deps)])
+              )
+
+            {fitted, over}
+          end
+        end)
+      end)
+
+    assert fitting
     {fitting, overflowing}
   end
 
-  defp search(space, histories, thread, prefix, last, low, high) when low >= high do
-    next = put(histories, thread, grown(thread, prefix ++ [post(thread, last, low)]))
+  defp search(space, histories, thread, prefix, last, deps, low, high) when low >= high do
+    next = put(histories, thread, grown(thread, prefix ++ [post(thread, last, low, deps)]))
     if size(space, next) <= @history_bytes, do: low, else: max(low - 1, 0)
   end
 
-  defp search(space, histories, thread, prefix, last, low, high) do
+  defp search(space, histories, thread, prefix, last, deps, low, high) do
     middle = div(low + high + 1, 2)
-    next = put(histories, thread, grown(thread, prefix ++ [post(thread, last, middle)]))
+    next = put(histories, thread, grown(thread, prefix ++ [post(thread, last, middle, deps)]))
 
     if size(space, next) <= @history_bytes,
-      do: search(space, histories, thread, prefix, last, middle, high),
-      else: search(space, histories, thread, prefix, last, low, middle - 1)
+      do: search(space, histories, thread, prefix, last, deps, middle, high),
+      else: search(space, histories, thread, prefix, last, deps, low, middle - 1)
   end
 
   defp size(space, histories) do
@@ -133,13 +157,22 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.WorkflowTest do
     log
   end
 
-  defp posts(thread, count, bytes), do: Enum.map(1..count, &post(thread, &1, bytes))
+  defp posts(thread, count, bytes, empty \\ 0)
 
-  defp post(thread, index, bytes) do
+  defp posts(_thread, count, _bytes, _empty) when count < 1, do: []
+
+  defp posts(thread, count, bytes, empty),
+    do:
+      Enum.map(1..count, fn index ->
+        deps = if index <= empty, do: [], else: [thread.creation.id]
+        post(thread, index, bytes, deps)
+      end)
+
+  defp post(thread, index, bytes, deps) do
     prefix = String.pad_leading(Integer.to_string(index), 6, "0")
     body = prefix <> String.duplicate("x", bytes)
 
-    Op.new(thread.root, thread.replica, [thread.creation.id], :command, {:post, [body]},
+    Op.new(thread.root, thread.replica, deps, :command, {:post, [body]},
       cap: thread.delegation.id
     )
   end
