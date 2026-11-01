@@ -176,9 +176,9 @@ defmodule Township.ReadModelTest do
     {baseline, _} = listform_log(nil)
     base = ReadModel.observe(baseline, labels: %{}, vouches: [])
 
-    for build <- [
-          fn good -> {:grant, %{good | audience: <<1>>}} end,
-          fn good -> {:grant, %{good | issuer: <<1>>}} end
+    for {build, marker} <- [
+          {fn good -> {:grant, %{good | audience: <<1>>}} end, "grant -> (malformed)"},
+          {fn good -> {:grant, %{good | issuer: <<1>>}} end, nil}
         ] do
       sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
       {sim, _genesis} = Sim.create_replica(sim, "clerk")
@@ -188,15 +188,17 @@ defmodule Township.ReadModelTest do
 
       model = ReadModel.observe(log, labels: %{}, vouches: [])
       assert model.trust_graph.edges == base.trust_graph.edges
-      assert is_list(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes)
+      labels = Enum.map(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes, & &1.label)
+
+      if marker, do: assert(Enum.any?(labels, &String.contains?(&1, marker)), inspect(labels))
     end
   end
 
   test "observe survives non-integer transfer, succeed and heartbeat ticks" do
-    for build <- [
-          fn good -> {:transfer, :clerk, good, %{}} end,
-          fn good -> {:succeed, :clerk, good, %{}} end,
-          fn _good -> {:heartbeat, :clerk, %{}} end
+    for {build, expected} <- [
+          {fn good -> {:transfer, :clerk, good, %{}} end, "transfer :clerk -> "},
+          {fn good -> {:succeed, :clerk, good, %{}} end, "succeed :clerk @t%{}"},
+          {fn _good -> {:heartbeat, :clerk, %{}} end, "heartbeat :clerk @t%{}"}
         ] do
       sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
       {sim, _genesis} = Sim.create_replica(sim, "clerk")
@@ -205,7 +207,13 @@ defmodule Township.ReadModelTest do
       log = sim |> Sim.sync_all() |> Sim.log("clerk")
 
       assert is_list(ReadModel.observe(log, labels: %{}, vouches: []).op_dag.nodes)
-      assert is_list(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes)
+      labels = Enum.map(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes, & &1.label)
+
+      assert Enum.any?(
+               labels,
+               &(String.contains?(&1, expected) and String.contains?(&1, "@t%{}"))
+             ),
+             inspect(labels)
     end
   end
 
