@@ -193,7 +193,8 @@ defmodule Lattice2.MalformedDelegationFieldsTest do
 
       analysis = Authority.analyze(@module, restored)
       assert analysis.reasons[grant_op.id] == :bad_delegation_sig, inspect(key)
-      assert Map.has_key?(analysis.reasons, post_op.id), inspect(key)
+      expected = if key == :id, do: :no_capability, else: :invalid_capability
+      assert analysis.reasons[post_op.id] == expected, inspect(key)
     end
   end
 
@@ -229,21 +230,38 @@ defmodule Lattice2.MalformedDelegationFieldsTest do
 
   describe "the carrier boundary" do
     test "a list-form grant is well-formed once it crosses the wire" do
+      for field <- [:ops, :roles] do
+        {sim, root, tab, parent} = setup_thread()
+        normal = grant(sim, root, tab, parent)
+        listed = Map.put(normal, field, normal |> Map.fetch!(field) |> MapSet.to_list())
+        {sim, grant_op, post_op} = grant_then_post(sim, listed)
+
+        {:ok, decoded} = grant_op |> Wire.encode_op() |> Wire.decode_op()
+        assert decoded.id == grant_op.id
+        assert {:grant, %Delegation{ops: %MapSet{}} = wired} = decoded.body
+        assert wired == normal
+        assert Op.valid?(decoded)
+
+        log = Sim.log(sim, "server")
+        log = %{log | ops: Map.put(log.ops, grant_op.id, decoded)}
+        analysis = Authority.analyze(@module, log)
+        refute Map.has_key?(analysis.reasons, grant_op.id)
+        refute Map.has_key?(analysis.reasons, post_op.id)
+      end
+    end
+  end
+
+  test "Verdict renders a grant whose carried id is not a UTF-8 binary" do
+    for id <- [{:a, 1}, <<255, 254>>, 7] do
       {sim, root, tab, parent} = setup_thread()
-      normal = grant(sim, root, tab, parent)
-      {sim, grant_op, post_op} = grant_then_post(sim, %{normal | ops: [:post]})
+      odd = %{grant(sim, root, tab, parent) | id: id}
+      {sim, grant_op} = Sim.append(sim, "server", :authority, {:grant, odd})
+      log = sim |> Sim.sync_all() |> Sim.log("server")
 
-      {:ok, decoded} = grant_op |> Wire.encode_op() |> Wire.decode_op()
-      assert decoded.id == grant_op.id
-      assert {:grant, %Delegation{ops: %MapSet{}} = wired} = decoded.body
-      assert wired == normal
-      assert Op.valid?(decoded)
-
-      log = Sim.log(sim, "server")
-      log = %{log | ops: Map.put(log.ops, grant_op.id, decoded)}
-      analysis = Authority.analyze(@module, log)
-      refute Map.has_key?(analysis.reasons, grant_op.id)
-      refute Map.has_key?(analysis.reasons, post_op.id)
+      {:quarantined, record} = Lattice.Verdict.explain(@module, log, grant_op.id)
+      assert record.reason == :bad_delegation_sig, inspect(id)
+      assert record.cited_delegation_id == nil, inspect(id)
+      assert %{"cited_delegation_id" => nil} = Jason.decode!(Lattice.Verdict.to_json(record))
     end
   end
 
