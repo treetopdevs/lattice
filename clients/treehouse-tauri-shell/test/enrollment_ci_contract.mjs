@@ -523,12 +523,16 @@ export function check(workflow, pkg, harnessSource) {
   if (/SKIP/iu.test(job)) fail("skip switches are forbidden");
   if (/TREEHOUSE_PACKAGED_PREFLIGHT_ONLY/u.test(job)) fail("the preflight-only switch must not be set in CI");
 
-  // Only the evidence upload may carry an if, and it is exactly always(). Quoted YAML keys count.
-  const conditional = yamlSteps(enrollmentYaml).filter((step) =>
-    ownKeysFromMap(step, workflowDoc).includes("if"),
-  );
-  if (conditional.length !== 1) fail("exactly one step (the evidence upload) may carry an if");
-  for (const step of conditional) {
+  // Only the evidence upload may carry an if, and it is exactly always(). Quoted YAML keys count;
+  // a second `'if'` on that same step still counts (uniqueKeys is false).
+  const conditional = yamlSteps(enrollmentYaml).map((step) => ({
+    step,
+    ifs: ownKeysFromMap(step, workflowDoc).filter((key) => key === "if"),
+  }));
+  const withIf = conditional.filter((entry) => entry.ifs.length > 0);
+  if (withIf.length !== 1 || withIf[0].ifs.length !== 1)
+    fail("exactly one step (the evidence upload) may carry an if");
+  for (const { step } of withIf) {
     if (step.get("if") !== "always()") fail("the only permitted if is always()");
     if (!String(step.get("uses") ?? "").startsWith("actions/upload-artifact@"))
       fail("only the upload step may carry an if");
@@ -993,6 +997,8 @@ const mutations = {
     mutateJob(text, (job) => mutate(job, "run: npm run packaged:enrollment", "run: echo packaged:enrollment")),
   "upload not always": (text) =>
     mutateJob(text, (job) => mutate(job, "        if: always()\n", "")),
+  "upload gains a second quoted if": (text) =>
+    mutateJob(text, (job) => mutate(job, "        if: always()\n", "        if: always()\n        'if': false\n")),
   "upload on success only": (text) =>
     mutateJob(text, (job) => mutate(job, "        if: always()\n", "        if: success()\n")),
   "upload wildcard evidence": (text) =>

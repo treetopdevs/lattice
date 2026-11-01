@@ -1155,6 +1155,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>P3. The GITHUB_ENV mutation replaced the harness command, and <code>$'</code> in a <code>String.replace</code> replacement expanded as JS post-match text, so unrelated checks rejected it. Removing the hex-escape scan still left every test green.</dd>
 <dt>Decision</dt><dd>Fixed. The mutation keeps the harness via a replacement callback and a dedicated test requires a <code>VITE_TREEHOUSE_</code> violation. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
+<section id="d173"><h2><span>D-173</span> PR #204 Codex P2: count every decoded <code>if</code> on the upload step</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/204#discussion_r4434302819">review comment</a> on tip <code>42a64d462</code></dd>
+<dt>Finding</dt><dd>P2. A second quoted <code>'if': false</code> on the evidence-upload step still left one conditional step, and <code>get("if")</code> returned <code>always()</code>. <code>uniqueKeys: false</code> is intentional.</dd>
+<dt>Decision</dt><dd>Fixed. The upload step must carry exactly one decoded <code>if</code> key. Mutation added. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
