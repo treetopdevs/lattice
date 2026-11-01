@@ -1150,6 +1150,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Context</dt><dd>Row 300 is marked DONE on this branch (PR #203, merge <code>2ee21f740</code>). Codex: six read-only passes; remaining P1s fixed; last P2 (D-170) restored the origin/main hex-escape scan and was not re-reviewed. Contract/docs only, not a working-policy rule-3 second-review path.</dd>
 <dt>Decision</dt><dd>Open #204 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). Leave row 238 IN PROGRESS on the exact tip so the tip stays green; the next slice marks it DONE with the merge SHA.</dd>
 </dl></section>
+<section id="d172"><h2><span>D-172</span> PR #204 Codex P3: D-170 fixture must keep the harness and assert the flag scan</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>15097ee5f</code></dd>
+<dt>Finding</dt><dd>P3. The GITHUB_ENV mutation replaced the harness command, and <code>$'</code> in a <code>String.replace</code> replacement expanded as JS post-match text, so unrelated checks rejected it. Removing the hex-escape scan still left every test green.</dd>
+<dt>Decision</dt><dd>Fixed. The mutation keeps the harness via a replacement callback and a dedicated test requires a <code>VITE_TREEHOUSE_</code> violation. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>

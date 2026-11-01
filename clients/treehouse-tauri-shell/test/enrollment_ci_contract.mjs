@@ -1105,10 +1105,8 @@ const mutations = {
     mutate(text, "run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist", "run: if npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist; then :; fi"),
   "shell-escaped variant flag written to GITHUB_ENV": (text) =>
     mutateJob(text, (job) =>
-      mutate(
-        job,
-        "        run: npm run packaged:enrollment",
-        "        run: echo $'VITE\\x5fTREEHOUSE_ENROLLMENT=1' >> \"$GITHUB_ENV\"",
+      job.replace("        run: npm run packaged:enrollment", () =>
+        "        run: |\n          echo $'VITE\\x5fTREEHOUSE_ENROLLMENT=1' >> \"$GITHUB_ENV\"\n          npm run packaged:enrollment",
       ),
     ),
   "YAML-escaped variant keys on the ordinary job (review)": (text) =>
@@ -1472,6 +1470,11 @@ test("countYamlKey reads bare-tag, dotted-anchor, and alias if keys", () => {
   assert.ok(countYamlKey("        ? ! 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
   assert.ok(countYamlKey("        ? &cond.foo 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
   assert.ok(countYamlKey("extra: &cond if\n? *cond\n: runner.os == 'Linux'\n", "if") > 0);
+});
+
+test("shell-escaped GITHUB_ENV variant flag is refused by the hex-escape scan", () => {
+  const problems = check(mutations["shell-escaped variant flag written to GITHUB_ENV"](workflow), pkg, harnessSource);
+  assert.ok(problems.some((problem) => /VITE_TREEHOUSE_/u.test(problem)));
 });
 
 test("full-document own keys see a shell alias defined outside the classification step", () => {
