@@ -4,13 +4,16 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { isAlias, isMap, isScalar, isSeq, parseDocument, visit } from "yaml";
 
 // Plan 181 slice 5c2: structural contract for the hard-failing packaged enrollment job.
 //
-// The workflow is parsed into job and step blocks (no yaml dependency in this shell, as in the Township
-// precedent mobile_core_native_ci_contract.mjs). `check` returns a list of violations for a workflow text
-// and a package.json object, and every mutation fixture below must make it return a non-empty list. A text
-// check alone is not feasibility proof: the hosted job still has to finish green.
+// Job and step *bodies* are still split from the workflow text (exact-text pins and digests). Skip keys,
+// own keys, and variant-flag names are judged from the decoded YAML document (`yaml`, same library as the
+// Township android signing contract), which is what GitHub Actions consumes. `check` returns a list of
+// violations for a workflow text and a package.json object, and every mutation fixture below must make it
+// return a non-empty list. A text check alone is not feasibility proof: the hosted job still has to finish
+// green.
 //
 // Re-pinned for plan 183 on 2026-10-08 (product-scoped CI). Every pin below stayed exact; none was deleted or
 // loosened. What moved, and why:
@@ -66,6 +69,17 @@ import { fileURLToPath } from "node:url";
 // - The packaged:export script pin is exactly `tsx --preserve-symlinks test/packaged_export.ts`.
 // - No other step body changed, so PACKAGED_MACOS_DIGEST and TREEHOUSE_PREVIEW_DIGEST are both unchanged.
 
+// Re-pinned for row 238 on 2026-10-31 (quoted YAML skip keys). Every pin below stayed exact; none was
+// deleted or loosened. What moved, and why:
+// - The ordinary classification step and the enrollment job's dev-trace classification step are now
+//   pinned as exact text, as the Space export was in row 236, so a quoted `'if': false` or
+//   `"continue-on-error": true` cannot ride along. Their own keys are exactly name, working-directory
+//   and run. The export step is held to the same decoded own-key whitelist.
+// - Skip keys, own keys, and VITE_TREEHOUSE_* names are read from decoded YAML Pair keys and scalar
+//   values, not from a regex scanner. Quoted, tagged, anchored, block-scalar, and escaped spellings
+//   therefore count as the keys GitHub Actions would see. continue-on-error remains forbidden in any
+//   spelling. No workflow step body changed, so both digests are unchanged.
+
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
 
@@ -78,6 +92,24 @@ const REPLAY_STEP = "Independently replay exact packaged Treehouse frames";
 const EXPORT_STEP = "Export Space frames from the packaged app and verify with the ceremony reader";
 const PREVIEW_UPLOAD_STEP = "Upload public Treehouse preview evidence";
 const EXPORT_RUN = "npm run packaged:export";
+const CLASSIFY_CALL =
+  "npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app";
+const ORDINARY_CLASSIFY_RUN = `${CLASSIFY_CALL} ordinary dist`;
+const DEV_TRACE_CLASSIFY_RUN = `${CLASSIFY_CALL} dev_trace dist`;
+const CLASSIFY_STEP_KEYS = ["name", "working-directory", "run"];
+const CLASSIFY_STEP_BODY = [
+  `      - name: ${CLASSIFY_STEP}`,
+  `        working-directory: ${SHELL_DIR}`,
+  `        run: ${ORDINARY_CLASSIFY_RUN}`,
+  "",
+].join("\n");
+const CLASSIFY_DEV_TRACE_STEP = "Classify Treehouse dev-trace bundle";
+const CLASSIFY_DEV_TRACE_STEP_BODY = [
+  `      - name: ${CLASSIFY_DEV_TRACE_STEP}`,
+  `        working-directory: ${SHELL_DIR}`,
+  `        run: ${DEV_TRACE_CLASSIFY_RUN}`,
+  "",
+].join("\n");
 const EXPORT_STEP_BODY = [
   "      - name: Export Space frames from the packaged app and verify with the ceremony reader",
   "        working-directory: clients/treehouse-tauri-shell",
@@ -92,7 +124,6 @@ const EXPORT_ENV = [
   ["MIX_ENV", "test"],
 ];
 const EXPORT_SCRIPT = "tsx --preserve-symlinks test/packaged_export.ts";
-const CLASSIFY_DEV_TRACE_STEP = "Classify Treehouse dev-trace bundle";
 const VARIANT_FLAGS = ["VITE_TREEHOUSE_ENROLLMENT", "VITE_TREEHOUSE_DEV_TRACE"];
 const BUILD_STEP_CALL = "npm run tauri:build:dev-trace";
 const EVIDENCE_DIR = "${{ runner.temp }}/treehouse-enrollment";
@@ -206,6 +237,143 @@ function envEntries(step) {
   return entries;
 }
 
+function decodeHexEscapes(text) {
+  return text.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
+    String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
+  );
+}
+
+function loadYamlDocument(text) {
+  return parseDocument(text, { prettyErrors: true, maxAliasCount: 10000, uniqueKeys: false });
+}
+
+function resolvedYaml(node, doc) {
+  let current = node;
+  const seen = new Set();
+  while (isAlias(current) && doc) {
+    if (seen.has(current)) return current;
+    seen.add(current);
+    current = current.resolve(doc);
+  }
+  return current;
+}
+
+function pairKeyName(key, doc) {
+  const resolved = resolvedYaml(key, doc);
+  return isScalar(resolved) && resolved.value != null ? String(resolved.value) : undefined;
+}
+
+function ownKeysFromMap(mapNode, doc) {
+  if (!isMap(mapNode)) return [];
+  return mapNode.items.map((pair) => pairKeyName(pair.key, doc)).filter((name) => name !== undefined);
+}
+
+function yamlMap(node) {
+  if (isSeq(node) && isMap(node.items[0])) return node.items[0];
+  if (isMap(node) && node.items.length === 1 && isMap(node.items[0].value)) return node.items[0].value;
+  return isMap(node) ? node : undefined;
+}
+
+function countKeyInNode(node, name, doc = node) {
+  let n = 0;
+  const seen = new Set();
+  const walk = (root) => {
+    visit(root, {
+      Pair(_key, pair) {
+        if (pairKeyName(pair.key, doc) === name) n += 1;
+      },
+      Alias(_key, alias) {
+        if (seen.has(alias)) return visit.SKIP;
+        seen.add(alias);
+        const target = resolvedYaml(alias, doc);
+        if (target && target !== alias) walk(target);
+        return visit.SKIP;
+      },
+    });
+  };
+  walk(node);
+  return n;
+}
+
+function yamlJob(doc, name) {
+  const jobs = resolvedYaml(doc.get("jobs"), doc);
+  return isMap(jobs) ? resolvedYaml(jobs.get(name), doc) : undefined;
+}
+
+function yamlSteps(jobNode, doc) {
+  const job = resolvedYaml(jobNode, doc);
+  if (!isMap(job)) return [];
+  const steps = resolvedYaml(job.get("steps"), doc);
+  if (!isSeq(steps)) return [];
+  return steps.items.map((item) => resolvedYaml(item, doc)).filter(isMap);
+}
+
+function yamlStepNamed(jobNode, name, doc) {
+  return yamlSteps(jobNode, doc).find((step) => step.get("name") === name);
+}
+
+function yamlHasSkipKey(stepNode, doc) {
+  if (!stepNode) return true;
+  const keys = ownKeysFromMap(resolvedYaml(stepNode, doc), doc);
+  return keys.includes("if") || keys.includes("continue-on-error");
+}
+
+function yamlMentions(doc, pattern) {
+  let found = false;
+  const seen = new Set();
+  const walk = (root) => {
+    visit(root, {
+      Pair(_key, pair) {
+        const name = pairKeyName(pair.key, doc);
+        if (name !== undefined && pattern.test(name)) found = true;
+      },
+      Scalar(_key, scalar) {
+        if (pattern.test(String(scalar.value ?? ""))) found = true;
+      },
+      Alias(_key, alias) {
+        if (seen.has(alias)) return visit.SKIP;
+        seen.add(alias);
+        const target = resolvedYaml(alias, doc);
+        if (target && target !== alias) walk(target);
+        return visit.SKIP;
+      },
+    });
+  };
+  walk(doc);
+  return found;
+}
+
+function stepOwnKeys(step) {
+  const doc = loadYamlDocument(step);
+  return ownKeysFromMap(yamlMap(doc.contents), doc);
+}
+
+function headerOwnKeys(header) {
+  const doc = loadYamlDocument(header);
+  return ownKeysFromMap(yamlMap(doc.contents), doc).filter((key) => key !== "steps");
+}
+
+function unquotedStepKeys(step) {
+  return [...step.matchAll(/^ {6}- ([a-z-]+):|^ {8}([a-z-]+):/gmu)].map((m) => m[1] ?? m[2]);
+}
+
+function countYamlKey(block, name) {
+  const doc = loadYamlDocument(block);
+  return countKeyInNode(doc, name, doc);
+}
+
+function hasSkipKey(step) {
+  const doc = loadYamlDocument(step);
+  const map = yamlMap(doc.contents);
+  if (!map) return true;
+  const keys = ownKeysFromMap(map, doc);
+  return keys.includes("if") || keys.includes("continue-on-error");
+}
+
+function exactStepBody(step) {
+  return step.replace(/\s+$/u, "\n");
+}
+
 function expandRun(run, scripts) {
   return run
     .split("\n")
@@ -251,23 +419,21 @@ function pinnedUses(job, action) {
   return undefined;
 }
 
-// Row 201: each classification step runs exactly one command, so no shell wrapper (echo, if, ;) can skip it.
-const CLASSIFY_CALL = "npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app";
-const ORDINARY_CLASSIFY_RUN = `${CLASSIFY_CALL} ordinary dist`;
-const DEV_TRACE_CLASSIFY_RUN = `${CLASSIFY_CALL} dev_trace dist`;
-
 export function check(workflow, pkg, harnessSource) {
   const problems = [];
   const fail = (message) => problems.push(message);
 
   // Row 201: the variant flags are set only by the tauri:build:dev-trace package script. No VITE_TREEHOUSE_*
-  // key may appear in any non-comment workflow line (workflow, job or step env, or an inline run).
-  // YAML double-quoted escapes are decoded first, so an escaped key cannot spell a flag past the scan.
-  const decoded = workflow.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
-    String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
-  );
+  // key or value may appear in the decoded workflow document (workflow, job or step env, or an inline run).
+  const workflowDoc = loadYamlDocument(workflow);
+  if (workflowDoc.errors.length > 0)
+    fail(`flagship.yml must parse as YAML: ${workflowDoc.errors[0].message.split("\n")[0]}`);
+  const decoded = decodeHexEscapes(workflow);
   const flagLine = decoded.split("\n").find((line) => !line.trim().startsWith("#") && /VITE_TREEHOUSE_/u.test(line));
   if (flagLine !== undefined) fail(`flagship.yml must not set any VITE_TREEHOUSE_* key: ${flagLine.trim()}`);
+  if (yamlMentions(workflowDoc, /VITE_TREEHOUSE_/u)) fail("flagship.yml must not set any VITE_TREEHOUSE_* key");
+  const enrollmentYaml = yamlJob(workflowDoc, JOB);
+  const previewYaml = yamlJob(workflowDoc, PREVIEW_JOB);
   for (const [script, body] of Object.entries(pkg.scripts ?? {}))
     if (script !== "tauri:build:dev-trace" && VARIANT_FLAGS.some((flag) => String(body).includes(flag)))
       fail(`package script ${script} must not set a Treehouse variant flag`);
@@ -290,17 +456,28 @@ export function check(workflow, pkg, harnessSource) {
     const steps = stepBlocks(preview);
     const names = steps.map(stepName);
     const buildAt = names.indexOf("Build ordinary offline Treehouse app");
+    const classifies = steps.filter((step) => stepName(step) === CLASSIFY_STEP);
     const classifyAt = names.indexOf(CLASSIFY_STEP);
-    if (classifyAt === -1) fail(`${PREVIEW_JOB} lacks the ordinary bundle classification step`);
+    if (classifies.length !== 1) fail(`${PREVIEW_JOB} must have exactly one ordinary bundle classification step`);
     else {
       if (classifyAt <= buildAt || buildAt === -1) fail("classification must run after the ordinary build");
-      const classify = steps[classifyAt];
+      const classify = classifies[0];
       const run = scalar(classify, "run") ?? "";
       if (run.trim() !== ORDINARY_CLASSIFY_RUN)
         fail("classification step must assert the ordinary variant of the ordinary bundle and its dist");
       if (scalar(classify, "working-directory") !== SHELL_DIR) fail("classification runs in the Treehouse shell");
-      if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(classify) || /\|\|/u.test(run))
+      if (yamlHasSkipKey(yamlStepNamed(previewYaml, CLASSIFY_STEP, workflowDoc), workflowDoc) || /\|\|/u.test(run))
         fail("classification must be unconditional and blocking");
+      // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
+      // such as 'if' or "continue-on-error" pass a bare `if:` line check).
+      if (exactStepBody(classify) !== CLASSIFY_STEP_BODY)
+        fail("the ordinary classification step body must be exactly the pinned text");
+      if (
+        JSON.stringify(unquotedStepKeys(classify)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
+        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, CLASSIFY_STEP, workflowDoc), workflowDoc)) !==
+          JSON.stringify(CLASSIFY_STEP_KEYS)
+      )
+        fail("the ordinary classification step keys must be exactly name, working-directory and run");
     }
     if (previewDigest(workflow) !== TREEHOUSE_PREVIEW_DIGEST)
       fail(`${PREVIEW_JOB} step bodies other than the classification and export steps changed`);
@@ -319,14 +496,18 @@ export function check(workflow, pkg, harnessSource) {
       if (scalar(step, "working-directory") !== SHELL_DIR) fail("the Space export runs in the Treehouse shell");
       if (JSON.stringify(envEntries(step)) !== JSON.stringify(EXPORT_ENV))
         fail("the Space export env must be exactly the evidence dir and MIX_ENV");
-      if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(step) || /\|\||set\s+\+e/u.test(step))
+      if (yamlHasSkipKey(yamlStepNamed(previewYaml, EXPORT_STEP, workflowDoc), workflowDoc) || /\|\||set\s+\+e/u.test(step))
         fail("the Space export must be unconditional and blocking");
       // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
-      // such as 'if' or "continue-on-error" pass the line checks above).
-      if (step.replace(/\s+$/u, "\n") !== EXPORT_STEP_BODY) fail("the Space export step body must be exactly the pinned text");
+      // such as 'if' or "continue-on-error" pass a bare `if:` line check).
+      if (exactStepBody(step) !== EXPORT_STEP_BODY) fail("the Space export step body must be exactly the pinned text");
       // No shell, timeout, id or uses may ride along: the step's own keys are exactly these four.
-      const keys = [...step.matchAll(/^ {6}- ([a-z-]+):|^ {8}([a-z-]+):/gmu)].map((m) => m[1] ?? m[2]);
-      if (JSON.stringify(keys) !== JSON.stringify(["name", "working-directory", "env", "run"]))
+      const exportKeys = ["name", "working-directory", "env", "run"];
+      if (
+        JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(exportKeys) ||
+        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, EXPORT_STEP, workflowDoc), workflowDoc)) !==
+          JSON.stringify(exportKeys)
+      )
         fail("the Space export step keys must be exactly name, working-directory, env and run");
     }
     if (pkg.scripts?.["packaged:export"] !== EXPORT_SCRIPT)
@@ -358,11 +539,18 @@ export function check(workflow, pkg, harnessSource) {
   if (!Number.isInteger(timeout) || timeout < 30 || timeout > 120) fail("timeout-minutes must be a bounded 30 to 120");
   if ((header.match(/^ {4}if:/gmu) ?? []).length !== 1 || scalar(header, "if", 4) !== ENROLLMENT_GATE)
     fail(`the job must carry exactly one job-level if, ${ENROLLMENT_GATE}`);
+  if (
+    ownKeysFromMap(enrollmentYaml, workflowDoc).filter((key) => key === "if").length !== 1 ||
+    ownKeysFromMap(enrollmentYaml, workflowDoc).filter((key) => key !== "steps").filter((key) => key === "if")
+      .length !== 1
+  )
+    fail(`the job must carry exactly one job-level if, including quoted YAML keys, ${ENROLLMENT_GATE}`);
   if (JSON.stringify(needsOf(job)) !== JSON.stringify(["changes"]))
     fail("the job must need exactly the changes classifier");
   if (JSON.stringify(permissions(header)) !== JSON.stringify(["contents: read"]))
     fail("the job must declare exactly least-privilege permissions: contents: read");
-  if (/continue-on-error/u.test(job)) fail("continue-on-error is forbidden in any spelling");
+  if (/continue-on-error/u.test(job) || countKeyInNode(enrollmentYaml, "continue-on-error", workflowDoc) > 0)
+    fail("continue-on-error is forbidden in any spelling");
   if (/\|\|\s*(?:true|:|exit\s+0)\b/u.test(job)) fail("|| true style masking is forbidden");
   if (/set\s+\+e/u.test(job)) fail("set +e is forbidden");
   if (/\bif:\s*(?:\$\{\{\s*)?false\b/u.test(job)) fail("if: false is forbidden");
@@ -370,12 +558,18 @@ export function check(workflow, pkg, harnessSource) {
   if (/SKIP/iu.test(job)) fail("skip switches are forbidden");
   if (/TREEHOUSE_PACKAGED_PREFLIGHT_ONLY/u.test(job)) fail("the preflight-only switch must not be set in CI");
 
-  // Only the evidence upload may carry an if, and it is exactly always().
-  const conditional = steps.filter((step) => /^ {8}if:|^ {6}- if:/mu.test(step));
-  if (conditional.length !== 1) fail("exactly one step (the evidence upload) may carry an if");
-  for (const step of conditional) {
-    if (scalar(step, "if") !== "always()") fail("the only permitted if is always()");
-    if (!(scalar(step, "uses") ?? "").startsWith("actions/upload-artifact@"))
+  // Only the evidence upload may carry an if, and it is exactly always(). Quoted YAML keys count;
+  // a second `'if'` on that same step still counts (uniqueKeys is false).
+  const conditional = yamlSteps(enrollmentYaml, workflowDoc).map((step) => ({
+    step,
+    ifs: ownKeysFromMap(step, workflowDoc).filter((key) => key === "if"),
+  }));
+  const withIf = conditional.filter((entry) => entry.ifs.length > 0);
+  if (withIf.length !== 1 || withIf[0].ifs.length !== 1)
+    fail("exactly one step (the evidence upload) may carry an if");
+  for (const { step } of withIf) {
+    if (step.get("if") !== "always()") fail("the only permitted if is always()");
+    if (!String(step.get("uses") ?? "").startsWith("actions/upload-artifact@"))
       fail("only the upload step may carry an if");
   }
 
@@ -502,14 +696,24 @@ export function check(workflow, pkg, harnessSource) {
   }
 
   // The dev-trace bundle and its frontend are classified together, unconditionally, before the harness runs.
-  if (classifyAt !== -1) {
-    const step = steps[classifyAt];
+  const classifySteps = steps.filter((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP);
+  if (classifySteps.length !== 1) fail("the enrollment job must have exactly one dev-trace classification step");
+  else {
+    const step = classifySteps[0];
     const run = runOf(step);
     if (run.trim() !== DEV_TRACE_CLASSIFY_RUN)
       fail("dev-trace classification must assert the dev_trace bundle and the dist");
     if (scalar(step, "working-directory") !== SHELL_DIR) fail("dev-trace classification runs in the Treehouse shell");
-    if (/^ {6,8}(?:- )?(?:if|continue-on-error):/mu.test(step) || /\|\|/u.test(run))
+    if (yamlHasSkipKey(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP, workflowDoc), workflowDoc) || /\|\|/u.test(run))
       fail("dev-trace classification must be unconditional and blocking");
+    if (exactStepBody(step) !== CLASSIFY_DEV_TRACE_STEP_BODY)
+      fail("the dev-trace classification step body must be exactly the pinned text");
+    if (
+      JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
+      JSON.stringify(ownKeysFromMap(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP, workflowDoc), workflowDoc)) !==
+        JSON.stringify(CLASSIFY_STEP_KEYS)
+    )
+      fail("the dev-trace classification step keys must be exactly name, working-directory and run");
   }
 
   // The harness: real harness script, oracle inside it, evidence dir, no env skip or debug switches.
@@ -556,13 +760,13 @@ const harnessSource = readFileSync(resolve(shellRoot, "test/packaged_enrollment.
 
 function mutate(source, from, to) {
   assert.ok(source.includes(from), `mutation anchor not found: ${JSON.stringify(from)}`);
-  return source.replace(from, to);
+  return source.replace(from, () => to);
 }
 
 function mutateJob(text, fn) {
   const job = findJob(text, JOB);
   assert.ok(job, "the job must exist to mutate it");
-  return text.replace(job, fn(job));
+  return text.replace(job, () => fn(job));
 }
 
 test("the committed workflow satisfies the enrollment job contract", () => {
@@ -606,6 +810,208 @@ const mutations = {
     mutateJob(text, (job) =>
       mutate(job, "        run: npm run packaged:enrollment", "        if: false\n        run: npm run packaged:enrollment"),
     ),
+  "harness quoted if false (row 238)": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", "        'if': false\n        run: npm run packaged:enrollment"),
+    ),
+  "harness double-quoted if false": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", '        "if": false\n        run: npm run packaged:enrollment'),
+    ),
+  "harness quoted if with space before colon": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", "        'if' : false\n        run: npm run packaged:enrollment"),
+    ),
+  "harness explicit YAML if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", "        ? if\n        : false\n        run: npm run packaged:enrollment"),
+    ),
+  "harness explicit quoted if with comment": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? 'if' # skip\n        : false\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness tagged if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", "        !!str if: false\n        run: npm run packaged:enrollment"),
+    ),
+  "harness block-scalar if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? |-\n          if\n        : false\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness block-scalar if with indent indicator": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? |2-\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness tagged block-scalar if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? !!str |-\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness tagged block-scalar if with indent indicator": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? !!str |2-\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness if after comment line continuation": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        # harmless \\\n        if: runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness split-line tagged if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? !!str\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness nested tagged if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ?\n          !!str if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness if after comment quote line continuation": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        '        # harmless " \\\n        if: runner.os == \'Linux\'\n        # closing "\n        run: npm run packaged:enrollment',
+      ),
+    ),
+  "harness anchored explicit if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? &cond 'if'\n        : runner.os == 'Linux'\n        id: *cond\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness bare-tag if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? ! 'if'\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness dotted-anchor if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? &cond.foo 'if'\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness alias if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        extra: &cond if\n        ? *cond\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness implicit alias if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        extra: &cond if\n        *cond: runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness if aliased from an earlier step": (text) => {
+    const withAnchor = mutate(
+      text,
+      "      - name: Build lattice-client\n",
+      "      - name: Build lattice-client\n        id: &cond if\n",
+    );
+    return mutateJob(withAnchor, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? *cond\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    );
+  },
+  "ordinary classification gains an external aliased shell": (text) => {
+    const named = mutate(text, "name: Flagship evidence", "name: Flagship evidence\nrun-name: &sh shell");
+    const step = stepBlocks(findJob(named, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return named.replace(step, step.replace("        run:", "        ? *sh\n        : bash -c true {0}\n        run:"));
+  },
+  "harness alias if anchored in job env": (text) =>
+    mutateJob(text, (job) => {
+      const withAnchor = mutate(
+        job,
+        "    permissions:\n      contents: read\n",
+        "    permissions:\n      contents: read\n    env: { COND: &cond if }\n",
+      );
+      return mutate(
+        withAnchor,
+        "        run: npm run packaged:enrollment",
+        "        ? *cond\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      );
+    }),
+  "job continue-on-error alias from workflow name": (text) => {
+    const named = mutate(text, "name: Flagship evidence", 'name: &coe "continue-on-erro\\u0072"');
+    return mutateJob(named, (job) =>
+      mutate(job, "    runs-on:", "    ? *coe\n    : true\n    runs-on:"),
+    );
+  },
+  "harness escaped-newline continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        '        ? "continue-on-erro\\\n          r"\n        : true\n        run: npm run packaged:enrollment',
+      ),
+    ),
+  "job escaped-newline continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "    runs-on:", '    ? "continue-on-erro\\\n      r"\n    : true\n    runs-on:'),
+    ),
+  "harness escaped continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        '        "continue-on-erro\\u0072": true\n        run: npm run packaged:enrollment',
+      ),
+    ),
+  "ordinary classification duplicated": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, `${step}${step}`);
+  },
+  "job extra quoted if false": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "    runs-on:", "    'if': false\n    runs-on:"),
+    ),
+  "job escaped continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "    runs-on:", '    "continue-on-erro\\u0072": true\n    runs-on:'),
+    ),
   "harness if expression false": (text) =>
     mutateJob(text, (job) =>
       mutate(job, "        run: npm run packaged:enrollment", "        if: ${{ false }}\n        run: npm run packaged:enrollment"),
@@ -626,6 +1032,36 @@ const mutations = {
     mutateJob(text, (job) => mutate(job, "run: npm run packaged:enrollment", "run: echo packaged:enrollment")),
   "upload not always": (text) =>
     mutateJob(text, (job) => mutate(job, "        if: always()\n", "")),
+  "upload gains a second quoted if": (text) =>
+    mutateJob(text, (job) => mutate(job, "        if: always()\n", "        if: always()\n        'if': false\n")),
+  "enrollment step aliased from a preview conditional": (text) => {
+    const withAnchor = mutate(
+      text,
+      "      - name: Upload public Treehouse preview evidence\n",
+      "      - &conditional_step\n        name: Upload public Treehouse preview evidence\n",
+    );
+    return mutateJob(withAnchor, (job) =>
+      mutate(
+        job,
+        "      - name: Upload public Treehouse enrollment evidence\n",
+        "      - *conditional_step\n      - name: Upload public Treehouse enrollment evidence\n",
+      ),
+    );
+  },
+  "enrollment step aliased from a continue-on-error mapping": (text) => {
+    const withAnchor = mutate(
+      text,
+      "name: Flagship evidence\n",
+      "name: Flagship evidence\nx-skip: &skip_step\n  continue-on-error: true\n  run: 'true'\n",
+    );
+    return mutateJob(withAnchor, (job) =>
+      mutate(
+        job,
+        "      - name: Upload public Treehouse enrollment evidence\n",
+        "      - *skip_step\n      - name: Upload public Treehouse enrollment evidence\n",
+      ),
+    );
+  },
   "upload on success only": (text) =>
     mutateJob(text, (job) => mutate(job, "        if: always()\n", "        if: success()\n")),
   "upload wildcard evidence": (text) =>
@@ -672,6 +1108,41 @@ const mutations = {
     mutate(text, "Treehouse.app ordinary dist", "Treehouse.app ordinary"),
   "classification dist argument replaced": (text) =>
     mutate(text, "Treehouse.app ordinary dist", "Treehouse.app ordinary src"),
+  "ordinary classification conditional": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", "        if: success()\n        run:"));
+  },
+  "ordinary classification gains a quoted if (row 238)": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", "        'if': false\n        run:"));
+  },
+  "ordinary classification gains a double-quoted if": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", '        "if": false\n        run:'));
+  },
+  "ordinary classification gains an escaped if": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", '        "i\\u0066": false\n        run:'));
+  },
+  "ordinary classification gains a quoted continue-on-error": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", '        "continue-on-error": true\n        run:'));
+  },
+  "ordinary classification gains a quoted shell": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", "        'shell': 'bash {0}'\n        run:"));
+  },
+  "ordinary classification gains a block-scalar shell": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", "        ? |-\n          shell\n        : bash -c true {0}\n        run:"));
+  },
+  "ordinary classification gains an anchored shell": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    const withShell = text.replace(step, step.replace("        run:", "        &sh 'shell': bash -c true {0}\n        run:"));
+    return mutateJob(withShell, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", "        id: *sh\n        run: npm run packaged:enrollment"),
+    );
+  },
   "job-level VITE_TREEHOUSE_ENROLLMENT on the ordinary job (row 201)": (text) =>
     mutate(
       text,
@@ -701,11 +1172,29 @@ const mutations = {
     mutate(text, "run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary dist", "run: echo npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary dist"),
   "dev-trace classification inside a shell if (review)": (text) =>
     mutate(text, "run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist", "run: if npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist; then :; fi"),
+  "shell-escaped variant flag written to GITHUB_ENV": (text) =>
+    mutateJob(text, (job) =>
+      job.replace("        run: npm run packaged:enrollment", () =>
+        "        run: |\n          echo $'VITE\\x5fTREEHOUSE_ENROLLMENT=1' >> \"$GITHUB_ENV\"\n          npm run packaged:enrollment",
+      ),
+    ),
   "YAML-escaped variant keys on the ordinary job (review)": (text) =>
     mutate(
       text,
       `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
       `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    env:\n      "VITE\\u005fTREEHOUSE_ENROLLMENT": "1"\n      "VITE\\x5fTREEHOUSE_DEV_TRACE": "1"\n`,
+    ),
+  "variant key after comment line continuation": (text) =>
+    mutate(
+      text,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    # noop \\\n      VITE_TREEHOUSE_DEV_TRACE: "1"\n`,
+    ),
+  "variant key after quoted hash in a flow map": (text) =>
+    mutate(
+      text,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    env: { NOTE: "safe #", VITE_TREEHOUSE_ENROLLMENT: "1" }\n`,
     ),
   "dev-trace classification removed": (text) =>
     mutateJob(text, (job) => job.replace(stepBlocks(job).find((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP) ?? "", "")),
@@ -718,6 +1207,31 @@ const mutations = {
       "      - name: Classify Treehouse dev-trace bundle\n",
       "      - name: Classify Treehouse dev-trace bundle\n        if: runner.os == 'macOS'\n",
     ),
+  "dev-trace classification gains a quoted if (row 238)": (text) =>
+    mutateJob(text, (job) => {
+      const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
+      return job.replace(step, step.replace("        run:", "        'if': false\n        run:"));
+    }),
+  "dev-trace classification gains a quoted continue-on-error": (text) =>
+    mutateJob(text, (job) => {
+      const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
+      return job.replace(step, step.replace("        run:", '        "continue-on-error": true\n        run:'));
+    }),
+  "dev-trace classification gains a quoted shell": (text) =>
+    mutateJob(text, (job) => {
+      const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
+      return job.replace(step, step.replace("        run:", "        'shell': 'bash {0}'\n        run:"));
+    }),
+  "dev-trace classification gains a block-scalar shell": (text) =>
+    mutateJob(text, (job) => {
+      const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
+      return job.replace(step, step.replace("        run:", "        ? |-\n          shell\n        : bash -c true {0}\n        run:"));
+    }),
+  "dev-trace classification duplicated": (text) =>
+    mutateJob(text, (job) => {
+      const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
+      return job.replace(step, `${step}${step}`);
+    }),
   "dev-trace classification before the build": (text) =>
     mutateJob(text, (job) => {
       const classify = stepBlocks(job).find((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP);
@@ -784,6 +1298,12 @@ const mutations = {
     mutate(text, "        run: npm run packaged:export\n", "        \"continue-on-error\": true\n        run: npm run packaged:export\n"),
   "export step gains a quoted shell": (text) =>
     mutate(text, "        run: npm run packaged:export\n", "        'shell': 'bash {0}'\n        run: npm run packaged:export\n"),
+  "export step gains a block-scalar shell": (text) =>
+    mutate(
+      text,
+      "        run: npm run packaged:export\n",
+      "        ? |-\n          shell\n        : bash -c true {0}\n        run: npm run packaged:export\n",
+    ),
   "export step gains a shell": (text) =>
     mutate(text, "        run: npm run packaged:export\n", "        shell: bash {0}\n        run: npm run packaged:export\n"),
   "export step gains a timeout": (text) =>
@@ -936,4 +1456,137 @@ test("the Treehouse preview job is a distinct sibling of packaged_macos", () => 
   const names = jobBlocks(workflow).map(jobName);
   assert.equal(names.filter((name) => name === PREVIEW_JOB).length, 1);
   assert.ok(names.includes("packaged_macos"));
+});
+
+test("countYamlKey reads indent-indicator and tagged block-scalar if keys", () => {
+  assert.ok(countYamlKey("        ? |2-\n          if\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("        ? !!str |-\n          if\n        : false\n", "if") > 0);
+  assert.ok(countYamlKey("        ? !!str |2-\n          if\n        : false\n", "if") > 0);
+});
+
+test("countYamlKey reads escaped-newline continue-on-error keys", () => {
+  assert.ok(countYamlKey('        ? "continue-on-erro\\\n          r"\n        : true\n', "continue-on-error") > 0);
+  assert.ok(countYamlKey('    ? "continue-on-erro\\\n      r"\n    : true\n', "continue-on-error") > 0);
+});
+
+test("own-key whitelist sees a lockstep block-scalar shell", () => {
+  const injected = "        ? |-\n          shell\n        : bash -c true {0}\n        run:";
+  const exportKeys = ["name", "working-directory", "env", "run"];
+  for (const [body, allowed] of [
+    [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [CLASSIFY_DEV_TRACE_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [EXPORT_STEP_BODY, exportKeys],
+  ]) {
+    const updated = body.replace("        run:", injected);
+    assert.ok(stepOwnKeys(updated).includes("shell"));
+    assert.notEqual(JSON.stringify(stepOwnKeys(updated)), JSON.stringify(allowed));
+  }
+});
+
+test("countYamlKey still sees if after a comment that ends with a backslash", () => {
+  assert.ok(countYamlKey("        # harmless \\\n        if: runner.os == 'Linux'\n", "if") > 0);
+});
+
+test("countYamlKey reads split-line and nested tagged if keys", () => {
+  assert.ok(countYamlKey("        ? !!str\n          if\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("        ?\n          !!str if\n        : false\n", "if") > 0);
+});
+
+test("own-key whitelist sees a lockstep split-line tagged shell", () => {
+  const injected = "        ? !!str\n          shell\n        : bash -c true {0}\n        run:";
+  const exportKeys = ["name", "working-directory", "env", "run"];
+  for (const [body, allowed] of [
+    [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [CLASSIFY_DEV_TRACE_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [EXPORT_STEP_BODY, exportKeys],
+  ]) {
+    const updated = body.replace("        run:", injected);
+    assert.ok(stepOwnKeys(updated).includes("shell"));
+    assert.notEqual(JSON.stringify(stepOwnKeys(updated)), JSON.stringify(allowed));
+  }
+});
+
+test("countYamlKey still sees if after a quoted comment line continuation", () => {
+  assert.ok(
+    countYamlKey('        # harmless " \\\n        if: runner.os == \'Linux\'\n        # closing "\n', "if") > 0,
+  );
+});
+
+test("decoded YAML refuses the withheld skip-key documents", () => {
+  for (const name of [
+    "harness if after comment quote line continuation",
+    "harness anchored explicit if",
+    "ordinary classification gains an anchored shell",
+    "harness bare-tag if",
+    "harness dotted-anchor if",
+    "harness alias if key",
+    "harness implicit alias if",
+    "harness alias if anchored in job env",
+    "harness if aliased from an earlier step",
+    "ordinary classification gains an external aliased shell",
+    "enrollment step aliased from a preview conditional",
+    "enrollment step aliased from a continue-on-error mapping",
+    "job continue-on-error alias from workflow name",
+    "variant key after quoted hash in a flow map",
+  ]) {
+    assert.notDeepEqual(check(mutations[name](workflow), pkg, harnessSource), [], `contract accepted: ${name}`);
+  }
+});
+
+test("countYamlKey reads an anchored explicit if key", () => {
+  assert.ok(countYamlKey("        ? &cond 'if'\n        : runner.os == 'Linux'\n        id: *cond\n", "if") > 0);
+});
+
+test("countYamlKey reads bare-tag, dotted-anchor, and alias if keys", () => {
+  assert.ok(countYamlKey("        ? ! 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("        ? &cond.foo 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("extra: &cond if\n? *cond\n: runner.os == 'Linux'\n", "if") > 0);
+});
+
+test("shell-escaped GITHUB_ENV variant flag is refused by the hex-escape scan", () => {
+  const mutated = mutations["shell-escaped variant flag written to GITHUB_ENV"](workflow);
+  const doc = loadYamlDocument(mutated);
+  assert.equal(doc.errors.length, 0);
+  assert.match(mutated, /npm run packaged:enrollment/u);
+  const problems = check(mutated, pkg, harnessSource);
+  assert.ok(problems.some((problem) => /VITE_TREEHOUSE_/u.test(problem)));
+});
+
+test("yamlSteps resolves an aliased preview conditional before the enrollment upload", () => {
+  const mutated = mutations["enrollment step aliased from a preview conditional"](workflow);
+  const doc = loadYamlDocument(mutated);
+  const ifSteps = yamlSteps(yamlJob(doc, JOB), doc).filter((step) => ownKeysFromMap(step, doc).includes("if"));
+  assert.ok(ifSteps.length > 1);
+  const problems = check(mutated, pkg, harnessSource);
+  assert.ok(problems.some((problem) => /exactly one step \(the evidence upload\) may carry an if/u.test(problem)));
+});
+
+test("yamlSteps resolves an aliased continue-on-error mapping", () => {
+  const mutated = mutations["enrollment step aliased from a continue-on-error mapping"](workflow);
+  const doc = loadYamlDocument(mutated);
+  const steps = yamlSteps(yamlJob(doc, JOB), doc);
+  assert.ok(steps.some((step) => ownKeysFromMap(step, doc).includes("continue-on-error")));
+  const problems = check(mutated, pkg, harnessSource);
+  assert.ok(problems.some((problem) => /continue-on-error/u.test(problem)));
+});
+
+test("full-document own keys see a shell alias defined outside the classification step", () => {
+  const mutated = mutations["ordinary classification gains an external aliased shell"](workflow);
+  const doc = loadYamlDocument(mutated);
+  const keys = ownKeysFromMap(yamlStepNamed(yamlJob(doc, PREVIEW_JOB), CLASSIFY_STEP, doc), doc);
+  assert.ok(keys.includes("shell"));
+});
+
+test("own-key whitelist sees a lockstep anchored shell", () => {
+  const injected = "        &sh 'shell': bash -c true {0}\n        run:";
+  const exportKeys = ["name", "working-directory", "env", "run"];
+  for (const [body, allowed] of [
+    [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [CLASSIFY_DEV_TRACE_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [EXPORT_STEP_BODY, exportKeys],
+  ]) {
+    const updated = body.replace("        run:", injected);
+    assert.ok(stepOwnKeys(updated).includes("shell"));
+    assert.notEqual(JSON.stringify(stepOwnKeys(updated)), JSON.stringify(allowed));
+  }
 });

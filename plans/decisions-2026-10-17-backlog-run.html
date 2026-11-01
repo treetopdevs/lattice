@@ -1096,6 +1096,80 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>Minor: required evidence item 4 still said the 32 MiB retained-snapshot fixture must export/import, which now conflicts with <code>CatalogEvidence.export/4</code> refusing <code>preview_storage_limit</code>.</dd>
 <dt>Decision</dt><dd>Fixed. Item 4 keeps the fixture as an evaluator / <code>Packet.encode/4</code> proof under the 64 MiB transport cap. <code>CatalogEvidence.export/4</code> of that page is <code>preview_storage_limit</code>. No new plan-index row; evaluator caps unchanged.</dd>
 </dl></section>
+<section id="d162"><h2><span>D-162</span> Slice choice: row 238, quoted YAML skip keys in the enrollment CI contract</h2><dl>
+<dt>When</dt><dd>2026-10-31, from main <code>2ee21f740</code></dd>
+<dt>Context</dt><dd>Already merged: #195–#203. This slice’s first plan-index edit marks row 300 DONE (PR #203, merge <code>2ee21f740</code>, exact tip <code>d90c1e2cc</code>, Flagship <code>41265390624</code> green) without reopening the exporter. Excluded: Township and Toolshed under rule 10; rule 8 parked items (rows 077/285 device, 146 codesigning, 261/262 two Macs, 224/245 ceremony); row 256, an operator decision; plans 267–279, the native evaluator track already in flight; rows 301 and 302, first-occurrence flakes; row 303 until row 255 / plan 245 PR 5; do not reopen 288, 295, 289, 257, 300. No higher unblocked P1 that fits one PR is free of those parks: 255/259 wait on plan 245 PR 6; 154 is Township; 150 is L and owned by R31; 229 waits on the next enrollment-hint failure.</dd>
+<dt>Options</dt><dd>(a) Row 238 (P3 S, recommended: pin the ordinary classification and enrollment classification step bodies as exact text, and close quoted <code>if</code> / <code>continue-on-error</code> holes in the enrollment job scans); (b) a parked P1; (c) row 301 or 302 on first occurrence.</dd>
+<dt>Decision</dt><dd>(a).</dd>
+<dt>Reason</dt><dd>Row 238 is the recommended next slice: unblocked, S, and the residual of the row 236 quoted-YAML finding. This is not a rule-3 path (contract test only; no <code>.github/workflows</code>, custody, codec, or carrier edit).</dd>
+</dl></section>
+<section id="d163"><h2><span>D-163</span> Row 238: exact-text pins plus a quoted YAML key scan</h2><dl>
+<dt>When</dt><dd>2026-10-31</dd>
+<dt>Context</dt><dd>The ordinary classification line check and the enrollment job’s <code>if:</code> / <code>if: false</code> scans missed quoted keys such as <code>'if': false</code>. Row 236 closed that class on the export step by pinning the whole body as exact text. <code>continue-on-error</code> was already forbidden as a substring in the enrollment job.</dd>
+<dt>Options</dt><dd>(a) Digest-pin every enrollment step body; (b) pin the ordinary and dev-trace classification steps as exact text (row 236 form) and read quoted / escaped / explicit <code>? if</code> YAML keys in the enrollment job’s <code>if</code> scan; (c) only widen the regex.</dd>
+<dt>Decision</dt><dd>(b). Classification own keys stay exactly <code>name</code>, <code>working-directory</code>, <code>run</code>. The export step gets the same quoted-key skip scan so updating the pin and the workflow together cannot smuggle a skip key. No workflow step body changed; both packaged digests are unchanged. Do not weaken any existing pin. Not a W4, Phase G, or packaged-runtime claim.</dd>
+<dt>Reason</dt><dd>(a) would freeze Hex/Rebar retry and cache keys that the enrollment job still pins structurally. (c) alone would leave the classification step, which is excluded from <code>TREEHOUSE_PREVIEW_DIGEST</code>, without an exact body pin.</dd>
+</dl></section>
+<section id="d164"><h2><span>D-164</span> Row 238 Codex P1/P2: count decoded YAML skip keys; exactly one classification step</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>8771c04e3</code></dd>
+<dt>Finding</dt><dd>Two P1, two P2. (1) <code>? 'if' # comment</code>, tagged keys, and block-scalar keys skipped the harness because the explicit-key regex required end of line. (2) <code>"continue-on-erro\u0072"</code> skipped the job-wide substring check, which ran on raw text. (3) <code>unquotedStepKeys</code> ignored quoted keys, so updating a pin constant and the workflow together could add <code>'shell'</code>. (4) Only the first ordinary classification step was pinned, while the preview digest excludes every step of that name.</dd>
+<dt>Decision</dt><dd>Fixed. Skip-key detection counts decoded YAML keys, including comments on <code>?</code> lines, tags, block/folded keys, and Unicode escapes. Classification and export compare decoded own keys to the whitelist. Preview and enrollment each require exactly one classification step. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d165"><h2><span>D-165</span> Row 238 Codex confirm P1/P2: indent indicators, escaped newlines, block-scalar own keys</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>02f98e8bc</code></dd>
+<dt>Finding</dt><dd>Two P1, one P2. (1) <code>? |2-</code> and tagged <code>? !!str |-</code> skipped the harness because the block-header regex omitted indentation indicators and tags. (2) A double-quoted key split by a YAML escaped line break decoded to <code>continue-on-error</code> but the scanner missed it. (3) <code>mappingKeys</code> ignored block-scalar names, so updating a pin constant and the workflow together could add a block-scalar <code>shell</code>.</dd>
+<dt>Decision</dt><dd>Fixed. <code>decodeYamlEscapes</code> folds double-quoted line continuations. Skip-key and own-key scans read tagged and indented block-scalar keys and nested <code>?</code> content. Scanner unit tests cover lockstep <code>shell</code>. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d166"><h2><span>D-166</span> Row 238 second confirm: fold only inside double quotes; split-line tags look ahead</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>2b1a57ea0</code></dd>
+<dt>Finding</dt><dd>Two P1, one P2. (1) Global <code>\</code>+linebreak folding joined a comment that ended in a backslash onto the next <code>if:</code> line, then comment-stripping hid it; origin/main rejected that mutation. The same join hid a <code>VITE_TREEHOUSE_*</code> assignment. (2) <code>? !!str</code> with the name on the next line, and nested <code>?</code> then <code>!!str if</code>, skipped the scanner. (3) The same split-line tag form omitted <code>shell</code> from the own-key whitelist.</dd>
+<dt>Decision</dt><dd>The comment-backslash regression was closed, but a regex fold still cannot tell a comment from a quoted scalar. That class of remaining holes is owned by D-168’s YAML parser, not by further fold-regex special cases. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d167"><h2><span>D-167</span> Row 238 third confirm: strip comments before fold; read YAML anchors</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>552518ffc</code></dd>
+<dt>Finding</dt><dd>Two P1, one P2. (1) A comment containing an unmatched quote plus a trailing backslash still started a fake double-quoted scalar that swallowed the next <code>if:</code>; origin/main rejected that mutation. (2) <code>? &amp;cond 'if'</code> left the anchor after tag stripping, so look-ahead read the value line. (3) Implicit <code>&amp;sh 'shell':</code> omitted <code>shell</code> from the own-key whitelist.</dd>
+<dt>Decision</dt><dd>The quoted-comment and anchor mutations are now fixtures, but another regex decorator pass is the wrong tool: GitHub Actions consumes decoded YAML keys. D-168 replaces the scanner. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d168"><h2><span>D-168</span> Row 238: judge skip keys from decoded YAML, not a regex scanner</h2><dl>
+<dt>When</dt><dd>2026-10-31, after the third confirm pass withheld PASS</dd>
+<dt>Finding</dt><dd>Two P1, one P2 remained against the regex scanner. (1) A comment containing a quote plus a trailing backslash still hid <code>if:</code>; origin/main rejected that mutation. (2) <code>? &amp;cond 'if'</code> decoded to an <code>if</code> key the scanner missed. (3) Lockstep <code>&amp;sh 'shell'</code> omitted <code>shell</code> from the own-key whitelist. The next confirm added bare <code>!</code> tags, dotted anchors, alias keys, and a quoted <code>#</code> that hid a <code>VITE_TREEHOUSE_*</code> flag. Further regex special cases would keep losing to YAML syntax.</dd>
+<dt>Decision</dt><dd>Fixed. The contract keeps exact-text pins and digests on the workflow text, and judges skip keys, own keys, and <code>VITE_TREEHOUSE_*</code> names from decoded YAML Pair keys and scalars via the same <code>yaml</code> 2.9.0 library the Township Android signing contract uses. Alias keys resolve against the document. Tests construct the withheld documents and assert refusal. No new plan-index row. Not a workflow, W4, or Phase G claim. Not a working-policy rule-3 path.</dd>
+</dl></section>
+<section id="d169"><h2><span>D-169</span> Row 238: resolve aliases against the complete workflow document</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass after D-168</dd>
+<dt>Finding</dt><dd>P1/P2. Reparsing a job or step fragment dropped anchors defined elsewhere. Accepted cases included job-env and workflow-name aliases, plus the confirm-pass documents: <code>id: &amp;cond if</code> on Build lattice-client with <code>? *cond</code> on the harness, and workflow-level <code>run-name: &amp;sh shell</code> with <code>? *sh</code> on the ordinary classification step.</dd>
+<dt>Decision</dt><dd>Fixed. <code>check</code> loads the workflow once and reads job/step Pair keys from that document. Fragment helpers remain for isolated scanner tests. Mutations construct those cross-fragment documents, including the two confirm-pass cases. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d170"><h2><span>D-170</span> Row 238: keep the origin/main hex-escape scan for variant flags</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass after D-169</dd>
+<dt>Finding</dt><dd>P2. YAML-only inspection accepted <code>echo $'VITE\x5fTREEHOUSE_ENROLLMENT=1' &gt;&gt; "$GITHUB_ENV"</code>. origin/main rejected it because its global hex-escape decode still saw <code>VITE_TREEHOUSE_</code> in the raw line.</dd>
+<dt>Decision</dt><dd>Fixed. Restore that text scan beside the decoded-YAML visit, so a shell ANSI-C escape cannot hide a variant flag. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d171"><h2><span>D-171</span> Row 238 opens as PR #204</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/204">#204</a></dd>
+<dt>Context</dt><dd>Row 300 is marked DONE on this branch (PR #203, merge <code>2ee21f740</code>). Codex: six read-only passes; remaining P1s fixed; last P2 (D-170) restored the origin/main hex-escape scan and was not re-reviewed. Contract/docs only, not a working-policy rule-3 second-review path.</dd>
+<dt>Decision</dt><dd>Open #204 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). Leave row 238 IN PROGRESS on the exact tip so the tip stays green; the next slice marks it DONE with the merge SHA.</dd>
+</dl></section>
+<section id="d172"><h2><span>D-172</span> PR #204 Codex P3: D-170 fixture must keep the harness and assert the flag scan</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>15097ee5f</code></dd>
+<dt>Finding</dt><dd>P3. The GITHUB_ENV mutation replaced the harness command, and <code>$'</code> in a <code>String.replace</code> replacement expanded as JS post-match text, so unrelated checks rejected it. Removing the hex-escape scan still left every test green.</dd>
+<dt>Decision</dt><dd>Fixed. The mutation keeps the harness via a replacement callback and a dedicated test requires a <code>VITE_TREEHOUSE_</code> violation. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d173"><h2><span>D-173</span> PR #204 Codex P2: count every decoded <code>if</code> on the upload step</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/204#discussion_r4434302819">review comment</a> on tip <code>42a64d462</code></dd>
+<dt>Finding</dt><dd>P2. A second quoted <code>'if': false</code> on the evidence-upload step still left one conditional step, and <code>get("if")</code> returned <code>always()</code>. <code>uniqueKeys: false</code> is intentional.</dd>
+<dt>Decision</dt><dd>Fixed. The upload step must carry exactly one decoded <code>if</code> key. Mutation added. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d174"><h2><span>D-174</span> PR #204 Codex P2: resolve aliased step mappings</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/204#discussion_r4434319507">review comment</a> on tip <code>bfba289f3</code></dd>
+<dt>Finding</dt><dd>P2. <code>yamlSteps</code> dropped sequence items that were Alias nodes, so <code>- *conditional_step</code> before the enrollment upload never entered the decoded <code>if</code> / <code>continue-on-error</code> scan.</dd>
+<dt>Decision</dt><dd>Fixed. Resolve aliases on jobs, steps, skip-key counts, and variant-flag visits before judging decoded keys. Mutations added. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d175"><h2><span>D-175</span> PR #204 confirm-7 P3s: fixtures must pin the decoded guards</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>c9993df43</code></dd>
+<dt>Finding</dt><dd>P3. Confirm 7 reported no P1/P2. D-172's outer <code>mutateJob</code> still expanded <code>$'</code>, and D-174's mutations were rejected by digest/order checks even if <code>yamlSteps</code> dropped Alias items.</dd>
+<dt>Decision</dt><dd>Fixed. <code>mutate</code>/<code>mutateJob</code> use replacement callbacks. D-172 asserts valid YAML plus the retained harness. D-174 asserts resolved step membership and the specific skip-key violation. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
