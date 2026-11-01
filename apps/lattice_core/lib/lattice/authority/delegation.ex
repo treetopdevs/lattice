@@ -167,10 +167,7 @@ defmodule Lattice.Authority.Delegation do
   """
   @spec well_formed?(term()) :: boolean()
   def well_formed?(%__MODULE__{} = d) do
-    # A tampered struct can lack any key (a legacy one lacks the lease); refuse it
-    # before a field read raises KeyError. `Lattice.Log.restore/1` upgrades legacy
-    # structs before the judge.
-    Enum.all?(@fields, &is_map_key(d, &1)) and is_binary(d.id) and is_binary(d.replica) and
+    complete?(d) and is_binary(d.id) and is_binary(d.replica) and
       is_binary(d.issuer) and
       is_binary(d.audience) and (is_nil(d.parent_id) or is_binary(d.parent_id)) and
       names?(d.ops) and names?(d.roles) and is_boolean(d.live) and is_binary(d.sig) and
@@ -180,6 +177,15 @@ defmodule Lattice.Authority.Delegation do
   end
 
   def well_formed?(_other), do: false
+
+  @doc """
+  True if the struct carries every key. A tampered struct can lack any key (a
+  legacy one lacks the lease); refuse it before a field read raises KeyError.
+  `Lattice.Log.restore/1` fills missing keys with `nil` before the judge.
+  """
+  @spec complete?(term()) :: boolean()
+  def complete?(%__MODULE__{} = d), do: Enum.all?(@fields, &is_map_key(d, &1))
+  def complete?(_other), do: false
 
   # Members must be scalars Canonical can encode. A binary or integer name is
   # harmless (it signs to different bytes from the atom, so it never authorizes a

@@ -286,18 +286,36 @@ defmodule Lattice2.MalformedDelegationFieldsTest do
   end
 
   describe "bounded continuation" do
-    test "a continuation claim whose delegation lacks the lease key is refused, not raised" do
+    test "a continuation claim whose delegation lacks any key is refused, not raised" do
       {sim, pin, profile, epoch} = continuation_ready()
       {_, candidate} = F.continue(sim, "nominee", pin, profile, epoch_basis: [epoch.id])
       {:succeed, role, d, proof} = candidate.body
 
-      odd = Map.delete(d, :expires_epoch)
-      {branch, op} = Sim.append(sim, "nominee", :authority, {:succeed, role, odd, proof})
-      assert Op.valid?(op)
-      assert {true, _reason} = Sim.quarantined(branch, "nominee", op.id)
+      # Only the lease key is optional in canonical bytes, so a keyless claim is
+      # signable; any other missing key reaches the judge through a tampered log.
+      {branch, op} =
+        Sim.append(
+          sim,
+          "nominee",
+          :authority,
+          {:succeed, role, Map.delete(d, :expires_epoch), proof}
+        )
 
-      refute Authority.holder_epoch(branch.module, Sim.log(branch, "nominee"), role).op_id ==
-               op.id
+      assert Op.valid?(op)
+      assert Sim.quarantined(branch, "nominee", op.id) == {true, :malformed_term}
+
+      log = Sim.log(sim, "nominee")
+      log = Log.from_ops(log.replica, Map.put(log.ops, candidate.id, candidate))
+
+      # `:id` is read by the judge's own passes first; a struct missing a key is
+      # in-process only (Log.restore/1 fills nil), so that is out of scope here.
+      for key <- Map.keys(d) -- [:__struct__, :id] do
+        odd = %{candidate | body: {:succeed, role, Map.delete(d, key), proof}}
+        tampered = Log.from_ops(log.replica, Map.put(log.ops, candidate.id, odd))
+        analysis = Authority.analyze(sim.module, tampered)
+        assert analysis.reasons[candidate.id] == :malformed_term, inspect(key)
+        refute Authority.holder_epoch(sim.module, tampered, role).op_id == candidate.id
+      end
     end
   end
 end
