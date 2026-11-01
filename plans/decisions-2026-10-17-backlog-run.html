@@ -1170,6 +1170,96 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>P3. Confirm 7 reported no P1/P2. D-172's outer <code>mutateJob</code> still expanded <code>$'</code>, and D-174's mutations were rejected by digest/order checks even if <code>yamlSteps</code> dropped Alias items.</dd>
 <dt>Decision</dt><dd>Fixed. <code>mutate</code>/<code>mutateJob</code> use replacement callbacks. D-172 asserts valid YAML plus the retained harness. D-174 asserts resolved step membership and the specific skip-key violation. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
+<section id="d176"><h2><span>D-176</span> Backlog run 2026-11-01: coordinator, monitor and merge policy</h2><dl>
+<dt>Context</dt><dd>Run policy for this backlog run.</dd>
+<dt>Options</dt><dd>Per-slice Workflows versus ad hoc agents.</dd>
+<dt>Decision</dt><dd>Slices run as Workflows in fresh worktrees from origin/main on Opus 5.5. Adversarial review is Codex Sol 6.1 at xhigh (user instruction, overriding the standing high). A Sonnet 5.5 CI monitor merges a PR with a merge commit only when every check on the exact head SHA is green, no review thread is unresolved, no bot P1/P2 is open on the tip and the branch is CLEAN (else update-branch and wait); otherwise it messages the PR's owner agent. D-02 still holds and D-128's criteria are kept.</dd>
+<dt>Reason</dt><dd>Desktop "Auto-fix pull requests" cannot be toggled from the session, so autofix means owner agents fixing on the monitor's message.</dd>
+</dl></section>
+<section id="d177"><h2><span>D-177</span> Take row 305 as the preferred slice</h2><dl>
+<dt>Context</dt><dd>Row 305 is the preferred slice. It must still be open, unblocked and not touched by an open PR.</dd>
+<dt>Options</dt><dd>Row 305; fallback row 231; then 226; then 225.</dd>
+<dt>Decision</dt><dd>Take row 305. No fallback.</dd>
+<dt>Reason</dt><dd>README line 471 shows it TODO. Its dependency, row 304 (PR #205), is merged as d987bd0d7. The only open PR is #206, which touches verdict.ex and its test only. No existing worktree uses a 305 branch. Fallbacks were not examined further because the preferred row passed. It does not claim the fallback rows are still open.</dd>
+</dl></section>
+<section id="d178"><h2><span>D-178</span> Crash guard under rule 10, not new Township work</h2><dl>
+<dt>Context</dt><dd>Rule 10 freezes Township product work. ReadModel is Township code.</dd>
+<dt>Options</dt><dd>Skip the row because Township is frozen; do it as a maintenance crash guard.</dd>
+<dt>Decision</dt><dd>Do it as a crash guard only. No new fields, panels or behavior.</dd>
+<dt>Reason</dt><dd>The slice brief says crash guards are allowed under rule 10, with precedent in row 304. The change only drops ill-formed delegations from a derived view. It does not claim any Township feature progress.</dd>
+</dl></section>
+<section id="d179"><h2><span>D-179</span> Filter with Delegation.well_formed?/1 rather than judge-valid introductions</h2><dl>
+<dt>Context</dt><dd>Row 305 offers two fixes: read only judge-valid introductions, or guard with Delegation.well_formed?/1.</dd>
+<dt>Options</dt><dd>(a) Drive both readers from the full judge result; (b) a well_formed?/1 filter at each read site.</dd>
+<dt>Decision</dt><dd>Use (b). One well_formed?/1 filter in ReadModel.delegation_events/1. (A second filter in InitialBundle.grants/3 was planned and later dropped as unreachable, see below.)</dd>
+<dt>Reason</dt><dd>well_formed? is total, cheap and already the shape contract from PR #205. Option (a) would mean threading judge output into a read model that currently reads the log directly. It does not claim these readers now apply full judge validity to what they display. They only stop raising.</dd>
+</dl></section>
+<section id="d180"><h2><span>D-180</span> Malformed bodies are omitted, and InitialBundle fails closed</h2><dl>
+<dt>Context</dt><dd>A skipped delegation must not silently change what the sealed import accepts.</dd>
+<dt>Options</dt><dd>Raise a clear error; skip the entry; return :error from the readers.</dd>
+<dt>Decision</dt><dd>ReadModel omits the node and edge. InitialBundle is unchanged (its own checks already refuse).</dd>
+<dt>Reason</dt><dd>The trust graph is display-only, so omission is safe. No new error atoms or API shapes. It does not claim a distinct refusal reason.</dd>
+</dl></section>
+<section id="d181"><h2><span>D-181</span> Treat the diff as rule 3 by intent and get a second review</h2><dl>
+<dt>Context</dt><dd>The diff touches no path in the rule-3 list. initial_bundle.ex is carrier-server operator code that derives the sealed-import roster from authority evidence.</dd>
+<dt>Options</dt><dd>One adversarial review only; one plus a second independent review.</dd>
+<dt>Decision</dt><dd>One adversarial review plus a second independent review (Codex Sol 6.1 High). The PR body says rule 3 applies by intent.</dd>
+<dt>Reason</dt><dd>The brief says to treat InitialBundle as rule 3 by intent. The final diff no longer touches it. It does not claim the literal rule-3 path list is hit.</dd>
+</dl></section>
+<section id="d182"><h2><span>D-182</span> Leave the `true =` MatchError in grants/3 out of scope</h2><dl>
+<dt>Context</dt><dd>grants/3 uses `true = d.issuer == root and ...`, which raises MatchError for a well-formed grant that is not a plain member grant. That is a different input class than row 305.</dd>
+<dt>Options</dt><dd>Fix it here; leave it and file a row if it is reachable.</dd>
+<dt>Decision</dt><dd>Leave it. If a test shows it is reachable from a signed log, file a new row rather than widen this PR.</dd>
+<dt>Reason</dt><dd>Row 305 is scoped to list-form bodies. A semantic change to refusal there deserves its own review. It does not claim grants/3 is otherwise crash-free.</dd>
+</dl></section>
+<section id="d183"><h2><span>D-183</span> Reproduce malformed logs through Sim.append, with Log.from_ops as backup</h2><dl>
+<dt>Context</dt><dd>The tests need a log that holds a list-form body, so the append path has to admit it.</dd>
+<dt>Options</dt><dd>Hand-built Log structs; the Sim.append pattern from malformed_delegation_test.exs grant_log/1; Log.from_ops rewriting an op.</dd>
+<dt>Decision</dt><dd>Use Sim.append with a list-form copy of a real grant (same id), as row 289's tests do. Each new test must be shown red on origin/main before the lib change.</dd>
+<dt>Reason</dt><dd>It reuses a proven helper shape and exercises the same-id aggregate case that defeats delegation_active?. It does not claim every malformed shape is covered.</dd>
+</dl></section>
+<section id="d184"><h2><span>D-184</span> Dropped the non-binary audience case from the first ReadModel test</h2><dl>
+<dt>Context</dt><dd>The plan listed a non-binary audience as a third case.</dd>
+<dt>Options</dt><dd>Widen the PR to guard ReplicaSnapshot, or drop the case and note the residual.</dd>
+<dt>Decision</dt><dd>Initially dropped: a non-binary audience crashed ReplicaSnapshot.summary/1. Later review rounds widened the PR to guard ReplicaSnapshot (audience_fp/1), see the review entry.</dd>
+<dt>Reason</dt><dd>Superseded by Codex rounds 1 and 2.</dd>
+</dl></section>
+<section id="d185"><h2><span>D-185</span> InitialBundle test pins no-raise and wire normalization, not an {:error, _} refusal</h2><dl>
+<dt>Context</dt><dd>The plan expected decode to return {:error, _}.</dd>
+<dt>Options</dt><dd>Make grants/3 public for a direct test (widens API), or pin the normalization.</dd>
+<dt>Decision</dt><dd>Pinned normalization first; then removed (see the unreachable-guard entry).</dd>
+<dt>Reason</dt><dd>Wire.encode_op and decode rebuild MapSets, so a list-form body never reaches grants/3. Authority.analyze also fails the analysis first.</dd>
+</dl></section>
+<section id="d186"><h2><span>D-186</span> ReadModel test uses a Matter log with Sim.grant plus a same-content malformed Sim.append</h2><dl>
+<dt>Context</dt><dd>Plan assertion (3): byte-equality with the pre-change result for well-formed logs.</dd>
+<dt>Options</dt><dd>Add a separate byte-equality assertion; compare trust-graph edges against a baseline log.</dd>
+<dt>Decision</dt><dd>Build a baseline log from Sim.grant and a per-field log with the extra malformed append, then assert the trust-graph edges are identical.</dd>
+<dt>Reason</dt><dd>This exercises the 'malformed body adds no edge' claim directly. The existing tracked-artifact test already covers byte-equality and stays green.</dd>
+</dl></section>
+<section id="d187"><h2><span>D-187</span> Env repair in the fresh worktree</h2><dl>
+<dt>Context</dt><dd>deps/ was absent, so mix could not run.</dd>
+<dt>Options</dt><dd>Run mix deps.get; copy deps.</dd>
+<dt>Decision</dt><dd>Ran `mix deps.get` in the worktree before compiling.</dd>
+<dt>Reason</dt><dd>No lockfile change was committed.</dd>
+</dl></section>
+<section id="d188"><h2><span>D-188</span> Drop unreachable InitialBundle guard</h2><dl>
+<dt>Context</dt><dd>Review found the grants/3 guard and its test pass with the guard reverted.</dd>
+<dt>Options</dt><dd>Expose a private function to test it; drop the guard.</dd>
+<dt>Decision</dt><dd>Removed the Delegation.well_formed? guard in grants/3 and its test; apps/lattice_carrier_server restored to origin/main.</dd>
+<dt>Reason</dt><dd>Every input reaches grants/3 through decode/1, which rebuilds MapSets and rescues all raises, so the guard has no reachable failure mode. Keeping it would leave a claim with no regression coverage.</dd>
+</dl></section>
+<section id="d189"><h2><span>D-189</span> Patch the call sites rather than change Delegation.well_formed? or Identity.fingerprint</h2><dl>
+<dt>Context</dt><dd>Delegation.well_formed? accepts any binary as a key.</dd>
+<dt>Options</dt><dd>Change well_formed? centrally; add key-length checks in ReadModel and ReplicaSnapshot.</dd>
+<dt>Decision</dt><dd>Added key-length checks and tick rendering in ReadModel and ReplicaSnapshot. Left well_formed? and fingerprint unchanged.</dd>
+<dt>Reason</dt><dd>Changing well_formed? is a wire and judge contract change outside row 305. The same class has repeated across rounds, so central design rows 307 and 309 are filed.</dd>
+</dl></section>
+<section id="d190"><h2><span>D-190</span> PR #207 review: Codex Sol 6.1 xhigh rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-01</dd>
+<dt>Finding</dt><dd>See Decision for each round.</dd>
+<dt>Decision</dt><dd>Round 1: (P2 read_model.ex:254 role interpolation before guard) fixed with role_event/3, new transfer/succeed map-role test red without fix; (P3 non-binary audience crashes ReplicaSnapshot.summary) fixed with audience_fp/1; (P3/P2 InitialBundle test passes with guard reverted) fixed by removing the unreachable guard and test; (P3 silent omission from the trust graph) follow-up row 306. Round 2: (P2 short binary audiences crash Identity.fingerprint) fixed: audience_fp/1 fingerprints only 32-byte binaries and ReadModel drops events whose issuer or audience is not 32 bytes; test red with ArgumentError when stashed. Round 3: (P2 malformed ticks crash both readers) fixed with tick_text/1 over transfer, succeed and heartbeat summaries, new regression test with map ticks; (P3 short-audience test masks the audience guard) fixed by keeping roles a MapSet. Final-round findings were the round-3 findings; both were addressed in the last commit, so no P1/P2 is known open on the tip. Follow-up rows 306 to 309.</dd>
+<dt>Reason</dt><dd>Rule 3 by intent; no workflow, W4 or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
