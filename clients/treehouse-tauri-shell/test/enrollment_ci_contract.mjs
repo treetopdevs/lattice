@@ -257,14 +257,35 @@ function yamlMap(node) {
   return isMap(node) ? node : undefined;
 }
 
-function countKeyInNode(doc, name) {
+function countKeyInNode(node, name, doc = node) {
   let n = 0;
-  visit(doc, {
+  visit(node, {
     Pair(_key, pair) {
       if (pairKeyName(pair.key, doc) === name) n += 1;
     },
   });
   return n;
+}
+
+function yamlJob(doc, name) {
+  const jobs = doc.get("jobs");
+  return isMap(jobs) ? jobs.get(name) : undefined;
+}
+
+function yamlSteps(jobNode) {
+  if (!isMap(jobNode)) return [];
+  const steps = jobNode.get("steps");
+  return isSeq(steps) ? steps.items.filter(isMap) : [];
+}
+
+function yamlStepNamed(jobNode, name) {
+  return yamlSteps(jobNode).find((step) => step.get("name") === name);
+}
+
+function yamlHasSkipKey(stepNode, doc) {
+  if (!stepNode) return true;
+  const keys = ownKeysFromMap(stepNode, doc);
+  return keys.includes("if") || keys.includes("continue-on-error");
 }
 
 function yamlMentions(doc, pattern) {
@@ -296,7 +317,8 @@ function unquotedStepKeys(step) {
 }
 
 function countYamlKey(block, name) {
-  return countKeyInNode(loadYamlDocument(block), name);
+  const doc = loadYamlDocument(block);
+  return countKeyInNode(doc, name, doc);
 }
 
 function hasSkipKey(step) {
@@ -366,6 +388,8 @@ export function check(workflow, pkg, harnessSource) {
   if (workflowDoc.errors.length > 0)
     fail(`flagship.yml must parse as YAML: ${workflowDoc.errors[0].message.split("\n")[0]}`);
   if (yamlMentions(workflowDoc, /VITE_TREEHOUSE_/u)) fail("flagship.yml must not set any VITE_TREEHOUSE_* key");
+  const enrollmentYaml = yamlJob(workflowDoc, JOB);
+  const previewYaml = yamlJob(workflowDoc, PREVIEW_JOB);
   for (const [script, body] of Object.entries(pkg.scripts ?? {}))
     if (script !== "tauri:build:dev-trace" && VARIANT_FLAGS.some((flag) => String(body).includes(flag)))
       fail(`package script ${script} must not set a Treehouse variant flag`);
@@ -398,14 +422,16 @@ export function check(workflow, pkg, harnessSource) {
       if (run.trim() !== ORDINARY_CLASSIFY_RUN)
         fail("classification step must assert the ordinary variant of the ordinary bundle and its dist");
       if (scalar(classify, "working-directory") !== SHELL_DIR) fail("classification runs in the Treehouse shell");
-      if (hasSkipKey(classify) || /\|\|/u.test(run)) fail("classification must be unconditional and blocking");
+      if (yamlHasSkipKey(yamlStepNamed(previewYaml, CLASSIFY_STEP), workflowDoc) || /\|\|/u.test(run))
+        fail("classification must be unconditional and blocking");
       // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
       // such as 'if' or "continue-on-error" pass a bare `if:` line check).
       if (exactStepBody(classify) !== CLASSIFY_STEP_BODY)
         fail("the ordinary classification step body must be exactly the pinned text");
       if (
         JSON.stringify(unquotedStepKeys(classify)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
-        JSON.stringify(stepOwnKeys(classify)) !== JSON.stringify(CLASSIFY_STEP_KEYS)
+        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, CLASSIFY_STEP), workflowDoc)) !==
+          JSON.stringify(CLASSIFY_STEP_KEYS)
       )
         fail("the ordinary classification step keys must be exactly name, working-directory and run");
     }
@@ -426,7 +452,8 @@ export function check(workflow, pkg, harnessSource) {
       if (scalar(step, "working-directory") !== SHELL_DIR) fail("the Space export runs in the Treehouse shell");
       if (JSON.stringify(envEntries(step)) !== JSON.stringify(EXPORT_ENV))
         fail("the Space export env must be exactly the evidence dir and MIX_ENV");
-      if (hasSkipKey(step) || /\|\||set\s+\+e/u.test(step)) fail("the Space export must be unconditional and blocking");
+      if (yamlHasSkipKey(yamlStepNamed(previewYaml, EXPORT_STEP), workflowDoc) || /\|\||set\s+\+e/u.test(step))
+        fail("the Space export must be unconditional and blocking");
       // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
       // such as 'if' or "continue-on-error" pass a bare `if:` line check).
       if (exactStepBody(step) !== EXPORT_STEP_BODY) fail("the Space export step body must be exactly the pinned text");
@@ -434,7 +461,8 @@ export function check(workflow, pkg, harnessSource) {
       const exportKeys = ["name", "working-directory", "env", "run"];
       if (
         JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(exportKeys) ||
-        JSON.stringify(stepOwnKeys(step)) !== JSON.stringify(exportKeys)
+        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, EXPORT_STEP), workflowDoc)) !==
+          JSON.stringify(exportKeys)
       )
         fail("the Space export step keys must be exactly name, working-directory, env and run");
     }
@@ -467,13 +495,17 @@ export function check(workflow, pkg, harnessSource) {
   if (!Number.isInteger(timeout) || timeout < 30 || timeout > 120) fail("timeout-minutes must be a bounded 30 to 120");
   if ((header.match(/^ {4}if:/gmu) ?? []).length !== 1 || scalar(header, "if", 4) !== ENROLLMENT_GATE)
     fail(`the job must carry exactly one job-level if, ${ENROLLMENT_GATE}`);
-  if (countYamlKey(header, "if") !== 1 || headerOwnKeys(header).filter((key) => key === "if").length !== 1)
+  if (
+    ownKeysFromMap(enrollmentYaml, workflowDoc).filter((key) => key === "if").length !== 1 ||
+    ownKeysFromMap(enrollmentYaml, workflowDoc).filter((key) => key !== "steps").filter((key) => key === "if")
+      .length !== 1
+  )
     fail(`the job must carry exactly one job-level if, including quoted YAML keys, ${ENROLLMENT_GATE}`);
   if (JSON.stringify(needsOf(job)) !== JSON.stringify(["changes"]))
     fail("the job must need exactly the changes classifier");
   if (JSON.stringify(permissions(header)) !== JSON.stringify(["contents: read"]))
     fail("the job must declare exactly least-privilege permissions: contents: read");
-  if (/continue-on-error/u.test(job) || countYamlKey(job, "continue-on-error") > 0)
+  if (/continue-on-error/u.test(job) || countKeyInNode(enrollmentYaml, "continue-on-error", workflowDoc) > 0)
     fail("continue-on-error is forbidden in any spelling");
   if (/\|\|\s*(?:true|:|exit\s+0)\b/u.test(job)) fail("|| true style masking is forbidden");
   if (/set\s+\+e/u.test(job)) fail("set +e is forbidden");
@@ -483,11 +515,13 @@ export function check(workflow, pkg, harnessSource) {
   if (/TREEHOUSE_PACKAGED_PREFLIGHT_ONLY/u.test(job)) fail("the preflight-only switch must not be set in CI");
 
   // Only the evidence upload may carry an if, and it is exactly always(). Quoted YAML keys count.
-  const conditional = steps.filter((step) => countYamlKey(step, "if") > 0);
+  const conditional = yamlSteps(enrollmentYaml).filter((step) =>
+    ownKeysFromMap(step, workflowDoc).includes("if"),
+  );
   if (conditional.length !== 1) fail("exactly one step (the evidence upload) may carry an if");
   for (const step of conditional) {
-    if (scalar(step, "if") !== "always()") fail("the only permitted if is always()");
-    if (!(scalar(step, "uses") ?? "").startsWith("actions/upload-artifact@"))
+    if (step.get("if") !== "always()") fail("the only permitted if is always()");
+    if (!String(step.get("uses") ?? "").startsWith("actions/upload-artifact@"))
       fail("only the upload step may carry an if");
   }
 
@@ -622,12 +656,14 @@ export function check(workflow, pkg, harnessSource) {
     if (run.trim() !== DEV_TRACE_CLASSIFY_RUN)
       fail("dev-trace classification must assert the dev_trace bundle and the dist");
     if (scalar(step, "working-directory") !== SHELL_DIR) fail("dev-trace classification runs in the Treehouse shell");
-    if (hasSkipKey(step) || /\|\|/u.test(run)) fail("dev-trace classification must be unconditional and blocking");
+    if (yamlHasSkipKey(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP), workflowDoc) || /\|\|/u.test(run))
+      fail("dev-trace classification must be unconditional and blocking");
     if (exactStepBody(step) !== CLASSIFY_DEV_TRACE_STEP_BODY)
       fail("the dev-trace classification step body must be exactly the pinned text");
     if (
       JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
-      JSON.stringify(stepOwnKeys(step)) !== JSON.stringify(CLASSIFY_STEP_KEYS)
+      JSON.stringify(ownKeysFromMap(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP), workflowDoc)) !==
+        JSON.stringify(CLASSIFY_STEP_KEYS)
     )
       fail("the dev-trace classification step keys must be exactly name, working-directory and run");
   }
@@ -858,6 +894,25 @@ const mutations = {
         "        extra: &cond if\n        *cond: runner.os == 'Linux'\n        run: npm run packaged:enrollment",
       ),
     ),
+  "harness alias if anchored in job env": (text) =>
+    mutateJob(text, (job) => {
+      const withAnchor = mutate(
+        job,
+        "    permissions:\n      contents: read\n",
+        "    permissions:\n      contents: read\n    env: { COND: &cond if }\n",
+      );
+      return mutate(
+        withAnchor,
+        "        run: npm run packaged:enrollment",
+        "        ? *cond\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      );
+    }),
+  "job continue-on-error alias from workflow name": (text) => {
+    const named = mutate(text, "name: Flagship evidence", 'name: &coe "continue-on-erro\\u0072"');
+    return mutateJob(named, (job) =>
+      mutate(job, "    runs-on:", "    ? *coe\n    : true\n    runs-on:"),
+    );
+  },
   "harness escaped-newline continue-on-error": (text) =>
     mutateJob(text, (job) =>
       mutate(
@@ -1363,6 +1418,8 @@ test("decoded YAML refuses the withheld skip-key documents", () => {
     "harness dotted-anchor if",
     "harness alias if key",
     "harness implicit alias if",
+    "harness alias if anchored in job env",
+    "job continue-on-error alias from workflow name",
     "variant key after quoted hash in a flow map",
   ]) {
     assert.notDeepEqual(check(mutations[name](workflow), pkg, harnessSource), [], `contract accepted: ${name}`);
