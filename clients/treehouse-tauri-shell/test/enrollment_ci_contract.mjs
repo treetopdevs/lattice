@@ -894,6 +894,25 @@ const mutations = {
         "        extra: &cond if\n        *cond: runner.os == 'Linux'\n        run: npm run packaged:enrollment",
       ),
     ),
+  "harness if aliased from an earlier step": (text) => {
+    const withAnchor = mutate(
+      text,
+      "      - name: Build lattice-client\n",
+      "      - name: Build lattice-client\n        id: &cond if\n",
+    );
+    return mutateJob(withAnchor, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? *cond\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    );
+  },
+  "ordinary classification gains an external aliased shell": (text) => {
+    const named = mutate(text, "name: Flagship evidence", "name: Flagship evidence\nrun-name: &sh shell");
+    const step = stepBlocks(findJob(named, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return named.replace(step, step.replace("        run:", "        ? *sh\n        : bash -c true {0}\n        run:"));
+  },
   "harness alias if anchored in job env": (text) =>
     mutateJob(text, (job) => {
       const withAnchor = mutate(
@@ -1419,6 +1438,8 @@ test("decoded YAML refuses the withheld skip-key documents", () => {
     "harness alias if key",
     "harness implicit alias if",
     "harness alias if anchored in job env",
+    "harness if aliased from an earlier step",
+    "ordinary classification gains an external aliased shell",
     "job continue-on-error alias from workflow name",
     "variant key after quoted hash in a flow map",
   ]) {
@@ -1434,6 +1455,13 @@ test("countYamlKey reads bare-tag, dotted-anchor, and alias if keys", () => {
   assert.ok(countYamlKey("        ? ! 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
   assert.ok(countYamlKey("        ? &cond.foo 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
   assert.ok(countYamlKey("extra: &cond if\n? *cond\n: runner.os == 'Linux'\n", "if") > 0);
+});
+
+test("full-document own keys see a shell alias defined outside the classification step", () => {
+  const mutated = mutations["ordinary classification gains an external aliased shell"](workflow);
+  const doc = loadYamlDocument(mutated);
+  const keys = ownKeysFromMap(yamlStepNamed(yamlJob(doc, PREVIEW_JOB), CLASSIFY_STEP), doc);
+  assert.ok(keys.includes("shell"));
 });
 
 test("own-key whitelist sees a lockstep anchored shell", () => {
