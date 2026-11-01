@@ -109,7 +109,7 @@ defmodule Lattice2.MalformedDelegationFieldsTest do
 
         analysis = analyze(branch)
         assert analysis.reasons[grant_op.id] == :bad_delegation_sig, inspect(fields)
-        assert Map.has_key?(analysis.reasons, post_op.id), inspect(fields)
+        assert analysis.reasons[post_op.id] == :invalid_capability, inspect(fields)
       end
     end
   end
@@ -122,6 +122,8 @@ defmodule Lattice2.MalformedDelegationFieldsTest do
             %{ops: nil},
             %{ops: %{__struct__: MapSet, map: :junk}},
             %{ops: %{post: true}},
+            %{ops: MapSet.new([%{__struct__: MapSet, map: :junk}])},
+            %{roles: MapSet.new([{:post}])},
             %{id: 1},
             %{sig: nil},
             %{replica: :other}
@@ -137,25 +139,62 @@ defmodule Lattice2.MalformedDelegationFieldsTest do
         refute Delegation.valid_sig?(struct(normal, patch)), inspect(patch)
         analysis = Authority.analyze(@module, log)
         assert analysis.reasons[grant_op.id] == :bad_delegation_sig, inspect(patch)
-        assert Map.has_key?(analysis.reasons, post_op.id), inspect(patch)
+        # With a tampered id no introduction carries the cited id at all.
+        expected = if Map.has_key?(patch, :id), do: :no_capability, else: :invalid_capability
+        assert analysis.reasons[post_op.id] == expected, inspect(patch)
       end
     end
   end
 
-  test "a legacy struct without the lease key is refused, not raised" do
+  test "valid_sig? and attenuates? refuse a struct missing any key, not raise" do
+    {sim, root, tab, parent} = setup_thread()
+    normal = grant(sim, root, tab, parent)
+
+    for key <- Map.keys(normal) -- [:__struct__] do
+      partial = Map.delete(normal, key)
+      refute Delegation.valid_sig?(partial), inspect(key)
+      refute Delegation.attenuates?(partial, parent), inspect(key)
+      refute Delegation.attenuates?(normal, Map.delete(parent, key)), inspect(key)
+    end
+  end
+
+  test "a legacy struct without the lease key is refused by the judge, not raised" do
     {sim, root, tab, parent} = setup_thread()
     normal = grant(sim, root, tab, parent)
     {sim, grant_op, post_op} = grant_then_post(sim, normal)
     legacy = Map.delete(normal, :expires_epoch)
-
-    refute Delegation.valid_sig?(legacy)
-    refute Delegation.attenuates?(legacy, parent)
 
     log = Sim.log(sim, "server")
     log = %{log | ops: Map.put(log.ops, grant_op.id, %{grant_op | body: {:grant, legacy}})}
     analysis = Authority.analyze(@module, log)
     assert analysis.reasons[grant_op.id] == :bad_delegation_sig
     assert analysis.reasons[post_op.id] == :invalid_capability
+  end
+
+  @tag :tmp_dir
+  test "a dumped delegation missing keys restores as nil fields the judge refuses", %{
+    tmp_dir: dir
+  } do
+    {sim, root, tab, parent} = setup_thread()
+    normal = grant(sim, root, tab, parent)
+    {sim, grant_op, post_op} = grant_then_post(sim, normal)
+
+    for key <- [:live, :ops, :audience, :id, :sig] do
+      log = Sim.log(sim, "server")
+      partial = Map.delete(normal, key)
+      log = %{log | ops: Map.put(log.ops, grant_op.id, %{grant_op | body: {:grant, partial}})}
+      path = Path.join(dir, "#{key}.dump")
+      bytes = :erlang.term_to_binary({:lattice_log_dump_v1, log})
+      File.write!(path, bytes)
+
+      assert {:ok, restored} = Log.restore(path)
+      {:grant, upgraded} = restored.ops[grant_op.id].body
+      assert Map.fetch!(upgraded, key) == nil
+
+      analysis = Authority.analyze(@module, restored)
+      assert analysis.reasons[grant_op.id] == :bad_delegation_sig, inspect(key)
+      assert Map.has_key?(analysis.reasons, post_op.id), inspect(key)
+    end
   end
 
   test "a forged genesis with a non-binary audience that sorts first is refused, not raised" do
