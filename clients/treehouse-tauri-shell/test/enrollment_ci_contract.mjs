@@ -237,6 +237,12 @@ function envEntries(step) {
   return entries;
 }
 
+function decodeHexEscapes(text) {
+  return text.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
+    String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
+  );
+}
+
 function loadYamlDocument(text) {
   return parseDocument(text, { prettyErrors: true, maxAliasCount: 10000, uniqueKeys: false });
 }
@@ -387,6 +393,9 @@ export function check(workflow, pkg, harnessSource) {
   const workflowDoc = loadYamlDocument(workflow);
   if (workflowDoc.errors.length > 0)
     fail(`flagship.yml must parse as YAML: ${workflowDoc.errors[0].message.split("\n")[0]}`);
+  const decoded = decodeHexEscapes(workflow);
+  const flagLine = decoded.split("\n").find((line) => !line.trim().startsWith("#") && /VITE_TREEHOUSE_/u.test(line));
+  if (flagLine !== undefined) fail(`flagship.yml must not set any VITE_TREEHOUSE_* key: ${flagLine.trim()}`);
   if (yamlMentions(workflowDoc, /VITE_TREEHOUSE_/u)) fail("flagship.yml must not set any VITE_TREEHOUSE_* key");
   const enrollmentYaml = yamlJob(workflowDoc, JOB);
   const previewYaml = yamlJob(workflowDoc, PREVIEW_JOB);
@@ -1094,6 +1103,14 @@ const mutations = {
     mutate(text, "run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary dist", "run: echo npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app ordinary dist"),
   "dev-trace classification inside a shell if (review)": (text) =>
     mutate(text, "run: npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist", "run: if npx --no-install tsx test/assert_bundle_variant.ts src-tauri/target/release/bundle/macos/Treehouse.app dev_trace dist; then :; fi"),
+  "shell-escaped variant flag written to GITHUB_ENV": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        run: echo $'VITE\\x5fTREEHOUSE_ENROLLMENT=1' >> \"$GITHUB_ENV\"",
+      ),
+    ),
   "YAML-escaped variant keys on the ordinary job (review)": (text) =>
     mutate(
       text,

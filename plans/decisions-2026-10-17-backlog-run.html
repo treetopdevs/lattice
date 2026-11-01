@@ -1140,6 +1140,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>P1/P2. Reparsing a job or step fragment dropped anchors defined elsewhere. Accepted cases included job-env and workflow-name aliases, plus the confirm-pass documents: <code>id: &amp;cond if</code> on Build lattice-client with <code>? *cond</code> on the harness, and workflow-level <code>run-name: &amp;sh shell</code> with <code>? *sh</code> on the ordinary classification step.</dd>
 <dt>Decision</dt><dd>Fixed. <code>check</code> loads the workflow once and reads job/step Pair keys from that document. Fragment helpers remain for isolated scanner tests. Mutations construct those cross-fragment documents, including the two confirm-pass cases. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
+<section id="d170"><h2><span>D-170</span> Row 238: keep the origin/main hex-escape scan for variant flags</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass after D-169</dd>
+<dt>Finding</dt><dd>P2. YAML-only inspection accepted <code>echo $'VITE\x5fTREEHOUSE_ENROLLMENT=1' &gt;&gt; "$GITHUB_ENV"</code>. origin/main rejected it because its global hex-escape decode still saw <code>VITE_TREEHOUSE_</code> in the raw line.</dd>
+<dt>Decision</dt><dd>Fixed. Restore that text scan beside the decoded-YAML visit, so a shell ANSI-C escape cannot hide a variant flag. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
