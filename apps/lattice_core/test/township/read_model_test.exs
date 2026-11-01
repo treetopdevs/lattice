@@ -159,7 +159,7 @@ defmodule Township.ReadModelTest do
     base = ReadModel.observe(baseline, labels: %{}, vouches: [])
 
     for build <- [
-          fn good -> {:grant, %{good | roles: [:clerk], audience: <<1>>}} end,
+          fn good -> {:grant, %{good | audience: <<1>>}} end,
           fn good -> {:grant, %{good | issuer: <<1>>}} end
         ] do
       sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
@@ -170,6 +170,23 @@ defmodule Township.ReadModelTest do
 
       model = ReadModel.observe(log, labels: %{}, vouches: [])
       assert model.trust_graph.edges == base.trust_graph.edges
+      assert is_list(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes)
+    end
+  end
+
+  test "observe survives non-integer transfer, succeed and heartbeat ticks" do
+    for build <- [
+          fn good -> {:transfer, :clerk, good, %{}} end,
+          fn good -> {:succeed, :clerk, good, %{}} end,
+          fn _good -> {:heartbeat, :clerk, %{}} end
+        ] do
+      sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+      {sim, _genesis} = Sim.create_replica(sim, "clerk")
+      {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+      {sim, _} = Sim.append(sim, "clerk", :authority, build.(good))
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+      assert is_list(ReadModel.observe(log, labels: %{}, vouches: []).op_dag.nodes)
       assert is_list(Lattice.Graph.ReplicaSnapshot.build(Matter, log).nodes)
     end
   end
