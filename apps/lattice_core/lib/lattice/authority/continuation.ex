@@ -78,7 +78,10 @@ defmodule Lattice.Authority.Continuation do
     do: {:error, :unauthorized_continuation}
 
   def judge(ctx, op, role, d, {:continuation_v1, certificate}, acquires, anc) do
+    # A legacy struct without the lease key is a malformed term, not a KeyError
+    # (row 289); other malformed fields fail Delegation.valid_sig?/1 in review/6.
     with true <- ContinuationCertificate.valid_shape?(certificate),
+         true <- is_map_key(d, :expires_epoch),
          true <- is_nil(d.expires_epoch) or ContinuationCertificate.epoch?(d.expires_epoch),
          {:ok, expected} <- review(ctx, op, role, d, acquires, anc),
          :ok <- epoch_matches(certificate.claim, expected),

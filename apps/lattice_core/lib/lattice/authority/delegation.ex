@@ -111,11 +111,12 @@ defmodule Lattice.Authority.Delegation do
   a MapSet wrapping a version-1 set of the same names into identical bytes, so
   those shapes can still verify; the judge later calls `MapSet.member?/2` and
   must not raise. A list or an unusable `:sets` v1 backing is therefore
-  `:bad_delegation_sig`, never a crash (row 289).
+  `:bad_delegation_sig`, never a crash (row 289). The same holds for every other
+  field outside `well_formed?/1`.
   """
   @spec valid_sig?(t()) :: boolean()
   def valid_sig?(%__MODULE__{} = d) do
-    mapset?(d.ops) and mapset?(d.roles) and consistent_sig?(d)
+    well_formed?(d) and consistent_sig?(d)
   rescue
     # Canonical rejects malformed terms with ArgumentError; keep this rescue
     # aligned with that invariant if its refusal exception types ever change.
@@ -145,8 +146,7 @@ defmodule Lattice.Authority.Delegation do
   """
   @spec attenuates?(t(), t()) :: boolean()
   def attenuates?(%__MODULE__{} = child, %__MODULE__{} = parent) do
-    mapset?(child.ops) and mapset?(child.roles) and
-      mapset?(parent.ops) and mapset?(parent.roles) and
+    well_formed?(child) and well_formed?(parent) and
       child.parent_id == parent.id and
       child.issuer == parent.audience and
       child.replica == parent.replica and
@@ -156,8 +156,32 @@ defmodule Lattice.Authority.Delegation do
       expiry_within?(child, parent)
   end
 
-  defp mapset?(%MapSet{map: set}) when is_map(set), do: true
-  defp mapset?(_), do: false
+  @doc """
+  True if every field has a shape `Lattice.Carrier.Wire` can decode (row 289).
+
+  The judge assumes these shapes: binary ids and keys, a boolean `live`, a
+  `nil` or uint64 lease, and map-backed `MapSet` names (`:sets` v2, the shape
+  `Delegation.new/4` emits). A signed or tampered term outside them, such
+  as `live: "yes"` or `expires_epoch: -1`, is never valid and never raises.
+  """
+  @spec well_formed?(term()) :: boolean()
+  # A legacy struct without the lease key is refused here rather than raising
+  # KeyError; `Lattice.Log.restore/1` upgrades such structs before the judge.
+  def well_formed?(%__MODULE__{} = d) when is_map_key(d, :expires_epoch) do
+    is_binary(d.id) and is_binary(d.replica) and is_binary(d.issuer) and
+      is_binary(d.audience) and (is_nil(d.parent_id) or is_binary(d.parent_id)) and
+      names?(d.ops) and names?(d.roles) and is_boolean(d.live) and is_binary(d.sig) and
+      (is_nil(d.expires_epoch) or
+         (is_integer(d.expires_epoch) and d.expires_epoch >= 0 and
+            d.expires_epoch <= Lattice.Canonical.max_integer()))
+  end
+
+  def well_formed?(_other), do: false
+
+  # Members are not checked: a non-atom name is harmless to MapSet's functions and
+  # signs to different bytes from the atom, so it can never authorize a command.
+  defp names?(%MapSet{map: set}) when is_map(set), do: true
+  defp names?(_other), do: false
 
   # nil = unbounded. An unbounded parent accepts anything; a leased parent
   # accepts only a child leased at or before its own expiry.

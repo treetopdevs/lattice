@@ -393,7 +393,12 @@ defmodule Lattice.Authority do
   # matches the replica's root commitment.
   defp root_matches?(nil, _audience), do: true
   defp root_matches?(:malformed_root_claim, _audience), do: false
-  defp root_matches?(commitment, audience), do: root_tag(audience) == commitment
+  # A non-binary audience (a malformed or forged genesis, row 289) matches no root
+  # rather than raising in root_tag/1.
+  defp root_matches?(commitment, audience) when is_binary(audience),
+    do: root_tag(audience) == commitment
+
+  defp root_matches?(_commitment, _audience), do: false
 
   # Replica root commitment plus delegation ids introduced by the two operations
   # that deliberately carry root-less self-issues.
