@@ -261,9 +261,15 @@ defmodule Township.ReadModel do
   defp pub_key?(key), do: is_binary(key) and byte_size(key) == 32
 
   # The role is attacker-shaped until proven a scalar: interpolate it only for a
-  # binary or atom role, otherwise drop the event before String.Chars can raise.
+  # binary or atom role, or a legacy Lattice.Canonical.Atom wrapper persisted under
+  # PR #114 (same rule as SuccessionCertificate); drop any other shape before
+  # String.Chars can raise.
   defp role_event(prefix, role, delegation) when is_binary(role) or is_atom(role),
     do: [{"#{prefix}:#{role}", delegation}]
+
+  defp role_event(prefix, %Lattice.Canonical.Atom{name: name}, delegation)
+       when is_binary(name),
+       do: [{"#{prefix}:#{name}", delegation}]
 
   defp role_event(_prefix, _role, _delegation), do: []
 

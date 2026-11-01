@@ -154,6 +154,24 @@ defmodule Township.ReadModelTest do
     end
   end
 
+  test "observe keeps the trust-graph edge for a legacy Canonical.Atom transfer/succeed role" do
+    for kind <- [:transfer, :succeed] do
+      edges =
+        for role <- [:clerk, %Lattice.Canonical.Atom{name: "clerk"}] do
+          sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+          {sim, _genesis} = Sim.create_replica(sim, "clerk")
+          {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+          {sim, _} = Sim.append(sim, "clerk", :authority, {kind, role, good, 0})
+          log = sim |> Sim.sync_all() |> Sim.log("clerk")
+          ReadModel.observe(log, labels: %{}, vouches: []).trust_graph.edges
+        end
+
+      [atom_edges, wrapped_edges] = edges
+      assert wrapped_edges == atom_edges
+      assert Enum.any?(wrapped_edges, &String.starts_with?(&1.kind, "#{kind}:clerk"))
+    end
+  end
+
   test "observe and ReplicaSnapshot survive short-binary audience or issuer" do
     {baseline, _} = listform_log(nil)
     base = ReadModel.observe(baseline, labels: %{}, vouches: [])
