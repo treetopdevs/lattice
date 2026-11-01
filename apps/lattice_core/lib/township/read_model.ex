@@ -8,8 +8,7 @@ defmodule Township.ReadModel do
   """
 
   alias Lattice.{Attestation, Authority, Identity, Log, Op}
-  alias Lattice.Authority.Delegation
-  alias Lattice.Graph.ReplicaSnapshot
+  alias Lattice.Graph.{AuthorityBody, ReplicaSnapshot}
   alias Township.Matter
 
   @member_commands [:admit, :remove_member]
@@ -216,7 +215,7 @@ defmodule Township.ReadModel do
 
     nodes =
       events
-      |> Enum.flat_map(fn {_kind, delegation} -> [delegation.issuer, delegation.audience] end)
+      |> Enum.flat_map(fn {_kind, dview} -> [pub(dview.issuer), pub(dview.audience)] end)
       |> Enum.uniq()
       |> Enum.map(fn pub ->
         fingerprint = Identity.fingerprint(pub)
@@ -225,62 +224,40 @@ defmodule Township.ReadModel do
       end)
 
     edges =
-      Enum.map(events, fn {kind, delegation} ->
+      Enum.map(events, fn {kind, dview} ->
         %{
-          from: Identity.fingerprint(delegation.issuer),
-          to: Identity.fingerprint(delegation.audience),
-          kind: delegation_edge_kind(kind, delegation)
+          from: Identity.fingerprint(pub(dview.issuer)),
+          to: Identity.fingerprint(pub(dview.audience)),
+          kind: delegation_edge_kind(kind, dview)
         }
       end)
 
     %{nodes: nodes, edges: edges}
   end
 
+  # Row 309: bodies go through the one total reader. An admitted but ill-formed
+  # delegation (list-form roles/ops, short or non-binary keys) or a role that is
+  # not a scalar name contributes no node or edge rather than crashing the reader.
   defp delegation_events(log) do
     log
     |> Log.topo_ops()
     |> Enum.filter(&(&1.kind == :authority))
     |> Enum.flat_map(fn op ->
-      case op.body do
-        {:genesis, delegation, _policies} -> [{"genesis", delegation}]
-        {:grant, delegation} -> [{"grant", delegation}]
-        {:transfer, role, delegation, _tick} -> role_event("transfer", role, delegation)
-        {:succeed, role, delegation, _tick} -> role_event("succeed", role, delegation)
+      case AuthorityBody.parse(op.body) do
+        {:genesis, dview} -> [{"genesis", dview}]
+        {:grant, dview} -> [{"grant", dview}]
+        {:transfer, {:name, _raw, role}, dview, _tick} -> [{"transfer:#{role}", dview}]
+        {:succeed, {:name, _raw, role}, dview, _tick} -> [{"succeed:#{role}", dview}]
         _other -> []
       end
     end)
-    # Row 305: an admitted but ill-formed body (list-form roles/ops, non-binary
-    # keys) contributes no node or edge rather than crashing the reader.
-    |> Enum.filter(fn {_kind, delegation} ->
-      Delegation.well_formed?(delegation) and pub_key?(delegation.issuer) and
-        pub_key?(delegation.audience)
-    end)
+    |> Enum.filter(fn {_kind, dview} -> dview.well_formed? end)
   end
 
-  # Ed25519 public keys are 32 bytes; a shorter binary would crash the fingerprint.
-  defp pub_key?(key), do: is_binary(key) and byte_size(key) == 32
+  defp pub({:ok, pub}), do: pub
 
-  # The role is attacker-shaped until proven a scalar: interpolate it only for a
-  # binary or atom role, or a legacy Lattice.Canonical.Atom wrapper persisted under
-  # PR #114 (same rule as SuccessionCertificate); drop any other shape before
-  # String.Chars can raise.
-  defp role_event(prefix, role, delegation) when is_binary(role) or is_atom(role),
-    do: [{"#{prefix}:#{role}", delegation}]
-
-  defp role_event(prefix, %Lattice.Canonical.Atom{name: name}, delegation)
-       when is_binary(name),
-       do: [{"#{prefix}:#{name}", delegation}]
-
-  defp role_event(_prefix, _role, _delegation), do: []
-
-  defp delegation_edge_kind(kind, delegation) do
-    roles =
-      if MapSet.size(delegation.roles) > 0 do
-        " roles=[#{delegation.roles |> Enum.sort() |> Enum.join(",")}]"
-      else
-        ""
-      end
-
-    "#{kind}#{roles} ops=[#{delegation.ops |> Enum.sort() |> Enum.join(",")}]"
+  defp delegation_edge_kind(kind, %{roles: {:ok, roles}, ops: {:ok, ops}}) do
+    roles = if roles == [], do: "", else: " roles=[#{Enum.join(roles, ",")}]"
+    "#{kind}#{roles} ops=[#{Enum.join(ops, ",")}]"
   end
 end
