@@ -1056,6 +1056,20 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>(b). New row 302. Do not rerun run <code>41253912704</code>. A later docs commit that names this flake starts a new exact-tip run; that is not a rerun of the cancelled job. Merge only if that new exact-tip required CI is green. Bound the verify step after a second occurrence, not in this authority/Verdict slice.</dd>
 <dt>Reason</dt><dd>The slice rule is rerun only a proven flake and cite its row. This is the first recorded hang of <code>apt_archive_cache.sh</code> eating the native job budget. Stretching 228, 277, or 301 would hide a distinct cache-verify stall. A workflow timeout in this PR would be a second rule-3 path on a slice that already reviewed <code>authority.ex</code>.</dd>
 </dl></section>
+<section id="d155"><h2><span>D-155</span> Slice choice: row 300, the exporter first-install capacity check</h2><dl>
+<dt>When</dt><dd>2026-10-31, from main <code>aa4554add</code></dd>
+<dt>Context</dt><dd>Already merged: #195–#202. This slice’s first plan-index edit marks row 288 DONE (PR #202, merge <code>aa4554add</code>, exact tip <code>7ca2e5f0d</code>) without reopening the Verdict work. Flagship <code>41259229868</code> on that tip was green. Excluded: Township and Toolshed under rule 10; rule 8 parked items (rows 077/285 device, 146 codesigning, 261/262 two Macs, 224/245 ceremony); row 256, an operator decision; plans 267–279, the native evaluator track already in flight; row 301, a first Maven 429 (D-148); row 302, a first apt-verify hang (D-154), do not touch until a second occurrence. No higher unblocked P1 that fits one PR is free of those parks: 255/259 wait on plan 245 PR 6; 154 is Township; 150 is L and owned by R31.</dd>
+<dt>Options</dt><dd>(a) Row 300 (P2 S, plan 261 D5 exporter half); (b) a parked P1; (c) row 301 or 302 on first occurrence.</dd>
+<dt>Decision</dt><dd>(a).</dd>
+<dt>Reason</dt><dd>Row 300 is the recommended next slice: unblocked, S, and the missing half of D5 after plan 257 paused the feed. The native owner check stays on plan 245 PR 5. This is not a rule-3 path (exporter/TS-adjacent Elixir only; no <code>src-tauri</code> custody, codec, or carrier edit).</dd>
+</dl></section>
+<section id="d156"><h2><span>D-156</span> Row 300: first-install PreviewState after encode; evaluator caps unchanged</h2><dl>
+<dt>When</dt><dd>2026-10-31</dd>
+<dt>Context</dt><dd>Plan 261 D5: exporter and native owner must calculate the serialized post-import profile size, including metadata and outbox, and refuse before changing trust or profile state if it exceeds 1 MiB. Plan 266’s exporter still only charged the 64 MiB source / 32 MiB snapshot caps. Plan 257 kept the 1 MiB store and assigned this half to row 300.</dd>
+<dt>Options</dt><dd>(a) Lower <code>Packet.encode/4</code> to 1 MiB and break the 32 MiB evaluator fixture; (b) compute a root first-install <code>PreviewState</code> (identity, profiles with frames, empty outbox and acks, no relay) after a page is evaluator-valid and refuse <code>preview_storage_limit</code> before writing; (c) wait for the native owner.</dd>
+<dt>Decision</dt><dd>(b). Inclusive <code>&lt;= 1_048_576</code>, matching plan 257. Size uses the exporter’s existing canonical JSON (key order does not change byte size). Catalog routes stay out of <code>PreviewState.relay</code> (row 255). <code>Packet.encode/4</code> keeps the evaluator caps. The native owner check against a device that already holds extra history remains plan 245 PR 5. Do not move custody. Do not claim catalog owner capacity is done. Do not weaken the row 257 pause.</dd>
+<dt>Reason</dt><dd>(a) would contradict plan 266 and plan 245 PR 4’s evaluator-only maximum-size fixture. (c) leaves operators exporting pages no honest first-install can hold.</dd>
+</dl></section>
 </main>
 </body>
 </html>

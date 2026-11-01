@@ -96,6 +96,10 @@ charges actual bounded reads during traversal. The general store verifier's API
 and policy remain unchanged. Over-budget sources return evidence_page_too_large.
 Do not lower the accepted evaluator-valid
 capacity to make an easy test pass; prove the maximum-capacity case explicitly.
+Row 300 adds a second, smaller bound only on `CatalogEvidence.export/4`: after a
+page is evaluator-valid, compute the root first-install PreviewState (plan 261 D5)
+and refuse `preview_storage_limit` before writing if that record exceeds 1 MiB.
+`Packet.encode/4` keeps the evaluator caps.
 
 Create a new regular output file exclusively; an existing file, hard link or
 symlink refuses. The selected parent must be a real directory, matching the native
