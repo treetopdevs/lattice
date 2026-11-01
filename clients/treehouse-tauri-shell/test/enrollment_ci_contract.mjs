@@ -247,9 +247,20 @@ function loadYamlDocument(text) {
   return parseDocument(text, { prettyErrors: true, maxAliasCount: 10000, uniqueKeys: false });
 }
 
+function resolvedYaml(node, doc) {
+  let current = node;
+  const seen = new Set();
+  while (isAlias(current) && doc) {
+    if (seen.has(current)) return current;
+    seen.add(current);
+    current = current.resolve(doc);
+  }
+  return current;
+}
+
 function pairKeyName(key, doc) {
-  if (isAlias(key) && doc) return pairKeyName(key.resolve(doc), doc);
-  return isScalar(key) && key.value != null ? String(key.value) : undefined;
+  const resolved = resolvedYaml(key, doc);
+  return isScalar(resolved) && resolved.value != null ? String(resolved.value) : undefined;
 }
 
 function ownKeysFromMap(mapNode, doc) {
@@ -265,46 +276,70 @@ function yamlMap(node) {
 
 function countKeyInNode(node, name, doc = node) {
   let n = 0;
-  visit(node, {
-    Pair(_key, pair) {
-      if (pairKeyName(pair.key, doc) === name) n += 1;
-    },
-  });
+  const seen = new Set();
+  const walk = (root) => {
+    visit(root, {
+      Pair(_key, pair) {
+        if (pairKeyName(pair.key, doc) === name) n += 1;
+      },
+      Alias(_key, alias) {
+        if (seen.has(alias)) return visit.SKIP;
+        seen.add(alias);
+        const target = resolvedYaml(alias, doc);
+        if (target && target !== alias) walk(target);
+        return visit.SKIP;
+      },
+    });
+  };
+  walk(node);
   return n;
 }
 
 function yamlJob(doc, name) {
-  const jobs = doc.get("jobs");
-  return isMap(jobs) ? jobs.get(name) : undefined;
+  const jobs = resolvedYaml(doc.get("jobs"), doc);
+  return isMap(jobs) ? resolvedYaml(jobs.get(name), doc) : undefined;
 }
 
-function yamlSteps(jobNode) {
-  if (!isMap(jobNode)) return [];
-  const steps = jobNode.get("steps");
-  return isSeq(steps) ? steps.items.filter(isMap) : [];
+function yamlSteps(jobNode, doc) {
+  const job = resolvedYaml(jobNode, doc);
+  if (!isMap(job)) return [];
+  const steps = resolvedYaml(job.get("steps"), doc);
+  if (!isSeq(steps)) return [];
+  return steps.items.map((item) => resolvedYaml(item, doc)).filter(isMap);
 }
 
-function yamlStepNamed(jobNode, name) {
-  return yamlSteps(jobNode).find((step) => step.get("name") === name);
+function yamlStepNamed(jobNode, name, doc) {
+  return yamlSteps(jobNode, doc).find((step) => step.get("name") === name);
 }
 
 function yamlHasSkipKey(stepNode, doc) {
   if (!stepNode) return true;
-  const keys = ownKeysFromMap(stepNode, doc);
+  const keys = ownKeysFromMap(resolvedYaml(stepNode, doc), doc);
   return keys.includes("if") || keys.includes("continue-on-error");
 }
 
 function yamlMentions(doc, pattern) {
   let found = false;
-  visit(doc, {
-    Pair(_key, pair) {
-      const name = pairKeyName(pair.key, doc);
-      if (name !== undefined && pattern.test(name)) found = true;
-    },
-    Scalar(_key, scalar) {
-      if (pattern.test(String(scalar.value ?? ""))) found = true;
-    },
-  });
+  const seen = new Set();
+  const walk = (root) => {
+    visit(root, {
+      Pair(_key, pair) {
+        const name = pairKeyName(pair.key, doc);
+        if (name !== undefined && pattern.test(name)) found = true;
+      },
+      Scalar(_key, scalar) {
+        if (pattern.test(String(scalar.value ?? ""))) found = true;
+      },
+      Alias(_key, alias) {
+        if (seen.has(alias)) return visit.SKIP;
+        seen.add(alias);
+        const target = resolvedYaml(alias, doc);
+        if (target && target !== alias) walk(target);
+        return visit.SKIP;
+      },
+    });
+  };
+  walk(doc);
   return found;
 }
 
@@ -431,7 +466,7 @@ export function check(workflow, pkg, harnessSource) {
       if (run.trim() !== ORDINARY_CLASSIFY_RUN)
         fail("classification step must assert the ordinary variant of the ordinary bundle and its dist");
       if (scalar(classify, "working-directory") !== SHELL_DIR) fail("classification runs in the Treehouse shell");
-      if (yamlHasSkipKey(yamlStepNamed(previewYaml, CLASSIFY_STEP), workflowDoc) || /\|\|/u.test(run))
+      if (yamlHasSkipKey(yamlStepNamed(previewYaml, CLASSIFY_STEP, workflowDoc), workflowDoc) || /\|\|/u.test(run))
         fail("classification must be unconditional and blocking");
       // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
       // such as 'if' or "continue-on-error" pass a bare `if:` line check).
@@ -439,7 +474,7 @@ export function check(workflow, pkg, harnessSource) {
         fail("the ordinary classification step body must be exactly the pinned text");
       if (
         JSON.stringify(unquotedStepKeys(classify)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
-        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, CLASSIFY_STEP), workflowDoc)) !==
+        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, CLASSIFY_STEP, workflowDoc), workflowDoc)) !==
           JSON.stringify(CLASSIFY_STEP_KEYS)
       )
         fail("the ordinary classification step keys must be exactly name, working-directory and run");
@@ -461,7 +496,7 @@ export function check(workflow, pkg, harnessSource) {
       if (scalar(step, "working-directory") !== SHELL_DIR) fail("the Space export runs in the Treehouse shell");
       if (JSON.stringify(envEntries(step)) !== JSON.stringify(EXPORT_ENV))
         fail("the Space export env must be exactly the evidence dir and MIX_ENV");
-      if (yamlHasSkipKey(yamlStepNamed(previewYaml, EXPORT_STEP), workflowDoc) || /\|\||set\s+\+e/u.test(step))
+      if (yamlHasSkipKey(yamlStepNamed(previewYaml, EXPORT_STEP, workflowDoc), workflowDoc) || /\|\||set\s+\+e/u.test(step))
         fail("the Space export must be unconditional and blocking");
       // The whole step is pinned as exact text, so no key rides along in any YAML spelling (quoted keys
       // such as 'if' or "continue-on-error" pass a bare `if:` line check).
@@ -470,7 +505,7 @@ export function check(workflow, pkg, harnessSource) {
       const exportKeys = ["name", "working-directory", "env", "run"];
       if (
         JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(exportKeys) ||
-        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, EXPORT_STEP), workflowDoc)) !==
+        JSON.stringify(ownKeysFromMap(yamlStepNamed(previewYaml, EXPORT_STEP, workflowDoc), workflowDoc)) !==
           JSON.stringify(exportKeys)
       )
         fail("the Space export step keys must be exactly name, working-directory, env and run");
@@ -525,7 +560,7 @@ export function check(workflow, pkg, harnessSource) {
 
   // Only the evidence upload may carry an if, and it is exactly always(). Quoted YAML keys count;
   // a second `'if'` on that same step still counts (uniqueKeys is false).
-  const conditional = yamlSteps(enrollmentYaml).map((step) => ({
+  const conditional = yamlSteps(enrollmentYaml, workflowDoc).map((step) => ({
     step,
     ifs: ownKeysFromMap(step, workflowDoc).filter((key) => key === "if"),
   }));
@@ -669,13 +704,13 @@ export function check(workflow, pkg, harnessSource) {
     if (run.trim() !== DEV_TRACE_CLASSIFY_RUN)
       fail("dev-trace classification must assert the dev_trace bundle and the dist");
     if (scalar(step, "working-directory") !== SHELL_DIR) fail("dev-trace classification runs in the Treehouse shell");
-    if (yamlHasSkipKey(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP), workflowDoc) || /\|\|/u.test(run))
+    if (yamlHasSkipKey(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP, workflowDoc), workflowDoc) || /\|\|/u.test(run))
       fail("dev-trace classification must be unconditional and blocking");
     if (exactStepBody(step) !== CLASSIFY_DEV_TRACE_STEP_BODY)
       fail("the dev-trace classification step body must be exactly the pinned text");
     if (
       JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
-      JSON.stringify(ownKeysFromMap(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP), workflowDoc)) !==
+      JSON.stringify(ownKeysFromMap(yamlStepNamed(enrollmentYaml, CLASSIFY_DEV_TRACE_STEP, workflowDoc), workflowDoc)) !==
         JSON.stringify(CLASSIFY_STEP_KEYS)
     )
       fail("the dev-trace classification step keys must be exactly name, working-directory and run");
@@ -999,6 +1034,34 @@ const mutations = {
     mutateJob(text, (job) => mutate(job, "        if: always()\n", "")),
   "upload gains a second quoted if": (text) =>
     mutateJob(text, (job) => mutate(job, "        if: always()\n", "        if: always()\n        'if': false\n")),
+  "enrollment step aliased from a preview conditional": (text) => {
+    const withAnchor = mutate(
+      text,
+      "      - name: Upload public Treehouse preview evidence\n",
+      "      - &conditional_step\n        name: Upload public Treehouse preview evidence\n",
+    );
+    return mutateJob(withAnchor, (job) =>
+      mutate(
+        job,
+        "      - name: Upload public Treehouse enrollment evidence\n",
+        "      - *conditional_step\n      - name: Upload public Treehouse enrollment evidence\n",
+      ),
+    );
+  },
+  "enrollment step aliased from a continue-on-error mapping": (text) => {
+    const withAnchor = mutate(
+      text,
+      "name: Flagship evidence\n",
+      "name: Flagship evidence\nx-skip: &skip_step\n  continue-on-error: true\n  run: 'true'\n",
+    );
+    return mutateJob(withAnchor, (job) =>
+      mutate(
+        job,
+        "      - name: Upload public Treehouse enrollment evidence\n",
+        "      - *skip_step\n      - name: Upload public Treehouse enrollment evidence\n",
+      ),
+    );
+  },
   "upload on success only": (text) =>
     mutateJob(text, (job) => mutate(job, "        if: always()\n", "        if: success()\n")),
   "upload wildcard evidence": (text) =>
@@ -1461,6 +1524,8 @@ test("decoded YAML refuses the withheld skip-key documents", () => {
     "harness alias if anchored in job env",
     "harness if aliased from an earlier step",
     "ordinary classification gains an external aliased shell",
+    "enrollment step aliased from a preview conditional",
+    "enrollment step aliased from a continue-on-error mapping",
     "job continue-on-error alias from workflow name",
     "variant key after quoted hash in a flow map",
   ]) {
@@ -1486,7 +1551,7 @@ test("shell-escaped GITHUB_ENV variant flag is refused by the hex-escape scan", 
 test("full-document own keys see a shell alias defined outside the classification step", () => {
   const mutated = mutations["ordinary classification gains an external aliased shell"](workflow);
   const doc = loadYamlDocument(mutated);
-  const keys = ownKeysFromMap(yamlStepNamed(yamlJob(doc, PREVIEW_JOB), CLASSIFY_STEP), doc);
+  const keys = ownKeysFromMap(yamlStepNamed(yamlJob(doc, PREVIEW_JOB), CLASSIFY_STEP, doc), doc);
   assert.ok(keys.includes("shell"));
 });
 

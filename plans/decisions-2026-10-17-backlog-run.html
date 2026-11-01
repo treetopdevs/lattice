@@ -1160,6 +1160,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>P2. A second quoted <code>'if': false</code> on the evidence-upload step still left one conditional step, and <code>get("if")</code> returned <code>always()</code>. <code>uniqueKeys: false</code> is intentional.</dd>
 <dt>Decision</dt><dd>Fixed. The upload step must carry exactly one decoded <code>if</code> key. Mutation added. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
+<section id="d174"><h2><span>D-174</span> PR #204 Codex P2: resolve aliased step mappings</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/204#discussion_r4434319507">review comment</a> on tip <code>bfba289f3</code></dd>
+<dt>Finding</dt><dd>P2. <code>yamlSteps</code> dropped sequence items that were Alias nodes, so <code>- *conditional_step</code> before the enrollment upload never entered the decoded <code>if</code> / <code>continue-on-error</code> scan.</dd>
+<dt>Decision</dt><dd>Fixed. Resolve aliases on jobs, steps, skip-key counts, and variant-flag visits before judging decoded keys. Mutations added. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
