@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { isMap, isScalar, isSeq, parseDocument, visit } from "yaml";
+import { isAlias, isMap, isScalar, isSeq, parseDocument, visit } from "yaml";
 
 // Plan 181 slice 5c2: structural contract for the hard-failing packaged enrollment job.
 //
@@ -241,13 +241,14 @@ function loadYamlDocument(text) {
   return parseDocument(text, { prettyErrors: true, maxAliasCount: 10000, uniqueKeys: false });
 }
 
-function pairKeyName(key) {
+function pairKeyName(key, doc) {
+  if (isAlias(key) && doc) return pairKeyName(key.resolve(doc), doc);
   return isScalar(key) && key.value != null ? String(key.value) : undefined;
 }
 
-function ownKeysFromMap(mapNode) {
+function ownKeysFromMap(mapNode, doc) {
   if (!isMap(mapNode)) return [];
-  return mapNode.items.map((pair) => pairKeyName(pair.key)).filter((name) => name !== undefined);
+  return mapNode.items.map((pair) => pairKeyName(pair.key, doc)).filter((name) => name !== undefined);
 }
 
 function yamlMap(node) {
@@ -256,25 +257,21 @@ function yamlMap(node) {
   return isMap(node) ? node : undefined;
 }
 
-function decodedMapping(text) {
-  return yamlMap(loadYamlDocument(text).contents);
-}
-
-function countKeyInNode(node, name) {
+function countKeyInNode(doc, name) {
   let n = 0;
-  visit(node, {
+  visit(doc, {
     Pair(_key, pair) {
-      if (pairKeyName(pair.key) === name) n += 1;
+      if (pairKeyName(pair.key, doc) === name) n += 1;
     },
   });
   return n;
 }
 
-function yamlMentions(node, pattern) {
+function yamlMentions(doc, pattern) {
   let found = false;
-  visit(node, {
+  visit(doc, {
     Pair(_key, pair) {
-      const name = pairKeyName(pair.key);
+      const name = pairKeyName(pair.key, doc);
       if (name !== undefined && pattern.test(name)) found = true;
     },
     Scalar(_key, scalar) {
@@ -285,11 +282,13 @@ function yamlMentions(node, pattern) {
 }
 
 function stepOwnKeys(step) {
-  return ownKeysFromMap(decodedMapping(step));
+  const doc = loadYamlDocument(step);
+  return ownKeysFromMap(yamlMap(doc.contents), doc);
 }
 
 function headerOwnKeys(header) {
-  return ownKeysFromMap(decodedMapping(header)).filter((key) => key !== "steps");
+  const doc = loadYamlDocument(header);
+  return ownKeysFromMap(yamlMap(doc.contents), doc).filter((key) => key !== "steps");
 }
 
 function unquotedStepKeys(step) {
@@ -301,9 +300,10 @@ function countYamlKey(block, name) {
 }
 
 function hasSkipKey(step) {
-  const map = decodedMapping(step);
+  const doc = loadYamlDocument(step);
+  const map = yamlMap(doc.contents);
   if (!map) return true;
-  const keys = ownKeysFromMap(map);
+  const keys = ownKeysFromMap(map, doc);
   return keys.includes("if") || keys.includes("continue-on-error");
 }
 
@@ -1354,11 +1354,16 @@ test("countYamlKey still sees if after a quoted comment line continuation", () =
   );
 });
 
-test("decoded YAML refuses the three withheld skip-key documents", () => {
+test("decoded YAML refuses the withheld skip-key documents", () => {
   for (const name of [
     "harness if after comment quote line continuation",
     "harness anchored explicit if",
     "ordinary classification gains an anchored shell",
+    "harness bare-tag if",
+    "harness dotted-anchor if",
+    "harness alias if key",
+    "harness implicit alias if",
+    "variant key after quoted hash in a flow map",
   ]) {
     assert.notDeepEqual(check(mutations[name](workflow), pkg, harnessSource), [], `contract accepted: ${name}`);
   }
@@ -1366,6 +1371,12 @@ test("decoded YAML refuses the three withheld skip-key documents", () => {
 
 test("countYamlKey reads an anchored explicit if key", () => {
   assert.ok(countYamlKey("        ? &cond 'if'\n        : runner.os == 'Linux'\n        id: *cond\n", "if") > 0);
+});
+
+test("countYamlKey reads bare-tag, dotted-anchor, and alias if keys", () => {
+  assert.ok(countYamlKey("        ? ! 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("        ? &cond.foo 'if'\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("extra: &cond if\n? *cond\n: runner.os == 'Linux'\n", "if") > 0);
 });
 
 test("own-key whitelist sees a lockstep anchored shell", () => {
