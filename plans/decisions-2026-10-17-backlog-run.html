@@ -1070,6 +1070,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>(b). Inclusive <code>&lt;= 1_048_576</code>, matching plan 257. Size uses the exporter’s existing canonical JSON (key order does not change byte size). Catalog routes stay out of <code>PreviewState.relay</code> (row 255). <code>Packet.encode/4</code> keeps the evaluator caps. The native owner check against a device that already holds extra history remains plan 245 PR 5. Do not move custody. Do not claim catalog owner capacity is done. Do not weaken the row 257 pause.</dd>
 <dt>Reason</dt><dd>(a) would contradict plan 266 and plan 245 PR 4’s evaluator-only maximum-size fixture. (c) leaves operators exporting pages no honest first-install can hold.</dd>
 </dl></section>
+<section id="d157"><h2><span>D-157</span> Row 300 Codex P2: pin the inclusive 1 MiB first-install bound</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>383c565a7</code></dd>
+<dt>Finding</dt><dd>No P1. One P2: the adjacent evaluator-valid fixtures serialized to 1,048,575 and 1,048,579 bytes, so changing <code>&lt;=</code> to <code>&lt;</code> still passed. Post bodies ride the wire as base64, which moves compact JSON in 4-byte steps.</dd>
+<dt>Decision</dt><dd>Fixed. The overflow test now requires a first-install record of exactly 1,048,576 bytes to be accepted and one more post-body byte to be refused. Three empty-dep prefix posts drop 45 JSON bytes each and shift the residue so a last-post body can land on the inclusive cap. <code>Packet.encode/4</code> still succeeds on both logs. Native owner capacity remains plan 245 PR 5. No new plan-index row.</dd>
+</dl></section>
 </main>
 </body>
 </html>
