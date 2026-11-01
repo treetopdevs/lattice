@@ -241,17 +241,19 @@ function decodeYamlEscapes(text) {
 }
 
 const YAML_MAPPING_KEY = String.raw`(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_-]+))`;
+const YAML_TAG = String.raw`(?:!!?\S+[ \t]+)?`;
+const YAML_COMMENT = String.raw`(?:[ \t]+#.*)?`;
 
 function mappingKeys(block, indent, dashed) {
   const decoded = decodeYamlEscapes(block);
   const prefix = dashed ? ` {${indent}}- ` : ` {${indent}}`;
-  const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
+  const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_TAG}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
     (m) => m[1] ?? m[2] ?? m[3],
   );
   keys.push(
-    ...[...decoded.matchAll(new RegExp(`^${prefix}\\?[ \\t]+${YAML_MAPPING_KEY}[ \\t]*$`, "gmu"))].map(
-      (m) => m[1] ?? m[2] ?? m[3],
-    ),
+    ...[
+      ...decoded.matchAll(new RegExp(`^${prefix}\\?[ \\t]+${YAML_TAG}${YAML_MAPPING_KEY}${YAML_COMMENT}$`, "gmu")),
+    ].map((m) => m[1] ?? m[2] ?? m[3]),
   );
   return keys;
 }
@@ -268,8 +270,33 @@ function unquotedStepKeys(step) {
   return [...step.matchAll(/^ {6}- ([a-z-]+):|^ {8}([a-z-]+):/gmu)].map((m) => m[1] ?? m[2]);
 }
 
+function countYamlKey(block, name) {
+  const decoded = decodeYamlEscapes(block);
+  const quoted = String.raw`(?:'${name}'|"${name}"|${name})`;
+  let n = 0;
+  const lines = decoded.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/[ \t]+#.*$/u, "");
+    if (new RegExp(`^\\s*(?:-\\s+)?\\?[ \\t]+(?:!!?\\S+[ \\t]+)?${quoted}(?:[ \\t]+|:|$)`, "u").test(line)) {
+      n += 1;
+      continue;
+    }
+    if (/^\s*(?:-\s+)?\?[ \t]+[|>][-+]?[ \t]*$/u.test(line)) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const content = lines[j].replace(/[ \t]+#.*$/u, "").trim();
+        if (content === "") continue;
+        if (content.replace(/^['"]|['"]$/gu, "") === name) n += 1;
+        break;
+      }
+      continue;
+    }
+    n += [...line.matchAll(new RegExp(`(?:^|[{,\\s])(?:!!?\\S+[ \\t]+)?${quoted}[ \\t]*:`, "gu"))].length;
+  }
+  return n;
+}
+
 function hasSkipKey(step) {
-  return stepOwnKeys(step).some((key) => key === "if" || key === "continue-on-error");
+  return countYamlKey(step, "if") > 0 || countYamlKey(step, "continue-on-error") > 0;
 }
 
 function exactStepBody(step) {
@@ -353,11 +380,12 @@ export function check(workflow, pkg, harnessSource) {
     const steps = stepBlocks(preview);
     const names = steps.map(stepName);
     const buildAt = names.indexOf("Build ordinary offline Treehouse app");
+    const classifies = steps.filter((step) => stepName(step) === CLASSIFY_STEP);
     const classifyAt = names.indexOf(CLASSIFY_STEP);
-    if (classifyAt === -1) fail(`${PREVIEW_JOB} lacks the ordinary bundle classification step`);
+    if (classifies.length !== 1) fail(`${PREVIEW_JOB} must have exactly one ordinary bundle classification step`);
     else {
       if (classifyAt <= buildAt || buildAt === -1) fail("classification must run after the ordinary build");
-      const classify = steps[classifyAt];
+      const classify = classifies[0];
       const run = scalar(classify, "run") ?? "";
       if (run.trim() !== ORDINARY_CLASSIFY_RUN)
         fail("classification step must assert the ordinary variant of the ordinary bundle and its dist");
@@ -367,7 +395,10 @@ export function check(workflow, pkg, harnessSource) {
       // such as 'if' or "continue-on-error" pass a bare `if:` line check).
       if (exactStepBody(classify) !== CLASSIFY_STEP_BODY)
         fail("the ordinary classification step body must be exactly the pinned text");
-      if (JSON.stringify(unquotedStepKeys(classify)) !== JSON.stringify(CLASSIFY_STEP_KEYS))
+      if (
+        JSON.stringify(unquotedStepKeys(classify)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
+        JSON.stringify(stepOwnKeys(classify)) !== JSON.stringify(CLASSIFY_STEP_KEYS)
+      )
         fail("the ordinary classification step keys must be exactly name, working-directory and run");
     }
     if (previewDigest(workflow) !== TREEHOUSE_PREVIEW_DIGEST)
@@ -392,7 +423,11 @@ export function check(workflow, pkg, harnessSource) {
       // such as 'if' or "continue-on-error" pass a bare `if:` line check).
       if (exactStepBody(step) !== EXPORT_STEP_BODY) fail("the Space export step body must be exactly the pinned text");
       // No shell, timeout, id or uses may ride along: the step's own keys are exactly these four.
-      if (JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(["name", "working-directory", "env", "run"]))
+      const exportKeys = ["name", "working-directory", "env", "run"];
+      if (
+        JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(exportKeys) ||
+        JSON.stringify(stepOwnKeys(step)) !== JSON.stringify(exportKeys)
+      )
         fail("the Space export step keys must be exactly name, working-directory, env and run");
     }
     if (pkg.scripts?.["packaged:export"] !== EXPORT_SCRIPT)
@@ -424,13 +459,15 @@ export function check(workflow, pkg, harnessSource) {
   if (!Number.isInteger(timeout) || timeout < 30 || timeout > 120) fail("timeout-minutes must be a bounded 30 to 120");
   if ((header.match(/^ {4}if:/gmu) ?? []).length !== 1 || scalar(header, "if", 4) !== ENROLLMENT_GATE)
     fail(`the job must carry exactly one job-level if, ${ENROLLMENT_GATE}`);
-  if (headerOwnKeys(header).filter((key) => key === "if").length !== 1)
+  if (countYamlKey(header, "if") !== 1 || headerOwnKeys(header).filter((key) => key === "if").length !== 1)
     fail(`the job must carry exactly one job-level if, including quoted YAML keys, ${ENROLLMENT_GATE}`);
   if (JSON.stringify(needsOf(job)) !== JSON.stringify(["changes"]))
     fail("the job must need exactly the changes classifier");
   if (JSON.stringify(permissions(header)) !== JSON.stringify(["contents: read"]))
     fail("the job must declare exactly least-privilege permissions: contents: read");
-  if (/continue-on-error/u.test(job)) fail("continue-on-error is forbidden in any spelling");
+  if (/continue-on-error/u.test(job) || /continue-on-error/u.test(decodeYamlEscapes(job)))
+    fail("continue-on-error is forbidden in any spelling");
+  if (countYamlKey(job, "continue-on-error") > 0) fail("continue-on-error is forbidden in any spelling");
   if (/\|\|\s*(?:true|:|exit\s+0)\b/u.test(job)) fail("|| true style masking is forbidden");
   if (/set\s+\+e/u.test(job)) fail("set +e is forbidden");
   if (/\bif:\s*(?:\$\{\{\s*)?false\b/u.test(job)) fail("if: false is forbidden");
@@ -441,7 +478,7 @@ export function check(workflow, pkg, harnessSource) {
   if (/TREEHOUSE_PACKAGED_PREFLIGHT_ONLY/u.test(job)) fail("the preflight-only switch must not be set in CI");
 
   // Only the evidence upload may carry an if, and it is exactly always(). Quoted YAML keys count.
-  const conditional = steps.filter((step) => stepOwnKeys(step).includes("if"));
+  const conditional = steps.filter((step) => countYamlKey(step, "if") > 0);
   if (conditional.length !== 1) fail("exactly one step (the evidence upload) may carry an if");
   for (const step of conditional) {
     if (scalar(step, "if") !== "always()") fail("the only permitted if is always()");
@@ -572,8 +609,10 @@ export function check(workflow, pkg, harnessSource) {
   }
 
   // The dev-trace bundle and its frontend are classified together, unconditionally, before the harness runs.
-  if (classifyAt !== -1) {
-    const step = steps[classifyAt];
+  const classifySteps = steps.filter((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP);
+  if (classifySteps.length !== 1) fail("the enrollment job must have exactly one dev-trace classification step");
+  else {
+    const step = classifySteps[0];
     const run = runOf(step);
     if (run.trim() !== DEV_TRACE_CLASSIFY_RUN)
       fail("dev-trace classification must assert the dev_trace bundle and the dist");
@@ -581,7 +620,10 @@ export function check(workflow, pkg, harnessSource) {
     if (hasSkipKey(step) || /\|\|/u.test(run)) fail("dev-trace classification must be unconditional and blocking");
     if (exactStepBody(step) !== CLASSIFY_DEV_TRACE_STEP_BODY)
       fail("the dev-trace classification step body must be exactly the pinned text");
-    if (JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(CLASSIFY_STEP_KEYS))
+    if (
+      JSON.stringify(unquotedStepKeys(step)) !== JSON.stringify(CLASSIFY_STEP_KEYS) ||
+      JSON.stringify(stepOwnKeys(step)) !== JSON.stringify(CLASSIFY_STEP_KEYS)
+    )
       fail("the dev-trace classification step keys must be exactly name, working-directory and run");
   }
 
@@ -695,9 +737,45 @@ const mutations = {
     mutateJob(text, (job) =>
       mutate(job, "        run: npm run packaged:enrollment", "        ? if\n        : false\n        run: npm run packaged:enrollment"),
     ),
+  "harness explicit quoted if with comment": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? 'if' # skip\n        : false\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness tagged if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", "        !!str if: false\n        run: npm run packaged:enrollment"),
+    ),
+  "harness block-scalar if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? |-\n          if\n        : false\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness escaped continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        '        "continue-on-erro\\u0072": true\n        run: npm run packaged:enrollment',
+      ),
+    ),
+  "ordinary classification duplicated": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, `${step}${step}`);
+  },
   "job extra quoted if false": (text) =>
     mutateJob(text, (job) =>
       mutate(job, "    runs-on:", "    'if': false\n    runs-on:"),
+    ),
+  "job escaped continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "    runs-on:", '    "continue-on-erro\\u0072": true\n    runs-on:'),
     ),
   "harness if expression false": (text) =>
     mutateJob(text, (job) =>
@@ -849,6 +927,11 @@ const mutations = {
     mutateJob(text, (job) => {
       const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
       return job.replace(step, step.replace("        run:", "        'shell': 'bash {0}'\n        run:"));
+    }),
+  "dev-trace classification duplicated": (text) =>
+    mutateJob(text, (job) => {
+      const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
+      return job.replace(step, `${step}${step}`);
     }),
   "dev-trace classification before the build": (text) =>
     mutateJob(text, (job) => {
