@@ -190,20 +190,20 @@ defmodule Lattice.Verdict do
   def to_json(%{schema: @schema} = record) do
     OrderedObject.new([
       {"schema", record.schema},
-      {"replica", record.replica},
-      {"op_id", record.op_id},
+      {"replica", id_json(record.replica)},
+      {"op_id", id_json(record.op_id)},
       {"author", record.author},
       {"kind", term_json(record.kind)},
       {"verdict", Atom.to_string(record.verdict)},
       {"reason", atom_or_nil(record.reason)},
-      {"cited_delegation_id", record.cited_delegation_id},
+      {"cited_delegation_id", id_json(record.cited_delegation_id)},
       {"evidence",
        OrderedObject.new([
-         {"revoked_by", record.evidence.revoked_by},
+         {"revoked_by", id_json(record.evidence.revoked_by)},
          {"lapsed_by_beacon", record.evidence.lapsed_by_beacon}
        ])},
       {"expires_epoch", record.expires_epoch},
-      {"frontier", record.frontier}
+      {"frontier", Enum.map(record.frontier, &id_json/1)}
     ])
     |> encode()
   end
@@ -211,14 +211,14 @@ defmodule Lattice.Verdict do
   def to_json(%{schema: @status_schema} = status) do
     OrderedObject.new([
       {"schema", status.schema},
-      {"delegation_id", status.delegation_id},
+      {"delegation_id", id_json(status.delegation_id)},
       {"status", Atom.to_string(status.status)},
       {"audience", status.audience},
       {"ops", Enum.map(status.ops, &term_json/1)},
-      {"revoked_by", status.revoked_by},
+      {"revoked_by", id_json(status.revoked_by)},
       {"expires_epoch", status.expires_epoch},
       {"latest_beacon_epoch", status.latest_beacon_epoch},
-      {"frontier", status.frontier}
+      {"frontier", Enum.map(status.frontier, &id_json/1)}
     ])
     |> encode()
   end
@@ -230,6 +230,19 @@ defmodule Lattice.Verdict do
   # encoded as an object that can never equal an action or kind name, never raised on.
   defp term_json(term) when is_atom(term), do: Atom.to_string(term)
   defp term_json(term), do: OrderedObject.new([{"non_atom", inspect(term)}])
+
+  # Ids and the replica come from signed data and may hold any binary (or term). JSON
+  # strings must be UTF-8, so anything else is tagged rather than raised on, and a tagged
+  # id can never equal a real one.
+  defp id_json(nil), do: nil
+
+  defp id_json(id) when is_binary(id) do
+    if String.valid?(id),
+      do: id,
+      else: OrderedObject.new([{"non_utf8_hex", Base.encode16(id, case: :lower)}])
+  end
+
+  defp id_json(id), do: OrderedObject.new([{"non_binary", inspect(id)}])
 
   # A key that is not a binary can never equal an actor's key; `nil` refuses.
   defp hex(key) when is_binary(key), do: Base.encode16(key, case: :lower)
