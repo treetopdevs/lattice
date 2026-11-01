@@ -7,11 +7,13 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
   filename. All logs and catalogs are re-read before publishing.
   No application is started, no signature
   is made and no private identity or ceremony bytes are copied to the output.
+  A page whose root first-install PreviewState would exceed the 1 MiB workflow
+  store is refused as `:preview_storage_limit` before any output is written.
   """
   alias Lattice.Log
   alias LatticeCarrierServer.{Durability, Manifest}
   alias LatticeCarrierServer.Operator.{CatalogBinding, CatalogStore, Journal}
-  alias LatticeCarrierServer.Operator.CatalogEvidence.Packet
+  alias LatticeCarrierServer.Operator.CatalogEvidence.{Packet, Workflow}
   alias LatticeCarrierServer.Operator.CatalogCeremony.{Atoms, Paths}
   @max_source 64 * 1024 * 1024
   @test_hooks_enabled Mix.env() == :test
@@ -47,6 +49,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
            ),
          {:ok, bytes} <-
            Packet.encode(space, Enum.map(store.documents, & &1.bytes), histories, store.head),
+         :ok <- Workflow.fit(space, histories),
          :ok <- output_location(output, root, ceremony, manifest_path, manifest.instances),
          :ok <- before_publish(),
          {:ok, ^raw} <- Journal.read(root),

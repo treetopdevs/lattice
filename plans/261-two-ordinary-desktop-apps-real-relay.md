@@ -128,8 +128,10 @@ the larger capacity now, shard storage first; that is the higher-cost alternativ
 
 Applied by plan 257 (D-130): the existing sync path pauses a route at `full` with a visible
 explanation, both stores accept exactly 1 MiB, and plan 245 PRs 5-6 now require the owner check
-and store-limit acceptance tests instead of large-import workflow criteria. The exporter's
-half of this budget is row 300.
+and store-limit acceptance tests instead of large-import workflow criteria. Row 300 is the
+exporter half: export refuses `preview_storage_limit` before writing a page whose root
+first-install PreviewState would miss the 1 MiB store. The native owner check remains on
+plan 245 PR 5.
 
 ### D6: scope the milestone explicitly
 

@@ -5,7 +5,9 @@
 DONE in [PR #199](https://github.com/treetopdevs/lattice/pull/199): 1 MiB kept
 (D-130), the feed pauses a route at `full`, max-size gates in TS and native.
 The native catalog owner's pre-install capacity check is carried by plan 245
-PR 5 and PR 6 (rule 7), because neither exists yet. The exporter half is row 300.
+PR 5 and PR 6 (rule 7), because neither exists yet. Row 300 implements the
+exporter half: `CatalogEvidence.export/4` refuses `preview_storage_limit`
+before writing.
 
 ## Problem
 
@@ -107,8 +109,8 @@ Evidence tier: unit and contract (rule 1). No packaged, device or relay field cl
 - No larger capacity: the pilot still holds about 1 MiB of history across the Space
   and its Threads, on the order of a thousand short posts (a short post's frame and
   ids take about 700 bytes).
-- No catalog route capacity check yet: plan 245 PRs 5 and 6 carry the owner and shell
-  halves, and row 300 the exporter half (plan 261 D5 names both).
+- No catalog owner capacity check yet: plan 245 PRs 5 and 6 still carry the native
+  owner and shell halves. Row 300 is the exporter half only (plan 261 D5 names both).
 - The `thread_storage_limit` check in `TreehouseWorkflow.command` (4,000 frames or
   8 MiB of one Thread) is unreachable under the 1 MiB record and is left as is.
 - The refused merge does not save that round's acknowledgements, so a local post
