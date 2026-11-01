@@ -1115,6 +1115,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Finding</dt><dd>Two P1, two P2. (1) <code>? 'if' # comment</code>, tagged keys, and block-scalar keys skipped the harness because the explicit-key regex required end of line. (2) <code>"continue-on-erro\u0072"</code> skipped the job-wide substring check, which ran on raw text. (3) <code>unquotedStepKeys</code> ignored quoted keys, so updating a pin constant and the workflow together could add <code>'shell'</code>. (4) Only the first ordinary classification step was pinned, while the preview digest excludes every step of that name.</dd>
 <dt>Decision</dt><dd>Fixed. Skip-key detection counts decoded YAML keys, including comments on <code>?</code> lines, tags, block/folded keys, and Unicode escapes. Classification and export compare decoded own keys to the whitelist. Preview and enrollment each require exactly one classification step. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
+<section id="d165"><h2><span>D-165</span> Row 238 Codex confirm P1/P2: indent indicators, escaped newlines, block-scalar own keys</h2><dl>
+<dt>When</dt><dd>2026-10-31, confirm pass on tip <code>02f98e8bc</code></dd>
+<dt>Finding</dt><dd>Two P1, one P2. (1) <code>? |2-</code> and tagged <code>? !!str |-</code> skipped the harness because the block-header regex omitted indentation indicators and tags. (2) A double-quoted key split by a YAML escaped line break decoded to <code>continue-on-error</code> but the scanner missed it. (3) <code>mappingKeys</code> ignored block-scalar names, so updating a pin constant and the workflow together could add a block-scalar <code>shell</code>.</dd>
+<dt>Decision</dt><dd>Fixed. <code>decodeYamlEscapes</code> folds double-quoted line continuations. Skip-key and own-key scans read tagged and indented block-scalar keys and nested <code>?</code> content. Scanner unit tests cover lockstep <code>shell</code>. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
