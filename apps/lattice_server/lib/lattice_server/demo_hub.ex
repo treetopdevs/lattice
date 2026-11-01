@@ -150,7 +150,7 @@ defmodule LatticeServer.DemoHub do
       %{
         type: "presence",
         tabs: tabs_from(state),
-        audit_count: length(Lattice.audit_events()),
+        audit_count: Lattice.Audit.count(),
         liveops: liveops_snapshot()
       },
       state
@@ -162,7 +162,7 @@ defmodule LatticeServer.DemoHub do
       %{
         type: "server_event",
         event: event,
-        audit_count: length(Lattice.audit_events()),
+        audit_count: Lattice.Audit.count(),
         liveops: liveops_snapshot()
       },
       state
@@ -197,7 +197,7 @@ defmodule LatticeServer.DemoHub do
       type: "snapshot",
       tabs: tabs_from(state),
       events: Enum.reverse(state.events),
-      audit_count: length(Lattice.audit_events()),
+      audit_count: Lattice.Audit.count(),
       liveops: liveops_snapshot()
     }
   end
@@ -220,11 +220,15 @@ defmodule LatticeServer.DemoHub do
     Enum.at([152, 280, 32, 210], rem(index, 4))
   end
 
+  # `nil` means LiveOps is not running. The catch also covers LiveOps dying
+  # between `whereis/1` and the call.
   defp liveops_snapshot do
     if Process.whereis(Lattice.LiveOps) do
       Lattice.LiveOps.snapshot()
     else
       nil
     end
+  catch
+    :exit, _reason -> nil
   end
 end

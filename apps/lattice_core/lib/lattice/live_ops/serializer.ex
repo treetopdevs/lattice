@@ -8,7 +8,8 @@ defmodule Lattice.LiveOps.Serializer do
   keeps emitting `"active"` for a live cap to honor the existing browser/proof
   contract. If the authority process is unavailable, serialization treats the
   store as empty so every projected capability fails closed as `"revoked"`
-  without crashing LiveOps.
+  without crashing LiveOps. Likewise the audit counter reads `0` while
+  `Lattice.Audit` is restarting, rather than crashing the snapshot.
   """
 
   alias Lattice.{Audit, Cap, CapStore}
@@ -50,7 +51,7 @@ defmodule Lattice.LiveOps.Serializer do
         approvals: map_size(state.approvals),
         operations: length(state.operations),
         denials: state.denials,
-        audit: length(Audit.events())
+        audit: Audit.count()
       }
     }
   end
