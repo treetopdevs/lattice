@@ -552,6 +552,39 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence.ExportTest do
     refute File.exists?(f.output)
   end
 
+  test "an evaluator-valid listed snapshot that misses the workflow store is not written", f do
+    {:ok, manifest} = Manifest.load(f.export_manifest)
+    thread = Enum.find(manifest.instances, &(&1.name == "thread"))
+    {:ok, %{log: log}} = Log.restore_verified(thread.log_file)
+    identity = Sim.identity(f.child, "creator")
+    genesis = Enum.find(Map.values(log.ops), &(&1.kind == :authority and &1.deps == []))
+    {:genesis, delegation, _} = genesis.body
+    original = File.read!(thread.log_file)
+    on_exit(fn -> File.write!(thread.log_file, original) end)
+
+    posts =
+      Enum.map(1..40, fn index ->
+        prefix = String.pad_leading(Integer.to_string(index), 6, "0")
+        body = prefix <> String.duplicate("x", 36_000)
+
+        Op.new(identity, log.replica, Log.frontier(log), :command, {:post, [body]},
+          cap: delegation.id
+        )
+      end)
+
+    grown = Log.from_ops(log.replica, Map.merge(log.ops, Map.new(posts, &{&1.id, &1})))
+    assert :ok = Log.verify_authenticity(grown)
+    assert :ok = Log.dump(grown, thread.log_file)
+    before = inputs(f)
+
+    assert {:error, :preview_storage_limit} =
+             CatalogEvidence.export(f.root, f.ceremony_dir, f.export_manifest, f.output)
+
+    refute File.exists?(f.output)
+    assert inputs(f) == before
+    assert File.read!(thread.log_file) == Log.dump_bytes(grown)
+  end
+
   test "compressed source allocation is bounded before decoding", f do
     bytes = <<131, 80, 67_108_864::unsigned-big-32, 0>>
     File.write!(f.active_log, bytes)
