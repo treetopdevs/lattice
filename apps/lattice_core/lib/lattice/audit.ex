@@ -24,9 +24,12 @@ defmodule Lattice.Audit do
   Returns the number of recorded events, counted inside the Audit process.
 
   This is a projection counter for UI snapshots (LiveOps, DemoHub), not
-  evidence. It returns `0` while Audit is unavailable, for example mid-restart,
-  so a snapshot never crashes its caller. Evidence readers must use `events/0`,
-  which still fails loudly when Audit is down.
+  evidence. It returns `0` when Audit is not running (for example mid-restart)
+  or exits during the call, so those cases do not crash the snapshot's caller.
+  It does not protect against a stalled Audit: the inner call then hits its
+  5 s timeout, which is the same deadline as the caller's own outer call.
+  Evidence readers must use `events/0`, which still fails loudly when Audit is
+  down.
   """
   def count do
     GenServer.call(__MODULE__, :count)

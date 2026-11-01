@@ -1349,8 +1349,14 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <section id="d206"><h2><span>D-206</span> PR #208 review: Codex Sol 6.1 xhigh rounds and dispositions</h2><dl>
 <dt>When</dt><dd>2026-11-01</dd>
 <dt>Finding</dt><dd>No earlier rounds with dispositions. Final round: (P3 apps/lattice_server/test/demo_hub_audit_restart_test.exs:28) two fixed DemoHub crash paths lack regression coverage: reverting only the presence counter change, or only the liveops_snapshot/0 catch, leaves all seven affected tests passing; (P3 apps/lattice_core/lib/lattice/audit.ex:27) the snapshot-safety doc overclaims timeout resilience: with :sys.suspend(Lattice.Audit), count/0 returns 0 after five seconds but both snapshot callers exit :timeout because their outer calls share the five-second deadline (behaviour predates the patch).</dd>
-<dt>Decision</dt><dd>No P1/P2 reported. Both P3 findings are open on the PR tip and named in the PR body; no follow-up row was filed for them in this slice.</dd>
+<dt>Decision</dt><dd>No P1/P2 reported. Both P3 findings were open on the reviewed tip; both are fixed in D-207, so no follow-up row was filed for them.</dd>
 <dt>Reason</dt><dd>Rule 3 does not apply (D-200); one review. No workflow, W4 or Phase G claim.</dd>
+</dl></section>
+<section id="d207"><h2><span>D-207</span> PR #208: both D-206 P3 findings fixed</h2><dl>
+<dt>When</dt><dd>2026-11-01</dd>
+<dt>Finding</dt><dd>D-206 left two P3 findings open: missing regression coverage for two fixed DemoHub crash paths, and the Audit.count/0 doc claiming the snapshot survives a stalled Audit.</dd>
+<dt>Decision</dt><dd>Fixed both. apps/lattice_server/test/demo_hub_audit_restart_test.exs adds two tests: register (auto_story? false) and unregister with Audit terminated leave the DemoHub pid unchanged; and with LiveOps suspended by :sys.suspend, a DemoHub snapshot started in a Task waits until its call is in the LiveOps mailbox, LiveOps is killed, and the reply has nil liveops with the DemoHub pid unchanged. Each test was checked by reverting only its fix (the presence counter line, then the liveops_snapshot/0 catch): the matching test failed and the other two passed. The apps/lattice_core/lib/lattice/audit.ex count/0 doc now covers only an Audit that is not running or exits during the call, and says a stalled Audit is not covered because the inner and outer calls share the five-second deadline. The doc change does not change behaviour.</dd>
+<dt>Reason</dt><dd>Both were in-scope P3 findings on the PR's own change, and fixing them was cheaper than a follow-up row. No workflow, W4 or Phase G claim.</dd>
 </dl></section>
 </main>
 </body>
