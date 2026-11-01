@@ -238,9 +238,11 @@ function envEntries(step) {
 }
 
 function decodeYamlEscapes(text) {
-  // Fold `\` + linebreak + indent only inside double-quoted scalars. Doing this globally
-  // joins a comment that ends in `\` onto the next line and then comment-strips a real key.
-  const folded = text.replace(/"(?:[^"\\]|\\[\s\S])*"/gu, (scalar) =>
+  // Strip comments first so a quote or trailing `\` in a comment cannot start a fake
+  // double-quoted scalar that swallows the next line's real key. Then fold `\`+linebreak
+  // only inside remaining double-quoted scalars, then hex/Unicode.
+  const uncommented = text.split("\n").map(stripYamlComment).join("\n");
+  const folded = uncommented.replace(/"(?:[^"\\]|\\[\s\S])*"/gu, (scalar) =>
     scalar.replace(/\\(?:\r\n|\r|\n)[ \t]*/gu, ""),
   );
   return folded.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
@@ -249,20 +251,25 @@ function decodeYamlEscapes(text) {
 }
 
 const YAML_MAPPING_KEY = String.raw`(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_-]+))`;
-const YAML_TAGS = String.raw`(?:!!?\S+[ \t]+)*`;
+const YAML_DECORATORS = String.raw`(?:(?:!!?\S+|&[A-Za-z0-9_-]+)[ \t]+)*`;
 const YAML_BLOCK_HEADER = String.raw`[|>][0-9+-]*`;
 
 function stripYamlComment(line) {
   return line.replace(/[ \t]+#.*$/u, "");
 }
 
-function stripYamlTags(text) {
-  return text.replace(/^(?:!!?\S+[ \t]*)+/u, "").trim();
+function stripYamlDecorators(text) {
+  let out = text.trim();
+  for (;;) {
+    const next = out.replace(/^(?:!!?\S+|&[A-Za-z0-9_-]+)[ \t]*/u, "").trim();
+    if (next === out) return next;
+    out = next;
+  }
 }
 
 function firstExplicitName(lines, start) {
   for (let j = start; j < lines.length; j++) {
-    const content = stripYamlTags(stripYamlComment(lines[j]).trim());
+    const content = stripYamlDecorators(stripYamlComment(lines[j]));
     if (content === "") continue;
     if (new RegExp(`^${YAML_BLOCK_HEADER}$`, "u").test(content)) continue;
     const named = new RegExp(`^${YAML_MAPPING_KEY}`, "u").exec(content);
@@ -274,7 +281,7 @@ function firstExplicitName(lines, start) {
 function parseExplicitKey(line) {
   const m = /^\s*(?:-\s+)?\?[ \t]*(.*)$/u.exec(line);
   if (!m) return undefined;
-  const body = stripYamlTags(m[1]);
+  const body = stripYamlDecorators(m[1]);
   if (body === "" || new RegExp(`^${YAML_BLOCK_HEADER}$`, "u").test(body)) return { kind: "lookAhead" };
   const named = new RegExp(`^${YAML_MAPPING_KEY}(?:[ \\t]+|:|$)`, "u").exec(body);
   if (named) return { kind: "named", name: named[1] ?? named[2] ?? named[3] };
@@ -284,7 +291,7 @@ function parseExplicitKey(line) {
 function mappingKeys(block, indent, dashed) {
   const decoded = decodeYamlEscapes(block);
   const prefix = dashed ? ` {${indent}}- ` : ` {${indent}}`;
-  const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_TAGS}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
+  const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_DECORATORS}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
     (m) => m[1] ?? m[2] ?? m[3],
   );
   const atIndent = new RegExp(`^${prefix}\\?`, "u");
@@ -327,7 +334,7 @@ function countYamlKey(block, name) {
       else if (parsed.kind === "lookAhead" && firstExplicitName(lines, i + 1) === name) n += 1;
       continue;
     }
-    n += [...line.matchAll(new RegExp(`(?:^|[{,\\s])${YAML_TAGS}${quoted}[ \\t]*:`, "gu"))].length;
+    n += [...line.matchAll(new RegExp(`(?:^|[{,\\s])${YAML_DECORATORS}${quoted}[ \\t]*:`, "gu"))].length;
   }
   return n;
 }
@@ -842,6 +849,22 @@ const mutations = {
         "        ?\n          !!str if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
       ),
     ),
+  "harness if after comment quote line continuation": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        '        # harmless " \\\n        if: runner.os == \'Linux\'\n        # closing "\n        run: npm run packaged:enrollment',
+      ),
+    ),
+  "harness anchored explicit if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? &cond 'if'\n        : runner.os == 'Linux'\n        id: *cond\n        run: npm run packaged:enrollment",
+      ),
+    ),
   "harness escaped-newline continue-on-error": (text) =>
     mutateJob(text, (job) =>
       mutate(
@@ -967,6 +990,10 @@ const mutations = {
   "ordinary classification gains a block-scalar shell": (text) => {
     const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
     return text.replace(step, step.replace("        run:", "        ? |-\n          shell\n        : bash -c true {0}\n        run:"));
+  },
+  "ordinary classification gains an anchored shell": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", "        &sh 'shell': bash -c true {0}\n        run:"));
   },
   "job-level VITE_TREEHOUSE_ENROLLMENT on the ordinary job (row 201)": (text) =>
     mutate(
@@ -1307,6 +1334,30 @@ test("countYamlKey reads split-line and nested tagged if keys", () => {
 
 test("own-key whitelist sees a lockstep split-line tagged shell", () => {
   const injected = "        ? !!str\n          shell\n        : bash -c true {0}\n        run:";
+  const exportKeys = ["name", "working-directory", "env", "run"];
+  for (const [body, allowed] of [
+    [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [CLASSIFY_DEV_TRACE_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [EXPORT_STEP_BODY, exportKeys],
+  ]) {
+    const updated = body.replace("        run:", injected);
+    assert.ok(stepOwnKeys(updated).includes("shell"));
+    assert.notEqual(JSON.stringify(stepOwnKeys(updated)), JSON.stringify(allowed));
+  }
+});
+
+test("countYamlKey still sees if after a quoted comment line continuation", () => {
+  assert.ok(
+    countYamlKey('        # harmless " \\\n        if: runner.os == \'Linux\'\n        # closing "\n', "if") > 0,
+  );
+});
+
+test("countYamlKey reads an anchored explicit if key", () => {
+  assert.ok(countYamlKey("        ? &cond 'if'\n        : runner.os == 'Linux'\n        id: *cond\n", "if") > 0);
+});
+
+test("own-key whitelist sees a lockstep anchored shell", () => {
+  const injected = "        &sh 'shell': bash -c true {0}\n        run:";
   const exportKeys = ["name", "working-directory", "env", "run"];
   for (const [body, allowed] of [
     [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
