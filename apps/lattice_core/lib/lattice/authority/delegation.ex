@@ -25,6 +25,7 @@ defmodule Lattice.Authority.Delegation do
   alias Lattice.Identity
 
   @enforce_keys [:id, :replica, :issuer, :audience, :ops, :roles, :live, :sig]
+  @fields [:parent_id, :expires_epoch | @enforce_keys]
   defstruct [
     :id,
     :replica,
@@ -111,11 +112,12 @@ defmodule Lattice.Authority.Delegation do
   a MapSet wrapping a version-1 set of the same names into identical bytes, so
   those shapes can still verify; the judge later calls `MapSet.member?/2` and
   must not raise. A list or an unusable `:sets` v1 backing is therefore
-  `:bad_delegation_sig`, never a crash (row 289).
+  `:bad_delegation_sig`, never a crash (row 289). The same holds for every other
+  field outside `well_formed?/1`.
   """
   @spec valid_sig?(t()) :: boolean()
   def valid_sig?(%__MODULE__{} = d) do
-    mapset?(d.ops) and mapset?(d.roles) and consistent_sig?(d)
+    well_formed?(d) and consistent_sig?(d)
   rescue
     # Canonical rejects malformed terms with ArgumentError; keep this rescue
     # aligned with that invariant if its refusal exception types ever change.
@@ -145,8 +147,7 @@ defmodule Lattice.Authority.Delegation do
   """
   @spec attenuates?(t(), t()) :: boolean()
   def attenuates?(%__MODULE__{} = child, %__MODULE__{} = parent) do
-    mapset?(child.ops) and mapset?(child.roles) and
-      mapset?(parent.ops) and mapset?(parent.roles) and
+    well_formed?(child) and well_formed?(parent) and
       child.parent_id == parent.id and
       child.issuer == parent.audience and
       child.replica == parent.replica and
@@ -156,8 +157,45 @@ defmodule Lattice.Authority.Delegation do
       expiry_within?(child, parent)
   end
 
-  defp mapset?(%MapSet{map: set}) when is_map(set), do: true
-  defp mapset?(_), do: false
+  @doc """
+  True if every field has a shape `Lattice.Carrier.Wire` can decode (row 289).
+
+  The judge assumes these shapes: binary ids and keys, a boolean `live`, a
+  `nil` or uint64 lease, and map-backed `MapSet`s (`:sets` v2, the shape
+  `Delegation.new/4` emits) of scalar names. A signed or tampered term outside them, such
+  as `live: "yes"` or `expires_epoch: -1`, is never valid and never raises.
+  """
+  @spec well_formed?(term()) :: boolean()
+  def well_formed?(%__MODULE__{} = d) do
+    complete?(d) and is_binary(d.id) and is_binary(d.replica) and
+      is_binary(d.issuer) and
+      is_binary(d.audience) and (is_nil(d.parent_id) or is_binary(d.parent_id)) and
+      names?(d.ops) and names?(d.roles) and is_boolean(d.live) and is_binary(d.sig) and
+      (is_nil(d.expires_epoch) or
+         (is_integer(d.expires_epoch) and d.expires_epoch >= 0 and
+            d.expires_epoch <= Lattice.Canonical.max_integer()))
+  end
+
+  def well_formed?(_other), do: false
+
+  @doc """
+  True if the struct carries every key. A tampered struct can lack any key (a
+  legacy one lacks the lease); refuse it before a field read raises KeyError.
+  `Lattice.Log.restore/1` fills missing keys with `nil` before the judge.
+  """
+  @spec complete?(term()) :: boolean()
+  def complete?(%__MODULE__{} = d), do: Enum.all?(@fields, &is_map_key(d, &1))
+  def complete?(_other), do: false
+
+  # Members must be scalars Canonical can encode. A binary or integer name is
+  # harmless (it signs to different bytes from the atom, so it never authorizes a
+  # command) and stays valid; a nested term such as a forged MapSet would raise.
+  defp names?(%MapSet{map: set} = names) when is_map(set), do: Enum.all?(names, &name?/1)
+  defp names?(_other), do: false
+
+  defp name?(name) when is_atom(name) or is_binary(name) or is_integer(name), do: true
+  defp name?(%Lattice.Canonical.Atom{name: name}) when is_binary(name), do: true
+  defp name?(_other), do: false
 
   # nil = unbounded. An unbounded parent accepts anything; a leased parent
   # accepts only a child leased at or before its own expiry.

@@ -246,15 +246,19 @@ defmodule Lattice.Verdict do
   # authority op from the delegation it carries, never from its `cap`.
   defp cited_delegation_id(%Op{kind: :authority, body: body} = op) do
     case carried_delegation(body) do
-      %Delegation{id: id} -> id
+      %Delegation{id: id} -> printable_id(id)
       nil -> cap_id(op)
     end
   end
 
   defp cited_delegation_id(op), do: cap_id(op)
 
-  defp cap_id(%Op{cap: cap}) when is_binary(cap), do: cap
-  defp cap_id(_op), do: nil
+  defp cap_id(%Op{cap: cap}), do: printable_id(cap)
+
+  # A malformed delegation can carry any id term (row 289); only a UTF-8 binary
+  # can be cited in the JSON record, so anything else is `nil`, never a raise.
+  defp printable_id(id) when is_binary(id), do: if(String.valid?(id), do: id)
+  defp printable_id(_id), do: nil
 
   # The delegation shapes the judge introduces from authority bodies.
   defp carried_delegation({:genesis, %Delegation{} = d, _policies}), do: d
