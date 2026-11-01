@@ -133,8 +133,10 @@ or ceremony artifact is mutated. Do not start a listener or add a network action
 3. Prove exclusive output, existing file/link refusal, source drift and no mutation
    of input bytes on every refusal. Exercise the actual closed Mix command.
 4. Build a maximum evaluator-valid fixture with 16 MiB of artifacts and histories
-   reaching the 32 MiB retained snapshot cap. It must export/import under the 64 MiB
-   transport cap; one byte beyond a limit refuses evidence_page_too_large.
+   reaching the 32 MiB retained snapshot cap. `Packet.encode/4` still round-trips
+   it under the 64 MiB transport cap; one byte beyond an evaluator limit refuses
+   `evidence_page_too_large`. `CatalogEvidence.export/4` of that page is
+   `preview_storage_limit` (row 300); it is not a workflow-store acceptance input.
 5. Prepare Node/client prerequisites, run focused tests, full mix check and both
    boundary security scans. Run actual owner integration as non-root Linux; macOS
    skips do not count. Run the real TS consumer on the produced file.

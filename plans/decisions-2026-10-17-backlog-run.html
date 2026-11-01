@@ -1085,6 +1085,17 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Context</dt><dd>Two Codex Sol 6.1 xhigh read-only passes ran before the PR: round 1 P2 (D-157), confirm no P1/P2 (D-158). The diff is exporter/Elixir, not a rule-3 second-review path. Row 288 is marked DONE on this branch (PR #202, merge <code>aa4554add</code>).</dd>
 <dt>Decision</dt><dd>Open #203 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128). Leave row 300 IN PROGRESS on the exact tip so the tip stays green; the next slice marks it DONE with the merge SHA.</dd>
 </dl></section>
+<section id="d160"><h2><span>D-160</span> PR #203 Codex P2: empty <code>acked</code> stays; acknowledgements are native owner / row 255</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/203#discussion_r4434081765">review comment</a></dd>
+<dt>Finding</dt><dd>P2: <code>mergeSync</code> adds every pulled frame id to <code>acked</code>, so an empty acknowledgement list undercounts the post-import record by about one token per frame. The exact-1 MiB export fixture would miss the store after those acknowledgements.</dd>
+<dt>Decision</dt><dd>Deferred. D-156’s first-install record has empty outbox, empty acks, and <code>relay</code> null. <code>mergeSync</code> refuses <code>unknown_route_replica</code> unless the replica is in <code>PreviewState.relay.routes</code>; catalog routes never enter that field (row 255). Plan 245 PR 5 is the owner that sizes frames, outbox and acknowledgements before changing trust or profile state. New row 303. Not a W4 or Phase G claim.</dd>
+<dt>Reason</dt><dd>Row 300 is the exporter half for an honest empty first-install. Folding pull acknowledgements into the exporter would pretend catalog install already uses the relay pull path, which PR 6 has not built.</dd>
+</dl></section>
+<section id="d161"><h2><span>D-161</span> PR #203 CodeRabbit Minor: plan 266 criterion 4 names the 1 MiB export refusal</h2><dl>
+<dt>When</dt><dd>2026-10-31, <a href="https://github.com/treetopdevs/lattice/pull/203#discussion_r4434105014">review comment</a></dd>
+<dt>Finding</dt><dd>Minor: required evidence item 4 still said the 32 MiB retained-snapshot fixture must export/import, which now conflicts with <code>CatalogEvidence.export/4</code> refusing <code>preview_storage_limit</code>.</dd>
+<dt>Decision</dt><dd>Fixed. Item 4 keeps the fixture as an evaluator / <code>Packet.encode/4</code> proof under the 64 MiB transport cap. <code>CatalogEvidence.export/4</code> of that page is <code>preview_storage_limit</code>. No new plan-index row; evaluator caps unchanged.</dd>
+</dl></section>
 </main>
 </body>
 </html>
