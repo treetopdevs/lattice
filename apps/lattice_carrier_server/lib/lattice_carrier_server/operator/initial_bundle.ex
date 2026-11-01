@@ -6,6 +6,7 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
   inventory. It neither installs client trust nor writes operator state.
   """
   alias Lattice.{Authority, Log, Op}
+  alias Lattice.Authority.Delegation
   alias Lattice.Carrier.Wire
   alias LatticeCarrierServer.Operator.{PublicHistory, ReferenceMode, Staging}
   alias LatticeCarrierServer.Operator.CatalogCeremony.Atoms
@@ -150,6 +151,7 @@ defmodule LatticeCarrierServer.Operator.InitialBundle do
 
   defp grants(log, root, parent) do
     for {id, %Op{kind: :authority, body: {:grant, d}}} <- log.ops,
+        Delegation.well_formed?(d),
         Authority.delegation_active?(log, d.id),
         not Authority.revoked?(log, d.id) do
       true =

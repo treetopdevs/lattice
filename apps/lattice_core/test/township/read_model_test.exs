@@ -116,6 +116,39 @@ defmodule Township.ReadModelTest do
              "| 122 | Township instrument read model | P1 | M | 121 | DONE |"
   end
 
+  test "observe tolerates ill-formed delegation fields and omits their trust-graph edge" do
+    {baseline, _} = listform_log(nil)
+    base_edges = ReadModel.observe(baseline, labels: %{}, vouches: []).trust_graph.edges
+
+    for field <- [:roles, :ops] do
+      {log, _} = listform_log(field)
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      graph = model.trust_graph
+
+      assert length(graph.edges) == length(base_edges), "field #{field}"
+      assert graph.edges == base_edges
+    end
+  end
+
+  defp listform_log(field) do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+
+    sim =
+      case field do
+        nil ->
+          sim
+
+        f ->
+          bad = %{good | f => MapSet.to_list(Map.fetch!(good, f))}
+          {sim, _} = Sim.append(sim, "clerk", :authority, {:grant, bad})
+          sim
+      end
+
+    {sim |> Sim.sync_all() |> Sim.log("clerk"), nil}
+  end
+
   defp denied_admission_log do
     sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model")
     {sim, _genesis} = Sim.create_replica(sim, "clerk")

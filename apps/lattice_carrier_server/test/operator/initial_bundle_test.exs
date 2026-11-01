@@ -32,6 +32,42 @@ defmodule LatticeCarrierServer.Operator.InitialBundleTest do
            ) == f.bytes
   end
 
+  test "a list-form roles or ops grant body does not raise and is wire-normalized", f do
+    {id, op} =
+      Enum.find(f.child.ops, fn {_id, op} ->
+        match?(%Lattice.Op{kind: :authority, body: {:grant, _}}, op)
+      end)
+
+    {:grant, d} = op.body
+
+    {:ok, %{bootstraps: [bootstrap]}} =
+      Treehouse.CatalogBootstrap.observe(f.fixture[:updated_log])
+
+    # Row 305: `grants/3` is guarded by `Delegation.well_formed?/1`. Through the
+    # public bundle path the wire codec rebuilds MapSets, so the guard is defense
+    # in depth: the rewrite must neither raise nor change the derived child.
+    for field <- [:roles, :ops] do
+      bad_d = %{d | field => MapSet.to_list(Map.fetch!(d, field))}
+
+      child =
+        Lattice.Log.from_ops(
+          f.child.replica,
+          Map.put(f.child.ops, id, %{op | body: {:grant, bad_d}})
+        )
+
+      bytes =
+        InitialBundle.encode(
+          f.fixture[:updated_log],
+          child,
+          bootstrap.id,
+          f.fixture[:reference].id
+        )
+
+      assert {:ok, verified} = InitialBundle.decode(bytes)
+      assert verified.child == f.child
+    end
+  end
+
   test "closed canonical format refuses alternative spelling and ambiguous fields", f do
     assert {:error, :invalid_initial_bundle} = InitialBundle.decode("\n" <> f.bytes)
 

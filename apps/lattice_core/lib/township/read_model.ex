@@ -8,6 +8,7 @@ defmodule Township.ReadModel do
   """
 
   alias Lattice.{Attestation, Authority, Identity, Log, Op}
+  alias Lattice.Authority.Delegation
   alias Lattice.Graph.ReplicaSnapshot
   alias Township.Matter
 
@@ -248,6 +249,9 @@ defmodule Township.ReadModel do
         _other -> []
       end
     end)
+    # Row 305: an admitted but ill-formed body (list-form roles/ops, non-binary
+    # keys) contributes no node or edge rather than crashing the reader.
+    |> Enum.filter(fn {_kind, delegation} -> Delegation.well_formed?(delegation) end)
   end
 
   defp delegation_edge_kind(kind, delegation) do
