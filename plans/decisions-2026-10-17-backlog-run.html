@@ -1110,6 +1110,11 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>(b). Classification own keys stay exactly <code>name</code>, <code>working-directory</code>, <code>run</code>. The export step gets the same quoted-key skip scan so updating the pin and the workflow together cannot smuggle a skip key. No workflow step body changed; both packaged digests are unchanged. Do not weaken any existing pin. Not a W4, Phase G, or packaged-runtime claim.</dd>
 <dt>Reason</dt><dd>(a) would freeze Hex/Rebar retry and cache keys that the enrollment job still pins structurally. (c) alone would leave the classification step, which is excluded from <code>TREEHOUSE_PREVIEW_DIGEST</code>, without an exact body pin.</dd>
 </dl></section>
+<section id="d164"><h2><span>D-164</span> Row 238 Codex P1/P2: count decoded YAML skip keys; exactly one classification step</h2><dl>
+<dt>When</dt><dd>2026-10-31, first Codex pass on tip <code>8771c04e3</code></dd>
+<dt>Finding</dt><dd>Two P1, two P2. (1) <code>? 'if' # comment</code>, tagged keys, and block-scalar keys skipped the harness because the explicit-key regex required end of line. (2) <code>"continue-on-erro\u0072"</code> skipped the job-wide substring check, which ran on raw text. (3) <code>unquotedStepKeys</code> ignored quoted keys, so updating a pin constant and the workflow together could add <code>'shell'</code>. (4) Only the first ordinary classification step was pinned, while the preview digest excludes every step of that name.</dd>
+<dt>Decision</dt><dd>Fixed. Skip-key detection counts decoded YAML keys, including comments on <code>?</code> lines, tags, block/folded keys, and Unicode escapes. Classification and export compare decoded own keys to the whitelist. Preview and enrollment each require exactly one classification step. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
