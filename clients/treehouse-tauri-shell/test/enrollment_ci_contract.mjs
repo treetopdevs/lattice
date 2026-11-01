@@ -238,12 +238,14 @@ function envEntries(step) {
 }
 
 function decodeYamlEscapes(text) {
-  // Fold YAML double-quoted line continuations first (`\` + linebreak + indent), then hex/Unicode.
-  return text
-    .replace(/\\(?:\r\n|\r|\n)[ \t]*/gu, "")
-    .replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
-      String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
-    );
+  // Fold `\` + linebreak + indent only inside double-quoted scalars. Doing this globally
+  // joins a comment that ends in `\` onto the next line and then comment-strips a real key.
+  const folded = text.replace(/"(?:[^"\\]|\\[\s\S])*"/gu, (scalar) =>
+    scalar.replace(/\\(?:\r\n|\r|\n)[ \t]*/gu, ""),
+  );
+  return folded.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
+    String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
+  );
 }
 
 const YAML_MAPPING_KEY = String.raw`(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_-]+))`;
@@ -254,14 +256,29 @@ function stripYamlComment(line) {
   return line.replace(/[ \t]+#.*$/u, "");
 }
 
+function stripYamlTags(text) {
+  return text.replace(/^(?:!!?\S+[ \t]*)+/u, "").trim();
+}
+
 function firstExplicitName(lines, start) {
   for (let j = start; j < lines.length; j++) {
-    const content = stripYamlComment(lines[j]).trim();
+    const content = stripYamlTags(stripYamlComment(lines[j]).trim());
     if (content === "") continue;
-    if (new RegExp(`^${YAML_TAGS}${YAML_BLOCK_HEADER}$`, "u").test(content)) continue;
-    return content.replace(/^['"]|['"]$/gu, "");
+    if (new RegExp(`^${YAML_BLOCK_HEADER}$`, "u").test(content)) continue;
+    const named = new RegExp(`^${YAML_MAPPING_KEY}`, "u").exec(content);
+    return named ? (named[1] ?? named[2] ?? named[3]) : content.replace(/^['"]|['"]$/gu, "");
   }
   return undefined;
+}
+
+function parseExplicitKey(line) {
+  const m = /^\s*(?:-\s+)?\?[ \t]*(.*)$/u.exec(line);
+  if (!m) return undefined;
+  const body = stripYamlTags(m[1]);
+  if (body === "" || new RegExp(`^${YAML_BLOCK_HEADER}$`, "u").test(body)) return { kind: "lookAhead" };
+  const named = new RegExp(`^${YAML_MAPPING_KEY}(?:[ \\t]+|:|$)`, "u").exec(body);
+  if (named) return { kind: "named", name: named[1] ?? named[2] ?? named[3] };
+  return { kind: "lookAhead" };
 }
 
 function mappingKeys(block, indent, dashed) {
@@ -270,18 +287,14 @@ function mappingKeys(block, indent, dashed) {
   const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_TAGS}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
     (m) => m[1] ?? m[2] ?? m[3],
   );
-  const namedExplicit = new RegExp(`^${prefix}\\?[ \\t]+${YAML_TAGS}${YAML_MAPPING_KEY}(?:[ \\t]+|:|$)`, "u");
-  const blockExplicit = new RegExp(`^${prefix}\\?[ \\t]+${YAML_TAGS}${YAML_BLOCK_HEADER}[ \\t]*$`, "u");
-  const nestedExplicit = new RegExp(`^${prefix}\\?[ \\t]*$`, "u");
+  const atIndent = new RegExp(`^${prefix}\\?`, "u");
   const lines = decoded.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = stripYamlComment(lines[i]);
-    const named = namedExplicit.exec(line);
-    if (named) {
-      keys.push(named[1] ?? named[2] ?? named[3]);
-      continue;
-    }
-    if (blockExplicit.test(line) || nestedExplicit.test(line)) {
+    if (!atIndent.test(line)) continue;
+    const parsed = parseExplicitKey(line);
+    if (parsed?.kind === "named") keys.push(parsed.name);
+    else if (parsed?.kind === "lookAhead") {
       const name = firstExplicitName(lines, i + 1);
       if (name !== undefined) keys.push(name);
     }
@@ -308,15 +321,10 @@ function countYamlKey(block, name) {
   const lines = decoded.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = stripYamlComment(lines[i]);
-    if (new RegExp(`^\\s*(?:-\\s+)?\\?[ \\t]+${YAML_TAGS}${quoted}(?:[ \\t]+|:|$)`, "u").test(line)) {
-      n += 1;
-      continue;
-    }
-    if (
-      new RegExp(`^\\s*(?:-\\s+)?\\?[ \\t]+${YAML_TAGS}${YAML_BLOCK_HEADER}[ \\t]*$`, "u").test(line) ||
-      /^\s*(?:-\s+)?\?[ \t]*$/u.test(line)
-    ) {
-      if (firstExplicitName(lines, i + 1) === name) n += 1;
+    const parsed = parseExplicitKey(line);
+    if (parsed) {
+      if (parsed.kind === "named" && parsed.name === name) n += 1;
+      else if (parsed.kind === "lookAhead" && firstExplicitName(lines, i + 1) === name) n += 1;
       continue;
     }
     n += [...line.matchAll(new RegExp(`(?:^|[{,\\s])${YAML_TAGS}${quoted}[ \\t]*:`, "gu"))].length;
@@ -810,6 +818,30 @@ const mutations = {
         "        ? !!str |2-\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
       ),
     ),
+  "harness if after comment line continuation": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        # harmless \\\n        if: runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness split-line tagged if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? !!str\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness nested tagged if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ?\n          !!str if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
   "harness escaped-newline continue-on-error": (text) =>
     mutateJob(text, (job) =>
       mutate(
@@ -970,6 +1002,12 @@ const mutations = {
       text,
       `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
       `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    env:\n      "VITE\\u005fTREEHOUSE_ENROLLMENT": "1"\n      "VITE\\x5fTREEHOUSE_DEV_TRACE": "1"\n`,
+    ),
+  "variant key after comment line continuation": (text) =>
+    mutate(
+      text,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    # noop \\\n      VITE_TREEHOUSE_DEV_TRACE: "1"\n`,
     ),
   "dev-trace classification removed": (text) =>
     mutateJob(text, (job) => job.replace(stepBlocks(job).find((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP) ?? "", "")),
@@ -1246,6 +1284,29 @@ test("countYamlKey reads escaped-newline continue-on-error keys", () => {
 
 test("own-key whitelist sees a lockstep block-scalar shell", () => {
   const injected = "        ? |-\n          shell\n        : bash -c true {0}\n        run:";
+  const exportKeys = ["name", "working-directory", "env", "run"];
+  for (const [body, allowed] of [
+    [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [CLASSIFY_DEV_TRACE_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [EXPORT_STEP_BODY, exportKeys],
+  ]) {
+    const updated = body.replace("        run:", injected);
+    assert.ok(stepOwnKeys(updated).includes("shell"));
+    assert.notEqual(JSON.stringify(stepOwnKeys(updated)), JSON.stringify(allowed));
+  }
+});
+
+test("countYamlKey still sees if after a comment that ends with a backslash", () => {
+  assert.ok(countYamlKey("        # harmless \\\n        if: runner.os == 'Linux'\n", "if") > 0);
+});
+
+test("countYamlKey reads split-line and nested tagged if keys", () => {
+  assert.ok(countYamlKey("        ? !!str\n          if\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("        ?\n          !!str if\n        : false\n", "if") > 0);
+});
+
+test("own-key whitelist sees a lockstep split-line tagged shell", () => {
+  const injected = "        ? !!str\n          shell\n        : bash -c true {0}\n        run:";
   const exportKeys = ["name", "working-directory", "env", "run"];
   for (const [body, allowed] of [
     [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
