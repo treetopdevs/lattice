@@ -4,13 +4,16 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { isMap, isScalar, isSeq, parseDocument, visit } from "yaml";
 
 // Plan 181 slice 5c2: structural contract for the hard-failing packaged enrollment job.
 //
-// The workflow is parsed into job and step blocks (no yaml dependency in this shell, as in the Township
-// precedent mobile_core_native_ci_contract.mjs). `check` returns a list of violations for a workflow text
-// and a package.json object, and every mutation fixture below must make it return a non-empty list. A text
-// check alone is not feasibility proof: the hosted job still has to finish green.
+// Job and step *bodies* are still split from the workflow text (exact-text pins and digests). Skip keys,
+// own keys, and variant-flag names are judged from the decoded YAML document (`yaml`, same library as the
+// Township android signing contract), which is what GitHub Actions consumes. `check` returns a list of
+// violations for a workflow text and a package.json object, and every mutation fixture below must make it
+// return a non-empty list. A text check alone is not feasibility proof: the hosted job still has to finish
+// green.
 //
 // Re-pinned for plan 183 on 2026-10-08 (product-scoped CI). Every pin below stayed exact; none was deleted or
 // loosened. What moved, and why:
@@ -71,14 +74,11 @@ import { fileURLToPath } from "node:url";
 // - The ordinary classification step and the enrollment job's dev-trace classification step are now
 //   pinned as exact text, as the Space export was in row 236, so a quoted `'if': false` or
 //   `"continue-on-error": true` cannot ride along. Their own keys are exactly name, working-directory
-//   and run. The same quoted-key scan is applied to the export step so updating the pin and the
-//   workflow together cannot smuggle a skip key.
-// - The enrollment job's step `if` scan now reads quoted YAML keys (after the same escape decode the
-//   variant-flag scan uses, including escaped line breaks), so `'if'` / `"if"` / `"i\\u0066"` /
-//   `"i\\\n f"` count as `if`. Block-scalar keys with indent indicators (`? |2-`) and tags
-//   (`? !!str |-`) count too. continue-on-error remains forbidden in any spelling. Own-key
-//   comparison reads those explicit names, so updating a pin constant and the workflow together
-//   cannot add a block-scalar `shell`. No workflow step body changed, so both digests are unchanged.
+//   and run. The export step is held to the same decoded own-key whitelist.
+// - Skip keys, own keys, and VITE_TREEHOUSE_* names are read from decoded YAML Pair keys and scalar
+//   values, not from a regex scanner. Quoted, tagged, anchored, block-scalar, and escaped spellings
+//   therefore count as the keys GitHub Actions would see. continue-on-error remains forbidden in any
+//   spelling. No workflow step body changed, so both digests are unchanged.
 
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
@@ -237,84 +237,59 @@ function envEntries(step) {
   return entries;
 }
 
-function decodeYamlEscapes(text) {
-  // Strip comments first so a quote or trailing `\` in a comment cannot start a fake
-  // double-quoted scalar that swallows the next line's real key. Then fold `\`+linebreak
-  // only inside remaining double-quoted scalars, then hex/Unicode.
-  const uncommented = text.split("\n").map(stripYamlComment).join("\n");
-  const folded = uncommented.replace(/"(?:[^"\\]|\\[\s\S])*"/gu, (scalar) =>
-    scalar.replace(/\\(?:\r\n|\r|\n)[ \t]*/gu, ""),
-  );
-  return folded.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
-    String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
-  );
+function loadYamlDocument(text) {
+  return parseDocument(text, { prettyErrors: true, maxAliasCount: 10000, uniqueKeys: false });
 }
 
-const YAML_MAPPING_KEY = String.raw`(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_-]+))`;
-const YAML_DECORATORS = String.raw`(?:(?:!!?\S+|&[A-Za-z0-9_-]+)[ \t]+)*`;
-const YAML_BLOCK_HEADER = String.raw`[|>][0-9+-]*`;
-
-function stripYamlComment(line) {
-  return line.replace(/[ \t]+#.*$/u, "");
+function pairKeyName(key) {
+  return isScalar(key) && key.value != null ? String(key.value) : undefined;
 }
 
-function stripYamlDecorators(text) {
-  let out = text.trim();
-  for (;;) {
-    const next = out.replace(/^(?:!!?\S+|&[A-Za-z0-9_-]+)[ \t]*/u, "").trim();
-    if (next === out) return next;
-    out = next;
-  }
+function ownKeysFromMap(mapNode) {
+  if (!isMap(mapNode)) return [];
+  return mapNode.items.map((pair) => pairKeyName(pair.key)).filter((name) => name !== undefined);
 }
 
-function firstExplicitName(lines, start) {
-  for (let j = start; j < lines.length; j++) {
-    const content = stripYamlDecorators(stripYamlComment(lines[j]));
-    if (content === "") continue;
-    if (new RegExp(`^${YAML_BLOCK_HEADER}$`, "u").test(content)) continue;
-    const named = new RegExp(`^${YAML_MAPPING_KEY}`, "u").exec(content);
-    return named ? (named[1] ?? named[2] ?? named[3]) : content.replace(/^['"]|['"]$/gu, "");
-  }
-  return undefined;
+function yamlMap(node) {
+  if (isSeq(node) && isMap(node.items[0])) return node.items[0];
+  if (isMap(node) && node.items.length === 1 && isMap(node.items[0].value)) return node.items[0].value;
+  return isMap(node) ? node : undefined;
 }
 
-function parseExplicitKey(line) {
-  const m = /^\s*(?:-\s+)?\?[ \t]*(.*)$/u.exec(line);
-  if (!m) return undefined;
-  const body = stripYamlDecorators(m[1]);
-  if (body === "" || new RegExp(`^${YAML_BLOCK_HEADER}$`, "u").test(body)) return { kind: "lookAhead" };
-  const named = new RegExp(`^${YAML_MAPPING_KEY}(?:[ \\t]+|:|$)`, "u").exec(body);
-  if (named) return { kind: "named", name: named[1] ?? named[2] ?? named[3] };
-  return { kind: "lookAhead" };
+function decodedMapping(text) {
+  return yamlMap(loadYamlDocument(text).contents);
 }
 
-function mappingKeys(block, indent, dashed) {
-  const decoded = decodeYamlEscapes(block);
-  const prefix = dashed ? ` {${indent}}- ` : ` {${indent}}`;
-  const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_DECORATORS}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
-    (m) => m[1] ?? m[2] ?? m[3],
-  );
-  const atIndent = new RegExp(`^${prefix}\\?`, "u");
-  const lines = decoded.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = stripYamlComment(lines[i]);
-    if (!atIndent.test(line)) continue;
-    const parsed = parseExplicitKey(line);
-    if (parsed?.kind === "named") keys.push(parsed.name);
-    else if (parsed?.kind === "lookAhead") {
-      const name = firstExplicitName(lines, i + 1);
-      if (name !== undefined) keys.push(name);
-    }
-  }
-  return keys;
+function countKeyInNode(node, name) {
+  let n = 0;
+  visit(node, {
+    Pair(_key, pair) {
+      if (pairKeyName(pair.key) === name) n += 1;
+    },
+  });
+  return n;
+}
+
+function yamlMentions(node, pattern) {
+  let found = false;
+  visit(node, {
+    Pair(_key, pair) {
+      const name = pairKeyName(pair.key);
+      if (name !== undefined && pattern.test(name)) found = true;
+    },
+    Scalar(_key, scalar) {
+      if (pattern.test(String(scalar.value ?? ""))) found = true;
+    },
+  });
+  return found;
 }
 
 function stepOwnKeys(step) {
-  return [...mappingKeys(step, 6, true), ...mappingKeys(step, 8, false)];
+  return ownKeysFromMap(decodedMapping(step));
 }
 
 function headerOwnKeys(header) {
-  return mappingKeys(header, 4, false);
+  return ownKeysFromMap(decodedMapping(header)).filter((key) => key !== "steps");
 }
 
 function unquotedStepKeys(step) {
@@ -322,25 +297,14 @@ function unquotedStepKeys(step) {
 }
 
 function countYamlKey(block, name) {
-  const decoded = decodeYamlEscapes(block);
-  const quoted = String.raw`(?:'${name}'|"${name}"|${name})`;
-  let n = 0;
-  const lines = decoded.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = stripYamlComment(lines[i]);
-    const parsed = parseExplicitKey(line);
-    if (parsed) {
-      if (parsed.kind === "named" && parsed.name === name) n += 1;
-      else if (parsed.kind === "lookAhead" && firstExplicitName(lines, i + 1) === name) n += 1;
-      continue;
-    }
-    n += [...line.matchAll(new RegExp(`(?:^|[{,\\s])${YAML_DECORATORS}${quoted}[ \\t]*:`, "gu"))].length;
-  }
-  return n;
+  return countKeyInNode(loadYamlDocument(block), name);
 }
 
 function hasSkipKey(step) {
-  return countYamlKey(step, "if") > 0 || countYamlKey(step, "continue-on-error") > 0;
+  const map = decodedMapping(step);
+  if (!map) return true;
+  const keys = ownKeysFromMap(map);
+  return keys.includes("if") || keys.includes("continue-on-error");
 }
 
 function exactStepBody(step) {
@@ -397,11 +361,11 @@ export function check(workflow, pkg, harnessSource) {
   const fail = (message) => problems.push(message);
 
   // Row 201: the variant flags are set only by the tauri:build:dev-trace package script. No VITE_TREEHOUSE_*
-  // key may appear in any non-comment workflow line (workflow, job or step env, or an inline run).
-  // YAML double-quoted escapes are decoded first, so an escaped key cannot spell a flag past the scan.
-  const decoded = decodeYamlEscapes(workflow);
-  const flagLine = decoded.split("\n").find((line) => !line.trim().startsWith("#") && /VITE_TREEHOUSE_/u.test(line));
-  if (flagLine !== undefined) fail(`flagship.yml must not set any VITE_TREEHOUSE_* key: ${flagLine.trim()}`);
+  // key or value may appear in the decoded workflow document (workflow, job or step env, or an inline run).
+  const workflowDoc = loadYamlDocument(workflow);
+  if (workflowDoc.errors.length > 0)
+    fail(`flagship.yml must parse as YAML: ${workflowDoc.errors[0].message.split("\n")[0]}`);
+  if (yamlMentions(workflowDoc, /VITE_TREEHOUSE_/u)) fail("flagship.yml must not set any VITE_TREEHOUSE_* key");
   for (const [script, body] of Object.entries(pkg.scripts ?? {}))
     if (script !== "tauri:build:dev-trace" && VARIANT_FLAGS.some((flag) => String(body).includes(flag)))
       fail(`package script ${script} must not set a Treehouse variant flag`);
@@ -509,14 +473,11 @@ export function check(workflow, pkg, harnessSource) {
     fail("the job must need exactly the changes classifier");
   if (JSON.stringify(permissions(header)) !== JSON.stringify(["contents: read"]))
     fail("the job must declare exactly least-privilege permissions: contents: read");
-  if (/continue-on-error/u.test(job) || /continue-on-error/u.test(decodeYamlEscapes(job)))
+  if (/continue-on-error/u.test(job) || countYamlKey(job, "continue-on-error") > 0)
     fail("continue-on-error is forbidden in any spelling");
-  if (countYamlKey(job, "continue-on-error") > 0) fail("continue-on-error is forbidden in any spelling");
   if (/\|\|\s*(?:true|:|exit\s+0)\b/u.test(job)) fail("|| true style masking is forbidden");
   if (/set\s+\+e/u.test(job)) fail("set +e is forbidden");
   if (/\bif:\s*(?:\$\{\{\s*)?false\b/u.test(job)) fail("if: false is forbidden");
-  if (/['"]if['"]:\s*(?:\$\{\{\s*)?(?:['"]false['"]|false)\b/u.test(decodeYamlEscapes(job)))
-    fail("if: false is forbidden");
   if (/lattice-mobile-core/u.test(job)) fail("the job must not use lattice-mobile-core");
   if (/SKIP/iu.test(job)) fail("skip switches are forbidden");
   if (/TREEHOUSE_PACKAGED_PREFLIGHT_ONLY/u.test(job)) fail("the preflight-only switch must not be set in CI");
@@ -865,6 +826,38 @@ const mutations = {
         "        ? &cond 'if'\n        : runner.os == 'Linux'\n        id: *cond\n        run: npm run packaged:enrollment",
       ),
     ),
+  "harness bare-tag if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? ! 'if'\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness dotted-anchor if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? &cond.foo 'if'\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness alias if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        extra: &cond if\n        ? *cond\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness implicit alias if": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        extra: &cond if\n        *cond: runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
   "harness escaped-newline continue-on-error": (text) =>
     mutateJob(text, (job) =>
       mutate(
@@ -993,7 +986,10 @@ const mutations = {
   },
   "ordinary classification gains an anchored shell": (text) => {
     const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
-    return text.replace(step, step.replace("        run:", "        &sh 'shell': bash -c true {0}\n        run:"));
+    const withShell = text.replace(step, step.replace("        run:", "        &sh 'shell': bash -c true {0}\n        run:"));
+    return mutateJob(withShell, (job) =>
+      mutate(job, "        run: npm run packaged:enrollment", "        id: *sh\n        run: npm run packaged:enrollment"),
+    );
   },
   "job-level VITE_TREEHOUSE_ENROLLMENT on the ordinary job (row 201)": (text) =>
     mutate(
@@ -1035,6 +1031,12 @@ const mutations = {
       text,
       `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
       `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    # noop \\\n      VITE_TREEHOUSE_DEV_TRACE: "1"\n`,
+    ),
+  "variant key after quoted hash in a flow map": (text) =>
+    mutate(
+      text,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n`,
+      `  ${PREVIEW_JOB}:\n    name: Packaged macOS Treehouse preview\n    env: { NOTE: "safe #", VITE_TREEHOUSE_ENROLLMENT: "1" }\n`,
     ),
   "dev-trace classification removed": (text) =>
     mutateJob(text, (job) => job.replace(stepBlocks(job).find((step) => stepName(step) === CLASSIFY_DEV_TRACE_STEP) ?? "", "")),
@@ -1350,6 +1352,16 @@ test("countYamlKey still sees if after a quoted comment line continuation", () =
   assert.ok(
     countYamlKey('        # harmless " \\\n        if: runner.os == \'Linux\'\n        # closing "\n', "if") > 0,
   );
+});
+
+test("decoded YAML refuses the three withheld skip-key documents", () => {
+  for (const name of [
+    "harness if after comment quote line continuation",
+    "harness anchored explicit if",
+    "ordinary classification gains an anchored shell",
+  ]) {
+    assert.notDeepEqual(check(mutations[name](workflow), pkg, harnessSource), [], `contract accepted: ${name}`);
+  }
 });
 
 test("countYamlKey reads an anchored explicit if key", () => {

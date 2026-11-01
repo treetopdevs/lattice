@@ -1123,12 +1123,17 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <section id="d166"><h2><span>D-166</span> Row 238 second confirm: fold only inside double quotes; split-line tags look ahead</h2><dl>
 <dt>When</dt><dd>2026-10-31, confirm pass on tip <code>2b1a57ea0</code></dd>
 <dt>Finding</dt><dd>Two P1, one P2. (1) Global <code>\</code>+linebreak folding joined a comment that ended in a backslash onto the next <code>if:</code> line, then comment-stripping hid it; origin/main rejected that mutation. The same join hid a <code>VITE_TREEHOUSE_*</code> assignment. (2) <code>? !!str</code> with the name on the next line, and nested <code>?</code> then <code>!!str if</code>, skipped the scanner. (3) The same split-line tag form omitted <code>shell</code> from the own-key whitelist.</dd>
-<dt>Decision</dt><dd>Fixed. Line continuations fold only inside double-quoted scalars. Explicit keys whose remainder is empty, a tag, or a block header look ahead, and look-ahead names strip tags. Mutations and scanner tests cover the comment-backslash regression and the split-line tag forms. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+<dt>Decision</dt><dd>The comment-backslash regression was closed, but a regex fold still cannot tell a comment from a quoted scalar. That class of remaining holes is owned by D-168’s YAML parser, not by further fold-regex special cases. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
 </dl></section>
 <section id="d167"><h2><span>D-167</span> Row 238 third confirm: strip comments before fold; read YAML anchors</h2><dl>
 <dt>When</dt><dd>2026-10-31, confirm pass on tip <code>552518ffc</code></dd>
 <dt>Finding</dt><dd>Two P1, one P2. (1) A comment containing an unmatched quote plus a trailing backslash still started a fake double-quoted scalar that swallowed the next <code>if:</code>; origin/main rejected that mutation. (2) <code>? &amp;cond 'if'</code> left the anchor after tag stripping, so look-ahead read the value line. (3) Implicit <code>&amp;sh 'shell':</code> omitted <code>shell</code> from the own-key whitelist.</dd>
-<dt>Decision</dt><dd>Fixed. Comments are stripped line-by-line before folding. Decorators now include tags and anchors, repeatedly, on both explicit and implicit keys. Mutations and scanner tests cover the quoted-comment regression and the anchor forms. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+<dt>Decision</dt><dd>The quoted-comment and anchor mutations are now fixtures, but another regex decorator pass is the wrong tool: GitHub Actions consumes decoded YAML keys. D-168 replaces the scanner. No new plan-index row. Not a workflow, W4, or Phase G claim.</dd>
+</dl></section>
+<section id="d168"><h2><span>D-168</span> Row 238: judge skip keys from decoded YAML, not a regex scanner</h2><dl>
+<dt>When</dt><dd>2026-10-31, after the third confirm pass withheld PASS</dd>
+<dt>Finding</dt><dd>Two P1, one P2 remained against the regex scanner. (1) A comment containing a quote plus a trailing backslash still hid <code>if:</code>; origin/main rejected that mutation. (2) <code>? &amp;cond 'if'</code> decoded to an <code>if</code> key the scanner missed. (3) Lockstep <code>&amp;sh 'shell'</code> omitted <code>shell</code> from the own-key whitelist. Further regex special cases would keep losing to YAML syntax.</dd>
+<dt>Decision</dt><dd>Fixed. The contract keeps exact-text pins and digests on the workflow text, and judges skip keys, own keys, and <code>VITE_TREEHOUSE_*</code> names from decoded YAML Pair keys and scalars via the same <code>yaml</code> 2.9.0 library the Township Android signing contract uses. Tests construct the three withheld documents and assert refusal. No new plan-index row. Not a workflow, W4, or Phase G claim. Not a working-policy rule-3 path.</dd>
 </dl></section>
 </main>
 </body>
