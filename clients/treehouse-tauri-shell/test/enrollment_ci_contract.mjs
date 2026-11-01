@@ -74,8 +74,11 @@ import { fileURLToPath } from "node:url";
 //   and run. The same quoted-key scan is applied to the export step so updating the pin and the
 //   workflow together cannot smuggle a skip key.
 // - The enrollment job's step `if` scan now reads quoted YAML keys (after the same escape decode the
-//   variant-flag scan uses), so `'if'` / `"if"` / `"i\\u0066"` count as `if`. continue-on-error remains
-//   forbidden in any spelling. No workflow step body changed, so both digests are unchanged.
+//   variant-flag scan uses, including escaped line breaks), so `'if'` / `"if"` / `"i\\u0066"` /
+//   `"i\\\n f"` count as `if`. Block-scalar keys with indent indicators (`? |2-`) and tags
+//   (`? !!str |-`) count too. continue-on-error remains forbidden in any spelling. Own-key
+//   comparison reads those explicit names, so updating a pin constant and the workflow together
+//   cannot add a block-scalar `shell`. No workflow step body changed, so both digests are unchanged.
 
 const shellRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repoRoot = resolve(shellRoot, "..", "..");
@@ -235,26 +238,54 @@ function envEntries(step) {
 }
 
 function decodeYamlEscapes(text) {
-  return text.replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
-    String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
-  );
+  // Fold YAML double-quoted line continuations first (`\` + linebreak + indent), then hex/Unicode.
+  return text
+    .replace(/\\(?:\r\n|\r|\n)[ \t]*/gu, "")
+    .replace(/\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))/gu, (_m, x, u, U) =>
+      String.fromCodePoint(Number.parseInt(x ?? u ?? U, 16)),
+    );
 }
 
 const YAML_MAPPING_KEY = String.raw`(?:'([^']+)'|"([^"]+)"|([A-Za-z0-9_-]+))`;
-const YAML_TAG = String.raw`(?:!!?\S+[ \t]+)?`;
-const YAML_COMMENT = String.raw`(?:[ \t]+#.*)?`;
+const YAML_TAGS = String.raw`(?:!!?\S+[ \t]+)*`;
+const YAML_BLOCK_HEADER = String.raw`[|>][0-9+-]*`;
+
+function stripYamlComment(line) {
+  return line.replace(/[ \t]+#.*$/u, "");
+}
+
+function firstExplicitName(lines, start) {
+  for (let j = start; j < lines.length; j++) {
+    const content = stripYamlComment(lines[j]).trim();
+    if (content === "") continue;
+    if (new RegExp(`^${YAML_TAGS}${YAML_BLOCK_HEADER}$`, "u").test(content)) continue;
+    return content.replace(/^['"]|['"]$/gu, "");
+  }
+  return undefined;
+}
 
 function mappingKeys(block, indent, dashed) {
   const decoded = decodeYamlEscapes(block);
   const prefix = dashed ? ` {${indent}}- ` : ` {${indent}}`;
-  const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_TAG}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
+  const keys = [...decoded.matchAll(new RegExp(`^${prefix}${YAML_TAGS}${YAML_MAPPING_KEY}[ \\t]*:`, "gmu"))].map(
     (m) => m[1] ?? m[2] ?? m[3],
   );
-  keys.push(
-    ...[
-      ...decoded.matchAll(new RegExp(`^${prefix}\\?[ \\t]+${YAML_TAG}${YAML_MAPPING_KEY}${YAML_COMMENT}$`, "gmu")),
-    ].map((m) => m[1] ?? m[2] ?? m[3]),
-  );
+  const namedExplicit = new RegExp(`^${prefix}\\?[ \\t]+${YAML_TAGS}${YAML_MAPPING_KEY}(?:[ \\t]+|:|$)`, "u");
+  const blockExplicit = new RegExp(`^${prefix}\\?[ \\t]+${YAML_TAGS}${YAML_BLOCK_HEADER}[ \\t]*$`, "u");
+  const nestedExplicit = new RegExp(`^${prefix}\\?[ \\t]*$`, "u");
+  const lines = decoded.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = stripYamlComment(lines[i]);
+    const named = namedExplicit.exec(line);
+    if (named) {
+      keys.push(named[1] ?? named[2] ?? named[3]);
+      continue;
+    }
+    if (blockExplicit.test(line) || nestedExplicit.test(line)) {
+      const name = firstExplicitName(lines, i + 1);
+      if (name !== undefined) keys.push(name);
+    }
+  }
   return keys;
 }
 
@@ -276,21 +307,19 @@ function countYamlKey(block, name) {
   let n = 0;
   const lines = decoded.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].replace(/[ \t]+#.*$/u, "");
-    if (new RegExp(`^\\s*(?:-\\s+)?\\?[ \\t]+(?:!!?\\S+[ \\t]+)?${quoted}(?:[ \\t]+|:|$)`, "u").test(line)) {
+    const line = stripYamlComment(lines[i]);
+    if (new RegExp(`^\\s*(?:-\\s+)?\\?[ \\t]+${YAML_TAGS}${quoted}(?:[ \\t]+|:|$)`, "u").test(line)) {
       n += 1;
       continue;
     }
-    if (/^\s*(?:-\s+)?\?[ \t]+[|>][-+]?[ \t]*$/u.test(line)) {
-      for (let j = i + 1; j < lines.length; j++) {
-        const content = lines[j].replace(/[ \t]+#.*$/u, "").trim();
-        if (content === "") continue;
-        if (content.replace(/^['"]|['"]$/gu, "") === name) n += 1;
-        break;
-      }
+    if (
+      new RegExp(`^\\s*(?:-\\s+)?\\?[ \\t]+${YAML_TAGS}${YAML_BLOCK_HEADER}[ \\t]*$`, "u").test(line) ||
+      /^\s*(?:-\s+)?\?[ \t]*$/u.test(line)
+    ) {
+      if (firstExplicitName(lines, i + 1) === name) n += 1;
       continue;
     }
-    n += [...line.matchAll(new RegExp(`(?:^|[{,\\s])(?:!!?\\S+[ \\t]+)?${quoted}[ \\t]*:`, "gu"))].length;
+    n += [...line.matchAll(new RegExp(`(?:^|[{,\\s])${YAML_TAGS}${quoted}[ \\t]*:`, "gu"))].length;
   }
   return n;
 }
@@ -757,6 +786,42 @@ const mutations = {
         "        ? |-\n          if\n        : false\n        run: npm run packaged:enrollment",
       ),
     ),
+  "harness block-scalar if with indent indicator": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? |2-\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness tagged block-scalar if key": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? !!str |-\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness tagged block-scalar if with indent indicator": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        "        ? !!str |2-\n          if\n        : runner.os == 'Linux'\n        run: npm run packaged:enrollment",
+      ),
+    ),
+  "harness escaped-newline continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(
+        job,
+        "        run: npm run packaged:enrollment",
+        '        ? "continue-on-erro\\\n          r"\n        : true\n        run: npm run packaged:enrollment',
+      ),
+    ),
+  "job escaped-newline continue-on-error": (text) =>
+    mutateJob(text, (job) =>
+      mutate(job, "    runs-on:", '    ? "continue-on-erro\\\n      r"\n    : true\n    runs-on:'),
+    ),
   "harness escaped continue-on-error": (text) =>
     mutateJob(text, (job) =>
       mutate(
@@ -867,6 +932,10 @@ const mutations = {
     const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
     return text.replace(step, step.replace("        run:", "        'shell': 'bash {0}'\n        run:"));
   },
+  "ordinary classification gains a block-scalar shell": (text) => {
+    const step = stepBlocks(findJob(text, PREVIEW_JOB)).find((s) => stepName(s) === CLASSIFY_STEP);
+    return text.replace(step, step.replace("        run:", "        ? |-\n          shell\n        : bash -c true {0}\n        run:"));
+  },
   "job-level VITE_TREEHOUSE_ENROLLMENT on the ordinary job (row 201)": (text) =>
     mutate(
       text,
@@ -927,6 +996,11 @@ const mutations = {
     mutateJob(text, (job) => {
       const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
       return job.replace(step, step.replace("        run:", "        'shell': 'bash {0}'\n        run:"));
+    }),
+  "dev-trace classification gains a block-scalar shell": (text) =>
+    mutateJob(text, (job) => {
+      const step = stepBlocks(job).find((s) => stepName(s) === CLASSIFY_DEV_TRACE_STEP);
+      return job.replace(step, step.replace("        run:", "        ? |-\n          shell\n        : bash -c true {0}\n        run:"));
     }),
   "dev-trace classification duplicated": (text) =>
     mutateJob(text, (job) => {
@@ -999,6 +1073,12 @@ const mutations = {
     mutate(text, "        run: npm run packaged:export\n", "        \"continue-on-error\": true\n        run: npm run packaged:export\n"),
   "export step gains a quoted shell": (text) =>
     mutate(text, "        run: npm run packaged:export\n", "        'shell': 'bash {0}'\n        run: npm run packaged:export\n"),
+  "export step gains a block-scalar shell": (text) =>
+    mutate(
+      text,
+      "        run: npm run packaged:export\n",
+      "        ? |-\n          shell\n        : bash -c true {0}\n        run: npm run packaged:export\n",
+    ),
   "export step gains a shell": (text) =>
     mutate(text, "        run: npm run packaged:export\n", "        shell: bash {0}\n        run: npm run packaged:export\n"),
   "export step gains a timeout": (text) =>
@@ -1151,4 +1231,29 @@ test("the Treehouse preview job is a distinct sibling of packaged_macos", () => 
   const names = jobBlocks(workflow).map(jobName);
   assert.equal(names.filter((name) => name === PREVIEW_JOB).length, 1);
   assert.ok(names.includes("packaged_macos"));
+});
+
+test("countYamlKey reads indent-indicator and tagged block-scalar if keys", () => {
+  assert.ok(countYamlKey("        ? |2-\n          if\n        : runner.os == 'Linux'\n", "if") > 0);
+  assert.ok(countYamlKey("        ? !!str |-\n          if\n        : false\n", "if") > 0);
+  assert.ok(countYamlKey("        ? !!str |2-\n          if\n        : false\n", "if") > 0);
+});
+
+test("countYamlKey reads escaped-newline continue-on-error keys", () => {
+  assert.ok(countYamlKey('        ? "continue-on-erro\\\n          r"\n        : true\n', "continue-on-error") > 0);
+  assert.ok(countYamlKey('    ? "continue-on-erro\\\n      r"\n    : true\n', "continue-on-error") > 0);
+});
+
+test("own-key whitelist sees a lockstep block-scalar shell", () => {
+  const injected = "        ? |-\n          shell\n        : bash -c true {0}\n        run:";
+  const exportKeys = ["name", "working-directory", "env", "run"];
+  for (const [body, allowed] of [
+    [CLASSIFY_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [CLASSIFY_DEV_TRACE_STEP_BODY, CLASSIFY_STEP_KEYS],
+    [EXPORT_STEP_BODY, exportKeys],
+  ]) {
+    const updated = body.replace("        run:", injected);
+    assert.ok(stepOwnKeys(updated).includes("shell"));
+    assert.notEqual(JSON.stringify(stepOwnKeys(updated)), JSON.stringify(allowed));
+  }
 });
