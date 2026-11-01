@@ -1049,6 +1049,13 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Context</dt><dd>One Codex Sol 6.1 xhigh read-only pass on the substantive tip <code>84c6735fb</code> found no P1/P2 (D-152). That pass is the rule-3 second review. Row 295 is marked DONE on this branch (PR #201, merge <code>3bc8fe5ef</code>).</dd>
 <dt>Decision</dt><dd>Open #202 against main. Merge with a merge commit only when exact-tip required CI is green and no bot P1/P2 is unresolved (D-128).</dd>
 </dl></section>
+<section id="d154"><h2><span>D-154</span> PR #202 Flagship native apt-verify hang is a new flake, not a rerun</h2><dl>
+<dt>When</dt><dd>2026-10-31, exact tip <code>be2190f89</code>, Flagship run <code>41253912704</code> job <code>124697501809</code></dd>
+<dt>Context</dt><dd>Every other required Flagship job on that tip passed, including Unit + property, packaged macOS convergence, Android compile (no Maven 429), and Android emulator launch. <code>treehouse_native</code> sat in <code>apt_archive_cache.sh</code> from 00:10:57Z to 00:58:58Z (~48 minutes) and was cancelled at the job’s 50-minute timeout; the 15-minute apt install never started. The #202 diff has no workflow or apt-script files. Row 228 names hex.pm/GitHub setup, enrollment hint timeout, stress restart, and Play fonts. Row 301 is Maven 429. Row 277 is the native test-budget plan, not this apt-verify hang.</dd>
+<dt>Options</dt><dd>(a) <code>gh run rerun</code> the cancelled job and stretch row 228 or 277; (b) file a new flake row and let a docs commit start a new exact-tip run; (c) add <code>timeout-minutes</code> on the verify step in this PR (workflow edit, rule 3).</dd>
+<dt>Decision</dt><dd>(b). New row 302. Do not rerun run <code>41253912704</code>. A later docs commit that names this flake starts a new exact-tip run; that is not a rerun of the cancelled job. Merge only if that new exact-tip required CI is green. Bound the verify step after a second occurrence, not in this authority/Verdict slice.</dd>
+<dt>Reason</dt><dd>The slice rule is rerun only a proven flake and cite its row. This is the first recorded hang of <code>apt_archive_cache.sh</code> eating the native job budget. Stretching 228, 277, or 301 would hide a distinct cache-verify stall. A workflow timeout in this PR would be a second rule-3 path on a slice that already reviewed <code>authority.ex</code>.</dd>
+</dl></section>
 </main>
 </body>
 </html>
