@@ -126,4 +126,19 @@ defmodule Toolshed.ReadModelTest do
     assert model.evidence.reasons[forged.id] == :missing_consent
     assert forged.id in model.evidence.quarantine
   end
+
+  # Row 309: an admitted grant body is attacker-shaped; the loan reader must not
+  # read fields off a body that is not a well-formed delegation.
+  test "an admitted ill-shaped grant body does not crash the loan projection" do
+    sim = borrowed(4)
+    borrower = Sim.identity(sim, "borrower")
+
+    for body <- [{:grant, 7}, {:grant, %{audience: borrower.pub, expires_epoch: 9}}] do
+      {sim, _op} = Sim.append(sim, "borrower", :authority, body)
+      model = sim |> Sim.sync_all() |> Sim.log("owner") |> ReadModel.observe()
+
+      assert model.loan.borrower_fingerprint == Identity.fingerprint(borrower.pub)
+      assert model.loan.due_epoch == 4
+    end
+  end
 end

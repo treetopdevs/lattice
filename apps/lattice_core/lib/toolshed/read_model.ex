@@ -14,6 +14,7 @@ defmodule Toolshed.ReadModel do
   """
 
   alias Lattice.{Authority, Identity, Log, Op}
+  alias Lattice.Graph.AuthorityBody
   alias Toolshed.Tool
 
   @type request :: %{
@@ -68,14 +69,17 @@ defmodule Toolshed.ReadModel do
   end
 
   # The active loan: the latest honored leased grant to the current holder is
-  # the borrow Cap; its `expires_epoch` is the due-back caveat.
+  # the borrow Cap; its `expires_epoch` is the due-back caveat. Row 309: an
+  # admitted grant body is attacker-shaped, so only one the shared parser calls
+  # well formed (a complete Delegation struct) has its fields read.
   defp loan(log, analysis, borrower) do
     borrow_cap =
       log
       |> Log.topo_ops()
       |> Enum.reduce(nil, fn
-        %Op{id: id, kind: :authority, body: {:grant, delegation}}, acc ->
-          if delegation.audience == borrower and delegation.expires_epoch != nil and
+        %Op{id: id, kind: :authority, body: {:grant, delegation} = body}, acc ->
+          if match?({:grant, %{well_formed?: true}}, AuthorityBody.parse(body)) and
+               delegation.audience == borrower and delegation.expires_epoch != nil and
                not MapSet.member?(analysis.quarantine, id),
              do: delegation,
              else: acc
