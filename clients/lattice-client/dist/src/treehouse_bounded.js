@@ -381,6 +381,19 @@ export async function authorTreehouseCatalogBootstrap(input) {
     for (const capId of fitting) {
         const frame = await authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier, signer: input.signer,
             capId, command: { command: "catalog_bootstrap_v1", record } });
+        // The placeholder measured a 64-byte signature; a caller signer may return anything, so the signed frame itself must
+        // verify and fit before it can leave (lifecycle contract §2). The semantic judge below ignores signatures.
+        let signatureValid = false;
+        try {
+            signatureValid = (await verifyCarrierOp(frame, { verify: async (author, bytes, signature) => verifyEd25519(signature, bytes, base64ToBytes(author)) })).valid;
+        }
+        catch {
+            signatureValid = false;
+        }
+        if (!signatureValid)
+            throw new Error("invalid_signer_signature");
+        if (new TextEncoder().encode(JSON.stringify({ type: "push", ops: [frame] })).length > 64_000)
+            throw new Error("catalog_command_too_large");
         const ops = carrierOpsToSemanticOps([...history.frames, frame], {}, treehouseCommandDecoders("Treehouse.Space"));
         if (!materialize(treehouseSpaceSchema, ops).quarantineReasons.has(frame.id))
             return frame;

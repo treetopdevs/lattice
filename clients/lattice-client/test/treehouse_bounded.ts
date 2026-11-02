@@ -140,6 +140,14 @@ await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames:
   await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: wide, signer: counted }), "catalog_command_too_large");
   assert.equal(signatures, 0);
 }
+// Review round 3 (row 350): the placeholder assumes a 64-byte signature, so the signed frame is verified and remeasured.
+// An oversized or wrong signature from a caller signer never leaves, even though the semantic judge ignores signatures.
+{
+  const oversized: CarrierOpSigner = { publicKey: root.publicKey, sign: () => new Uint8Array(50_000) };
+  await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, signer: oversized }), "invalid_signer_signature");
+  const zeroed: CarrierOpSigner = { publicKey: root.publicKey, sign: () => new Uint8Array(64) };
+  await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, signer: zeroed }), "invalid_signer_signature");
+}
 // Review round 2 (row 350): a retained root genesis with a malformed oversized delegation id, sorted before the valid
 // genesis, is measured per capability and skipped; the bootstrap that fits is still authored and honored.
 {
