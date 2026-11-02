@@ -250,7 +250,7 @@ test("admin-authored valid replacement is Core-honored and writes only the admin
 test("replacement Stage A literal bindings refuse as application_invalid_catalog", async () => {
     const h = await replacementHistory(await fixture());
     const cases = await stageACases(h);
-    assert.equal(cases.length, 13);
+    assert.equal(cases.length, 16);
     for (const c of cases)
         assert.equal((await judge([...h.before, ...c.prefix, c.frame])).get(c.frame.id), "application_invalid_catalog", c.name);
     const reversed = await h.op(h.sign(h.claim), { deps: [h.beacon.id, h.beacon.id] });
@@ -275,7 +275,21 @@ test("BEAM-authored replacement Stage A frames get BEAM's reasons in TS", async 
     const vector = JSON.parse(readFileSync(new URL("./vectors/catalog/replacement_v1.json", import.meta.url), "utf8"));
     const before = vector.frames.filter((frame) => frame.id !== vector.binding_id);
     assert.equal((await judge(vector.frames)).size, 0);
-    assert.equal(vector.stage_a.length, 13);
+    assert.equal(vector.stage_a.length, 16);
     for (const c of vector.stage_a)
         assert.equal((await judge([...before, ...c.prefix, c.frame])).get(c.frame.id), c.reason, c.name);
+});
+test("the committed package entry gives BEAM's Stage A reasons too", async () => {
+    // Shells resolve the package to dist/src/index.js, so a src fix without its rebuilt dist leaves
+    // them on the old decoder (review r2: high uint64 arguments refused as malformed_term there).
+    // The specifier is a runtime string so tsc, which also builds this file into dist, never needs
+    // dist to exist; the types come from src, which dist must match.
+    const entry = "../dist/src/index.js";
+    const packageEntry = await import(entry);
+    const vector = JSON.parse(readFileSync(new URL("./vectors/catalog/replacement_v1.json", import.meta.url), "utf8"));
+    const before = vector.frames.filter((frame) => frame.id !== vector.binding_id);
+    const judgeByPackage = (frames) => packageEntry.observeTreehouse("Treehouse.Space", packageEntry.carrierOpsToSemanticOps(frames, {}, packageEntry.treehouseCommandDecoders("Treehouse.Space"))).quarantineReasons;
+    assert.equal(judgeByPackage(vector.frames).size, 0);
+    for (const c of vector.stage_a)
+        assert.equal(judgeByPackage([...before, ...c.prefix, c.frame]).get(c.frame.id), c.reason, c.name);
 });

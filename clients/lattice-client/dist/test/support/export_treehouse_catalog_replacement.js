@@ -109,7 +109,17 @@ export async function stageACases(h) {
         { name: "bad-catalog-possession", prefix: [], frame: await h.op([term, sp, sp]) },
         { name: "bad-service-possession", prefix: [], frame: await h.op([term, cp, cp]) },
         { name: "non-binary-possession", prefix: [], frame: await h.op([term, atom("admin"), sp]) },
+        // Wire uint64s above 2^53 - 1 reach the replacement decoder as opaque sentinels, never malformed_term.
+        { name: "high-generation", prefix: [], frame: await h.op([withField(term, "generation", high), cp, sp]) },
+        { name: "high-epoch", prefix: [], frame: await h.op([withField(term, "epoch", high), cp, sp]) },
+        { name: "high-integer-possession", prefix: [], frame: await h.op([term, high, sp]) },
     ];
+}
+const high = ["int", "9007199254740992"];
+function withField(term, field, value) {
+    const pairs = term[1].map(([key, item]) => [key, JSON.stringify(key) === JSON.stringify(atom(field)) ? value : item]);
+    assert.ok(pairs.some(([key]) => JSON.stringify(key) === JSON.stringify(atom(field))), field);
+    return ["map", pairs];
 }
 export async function judge(frames) {
     for (const frame of frames) {

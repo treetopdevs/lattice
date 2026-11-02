@@ -307,6 +307,7 @@ export function treehouseCommandDecoders(product) {
                             [certificate.claim, certificate.possession, certificate.vouches] };
                 } }],
         // Never throws: a malformed claim or possession is `application_invalid_catalog`, not `malformed_command`.
+        // Wire integers above MAX_SAFE_INTEGER arrive as opaque sentinels (decodeCarrierBody) and refuse here too.
         ["replace_catalog_v1", { arity: 3, decode: (raw) => {
                     const marker = admin("replace_catalog_v1");
                     const possession = (term) => term !== null && typeof term === "object" && term.type === "bin" && term.bytes instanceof Uint8Array ? bytesBase64(term.bytes) : null;

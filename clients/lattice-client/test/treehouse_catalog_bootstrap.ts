@@ -306,3 +306,18 @@ test("BEAM-authored replacement Stage A frames get BEAM's reasons in TS", async 
   assert.equal(vector.stage_a.length, 16);
   for (const c of vector.stage_a) assert.equal((await judge([...before, ...c.prefix, c.frame])).get(c.frame.id), c.reason, c.name);
 });
+
+test("the committed package entry gives BEAM's Stage A reasons too", async () => {
+  // Shells resolve the package to dist/src/index.js, so a src fix without its rebuilt dist leaves
+  // them on the old decoder (review r2: high uint64 arguments refused as malformed_term there).
+  // The specifier is a runtime string so tsc, which also builds this file into dist, never needs
+  // dist to exist; the types come from src, which dist must match.
+  const entry = "../dist/src/index.js";
+  const packageEntry: typeof publicApi = await import(entry);
+  const vector = JSON.parse(readFileSync(new URL("./vectors/catalog/replacement_v1.json", import.meta.url), "utf8"));
+  const before = vector.frames.filter((frame: CarrierOpFrame) => frame.id !== vector.binding_id);
+  const judgeByPackage = (frames: CarrierOpFrame[]) =>
+    packageEntry.observeTreehouse("Treehouse.Space", packageEntry.carrierOpsToSemanticOps(frames, {}, packageEntry.treehouseCommandDecoders("Treehouse.Space"))).quarantineReasons;
+  assert.equal(judgeByPackage(vector.frames).size, 0);
+  for (const c of vector.stage_a) assert.equal(judgeByPackage([...before, ...c.prefix, c.frame]).get(c.frame.id), c.reason, c.name);
+});
