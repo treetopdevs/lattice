@@ -406,44 +406,40 @@ defmodule LatticeCore.LiveOpsTest do
       assert length(liveops_audit()) == pending
     end
 
-    # Row 315: Audit dies while LiveOps' write is already queued in its
-    # mailbox. `try_record/2` must turn the in-flight `:killed` exit into a
-    # deferral rather than crash LiveOps; the supervisor restarts Audit and the
-    # record replays. The retry timer is held so only `flush_audit/0` replays.
+    # Row 315: Audit dies while LiveOps' write is in flight. `try_record/2`
+    # must turn the `:killed` exit into a deferral rather than crash LiveOps;
+    # Audit restarts and the record replays. The retry timer is held so only
+    # `flush_audit/0` replays.
+    #
+    # A stub registered as `Lattice.Audit` takes the in-flight call and kills
+    # itself. Suspending the real Audit instead blocked every other Audit
+    # caller too (a LiveOps snapshot's `count/0`, CapStore), so in the umbrella
+    # CI run LiveOps sat 5 s in an unrelated call and the denial timed out
+    # (row 315 CI, run 41384634389). The stub answers unrelated calls at once.
     test "Audit killed with a LiveOps write in flight defers the record" do
       hold_audit_retry!()
       liveops = Process.whereis(Lattice.LiveOps)
-      audit = Process.whereis(Lattice.Audit)
-      audit_ref = Process.monitor(audit)
-      :ok = :sys.suspend(audit)
+      stop_audit!()
+      test_pid = self()
+      stub = spawn(fn -> audit_stub(liveops, test_pid) end)
+      stub_ref = Process.monitor(stub)
+      true = Process.register(stub, Lattice.Audit)
+
+      on_exit(fn ->
+        if Process.alive?(stub), do: Process.exit(stub, :kill)
+      end)
 
       task =
         Task.async(fn ->
           Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
         end)
 
-      # Wait until LiveOps' own `:liveops_denied` call sits in Audit's mailbox.
-      assert eventually(fn ->
-               {:messages, messages} = Process.info(audit, :messages)
-
-               Enum.any?(messages, fn
-                 {:"$gen_call", {^liveops, _}, {:record, :liveops_denied, _}} -> true
-                 _ -> false
-               end)
-             end)
-
-      Process.exit(audit, :kill)
-      assert_receive {:DOWN, ^audit_ref, :process, ^audit, :killed}, 5_000
-
+      assert_receive {:audit_stub_killed_in_flight, ^stub}, 5_000
+      assert_receive {:DOWN, ^stub_ref, :process, ^stub, :killed}, 5_000
       assert Task.await(task, 10_000) == :ok
       assert Process.whereis(Lattice.LiveOps) == liveops
-
-      assert eventually(fn ->
-               case Process.whereis(Lattice.Audit) do
-                 nil -> false
-                 pid -> pid != audit
-               end
-             end)
+      assert %{counters: %{audit_pending: 1}} = Lattice.LiveOps.snapshot()
+      start_audit!()
 
       assert {:ok, %{flushed: 1, pending: 0, gap: 0}} = Lattice.LiveOps.flush_audit()
 
@@ -451,6 +447,36 @@ defmodule LatticeCore.LiveOpsTest do
                audit_of(:liveops_denied)
 
       assert Process.whereis(Lattice.LiveOps) == liveops
+    end
+  end
+
+  # Stands in for `Lattice.Audit` (row 315): replies to unrelated calls at
+  # once and kills itself on LiveOps' `:liveops_denied` write, leaving that
+  # call in flight.
+  defp audit_stub(liveops, test_pid) do
+    receive do
+      {:"$gen_call", {^liveops, _}, {:record, :liveops_denied, _}} ->
+        send(test_pid, {:audit_stub_killed_in_flight, self()})
+        Process.exit(self(), :kill)
+
+      {:"$gen_call", from, :count} ->
+        GenServer.reply(from, 0)
+        audit_stub(liveops, test_pid)
+
+      {:"$gen_call", from, :events} ->
+        GenServer.reply(from, [])
+        audit_stub(liveops, test_pid)
+
+      {:"$gen_call", from, {:record, type, metadata}} ->
+        GenServer.reply(from, %{id: 0, type: type, at: 0, metadata: metadata})
+        audit_stub(liveops, test_pid)
+
+      {:"$gen_call", from, _request} ->
+        GenServer.reply(from, :ok)
+        audit_stub(liveops, test_pid)
+
+      _other ->
+        audit_stub(liveops, test_pid)
     end
   end
 
