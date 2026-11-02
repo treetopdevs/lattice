@@ -1652,6 +1652,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Options</dt><dd>Longer timeouts (still flaky); quiesce LiveOps before suspending (async DOWN and snapshot callers still race); a stub registered as Lattice.Audit (chosen)</dd>
 <dt>Decision</dt><dd>The test terminates the real Audit, registers a stub that replies to unrelated calls at once and kills itself on LiveOps&#x27; :liveops_denied call, then asserts the deferral before restarting Audit and replaying through flush_audit/0. Commit ff0534935. Calling LiveOps.snapshot/0 in a loop during the test reproduced the timeout on the old version; the stub version passes. It still fails with try_record/2&#x27;s exit handler removed.</dd>
 <dt>Reason</dt><dd>The in-flight kill stays exact and no longer depends on what else in the VM calls Audit. Test change only; no production change.</dd>
+</dl></section>
 <section id="d265"><h2><span>D-265</span> Plan 316 implements the adopted lifecycle contract; it does not redesign it</h2><dl>
 <dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a> (row 316)</dd>
 <dt>Context</dt><dd><code>docs/research/treehouse_catalog_lifecycle.md</code> sections 2–4 and 7 were adopted at <code>789ab235</code>. They fix the <code>replace_catalog_v1</code> command, claim fields, byte domains, verification stages, refusal order and cases C10–C15. Founder lifecycle section 6 leaves the exact wire contract to R11c review.</dd>
