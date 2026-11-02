@@ -78,12 +78,12 @@ A "retained client" keeps its original bootstrap review and accepted watermark (
 | a | Catalog signer seed and backup both lost (custody `:417`) | — | Recovery is a bounded-admin replacement. The old key is not an input. |
 | b | Catalog signer compromised, admin intact. It can sign catalogs and old-key rotations under bindings it holds; it cannot change keys through a catalog or service identity through rotation. | Entry/inventory checks; route-reuse refusal; fork detection; the closing rule (D-275) | Bad catalogs refused; two signed revisions fork and pause transport. An admin replacement cites the attacker's heads in `parents` and **closes** every cited binding and its ancestry: later old-key rotations or catalogs under it are retained evidence and refused, so one resolution ends the attacker's ability to force `catalog_fork`. Suspected exposure is loss (`:420`). |
 | c | Service key lost | Possession under `:service` | A partial-loss replacement keeps the catalog key (fresh `:catalog` possession) and sets a new service ID, key and, if needed, origin. |
-| d | Founder, old catalog key and old service key all lost (C10/A09) | Full stage B | Only an R04 bounded successor acts, and only if its pre-loss ceiling includes `replace_catalog_v1`. No old key, injected trust or root change. |
+| d | Founder, old catalog key and old service key all lost (C10/A09) | Full stage B | Only an R04 bounded successor acts, and only if its pre-loss ceiling includes `replace_catalog_v1`. Its rootless continuation delegation (`parent_id: nil`) is Core-honored and accepted (step 4). No old key, injected trust or root change. |
 | e | Malicious current admin | Ordinary revoke, transfer and lease rules | Accepted residual (contract §1). A concurrent revoke, transfer or lapse reclassifies it (row g). |
 | f | Two authorized sibling replacements, or one nonce reused with different claims (C12) | Declared-graph validation, then sibling and nonce-reuse detection | `catalog_fork` in either delivery order. Both heads retained, no route switch. A resolution covers both, and its deps include both ops. |
 | g | Concurrent revoke, holder change or lapse beacon after union (C13) | Stage B step 3 on the full union | `authority_changed`: freeze routes, keep watermark and the refused node as evidence. A fresh current-admin resolution citing it unfreezes; the client never falls back to the old signer. |
 | h | No honored ancestor beacon | Preflight; stage B epoch derivation | Authoring stops with `catalog_epoch_missing`; the resolver refuses `catalog_authority_refused`. |
-| i | Living root's unleased genesis cap, or a leased grant without an honored acquisition | Strict-prefix acquisition match; finite lease | `catalog_authority_refused`. The root must take a finite acquisition or rotate instead. |
+| i | Living root's unleased genesis cap, or a leased grant without an honored acquisition | Strict-prefix acquisition match; finite lease (not attenuation, which Core owns) | `catalog_authority_refused`. The root must take a finite acquisition or rotate instead. |
 | j | Wrong root, product, Space, version or profile; cross-product replay | Pinned bootstrap scope | `wrong_catalog_scope` |
 | k | Rollback to an older generation, a wrong predecessor, or a child of a closed binding | Generation, predecessor and closing checks | `catalog_rollback` / `invalid_catalog_transition` |
 | l | Incomplete or wrong cutoff for the new service | `log_digest` against the restored raw log | `recovery_incomplete`; never an invented empty replica. |
@@ -184,10 +184,17 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
    with the unchanged Core reason, or `authority_changed` if it was accepted earlier.
 4. **Strict prefix**, one `Authority.analyze_with_records(Treehouse.Space, strict_ancestor_log)`:
    `holder_epoch(:admin) == %{holder: op.author, op_id: claim.holder_epoch}`; the acquisition
-   record `{claim.holder_epoch, author, delegation_id}` has `delegation_id == op.cap`, attenuated
-   from the root bootstrap delegation; its ceiling contains `replace_catalog_v1`, `live: false`,
-   finite unexpired lease at the prefix epoch; `epoch`/`epoch_basis` equal that pass's beacons
-   (reuse `member_continuity.ex` `epoch/2`). Each failure is `catalog_authority_refused`
+   record `{claim.holder_epoch, author, delegation_id}` is the **Core-honored** current `:admin`
+   record at that prefix and has `delegation_id == op.cap`. The resolver does not re-check the
+   delegation chain: signature, issuer, audience, parent attenuation and activation are Core's
+   (contract §3 step 3). The record may be a root-attenuated grant **or** an R04 continuation,
+   whose delegation is self-issued with `parent_id: nil` (`continuation.ex` `scope?/4`); both are
+   accepted (D-280). Resolver-specific predicates only: the ceiling contains
+   `replace_catalog_v1` with **inherited provenance** (the permission is in every honored
+   `:admin` ceiling from the latest root-attenuated record to this one; Core's `scope?/4` subset
+   rule already implies it, and PR 0 decides whether the check is redundant), `live: false`, a
+   finite lease unexpired at the prefix epoch, and `epoch`/`epoch_basis` equal to that pass's
+   beacons (reuse `member_continuity.ex` `epoch/2`). Each failure is `catalog_authority_refused`
    (D-274), with a resolver-supplied detail when Core honored the op. A `profile_id` mismatch
    with `continuation_profile/1` on the prefix is `wrong_catalog_scope`; it is evaluated here only
    because it needs the prefix.
@@ -196,10 +203,13 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
    `prior_catalogs` entry names a catalog under its binding (unheld is `trust_pending`), and `nil`
    is its parent's sole entry; generation is `max + 1`; inventory and entries match the first
    catalog. Failure is `invalid_catalog_transition`; an accepted candidate is never re-judged here.
-6. **Conflict deps (D-278).** If the candidate cites more than one head, a refused node, or a
-   catalog-forked binding, its op deps' causal closure includes every cited replacement op and
-   every Core control op (revoke, transfer, beacon) that refused a cited node. Rotation heads are
-   not Space ops and are covered by `parents` alone. Else `invalid_catalog_transition`.
+6. **Conflict deps (D-278), intrinsic.** The candidate's op deps' causal closure includes every
+   cited replacement op. Rotation heads are not Space ops and are covered by `parents` alone.
+   Else `invalid_catalog_transition`. A cited node's refusal on the union is a D-276 property of
+   that node (it authorizes nothing), never a validity condition of the citing candidate; the
+   candidate covers the conflict by citing the node (contract §4). The resolver does not require
+   the refusing Core controls in the deps: that set is unbounded (every later beacon past a lapsed
+   lease refuses the node again) and depends on delivery order.
 7. **Against retained evidence.** Omitting another D-276-eligible replacement head makes the
    candidate a **sibling**, retained as `catalog_fork` (never `invalid_catalog_transition`); nonce
    reuse with a different claim is `catalog_fork`; an uncovered old-key child (rotation or
@@ -210,6 +220,13 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
 9. Store the atomic watermark with every observed head. Restore readiness against the new
    identity is still required (`carrier_pending`). Steps 3–4 needing more than these public APIs
    is a STOP for interface review (contract §3, PR 0).
+
+**Intrinsic-check invariant (D-279).** Steps 1, 2, 4, 5 and 6 read only the candidate's bytes and
+its own causal closure, so their verdict is fixed when the candidate is first evaluated and is
+never re-judged for an accepted candidate. Only steps 3, 7 and 8 consult the retained union, and
+they only reclassify (`authority_changed`, `catalog_fork`, `recovery_incomplete`). An accepted
+candidate can therefore never later yield `invalid_catalog_transition`, `wrong_catalog_scope` or
+an intrinsic `catalog_authority_refused`. PR 4 pins this with a monotonicity property test.
 
 ## 4. Refusal reasons
 
@@ -248,8 +265,10 @@ Each PR is small, follows D-38 (freeze after two bot rounds), and gets rule 3 re
 admin acquisition with replace_catalog_v1 in ceiling is observable at strict prefix via
 holder_epoch/acquisitions"; "ancestor beacon basis derivable via analyze_with_beacon_evidence"
 (also `analyze_with_records/2` on the prefix); "unleased root genesis cap yields no finite
-acquisition"; "a refused replacement op stays in the authenticated history with its Core
-reason". STOP if any check needs a new Core primitive: file a row and return for interface
+acquisition"; "an R04 continuation acquisition (`parent_id: nil`) is observable via
+`acquisitions/3` and its delegation ceiling is readable from the prefix log" (`acquisition()`
+carries only `delegation_id`, so reaching the delegation struct without a new API is part of the
+probe); "a refused replacement op stays in the authenticated history with its Core reason". STOP if any check needs a new Core primitive: file a row and return for interface
 review (contract §3). Do not approximate.
 
 **PR 1 — claim codec and the Space command.** Files: `transport_catalog.ex`; `space.ex` (the
@@ -289,10 +308,14 @@ origin/URL, refused nodes, and restoring pre-upgrade single-`parent` trust store
 `catalog_replacement_trust_test.exs` and the TS twin. Every multi-delivery test persists the
 accepted state between resolver calls and runs both delivery orders.
 
-- **C10:** the combined-loss case is accepted; routes dial `new_origin` with the new realm.
+- **C10:** the combined-loss case is accepted; routes dial `new_origin` with the new realm. The
+  author is an R04 continuation successor whose delegation is self-issued with `parent_id: nil`
+  and an inherited ceiling containing `replace_catalog_v1` (a resolver that demands a linked root
+  parent fails this case).
 - **C11 negatives:** missing pre-loss permission (no `replace_catalog_v1` in the ceiling); wrong
   profile (`wrong_catalog_scope`); no beacon; root genesis cap; unleased cap; wrong acquisition
-  cap; stale holder; bad parent; delegation not attenuated from the root; revoked or lapsed
+  cap; stale holder; bad parent; a parent-linked delegation not attenuated from the root (Core
+  refuses it, so the resolver sees no honored record); revoked or lapsed
   authority; wrong nonce, deps, epoch, basis or cutoff; each bad possession signature; an R04
   certificate alone grants no catalog trust; unsupported raw cutoff evidence refuses and is kept
   for export.
@@ -312,7 +335,16 @@ accepted state between resolver calls and runs both delivery orders.
   keeps the watermark; a client that saw the revoke first still holds R1 as a refused node; a
   fresh admin resolution citing refused R1, with the revoke in its deps, is accepted and unfreezes
   (a permanently frozen implementation fails); a rotation or catalog under refused R1 is refused;
-  a causally later revoke keeps the history.
+  a causally later revoke keeps the history. **Redundant late beacon:** R1's lease expires at
+  epoch 6 and concurrent beacon E7 refuses it; resolution R2 (lease to 13) cites R1 with R1 and E7
+  in its deps and is accepted; beacon E8, a descendant of E7 concurrent with R1/R2, then arrives
+  and R2 stays accepted (never `invalid_catalog_transition`), with persisted state, in both
+  delivery orders (E8 before R2 and after). R2 citing R1 without E7 in its deps is also accepted.
+- **Monotonicity property (D-279; plan-local, not a contract case):** StreamData over interleavings of valid revokes,
+  transfers, beacons, rotations and replacements, with persisted state between calls: once a
+  candidate is accepted, no later delivery yields `invalid_catalog_transition`,
+  `wrong_catalog_scope` or an intrinsic `catalog_authority_refused` for it; only
+  `authority_changed`, `catalog_fork` or `recovery_incomplete` may follow.
 - **C14:** a third head is `control_history_limit`; a rotation head plus a replacement head count
   as two; three non-admin proposals with `parents: [bootstrap]` are raw evidence, add no head and
   leave the bootstrap catalog resolving; a missing page is `trust_pending` with no partial
@@ -395,5 +427,11 @@ Copied into `plans/README.md` and `plans/decisions-2026-10-17-backlog-run.html` 
   citable node that authorizes nothing; other refused ops are raw evidence, never heads (§2).
 - **D-277.** Declared-graph checks are structural; coverage, siblings (`catalog_fork`) and then
   cutoffs are judged against retained evidence (§3 steps 5, 7, 8).
-- **D-278.** A resolution's deps causally include every cited replacement op and every Core
-  control op that refused a cited node; rotation heads are covered by `parents` (§3 step 6).
+- **D-278.** A resolution's deps causally include every cited replacement op; rotation heads are
+  covered by `parents`; the refusing Core controls are not required (§3 step 6).
+- **D-279.** Intrinsic-check invariant: steps 1, 2, 4–6 read only the candidate and its causal
+  closure and never re-judge an accepted candidate; only steps 3, 7, 8 consult the union, and
+  they only reclassify; pinned by the PR 4 monotonicity property (§3).
+- **D-280.** Step 4 trusts Core for delegation-chain validity and accepts an honored R04
+  continuation (`parent_id: nil`) as well as a root-attenuated grant; the resolver checks only
+  ceiling, inherited provenance, `live: false`, lease and epoch basis (§3 step 4).
