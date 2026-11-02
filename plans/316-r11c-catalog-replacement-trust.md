@@ -6,8 +6,7 @@ row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 nat
 
 - **Row, priority, effort**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`); P1 / L
 - **Depends on**: plan 224 PRs 1–3 (DONE), plan 263 (DONE, custodian ledger), R03 and R04 (DONE,
-  beacons and bounded continuation). PR 4 also depends on plans 267 and 269.
-- **Planned at**: commit `cb7ffa3bc`, 2026-11-01
+  beacons and bounded continuation); PR 4 also on 267/269. **Planned at** `cb7ffa3bc`, 2026-11-01
 - **Drift check (run before each PR)**:
   ```sh
   L=apps/lattice_core/lib; C=clients/lattice-client/src
@@ -88,7 +87,7 @@ Contract §3 restated with code names. **Claim** (closed map; extra or missing f
 |---|---|
 | `version`, `product`, `space`, `bootstrap` | `1`, `:treehouse`, pinned Space, pinned bootstrap ID |
 | `profile_genesis`, `profile_id` | Equal the retained bootstrap and `Authority.continuation_profile/1` at the strict prefix |
-| `parents` | Binding-head IDs (bootstrap, rotation or replacement, D-276 refused nodes included): sorted, distinct, nonempty. First replacement: the bootstrap ID. |
+| `parents` | Binding-head IDs (bootstrap, rotation or replacement, D-276 refused nodes included): sorted, distinct, nonempty. First replacement: the current heads (the bootstrap unless a rotation advanced it, e.g. `[T]` after B→T). |
 | `prior_catalogs` | **Pinned (D-271):** sorted, distinct `%{binding, catalog}`; at least one per parent; every retained catalog head under that parent (more than one when that binding's catalog chain forked); `catalog: nil` only as the sole entry for a parent with no known catalog. Coverage is an authoring obligation (PR 2), judged by the verifier only at step 7. |
 | `generation` | `max(parent generation) + 1`, within the safe-integer horizon |
 | `nonce` | Fresh 32-byte `Nonce`; also the local journal attempt ID |
@@ -327,7 +326,8 @@ accepted state between resolver calls and runs both delivery orders.
   such child yields `authority_changed`; after one resolution, a further attacker rotation cannot
   produce `catalog_fork`. Ancestry: with B, B→T, T→R accepted, B→Z is `catalog_rollback`, not a
   fork, both orders, and B→Z and T→Z′ stay refused after R is reclassified. R citing `{P, nil}`
-  stays accepted when a C0 under P arrives later (C0 refused); C0 first gives `authority_changed`.
+  stays accepted when a C0 under P arrives later (C0 refused); C0 first gives `authority_changed`. A
+  union-refused but D-276-eligible R′ citing P also closes P: an old-key rotation of P is refused, both orders.
 - **C13:** a concurrent revoke after accepting R1 gives `authority_changed`, freezes routes and
   keeps the watermark; a client that saw the revoke first still holds R1 as a refused node; a
   fresh admin resolution citing refused R1, with the revoke in its deps, is accepted and unfreezes
