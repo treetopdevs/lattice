@@ -1646,6 +1646,13 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>emit/3 also appends the event to state.audit_queue; write_audit_batch/3 peeks the front, drops it on {:ok, _}, and stops after the allowance or the first {:error, :unavailable}. reset/0&#x27;s fresh_state/0 empties the queue. Commit 990339d51. The test &#x27;a deferred emit does not scale with the backlog&#x27; compares one deferred emit&#x27;s LiveOps reductions at a 10- and a 5000-event backlog: 152 to 21183 with the old scan reinstated, flat with the queue.</dd>
 <dt>Reason</dt><dd>Work per flush is now bounded by the batch plus one failed write, which is what the moduledoc already claimed. Reductions are deterministic, so the test has no wall-clock threshold. Memory is shared terms, not copies. reset/0&#x27;s full drain (row 314) is unchanged.</dd>
 </dl></section>
+<section id="d261"><h2><span>D-261</span> Row 315 test: stub Audit instead of :sys.suspend</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Finding</dt><dd>Flagship run 41384634389 failed &#x27;Audit killed with a LiveOps write in flight defers the record&#x27; with a record_denial call timeout, and three later tests failed with it. LiveOps sent its :liveops_denied write about 5 s after the Task&#x27;s call, so LiveOps was first blocked in an unrelated call into the suspended Audit (in the umbrella run, processes from other apps share the VM).</dd>
+<dt>Options</dt><dd>Longer timeouts (still flaky); quiesce LiveOps before suspending (async DOWN and snapshot callers still race); a stub registered as Lattice.Audit (chosen)</dd>
+<dt>Decision</dt><dd>The test terminates the real Audit, registers a stub that replies to unrelated calls at once and kills itself on LiveOps&#x27; :liveops_denied call, then asserts the deferral before restarting Audit and replaying through flush_audit/0. Commit ff0534935. Calling LiveOps.snapshot/0 in a loop during the test reproduced the timeout on the old version; the stub version passes. It still fails with try_record/2&#x27;s exit handler removed.</dd>
+<dt>Reason</dt><dd>The in-flight kill stays exact and no longer depends on what else in the VM calls Audit. Test change only; no production change.</dd>
+</dl></section>
 </main>
 </body>
 </html>
