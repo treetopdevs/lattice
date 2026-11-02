@@ -12,6 +12,15 @@ defmodule Lattice.LiveOps do
   revocation, expiry, use-limit, ops, schema, and the action caveat. LiveOps only
   executes the overlay/approval/publish workflow and renders state, deriving every
   capability's status from `CapStore` so the two can never drift.
+
+  Every event is mirrored to `Lattice.Audit`. Audit writes are deferred, not
+  dropped, while Audit is unavailable (row 310): `state.events` already holds
+  each event's exact `kind` and `data`, and `audit_cursor` marks the newest
+  event Audit acknowledged. Later events are replayed in order, tagged
+  `audit_deferred: true`, on the next emit, on a 1 s retry timer, or through
+  `flush_audit/0`. A `reset/0` that discards unrecorded events leaves one
+  `:liveops_audit_gap` record with the dropped count. A stalled Audit (a call
+  timeout) still exits LiveOps.
   """
 
   use GenServer
@@ -33,6 +42,15 @@ defmodule Lattice.LiveOps do
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def events, do: GenServer.call(__MODULE__, :events)
   def reset, do: GenServer.call(__MODULE__, :reset)
+
+  @doc """
+  Replays any audit records deferred while `Lattice.Audit` was unavailable.
+
+  Returns `{:ok, %{flushed: n, pending: m, gap: g}}`: `n` records written now,
+  `m` still waiting for Audit, and `g` events a `reset/0` discarded unrecorded
+  whose gap record is not written yet.
+  """
+  def flush_audit, do: GenServer.call(__MODULE__, :flush_audit)
   def export(format \\ :json), do: GenServer.call(__MODULE__, {:export, format})
 
   def record_denial(tab_id, action, reason, metadata \\ %{}) do
@@ -136,7 +154,26 @@ defmodule Lattice.LiveOps do
 
   def handle_call(:snapshot, _from, state), do: {:reply, Serializer.snapshot(state), state}
   def handle_call(:events, _from, state), do: {:reply, Enum.reverse(state.events), state}
-  def handle_call(:reset, _from, _state), do: {:reply, :ok, fresh_state()}
+
+  def handle_call(:reset, _from, state) do
+    state = flush_audit(state)
+    cancel_audit_retry(state)
+    gap = state.audit_gap + audit_pending(state)
+    {:reply, :ok, schedule_audit_retry(%{fresh_state() | audit_gap: gap})}
+  end
+
+  def handle_call(:flush_audit, _from, state) do
+    before = state.audit_cursor
+    state = flush_audit(state)
+
+    {:reply,
+     {:ok,
+      %{
+        flushed: state.audit_cursor - before,
+        pending: audit_pending(state),
+        gap: state.audit_gap
+      }}, state}
+  end
 
   def handle_call({:export, :json}, _from, state) do
     {:reply, Jason.encode!(Serializer.snapshot(state), pretty: true), state}
@@ -169,6 +206,10 @@ defmodule Lattice.LiveOps do
   end
 
   @impl true
+  def handle_info(:flush_audit, state) do
+    {:noreply, flush_audit(%{state | audit_retry: nil})}
+  end
+
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     case Map.pop(state.device_refs, ref) do
       {{tab_id, device_id}, device_refs} ->
@@ -195,7 +236,10 @@ defmodule Lattice.LiveOps do
       operation_sequence: 0,
       device_sequence: 0,
       denials: 0,
-      device_refs: %{}
+      device_refs: %{},
+      audit_cursor: 0,
+      audit_gap: 0,
+      audit_retry: nil
     }
   end
 
@@ -664,10 +708,77 @@ defmodule Lattice.LiveOps do
       data: data
     }
 
-    Audit.record(kind, Map.put(data, :liveops_event_id, event.id))
+    state = flush_audit(%{state | events: [event | state.events], sequence: event.id}, event.id)
     push_demo_event(kind, data)
+    state
+  end
 
-    %{state | events: [event | state.events], sequence: event.id}
+  # Writes every event newer than `audit_cursor` to Audit, oldest first, and
+  # stops at the first `{:error, :unavailable}`. `current_id` is the event being
+  # emitted right now: it alone is recorded without the `audit_deferred` marker,
+  # so a healthy-path record is byte-identical to the pre-row-310 one.
+  defp flush_audit(state, current_id \\ nil) do
+    state = flush_audit_gap(state)
+
+    state =
+      if state.audit_gap > 0 do
+        state
+      else
+        state.events
+        |> Enum.take_while(&(&1.id > state.audit_cursor))
+        |> Enum.reverse()
+        |> Enum.reduce_while(state, fn event, state ->
+          metadata =
+            event.data
+            |> Map.put(:liveops_event_id, event.id)
+            |> mark_deferred(event.id != current_id)
+
+          case Audit.try_record(event.kind, metadata) do
+            {:ok, _record} -> {:cont, %{state | audit_cursor: event.id}}
+            {:error, :unavailable} -> {:halt, state}
+          end
+        end)
+      end
+
+    schedule_audit_retry(state)
+  end
+
+  defp flush_audit_gap(%{audit_gap: 0} = state), do: state
+
+  defp flush_audit_gap(state) do
+    case Audit.try_record(:liveops_audit_gap, %{dropped: state.audit_gap, reason: :reset}) do
+      {:ok, _record} -> %{state | audit_gap: 0}
+      {:error, :unavailable} -> state
+    end
+  end
+
+  defp mark_deferred(metadata, true), do: Map.put(metadata, :audit_deferred, true)
+  defp mark_deferred(metadata, false), do: metadata
+
+  defp audit_pending(state), do: state.sequence - state.audit_cursor
+
+  defp schedule_audit_retry(%{audit_retry: nil} = state) do
+    if state.audit_gap > 0 or audit_pending(state) > 0 do
+      %{state | audit_retry: Process.send_after(self(), :flush_audit, 1_000)}
+    else
+      state
+    end
+  end
+
+  defp schedule_audit_retry(state), do: state
+
+  defp cancel_audit_retry(%{audit_retry: nil}), do: :ok
+
+  defp cancel_audit_retry(%{audit_retry: ref}) do
+    if Process.cancel_timer(ref) == false do
+      receive do
+        :flush_audit -> :ok
+      after
+        0 -> :ok
+      end
+    end
+
+    :ok
   end
 
   defp push_demo_event(kind, data) do

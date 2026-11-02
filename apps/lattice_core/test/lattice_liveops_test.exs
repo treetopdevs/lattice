@@ -161,8 +161,9 @@ defmodule LatticeCore.LiveOpsTest do
   # Row 231: `Audit.events/0` is a plain call, so a snapshot taken while Audit
   # is mid-restart used to exit `:noproc` inside LiveOps. Terminating the child
   # through the supervisor makes the unavailable window deterministic. No tab
-  # is registered while Audit is down: `emit/3` still records through a call
-  # and would crash LiveOps (row 310).
+  # is registered while Audit is down: `emit/3` now defers its own audit write
+  # (row 310), but `register_tab/1` grants through `Lattice.CapStore`, which
+  # still records through `Audit.record/2` and would crash (row 313).
   test "snapshot survives an unavailable Audit" do
     before = Process.whereis(Lattice.LiveOps)
     :ok = Supervisor.terminate_child(LatticeCore.Supervisor, Lattice.Audit)
@@ -186,6 +187,142 @@ defmodule LatticeCore.LiveOpsTest do
     assert %{counters: %{audit: 1}} = Lattice.LiveOps.snapshot()
     assert Process.whereis(Lattice.LiveOps) == before
   end
+
+  # Row 310: `emit/3` defers audit writes while Audit is down instead of exiting
+  # LiveOps. Emits are driven only through `record_denial/4` and
+  # `device_event/6`, which do not call `Lattice.CapStore`; a CapStore hop still
+  # records through `Audit.record/2` and would crash during the outage (row 313).
+  # No assertion relies on the 1 s retry timer: Audit stays terminated for the
+  # whole deferral window, so a timer fire there only re-arms.
+  describe "audit deferral across an Audit restart (row 310)" do
+    setup do
+      on_exit(&ensure_audit_running/0)
+      :ok
+    end
+
+    test "record_denial while Audit is down is deferred, not lost" do
+      liveops = Process.whereis(Lattice.LiveOps)
+      stop_audit!()
+
+      assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+      assert Process.whereis(Lattice.LiveOps) == liveops
+      assert %{counters: %{audit_pending: 1, audit_gap: 0}} = Lattice.LiveOps.snapshot()
+
+      assert [%{id: event_id, kind: :liveops_denied}] =
+               Enum.filter(Lattice.LiveOps.events(), &(&1.kind == :liveops_denied))
+
+      start_audit!()
+      # `flushed` is not pinned: the 1 s retry timer may win the race on a slow
+      # runner. The Audit contents below are identical either way.
+      assert {:ok, %{pending: 0, gap: 0}} = Lattice.LiveOps.flush_audit()
+
+      assert [%{metadata: metadata}] = audit_of(:liveops_denied)
+      assert metadata.liveops_event_id == event_id
+      assert metadata.audit_deferred == true
+      assert metadata.tab_id == "tab-x"
+      assert %{counters: %{audit_pending: 0}} = Lattice.LiveOps.snapshot()
+      assert Process.whereis(Lattice.LiveOps) == liveops
+    end
+
+    test "deferred records replay in LiveOps event order" do
+      stop_audit!()
+
+      assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+
+      assert {:ok, _op} =
+               Lattice.LiveOps.device_event(:camera, "tab-x", "device-1", :camera_frame, nil, %{})
+
+      assert %{counters: %{audit_pending: 2}} = Lattice.LiveOps.snapshot()
+
+      start_audit!()
+      assert {:ok, %{pending: 0}} = Lattice.LiveOps.flush_audit()
+
+      records = liveops_audit()
+      ids = Enum.map(records, & &1.metadata.liveops_event_id)
+      assert ids == Enum.sort(ids) and ids == Enum.uniq(ids)
+      assert ids == Enum.map(Lattice.LiveOps.events(), & &1.id)
+
+      assert Enum.map(records, & &1.type) == [:liveops_denied, :liveops_device_operation]
+      assert Enum.all?(records, &(&1.metadata.audit_deferred == true))
+    end
+
+    test "next emit after Audit returns flushes the backlog first" do
+      stop_audit!()
+      assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+      start_audit!()
+
+      assert :ok = Lattice.LiveOps.record_denial("tab-y", :publish, :cap_required, %{})
+
+      assert [older, newer] = audit_of(:liveops_denied)
+      assert older.metadata.liveops_event_id < newer.metadata.liveops_event_id
+      assert older.metadata.tab_id == "tab-x"
+      assert older.metadata.audit_deferred == true
+      assert newer.metadata.tab_id == "tab-y"
+      refute Map.has_key?(newer.metadata, :audit_deferred)
+      assert %{counters: %{audit_pending: 0}} = Lattice.LiveOps.snapshot()
+    end
+
+    test "healthy Audit records immediately with no deferral marker" do
+      assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+
+      assert {:ok, _op} =
+               Lattice.LiveOps.device_event(:camera, "tab-x", "device-1", :camera_frame, nil, %{})
+
+      records = liveops_audit()
+      assert length(records) == 2
+      refute Enum.any?(records, &Map.has_key?(&1.metadata, :audit_deferred))
+
+      assert Enum.map(records, & &1.metadata.liveops_event_id) ==
+               Enum.map(Lattice.LiveOps.events(), & &1.id)
+
+      assert %{counters: %{audit_pending: 0, audit_gap: 0}} = Lattice.LiveOps.snapshot()
+    end
+
+    test "reset with pending records leaves a visible gap record" do
+      stop_audit!()
+      assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+      assert :ok = Lattice.LiveOps.record_denial("tab-y", :publish, :cap_required, %{})
+
+      assert :ok = Lattice.LiveOps.reset()
+      assert %{counters: %{audit_gap: 2, audit_pending: 0}} = Lattice.LiveOps.snapshot()
+
+      start_audit!()
+      assert {:ok, %{flushed: 0, pending: 0, gap: 0}} = Lattice.LiveOps.flush_audit()
+
+      assert [%{metadata: %{dropped: 2, reason: :reset}}] = audit_of(:liveops_audit_gap)
+      assert audit_of(:liveops_denied) == []
+      assert %{counters: %{audit_gap: 0}} = Lattice.LiveOps.snapshot()
+    end
+
+    test "Audit.try_record reports unavailable instead of exiting" do
+      stop_audit!()
+
+      assert Lattice.Audit.try_record(:probe, %{}) == {:error, :unavailable}
+      assert Process.alive?(self())
+      assert catch_exit(Lattice.Audit.record(:probe, %{}))
+    end
+  end
+
+  defp stop_audit! do
+    assert :ok = Supervisor.terminate_child(LatticeCore.Supervisor, Lattice.Audit)
+  end
+
+  defp start_audit! do
+    assert {:ok, _pid} = Supervisor.restart_child(LatticeCore.Supervisor, Lattice.Audit)
+  end
+
+  defp ensure_audit_running do
+    case Supervisor.restart_child(LatticeCore.Supervisor, Lattice.Audit) do
+      {:ok, _pid} -> :ok
+      {:error, :running} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
+  end
+
+  defp liveops_audit,
+    do: Enum.filter(Lattice.Audit.events(), &Map.has_key?(&1.metadata, :liveops_event_id))
+
+  defp audit_of(type), do: Enum.filter(Lattice.Audit.events(), &(&1.type == type))
 
   defp connect_role(role) do
     {:ok, _pid, tab} =
