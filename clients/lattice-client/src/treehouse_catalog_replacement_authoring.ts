@@ -281,10 +281,16 @@ function coverage(history: JudgedHistory, replica: string, bootstrap: {id: strin
     stack.push(...nodes.get(id)!.parents);
   }
   const heads = [...nodes.keys()].filter((id) => !closed.has(id));
+  // Plan 316 §4 precedence: an unknown parent is the intrinsic step-5 failure, before the step-7 sibling.
+  if (claim.parents.some((id) => !nodes.has(id))) return "invalid_catalog_transition";
   const parents = cover(heads, claim.parents, (id) => id);
   if (parents !== null) return parents;
   const generation = Math.max(...claim.parents.map((id) => nodes.get(id)!.generation)) + 1;
   if (claim.generation !== generation) return "invalid_catalog_transition";
+  // Step 5: each prior entry names a cited parent and, unless null, a catalog held under it.
+  if (claim.priorCatalogs.some((item) => !claim.parents.includes(item.binding))) return "invalid_catalog_transition";
+  if (claim.priorCatalogs.some((item) => item.catalog !== null &&
+    !catalogs.some((held) => held.binding === item.binding && held.id === item.catalog))) return "trust_pending";
   const previous = new Set(catalogs.map((item) => `${item.binding}\u0000${item.previous}`));
   const expected = claim.parents.flatMap((binding): CatalogPriorCatalog[] => {
     const under = [...new Set(catalogs.filter((item) => item.binding === binding && !previous.has(`${binding}\u0000${item.id}`))

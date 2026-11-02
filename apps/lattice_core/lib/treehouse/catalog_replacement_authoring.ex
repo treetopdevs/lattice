@@ -238,9 +238,10 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     with {:ok, pending} <- rotation_envelopes(log, request.rotations, bootstrap),
          {:ok, nodes} <- chain(pending, Map.merge(replacement_nodes(log, bootstrap), root)),
          :ok <- known_parents(nodes),
-         {:ok, catalog_heads} <- catalog_heads(log, request.catalogs, bootstrap, nodes),
-         :ok <- cover_parents(claim.parents, heads(nodes)),
-         :ok <- cover_generation(claim, nodes) do
+         {:ok, catalog_heads, held} <- catalog_heads(log, request.catalogs, bootstrap, nodes),
+         :ok <- cover_parents(claim.parents, nodes),
+         :ok <- cover_generation(claim, nodes),
+         :ok <- held_priors(claim, held) do
       expected =
         Enum.flat_map(claim.parents, fn parent ->
           case Map.get(catalog_heads, parent, []) do
@@ -347,7 +348,29 @@ defmodule Treehouse.CatalogReplacementAuthoring do
       else: closure(Map.fetch!(nodes, id).parents ++ rest, nodes, MapSet.put(acc, id))
   end
 
-  defp cover_parents(parents, heads), do: cover(heads, parents)
+  # Plan 316 §4 precedence: an unknown parent is the intrinsic step-5 failure, reported before
+  # the step-7 sibling (`catalog_fork`) for an omitted head.
+  defp cover_parents(parents, nodes) do
+    if Enum.all?(parents, &Map.has_key?(nodes, &1)),
+      do: cover(heads(nodes), parents),
+      else: {:error, :invalid_catalog_transition}
+  end
+
+  # Step 5: each prior entry names a cited parent and, unless `nil`, a catalog held under it.
+  defp held_priors(claim, held) do
+    cond do
+      Enum.any?(claim.prior_catalogs, &(&1.binding not in claim.parents)) ->
+        {:error, :invalid_catalog_transition}
+
+      Enum.any?(claim.prior_catalogs, fn %{binding: binding, catalog: catalog} ->
+        catalog != nil and not MapSet.member?(held, {binding, catalog})
+      end) ->
+        {:error, :trust_pending}
+
+      true ->
+        :ok
+    end
+  end
 
   # Omitting a known head would author a sibling (`catalog_fork`); anything else is wrong.
   defp cover(expected, supplied) do
@@ -392,11 +415,13 @@ defmodule Treehouse.CatalogReplacementAuthoring do
         previous =
           MapSet.new(verified, fn {_id, catalog} -> {catalog.binding, catalog.previous} end)
 
-        {:ok,
-         verified
-         |> Enum.reject(fn {id, catalog} -> MapSet.member?(previous, {catalog.binding, id}) end)
-         |> Enum.group_by(fn {_id, catalog} -> catalog.binding end, &elem(&1, 0))
-         |> Map.new(fn {binding, ids} -> {binding, ids |> Enum.uniq() |> Enum.sort()} end)}
+        heads =
+          verified
+          |> Enum.reject(fn {id, catalog} -> MapSet.member?(previous, {catalog.binding, id}) end)
+          |> Enum.group_by(fn {_id, catalog} -> catalog.binding end, &elem(&1, 0))
+          |> Map.new(fn {binding, ids} -> {binding, ids |> Enum.uniq() |> Enum.sort()} end)
+
+        {:ok, heads, MapSet.new(verified, fn {id, catalog} -> {catalog.binding, id} end)}
 
       error ->
         error

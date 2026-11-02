@@ -306,7 +306,7 @@ test("parents, priorCatalogs and generation are checked against the binding grap
   assert.equal(b64(catalogSigner(f).publicKey), f.record.catalogKey);
   const unrelated = id("unrelated-binding");
   assert.equal(reason(await prepare(f, f.frames, request(f, { parents: [unrelated], priorCatalogs: [{ binding: unrelated, catalog: null }],
-    generation: 9 }))), "catalog_fork");
+    generation: 9 }))), "invalid_catalog_transition");
   const both = [f.bootstrap.id, unrelated].sort();
   assert.equal(reason(await prepare(f, f.frames, request(f, { parents: both,
     priorCatalogs: both.map((binding) => ({ binding, catalog: null })) }))), "invalid_catalog_transition");
@@ -316,6 +316,8 @@ test("parents, priorCatalogs and generation are checked against the binding grap
   assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first] }))), "catalog_fork");
   assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first],
     priorCatalogs: [{ binding: f.bootstrap.id, catalog: firstId }] }))), "ok");
+  assert.equal(reason(await prepare(f, f.frames, request(f, {
+    priorCatalogs: [{ binding: f.bootstrap.id, catalog: firstId }] }))), "trust_pending");
   const second = catalog(f, f.bootstrap.id, 1, firstId), secondId = transportCatalogId(second.catalog);
   assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first, second],
     priorCatalogs: [{ binding: f.bootstrap.id, catalog: firstId }] }))), "catalog_fork");

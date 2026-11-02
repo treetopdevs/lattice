@@ -553,14 +553,14 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     f = fixture()
     unrelated = id("unrelated-binding")
 
-    # An off-graph parent with a wrong generation omits the honored bootstrap head.
+    # An off-graph parent with a wrong generation is an intrinsic transition failure.
     off_graph = %{
       parents: [unrelated],
       prior_catalogs: [%{binding: unrelated, catalog: nil}],
       generation: 9
     }
 
-    assert {:error, :catalog_fork} =
+    assert {:error, :invalid_catalog_transition} =
              Space.prepare_replace_catalog(f.space_log, request(f, off_graph), %{})
 
     both = %{
@@ -586,6 +586,11 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
              Space.prepare_replace_catalog(f.space_log, request(f, %{catalogs: [first]}), %{})
 
     cited = %{catalogs: [first], prior_catalogs: [%{binding: f.bootstrap.id, catalog: first_id}]}
+
+    # Citing a catalog that is not held is pending trust, not a valid prior.
+    assert {:error, :trust_pending} =
+             Space.prepare_replace_catalog(f.space_log, request(f, %{cited | catalogs: []}), %{})
+
     assert {:ok, _} = Space.prepare_replace_catalog(f.space_log, request(f, cited), %{})
 
     # Its successor supersedes it as the head under the same binding.
