@@ -192,7 +192,8 @@ defmodule LatticeCore.LiveOpsTest do
   # LiveOps. Emits are driven only through `record_denial/4` and
   # `device_event/6`, which do not call `Lattice.CapStore`; a CapStore hop still
   # records through `Audit.record/2` and would crash during the outage (row 313).
-  # Only the automatic-retry test relies on the 1 s retry timer; elsewhere
+  # Only the automatic-retry test relies on the 1 s retry timer; tests that
+  # assert a flush count hold it off (`hold_audit_retry!/0`); elsewhere
   # Audit stays terminated for the whole deferral window, so a timer fire there
   # only re-arms.
   describe "audit deferral across an Audit restart (row 310)" do
@@ -280,6 +281,7 @@ defmodule LatticeCore.LiveOpsTest do
     end
 
     test "reset with pending records leaves a visible gap record" do
+      hold_audit_retry!()
       stop_audit!()
       assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
       assert :ok = Lattice.LiveOps.record_denial("tab-y", :publish, :cap_required, %{})
@@ -294,6 +296,28 @@ defmodule LatticeCore.LiveOpsTest do
       assert [%{metadata: %{dropped: 2, reason: :reset}}] = audit_of(:liveops_audit_gap)
       assert audit_of(:liveops_denied) == []
       assert %{counters: %{audit_gap: 0}} = Lattice.LiveOps.snapshot()
+    end
+
+    # Row 310 round 2: the gap record counts toward the batch allowance.
+    test "a flush that writes a gap record stays within the batch limit" do
+      hold_audit_retry!()
+      batch = Lattice.LiveOps.audit_batch()
+      stop_audit!()
+      assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+      assert :ok = Lattice.LiveOps.reset()
+
+      for n <- 1..batch do
+        assert :ok = Lattice.LiveOps.record_denial("tab-#{n}", :publish, :cap_required, %{})
+      end
+
+      start_audit!()
+      assert {:ok, %{flushed: ^batch, pending: 1, gap: 0}} = Lattice.LiveOps.flush_audit()
+      assert [%{metadata: %{dropped: 1, reason: :reset}}] = audit_of(:liveops_audit_gap)
+
+      assert eventually(fn -> Lattice.LiveOps.snapshot().counters.audit_pending == 0 end)
+      ids = Enum.map(liveops_audit(), & &1.metadata.liveops_event_id)
+      assert length(ids) == batch
+      assert ids == Enum.sort(ids) and ids == Enum.uniq(ids)
     end
 
     # Row 310 round 1: an idle LiveOps must replay on its own once Audit
@@ -378,6 +402,21 @@ defmodule LatticeCore.LiveOpsTest do
           20 -> poll_until(fun, deadline)
         end
     end
+  end
+
+  # Holds the 1 s retry timer off so an explicit `flush_audit/0` count cannot
+  # race an automatic retry (row 310 round 2). The 0-delay continuation is
+  # unaffected.
+  defp hold_audit_retry! do
+    previous = Application.fetch_env(:lattice_core, :liveops_audit_retry_ms)
+    Application.put_env(:lattice_core, :liveops_audit_retry_ms, 3_600_000)
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:lattice_core, :liveops_audit_retry_ms, value)
+        :error -> Application.delete_env(:lattice_core, :liveops_audit_retry_ms)
+      end
+    end)
   end
 
   defp stop_audit! do
