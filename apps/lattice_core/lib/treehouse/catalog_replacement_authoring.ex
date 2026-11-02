@@ -19,6 +19,12 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   A Core-honored result is an authorized signed proposal, not a route switch or installed
   catalog trust: the Stage B resolver (PR 4) and the operator journal (lifecycle §5) remain
   the caller's. The returned journal entry is caller-owned and is not persisted here.
+
+  Non-claim: the binding-graph coverage here is interim. It does not apply D-276 node
+  eligibility (an on-Space replacement failing the intrinsic checks is still treated as a node),
+  the D-275 closing rule (an old-key rotation of a closed binding is still chained), or the full
+  §4 refusal precedence; those are Stage B resolver semantics owned by plan 316 PR 4, whose
+  binding-graph function this coverage is to call once it lands (review round 2 follow-up row).
   """
 
   alias Lattice.{Authority, Dag, Identity, Log, Op}

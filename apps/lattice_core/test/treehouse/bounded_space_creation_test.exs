@@ -304,6 +304,42 @@ defmodule Treehouse.BoundedSpaceCreationTest do
     end
   end
 
+  describe "review round 2: bootstrap size per capability" do
+    test "a malformed oversized capability id sorting first does not refuse a bootstrap that fits" do
+      {root, log, pin} = pinned()
+      rec = record(root, log, pin)
+      {:ok, original} = Space.author_catalog_bootstrap(root, log, rec)
+
+      [valid | _] =
+        for %Lattice.Op{kind: :authority, body: {:genesis, %{id: id}, _}} = op <-
+              Log.topo_ops(log),
+            id == original.cap,
+            do: op.id
+
+      {bad, widened} =
+        Enum.find_value(1..500, fn n ->
+          delegation =
+            Lattice.Authority.Delegation.genesis(root, log.replica,
+              ops: [:catalog_bootstrap_v1],
+              roles: [:admin]
+            )
+
+          delegation = %{delegation | id: String.duplicate("a", 50_000) <> Integer.to_string(n)}
+          op = Lattice.Op.new(root, log.replica, [], :authority, {:genesis, delegation, %{}})
+          widened = Log.append!(log, op)
+          order = Enum.map(Log.topo_ops(widened), & &1.id)
+
+          if Enum.find_index(order, &(&1 == op.id)) < Enum.find_index(order, &(&1 == valid)),
+            do: {op, widened}
+        end)
+
+      assert byte_size(elem(bad.body, 1).id) > 50_000
+      assert {:ok, op} = Space.author_catalog_bootstrap(root, widened, rec)
+      assert op.cap == original.cap
+      refute Map.has_key?(Authority.analyze(Space, Log.append!(widened, op)).reasons, op.id)
+    end
+  end
+
   describe "PR review: capability selection" do
     test "a root admin genesis without catalog_bootstrap_v1 is never the bootstrap cap" do
       {root, log, pin} = pinned()

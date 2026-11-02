@@ -283,6 +283,32 @@ test("an honored Space command appended during signing withholds the stale frame
   assert.equal((await judge(store)).get(command.id), undefined);
 });
 
+// --- review round 2 ---------------------------------------------------------
+
+test("a caller attempt mutated during an async signer never pairs the old frame with new claim bytes", async () => {
+  const f = await fixture();
+  const attempt = await prepared(f);
+  const original = attempt.claimBytes;
+  const possession = possess(f, attempt);
+  const command = await authorCarrierOp({ replica: f.replica, signer: f.nominee, deps: attempt.frozenFrontier, kind: "command",
+    cap: townshipCapTerm(f.leased.id), body: tuple(atom("create_thread"), ["list", [text(f.thread), text("Moved")]]) });
+  let store: CarrierOpFrame[] = [...f.frames];
+  const signer: CarrierOpSigner = { publicKey: f.nominee.publicKey, sign: async (bytes) => {
+    const signature = f.nominee.sign(bytes);
+    store = [...store, command];
+    const again = await prepare(f, store);
+    if (!again.ok) assert.fail(again.reason);
+    Object.assign(attempt, again.attempt);
+    return signature;
+  } };
+  const result = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => store, attempt, possession, signer });
+  assert.deepEqual(result.ok ? null : [result.reason, result.journalEntry.status, result.journalEntry.opId],
+    ["stale_verified_state", "cancelled_after_signature", null]);
+  if (result.ok) return;
+  assert.deepEqual(result.journalEntry.claimBytes, original);
+  assert.notDeepEqual(attempt.claimBytes, original);
+});
+
 const catalogSigner = (_f: Fixture) => seededSigner("r316-pr2-ts-catalog");
 function catalog(f: Fixture, binding: string, revision: number, previous: string | null): CatalogEnvelope {
   const value: TransportCatalog = { version: 1, product: "treehouse", space: f.replica, bootstrap: f.bootstrap.id, binding, revision,

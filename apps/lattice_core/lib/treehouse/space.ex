@@ -353,21 +353,37 @@ defmodule Treehouse.Space do
     deps = Enum.sort(Log.frontier(log))
     caps = root_capabilities(log, identity)
 
-    with :ok <- bootstrap_envelope(identity, log.replica, deps, record, caps) do
+    with {:ok, fitting} <- bootstrap_envelope(identity, log.replica, deps, record, caps) do
       Enum.find_value(
-        caps,
+        fitting,
         {:error, :bootstrap_not_honored},
         &honored_bootstrap(identity, log, deps, record, &1)
       )
     end
   end
 
-  # Lifecycle contract §2 (row 318): the signature slot is fixed at 64 bytes and every cap id
-  # has one length, so the zero-signed placeholder measures the signed push envelope
-  # byte-exactly before any signature is made.
-  defp bootstrap_envelope(_identity, _replica, _deps, _record, []), do: :ok
+  # Lifecycle contract §2 (row 318): the signature slot is fixed at 64 bytes, so a zero-signed
+  # placeholder measures the signed push envelope byte-exactly before any signature is made. A
+  # retained genesis may carry a malformed capability id of any length, so each candidate cap is
+  # measured; one that does not fit is skipped, and only when none fits is the bootstrap refused.
+  defp bootstrap_envelope(_identity, _replica, _deps, _record, []), do: {:ok, []}
 
-  defp bootstrap_envelope(identity, replica, deps, record, [cap | _]) do
+  defp bootstrap_envelope(identity, replica, deps, record, caps) do
+    statuses = for cap <- caps, do: {cap, bootstrap_status(identity, replica, deps, record, cap)}
+
+    case for({cap, :ok} <- statuses, do: cap) do
+      [] ->
+        case Enum.find(statuses, fn {_, status} -> status != {:error, :capacity_stop} end) do
+          nil -> {:error, :catalog_command_too_large}
+          {_, error} -> error
+        end
+
+      fitting ->
+        {:ok, fitting}
+    end
+  end
+
+  defp bootstrap_status(identity, replica, deps, record, cap) do
     op = %Op{
       id: "",
       replica: replica,
@@ -379,11 +395,7 @@ defmodule Treehouse.Space do
       sig: <<0::512>>
     }
 
-    case Treehouse.MemberContinuityAuthoring.envelope_status(%{op | id: Op.recompute_id(op)}) do
-      :ok -> :ok
-      {:error, :capacity_stop} -> {:error, :catalog_command_too_large}
-      {:error, reason} -> {:error, reason}
-    end
+    Treehouse.MemberContinuityAuthoring.envelope_status(%{op | id: Op.recompute_id(op)})
   end
 
   defp honored_bootstrap(identity, log, deps, record, cap) do

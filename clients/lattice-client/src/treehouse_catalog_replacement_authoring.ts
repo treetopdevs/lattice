@@ -1,6 +1,9 @@
 // TS twin of Treehouse.CatalogReplacementAuthoring (plan 316 PR 2): freeze, derive, review, sign last.
 // Unsigned intents are private full-judge inputs; they are never appended or exported. A Core-honored
 // result is an authorized signed proposal, not a route switch or installed catalog trust.
+// Non-claim: the binding-graph coverage below is interim. D-276 node eligibility, the D-275 closing rule and full §4
+// refusal precedence are Stage B resolver semantics owned by plan 316 PR 4; coverage is to call that resolver's
+// binding-graph function once it lands (review round 2 follow-up row).
 import { verifyEd25519 } from "./signature";
 import { analyzeAuthority } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
@@ -118,7 +121,11 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
   currentFrames: () => TreehouseCatalogReplacementCurrent | Promise<TreehouseCatalogReplacementCurrent>;
   attempt: TreehouseCatalogReplacementAttempt; possession: {catalog: string; service: string}; signer: CarrierOpSigner;
 }): Promise<TreehouseCatalogReplacementAuthorResult> {
-  const attempt = input.attempt;
+  // Snapshot the caller's attempt: a mutation during the async signer must never reach the post-sign checks.
+  let attempt: TreehouseCatalogReplacementAttempt;
+  try { attempt = structuredClone(input.attempt); } catch {
+    return {ok: false, reason: "stale_verified_state", journalEntry: entry(null, "cancelled", "stale_verified_state", null)};
+  }
   if (!attemptShape(attempt)) return {ok: false, reason: "stale_verified_state", journalEntry: entry(null, "cancelled", "stale_verified_state", null)};
   const cancel = (reason: string) => ({ok: false as const, reason, journalEntry: entry(attempt, "cancelled", reason, null)});
   let candidate: CarrierOpFrame, claim: CatalogReplacementClaim;
