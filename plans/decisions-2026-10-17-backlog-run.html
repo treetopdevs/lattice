@@ -1813,6 +1813,94 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>Round 4 is the final fix round for a design-only plan PR. Every open P1 is fixed in the plan. A P2 is fixed only if it takes a one- or two-line correction; otherwise it goes to a short "Open review findings" list, a new index row owned by the build PR, or an operator decision with a recommended default. Each thread is answered with where its finding went and then resolved, and no further round starts. On #211 the four round-4 P2s were each a one- or two-line fix and were fixed: PR 4 is gated on OD-17; step 5 checks the service ID against each parent; PR 1 tests only generation shape, with the max + 1 relation moved to PR 4; step 4 compares both <code>profile_genesis</code> and <code>profile_id</code> at the strict prefix. C11 gains a negative for each.</dd>
 <dt>Reason</dt><dd>Findings on a plan compound from round to round, and each build PR gets its own adversarial review against real code, which is where they get settled (rule 3 spirit). The plan stays at 400 lines (rule 4).</dd>
 </dl></section>
+<section id="d330"><h2><span>D-330</span> Take plan 316 PR 0 as slice 7</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Context</dt><dd>The preferred slice was plan 316 PR 0. Row 316 still read IN REVIEW (PR #211), but #211 merged as <code>7bdace22e</code>. The only open PR was #212.</dd>
+<dt>Options</dt><dd>Plan 316 PR 0; fallback row 226; fallback row 225.</dd>
+<dt>Decision</dt><dd>Take plan 316 PR 0, in worktree <code>.claude/worktrees/316-pr0-authority-probe</code> on branch <code>claude/316-pr0-authority-probe</code>. The implement-stage task said not to edit <code>plans/README.md</code> or this log yet, which overrode its FILES items 3 and 4. So the row 316 update and these entries were added in the index stage of this PR.</dd>
+<dt>Reason</dt><dd>The row is open, and PR 0's dependencies are DONE. Its one code file is new. PR #212 shares only <code>plans/README.md</code> and this log, so those edits are append-only. It does not claim that any later 316 PR is unblocked.</dd>
+</dl></section>
+<section id="d331"><h2><span>D-331</span> Test 5 pins <code>:unknown_command</code> on the real Space and proves retention with a declared command</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Context</dt><dd>Core runs <code>command_status</code> before <code>cap_ok</code>. <code>Treehouse.Space</code> has no <code>replace_catalog_v1</code> command until PR 1. So every <code>replace_catalog_v1</code> op on the Space is quarantined <code>:unknown_command</code>, whatever its cap or lease. Plan 316 §3 step 2 assumes Core refuses it at the authority gate.</dd>
+<dt>Options</dt><dd>(a) A test-only schema with a <code>replace_catalog_v1</code> command. (b) A pending test until PR 1. (c) On the real Space, pin <code>:unknown_command</code> as a tripwire and prove retention with an authority reason using a declared admin command under a lapsed or revoked cap.</dd>
+<dt>Decision</dt><dd>(c).</dd>
+<dt>Reason</dt><dd>The gap is PR 1's product command, not a Core primitive, so it is not a STOP. A substitute schema would not prove anything about the Space. It does not claim that a <code>replace_catalog_v1</code> op gets an authority reason today; PR 1 must flip the tripwire.</dd>
+</dl></section>
+<section id="d332"><h2><span>D-332</span> Fixture: Sim over the real <code>Treehouse.Space</code>, with prepared ops as fallback</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Context</dt><dd>No existing test drove <code>Treehouse.Space</code> through Sim. <code>ContinuationFixtures</code> uses its own schema, and the Space tests use <code>prepare_bounded_creation</code> over raw logs.</dd>
+<dt>Options</dt><dd><code>Sim.create_replica</code> with bounded genesis ops; <code>Space.prepare_bounded_creation</code> and <code>prepare_continuation_pin</code> fed through <code>Sim.append</code> or a raw Log; the <code>ContinuationFixtures</code> schema.</dd>
+<dt>Decision</dt><dd>Use <code>Sim.create_replica</code> on <code>Treehouse.Space</code> first. Fall back to the prepared ops if the Space rejects Sim's genesis. The PR records which one was used. Never use the fixture schema. Outcome: the primary Sim fixture worked. The sequence was <code>Sim.create_replica</code> with the bounded genesis ops, <code>Sim.command :create_space</code>, the <code>Sim.append</code> pin genesis, beacon 0, then <code>Sim.transfer</code>. <code>Space.command_op_status</code> and pin detection accepted the Sim genesis. Continuations and witnessed beacons were honored, so the fallback was not needed.</dd>
+<dt>Reason</dt><dd>The probe must observe the real Space's authority analysis. It uses disposable seeds only. It makes no custody or real-Space claim.</dd>
+</dl></section>
+<section id="d333"><h2><span>D-333</span> The strict prefix is composed in the test from public APIs</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Context</dt><dd>Every check reads the strict prefix. Core has no Log prefix helper, but <code>Lattice.state_at/3</code> builds one from <code>Dag.reachable</code> and <code>Log.from_ops</code>.</dd>
+<dt>Options</dt><dd>Add a Core primitive; compose it in the test.</dd>
+<dt>Decision</dt><dd>A private helper in the test file mirrors <code>state_at/3</code>. PR 4 composes the same thing.</dd>
+<dt>Reason</dt><dd>Public APIs are enough, so this is not a STOP. Analysis evidence is global to the log, which T2 shows directly. It does not claim that the helper is a resolver API.</dd>
+</dl></section>
+<section id="d334"><h2><span>D-334</span> The inherited-provenance check is redundant if T4's negative assertion passes (superseded in part by D-337)</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Context</dt><dd>Plan 316 §3 step 4 leaves to PR 0 whether checking that <code>replace_catalog_v1</code> was inherited from the last root-attenuated record adds anything. <code>Continuation.scope?/4</code> requires <code>d.ops</code> to be a subset of the predecessor's. Leased transfers go through <code>Delegation.attenuates?/2</code> (<code>:not_attenuated</code>).</dd>
+<dt>Options</dt><dd>Keep a resolver-side provenance walk; drop it as implied by Core.</dd>
+<dt>Decision</dt><dd>Record it as redundant once T4 sees <code>{:error, :continuation_scope_exceeded}</code> for a widened continuation. If it does not, keep the check and file a row.</dd>
+<dt>Reason</dt><dd>Both acquisition paths enforce subset in Core, so a ceiling holding <code>replace_catalog_v1</code> would be inherited by induction. It does not claim anything about legacy or non-bounded profiles. The Sol review then showed the induction does not hold across a chosen older parent (D-337).</dd>
+</dl></section>
+<section id="d335"><h2><span>D-335</span> Rule 3 review applies to a test-only diff</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Context</dt><dd>The diff is one test file plus plan docs. Its subject is authority observation.</dd>
+<dt>Options</dt><dd>Skip the second review because nothing outside tests changes; run it by subject.</dd>
+<dt>Decision</dt><dd>Run the independent Sol 6.1 High review (never Astra) and the bot rounds under D-38.</dd>
+<dt>Reason</dt><dd>Plan 316 §7 and rule 3 are by subject, and PR 4's resolver design depends on this verdict. It does not claim that the review covers PRs 1–4.</dd>
+</dl></section>
+<section id="d336"><h2><span>D-336</span> Lease lapse boundary is epoch &gt; <code>expires_epoch</code></h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Decision</dt><dd>T5(b) asserts that a beacon at epoch 6 still honors <code>create_thread</code> under the lease ending at 6, and that a beacon at 7 gives <code>{true, :lease_expired}</code>. It does not use "epoch ≥ 6".</dd>
+<dt>Reason</dt><dd>Core's <code>expired_as_of?</code> requires epoch &gt; expires. This matches plan 316 C13 (E7 refuses a lease ending at 6). The task text was imprecise, not the plan.</dd>
+</dl></section>
+<section id="d337"><h2><span>D-337</span> Step-4 provenance verdict corrected after the Sol review (residual, not a STOP)</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a> (<code>2c697b1f3</code>)</dd>
+<dt>Options</dt><dd>STOP and file an interface-review row, or GO with a resolver residual.</dd>
+<dt>Decision</dt><dd>GO with the residual. Each hop is subset-checked: a continuation against its predecessor acquisition, a transfer against its chosen parent. That does not keep the ceiling from widening again along the chain. T4 now pins that Core accepts a transfer that restores <code>replace_catalog_v1</code> via an older broad continuation cap after a narrower continuation dropped it. PR 4's resolver must validate the ceiling chain over <code>acquisitions/3</code> itself. This is recorded in plan 316's PR 0 outcome. No separate index row was filed in this slice.</dd>
+<dt>Reason</dt><dd>The Sol 6.1 High review (P2) reproduced it. The resolver can read the acquisition sequence and the delegation structs from the prefix with existing public APIs, so no new Core API is needed and GO stands.</dd>
+</dl></section>
+<section id="d338"><h2><span>D-338</span> T3 observation recorded</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Decision</dt><dd><code>holder_epoch(:admin)</code> on the root candidate's prefix names the root genesis op. <code>acquisitions(:admin)</code> is exactly <code>[genesis acquisition]</code>, with <code>expires_epoch</code> nil.</dd>
+<dt>Reason</dt><dd>The plan asked which of "nil" or "names the genesis" Core returns.</dd>
+</dl></section>
+<section id="d339"><h2><span>D-339</span> T1 <code>live</code> flag</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Decision</dt><dd>The leased transfer delegation has <code>live == false</code>, the <code>Delegation.new</code> default, because <code>Sim.transfer</code> passes no <code>:live</code>. Its <code>parent_id</code> is the root genesis delegation.</dd>
+<dt>Reason</dt><dd>The task asked for this to be read and recorded, not assumed.</dd>
+</dl></section>
+<section id="d340"><h2><span>D-340</span> Environment setup in the fresh worktree</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Decision</dt><dd>Ran <code>mix deps.get</code>, then <code>npm ci</code> (Node 22 via <code>npm-cli.js</code> directly) in <code>clients/lattice-client</code> and <code>clients/treehouse-tauri-shell</code> so the TS reciprocal tests could run. <code>node_modules</code> is gitignored, so there is no diff impact. Credo has to be run from the umbrella root.</dd>
+<dt>Reason</dt><dd>The neighbour-regression failures came from the missing <code>tsx</code>/<code>node_modules</code> and were not regressions.</dd>
+</dl></section>
+<section id="d341"><h2><span>D-341</span> Transfer-hop refusal reason</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a> (<code>521a19397</code>)</dd>
+<dt>Context</dt><dd>The reviewer expected a <code>:not_attenuated</code> quarantine reason.</dd>
+<dt>Options</dt><dd>Pin <code>:invalid_transfer</code> with a control (chosen); soften the plan text only; add a Core API (out of scope for a test-only PR).</dd>
+<dt>Decision</dt><dd>Pin <code>:invalid_transfer</code> on the op plus <code>Delegation.attenuates?/2 == false</code>, with an honored control that differs only in <code>ops</code>.</dd>
+<dt>Reason</dt><dd>Core puts <code>:not_attenuated</code> in its delegation-validity map, and <code>decide_transfer</code> reports it on the op as <code>:invalid_transfer</code>. No public API exposes the inner reason, so the control isolates ops width as the cause.</dd>
+</dl></section>
+<section id="d342"><h2><span>D-342</span> PR #213 review: Codex Sol rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/213">#213</a></dd>
+<dt>Finding</dt><dd>Sol 6.1 High first pass: P2, per-hop subset checks do not give monotone ceiling provenance (D-337). Round 1 (4): P2 probe test :162/:252, bind the delegation lookup to the honored acquisition; P3 :29, a false comment about the Space's private bounded genesis ceiling; P3 plan :269, the plan claims a transfer-hop <code>:not_attenuated</code> is probed; P3 :241, T3's redundant first refute. Final round: no findings.</dd>
+<dt>Decision</dt><dd>All fixed. The provenance P2 is fixed in <code>2c697b1f3</code>: T4 pins the restoring transfer, and plan 316 records the PR 4 residual. The round-1 fixes are in <code>521a19397</code>, in order:
+<ul>
+<li>Id scans were replaced with <code>acquired_delegation/2</code>, which fetches the op by the acquisition's <code>op_id</code> and checks the <code>delegation_id</code>. New T1b retains an observer-authored copied transfer (<code>:invalid_transfer</code>) and a forged-expiry one (<code>:bad_delegation_sig</code>). It shows the old id scan returns 3 structs, including the forgery, while the acquisition-bound read returns the honored one (expiry 6).</li>
+<li>The copied <code>@bounded_genesis_ops</code> was removed. The ceiling is read from the delegation authored by <code>Space.prepare_bounded_creation/4</code>, with an assertion that it contains <code>:replace_catalog_v1</code>.</li>
+<li>T4 gains the wider-ops transfer, refused as <code>:invalid_transfer</code> and not an acquisition, with an honored control (D-341). The plan text was corrected.</li>
+<li>The redundant refute was dropped, and the remaining one uses <code>acquired_delegation</code>.</li>
+</ul>
+The bot rounds under D-38 run on this PR.</dd>
+<dt>Reason</dt><dd>Rule 3 by subject (D-335). Test only: PR 0 GO. No claim that PRs 1–4 are unblocked, and no R13, native parity, custody, W4 or Phase G claim. C10–C15 stay OPEN.</dd>
+</dl></section>
 </main>
 </body>
 </html>
