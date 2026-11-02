@@ -2,11 +2,9 @@
 
 Status: DESIGNED (design only, 2026-11-01). PRs 0–2, 6 and PR 3's generation keying can start on
 fixtures now. PR 4 and PR 3's closed-binding refusal wait on integrator sign-off for D-275/D-278
-(OD-16); PR 4 also waits on plans 267 and 269. PR 5 belongs to the native
-track. PR 7 is an operator run under rule 8. C10–C15 stay OPEN.
+(OD-16); PR 4 also on plans 267/269 and row 320. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 
-- **Row**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`)
-- **Priority / effort**: P1 / L
+- **Row / priority / effort**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`); P1 / L
 - **Depends on**: plan 224 PRs 1–3 (DONE), plan 263 (DONE, custodian ledger), R03 and R04 (DONE,
   beacons and bounded continuation). PR 4 also depends on plans 267 and 269.
 - **Planned at**: commit `cb7ffa3bc`, 2026-11-01
@@ -199,7 +197,9 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
    later-arriving catalogs: every parent is a known binding node (refused nodes included); each
    `prior_catalogs` entry names a catalog under its binding (unheld is `trust_pending`), and `nil`
    is its parent's sole entry; generation is `max + 1`; inventory and entries match the first
-   catalog. Failure is `invalid_catalog_transition`; an accepted candidate is never re-judged here.
+   catalog, whose entries extend every cited non-nil prior catalog (`inventory_extends?/2`: no
+   replica dropped, `root`/`genesis`/`creation`/`reference`/`kind`/`schema` unchanged; only
+   route and service fields change; lifecycle §2 no slot recycling). Failure is `invalid_catalog_transition`; an accepted candidate is never re-judged here.
 6. **Conflict deps (D-278), intrinsic.** The candidate's op deps' causal closure includes every
    cited replacement op. Rotation heads are not Space ops and are covered by `parents` alone.
    Else `invalid_catalog_transition`. A cited node's refusal on the union is a D-276 property of
@@ -297,8 +297,8 @@ history. Tests: accepts revision 0 under the new binding; refuses signing under 
 with a named reason; existing replay and crash refusals kept.
 
 **PR 4 — resolver integration** (`catalog_trust.ex` / `.ts`, D-270, D-275–D-278). **GATED on
-plans 267 and 269 merging** (seven `codex/treehouse-*` branches rewrite both files) **and on
-OD-16 sign-off.** Scope includes the multi-parent graph functions, current-binding route
+plans 267 and 269 merging** (seven `codex/treehouse-*` branches rewrite both files), **OD-16
+sign-off and row 320** (the resolution shape that clears a closed-out accepted catalog). Scope includes the multi-parent graph functions, current-binding route
 origin/URL, refused nodes, and restoring pre-upgrade single-`parent` trust stores. Tests in
 `catalog_replacement_trust_test.exs` and the TS twin. Every multi-delivery test persists the
 accepted state between resolver calls and runs both delivery orders.
@@ -310,8 +310,9 @@ accepted state between resolver calls and runs both delivery orders.
 - **C11 negatives:** missing pre-loss permission (no `replace_catalog_v1` in the ceiling); wrong
   profile (`wrong_catalog_scope`); no beacon; root genesis cap; unleased cap; wrong acquisition
   cap; stale holder; bad parent; a parent-linked delegation not attenuated from the root (Core
-  refuses it, so the resolver sees no honored record); revoked or lapsed
-  authority; wrong nonce, deps, epoch, basis or cutoff; each bad possession signature; an R04
+  refuses it, so the resolver sees no honored record); revoked or lapsed authority; wrong nonce,
+  deps, epoch, basis or cutoff; each bad possession signature; a first catalog that drops a prior
+  Thread or changes its root, genesis, creation or reference; an R04
   certificate alone grants no catalog trust; unsupported raw cutoff evidence refuses and is kept
   for export.
 - **C12:** sibling replacements A and B from P, sequential with persisted acceptance, both orders,
@@ -335,11 +336,11 @@ accepted state between resolver calls and runs both delivery orders.
   in its deps and is accepted; beacon E8, a descendant of E7 concurrent with R1/R2, then arrives
   and R2 stays accepted (never `invalid_catalog_transition`), with persisted state, in both
   delivery orders (E8 before R2 and after). R2 citing R1 without E7 in its deps is also accepted.
-- **Monotonicity property (D-279; plan-local, not a contract case):** StreamData over interleavings of valid revokes,
-  transfers, beacons, rotations and replacements, with persisted state between calls: once a
-  candidate is accepted, no later delivery yields `invalid_catalog_transition`,
-  `wrong_catalog_scope` or an intrinsic `catalog_authority_refused` for it; only
-  `authority_changed`, `catalog_fork` or `recovery_incomplete` may follow.
+- **Monotonicity property (D-279, plan-local):** StreamData over interleavings of valid revokes,
+  transfers, beacons, rotations and replacements, state persisted between calls: an accepted
+  candidate never later yields `invalid_catalog_transition`, `wrong_catalog_scope` or an intrinsic
+  `catalog_authority_refused`; only `authority_changed`, `catalog_fork`, `recovery_incomplete` or
+  (a third head, C14) `control_history_limit` may follow.
 - **C14:** a third head is `control_history_limit`; a rotation head plus a replacement head count
   as two; three non-admin proposals with `parents: [bootstrap]` are raw evidence, add no head and
   leave the bootstrap catalog resolving; a missing page is `trust_pending` with no partial
@@ -392,9 +393,8 @@ production deployment, Phase G or receipt-free W4. C10–C15 stay OPEN until the
 - **Design done:** roadmap R11c links this file and stays PLANNED; index row and decisions exist;
   design-slice gates pass. **Implementation done:** every PR's tests pass; vectors agree in BEAM,
   TS and, after PR 5, native.
-- **STOP:** PR 0 needs a Core primitive or a new context field; any historical Space vector or
-  wire vocabulary byte changes; PR 4 starts before plans 267/269 merge or OD-16 is answered; C10
-  would need an old private key, a new root, or injected trust.
+- **STOP:** PR 0 needs a Core primitive or context field; a historical Space vector or wire byte
+  changes; PR 4 starts before 267/269, OD-16 and row 320; C10 needs an old key, new root or injected trust.
 
 **Decisions:** D-265–D-280 (design) and D-281 onward (process) live in
 `plans/decisions-2026-10-17-backlog-run.html`; the index row is in `plans/README.md`.
