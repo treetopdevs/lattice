@@ -16,6 +16,8 @@ import * as treehouse from "../src/treehouse";
 import { continuationProfileBindingMatches } from "../src/authority";
 import * as authority from "../src/authority";
 import * as publicApi from "../src/index";
+import { readFileSync } from "node:fs";
+import { judge, replacementHistory, stageACases } from "./support/export_treehouse_catalog_replacement";
 
 // Resolve every preexisting type through the package entry at compile time.
 type ExistingAuthorityTypes = [publicApi.ContinuationProfileObservation, publicApi.HonoredAcquire,
@@ -145,7 +147,8 @@ test("bootstrap retains malformed-arity, capability and actual admin refusal pre
   assert.equal(result.quarantineReasons.get(staleRoot.id), "not_holder");
   assert.equal(result.quarantineReasons.get(newAdmin.id), "application_invalid_catalog");
   const replacement = await bootstrap(f, raw, { body: tuple(atom("replace_catalog_v1"), ["list", [raw]]) });
-  assert.equal(observeTreehouse("Treehouse.Space", await authenticated([...f.before, replacement])).quarantineReasons.get(replacement.id), "unknown_command");
+  // replace_catalog_v1 is a registered 3-arity command now (plan 316 PR 1, D-358).
+  assert.equal(observeTreehouse("Treehouse.Space", await authenticated([...f.before, replacement])).quarantineReasons.get(replacement.id), "bad_command_arity");
 });
 
 test("root-only preparation preserves original signed bytes and six-command capability ceiling", async () => {
@@ -257,4 +260,64 @@ test("verified bootstrap query refuses forged/partial history and retains all ho
   const pending = query({ replica: f.replica, frames: mutable });
   mutable[0]!.sig = b64(new Uint8Array(64));
   assert.deepEqual(await pending, expected, "query owns a snapshot before asynchronous authentication");
+});
+
+// Plan 316 PR 1: Stage A of replace_catalog_v1, twin of catalog_replacement_command_test.exs.
+test("admin-authored valid replacement is Core-honored and writes only the admin_actions marker", async () => {
+  const h = await replacementHistory(await fixture());
+  const before = observeTreehouse("Treehouse.Space", await authenticated(h.before));
+  const after = observeTreehouse("Treehouse.Space", await authenticated([...h.before, h.replacement]));
+  assert.equal(after.quarantineReasons.size, 0);
+  assert.equal(before.state.admin_actions, "create_space");
+  assert.deepEqual(after.state, { ...before.state, admin_actions: "replace_catalog_v1" });
+  assert.deepEqual(treehouse.treehouseCommandFields("Treehouse.Space", "replace_catalog_v1"), ["admin_actions"]);
+  assert.deepEqual(treehouse.treehouseCommandRoles("Treehouse.Space", "replace_catalog_v1"), ["admin"]);
+});
+
+test("replacement Stage A literal bindings refuse as application_invalid_catalog", async () => {
+  const h = await replacementHistory(await fixture());
+  const cases = await stageACases(h);
+  assert.equal(cases.length, 16);
+  for (const c of cases) assert.equal((await judge([...h.before, ...c.prefix, c.frame])).get(c.frame.id), "application_invalid_catalog", c.name);
+  const reversed = await h.op(h.sign(h.claim), { deps: [h.beacon.id, h.beacon.id] });
+  assert.equal((await judge([...h.before, reversed])).get(reversed.id), undefined, "op deps compare as a sorted set");
+});
+
+test("replacement arity and capability refusals precede Stage A", async () => {
+  const f = await fixture();
+  const h = await replacementHistory(f);
+  const [claim, cp] = h.sign(h.claim);
+  for (const args of [[claim], [claim, cp]]) {
+    const bad = await h.op(args);
+    assert.equal((await judge([...h.before, bad])).get(bad.id), "bad_command_arity");
+  }
+  const narrow = await authorTreehouseRoleTransfer({ replica: f.replica, deps: [h.beacon.id], signer: f.root,
+    parent: f.delegation, recipient: f.nominee.publicKey, action: "transfer_admin" });
+  const stale = await h.op(h.sign({ ...h.claim, deps: [narrow.frame.id] }), { deps: [narrow.frame.id] });
+  assert.equal((await judge([...h.before, narrow.frame, stale])).get(stale.id), "not_holder");
+  const wrongAudience = await h.op(h.sign({ ...h.claim, author: b64(f.nominee.publicKey) }), { signer: f.nominee });
+  assert.equal((await judge([...h.before, wrongAudience])).get(wrongAudience.id), "capability_wrong_audience");
+});
+
+test("BEAM-authored replacement Stage A frames get BEAM's reasons in TS", async () => {
+  const vector = JSON.parse(readFileSync(new URL("./vectors/catalog/replacement_v1.json", import.meta.url), "utf8"));
+  const before = vector.frames.filter((frame: CarrierOpFrame) => frame.id !== vector.binding_id);
+  assert.equal((await judge(vector.frames)).size, 0);
+  assert.equal(vector.stage_a.length, 16);
+  for (const c of vector.stage_a) assert.equal((await judge([...before, ...c.prefix, c.frame])).get(c.frame.id), c.reason, c.name);
+});
+
+test("the committed package entry gives BEAM's Stage A reasons too", async () => {
+  // Shells resolve the package to dist/src/index.js, so a src fix without its rebuilt dist leaves
+  // them on the old decoder (review r2: high uint64 arguments refused as malformed_term there).
+  // The specifier is a runtime string so tsc, which also builds this file into dist, never needs
+  // dist to exist; the types come from src, which dist must match.
+  const entry = "../dist/src/index.js";
+  const packageEntry: typeof publicApi = await import(entry);
+  const vector = JSON.parse(readFileSync(new URL("./vectors/catalog/replacement_v1.json", import.meta.url), "utf8"));
+  const before = vector.frames.filter((frame: CarrierOpFrame) => frame.id !== vector.binding_id);
+  const judgeByPackage = (frames: CarrierOpFrame[]) =>
+    packageEntry.observeTreehouse("Treehouse.Space", packageEntry.carrierOpsToSemanticOps(frames, {}, packageEntry.treehouseCommandDecoders("Treehouse.Space"))).quarantineReasons;
+  assert.equal(judgeByPackage(vector.frames).size, 0);
+  for (const c of vector.stage_a) assert.equal(judgeByPackage([...before, ...c.prefix, c.frame]).get(c.frame.id), c.reason, c.name);
 });

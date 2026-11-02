@@ -127,3 +127,65 @@ fn native_command_preflight_matches_actual_capability_and_role_owners() {
         "passing gates still require application policy"
     );
 }
+
+/// Plan 316 PR 1 (D-375): BEAM and TS admit `replace_catalog_v1` to Stage A, but the
+/// native table has no entry until plan 316 PR 5 (row 319). Native must fail closed
+/// as `unknown_command` before Space policy or projection, and must not panic. A
+/// future command-table edit that adds the command without a `space_policy` Stage A
+/// check and a `space_projection` arm fails this test.
+#[test]
+fn native_refuses_replace_catalog_v1_as_unknown_command_without_panicking() {
+    use treehouse_tauri_shell::catalog_eval::{space_policy::SpacePolicy, space_projection};
+    let fixture: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../lattice-client/test/vectors/catalog/replacement_v1.json"
+    )))
+    .unwrap();
+    let replica = fixture["replica"].as_str().unwrap();
+    let base = fixture["frames"].as_array().unwrap().clone();
+    let is_replace = |f: &Value| f["body"][1][0][1].as_str() == Some("replace_catalog_v1");
+    let mut histories = vec![("valid-claim".to_string(), base.clone())];
+    for case in fixture["stage_a"].as_array().unwrap() {
+        let mut frames: Vec<Value> = base.iter().filter(|f| !is_replace(f)).cloned().collect();
+        frames.extend(case["prefix"].as_array().unwrap().iter().cloned());
+        frames.push(case["frame"].clone());
+        histories.push((case["name"].as_str().unwrap().to_string(), frames));
+    }
+    assert_eq!(histories.len(), 17);
+    for (name, frames) in histories {
+        let dag = checked(replica, &frames);
+        let ids: Vec<String> = frames.iter().filter(|f| is_replace(f)).map(id_of).collect();
+        assert!(
+            !ids.is_empty(),
+            "{name}: carries a replace_catalog_v1 frame"
+        );
+        let preflight = CommandPreflight::analyze(&dag).unwrap();
+        let policy = SpacePolicy::analyze(&dag).unwrap();
+        let projection = std::panic::catch_unwind(|| space_projection::project(&dag))
+            .unwrap_or_else(|_| panic!("{name}: native projection panicked"))
+            .unwrap();
+        for id in ids {
+            assert!(
+                matches!(
+                    preflight.decisions().get(&id),
+                    Some(PrePolicyDecision::Refused("unknown_command"))
+                ),
+                "{name}: native preflight refuses replace_catalog_v1 as unknown_command"
+            );
+            assert!(preflight.command(&id).is_none(), "{name}");
+            assert_eq!(
+                policy.command_reasons().get(&id),
+                Some(&Some("unknown_command")),
+                "{name}"
+            );
+            assert_eq!(
+                projection.command_reasons.get(&id),
+                Some(&Some("unknown_command")),
+                "{name}"
+            );
+        }
+    }
+}
+fn id_of(frame: &Value) -> String {
+    frame["id"].as_str().unwrap().to_string()
+}
