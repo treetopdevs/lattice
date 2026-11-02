@@ -1639,6 +1639,13 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>The test &#x27;Audit killed with a LiveOps write in flight defers the record&#x27; suspends Audit with :sys.suspend/1, issues record_denial/4 from a Task, waits until LiveOps&#x27; own {:record, :liveops_denied, _} call is in Audit&#x27;s mailbox, kills Audit, then asserts the Task returns :ok, the LiveOps pid is unchanged, and after the supervisor restarts Audit flush_audit/0 returns flushed: 1, pending: 0 with one audit_deferred record. hold_audit_retry!/0 keeps the timer out of the count.</dd>
 <dt>Reason</dt><dd>It is the only test that reaches try_record/2&#x27;s exit handler. With the handler removed, this test fails (LiveOps crashes on the :killed exit) and the other 16 still pass. Test coverage only; no production change, and no workflow, W4 or Phase G claim.</dd>
 </dl></section>
+<section id="d260"><h2><span>D-260</span> Oldest-first audit queue (PR #210 Codex P2, live_ops.ex:756)</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Finding</dt><dd>During an Audit outage every emit calls flush_audit/2, which selected the batch with take_while and reverse over the newest-first state.events, so each emit walked the whole backlog and N outage emits cost O(N^2).</dd>
+<dt>Options</dt><dd>Skip the flush while the retry timer is armed (breaks the next-emit-flushes-first ordering test); oldest-first :queue of unacknowledged events (chosen)</dd>
+<dt>Decision</dt><dd>emit/3 also appends the event to state.audit_queue; write_audit_batch/3 peeks the front, drops it on {:ok, _}, and stops after the allowance or the first {:error, :unavailable}. reset/0&#x27;s fresh_state/0 empties the queue. Commit 990339d51. The test &#x27;a deferred emit does not scale with the backlog&#x27; compares one deferred emit&#x27;s LiveOps reductions at a 10- and a 5000-event backlog: 152 to 21183 with the old scan reinstated, flat with the queue.</dd>
+<dt>Reason</dt><dd>Work per flush is now bounded by the batch plus one failed write, which is what the moduledoc already claimed. Reductions are deterministic, so the test has no wall-clock threshold. Memory is shared terms, not copies. reset/0&#x27;s full drain (row 314) is unchanged.</dd>
+</dl></section>
 </main>
 </body>
 </html>
