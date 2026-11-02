@@ -9,6 +9,8 @@ defmodule Treehouse.TransportCatalog do
   @entry_fields ~w(product replica kind schema root genesis creation reference route service_id service_key)a
   @rotation_fields ~w(version product space bootstrap parent prior_catalog generation new_catalog_key nonce inventory_digest cutoffs)a
   @bootstrap_fields ~w(version product space space_root profile_genesis profile_id replacement_rule catalog_key service_id service_key origin nonce)a
+  @replacement_fields ~w(version product space bootstrap profile_genesis profile_id parents prior_catalogs generation nonce new_catalog_key new_service_id new_service_key new_origin inventory_digest cutoffs author cap holder_epoch deps epoch epoch_basis)a
+  @replacement_purposes [:catalog, :service]
   @max_artifact_bytes 131_072
 
   @spec normalize_bootstrap(term()) :: {:ok, map()} | {:error, :malformed_catalog}
@@ -78,6 +80,84 @@ defmodule Treehouse.TransportCatalog do
       digest(Canonical.term(["lattice-treehouse-catalog-rotation-v1", envelope]))
     else
       raise ArgumentError, "malformed catalog rotation"
+    end
+  end
+
+  @doc """
+  Closed `replace_catalog_v1` claim shape (lifecycle §3). Structural only: the generation
+  relation, profile, lease, epoch and declared graph are the resolver's (plan 316 stage B).
+  """
+  @spec normalize_replacement_claim(term()) :: {:ok, map()} | {:error, :malformed_catalog}
+  def normalize_replacement_claim(value) do
+    if fields?(value, @replacement_fields) and replacement_scope?(value) and
+         replacement_graph?(value) and replacement_binding?(value) and
+         replacement_op_binding?(value),
+       do: {:ok, value},
+       else: {:error, :malformed_catalog}
+  end
+
+  defp replacement_scope?(value),
+    do:
+      value.version == 1 and value.product == :treehouse and text?(value.space) and
+        id?(value.bootstrap) and id?(value.profile_genesis) and id?(value.profile_id)
+
+  defp replacement_graph?(value),
+    do:
+      ids?(value.parents, 16) and prior_catalogs?(value.prior_catalogs, value.parents) and
+        integer?(value.generation) and value.generation > 0 and id?(value.nonce)
+
+  defp replacement_binding?(value),
+    do:
+      bytes?(value.new_catalog_key, 32) and bytes?(value.new_service_key, 32) and
+        value.new_catalog_key != value.new_service_key and id?(value.new_service_id) and
+        origin?(value.new_origin) and id?(value.inventory_digest) and cutoffs?(value.cutoffs)
+
+  defp replacement_op_binding?(value),
+    do:
+      bytes?(value.author, 32) and id?(value.cap) and id?(value.holder_epoch) and
+        ids?(value.deps, 64) and integer?(value.epoch) and ids?(value.epoch_basis, 64)
+
+  @doc "Pre-hash and debug bytes for vectors only; not a signing domain."
+  @spec replacement_claim_bytes(term()) :: binary()
+  def replacement_claim_bytes(value),
+    do:
+      Canonical.term([
+        "lattice-treehouse-catalog-replacement-claim-v1",
+        require_value(normalize_replacement_claim(value))
+      ])
+
+  @spec replacement_possession_bytes(:catalog | :service, term()) :: binary()
+  def replacement_possession_bytes(purpose, value) when purpose in @replacement_purposes,
+    do:
+      Canonical.term([
+        "lattice-treehouse-transport-possession-v1",
+        purpose,
+        require_value(normalize_replacement_claim(value))
+      ])
+
+  def replacement_possession_bytes(_purpose, _value),
+    do: raise(ArgumentError, "malformed possession purpose")
+
+  @doc "Both new-key possession signatures; proves key control, not authority or custody."
+  @spec verify_replacement_possession(term(), term(), term()) ::
+          :ok | {:error, :malformed_catalog | :invalid_possession}
+  def verify_replacement_possession(claim, catalog_signature, service_signature) do
+    with {:ok, claim} <- normalize_replacement_claim(claim),
+         true <- bytes?(catalog_signature, 64) and bytes?(service_signature, 64) do
+      if Identity.verify(
+           claim.new_catalog_key,
+           replacement_possession_bytes(:catalog, claim),
+           catalog_signature
+         ) and
+           Identity.verify(
+             claim.new_service_key,
+             replacement_possession_bytes(:service, claim),
+             service_signature
+           ),
+         do: :ok,
+         else: {:error, :invalid_possession}
+    else
+      _ -> {:error, :malformed_catalog}
     end
   end
 
@@ -231,6 +311,28 @@ defmodule Treehouse.TransportCatalog do
       fields?(value, [:replica, :frontier, :log_digest]) and text?(value.replica) and
         id?(value.log_digest) and is_list(value.frontier) and Enum.all?(value.frontier, &id?/1) and
         ordered_unique?(value.frontier)
+
+  defp ids?(values, max) when is_list(values),
+    do: length(values) in 1..max and Enum.all?(values, &id?/1) and ordered_unique?(values)
+
+  defp ids?(_, _), do: false
+
+  # Sorted by {binding, catalog}; Erlang term order puts `nil` before any binary.
+  defp prior_catalogs?(values, parents) when is_list(values) and length(values) in 1..32 do
+    Enum.all?(values, &prior_catalog?/1) and
+      ordered_unique?(Enum.map(values, &{&1.binding, &1.catalog})) and
+      Enum.uniq(Enum.map(values, & &1.binding)) == parents and
+      values
+      |> Enum.group_by(& &1.binding, & &1.catalog)
+      |> Enum.all?(fn {_, catalogs} -> nil not in catalogs or catalogs == [nil] end)
+  end
+
+  defp prior_catalogs?(_, _), do: false
+
+  defp prior_catalog?(value),
+    do:
+      fields?(value, [:binding, :catalog]) and id?(value.binding) and
+        (is_nil(value.catalog) or id?(value.catalog))
 
   defp require_value({:ok, value}), do: value
   defp require_value(_), do: raise(ArgumentError, "malformed catalog value")

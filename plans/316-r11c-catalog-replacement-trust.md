@@ -3,6 +3,9 @@
 Status: DESIGNED (design only, 2026-11-01). PRs 0–2, PR 3's generation keying and PR 6's
 exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
+PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
+implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
+atom and claims no route switch, catalog trust or C10–C15.
 
 - **Row, priority, effort**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`); P1 / L
 - **Depends on**: plan 224 PRs 1–3 (DONE), plan 263 (DONE, custodian ledger), R03 and R04 (DONE,

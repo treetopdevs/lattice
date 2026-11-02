@@ -9,7 +9,7 @@ import { canonicalOrder, depth, index } from "./dag";
 import { frontier } from "./sync";
 import { causalListEntries } from "./crdt/reducers";
 import { continuationProfileBindingMatches } from "./authority";
-import { catalogBootstrapFromDecodedTerm, catalogBootstrapToCarrierTerm, normalizeCatalogBootstrap } from "./treehouse_catalog_codec";
+import { catalogBootstrapFromDecodedTerm, catalogBootstrapToCarrierTerm, catalogReplacementClaimFromDecodedTerm, normalizeCatalogBootstrap, normalizeCatalogReplacementClaim, verifyCatalogReplacementPossession } from "./treehouse_catalog_codec";
 import { memberContinuityCertificateFromDecodedArguments, memberContinuityClaimFromDecodedTerm } from "./treehouse_member_continuity_codec";
 import { memberContinuityCommandStatus } from "./treehouse_member_continuity";
 export const treehouseSpaceSchema = {
@@ -261,7 +261,8 @@ const TREEHOUSE_COMMAND_FIELDS = {
         moderator_tombstone: ["posts", "moderation"], archive_thread: ["archived"],
     },
     "Treehouse.Space": {
-        catalog_bootstrap_v1: ["admin_actions"], attest_member_key_v1: ["admin_actions"], create_space: ["name", "admin_actions"],
+        catalog_bootstrap_v1: ["admin_actions"], attest_member_key_v1: ["admin_actions"], replace_catalog_v1: ["admin_actions"],
+        create_space: ["name", "admin_actions"],
         create_thread: ["threads", "admin_actions"], issue_invitation: ["invitations", "admin_actions"],
         revoke_invitation: ["revoked_invitations", "admin_actions"], admit_member: ["members", "membership_events", "admin_actions"],
         remove_member: ["members", "membership_events", "admin_actions"],
@@ -304,6 +305,13 @@ export function treehouseCommandDecoders(product) {
                     return { ...marker, command: "attest_member_key_v1", effects: [marker],
                         commandArgs: certificate === null ? [memberContinuityClaimFromDecodedTerm(raw[0]), null, null] :
                             [certificate.claim, certificate.possession, certificate.vouches] };
+                } }],
+        // Never throws: a malformed claim or possession is `application_invalid_catalog`, not `malformed_command`.
+        ["replace_catalog_v1", { arity: 3, decode: (raw) => {
+                    const marker = admin("replace_catalog_v1");
+                    const possession = (term) => term !== null && typeof term === "object" && term.type === "bin" && term.bytes instanceof Uint8Array ? bytesBase64(term.bytes) : null;
+                    return { ...marker, command: "replace_catalog_v1", effects: [marker],
+                        commandArgs: [catalogReplacementClaimFromDecodedTerm(raw[0]), possession(raw[1]), possession(raw[2])] };
                 } }],
         ["create_space", decoder(1, "create_space", ([name]) => [effect("name", "write", text(name)), admin("create_space")])],
         ["create_thread", decoder(2, "create_thread", ([replica, title]) => [effect("threads", "add", { replica: reference(replica), title: text(title) }), admin("create_thread")])],
@@ -393,6 +401,8 @@ function spaceStatus(op, visible, context) {
             continuationProfileBindingMatches(record.space, [...context.visibleOps.values()], record.spaceRoot, record.profileGenesis, record.profileId)
             ? allowed : refused("application_invalid_catalog");
     }
+    if (op.command === "replace_catalog_v1")
+        return replacementStatus(op, visible, context);
     const threadScope = [...new Set([...context.visibleOps.values()].filter((prior) => prior.kind === "command" && prior.command === "create_thread" && honored(context, prior)).map((prior) => prior.commandArgs[0]))].sort(compareUtf8);
     const sameScope = (scope) => JSON.stringify(scope) === JSON.stringify(threadScope);
     if (op.command === "issue_invitation") {
@@ -421,4 +431,23 @@ function spaceStatus(op, visible, context) {
     catch {
         return refused("application_invalid_invitation");
     }
+}
+// Stage A only (plan 316 §3), mirroring BEAM `Treehouse.Space.command_op_status/3`. Profile,
+// lease, epoch and the binding graph are the resolver's stage B; this never calls the resolver.
+function replacementStatus(op, visible, context) {
+    const [rawClaim, catalogPossession, servicePossession] = op.commandArgs ?? [];
+    const claim = normalizeCatalogReplacementClaim(rawClaim);
+    if (claim === null || claim.space !== op.replica)
+        return refused("application_invalid_catalog");
+    const bootstrap = context.visibleOps.get(claim.bootstrap);
+    if (!visible.has(claim.bootstrap) || context.verdicts.get(claim.bootstrap) !== "honored" || bootstrap === undefined ||
+        bootstrap.replica !== op.replica || bootstrap.kind !== "command" || bootstrap.command !== "catalog_bootstrap_v1")
+        return refused("application_invalid_catalog");
+    const deps = [...new Set(op.deps)].sort(compareUtf8);
+    if (claim.author !== (op.authorPubkey ?? op.author) || claim.cap !== op.cap ||
+        claim.deps.length !== deps.length || claim.deps.some((dep, index) => dep !== deps[index]))
+        return refused("application_invalid_catalog");
+    if (!visible.has(claim.holderEpoch))
+        return refused("application_invalid_catalog");
+    return verifyCatalogReplacementPossession(claim, catalogPossession, servicePossession) ? allowed : refused("application_invalid_catalog");
 }

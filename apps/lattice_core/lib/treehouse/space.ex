@@ -23,8 +23,8 @@ defmodule Treehouse.Space do
   ]
 
   # The root's capability set is final: the continuation pin adds no ops, so rotation and
-  # attestation ops are granted at birth. `replace_catalog_v1` is a closed wire atom with no
-  # Space command yet.
+  # attestation ops are granted at birth. `replace_catalog_v1` is the bounded-admin replacement
+  # proposal (plan 316); a Core-honored one is an authorized signed proposal, not a route switch.
   @bounded_genesis_ops @preview_commands ++
                          [:catalog_bootstrap_v1, :attest_member_key_v1, :replace_catalog_v1]
   @bounded_suffix "#authority:bounded-continuation-v1"
@@ -103,6 +103,10 @@ defmodule Treehouse.Space do
 
   command(:attest_member_key_v1, [:_claim, :_possession, :_vouches],
     do: [{:admin_actions, {:write, "attest_member_key_v1"}}]
+  )
+
+  command(:replace_catalog_v1, [:_claim, :_catalog_possession, :_service_possession],
+    do: [{:admin_actions, {:write, "replace_catalog_v1"}}]
   )
 
   @doc "Prepare deterministic root-only creation; pending signed ops are not yet persisted."
@@ -579,6 +583,33 @@ defmodule Treehouse.Space do
     end
   end
 
+  # Stage A only (plan 316 §3): closed shape, the honored causal bootstrap, the literal
+  # claim-to-op bindings and both possession signatures. Profile, lease, epoch and the binding
+  # graph are the resolver's stage B; this never calls the resolver.
+  def command_op_status(
+        %Op{body: {:replace_catalog_v1, [claim, catalog_possession, service_possession]}} = op,
+        visible,
+        context
+      ) do
+    with {:ok, claim} <- TransportCatalog.normalize_replacement_claim(claim),
+         true <- claim.space == op.replica,
+         true <- honored_bootstrap?(claim.bootstrap, op.replica, visible, context),
+         true <-
+           claim.author == op.author and claim.cap == op.cap and
+             claim.deps == Enum.sort(Enum.uniq(op.deps)),
+         true <- MapSet.member?(visible, claim.holder_epoch),
+         :ok <-
+           TransportCatalog.verify_replacement_possession(
+             claim,
+             catalog_possession,
+             service_possession
+           ) do
+      :ok
+    else
+      _ -> {:error, :application_invalid_catalog}
+    end
+  end
+
   def command_op_status(%Op{body: {:issue_invitation, [recipient, threads]}}, _visible, context) do
     if Invitation.recipient?(recipient) and threads == thread_scope(context),
       do: :ok,
@@ -629,6 +660,14 @@ defmodule Treehouse.Space do
       true ->
         :ok
     end
+  end
+
+  defp honored_bootstrap?(id, replica, visible, context) do
+    MapSet.member?(visible, id) and Map.get(context.verdicts, id) == :honored and
+      match?(
+        %Op{replica: ^replica, kind: :command, body: {:catalog_bootstrap_v1, [_]}},
+        context.visible_ops[id]
+      )
   end
 
   defp thread_scope(context) do

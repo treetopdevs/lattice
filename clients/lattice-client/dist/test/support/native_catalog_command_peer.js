@@ -63,7 +63,9 @@ export async function commandCases() {
         const root = fixtureSigner(`native-command-root-${kind}`), member = fixtureSigner(`native-command-member-${kind}`);
         const replica = await bindTownshipReplica(`replica:treehouse:${kind}:${fixtureId(`native-command-${kind}`)}#authority:bounded-continuation-v1`, root.publicKey);
         const product = kind === "space" ? "Treehouse.Space" : "Treehouse.Thread";
-        const names = [...treehouseCommandDecoders(product).keys()];
+        // replace_catalog_v1 has no native registry entry until plan 316 PR 5, so native fails it
+        // closed as unknown_command; it is excluded here rather than claimed as three-way parity.
+        const names = [...treehouseCommandDecoders(product).keys()].filter((name) => name !== "replace_catalog_v1");
         const roles = kind === "space" ? ["admin", "moderator"] : ["moderator"];
         const cap = await authorCarrierDelegation({ replica, signer: root, audiencePubkey: root.publicKey, ops: names, roles, live: true });
         const genesis = await authorCarrierOp({ replica, signer: root, deps: [], kind: "authority", cap: ["nil"], body: ["tuple", [atom("genesis"), ["delegation", cap], ["map", []]]] });
