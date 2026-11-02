@@ -1358,6 +1358,113 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>Fixed both. apps/lattice_server/test/demo_hub_audit_restart_test.exs adds two tests: register (auto_story? false) and unregister with Audit terminated leave the DemoHub pid unchanged; and with LiveOps suspended by :sys.suspend, a DemoHub snapshot started in a Task waits until its call is in the LiveOps mailbox, LiveOps is killed, and the reply has nil liveops with the DemoHub pid unchanged. Each test was checked by reverting only its fix (the presence counter line, then the liveops_snapshot/0 catch): the matching test failed and the other two passed. The apps/lattice_core/lib/lattice/audit.ex count/0 doc now covers only an Audit that is not running or exits during the call, and says a stalled Audit is not covered because the inner and outer calls share the five-second deadline. The doc change does not change behaviour.</dd>
 <dt>Reason</dt><dd>Both were in-scope P3 findings on the PR's own change, and fixing them was cheaper than a follow-up row. No workflow, W4 or Phase G claim.</dd>
 </dl></section>
+<section id="d208"><h2><span>D-208</span> Rule 3: run a second independent review</h2><dl>
+<dt>Context</dt><dd>The diff touches lib/lattice/graph/ and lib/township/read_model.ex. Neither is a rule-3 path by letter. D-190 (PR #207) recorded 'Rule 3 by intent' for these same two files. D-200 (PR #208) recorded 'does not apply' for core files outside the list.</dd>
+<dt>Options</dt><dd>One review, citing the letter of rule 3 and D-200. Or two reviews, following D-190 for the same files and the same class.</dd>
+<dt>Decision</dt><dd>Run two independent reviews: Codex Sol 6.1 plus one other reviewer.</dd>
+<dt>Reason</dt><dd>This is the same class on the same files as D-190. The class has already reached its third round (rule 3 makes that a design question), so a second reader is cheap insurance. The module sits under Graph because it is read-only. That placement is not the reason for the review count. It does not claim the diff changes the judge.</dd>
+</dl></section>
+<section id="d209"><h2><span>D-209</span> Do not make Delegation.well_formed? enforce key length (row 307)</h2><dl>
+<dt>Context</dt><dd>Row 307 proposed enforcing key length in Identity or Delegation.well_formed? so readers cannot raise. well_formed? is on the judge path and mirrored in TS.</dd>
+<dt>Options</dt><dd>Tighten well_formed? with BEAM/TS parity and a rule-3 review. Or parse on the read side and leave admission unchanged.</dd>
+<dt>Decision</dt><dd>Leave admission unchanged. Row 307 is DONE, folded into row 309's read-side parser.</dd>
+<dt>Reason</dt><dd>A validly signed grant to a non-32-byte audience can never be used, because no key signs for it. Refusing it at the judge buys nothing and costs a parity change, as D-189 already found. It does not claim such delegations are judge-invalid.</dd>
+</dl></section>
+<section id="d210"><h2><span>D-210</span> Put the parser in Lattice.Graph.AuthorityBody</h2><dl>
+<dt>Context</dt><dd>Both readers need it. ReadModel is Township and ReplicaSnapshot is lattice_core, so the module must live in lattice_core.</dd>
+<dt>Options</dt><dd>Lattice.Authority.Delegation, a new Lattice.Authority.* module, or a read-side Lattice.Graph module.</dd>
+<dt>Decision</dt><dd>New Lattice.Graph.AuthorityBody, next to ReplicaSnapshot.</dd>
+<dt>Reason</dt><dd>It is a read-side projection helper. Keeping it out of Authority keeps the judge files untouched and makes clear it decides nothing. It calls Delegation.well_formed?/1 and does not change it.</dd>
+</dl></section>
+<section id="d211"><h2><span>D-211</span> Parse each delegation field separately, not all-or-nothing</h2><dl>
+<dt>Context</dt><dd>ReplicaSnapshot shows the audience fingerprint for a grant with list-form roles but a good audience. ReadModel drops any delegation that is not well formed.</dd>
+<dt>Options</dt><dd>One valid/invalid view; or per-field results plus a well_formed? flag.</dd>
+<dt>Decision</dt><dd>Per-field {:ok, _} or :malformed for issuer, audience, roles and ops, plus a well_formed? flag that equals today's ReadModel filter.</dd>
+<dt>Reason</dt><dd>This keeps both readers' current output byte-identical, including the PR #207 fixtures. It also keeps the markers row 306 can count later.</dd>
+</dl></section>
+<section id="d212"><h2><span>D-212</span> Keep each reader's rendering; the parser returns terms, not text</h2><dl>
+<dt>Context</dt><dd>ReadModel renders roles as transfer:clerk, ReplicaSnapshot as transfer :clerk (inspect).</dd>
+<dt>Options</dt><dd>Unify the label format; or keep both formats.</dd>
+<dt>Decision</dt><dd>The parser returns the raw role plus its text form, and each reader keeps its format.</dd>
+<dt>Reason</dt><dd>A label change would move the tracked manifest and the demo audit artifacts without fixing anything. It does not claim the two formats are consistent.</dd>
+</dl></section>
+<section id="d213"><h2><span>D-213</span> Fix the revoke crash with a marker</h2><dl>
+<dt>Context</dt><dd>A probe on aa311eafe showed {:revoke, 7} and {:revoke, %{}} raise FunctionClauseError in ReplicaSnapshot.short/1, which also takes down ReadModel.observe through op_dag. PR #207 missed this case.</dd>
+<dt>Options</dt><dd>Render inspect(target) truncated; or render '(malformed)'.</dd>
+<dt>Decision</dt><dd>Render 'revoke (malformed)'. This is the only new label text in the slice.</dd>
+<dt>Reason</dt><dd>It matches the existing '(malformed)' audience marker. A regression test fails on origin/main and passes after the change.</dd>
+</dl></section>
+<section id="d214"><h2><span>D-214</span> Property tests in two layers</h2><dl>
+<dt>Context</dt><dd>Bodies outside the canonical domain, such as a Canonical.Atom with an integer name or a struct missing keys, raise in Op.new at authoring, not in the readers.</dd>
+<dt>Options</dt><dd>One Sim-level property; or a pure parse property plus a small Sim-level property.</dd>
+<dt>Decision</dt><dd>Layer 1: parse/1 is total over arbitrary terms. Layer 2: both readers and all three exports never raise on bodies admitted through Sim.append, generated only inside the canonical-encodable domain, with a small max_runs.</dd>
+<dt>Reason</dt><dd>Layer 1 checks totality cheaply. Layer 2 checks the real admitted path without failing for an authoring reason. It does not claim coverage of wire-decoded logs beyond what Sim admits.</dd>
+</dl></section>
+<section id="d215"><h2><span>D-215</span> Close row 308 with the slice 2 evidence</h2><dl>
+<dt>Context</dt><dd>Row 308 asked whether the treehouse test failures also occur on origin/main.</dd>
+<dt>Options</dt><dd>Re-run here; or record slice 2's result.</dd>
+<dt>Decision</dt><dd>DONE. Slice 2 (PR #208) ran full mix verify green after npm ci --ignore-scripts in the five clients/* packages. The 41 earlier failures were all TS-reciprocal tests failing on missing tsx in a fresh worktree.</dd>
+<dt>Reason</dt><dd>This slice runs the same full gate the same way, which re-confirms it. No product defect.</dd>
+</dl></section>
+<section id="d216"><h2><span>D-216</span> Mark row 305 DONE</h2><dl>
+<dt>Context</dt><dd>PR #207 merged as aa311eafe, but row 305 still says IN REVIEW. PR #208 does not edit that line.</dd>
+<dt>Options</dt><dd>Leave it for another slice; or flip it here.</dd>
+<dt>Decision</dt><dd>Flip row 305 to DONE with the merge SHA in this slice's README edit.</dd>
+<dt>Reason</dt><dd>It is low-conflict housekeeping, and rows 307 and 309 depend on 305.</dd>
+</dl></section>
+<section id="d217"><h2><span>D-217</span> Scope exclusions</h2><dl>
+<dt>Context</dt><dd>Row 306, InitialBundle, Identity.fingerprint and the judge are neighbouring surfaces.</dd>
+<dt>Options</dt><dd>Fold them in; or keep them out.</dd>
+<dt>Decision</dt><dd>Out of scope: row 306 (changes the trust_graph shape), InitialBundle (unreachable per D-188), fingerprint hardening, and any admission, wire or TS change.</dd>
+<dt>Reason</dt><dd>This slice is crash-class maintenance of two read surfaces, which rule 10 allows. It claims no Township feature, no judge validity for what is displayed, and no W4 or Phase G.</dd>
+</dl></section>
+<section id="d218"><h2><span>D-218</span> Revoke UTF-8 check on the shown prefix</h2><dl>
+<dt>Context</dt><dd>The plan said the marker applies only to non-binary targets.</dd>
+<dt>Options</dt><dd>Validate the whole target (Codex showed this changes existing labels) / validate the shown prefix (chosen) / no check (JSON export can fail)</dd>
+<dt>Decision</dt><dd><code>parse/1</code> still returns <code>{:ok, binary}</code> for any binary target, as the plan specifies. The renderer also shows <code>revoke (malformed)</code> when the 8-byte prefix it displays is not valid UTF-8.</dd>
+<dt>Reason</dt><dd>A target like <code>&lt;&lt;154&gt;&gt;</code> would put raw bytes in the label and break the JSON export. Checking only the shown prefix (after the Codex finding) keeps every label that rendered before unchanged.</dd>
+</dl></section>
+<section id="d219"><h2><span>D-219</span> Kept audience_fp/1 and tick_text/1</h2><dl>
+<dt>Context</dt><dd>The plan said to delete them.</dd>
+<dt>Decision</dt><dd>Kept them as one-line renderers over the parsed fields instead of deleting them.</dd>
+<dt>Reason</dt><dd>They produce the same output strings and keep the <code>render</code> clauses readable. Their old raw-body matching is gone.</dd>
+</dl></section>
+<section id="d220"><h2><span>D-220</span> Trust-edge filter checks every parsed field</h2><dl>
+<dt>Context</dt><dd>The plan said to filter on <code>well_formed?</code> alone.</dd>
+<dt>Decision</dt><dd><code>delegation_events</code> keeps a dview only when <code>well_formed?</code> is true and issuer, audience, roles and ops are all <code>{:ok, _}</code>.</dd>
+<dt>Reason</dt><dd>The second review found that <code>delegation_edge_kind</code> and <code>pub/1</code> relied on an unstated invariant that would raise if the parser's member rule ever drifted from <code>Delegation.names?</code>. Output is unchanged.</dd>
+</dl></section>
+<section id="d221"><h2><span>D-221</span> wire_vocabulary_test timeout treated as environmental</h2><dl>
+<dt>Context</dt><dd>The two other timeouts in verify run 1 happened while Codex and the demo were running at the same time, and did not recur.</dd>
+<dt>Decision</dt><dd>Treated the remaining <code>mix verify</code> failure (wire_vocabulary_test:99, 60 s timeout inside <code>code_server</code> while loading modules) as a flake, not a product defect.</dd>
+<dt>Reason</dt><dd>It passes alone and in the full isolated lattice_core run (990 tests, 0 failures). It does not touch the changed code. deja recall shows a past session hitting the same load timeout on this test.</dd>
+</dl></section>
+<section id="d222"><h2><span>D-222</span> Second-review findings left alone</h2><dl>
+<dt>Context</dt><dd>These are candidates for a new row (311+) if the PR review agrees.</dd>
+<dt>Decision</dt><dd>Not addressed: making one member-name helper public on <code>Delegation</code>, memoizing fingerprints, a lazier parse for display, and bounding <code>inspect</code> on large malformed ticks.</dd>
+<dt>Reason</dt><dd>D-209 keeps <code>Delegation</code> unchanged. The others are minor costs or behaviour that existed before this change.</dd>
+</dl></section>
+<section id="d223"><h2><span>D-223</span> Revoke test name broader than its cases</h2><dl>
+<dt>Context</dt><dd>Minor naming difference from the plan.</dd>
+<dt>Decision</dt><dd>The test 'revoke with a non-binary target renders a marker' also covers <code>&lt;&lt;154&gt;&gt;</code>, which is a binary with an invalid UTF-8 prefix.</dd>
+<dt>Reason</dt><dd>It is the same marker path and the same JSON-export guarantee, so it was kept in one test.</dd>
+</dl></section>
+<section id="d224"><h2><span>D-224</span> Repeat-class UTF-8 display safety (working policy rule 3)</h2><dl>
+<dt>Context</dt><dd>Round 1 P2 on claude/309-body-normalizer</dd>
+<dt>Options</dt><dd>Patch each render site / parser-level invariant + property / design row only</dd>
+<dt>Decision</dt><dd>Invalid UTF-8 in rendered text has now come up in two rounds (the revoke prefix in b5c51cbdc, and role/delegation names here). I fixed it once in the shared parser, backed by an encodability property, and did not patch the render site again. I also filed a design row (row 311) to make the contract explicit and move the revoke check into the parser.</dd>
+<dt>Reason</dt><dd>Fixing it in the parser covers all readers at once, and the new Jason property would catch this whole class in the trust graph. Doing the full contract and the revoke-check move belongs in its own row, separate from this review fix.</dd>
+</dl></section>
+<section id="d225"><h2><span>D-225</span> Toolshed loan gate</h2><dl>
+<dt>Decision</dt><dd>loan/3 now checks the shared parser's well_formed? flag before reading raw Delegation fields. It does not take audience/expires_epoch from the dview.</dd>
+<dt>Reason</dt><dd>The dview leaves out expires_epoch and id. well_formed? requires a complete Delegation struct, so reading fields after the check cannot raise. This is the smallest fix that keeps loan/3 on the single parser.</dd>
+</dl></section>
+<section id="d226"><h2><span>D-226</span> PR #209 review: Codex Sol 6.1 xhigh rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-01</dd>
+<dt>Finding</dt><dd>Round 1: (P2 apps/lattice_core/lib/lattice/graph/authority_body.ex:126) role and delegation names that are not valid UTF-8 were treated as display-safe text; (P3 apps/lattice_core/lib/toolshed/read_model.ex:77) <code>loan/3</code> read raw <code>{:grant, d}</code> fields. Final round: (P3 apps/lattice_core/test/lattice2/authority_body_test.exs:157) the totality property rejects the intended UTF-8 handling: <code>dview?/1</code> requires roles/ops to parse successfully whenever <code>well_formed?</code> is true. But <code>{:grant, %{good | roles: MapSet.new([&lt;&lt;255&gt;&gt;])}}</code> correctly parses <code>roles: :malformed, well_formed?: true</code>, which is what the example at line 252 expects. So the arbitrary-term generator can fail on some seeds even though production behaviour is correct.</dd>
+<dt>Decision</dt><dd>Round 1 P2 fixed: <code>AuthorityBody.parse/1</code> returns <code>{:malformed, raw}</code> for a binary or <code>Canonical.Atom</code> role whose name is not valid UTF-8, and a roles/ops MapSet with any such name becomes <code>:malformed</code>. <code>Township.ReadModel</code> then drops the edge and the trust graph stays JSON-encodable. An example test covers transfer, succeed, grant-roles and grant-ops, and the attacker-body property now runs <code>Jason.encode!(model.trust_graph)</code>. Without the fix it fails with <code>Jason.EncodeError</code> on 0xFF (see D-224). Round 1 P3 fixed: <code>loan/3</code> reads a grant's fields only when <code>AuthorityBody.parse(body)</code> reports <code>well_formed?: true</code>. The regression test has the borrower append <code>{:grant, 7}</code> and a forged plain map with a matching audience. In both cases the loan still projects due_epoch 4. Without the fix the test fails with <code>BadMapError</code> (see D-225). The final-round P3 was open on the reviewed tip and is filed as row 312. No P1 was reported.</dd>
+<dt>Reason</dt><dd>Two reviews were run under rule 3 by intent (D-208). The final P3 is a test-only false negative and does not change production behaviour, so it gets its own row rather than another round in this PR. No workflow, W4 or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
