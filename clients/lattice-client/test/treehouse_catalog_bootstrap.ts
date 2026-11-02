@@ -277,7 +277,7 @@ test("admin-authored valid replacement is Core-honored and writes only the admin
 test("replacement Stage A literal bindings refuse as application_invalid_catalog", async () => {
   const h = await replacementHistory(await fixture());
   const cases = await stageACases(h);
-  assert.equal(cases.length, 13);
+  assert.equal(cases.length, 16);
   for (const c of cases) assert.equal((await judge([...h.before, ...c.prefix, c.frame])).get(c.frame.id), "application_invalid_catalog", c.name);
   const reversed = await h.op(h.sign(h.claim), { deps: [h.beacon.id, h.beacon.id] });
   assert.equal((await judge([...h.before, reversed])).get(reversed.id), undefined, "op deps compare as a sorted set");
@@ -303,6 +303,6 @@ test("BEAM-authored replacement Stage A frames get BEAM's reasons in TS", async 
   const vector = JSON.parse(readFileSync(new URL("./vectors/catalog/replacement_v1.json", import.meta.url), "utf8"));
   const before = vector.frames.filter((frame: CarrierOpFrame) => frame.id !== vector.binding_id);
   assert.equal((await judge(vector.frames)).size, 0);
-  assert.equal(vector.stage_a.length, 13);
+  assert.equal(vector.stage_a.length, 16);
   for (const c of vector.stage_a) assert.equal((await judge([...before, ...c.prefix, c.frame])).get(c.frame.id), c.reason, c.name);
 });

@@ -98,7 +98,7 @@ defmodule Treehouse.TransportCatalog do
 
   defp replacement_scope?(value),
     do:
-      value.version == 1 and value.product == :treehouse and text?(value.space) and
+      value.version === 1 and value.product == :treehouse and text?(value.space) and
         id?(value.bootstrap) and id?(value.profile_genesis) and id?(value.profile_id)
 
   defp replacement_graph?(value),

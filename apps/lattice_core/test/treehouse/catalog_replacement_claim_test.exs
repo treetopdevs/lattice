@@ -33,6 +33,13 @@ defmodule Treehouse.CatalogReplacementClaimTest do
     assert malformed(Map.put(f.claim, :extra, 1))
     assert malformed(Map.put(f.claim, :binding, f.bootstrap.id))
     assert malformed(%{f.claim | version: 2})
+    # 1.0 == 1 in Elixir; a float must refuse, not crash the canonical encoder later.
+    assert malformed(%{f.claim | version: 1.0})
+    sig = <<0::512>>
+
+    assert Catalog.verify_replacement_possession(%{f.claim | version: 1.0}, sig, sig) ==
+             {:error, :malformed_catalog}
+
     assert malformed(%{f.claim | product: :township})
     assert malformed(%{f.claim | space: ""})
     assert malformed(%{f.claim | bootstrap: "short"})
@@ -306,7 +313,7 @@ defmodule Treehouse.CatalogReplacementClaimTest do
     assert Lattice.Authority.analyze(Treehouse.Space, base).reasons == %{}
     assert List.last(Log.topo_ops(base)).id == ts["binding_id"]
 
-    assert length(ts["stage_a"]) == 13
+    assert length(ts["stage_a"]) == 16
 
     for c <- ts["stage_a"] do
       assert c["reason"] == "application_invalid_catalog", c["name"]

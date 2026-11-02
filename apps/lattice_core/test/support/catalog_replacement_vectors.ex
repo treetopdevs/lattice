@@ -12,6 +12,7 @@ defmodule Treehouse.CatalogReplacementVectors do
   alias Treehouse.TransportCatalog, as: Catalog
 
   @path "catalog/replacement_v1.json"
+  @high_uint64 9_007_199_254_740_992
 
   @spec fixture() :: map()
   def fixture do
@@ -149,7 +150,12 @@ defmodule Treehouse.CatalogReplacementVectors do
        replacement_op(f, claim, signed_args(f, %{claim | space: "another-space"}))},
       {"bad-catalog-possession", replacement_op(f, claim, [claim, sp, sp])},
       {"bad-service-possession", replacement_op(f, claim, [claim, cp, cp])},
-      {"non-binary-possession", replacement_op(f, claim, [claim, :admin, sp])}
+      {"non-binary-possession", replacement_op(f, claim, [claim, :admin, sp])},
+      # Wire uint64s above 2^53 - 1: TS must refuse them in the decoder, not as malformed_term.
+      {"high-generation",
+       replacement_op(f, claim, [%{claim | generation: @high_uint64}, cp, sp])},
+      {"high-epoch", replacement_op(f, claim, [%{claim | epoch: @high_uint64}, cp, sp])},
+      {"high-integer-possession", replacement_op(f, claim, [claim, @high_uint64, sp])}
     ]
     |> Enum.map(fn
       {name, op} -> {name, [], op}

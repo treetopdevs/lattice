@@ -93,7 +93,10 @@ defmodule Treehouse.CatalogReplacementCommandTest do
              "wrong-space",
              "bad-catalog-possession",
              "bad-service-possession",
-             "non-binary-possession"
+             "non-binary-possession",
+             "high-generation",
+             "high-epoch",
+             "high-integer-possession"
            ]
 
     for {name, prefix, op} <- cases do
