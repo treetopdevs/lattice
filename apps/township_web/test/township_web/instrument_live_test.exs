@@ -92,6 +92,7 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert has_element?(view, "#attest-panel [data-receipt-free='false']")
     assert has_element?(view, "#trust-graph-panel [data-trust-node]")
     assert has_element?(view, "#trust-graph-panel [data-trust-edge]")
+    refute has_element?(view, "#trust-graph-panel [data-trust-omitted]")
     assert has_element?(view, "#op-dag-panel [data-op-node]")
     assert has_element?(view, "#op-dag-panel [data-frontier]")
     assert has_element?(view, "#op-dag-panel .op-rail")
@@ -222,6 +223,28 @@ defmodule TownshipWeb.InstrumentLiveTest do
            )
 
     refute has_element?(view, "#roles-panel [data-audit-ledger]", "No quarantine events.")
+  end
+
+  test "trust graph panel shows the omitted count", %{conn: conn} do
+    peer_log = omitted_grant_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:trust-omitted:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#trust-graph-panel [data-trust-omitted]", "1 omitted")
   end
 
   test "fresh carrier state prepares one unsigned participant post without changing the model", %{
@@ -1271,6 +1294,18 @@ defmodule TownshipWeb.InstrumentLiveTest do
     {sim, _title} = Sim.command(sim, "clerk", :set_title, ["Projection matter"])
     {sim, _post} = Sim.command(sim, "clerk", :post, ["clerk: live update"])
     Sim.log(sim, "clerk")
+  end
+
+  defp omitted_grant_log do
+    sim =
+      Sim.new(Matter, "replica:matter:trust-omitted", ["clerk", "resident"],
+        seed: "trust-omitted"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+    {sim, _bad} = Sim.append(sim, "clerk", :authority, {:grant, %{good | roles: [:clerk]}})
+    sim |> Sim.sync_all() |> Sim.log("clerk")
   end
 
   defp structural_quarantine_log do

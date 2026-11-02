@@ -121,13 +121,72 @@ defmodule Township.ReadModelTest do
     base_edges = ReadModel.observe(baseline, labels: %{}, vouches: []).trust_graph.edges
 
     for field <- [:roles, :ops] do
-      {log, _} = listform_log(field)
+      {log, op_id} = listform_log(field)
       model = ReadModel.observe(log, labels: %{}, vouches: [])
       graph = model.trust_graph
 
       assert length(graph.edges) == length(base_edges), "field #{field}"
       assert graph.edges == base_edges
+      assert graph.omitted == [op_id], "field #{field}"
     end
+  end
+
+  test "an honest log reports no omitted delegations" do
+    {baseline, nil} = listform_log(nil)
+    assert ReadModel.observe(baseline, labels: %{}, vouches: []).trust_graph.omitted == []
+  end
+
+  test "a malformed transfer/succeed role is counted as omitted" do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+    {sim, transfer} = Sim.append(sim, "clerk", :authority, {:transfer, %{}, good, 0})
+    {sim, _heartbeat} = Sim.append(sim, "clerk", :authority, {:heartbeat, %{}, 0})
+    {sim, succeed} = Sim.append(sim, "clerk", :authority, {:succeed, %{}, good, 0})
+    {sim, _revoke} = Sim.revoke(sim, "clerk", good.id)
+    log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+    assert ReadModel.observe(log, labels: %{}, vouches: []).trust_graph.omitted ==
+             [transfer.id, succeed.id]
+  end
+
+  test "trust-graph exports without omitted delegations are byte-identical" do
+    alias Lattice.Graph.Export
+
+    snapshot = %{
+      nodes: [%{id: "a", kind: "realm", label: "A"}, %{id: "b", kind: "realm", label: "B"}],
+      edges: [%{from: "a", to: "b", kind: "grant ops=[post]"}]
+    }
+
+    # Pinned pre-row-306 bytes.
+    dot = """
+    digraph lattice {
+      "a" [label="A", shape="ellipse"];
+      "b" [label="B", shape="ellipse"];
+      "a" -> "b" [label="grant ops=[post]"];
+    }\
+    """
+
+    mermaid = """
+    graph TD
+      n_a["A"]
+      n_b["B"]
+      n_a -->|"grant ops=[post]"| n_b\
+    """
+
+    for {format, expected} <- [dot: dot, mermaid: mermaid],
+        graph <- [snapshot, Map.put(snapshot, :omitted, []), %{nodes: [], edges: []}] do
+      bytes = Export.export(graph, format)
+      if graph.nodes != [], do: assert(bytes == expected), else: refute(bytes =~ "omitted")
+      assert bytes == Export.export(Map.put(graph, :omitted, []), format)
+    end
+
+    assert Export.export(Map.put(snapshot, :omitted, ["x", "y"]), :dot) ==
+             String.replace(
+               dot,
+               "digraph lattice {\n",
+               "digraph lattice {\n  // omitted 2 ill-formed delegation op(s): x y\n"
+             )
   end
 
   test "observe survives a malformed role or non-binary audience in transfer/succeed/grant bodies" do
@@ -222,18 +281,18 @@ defmodule Township.ReadModelTest do
     {sim, _genesis} = Sim.create_replica(sim, "clerk")
     {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
 
-    sim =
+    {sim, op_id} =
       case field do
         nil ->
-          sim
+          {sim, nil}
 
         f ->
           bad = %{good | f => MapSet.to_list(Map.fetch!(good, f))}
-          {sim, _} = Sim.append(sim, "clerk", :authority, {:grant, bad})
-          sim
+          {sim, op} = Sim.append(sim, "clerk", :authority, {:grant, bad})
+          {sim, op.id}
       end
 
-    {sim |> Sim.sync_all() |> Sim.log("clerk"), nil}
+    {sim |> Sim.sync_all() |> Sim.log("clerk"), op_id}
   end
 
   defp denied_admission_log do

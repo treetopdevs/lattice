@@ -1,6 +1,6 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: DESIGNED (design only, 2026-11-01). PRs 0–2, PR 3's generation keying and PR 6's
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 1–2, PR 3's generation keying and PR 6's
 exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
@@ -264,7 +264,7 @@ acquisition"; "an R04 continuation acquisition (`parent_id: nil`) is observable 
 `acquisitions/3` and its delegation ceiling is readable from the prefix log" (`acquisition()`
 carries only `delegation_id`, so reaching the delegation struct without a new API is part of the
 probe); "a refused replacement op stays in the authenticated history with its Core reason". STOP if any check needs a new Core primitive: file a row and return for interface
-review (contract §3). Do not approximate.
+review (contract §3). Do not approximate. *Outcome (2026-11-02): GO*, no Core primitive needed (evidence in PR #213); the PR 4 resolver must check ceiling monotonicity over the whole acquisition sequence (row 335).
 
 **PR 1 — claim codec and the Space command.** Files: `transport_catalog.ex`; `space.ex` (the
 `command(:replace_catalog_v1, [:_claim, :_catalog_possession, :_service_possession], ...)`
@@ -300,7 +300,7 @@ ancestor B of cited rotation T) with a named reason; replay and crash refusals k
 
 **PR 4 — resolver integration** (`catalog_trust.ex` / `.ts`, D-270, D-275–D-278). **GATED on
 plans 267 and 269 merging** (seven `codex/treehouse-*` branches rewrite both files), **OD-16
-sign-off, OD-17 and row 320** (the resolution shape that clears a closed-out accepted catalog). Scope includes the multi-parent graph functions, current-binding route
+sign-off, OD-17 and row 320** (the resolution shape that clears a closed-out accepted catalog). Row 335 (ceiling monotonicity over the acquisition sequence) is a PR 4 acceptance requirement, not a gate. Scope includes the multi-parent graph functions, current-binding route
 origin/URL, refused nodes, and restoring pre-upgrade single-`parent` trust stores. Tests in
 `catalog_replacement_trust_test.exs` and the TS twin. Every multi-delivery test persists the
 accepted state between resolver calls and runs both delivery orders.
@@ -309,7 +309,7 @@ accepted state between resolver calls and runs both delivery orders.
   author is an R04 continuation successor whose delegation is self-issued with `parent_id: nil`
   and an inherited ceiling containing `replace_catalog_v1` (a resolver that demands a linked root
   parent fails this case).
-- **C11 negatives:** missing pre-loss permission (no `replace_catalog_v1` in the ceiling); wrong
+- **C11 negatives:** missing pre-loss permission (no `replace_catalog_v1` in the ceiling); restored permission (a later transfer from an older, broader continuation cap regains `replace_catalog_v1` after a narrower continuation dropped it; Core honors every hop, so a current-record check accepts it; row 335 acceptance); wrong
   profile, incl. a same-`profile_id` repin with another genesis (`wrong_catalog_scope`); a kept
   parent service ID with a new service key; wrong generation; no beacon; root genesis cap; unleased cap; wrong acquisition
   cap; stale holder; bad parent; a parent-linked delegation not attenuated from the root (Core
