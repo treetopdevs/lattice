@@ -1,7 +1,8 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: DESIGNED (design only, 2026-11-01). PRs 0–3 and 6 can start on fixtures now. PR 4 waits
-on plans 267 and 269 and on integrator sign-off for D-275 (OD-16). PR 5 belongs to the native
+Status: DESIGNED (design only, 2026-11-01). PRs 0–2, 6 and PR 3's generation keying can start on
+fixtures now. PR 4 and PR 3's closed-binding refusal wait on integrator sign-off for D-275/D-278
+(OD-16); PR 4 also waits on plans 267 and 269. PR 5 belongs to the native
 track. PR 7 is an operator run under rule 8. C10–C15 stay OPEN.
 
 - **Row**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`)
@@ -11,34 +12,25 @@ track. PR 7 is an operator run under rule 8. C10–C15 stay OPEN.
 - **Planned at**: commit `cb7ffa3bc`, 2026-11-01
 - **Drift check (run before each PR)**:
   ```sh
-  git diff --stat cb7ffa3bc..HEAD -- apps/lattice_core/lib/treehouse/space.ex \
-    apps/lattice_core/lib/treehouse/transport_catalog.ex apps/lattice_core/lib/treehouse/catalog_trust.ex \
-    apps/lattice_core/lib/treehouse/catalog_cutoff.ex apps/lattice_core/lib/lattice/authority.ex \
-    clients/lattice-client/src/treehouse.ts clients/lattice-client/src/treehouse_catalog_codec.ts \
-    clients/lattice-client/src/treehouse_catalog_trust.ts \
-    apps/lattice_carrier_server/lib/lattice_carrier_server/operator/catalog_ceremony/ \
-    docs/research/treehouse_catalog_lifecycle.md
+  L=apps/lattice_core/lib; C=clients/lattice-client/src
+  git diff --stat cb7ffa3bc..HEAD -- $L/treehouse/{space,transport_catalog,catalog_trust,catalog_cutoff}.ex \
+    $L/lattice/authority.ex $C/treehouse{,_catalog_codec,_catalog_trust}.ts docs/research/treehouse_catalog_lifecycle.md \
+    apps/lattice_carrier_server/lib/lattice_carrier_server/operator/catalog_ceremony/
   ```
   If an in-scope file changed, recheck the "current state" notes; a cited-line mismatch is a STOP.
 
 ## 0. Status and normative source
 
-R11c has a design already. [`docs/research/treehouse_catalog_lifecycle.md`](../docs/research/treehouse_catalog_lifecycle.md)
-§2–§4 and §7 are an **adopted contract** (integrator PASS at `789ab235`). Section 6 of
+Normative: [`docs/research/treehouse_catalog_lifecycle.md`](../docs/research/treehouse_catalog_lifecycle.md)
+§2–§4 and §7 (**adopted contract**, integrator PASS at `789ab235`: command, claim fields, domains,
+both stages, closed refusal order, C10–C15) and
 [`docs/research/treehouse_founder_lifecycle.md`](../docs/research/treehouse_founder_lifecycle.md)
-(its R11 amendment, and acceptance row A09) adds the combined-loss fixture. Those two documents
-are normative. This plan cites them and does not restate them as new decisions. It pins only what
-the contract leaves to "R11c review", maps each check to the code that exists today, and splits
-the work into PRs. The one pin that reads as a contract interpretation (D-275) is flagged as
-OD-16 and needs integrator sign-off before PR 4.
-
-The contract fixes the `replace_catalog_v1(claim, catalog_possession, service_possession)`
-command and claim fields, the possession, inventory and cutoff domains, the two verification
-stages, the closed refusal order, and acceptance cases C10–C15.
-
-The task asked for a "root/custodian quorum"; D-267 answers it. Replacement authority is the
-living root's bootstrap delegation to an honored bounded Space admin (contract §1); there is no
-catalog quorum. R04 witnesses govern admin acquisition and renewal; the custodian holds a key.
+§6 (R11 amendment, A09 combined-loss fixture). This plan pins only what the contract leaves to
+"R11c review", maps checks to code and splits PRs. Two pins read as contract interpretations,
+D-275 (closing rule) and D-278 (which "known causal conflict" §4 puts in a resolution's deps);
+both are OD-16 and need integrator sign-off. There is no catalog quorum (D-267): authority is the
+living root's bootstrap delegation to an honored bounded Space admin (contract §1); R04 witnesses
+govern admin acquisition and renewal; the custodian holds a key.
 
 ### Current state on `cb7ffa3bc`
 
@@ -57,12 +49,9 @@ catalog quorum. R04 witnesses govern admin acquisition and renewal; the custodia
 | The custodian ledger is keyed on `binding.bootstrap_id` and `binding.record.catalog_key`. | `catalog_ceremony/signing_ledger.ex:23-48`; `catalog_ceremony/binding.ex` |
 | Seed and backup both lost: "Replacement is the R11c procedure, which is not built." | `docs/treehouse_catalog_signer_custody.md:417-420` |
 
-**Corrections to the task's grounding** (D-273): the custody reference is
-`docs/treehouse_catalog_signer_custody.md:417`. Native no longer refuses rotation with
-`catalog_rotation_unsupported` (plan 267 added `catalog_eval/chains.rs`); it has no replacement
-node, so a replacement binding fails closed with `trust_pending` at `Work::Binding`
-(`chains.rs:290-297`). TS names follow the codec convention
-(`canonicalBytesForCatalogRotationPossession`). PR 1 adds no wire atoms.
+**Grounding corrections** (D-273): native rotation exists (`catalog_eval/chains.rs`, plan 267)
+but has no replacement node, so a replacement binding fails closed with `trust_pending` at
+`Work::Binding` (`chains.rs:290-297`). PR 1 adds no wire atoms.
 
 **Scope.** One Space command, a claim codec, authoring preflight, resolver integration, ledger
 generation and parity vectors, on disposable-key fixtures. Out of scope: code in this design slice;
@@ -115,15 +104,14 @@ Contract §3 restated with code names. **Claim** (closed map; extra or missing f
 `purpose ∈ {:catalog, :service}`, verified under `new_catalog_key` / `new_service_key`. Both are
 required even when a key is kept.
 
-**New pins** (decisions in the appendix):
+**New pins** (decisions in the log, see the end):
 
 - **Binding ID (D-268).** The final `replace_catalog_v1` op ID. The first catalog under it is
   `revision: 0, previous: nil`, `inventory_id(entries) == claim.inventory_digest`, every entry
   carries the new service ID/key, realm `"treehouse-service:" <> new_service_id`.
-- **Namespace (D-272).** Replacement IDs are `lattice-op-v2` payload digests; rotation IDs digest
-  under the rotation domain. One `bindings` map stays sound.
-- **No new page field.** Replacement nodes come from the authenticated Space history in
-  `histories`, which already carries quarantined ops (the cutoff requires them).
+- **Namespace (D-272); no page field.** Replacement IDs are `lattice-op-v2` digests, rotation IDs
+  use the rotation domain, so one `bindings` map is sound. Nodes come from `histories`, which
+  already carries quarantined ops.
 - **Binding node (D-270).** Every node carries `{key, service_id, service_key, origin, parents,
   refused?}`. The bootstrap seeds it; a rotation inherits service and origin from its parent and
   has a one-element `parents`; a replacement sets them from the claim. Entry service and realm
@@ -131,16 +119,18 @@ required even when a key is kept.
   construction (`routes/1`, TS `catalogRoutes`) read the **current binding**, not
   `context.bootstrap`. Heads, forks and ancestry (`binding_heads/1`, `rotation_forks/3`,
   `catalog_ancestor?/3`, TS `:290-310`, `:515`, `:523`) become multi-parent. Persisted
-  single-`parent` trust stores (TS `:479`, BEAM restore) must restore unchanged on upgrade.
-  Same change in TS, and in `chains.rs` in PR 5.
-- **Refused nodes are evidence (D-276).** A `replace_catalog_v1` op that passes step 4
-  (strict-prefix admin authority, intrinsic to its own ancestry) but is not honored on the full
-  union (step 3) is a node with `refused?: true`, in every delivery order. It may be cited in
+  single-`parent` trust stores (TS `:479`, BEAM restore) restore unchanged; `chains.rs` in PR 5.
+- **Refused nodes are evidence (D-276).** A `replace_catalog_v1` op that passes steps 1, 2, 4
+  and 5 (scope, closure with claim-to-op bindings and both possessions, strict-prefix admin
+  authority, declared graph: all intrinsic to its own bytes and ancestry) but is not honored on
+  the full union (step 3) is a node with `refused?: true`, in every delivery order. It may be cited in
   `parents` and `prior_catalogs`; catalogs under it are retained conflict evidence. It authorizes
   nothing: a rotation, catalog or route under it is refused. Any other authenticated refused op
   (a non-admin's, or one failing scope, prefix or declared-graph checks) is **raw refusal
-  evidence**: kept and exported (plan 266), never a node, head or citable parent, and counted only
-  against parser bounds, so non-admin proposals cannot force `control_history_limit`.
+  evidence**: kept and exported (plan 266), never a node, head or citable parent. It counts
+  against parser/history bounds but not the head budget: non-admin proposals cannot add a head or
+  reach the head limit, though enough raw bytes still hit the parser bound (`control_history_limit`,
+  fail closed, row n).
 - **Closing rule (D-275, OD-16).** Every binding that is an ancestor-or-self of a `parents` entry
   of any D-276-eligible replacement node (honored or refused) is closed to old-key children. A
   rotation from it, or a catalog under it past the cited `prior_catalogs`, is retained evidence
@@ -156,14 +146,13 @@ required even when a key is kept.
 - **Retention (D-271, OD-15).** A claim may keep both keys and the service ID (no-op refusal is
   rotation-only, plan 274).
 
-**Proposed names** (PR 1 fixes them): BEAM `TransportCatalog.normalize_replacement_claim/1`,
-`replacement_claim_bytes/1`, `replacement_possession_bytes/2`, `verify_replacement_possession/3`;
-TS `normalizeCatalogReplacementClaim`, `catalogReplacementClaimToCarrierTerm` / `FromCarrierTerm`,
-`canonicalBytesForCatalogReplacementClaim`, `canonicalBytesForCatalogReplacementPossession`.
+**Proposed names** (PR 1 fixes them): BEAM `TransportCatalog.{normalize_replacement_claim/1,
+replacement_claim_bytes/1, replacement_possession_bytes/2, verify_replacement_possession/3}`; TS
+twins in codec convention (`normalizeCatalogReplacementClaim`, `canonicalBytesForCatalogReplacement*`).
 
 ## 3. Verification stages, mapped to code
 
-**Stage A — the Space application callback.** A new `command_op_status/3` clause for
+**Stage A — Space application callback.** A new `command_op_status/3` clause for
 `{:replace_catalog_v1, [claim, catalog_possession, service_possession]}` in `space.ex`, with the
 matching branch in `treehouse.ts` (registry `:283`, decoder near `:316`, status near `:401`),
 after the existing cap and admin-holder gates. It checks the closed shape; that the bootstrap ID
@@ -176,12 +165,17 @@ a route switch.
 **Stage B — the resolver.** `resolve_binding!/3` in `catalog_trust.ex` and its TS twin gain a
 third node source: an authenticated `replace_catalog_v1` op in Space history. For each:
 
-1. **Scope.** `version`, `product`, `space`, `bootstrap` and `profile_genesis` against the
-   retained bootstrap: `wrong_catalog_scope` (precedence 2).
-2. **Closure.** Every frame authenticated, dependency closure exact; else `trust_pending`.
+1. **Shape and scope.** Closed claim shape (`malformed_catalog`); `version`, `product`, `space`,
+   `bootstrap` and `profile_genesis` against the retained bootstrap: `wrong_catalog_scope`.
+2. **Closure, bindings, possession.** Every frame authenticated, dependency closure exact (else
+   `trust_pending`). Then the resolver itself re-checks Stage A's literal bindings
+   (`claim.author`/`cap`/`deps`/`holder_epoch` against the op; else `invalid_catalog_transition`)
+   and both possession signatures (`invalid_possession`): Core refuses a revoked or lapsed command
+   at its authority gate before `command_op_status/3` runs, so a union-refused op was never
+   Stage-A validated.
 3. **Full union.** `Authority.analyze(Treehouse.Space, full_union)`. Not honored: a refused node
-   if step 4 passes, else raw refusal evidence (D-276); the candidate is `catalog_authority_refused`
-   with the unchanged Core reason, or `authority_changed` if it was accepted earlier.
+   if steps 1, 2, 4 and 5 pass, else raw refusal evidence (D-276); the candidate is
+   `catalog_authority_refused` (Core reason attached), or `authority_changed` if accepted earlier.
 4. **Strict prefix**, one `Authority.analyze_with_records(Treehouse.Space, strict_ancestor_log)`:
    `holder_epoch(:admin) == %{holder: op.author, op_id: claim.holder_epoch}`; the acquisition
    record `{claim.holder_epoch, author, delegation_id}` is the **Core-honored** current `:admin`
@@ -197,7 +191,10 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
    beacons (reuse `member_continuity.ex` `epoch/2`). Each failure is `catalog_authority_refused`
    (D-274), with a resolver-supplied detail when Core honored the op. A `profile_id` mismatch
    with `continuation_profile/1` on the prefix is `wrong_catalog_scope`; it is evaluated here only
-   because it needs the prefix.
+   because it needs the prefix. Step order is evaluation order; the reported reason is the
+   highest-precedence failure among steps 1–6 (§4), so a profile mismatch outranks step 3. The
+   epoch rule matches the private `member_continuity.ex` `epoch/2` but is recomputed from
+   `analyze_with_beacon_evidence/2` on the prefix (that helper reads callback context).
 5. **Declared graph, intrinsic (D-277).** Structural only, without installed heads or
    later-arriving catalogs: every parent is a known binding node (refused nodes included); each
    `prior_catalogs` entry names a catalog under its binding (unheld is `trust_pending`), and `nil`
@@ -244,18 +241,15 @@ The closed `CatalogTrust.reason` set is unchanged; only `Space.author_replace_ca
 BEAM and TS share reciprocal vectors in `clients/lattice-client/test/vectors/catalog/replacement_v1.json`
 (claim, both possession, inventory and cutoff pre-hash bytes including bad-signature `rejected`
 evidence; the binding ID; every refusal reason), BEAM writing and TS reading, then the reverse.
-Native `catalog_eval` is the third twin (OD-6/D-44), native-track owned after plan 267; until then
-packaged clients fail closed with `trust_pending` (§0), a non-claim. The plan 266 exporter must
-carry replacement histories, refused ones included (PR 6). The plan 263 ledger must accept
-revision 0 of a new binding and refuse to sign under a closed binding (PR 3).
+Native `catalog_eval` is the third twin (OD-6/D-44, PR 5); until then packaged clients fail closed
+with `trust_pending`. Exporter (PR 6) and ledger (PR 3) obligations are listed under their PRs.
 
 ## 6. Buildable now vs parked
 
-**Now, on disposable-key fixtures:** a Sim bounded Space (`Sim.create_replica/3` with explicit
-`ops:`), a root `catalog_bootstrap_v1`, an R04 leased admin acquisition whose ceiling includes
-`replace_catalog_v1`, and R03 beacons (`Sim.beacon/3`): PRs 0–3 and 6; PR 4 too, but gated (§7).
-**Parked under rule 8:** the real Space (row 224 `catalogued` BLOCKED on the ceremony), custodian
-re-initialization, the new-signer ceremony, field and packaged runs. **On plan 267:** native.
+**Now, on disposable-key fixtures** (Sim bounded Space with explicit `ops:`, root bootstrap, R04
+leased admin with `replace_catalog_v1`, R03 beacons): PRs 0–3 and 6; PR 4 gated (§7). **Parked
+(rule 8):** the real Space (row 224 BLOCKED on the ceremony), custodian re-init, new-signer
+ceremony, field and packaged runs. **Native:** after plan 267.
 
 ## 7. PR breakdown
 
@@ -264,7 +258,7 @@ Each PR is small, follows D-38 (freeze after two bot rounds), and gets rule 3 re
 `apps/lattice_core/test/treehouse/catalog_replacement_authority_probe_test.exs`. Tests: "leased
 admin acquisition with replace_catalog_v1 in ceiling is observable at strict prefix via
 holder_epoch/acquisitions"; "ancestor beacon basis derivable via analyze_with_beacon_evidence"
-(also `analyze_with_records/2` on the prefix); "unleased root genesis cap yields no finite
+(`analyze_with_records/2` on the prefix); "unleased root genesis cap yields no finite
 acquisition"; "an R04 continuation acquisition (`parent_id: nil`) is observable via
 `acquisitions/3` and its delegation ceiling is readable from the prefix log" (`acquisition()`
 carries only `delegation_id`, so reaching the delegation struct without a new API is part of the
@@ -295,7 +289,8 @@ authority reclassification of the frozen state cancels the pending attempt befor
 signing call (C13 "cancel pending signing"). Follow-up observation: `author_catalog_bootstrap/3`
 has no `catalog_command_too_large` preflight either; that is a separate row.
 
-**PR 3 — custodian and ledger generation** (fixture only). Files:
+**PR 3 — custodian and ledger generation** (fixture only; the closed-binding refusal waits on
+OD-16). Files:
 `catalog_ceremony/signing_ledger.ex`, `binding.ex`, `space_export.ex`, `release_catalog.ex`. Key
 the ledger by `{binding_id, catalog_key}`; it learns closed bindings from the exported Space
 history. Tests: accepts revision 0 under the new binding; refuses signing under a closed binding
@@ -357,11 +352,13 @@ combined replacement) and a plan 266 exporter test. **PR 7** — the operator ru
 
 ## 8. Gate commands
 
-Per PR: `~/.asdf/shims/mix format --check-formatted`; `MIX_ENV=test ~/.asdf/shims/mix compile`;
-`~/.asdf/shims/mix test apps/lattice_core/test/treehouse/`; for PR 3
-`(cd apps/lattice_carrier_server && MIX_ENV=test ~/.asdf/shims/mix test)`; then under Node 22
-(`source ~/.nvm/nvm.sh && nvm use 22`) `tsc -p .` and the lattice-client test runner from
-`clients/lattice-client/node_modules/.bin`; `cargo test` in
+Per PR, on a fresh checkout first (`AGENTS.md`, Node 22 via `source ~/.nvm/nvm.sh && nvm use 22`):
+`npm --prefix clients/lattice-client ci`, `npm --prefix clients/lattice-client run build`,
+`npm --prefix clients/treehouse-tauri-shell ci`. Then `~/.asdf/shims/mix format --check-formatted`;
+`MIX_ENV=test ~/.asdf/shims/mix compile`; `~/.asdf/shims/mix test apps/lattice_core/test/treehouse/`; for PR 3
+`(cd apps/lattice_carrier_server && MIX_ENV=test ~/.asdf/shims/mix test)`;
+`clients/lattice-client/node_modules/.bin/tsc -p clients/lattice-client` and the lattice-client
+test runner from that `node_modules/.bin`; `cargo test` in
 `clients/treehouse-tauri-shell/src-tauri` for any TS codec change; regenerate the dist files.
 
 For this design slice:
@@ -381,57 +378,23 @@ grep -o '](\.\./[^)]*)' plans/316-r11c-catalog-replacement-trust.md   # every ta
 | OD-13 | Does custodian re-initialization after a replacement need a new ceremony report? | Yes, under rule 8. |
 | OD-14 | What does Treehouse show for `catalog_fork` / `authority_changed`? | "Transport paused, ask your admin", no automatic retry. |
 | OD-15 | May a replacement keep both keys and the service ID? | Yes; the no-op refusal stays rotation-only (plan 274). |
-| OD-16 | Adopt the closing rule (D-275) as a contract §4 amendment? | Yes. Integrator sign-off is a PR 4 precondition; without it an old-key holder can pause transport indefinitely. |
+| OD-16 | Adopt the closing rule (D-275), and D-278's reading that a resolution's deps need the cited replacement ops but not the refusing controls, as contract §4 amendments? | Yes. Sign-off gates PR 4 and PR 3's closed-binding refusal; without D-275 an old-key holder can pause transport indefinitely. |
 
 ## 10. Explicit non-claims
 
 No completeness against withheld ops; no whole-store rollback resistance; no re-observation from a
-compromised webview (OD-10, row 260); no native or packaged acceptance until PR 5 (packaged
-clients fail closed with `trust_pending`); no real-Space replacement or ceremony; no R13, R16 or
-R18 completion; no catalog witness quorum, new Core primitive, quarantine reason or wire atom; no
+compromised webview (OD-10, row 260); no native or packaged acceptance until PR 5; no real-Space
+replacement or ceremony; no R13, R16 or R18 completion; no catalog witness quorum, new Core primitive, quarantine reason or wire atom; no
 production deployment, Phase G or receipt-free W4. C10–C15 stay OPEN until their PRs land.
 
 ## Done criteria and STOP conditions
 
-- **Design slice done:** this file exists, the roadmap R11c row links it and stays PLANNED, the
-  index row and decisions below are copied in, and the design-slice gates pass.
-- **Implementation done:** every PR's named tests pass; reciprocal vectors agree in BEAM, TS and,
-  after PR 5, native.
+- **Design done:** roadmap R11c links this file and stays PLANNED; index row and decisions exist;
+  design-slice gates pass. **Implementation done:** every PR's tests pass; vectors agree in BEAM,
+  TS and, after PR 5, native.
 - **STOP:** PR 0 needs a Core primitive or a new context field; any historical Space vector or
   wire vocabulary byte changes; PR 4 starts before plans 267/269 merge or OD-16 is answered; C10
   would need an old private key, a new root, or injected trust.
 
-## Appendix — proposed index row and decisions
-
-Copied into `plans/README.md` and `plans/decisions-2026-10-17-backlog-run.html` in the index stage.
-
-`| 316 | [R11c catalog replacement trust and recovery](316-r11c-catalog-replacement-trust.md) | P1 | L | 224 PRs 1–3; 263; 267/269 for PR 4; R03/R04 DONE | DESIGNED (plan 316, design only; PRs 0–3 and 6 startable on fixtures; PR 4 waits on 267/269 and OD-16; PR 5 native-track; PR 7 rule 8) |`
-
-- **D-265.** Plan 316 implements lifecycle §2–§4/§7 and founder §6; it pins only R11c-review gaps.
-- **D-266.** PRs 0–3 and 6 start on fixtures; PR 4 waits on 267/269 and OD-16; PR 5 native; PR 7 rule 8.
-- **D-267.** No catalog quorum: authority is the root's delegation to an honored bounded admin;
-  R04 witnesses govern acquisition and renewal only; the custodian is a key holder (OD-11).
-- **D-268.** Binding ID is the final op ID; first catalog revision 0 as §2; no page field (§2).
-- **D-269.** Possession domain reused; disjoint closed key sets; negative test both ways (§2).
-- **D-270.** Multi-parent binding nodes carry service, origin and `refused?`; checks and routes read
-  the current binding; old single-`parent` stores restore on upgrade; BEAM, TS, native (§2).
-- **D-271.** `prior_catalogs` and key rules as §2; both keys may be kept (OD-15).
-- **D-272.** Op-ID and rotation-ID bindings share one namespace; pre-image domains differ (§2).
-- **D-273.** Grounding corrections: custody path, native `trust_pending`, TS naming, no atoms (§0).
-- **D-274.** Stage B authority failures are `catalog_authority_refused` (resolver detail when Core
-  honored the op); scope, version and profile are `wrong_catalog_scope` (§3 steps 1, 4).
-- **D-275.** Closing rule: every ancestor-or-self of a parent of a D-276-eligible replacement
-  admits no old-key rotation or later catalog; such children are refused, or `authority_changed`
-  if accepted; monotone, order-independent; admin siblings still fork (OD-16) (§2).
-- **D-276.** A replacement authorized at its strict prefix but refused on the full union is a
-  citable node that authorizes nothing; other refused ops are raw evidence, never heads (§2).
-- **D-277.** Declared-graph checks are structural; coverage, siblings (`catalog_fork`) and then
-  cutoffs are judged against retained evidence (§3 steps 5, 7, 8).
-- **D-278.** A resolution's deps causally include every cited replacement op; rotation heads are
-  covered by `parents`; the refusing Core controls are not required (§3 step 6).
-- **D-279.** Intrinsic-check invariant: steps 1, 2, 4–6 read only the candidate and its causal
-  closure and never re-judge an accepted candidate; only steps 3, 7, 8 consult the union, and
-  they only reclassify; pinned by the PR 4 monotonicity property (§3).
-- **D-280.** Step 4 trusts Core for delegation-chain validity and accepts an honored R04
-  continuation (`parent_id: nil`) as well as a root-attenuated grant; the resolver checks only
-  ceiling, inherited provenance, `live: false`, lease and epoch basis (§3 step 4).
+**Decisions:** D-265–D-280 (design) and D-281 onward (process) live in
+`plans/decisions-2026-10-17-backlog-run.html`; the index row is in `plans/README.md`.
