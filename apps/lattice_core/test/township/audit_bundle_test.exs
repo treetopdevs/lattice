@@ -48,6 +48,25 @@ defmodule Township.AuditBundleTest do
   end
 
   @tag :tmp_dir
+  test "a bundle over a log with an ill-formed grant names the omission and still verifies", %{
+    tmp_dir: dir
+  } do
+    sim = Sim.new(Matter, "replica:matter:omitted", ["clerk", "resident"], seed: "bundle-omitted")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+    {sim, bad} = Sim.append(sim, "clerk", :authority, {:grant, %{good | roles: [:clerk]}})
+    log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+    assert {:ok, _} = AuditBundle.write(dir, log)
+
+    assert File.read!(Path.join(dir, "trust_graph.dot")) =~
+             "// omitted 1 ill-formed delegation op(s): #{bad.id}"
+
+    assert File.read!(Path.join(dir, "trust_graph.mermaid")) =~ "%% omitted 1"
+    assert :ok = AuditBundle.verify(dir)
+  end
+
+  @tag :tmp_dir
   test "authentic accepted history with rejected-signature evidence still verifies", %{
     tmp_dir: dir
   } do
