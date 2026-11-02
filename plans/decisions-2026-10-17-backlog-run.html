@@ -1477,6 +1477,175 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>Merge only when the exact head SHA has a completed, successful "Flagship evidence" run and no GitHub Actions check suite is still pending. <code>poll.sh</code> now reads check suites, not only the rollup. PR #208 and this PR merged under the new rule.</dd>
 <dt>Reason</dt><dd>A check that has not registered is missing from the rollup, so the rollup can look green before the required evidence exists. Check suites show pending work before its check runs appear. No workflow, W4 or Phase G claim.</dd>
 </dl></section>
+<section id="d235"><h2><span>D-235</span> Take row 310; fallbacks not needed</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>Row 310 is TODO and depends only on row 231, which merged as PR #208 (8e692f13c). The only open PR is #209.</dd>
+<dt>Options</dt><dd>Row 310; row 226; row 225.</dd>
+<dt>Decision</dt><dd>Take row 310. Also mark row 231 DONE, since the README still says IN REVIEW.</dd>
+<dt>Reason</dt><dd>#209&#x27;s files (authority_body, replica_snapshot, the two read models and their tests) do not include live_ops.ex, live_ops/serializer.ex, audit.ex or the liveops and stress tests. plans/README.md merges row by row (D-08).</dd>
+</dl></section>
+<section id="d236"><h2><span>D-236</span> Buffer, not drop or fail</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>Every emit/3 runs after its state change and after any CapStore grant or revoke or device spawn. publish/3 emits twice around a revoke. remove_device emits from handle_info with no caller.</dd>
+<dt>Options</dt><dd>Drop the record (catch and ignore); fail the caller with a named error; buffer and replay.</dd>
+<dt>Decision</dt><dd>Buffer and replay. LiveOps survives, and the record is written once Audit is back.</dd>
+<dt>Reason</dt><dd>Failing the call cannot be atomic: the grant or revoke has already happened, so an error reply would describe an action that did occur, and the DOWN path has no caller. Dropping is the silent evidence gap D-197 refused. It does not claim Audit&#x27;s own history survives a restart; Audit is in-memory and a restart still wipes it.</dd>
+</dl></section>
+<section id="d237"><h2><span>D-237</span> Watermark over state.events, no separate queue and no overflow cap</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>LiveOps already keeps every event in state.events, with a monotonic id and the same kind and data it sends to Audit.</dd>
+<dt>Options</dt><dd>A bounded queue with an overflow marker; a cursor (audit_cursor) over the retained events.</dd>
+<dt>Decision</dt><dd>Add audit_cursor. Pending means events with id &gt; cursor, replayed oldest first. There is no separate cap.</dd>
+<dt>Reason</dt><dd>Nothing is dropped while LiveOps lives, so an overflow marker would guard a loss that cannot happen. Memory is bounded exactly as before, which is not at all; that is pre-existing and out of scope.</dd>
+</dl></section>
+<section id="d238"><h2><span>D-238</span> Defer only when Audit is not there; a timeout still exits</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>A GenServer.call timeout means Audit may still process the record later. Replaying it would then duplicate it.</dd>
+<dt>Options</dt><dd>Defer on any exit; defer only on noproc, shutdown, normal or killed and let {:timeout, _} propagate.</dd>
+<dt>Decision</dt><dd>Defer only on not-there exits. Re-raise timeouts and every other exit unchanged.</dd>
+<dt>Reason</dt><dd>The row is about the restart window. Deferring a timeout trades a crash for possible duplicate evidence. A stalled Audit is named out of scope. It does not claim LiveOps survives a stalled Audit.</dd>
+</dl></section>
+<section id="d239"><h2><span>D-239</span> New Audit.try_record/2; record/2 stays loud</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>D-195 added count/0 as one total helper and kept events/0 loud for evidence readers. Some 30 other record/2 call sites exist.</dd>
+<dt>Options</dt><dd>Catch inside LiveOps.emit/3; change record/2 to be total; add Audit.try_record/2.</dd>
+<dt>Decision</dt><dd>Add try_record/2, which returns {:ok, event} or {:error, :unavailable} and checks Process.whereis first. Only LiveOps uses it.</dd>
+<dt>Reason</dt><dd>The catch logic sits next to Audit, as with count/0. No other writer silently changes behaviour, because none of them keeps a replayable copy.</dd>
+</dl></section>
+<section id="d240"><h2><span>D-240</span> Mark replayed records audit_deferred: true</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>A replayed record lands later than its peers from other writers, and its Audit at timestamp is the replay time.</dd>
+<dt>Options</dt><dd>Replay verbatim; add a marker.</dd>
+<dt>Decision</dt><dd>Add audit_deferred: true to every replayed record&#x27;s metadata. Records written on time stay byte-identical to today&#x27;s.</dd>
+<dt>Reason</dt><dd>An evidence reader can tell the record was written late, and liveops_event_id still gives the LiveOps order. It does not claim Audit order or at timestamps match when the events happened.</dd>
+</dl></section>
+<section id="d241"><h2><span>D-241</span> reset/0 with pending records leaves a :liveops_audit_gap record</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>reset/0 replaces state.events, so pending records would be lost silently.</dd>
+<dt>Options</dt><dd>Refuse reset while records are pending; carry them over; discard them with a counted gap.</dd>
+<dt>Decision</dt><dd>Try to flush first. Otherwise carry audit_gap into the fresh state and write :liveops_audit_gap %{dropped: n, reason: :reset} at the next successful flush.</dd>
+<dt>Reason</dt><dd>reset is a demo and test API, and refusing it would break test setup. The gap is visible in Audit and in the snapshot counters, so the loss is not silent.</dd>
+</dl></section>
+<section id="d242"><h2><span>D-242</span> Flush on every emit, on flush_audit/0 and on a 1 s retry timer</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>After a restart a quiet LiveOps might never emit again.</dd>
+<dt>Options</dt><dd>Next emit only; also a public flush_audit/0; also a send_after retry.</dd>
+<dt>Decision</dt><dd>All three. The timer is armed only while records are pending. Tests use flush_audit/0 and never the timer.</dd>
+<dt>Reason</dt><dd>The backlog drains without traffic, and tests stay deterministic because Audit stays terminated through the deferral window.</dd>
+</dl></section>
+<section id="d243"><h2><span>D-243</span> Add audit_pending and audit_gap to the snapshot counters</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>The pending backlog must be visible, not only in Audit after the fact. There is no golden fixture; lattice.liveops.proof copies the map as-is.</dd>
+<dt>Options</dt><dd>Keep it internal; add counters.</dd>
+<dt>Decision</dt><dd>Add counters.audit_pending and counters.audit_gap. counters.audit keeps D-196&#x27;s meaning.</dd>
+<dt>Reason</dt><dd>Adding keys does not break the existing partial matches or the proof artifact. It does not claim the counts are durable.</dd>
+</dl></section>
+<section id="d244"><h2><span>D-244</span> CapStore and Topology are row 313, not this slice</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>CapStore calls Audit.record inside handle_call (authorize, grant, revoke, delegate). Its caps live only in memory (init %{caps: %{}}). Topology does the same. So register_tab, cleanup_tab and every Gateway call die in CapStore during an Audit outage, before LiveOps is reached.</dd>
+<dt>Options</dt><dd>Fix them here; file a row.</dd>
+<dt>Decision</dt><dd>File row 313 (P2, S, depends on 310, rule 3 applies). The tests drive emit only through record_denial/4 and device_event/6, which have no CapStore hop.</dd>
+<dt>Reason</dt><dd>CapStore is the authority path, which is rule-3 work with its own decision on fail-closed versus defer. This slice does not claim LiveOps actions work end to end during an Audit restart.</dd>
+</dl></section>
+<section id="d245"><h2><span>D-245</span> Rule 3 does not apply</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>Rule 3 requires a second review for authority, canonical, carrier, wire, codec, custody, src-tauri or workflow diffs.</dd>
+<dt>Options</dt><dd>One review; two.</dd>
+<dt>Decision</dt><dd>One adversarial review.</dd>
+<dt>Reason</dt><dd>The diff touches audit.ex, live_ops.ex, live_ops/serializer.ex, tests and plans/README.md. As with D-200, none is a rule-3 path. LiveOps&#x27; moduledoc says it never authorizes; CapStore does. Row 313 will need two reviews.</dd>
+</dl></section>
+<section id="d246"><h2><span>D-246</span> Slice edits README rows only, not the decisions ledger</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>D-03 says slices never edit the decisions html, and the file is also in open PR #209.</dd>
+<dt>Options</dt><dd>Edit the ledger; return the decisions to the coordinator.</dd>
+<dt>Decision</dt><dd>Change README rows 231 (DONE), 310 (IN PROGRESS, then IN REVIEW) and add 313. Decisions D-235 to D-246 are returned for the coordinator&#x27;s ledger PR.</dd>
+<dt>Reason</dt><dd>This follows D-03 and avoids a conflict with #209.</dd>
+</dl></section>
+<section id="d247"><h2><span>D-247</span> emit/3 writes to Audit before the DemoHub push</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>push then flush (plan wording) | flush then push (chosen)</dd>
+<dt>Decision</dt><dd>flush_audit runs first, then push_demo_event</dd>
+<dt>Reason</dt><dd>Before this change Audit.record ran before the push. DemoHub.event is a cast, and its consumers read Audit.count(), so pushing first would create a race that did not exist before. The plan said to push as today and then flush; I kept today&#x27;s order instead.</dd>
+</dl></section>
+<section id="d248"><h2><span>D-248</span> Deferral tests do not pin an exact flushed count</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>pin flushed: n (plan) | assert pending plus the record contents (chosen)</dd>
+<dt>Decision</dt><dd>The explicit flush_audit() assertions match pending: 0 (and gap: 0) rather than flushed: 1 / flushed: 2; the tests assert the exact Audit records instead</dd>
+<dt>Reason</dt><dd>The 1 s retry timer starts at the first deferred emit and can fire between restarting Audit and the explicit flush on a slow runner, which would make flushed 0. The resulting Audit records are the same either way.</dd>
+</dl></section>
+<section id="d249"><h2><span>D-249</span> Deferred events wait for the gap record</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>always try events after the gap | wait for the gap first (chosen)</dd>
+<dt>Decision</dt><dd>When an audit_gap is still unwritten, flush_audit does not write deferred events in that pass</dd>
+<dt>Reason</dt><dd>The gap record can only be unwritten because Audit is unavailable, so the events would fail anyway. This also guarantees the gap record is written before any newer events.</dd>
+</dl></section>
+<section id="d250"><h2><span>D-250</span> Retry timer after reset, and stale timer messages</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>plan: cancel only | cancel, clear the stale message and re-arm (chosen)</dd>
+<dt>Decision</dt><dd>reset/0 starts the retry timer when it leaves a gap. If Process.cancel_timer/1 returns false, an already-delivered :flush_audit message is removed from the mailbox.</dd>
+<dt>Reason</dt><dd>Without the timer, a gap left by reset would only be written on the next emit or an explicit flush. Removing the stale message stops a second retry timer from being left running.</dd>
+</dl></section>
+<section id="d251"><h2><span>D-251</span> Tests filter Audit records to LiveOps ones</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>raw Audit.events() | filtered (chosen)</dd>
+<dt>Decision</dt><dd>Tests that count all Audit events only look at records that carry liveops_event_id</dd>
+<dt>Reason</dt><dd>This keeps the tests from breaking if some other process writes to Audit during the test.</dd>
+</dl></section>
+<section id="d252"><h2><span>D-252</span> Full umbrella failures are environment, not this change</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>install node_modules and re-run | treat as environment (chosen)</dd>
+<dt>Decision</dt><dd>Left the 47 umbrella failures unfixed</dd>
+<dt>Reason</dt><dd>43 are TypeScript tests that cannot find tsx because this fresh worktree has no node_modules; the plan has no TS gate. The other 4 timed out at load average about 130-160 and pass when their files are re-run on their own.</dd>
+</dl></section>
+<section id="d253"><h2><span>D-253</span> Bounded audit replay batch</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>Drain everything in one run (the old blocking behaviour); bounded batch on the 1 s timer (slow); bounded batch with an immediate continuation (chosen)</dd>
+<dt>Decision</dt><dd>Batch size 500. After a full batch, continue at once with send_after 0, replacing any pending 1 s retry. Keep the 1 s retry only when Audit is unavailable.</dd>
+<dt>Reason</dt><dd>This keeps each handler run short, so callers do not hit the 5 s GenServer.call timeout. A healthy backlog still drains without waiting on the timer.</dd>
+</dl></section>
+<section id="d254"><h2><span>D-254</span> reset/0 drains fully before recording a gap</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>One batch then gap (loses records); full drain (chosen)</dd>
+<dt>Decision</dt><dd>handle_call(:reset) calls drain_audit/1, which repeats bounded flushes until nothing is pending or a flush makes no progress. Only records Audit cannot accept become the gap.</dd>
+<dt>Reason</dt><dd>With bounded batches alone, a reset against a working Audit would turn records Audit could have taken into a gap. Reset is a destructive control call, so blocking there is acceptable. Covered by the test &#x27;reset with a healthy Audit drains a multi-batch backlog&#x27;.</dd>
+</dl></section>
+<section id="d255"><h2><span>D-255</span> flushed counts the gap record</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>Count gap writes (chosen); document that flushed counts only replayed events</dd>
+<dt>Decision</dt><dd>flushed is the number of Audit records this call wrote, including a :liveops_audit_gap record.</dd>
+<dt>Reason</dt><dd>This matches the documented meaning, &#x27;records written now&#x27;.</dd>
+</dl></section>
+<section id="d256"><h2><span>D-256</span> Round 2 P2: follow-up row instead of a third patch</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Context</dt><dd>Round 1 found unbounded replay in flush and the fix bounded it. That fix&#x27;s reset drain then brought the same unbounded replay back on the reset path.</dd>
+<dt>Options</dt><dd>(a) keep drain + design row; (b) one bounded flush on reset and gap the rest; (c) carry-forward replay state</dd>
+<dt>Decision</dt><dd>Kept drain_audit, documented reset as O(backlog) synchronous, and proposed a design row (row 314)</dd>
+<dt>Reason</dt><dd>This is the same kind of problem a third time (rule 3). Removing the drain (option b) would knowingly drop records a live Audit could have taken, which brings back round 1&#x27;s data loss. Adding carry-forward state would be new behaviour with no settled memory bound, and that bound is exactly the design question.</dd>
+</dl></section>
+<section id="d257"><h2><span>D-257</span> How tests control the retry timer</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Decision</dt><dd>Read the retry interval from runtime app env (:liveops_audit_retry_ms), with a test helper that sets it to 1 h and restores it on exit</dd>
+<dt>Reason</dt><dd>Cheap, keeps the exact count assertions, and leaves the 0-delay batch continuation and the default auto-retry test path as they are. The test module is async: false, so put_env is safe.</dd>
+</dl></section>
+<section id="d258"><h2><span>D-258</span> PR #210 review: Codex Sol 6.1 xhigh rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Finding</dt><dd>Round 1: (P2 live_ops.ex:727) replay kept LiveOps busy until the whole backlog was written; (P3 lattice_liveops_test.exs:195) automatic retry had no regression coverage; (P3 live_ops.ex:172) flushed did not count the gap record. Round 2: (P2 live_ops.ex:769) reset restores unbounded synchronous replay through drain_audit; (P3 live_ops.ex:740) a gap write exceeded the documented batch limit (flushed: 501); (P3 lattice_liveops_test.exs:292) the gap-count assertion raced the automatic retry. Final round: (P3 lattice_liveops_test.exs:377) in-flight Audit termination lacks regression coverage: every outage test stops Audit before writing, bypassing try_record/2&#x27;s exit handler, so removing that handler leaves all 16 tests passing; a probe (suspend Audit, queue a denial write, then kill Audit) crashes LiveOps with that mutation, while HEAD survives and replays the event.</dd>
+<dt>Decision</dt><dd>Round 1: all three fixed. flush_audit/2 writes at most 500 records per run and queues an immediate :flush_audit continuation (send_after 0) when more remain, re-arming the 1 s retry only when Audit is unavailable; the new test &#x27;a large backlog drains in bounded batches&#x27; fails with the limit removed (its flushed &lt;= batch check could rarely pass trivially if the timer chain drains first; no 30k-scale timing repro was run). The new test &#x27;an idle LiveOps replays the backlog after Audit returns&#x27; fails with Process.send_after disabled. flushed now includes the gap record; the reset test pins flushed: 1. Round 2: the P2 became follow-up row 314 (D-256): it is the same class as round 1&#x27;s P2, caused by round 1&#x27;s own drain_audit commit 0a62677e3, so under rule 3 it was not patched a third time; the moduledoc states it as a known residual. The batch-limit P3 is fixed: the event allowance drops to 499 when a call writes the gap record, and the test &#x27;a flush that writes a gap record stays within the batch limit&#x27; asserts flushed: 500, pending: 1 (flushed: 501 with the fix reverted). The race P3 is fixed: the retry interval is read at runtime from :lattice_core, :liveops_audit_retry_ms and hold_audit_retry!/0 sets it to 1 h (D-257); a 1.1 s pause reproduced the race (flushed: 0) without the hold and passed with it; the pause was not committed. Final round: the P3 was open on the reviewed tip and is filed as row 315. No P1 was reported.</dd>
+<dt>Reason</dt><dd>One adversarial review, since rule 3 does not apply to this diff (D-245). The round 2 P2 is a design question about the reset contract, not a bug a further patch should guess at. The final P3 is test coverage only; production behaviour on HEAD is correct. No workflow, W4 or Phase G claim.</dd>
+</dl></section>
+<section id="d259"><h2><span>D-259</span> Row 315: in-flight Audit termination test</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Options</dt><dd>Kill Audit with the write queued in its mailbox and replay through flush_audit/0 with the retry timer held (chosen); rely on the 1 s retry after the restart (races the timer); stop Audit through the supervisor (never exercises the exit handler)</dd>
+<dt>Decision</dt><dd>The test &#x27;Audit killed with a LiveOps write in flight defers the record&#x27; suspends Audit with :sys.suspend/1, issues record_denial/4 from a Task, waits until LiveOps&#x27; own {:record, :liveops_denied, _} call is in Audit&#x27;s mailbox, kills Audit, then asserts the Task returns :ok, the LiveOps pid is unchanged, and after the supervisor restarts Audit flush_audit/0 returns flushed: 1, pending: 0 with one audit_deferred record. hold_audit_retry!/0 keeps the timer out of the count.</dd>
+<dt>Reason</dt><dd>It is the only test that reaches try_record/2&#x27;s exit handler. With the handler removed, this test fails (LiveOps crashes on the :killed exit) and the other 16 still pass. Test coverage only; no production change, and no workflow, W4 or Phase G claim.</dd>
+</dl></section>
+<section id="d260"><h2><span>D-260</span> Oldest-first audit queue (PR #210 Codex P2, live_ops.ex:756)</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/210">#210</a></dd>
+<dt>Finding</dt><dd>During an Audit outage every emit calls flush_audit/2, which selected the batch with take_while and reverse over the newest-first state.events, so each emit walked the whole backlog and N outage emits cost O(N^2).</dd>
+<dt>Options</dt><dd>Skip the flush while the retry timer is armed (breaks the next-emit-flushes-first ordering test); oldest-first :queue of unacknowledged events (chosen)</dd>
+<dt>Decision</dt><dd>emit/3 also appends the event to state.audit_queue; write_audit_batch/3 peeks the front, drops it on {:ok, _}, and stops after the allowance or the first {:error, :unavailable}. reset/0&#x27;s fresh_state/0 empties the queue. Commit 990339d51. The test &#x27;a deferred emit does not scale with the backlog&#x27; compares one deferred emit&#x27;s LiveOps reductions at a 10- and a 5000-event backlog: 152 to 21183 with the old scan reinstated, flat with the queue.</dd>
+<dt>Reason</dt><dd>Work per flush is now bounded by the batch plus one failed write, which is what the moduledoc already claimed. Reductions are deterministic, so the test has no wall-clock threshold. Memory is shared terms, not copies. reset/0&#x27;s full drain (row 314) is unchanged.</dd>
+</dl></section>
 </main>
 </body>
 </html>

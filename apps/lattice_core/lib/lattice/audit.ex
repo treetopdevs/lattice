@@ -16,6 +16,45 @@ defmodule Lattice.Audit do
     GenServer.call(__MODULE__, {:record, type, metadata})
   end
 
+  @doc """
+  Records an event, or reports `{:error, :unavailable}` when Audit is not there.
+
+  This is for projection-side writers that keep their own copy of every event
+  and replay it later (for example `Lattice.LiveOps`, row 310). It returns
+  `{:error, :unavailable}` without calling when no `Lattice.Audit` process is
+  registered, and when the call exits because the process is gone or stopping
+  (`:noproc`, `:normal`, `:shutdown`, `{:shutdown, _}`, `:killed`). Any other
+  exit, including `{:timeout, _}` from a stalled Audit, is re-raised unchanged.
+
+  `record/2` stays loud for every other caller: it still exits when Audit is
+  down.
+  """
+  def try_record(type, metadata \\ %{}) when is_atom(type) and is_map(metadata) do
+    if Process.whereis(__MODULE__) do
+      {:ok, GenServer.call(__MODULE__, {:record, type, metadata})}
+    else
+      {:error, :unavailable}
+    end
+  catch
+    :exit, reason ->
+      if unavailable_exit?(reason) do
+        {:error, :unavailable}
+      else
+        :erlang.raise(:exit, reason, __STACKTRACE__)
+      end
+  end
+
+  defp unavailable_exit?({reason, {GenServer, :call, _args}}), do: unavailable_reason?(reason)
+  defp unavailable_exit?(reason), do: unavailable_reason?(reason)
+
+  defp unavailable_reason?(:noproc), do: true
+  defp unavailable_reason?({:noproc, _}), do: true
+  defp unavailable_reason?(:normal), do: true
+  defp unavailable_reason?(:shutdown), do: true
+  defp unavailable_reason?({:shutdown, _}), do: true
+  defp unavailable_reason?(:killed), do: true
+  defp unavailable_reason?(_reason), do: false
+
   def events do
     GenServer.call(__MODULE__, :events)
   end
