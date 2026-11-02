@@ -251,8 +251,23 @@ defmodule Township.ReadModel do
         _other -> []
       end
     end)
-    |> Enum.filter(fn {_kind, dview} -> dview.well_formed? end)
+    |> Enum.filter(fn {_kind, dview} -> renderable?(dview) end)
   end
+
+  # Match every field the edge reads, not only `well_formed?`, so a drift
+  # between the parser's member rule and the judge's cannot raise below.
+  defp renderable?(dview),
+    do:
+      match?(
+        %{
+          well_formed?: true,
+          issuer: {:ok, _},
+          audience: {:ok, _},
+          roles: {:ok, _},
+          ops: {:ok, _}
+        },
+        dview
+      )
 
   defp pub({:ok, pub}), do: pub
 

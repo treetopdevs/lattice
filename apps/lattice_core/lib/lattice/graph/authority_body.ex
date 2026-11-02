@@ -94,12 +94,10 @@ defmodule Lattice.Graph.AuthorityBody do
     end
   end
 
-  # Atoms convert through String.Chars (`nil` becomes ""), matching the
-  # interpolation and `Enum.join/2` the readers used before.
   # Same member rule as Delegation.well_formed?/1: a map-backed MapSet of
   # atoms, binaries, integers or binary-name Canonical.Atom wrappers. Members
-  # sort in Erlang term order before conversion, so the joined text matches
-  # what the readers printed before this parser existed.
+  # sort in Erlang term order, then convert through String.Chars (`nil` becomes
+  # ""), so the joined text matches what the readers printed before.
   defp names(map, field) do
     case Map.get(map, field) do
       %MapSet{map: backing} = set when is_map(backing) ->
