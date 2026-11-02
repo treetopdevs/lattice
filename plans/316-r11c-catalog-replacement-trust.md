@@ -1,6 +1,6 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: DESIGNED (design only, 2026-11-01). PRs 0–2, PR 3's generation keying and PR 6's
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 1–2, PR 3's generation keying and PR 6's
 exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 
@@ -262,6 +262,16 @@ acquisition"; "an R04 continuation acquisition (`parent_id: nil`) is observable 
 carries only `delegation_id`, so reaching the delegation struct without a new API is part of the
 probe); "a refused replacement op stays in the authenticated history with its Core reason". STOP if any check needs a new Core primitive: file a row and return for interface
 review (contract §3). Do not approximate.
+
+*PR 0 outcome (2026-11-02): GO.* All five probes pass on the real `Treehouse.Space` through the
+public Sim fixture; no Core primitive or context field was needed. The delegation struct is read
+by matching the transfer/succeed op in the strict prefix's `Log.ops/1`. Step-4 provenance: an R04
+continuation's self-issued ceiling must be a subset of its predecessor acquisition's ceiling
+(`Continuation.scope?/4`, `continuation_scope_exceeded`), and leased transfers are attenuated
+(`not_attenuated`), so both acquisition paths inherit, never widen, `replace_catalog_v1`. A root
+genesis cap is the `:admin` acquisition itself with `expires_epoch: nil`. Lapse needs a beacon
+epoch strictly greater than `expires_epoch` (6 honors, 7 lapses). Until PR 1 adds the command, a
+`replace_catalog_v1` op is retained with `:unknown_command` (tripwire in the probe test).
 
 **PR 1 — claim codec and the Space command.** Files: `transport_catalog.ex`; `space.ex` (the
 `command(:replace_catalog_v1, [:_claim, :_catalog_possession, :_service_possession], ...)`
