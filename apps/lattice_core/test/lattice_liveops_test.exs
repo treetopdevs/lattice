@@ -192,8 +192,9 @@ defmodule LatticeCore.LiveOpsTest do
   # LiveOps. Emits are driven only through `record_denial/4` and
   # `device_event/6`, which do not call `Lattice.CapStore`; a CapStore hop still
   # records through `Audit.record/2` and would crash during the outage (row 313).
-  # No assertion relies on the 1 s retry timer: Audit stays terminated for the
-  # whole deferral window, so a timer fire there only re-arms.
+  # Only the automatic-retry test relies on the 1 s retry timer; elsewhere
+  # Audit stays terminated for the whole deferral window, so a timer fire there
+  # only re-arms.
   describe "audit deferral across an Audit restart (row 310)" do
     setup do
       on_exit(&ensure_audit_running/0)
@@ -287,11 +288,48 @@ defmodule LatticeCore.LiveOpsTest do
       assert %{counters: %{audit_gap: 2, audit_pending: 0}} = Lattice.LiveOps.snapshot()
 
       start_audit!()
-      assert {:ok, %{flushed: 0, pending: 0, gap: 0}} = Lattice.LiveOps.flush_audit()
+      # `flushed` counts the gap record itself (row 310 round 1).
+      assert {:ok, %{flushed: 1, pending: 0, gap: 0}} = Lattice.LiveOps.flush_audit()
 
       assert [%{metadata: %{dropped: 2, reason: :reset}}] = audit_of(:liveops_audit_gap)
       assert audit_of(:liveops_denied) == []
       assert %{counters: %{audit_gap: 0}} = Lattice.LiveOps.snapshot()
+    end
+
+    # Row 310 round 1: an idle LiveOps must replay on its own once Audit
+    # returns; nothing here flushes or emits after the restart.
+    test "an idle LiveOps replays the backlog after Audit returns" do
+      stop_audit!()
+      assert :ok = Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+      start_audit!()
+
+      assert eventually(fn -> Lattice.LiveOps.snapshot().counters.audit_pending == 0 end)
+      assert [%{metadata: %{tab_id: "tab-x", audit_deferred: true}}] = audit_of(:liveops_denied)
+    end
+
+    # Row 310 round 1: replaying a large backlog in one handler blocked every
+    # LiveOps caller until it drained. A flush now writes one bounded batch and
+    # the remainder continues through the mailbox.
+    test "a large backlog drains in bounded batches" do
+      batch = Lattice.LiveOps.audit_batch()
+      total = batch * 2 + 100
+      stop_audit!()
+
+      for n <- 1..total do
+        assert :ok = Lattice.LiveOps.record_denial("tab-#{n}", :publish, :cap_required, %{})
+      end
+
+      assert %{counters: %{audit_pending: ^total}} = Lattice.LiveOps.snapshot()
+      start_audit!()
+
+      assert {:ok, %{flushed: flushed}} = Lattice.LiveOps.flush_audit()
+      assert flushed <= batch
+
+      assert eventually(fn -> Lattice.LiveOps.snapshot().counters.audit_pending == 0 end)
+
+      ids = Enum.map(liveops_audit(), & &1.metadata.liveops_event_id)
+      assert length(ids) == total
+      assert ids == Enum.sort(ids) and ids == Enum.uniq(ids)
     end
 
     test "Audit.try_record reports unavailable instead of exiting" do
@@ -300,6 +338,27 @@ defmodule LatticeCore.LiveOpsTest do
       assert Lattice.Audit.try_record(:probe, %{}) == {:error, :unavailable}
       assert Process.alive?(self())
       assert catch_exit(Lattice.Audit.record(:probe, %{}))
+    end
+  end
+
+  defp eventually(fun, timeout_ms \\ 5_000) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    poll_until(fun, deadline)
+  end
+
+  defp poll_until(fun, deadline) do
+    cond do
+      fun.() ->
+        true
+
+      System.monotonic_time(:millisecond) > deadline ->
+        false
+
+      true ->
+        receive do
+        after
+          20 -> poll_until(fun, deadline)
+        end
     end
   end
 

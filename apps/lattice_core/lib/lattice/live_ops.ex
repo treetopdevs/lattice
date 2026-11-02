@@ -18,9 +18,12 @@ defmodule Lattice.LiveOps do
   each event's exact `kind` and `data`, and `audit_cursor` marks the newest
   event Audit acknowledged. Later events are replayed in order, tagged
   `audit_deferred: true`, on the next emit, on a 1 s retry timer, or through
-  `flush_audit/0`. A `reset/0` that discards unrecorded events leaves one
-  `:liveops_audit_gap` record with the dropped count. A stalled Audit (a call
-  timeout) still exits LiveOps.
+  `flush_audit/0`. Each of those writes at most `@audit_batch` (500) records and, if more
+  remain, queues an immediate continuation message, so a large backlog drains
+  in bounded batches with snapshot and control calls served between them. A
+  `reset/0` that discards unrecorded events leaves one `:liveops_audit_gap`
+  record with the dropped count. A stalled Audit (a call timeout) still exits
+  LiveOps.
   """
 
   use GenServer
@@ -29,6 +32,8 @@ defmodule Lattice.LiveOps do
   alias Lattice.LiveOps.{Policy, Serializer}
 
   @default_publish_ttl_ms 15_000
+  @audit_batch 500
+  @audit_retry_ms 1_000
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -46,11 +51,17 @@ defmodule Lattice.LiveOps do
   @doc """
   Replays any audit records deferred while `Lattice.Audit` was unavailable.
 
-  Returns `{:ok, %{flushed: n, pending: m, gap: g}}`: `n` records written now,
-  `m` still waiting for Audit, and `g` events a `reset/0` discarded unrecorded
-  whose gap record is not written yet.
+  Writes at most one bounded batch (500 records); any remainder continues
+  automatically without blocking callers. Returns
+  `{:ok, %{flushed: n, pending: m, gap: g}}`: `n` Audit records this call wrote,
+  counting a `:liveops_audit_gap` record; `m` events still waiting for Audit;
+  and `g` events a `reset/0` discarded unrecorded whose gap record is not
+  written yet.
   """
   def flush_audit, do: GenServer.call(__MODULE__, :flush_audit)
+
+  @doc false
+  def audit_batch, do: @audit_batch
   def export(format \\ :json), do: GenServer.call(__MODULE__, {:export, format})
 
   def record_denial(tab_id, action, reason, metadata \\ %{}) do
@@ -159,17 +170,19 @@ defmodule Lattice.LiveOps do
     state = flush_audit(state)
     cancel_audit_retry(state)
     gap = state.audit_gap + audit_pending(state)
-    {:reply, :ok, schedule_audit_retry(%{fresh_state() | audit_gap: gap})}
+    {:reply, :ok, schedule_audit_retry(%{fresh_state() | audit_gap: gap}, @audit_retry_ms)}
   end
 
   def handle_call(:flush_audit, _from, state) do
     before = state.audit_cursor
+    gap_before = state.audit_gap
     state = flush_audit(state)
+    gap_written = if gap_before > 0 and state.audit_gap == 0, do: 1, else: 0
 
     {:reply,
      {:ok,
       %{
-        flushed: state.audit_cursor - before,
+        flushed: state.audit_cursor - before + gap_written,
         pending: audit_pending(state),
         gap: state.audit_gap
       }}, state}
@@ -713,34 +726,41 @@ defmodule Lattice.LiveOps do
     state
   end
 
-  # Writes every event newer than `audit_cursor` to Audit, oldest first, and
-  # stops at the first `{:error, :unavailable}`. `current_id` is the event being
+  # Writes up to `@audit_batch` events newer than `audit_cursor` to Audit,
+  # oldest first, and stops at the first `{:error, :unavailable}`. A backlog
+  # left after a full batch is continued by an immediate `:flush_audit`
+  # message, so the mailbox interleaves other calls (row 310 round 1); an
+  # unavailable Audit re-arms the 1 s retry instead. `current_id` is the event being
   # emitted right now: it alone is recorded without the `audit_deferred` marker,
   # so a healthy-path record is byte-identical to the pre-row-310 one.
   defp flush_audit(state, current_id \\ nil) do
     state = flush_audit_gap(state)
 
-    state =
-      if state.audit_gap > 0 do
-        state
-      else
+    if state.audit_gap > 0 do
+      schedule_audit_retry(state, @audit_retry_ms)
+    else
+      batch =
         state.events
         |> Enum.take_while(&(&1.id > state.audit_cursor))
         |> Enum.reverse()
-        |> Enum.reduce_while(state, fn event, state ->
+        |> Enum.take(@audit_batch)
+
+      {state, outcome} =
+        Enum.reduce_while(batch, {state, :ok}, fn event, {state, :ok} ->
           metadata =
             event.data
             |> Map.put(:liveops_event_id, event.id)
             |> mark_deferred(event.id != current_id)
 
           case Audit.try_record(event.kind, metadata) do
-            {:ok, _record} -> {:cont, %{state | audit_cursor: event.id}}
-            {:error, :unavailable} -> {:halt, state}
+            {:ok, _record} -> {:cont, {%{state | audit_cursor: event.id}, :ok}}
+            {:error, :unavailable} -> {:halt, {state, :unavailable}}
           end
         end)
-      end
 
-    schedule_audit_retry(state)
+      delay = if outcome == :ok, do: 0, else: @audit_retry_ms
+      schedule_audit_retry(state, delay)
+    end
   end
 
   defp flush_audit_gap(%{audit_gap: 0} = state), do: state
@@ -757,15 +777,24 @@ defmodule Lattice.LiveOps do
 
   defp audit_pending(state), do: state.sequence - state.audit_cursor
 
-  defp schedule_audit_retry(%{audit_retry: nil} = state) do
-    if state.audit_gap > 0 or audit_pending(state) > 0 do
-      %{state | audit_retry: Process.send_after(self(), :flush_audit, 1_000)}
-    else
-      state
+  # Arms one `:flush_audit` timer while records are owed. A continuation
+  # (`delay` 0) replaces a pending 1 s retry so a healthy backlog never idles.
+  defp schedule_audit_retry(state, delay) do
+    cond do
+      state.audit_gap == 0 and audit_pending(state) == 0 ->
+        state
+
+      state.audit_retry == nil ->
+        %{state | audit_retry: Process.send_after(self(), :flush_audit, delay)}
+
+      delay == 0 ->
+        cancel_audit_retry(state)
+        %{state | audit_retry: Process.send_after(self(), :flush_audit, 0)}
+
+      true ->
+        state
     end
   end
-
-  defp schedule_audit_retry(state), do: state
 
   defp cancel_audit_retry(%{audit_retry: nil}), do: :ok
 
