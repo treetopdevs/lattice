@@ -142,19 +142,51 @@ defmodule Township.ReadModelTest do
     {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
     {sim, transfer} = Sim.append(sim, "clerk", :authority, {:transfer, %{}, good, 0})
     {sim, _heartbeat} = Sim.append(sim, "clerk", :authority, {:heartbeat, %{}, 0})
+    {sim, succeed} = Sim.append(sim, "clerk", :authority, {:succeed, %{}, good, 0})
     {sim, _revoke} = Sim.revoke(sim, "clerk", good.id)
     log = sim |> Sim.sync_all() |> Sim.log("clerk")
 
-    assert ReadModel.observe(log, labels: %{}, vouches: []).trust_graph.omitted == [transfer.id]
+    assert ReadModel.observe(log, labels: %{}, vouches: []).trust_graph.omitted ==
+             [transfer.id, succeed.id]
   end
 
   test "trust-graph exports without omitted delegations are byte-identical" do
-    snapshot = %{nodes: [], edges: []}
+    alias Lattice.Graph.Export
 
-    for format <- [:dot, :mermaid] do
-      assert Lattice.Graph.Export.export(snapshot, format) ==
-               Lattice.Graph.Export.export(Map.put(snapshot, :omitted, []), format)
+    snapshot = %{
+      nodes: [%{id: "a", kind: "realm", label: "A"}, %{id: "b", kind: "realm", label: "B"}],
+      edges: [%{from: "a", to: "b", kind: "grant ops=[post]"}]
+    }
+
+    # Pinned pre-row-306 bytes.
+    dot = """
+    digraph lattice {
+      "a" [label="A", shape="ellipse"];
+      "b" [label="B", shape="ellipse"];
+      "a" -> "b" [label="grant ops=[post]"];
+    }\
+    """
+
+    mermaid = """
+    graph TD
+      n_a["A"]
+      n_b["B"]
+      n_a -->|"grant ops=[post]"| n_b\
+    """
+
+    for {format, expected} <- [dot: dot, mermaid: mermaid],
+        graph <- [snapshot, Map.put(snapshot, :omitted, []), %{nodes: [], edges: []}] do
+      bytes = Export.export(graph, format)
+      if graph.nodes != [], do: assert(bytes == expected), else: refute(bytes =~ "omitted")
+      assert bytes == Export.export(Map.put(graph, :omitted, []), format)
     end
+
+    assert Export.export(Map.put(snapshot, :omitted, ["x", "y"]), :dot) ==
+             String.replace(
+               dot,
+               "digraph lattice {\n",
+               "digraph lattice {\n  // omitted 2 ill-formed delegation op(s): x y\n"
+             )
   end
 
   test "observe survives a malformed role or non-binary audience in transfer/succeed/grant bodies" do
