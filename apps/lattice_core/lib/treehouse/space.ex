@@ -351,21 +351,52 @@ defmodule Treehouse.Space do
   # judge honors; an op that would quarantine (revoked, expired, not granted) is never returned.
   defp honored_bootstrap(identity, log, record) do
     deps = Enum.sort(Log.frontier(log))
+    caps = root_capabilities(log, identity)
 
-    log
-    |> root_capabilities(identity)
-    |> Enum.find_value({:error, :bootstrap_not_honored}, fn cap ->
-      with {:ok, op} <-
-             Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
-               cap: cap
-             ),
-           false <-
-             MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
-        {:ok, op}
-      else
-        _ -> nil
-      end
-    end)
+    with :ok <- bootstrap_envelope(identity, log.replica, deps, record, caps) do
+      Enum.find_value(
+        caps,
+        {:error, :bootstrap_not_honored},
+        &honored_bootstrap(identity, log, deps, record, &1)
+      )
+    end
+  end
+
+  # Lifecycle contract §2 (row 318): the signature slot is fixed at 64 bytes and every cap id
+  # has one length, so the zero-signed placeholder measures the signed push envelope
+  # byte-exactly before any signature is made.
+  defp bootstrap_envelope(_identity, _replica, _deps, _record, []), do: :ok
+
+  defp bootstrap_envelope(identity, replica, deps, record, [cap | _]) do
+    op = %Op{
+      id: "",
+      replica: replica,
+      author: identity.pub,
+      deps: deps,
+      kind: :command,
+      body: {:catalog_bootstrap_v1, [record]},
+      cap: cap,
+      sig: <<0::512>>
+    }
+
+    case Treehouse.MemberContinuityAuthoring.envelope_status(%{op | id: Op.recompute_id(op)}) do
+      :ok -> :ok
+      {:error, :capacity_stop} -> {:error, :catalog_command_too_large}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp honored_bootstrap(identity, log, deps, record, cap) do
+    with {:ok, op} <-
+           Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
+             cap: cap
+           ),
+         false <-
+           MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
+      {:ok, op}
+    else
+      _ -> nil
+    end
   end
 
   defp bootstrap_profile(log) do

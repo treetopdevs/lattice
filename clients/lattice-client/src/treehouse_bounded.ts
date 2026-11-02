@@ -334,6 +334,16 @@ export async function authorTreehouseCatalogBootstrap(input: {
     if (!delegation.ops.includes("catalog_bootstrap_v1") || !delegation.roles.includes("admin")) continue;
     if (!caps.includes(delegation.id)) caps.push(delegation.id);
   }
+  // Lifecycle contract §2 (row 318): the signature slot is fixed at 64 bytes and every cap id has one length, so a
+  // zero-signed placeholder measures the signed push envelope byte-exactly before any signature is made.
+  if (caps.length > 0) {
+    const placeholder = await authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier,
+      signer: { publicKey: input.signer.publicKey, sign: () => new Uint8Array(64) }, capId: caps[0]!,
+      command: { command: "catalog_bootstrap_v1", record } });
+    if (new TextEncoder().encode(JSON.stringify({ type: "push", ops: [placeholder] })).length > 64_000) {
+      throw new Error("catalog_command_too_large");
+    }
+  }
   // Return the first authored op the judge honors; one that would quarantine (revoked, expired, not granted) never leaves.
   for (const capId of caps) {
     const frame = await authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier, signer: input.signer,

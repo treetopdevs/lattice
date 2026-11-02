@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { authorCarrierDelegation, authorCarrierOp } from "../src/codec";
 import { bindTownshipReplica, townshipCapTerm } from "../src/township";
 import { deriveTreehouseCatalogCutoff } from "../src/treehouse_catalog_cutoff";
-import { canonicalBytesForCatalogReplacementPossession, catalogReplacementClaimToCarrierTerm } from "../src/treehouse_catalog_codec";
+import { canonicalBytesForCatalogReplacementPossession, canonicalBytesForCatalogRotation, canonicalBytesForCatalogRotationPossession, canonicalBytesForTransportCatalog, catalogReplacementClaimToCarrierTerm, catalogRotationId, transportCatalogId, } from "../src/treehouse_catalog_codec";
 import { authorTreehouseCatalogReplacementFromFrames, prepareTreehouseCatalogReplacementFromFrames, } from "../src/index";
 import { judge, replacementBaseFixture, seededSigner } from "./support/export_treehouse_catalog_replacement";
 const atom = (name) => ["atom", name];
@@ -51,7 +51,8 @@ function request(f, overrides = {}, threadFrames = [f.threadGenesis]) {
     return { author: b64(f.nominee.publicKey), nonce: id("nonce"), parents: [f.bootstrap.id],
         priorCatalogs: [{ binding: f.bootstrap.id, catalog: null }], generation: 1, newCatalogKey: b64(f.newCatalog.publicKey),
         newServiceId: id("service"), newServiceKey: serviceKey, newOrigin: "wss://replacement-relay.invalid",
-        entries: entries(f, serviceKey), replicaHistories: { [f.thread]: { frames: threadFrames, rejected: [] } }, ...overrides };
+        entries: entries(f, serviceKey), replicaHistories: { [f.thread]: { frames: threadFrames, rejected: [] } }, rotations: [], catalogs: [],
+        ...overrides };
 }
 let signed = [];
 const spy = (signer, label, during = () => { }) => ({
@@ -235,4 +236,94 @@ test("a tampered attempt or a corrupt re-read never yields a frame", async () =>
     const corrupt = await authorTreehouseCatalogReplacementFromFrames({ attempt, possession: possess(f, attempt), signer: f.nominee,
         currentFrames: () => (++reads === 1 ? f.frames : { frames: f.frames, rejected: [{ frame: f.genesis, reason: "bad_signature" }] }) });
     assert.deepEqual(corrupt.ok ? null : [corrupt.reason, corrupt.journalEntry.status], ["invalid_verified_history", "cancelled_after_signature"]);
+});
+// --- review round 1 ---------------------------------------------------------
+test("an honored Space command appended during signing withholds the stale frame", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const possession = possess(f, attempt);
+    const command = await authorCarrierOp({ replica: f.replica, signer: f.nominee, deps: attempt.frozenFrontier, kind: "command",
+        cap: townshipCapTerm(f.leased.id), body: tuple(atom("create_thread"), ["list", [text(f.thread), text("Moved")]]) });
+    let store = [...f.frames];
+    signed = [];
+    const result = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => store, attempt, possession,
+        signer: spy(f.nominee, "op", () => { store = [...store, command]; }) });
+    assert.deepEqual(result.ok ? null : [result.reason, result.journalEntry.status, result.journalEntry.opId], ["stale_verified_state", "cancelled_after_signature", null]);
+    assert.deepEqual(signed, ["op"]);
+    assert.equal((await judge(store)).get(command.id), undefined);
+});
+const catalogSigner = (_f) => seededSigner("r316-pr2-ts-catalog");
+function catalog(f, binding, revision, previous) {
+    const value = { version: 1, product: "treehouse", space: f.replica, bootstrap: f.bootstrap.id, binding, revision,
+        previous, entries: entries(f, f.record.serviceKey) };
+    return { catalog: value, signature: b64(catalogSigner(f).sign(canonicalBytesForTransportCatalog(value))) };
+}
+async function rotation(f, parent, generation, old, next, label) {
+    const attempt = await prepared(f);
+    const value = { version: 1, product: "treehouse", space: f.replica, bootstrap: f.bootstrap.id, parent,
+        priorCatalog: id(`prior-${label}`), generation, newCatalogKey: b64(next.publicKey), nonce: id(`rotation-${label}`),
+        inventoryDigest: attempt.claim.inventoryDigest, cutoffs: attempt.claim.cutoffs };
+    const envelope = { rotation: value,
+        oldSignature: b64(old.sign(canonicalBytesForCatalogRotation(value))),
+        newSignature: b64(next.sign(canonicalBytesForCatalogRotationPossession(value))) };
+    return { id: catalogRotationId(envelope), envelope };
+}
+const reason = (result) => result.ok ? "ok" : result.reason;
+test("parents, priorCatalogs and generation are checked against the binding graph", async () => {
+    const f = await fixture();
+    assert.equal(b64(catalogSigner(f).publicKey), f.record.catalogKey);
+    const unrelated = id("unrelated-binding");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { parents: [unrelated], priorCatalogs: [{ binding: unrelated, catalog: null }],
+        generation: 9 }))), "catalog_fork");
+    const both = [f.bootstrap.id, unrelated].sort();
+    assert.equal(reason(await prepare(f, f.frames, request(f, { parents: both,
+        priorCatalogs: both.map((binding) => ({ binding, catalog: null })) }))), "invalid_catalog_transition");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { generation: 9 }))), "invalid_catalog_transition");
+    const first = catalog(f, f.bootstrap.id, 0, null), firstId = transportCatalogId(first.catalog);
+    assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first] }))), "catalog_fork");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first],
+        priorCatalogs: [{ binding: f.bootstrap.id, catalog: firstId }] }))), "ok");
+    const second = catalog(f, f.bootstrap.id, 1, firstId), secondId = transportCatalogId(second.catalog);
+    assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first, second],
+        priorCatalogs: [{ binding: f.bootstrap.id, catalog: firstId }] }))), "catalog_fork");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [second, first],
+        priorCatalogs: [{ binding: f.bootstrap.id, catalog: secondId }] }))), "ok");
+    const forged = { ...first, signature: b64(f.root.sign(canonicalBytesForTransportCatalog(first.catalog))) };
+    assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [forged] }))), "invalid_catalog_signature");
+});
+test("a retained rotation advances the head the replacement must cite", async () => {
+    const f = await fixture();
+    const next = seededSigner("r316-pr2-ts-rotated-catalog");
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), next, "t");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [t.envelope] }))), "catalog_fork");
+    const overT = { rotations: [t.envelope], parents: [t.id], priorCatalogs: [{ binding: t.id, catalog: null }], generation: 2 };
+    const ok = await prepare(f, f.frames, request(f, overT));
+    assert.equal(reason(ok), "ok");
+    if (ok.ok)
+        assert.deepEqual([ok.attempt.claim.parents, ok.attempt.claim.generation], [[t.id], 2]);
+    assert.equal(reason(await prepare(f, f.frames, request(f, { ...overT, generation: 1 }))), "invalid_catalog_transition");
+    const forged = await rotation(f, f.bootstrap.id, 1, f.root, next, "forged");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [forged.envelope] }))), "invalid_catalog_signature");
+    const orphan = await rotation(f, id("unknown-parent"), 1, catalogSigner(f), next, "orphan");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [orphan.envelope] }))), "trust_pending");
+});
+test("an appended replacement is a head a later replacement must cite (D-276)", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const r1 = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt, possession: possess(f, attempt),
+        signer: f.nominee });
+    if (!r1.ok)
+        assert.fail(r1.reason);
+    const frames = [...f.frames, r1.frame];
+    assert.equal((await judge(frames)).get(r1.frame.id), undefined);
+    assert.equal(reason(await prepare(f, frames, request(f, { nonce: id("r2") }))), "catalog_fork");
+    const r2 = { nonce: id("r2"), newCatalogKey: b64(seededSigner("r316-pr2-ts-second-catalog").publicKey), parents: [r1.frame.id],
+        priorCatalogs: [{ binding: r1.frame.id, catalog: null }], generation: 2 };
+    assert.equal(reason(await prepare(f, frames, request(f, r2))), "ok");
+    // A concurrent revoke refuses R1 on the union but leaves it a binding node.
+    const revoke = await authorCarrierOp({ replica: f.replica, signer: f.root, deps: attempt.frozenFrontier, kind: "authority", cap: nil,
+        body: tuple(atom("revoke"), text(f.leased.id)) });
+    const revoked = [...frames, revoke];
+    assert.equal((await judge(revoked)).get(r1.frame.id), "revoked_capability");
+    assert.equal(reason(await prepare(f, revoked, request(f, { nonce: id("r2") }))), "catalog_fork");
 });

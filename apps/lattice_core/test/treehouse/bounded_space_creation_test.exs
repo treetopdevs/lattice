@@ -278,6 +278,32 @@ defmodule Treehouse.BoundedSpaceCreationTest do
     end
   end
 
+  describe "row 318: bootstrap size preflight" do
+    test "a bootstrap whose signed push envelope exceeds 64,000 bytes refuses before signing" do
+      {root, log, pin} = pinned()
+      rec = record(root, log, pin)
+
+      wide =
+        Enum.reduce(1..1_500, log, fn n, acc ->
+          Log.append!(
+            acc,
+            Lattice.Op.new(
+              root,
+              log.replica,
+              [pin.id],
+              :command,
+              {:create_thread, ["t#{n}", "t"]}
+            )
+          )
+        end)
+
+      assert length(Log.frontier(wide)) == 1_500
+
+      assert {:error, :catalog_command_too_large} =
+               Space.author_catalog_bootstrap(root, wide, rec)
+    end
+  end
+
   describe "PR review: capability selection" do
     test "a root admin genesis without catalog_bootstrap_v1 is never the bootstrap cap" do
       {root, log, pin} = pinned()

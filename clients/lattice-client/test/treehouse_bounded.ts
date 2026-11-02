@@ -126,6 +126,19 @@ for (const change of [{ catalogKey: bootstrapRecord.spaceRoot }, { serviceKey: b
   await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, record: { ...bootstrapRecord, ...change } }), "binding_key_reuse");
 }
 await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [...withPin, bootstrap] }), "catalog_bootstrap_exists");
+// Row 318: a bootstrap whose signed push envelope would exceed 64,000 bytes refuses before any signature.
+{
+  const bin = (value: string): ["bin", string] => ["bin", Buffer.from(value).toString("base64")];
+  const wide: CarrierOpFrame[] = [...withPin];
+  for (let n = 1; n <= 1_500; n++) {
+    wide.push(await authorCarrierOp({ replica: vector.replica, signer: root, deps: [pin.id], kind: "command", cap: ["nil"],
+      body: ["tuple", [["atom", "create_thread"], ["list", [bin(`t${n}`), bin("t")]]]] }));
+  }
+  let signatures = 0;
+  const counted: CarrierOpSigner = { publicKey: root.publicKey, sign: (bytes) => { signatures++; return root.sign(bytes); } };
+  await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: wide, signer: counted }), "catalog_command_too_large");
+  assert.equal(signatures, 0);
+}
 // The capability is chosen in canonical order, so a second root admin genesis cannot make the bytes depend on array order.
 const extra = await authorTownshipGenesis({ replica: vector.replica, signer: root, ops: ["create_space"], roles: ["admin"], policies: {} });
 const first = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [...withPin, extra] });

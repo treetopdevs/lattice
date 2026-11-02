@@ -2,10 +2,15 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   @moduledoc """
   `replace_catalog_v1` authoring preflight (plan 316 PR 2): freeze, derive, review, sign last.
 
-  `prepare/3` freezes the Space frontier and derives every consent-bearing claim field from
-  the authenticated judged history: the honored bootstrap, the current `:admin` holder and
+  `prepare/3` freezes the Space frontier and derives the authority and recovery claim fields
+  from the authenticated judged history: the honored bootstrap, the current `:admin` holder and
   its acquisition capability, the beacon epoch basis, the route inventory and the recovery
-  cutoffs. It signs nothing. The caller collects the two new-key possession signatures over
+  cutoffs. The caller-chosen `parents`, `prior_catalogs` and `generation` are checked, not
+  derived: against the binding graph built from the honored bootstrap, the caller's retained
+  `rotations` and `catalogs` (verified here) and every on-Space replacement honored at its
+  strict prefix (D-276), `parents` must equal the current heads, `prior_catalogs` every
+  retained catalog head under each parent (D-271), and `generation` the maximum parent
+  generation plus one. It signs nothing. The caller collects the two new-key possession signatures over
   the returned bytes, then `author/4` re-reads the log, refuses a reclassified frozen state
   (`authority_changed`) or any moved claim input (`stale_verified_state`), verifies both
   possessions, preflights the exact candidate on the full judge and signs once.
@@ -21,7 +26,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   alias Treehouse.{CatalogBootstrap, CatalogCutoff, MemberContinuityAuthoring, Space}
   alias Treehouse.TransportCatalog
 
-  @request_fields ~w(author nonce parents prior_catalogs generation new_catalog_key new_service_id new_service_key new_origin entries replica_logs)a
+  @request_fields ~w(author nonce parents prior_catalogs generation new_catalog_key new_service_id new_service_key new_origin entries replica_logs rotations catalogs)a
   @attempt_fields ~w(attempt_id request claim claim_bytes catalog_possession_bytes service_possession_bytes author cap frozen_frontier)a
   @zero <<0::512>>
 
@@ -54,6 +59,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   defp derive(log, request, journal) do
     with :ok <- request_shape(request),
          %Log{} <- log,
+         :ok <- authentic(log),
          deps = Log.frontier(log),
          {:ok, bootstrap} <- bootstrap(log),
          {:ok, author, holder_epoch, cap} <- holder(log, request.author),
@@ -65,6 +71,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
              inventory: inventory,
              cutoffs: cutoffs
            ),
+         :ok <- coverage(log, claim, request, bootstrap),
          claim_bytes = TransportCatalog.replacement_claim_bytes(claim),
          :ok <- nonce_free(journal, claim.nonce, claim_bytes),
          candidate = intent(claim, @zero, @zero),
@@ -92,6 +99,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   defp request_shape(request) when is_map(request) do
     if Enum.sort(Map.keys(request)) == Enum.sort(@request_fields) and key?(request.author) and
          is_list(request.entries) and is_map(request.replica_logs) and
+         is_list(request.rotations) and is_list(request.catalogs) and
          Enum.all?(request.replica_logs, fn {replica, log} ->
            is_binary(replica) and match?(%Log{}, log)
          end),
@@ -100,6 +108,13 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   end
 
   defp request_shape(_), do: {:error, :application_invalid_catalog}
+
+  # Authenticate before any structural read, so a corrupt history refuses instead of raising.
+  defp authentic(log) do
+    if Log.verify_authenticity(log) == :ok, do: :ok, else: {:error, :invalid_verified_history}
+  rescue
+    _ -> {:error, :invalid_verified_history}
+  end
 
   # The one honored bootstrap. None, or a competing set this preflight does not resolve
   # (D-275 closing is the resolver's), refuses with the Stage A reason.
@@ -211,6 +226,185 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     end
   end
 
+  # --- retained-evidence coverage (plan 316 §3: parents, prior_catalogs, generation) ----
+
+  # Binding nodes are the honored bootstrap (generation 0), every on-Space replacement honored
+  # at its strict prefix (D-276, refused-on-the-union nodes included) and every retained
+  # rotation chained and verified from a known node. A cited but unknown node is
+  # `trust_pending`: the caller must supply the retained evidence before authoring.
+  defp coverage(log, claim, request, bootstrap) do
+    root = %{bootstrap.id => %{generation: 0, key: bootstrap.record.catalog_key, parents: []}}
+
+    with {:ok, pending} <- rotation_envelopes(log, request.rotations, bootstrap),
+         {:ok, nodes} <- chain(pending, Map.merge(replacement_nodes(log, bootstrap), root)),
+         :ok <- known_parents(nodes),
+         {:ok, catalog_heads} <- catalog_heads(log, request.catalogs, bootstrap, nodes),
+         :ok <- cover_parents(claim.parents, heads(nodes)),
+         :ok <- cover_generation(claim, nodes) do
+      expected =
+        Enum.flat_map(claim.parents, fn parent ->
+          case Map.get(catalog_heads, parent, []) do
+            [] -> [%{binding: parent, catalog: nil}]
+            catalogs -> for catalog <- catalogs, do: %{binding: parent, catalog: catalog}
+          end
+        end)
+
+      cover(expected, claim.prior_catalogs)
+    end
+  end
+
+  defp rotation_envelopes(log, rotations, bootstrap) do
+    Enum.reduce_while(rotations, {:ok, %{}}, fn envelope, {:ok, acc} ->
+      with true <-
+             is_map(envelope) and
+               Enum.sort(Map.keys(envelope)) == [:new_signature, :old_signature, :rotation],
+           {:ok, rotation} <- TransportCatalog.normalize_rotation(envelope.rotation) do
+        if rotation.space == log.replica and rotation.bootstrap == bootstrap.id,
+          do: {:cont, {:ok, Map.put(acc, TransportCatalog.rotation_id(envelope), envelope)}},
+          else: {:halt, {:error, :wrong_catalog_scope}}
+      else
+        _ -> {:halt, {:error, :malformed_catalog}}
+      end
+    end)
+  rescue
+    _ -> {:error, :malformed_catalog}
+  end
+
+  defp replacement_nodes(log, bootstrap) do
+    for {id, %Op{kind: :command, body: {:replace_catalog_v1, [claim | _]}}} <- log.ops,
+        {:ok, claim} <- [TransportCatalog.normalize_replacement_claim(claim)],
+        claim.space == log.replica and claim.bootstrap == bootstrap.id,
+        honored_at_prefix?(log, id),
+        into: %{},
+        do:
+          {id,
+           %{generation: claim.generation, key: claim.new_catalog_key, parents: claim.parents}}
+  end
+
+  defp honored_at_prefix?(log, id) do
+    ids = Dag.reachable(log.ops, [id])
+    prefix = Log.from_ops(log.replica, Map.take(log.ops, MapSet.to_list(ids)))
+    Authority.analyze(Space, prefix).reasons[id] == nil
+  end
+
+  # Rotations chain only from a known node, verified under that node's catalog key.
+  defp chain(pending, nodes) when map_size(pending) == 0, do: {:ok, nodes}
+
+  defp chain(pending, nodes) do
+    case Enum.filter(pending, fn {_id, envelope} ->
+           Map.has_key?(nodes, envelope.rotation.parent)
+         end) do
+      [] ->
+        {:error, :trust_pending}
+
+      ready ->
+        ready
+        |> Enum.reduce_while({:ok, nodes}, fn {id, envelope}, {:ok, acc} ->
+          rotation = envelope.rotation
+          parent = Map.fetch!(acc, rotation.parent)
+
+          cond do
+            Map.has_key?(acc, id) or rotation.generation != parent.generation + 1 ->
+              {:halt, {:error, :invalid_catalog_transition}}
+
+            TransportCatalog.verify_rotation(envelope, parent.key) != :ok ->
+              {:halt, {:error, :invalid_catalog_signature}}
+
+            true ->
+              node = %{
+                generation: rotation.generation,
+                key: rotation.new_catalog_key,
+                parents: [rotation.parent]
+              }
+
+              {:cont, {:ok, Map.put(acc, id, node)}}
+          end
+        end)
+        |> case do
+          {:ok, nodes} -> chain(Map.drop(pending, Enum.map(ready, &elem(&1, 0))), nodes)
+          error -> error
+        end
+    end
+  end
+
+  defp known_parents(nodes) do
+    if Enum.all?(nodes, fn {_id, node} -> Enum.all?(node.parents, &Map.has_key?(nodes, &1)) end),
+      do: :ok,
+      else: {:error, :trust_pending}
+  end
+
+  # D-275: every ancestor-or-self of a cited parent is closed; the rest are heads.
+  defp heads(nodes) do
+    closed = nodes |> Map.values() |> Enum.flat_map(& &1.parents) |> closure(nodes, MapSet.new())
+    nodes |> Map.keys() |> Enum.reject(&MapSet.member?(closed, &1)) |> Enum.sort()
+  end
+
+  defp closure([], _nodes, acc), do: acc
+
+  defp closure([id | rest], nodes, acc) do
+    if MapSet.member?(acc, id),
+      do: closure(rest, nodes, acc),
+      else: closure(Map.fetch!(nodes, id).parents ++ rest, nodes, MapSet.put(acc, id))
+  end
+
+  defp cover_parents(parents, heads), do: cover(heads, parents)
+
+  # Omitting a known head would author a sibling (`catalog_fork`); anything else is wrong.
+  defp cover(expected, supplied) do
+    cond do
+      Enum.sort(expected) == Enum.sort(supplied) -> :ok
+      Enum.any?(expected, &(&1 not in supplied)) -> {:error, :catalog_fork}
+      true -> {:error, :invalid_catalog_transition}
+    end
+  end
+
+  defp cover_generation(claim, nodes) do
+    max = claim.parents |> Enum.map(&Map.fetch!(nodes, &1).generation) |> Enum.max()
+    if claim.generation == max + 1, do: :ok, else: {:error, :invalid_catalog_transition}
+  end
+
+  # Retained catalogs, verified under their binding's key; heads are those no other catalog
+  # under the same binding names as `previous`.
+  defp catalog_heads(log, catalogs, bootstrap, nodes) do
+    catalogs
+    |> Enum.reduce_while({:ok, []}, fn envelope, {:ok, acc} ->
+      with true <- is_map(envelope) and Enum.sort(Map.keys(envelope)) == [:catalog, :signature],
+           {:ok, catalog} <- TransportCatalog.normalize_catalog(envelope.catalog) do
+        cond do
+          catalog.space != log.replica or catalog.bootstrap != bootstrap.id ->
+            {:halt, {:error, :wrong_catalog_scope}}
+
+          not Map.has_key?(nodes, catalog.binding) ->
+            {:halt, {:error, :trust_pending}}
+
+          TransportCatalog.verify_catalog(envelope, nodes[catalog.binding].key) != :ok ->
+            {:halt, {:error, :invalid_catalog_signature}}
+
+          true ->
+            {:cont, {:ok, [{TransportCatalog.catalog_id(catalog), catalog} | acc]}}
+        end
+      else
+        _ -> {:halt, {:error, :malformed_catalog}}
+      end
+    end)
+    |> case do
+      {:ok, verified} ->
+        previous =
+          MapSet.new(verified, fn {_id, catalog} -> {catalog.binding, catalog.previous} end)
+
+        {:ok,
+         verified
+         |> Enum.reject(fn {id, catalog} -> MapSet.member?(previous, {catalog.binding, id}) end)
+         |> Enum.group_by(fn {_id, catalog} -> catalog.binding end, &elem(&1, 0))
+         |> Map.new(fn {binding, ids} -> {binding, ids |> Enum.uniq() |> Enum.sort()} end)}
+
+      error ->
+        error
+    end
+  rescue
+    _ -> {:error, :malformed_catalog}
+  end
+
   # The attempt journal is keyed by the claim nonce; identical bytes are an idempotent retry.
   defp nonce_free(nil, _nonce, _bytes), do: :ok
 
@@ -297,10 +491,12 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   end
 
   # The signed frame leaves only if the freshly re-read frozen state is still unreclassified
-  # with the signed op appended; otherwise the pending attempt is cancelled.
+  # with the signed op appended and still re-derives the signed claim byte-for-byte; otherwise
+  # the pending attempt is cancelled.
   defp after_signature(log_source, attempt, signed) do
     with {:ok, current} <- read(log_source, attempt),
          :ok <- reclassified(current, attempt, signed),
+         :ok <- fresh(current, attempt),
          :ok <- envelope(signed),
          {:ok, frame} <- Wire.encode_op_checked(signed) do
       {:ok,

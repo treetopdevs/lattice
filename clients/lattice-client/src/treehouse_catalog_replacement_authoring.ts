@@ -16,9 +16,13 @@ import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehou
 import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 import {
   canonicalBytesForCatalogReplacementClaim, canonicalBytesForCatalogReplacementPossession, catalogInventoryId,
-  catalogReplacementClaimToCarrierTerm, normalizeCatalogReplacementClaim, verifyCatalogReplacementPossession,
+  catalogReplacementClaimToCarrierTerm, catalogRotationId, normalizeCatalogEnvelope, normalizeCatalogReplacementClaim,
+  normalizeCatalogRotationEnvelope, transportCatalogId, verifyCatalogEnvelope, verifyCatalogReplacementPossession,
+  verifyCatalogRotationEnvelope,
 } from "./treehouse_catalog_codec";
-import type { CatalogCutoff, CatalogEntry, CatalogPriorCatalog, CatalogReplacementClaim } from "./treehouse_catalog_codec";
+import type {
+  CatalogCutoff, CatalogEntry, CatalogEnvelope, CatalogPriorCatalog, CatalogReplacementClaim, CatalogRotationEnvelope,
+} from "./treehouse_catalog_codec";
 
 /** One retained complete history: authenticated frames plus retained bad-signature evidence. */
 export interface TreehouseCatalogReplacementHistory {
@@ -40,6 +44,10 @@ export interface TreehouseCatalogReplacementRequest {
   entries: CatalogEntry[];
   /** Thread replica → retained history; the Space cutoff comes from the frozen Space frames. */
   replicaHistories: Record<string, TreehouseCatalogReplacementHistory>;
+  /** Retained catalog rotations (off-Space binding nodes); verified and chained from a known node. */
+  rotations: CatalogRotationEnvelope[];
+  /** Retained signed catalogs; verified under their binding's key. */
+  catalogs: CatalogEnvelope[];
 }
 
 export type TreehouseCatalogReplacementStatus = "awaiting_possession" | "cancelled" | "cancelled_after_signature" | "signed";
@@ -79,7 +87,7 @@ export type TreehouseCatalogReplacementAuthorResult =
 export type TreehouseCatalogReplacementCurrent = readonly unknown[] | TreehouseCatalogReplacementHistory;
 
 const requestFields = ["author", "nonce", "parents", "priorCatalogs", "generation", "newCatalogKey", "newServiceId",
-  "newServiceKey", "newOrigin", "entries", "replicaHistories"].sort();
+  "newServiceKey", "newOrigin", "entries", "replicaHistories", "rotations", "catalogs"].sort();
 const zero = () => new Uint8Array(64);
 const tooLarge = "catalog_command_too_large";
 
@@ -87,7 +95,11 @@ type Prepared = Omit<TreehouseCatalogReplacementAttempt, "journalEntry">;
 type Refusal = { ok: false; reason: string };
 const refuse = (reason: string): Refusal => ({ ok: false, reason });
 
-/** Review step; signs nothing. Freezes the frontier and derives every claim field from the judged history. */
+/**
+ * Review step; signs nothing. Freezes the frontier and derives the authority and recovery claim fields from the
+ * judged history; the caller-chosen parents, priorCatalogs and generation are checked against the binding graph
+ * (honored bootstrap, retained rotations and catalogs, on-Space replacements honored at their strict prefix).
+ */
 export async function prepareTreehouseCatalogReplacementFromFrames(input: {
   replica: string; frames: readonly unknown[]; rejected?: TreehouseCatalogReplacementHistory["rejected"];
   request: TreehouseCatalogReplacementRequest; journal: TreehouseCatalogReplacementJournal;
@@ -146,6 +158,10 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
     if (!current.ok) return late(current.reason);
     const after = await reclassified(current.history, attempt, frame);
     if (after !== null) return late(after);
+    // The signed claim must still be the one a fresh preparation derives now.
+    const again = await derive(attempt.replica, current.raw, attempt.request, null);
+    if (!again.ok) return late(again.reason === "invalid_verified_history" ? again.reason : "stale_verified_state");
+    if (!samePrepared(again.attempt, attempt)) return late("stale_verified_state");
     if (envelopeBytes(frame) > 64_000) return late(tooLarge);
     return {ok: true, frame, bindingId: frame.id, attemptId: attempt.attemptId, journalEntry: entry(attempt, "signed", null, frame.id)};
   } catch { return late("stale_verified_state"); }
@@ -190,6 +206,8 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
     newServiceId: request.newServiceId, newServiceKey: request.newServiceKey, newOrigin: request.newOrigin, inventoryDigest,
     cutoffs: cutoffs.cutoffs, author: request.author, cap, holderEpoch: acquire.opId, deps, epoch, epochBasis});
   if (claim === null) return refuse("malformed_catalog");
+  const covered = coverage(history, replica, bootstrap, claim, request);
+  if (covered !== null) return refuse(covered);
   const claimBytes = canonicalBytesForCatalogReplacementClaim(claim);
   // The attempt journal is keyed by the claim nonce; identical bytes are an idempotent retry.
   const prior = journal === null ? undefined : Object.hasOwn(journal, claim.nonce) ? journal[claim.nonce] : undefined;
@@ -206,6 +224,87 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
     catalogPossessionBytes: canonicalBytesForCatalogReplacementPossession("catalog", claim),
     servicePossessionBytes: canonicalBytesForCatalogReplacementPossession("service", claim),
     author: request.author, cap, frozenFrontier: deps}};
+}
+
+// --- retained-evidence coverage (plan 316 §3: parents, priorCatalogs, generation) ----------
+
+type BindingNode = {generation: number; key: string; parents: readonly string[]};
+
+// Nodes: the honored bootstrap (generation 0), every on-Space replacement honored at its strict prefix (D-276,
+// refused-on-the-union nodes included) and every retained rotation chained and verified from a known node.
+function coverage(history: JudgedHistory, replica: string, bootstrap: {id: string; record: {catalogKey: string}},
+  claim: CatalogReplacementClaim, request: TreehouseCatalogReplacementRequest): string | null {
+  const nodes = new Map<string, BindingNode>([[bootstrap.id, {generation: 0, key: bootstrap.record.catalogKey, parents: []}]]);
+  for (const op of history.ops) {
+    if (op.command !== "replace_catalog_v1") continue;
+    const cited = normalizeCatalogReplacementClaim(op.commandArgs?.[0]);
+    if (cited === null || cited.space !== replica || cited.bootstrap !== bootstrap.id || !honoredAtPrefix(history, op.id, replica)) continue;
+    nodes.set(op.id, {generation: cited.generation, key: cited.newCatalogKey, parents: cited.parents});
+  }
+  const pending = new Map<string, CatalogRotationEnvelope>();
+  for (const value of request.rotations as unknown[]) {
+    const envelope = normalizeCatalogRotationEnvelope(value);
+    if (envelope === null) return "malformed_catalog";
+    if (envelope.rotation.space !== replica || envelope.rotation.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
+    pending.set(catalogRotationId(envelope), envelope);
+  }
+  // Rotations chain only from a known node, verified under that node's catalog key.
+  while (pending.size > 0) {
+    const ready = [...pending].filter(([, envelope]) => nodes.has(envelope.rotation.parent));
+    if (ready.length === 0) return "trust_pending";
+    for (const [id, envelope] of ready) {
+      const parent = nodes.get(envelope.rotation.parent)!;
+      if (nodes.has(id) || envelope.rotation.generation !== parent.generation + 1) return "invalid_catalog_transition";
+      if (!verifyCatalogRotationEnvelope(envelope, parent.key)) return "invalid_catalog_signature";
+      nodes.set(id, {generation: envelope.rotation.generation, key: envelope.rotation.newCatalogKey, parents: [envelope.rotation.parent]});
+      pending.delete(id);
+    }
+  }
+  if ([...nodes.values()].some((node) => node.parents.some((parent) => !nodes.has(parent)))) return "trust_pending";
+  const catalogs: {id: string; binding: string; previous: string | null}[] = [];
+  for (const value of request.catalogs as unknown[]) {
+    const envelope = normalizeCatalogEnvelope(value);
+    if (envelope === null) return "malformed_catalog";
+    if (envelope.catalog.space !== replica || envelope.catalog.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
+    const binding = nodes.get(envelope.catalog.binding);
+    if (binding === undefined) return "trust_pending";
+    if (!verifyCatalogEnvelope(envelope, binding.key)) return "invalid_catalog_signature";
+    catalogs.push({id: transportCatalogId(envelope.catalog), binding: envelope.catalog.binding, previous: envelope.catalog.previous});
+  }
+  // D-275: every ancestor-or-self of a cited parent is closed; the rest are heads.
+  const closed = new Set<string>();
+  const stack = [...nodes.values()].flatMap((node) => [...node.parents]);
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (closed.has(id)) continue;
+    closed.add(id);
+    stack.push(...nodes.get(id)!.parents);
+  }
+  const heads = [...nodes.keys()].filter((id) => !closed.has(id));
+  const parents = cover(heads, claim.parents, (id) => id);
+  if (parents !== null) return parents;
+  const generation = Math.max(...claim.parents.map((id) => nodes.get(id)!.generation)) + 1;
+  if (claim.generation !== generation) return "invalid_catalog_transition";
+  const previous = new Set(catalogs.map((item) => `${item.binding}\u0000${item.previous}`));
+  const expected = claim.parents.flatMap((binding): CatalogPriorCatalog[] => {
+    const under = [...new Set(catalogs.filter((item) => item.binding === binding && !previous.has(`${binding}\u0000${item.id}`))
+      .map((item) => item.id))];
+    return under.length === 0 ? [{binding, catalog: null}] : under.map((catalog) => ({binding, catalog}));
+  });
+  return cover(expected, claim.priorCatalogs, (item) => `${item.binding}\u0000${item.catalog}`);
+}
+
+function honoredAtPrefix(history: JudgedHistory, id: string, replica: string): boolean {
+  const closure = ancestors(id, history.byId, new Map());
+  const frames = history.frames.filter((frame) => frame.id === id || closure.has(frame.id));
+  return !judge(frames, replica).quarantineReasons.has(id);
+}
+
+// Omitting a known head would author a sibling (catalog_fork); any other mismatch is wrong.
+function cover<T>(expected: readonly T[], supplied: readonly T[], key: (value: T) => string): string | null {
+  const want = expected.map(key).sort(compareUtf8), have = supplied.map(key).sort(compareUtf8);
+  if (same(want, have)) return null;
+  return want.some((value) => !have.includes(value)) ? "catalog_fork" : "invalid_catalog_transition";
 }
 
 // The Space cutoff is the frozen pre-action history itself, so it never includes the action.
@@ -291,7 +390,7 @@ function attemptShape(value: unknown): value is TreehouseCatalogReplacementAttem
 function requestShape(value: unknown): value is TreehouseCatalogReplacementRequest {
   if (!object(value) || !same(Object.keys(value).sort(), requestFields)) return false;
   return typeof value.author === "string" && canonicalBase64Bytes(value.author, 32) !== null &&
-    Array.isArray(value.entries) && object(value.replicaHistories);
+    Array.isArray(value.entries) && object(value.replicaHistories) && Array.isArray(value.rotations) && Array.isArray(value.catalogs);
 }
 
 function entry(attempt: Prepared | null, status: TreehouseCatalogReplacementStatus, reason: string | null,

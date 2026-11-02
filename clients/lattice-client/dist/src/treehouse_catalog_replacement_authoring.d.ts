@@ -1,6 +1,6 @@
 import type { CarrierOpFrame } from "./carrier";
 import type { CarrierOpSigner } from "./codec";
-import type { CatalogEntry, CatalogPriorCatalog, CatalogReplacementClaim } from "./treehouse_catalog_codec";
+import type { CatalogEntry, CatalogEnvelope, CatalogPriorCatalog, CatalogReplacementClaim, CatalogRotationEnvelope } from "./treehouse_catalog_codec";
 /** One retained complete history: authenticated frames plus retained bad-signature evidence. */
 export interface TreehouseCatalogReplacementHistory {
     frames: readonly unknown[];
@@ -23,6 +23,10 @@ export interface TreehouseCatalogReplacementRequest {
     entries: CatalogEntry[];
     /** Thread replica → retained history; the Space cutoff comes from the frozen Space frames. */
     replicaHistories: Record<string, TreehouseCatalogReplacementHistory>;
+    /** Retained catalog rotations (off-Space binding nodes); verified and chained from a known node. */
+    rotations: CatalogRotationEnvelope[];
+    /** Retained signed catalogs; verified under their binding's key. */
+    catalogs: CatalogEnvelope[];
 }
 export type TreehouseCatalogReplacementStatus = "awaiting_possession" | "cancelled" | "cancelled_after_signature" | "signed";
 /** Caller-owned journal entry keyed by the claim nonce; never persisted here. */
@@ -68,7 +72,11 @@ export type TreehouseCatalogReplacementAuthorResult = {
 };
 /** Current Space history: frames alone, or frames with retained bad-signature evidence. */
 export type TreehouseCatalogReplacementCurrent = readonly unknown[] | TreehouseCatalogReplacementHistory;
-/** Review step; signs nothing. Freezes the frontier and derives every claim field from the judged history. */
+/**
+ * Review step; signs nothing. Freezes the frontier and derives the authority and recovery claim fields from the
+ * judged history; the caller-chosen parents, priorCatalogs and generation are checked against the binding graph
+ * (honored bootstrap, retained rotations and catalogs, on-Space replacements honored at their strict prefix).
+ */
 export declare function prepareTreehouseCatalogReplacementFromFrames(input: {
     replica: string;
     frames: readonly unknown[];
