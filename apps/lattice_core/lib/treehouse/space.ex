@@ -325,6 +325,28 @@ defmodule Treehouse.Space do
     end
   end
 
+  @doc """
+  Review step for one `replace_catalog_v1` attempt (plan 316 PR 2); signs nothing.
+
+  Freezes the frontier and derives the claim from the judged history: the honored bootstrap,
+  the current `:admin` holder and its acquisition capability, the beacon epoch basis, the
+  inventory and the recovery cutoffs. Returns the exact possession bytes to sign and a
+  caller-owned journal entry keyed by the claim nonce. See `Treehouse.CatalogReplacementAuthoring`.
+  """
+  @spec prepare_replace_catalog(Log.t(), map(), map()) :: {:ok, map()} | {:error, atom()}
+  def prepare_replace_catalog(log, request, journal),
+    do: Treehouse.CatalogReplacementAuthoring.prepare(log, request, journal)
+
+  @doc """
+  Sign one prepared `replace_catalog_v1` attempt last, after re-reading `log_source`, refusing a
+  reclassified frozen state or a moved claim, and verifying both possession signatures. The frame
+  is withheld when the re-read after the signing call shows reclassification.
+  """
+  @spec author_replace_catalog(Identity.t() | map(), Log.t() | (-> Log.t()), map(), map()) ::
+          {:ok, map()} | {:error, atom(), map()}
+  def author_replace_catalog(signer, log_source, attempt, possession),
+    do: Treehouse.CatalogReplacementAuthoring.author(signer, log_source, attempt, possession)
+
   # Try each root genesis capability, in canonical order, and return the first authored op the
   # judge honors; an op that would quarantine (revoked, expired, not granted) is never returned.
   defp honored_bootstrap(identity, log, record) do
