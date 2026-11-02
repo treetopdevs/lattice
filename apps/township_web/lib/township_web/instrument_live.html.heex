@@ -520,7 +520,10 @@
               <h2 id="trust-graph-title">Who may act</h2>
             </div>
             <span class="metric">
-              {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants
+              {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants<span
+                :if={@model.trust_graph.omitted != []}
+                data-trust-omitted
+              > · {length(@model.trust_graph.omitted)} omitted</span>
             </span>
           </header>
 

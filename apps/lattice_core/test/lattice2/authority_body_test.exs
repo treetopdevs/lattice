@@ -4,7 +4,7 @@ defmodule Lattice2.AuthorityBodyTest do
 
   alias Lattice.Authority.Delegation
   alias Lattice.Canonical
-  alias Lattice.Graph.{AuthorityBody, ReplicaSnapshot}
+  alias Lattice.Graph.{AuthorityBody, Export, ReplicaSnapshot}
   alias Lattice.Sim
   alias Township.{Matter, ReadModel}
 
@@ -83,17 +83,8 @@ defmodule Lattice2.AuthorityBodyTest do
   end
 
   defp attacker_body_gen(good) do
-    deleg =
-      one_of([
-        constant(good),
-        bind(member_of(@fields -- [:expires_epoch]), fn field ->
-          map(encodable_gen(), &%{good | field => &1})
-        end),
-        map(one_of([constant(nil), integer(0..100)]), &%{good | expires_epoch: &1}),
-        encodable_gen()
-      ])
-
     role = one_of([constant(:clerk), encodable_gen()])
+    deleg = deleg_gen(good)
     tick = one_of([integer(0..100), encodable_gen()])
 
     one_of([
@@ -105,6 +96,17 @@ defmodule Lattice2.AuthorityBodyTest do
       map({role, tick}, fn {r, t} -> {:heartbeat, r, t} end),
       map(encodable_gen(), &{:revoke, &1}),
       map({encodable_gen(), encodable_gen()}, fn {r, p} -> {:request, r, p} end),
+      encodable_gen()
+    ])
+  end
+
+  defp deleg_gen(good) do
+    one_of([
+      constant(good),
+      bind(member_of(@fields -- [:expires_epoch]), fn field ->
+        map(encodable_gen(), &%{good | field => &1})
+      end),
+      map(one_of([constant(nil), integer(0..100)]), &%{good | expires_epoch: &1}),
       encodable_gen()
     ])
   end
@@ -144,7 +146,7 @@ defmodule Lattice2.AuthorityBodyTest do
   defp parsed_shape?({:heartbeat, r, t}),
     do: role?(r) and tick?(t) and not match?({:witnessed, _}, t)
 
-  defp parsed_shape?({:revoke, {:ok, t}}), do: is_binary(t)
+  defp parsed_shape?({:revoke, {:ok, t}}), do: is_binary(t) and String.valid?(t)
   defp parsed_shape?({:revoke, {:malformed, _}}), do: true
   defp parsed_shape?({:request, _}), do: true
   defp parsed_shape?({:command, c, a}), do: is_atom(c) and is_list(a)
@@ -166,11 +168,13 @@ defmodule Lattice2.AuthorityBodyTest do
   defp key?(:malformed), do: true
   defp key?(_), do: false
 
-  defp names?({:ok, names}), do: is_list(names) and Enum.all?(names, &is_binary/1)
+  defp names?({:ok, names}),
+    do: is_list(names) and Enum.all?(names, &(is_binary(&1) and String.valid?(&1)))
+
   defp names?(:malformed), do: true
   defp names?(_), do: false
 
-  defp role?({:name, _raw, text}), do: is_binary(text)
+  defp role?({:name, _raw, text}), do: is_binary(text) and String.valid?(text)
   defp role?({:malformed, _raw}), do: true
   defp role?(_), do: false
 
@@ -187,7 +191,7 @@ defmodule Lattice2.AuthorityBodyTest do
     end
   end
 
-  property "both readers never raise on admitted attacker-shaped authority bodies" do
+  property "readers stay display-safe on admitted attacker-shaped authority bodies" do
     {sim, good} = base_sim()
     base_edges = ReadModel.observe(Sim.log(sim, "clerk")).trust_graph.edges
 
@@ -195,13 +199,63 @@ defmodule Lattice2.AuthorityBodyTest do
       log = append_log(sim, body)
       model = ReadModel.observe(log, labels: %{}, vouches: [])
       assert is_binary(Jason.encode!(model.trust_graph))
-      assert is_map(ReadModel.replay(log))
+      assert is_binary(Jason.encode!(ReadModel.replay(log)))
+      assert is_binary(Jason.encode!(model.op_dag))
       graph = ReplicaSnapshot.build(Matter, log)
 
-      for format <- [:mermaid, :json, :dot],
-          do: assert(is_binary(ReplicaSnapshot.export(graph, format)))
+      for format <- [:mermaid, :dot],
+          do: assert(String.valid?(ReplicaSnapshot.export(graph, format)))
+
+      assert is_map(Jason.decode!(ReplicaSnapshot.export(graph, :json)))
+
+      # The exact bytes AuditBundle writes for the trust graph.
+      for format <- [:dot, :mermaid],
+          do: assert(String.valid?(Export.export(model.trust_graph, format)))
 
       assert base_edges -- model.trust_graph.edges == []
+    end
+  end
+
+  # D-317: the property must reach loan/3, Toolshed's only AuthorityBody
+  # consumer, so it first establishes custody with the borrower and an active
+  # leased borrow Cap, then lets the borrower append attacker-shaped grants.
+  property "Toolshed.ReadModel loan projection stays display-safe on admitted attacker-shaped authority bodies" do
+    sim = Sim.new(Toolshed.Tool, "replica:tool:authority-body", ["owner", "borrower"], seed: "ab")
+    {sim, _genesis} = Sim.create_replica(sim, "owner")
+    {sim, request} = Sim.request(sim, "borrower", "custody", {:custody_transfer, []})
+    sim = Sim.sync_all(sim)
+    owner = Sim.identity(sim, "owner")
+    borrower = Sim.identity(sim, "borrower")
+
+    consent =
+      Lattice.Authority.Consent.sign_custody(borrower, Sim.replica(sim), request.id, owner.pub)
+
+    {sim, _transfer} =
+      Sim.command(sim, "owner", :custody_transfer, [borrower.pub, request.id, consent])
+
+    {sim, good} = Sim.grant(sim, "owner", "borrower", ops: [:note_condition], expires_epoch: 4)
+    sim = Sim.sync_all(sim)
+
+    base = sim |> Sim.log("owner") |> Toolshed.ReadModel.observe()
+    assert %{due_epoch: 4, overdue?: false} = base.loan
+    fingerprint = Lattice.Identity.fingerprint(borrower.pub)
+
+    # Half the bodies are grants, the only tag loan/3 reads.
+    bodies = one_of([map(deleg_gen(good), &{:grant, &1}), attacker_body_gen(good)])
+
+    check all(body <- bodies |> filter(&signable?/1, 50), max_runs: 50) do
+      {sim, _op} = Sim.append(sim, "borrower", :authority, body)
+      model = sim |> Sim.sync_all() |> Sim.log("owner") |> Toolshed.ReadModel.observe()
+
+      assert %{borrower_fingerprint: ^fingerprint, overdue?: overdue?} = model.loan,
+             inspect(body)
+
+      assert is_boolean(overdue?)
+      assert model.loan.due_epoch == 4, inspect(body)
+      assert is_binary(Jason.encode!(model.loan))
+      assert String.valid?(model.loan.borrower_fingerprint)
+      assert String.valid?(model.custody.holder_fingerprint)
+      for r <- model.requests, do: assert(String.valid?(r.author_fingerprint))
     end
   end
 
@@ -220,12 +274,25 @@ defmodule Lattice2.AuthorityBodyTest do
     end
   end
 
-  test "revoke label checks only the shown prefix of the target" do
+  test "revoke whose target is not valid UTF-8 renders the marker even with a valid prefix" do
     {sim, _good} = base_sim()
-    graph = ReplicaSnapshot.build(Matter, append_log(sim, {:revoke, "12345678" <> <<255>>}))
-    assert is_binary(ReplicaSnapshot.export(graph, :json))
+    body = {:revoke, "12345678" <> <<255>>}
+    graph = ReplicaSnapshot.build(Matter, append_log(sim, body))
+    assert is_map(Jason.decode!(ReplicaSnapshot.export(graph, :json)))
     labels = Enum.map(graph.nodes, & &1.label)
-    assert Enum.any?(labels, &String.contains?(&1, "revoke 12345678")), inspect(labels)
+    assert Enum.any?(labels, &String.contains?(&1, "revoke (malformed)")), inspect(labels)
+    assert {:revoke, {:malformed, _}} = AuthorityBody.parse(body)
+  end
+
+  test "an honest revoke still renders its 8-character prefix" do
+    {sim, good} = base_sim()
+    {sim, revoke} = Sim.revoke(sim, "clerk", good.id)
+    log = sim |> Sim.sync_all() |> Sim.log("clerk")
+    labels = Enum.map(ReplicaSnapshot.build(Matter, log).nodes, & &1.label)
+    shown = "revoke " <> String.slice(good.id, 0, 8)
+    assert Enum.any?(labels, &String.contains?(&1, shown)), inspect(labels)
+    assert {:revoke, {:ok, id}} = AuthorityBody.parse(revoke.body)
+    assert id == good.id
   end
 
   test "invalid UTF-8 role or delegation names never reach the trust graph as text" do

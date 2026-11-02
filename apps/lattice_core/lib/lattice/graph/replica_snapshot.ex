@@ -180,13 +180,7 @@ defmodule Lattice.Graph.ReplicaSnapshot do
     do: "succeed #{role_text(role)} @t#{tick_text(tick)}"
 
   defp render({:heartbeat, role, tick}), do: "heartbeat #{role_text(role)} @t#{tick_text(tick)}"
-  # A shortened target that is not valid UTF-8 would leak raw bytes into the
-  # label and break the JSON export; delegation ids are base64url text. Only the
-  # shown prefix is checked, so a label that rendered before still renders.
-  defp render({:revoke, {:ok, target}}) do
-    shown = short(target)
-    if String.valid?(shown), do: "revoke #{shown}", else: "revoke (malformed)"
-  end
+  defp render({:revoke, {:ok, target}}), do: "revoke #{short(target)}"
 
   defp render({:revoke, {:malformed, _target}}), do: "revoke (malformed)"
   defp render({:request, ref}), do: "request #{inspect(ref)}"

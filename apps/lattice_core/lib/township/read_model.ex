@@ -5,6 +5,9 @@ defmodule Township.ReadModel do
   Matter state, authority verdicts, and graph evidence are projections of the
   supplied log. Vouch bodies remain caller-held attestation evidence, outside
   `Township.Matter`. Optional realm labels affect only delegation-graph labels.
+
+  The trust graph's `omitted` list names admitted authority ops present in the
+  log whose delegation could not be drawn; it does not claim the log is complete.
   """
 
   alias Lattice.{Attestation, Authority, Identity, Log, Op}
@@ -33,7 +36,7 @@ defmodule Township.ReadModel do
           roles: map(),
           members: map(),
           attest: map(),
-          trust_graph: map(),
+          trust_graph: %{nodes: [map()], edges: [map()], omitted: [String.t()]},
           op_dag: map()
         }
 
@@ -211,7 +214,7 @@ defmodule Township.ReadModel do
   defp member_mutation(_op), do: :error
 
   defp trust_graph(log, labels) when is_map(labels) do
-    events = delegation_events(log)
+    {events, omitted} = delegation_events(log)
 
     nodes =
       events
@@ -232,27 +235,40 @@ defmodule Township.ReadModel do
         }
       end)
 
-    %{nodes: nodes, edges: edges}
+    %{nodes: nodes, edges: edges, omitted: omitted}
   end
 
   # Row 309: bodies go through the one total reader. An admitted but ill-formed
   # delegation (list-form roles/ops, short or non-binary keys) or a role that is
   # not a scalar name contributes no node or edge rather than crashing the reader.
+  # Row 306: such a delegation op is named in `omitted` (topo order) instead of
+  # vanishing silently. Heartbeat, revoke, request, command and other bodies are
+  # not delegations and are never counted.
   defp delegation_events(log) do
-    log
-    |> Log.topo_ops()
-    |> Enum.filter(&(&1.kind == :authority))
-    |> Enum.flat_map(fn op ->
-      case AuthorityBody.parse(op.body) do
-        {:genesis, dview} -> [{"genesis", dview}]
-        {:grant, dview} -> [{"grant", dview}]
-        {:transfer, {:name, _raw, role}, dview, _tick} -> [{"transfer:#{role}", dview}]
-        {:succeed, {:name, _raw, role}, dview, _tick} -> [{"succeed:#{role}", dview}]
-        _other -> []
-      end
-    end)
-    |> Enum.filter(fn {_kind, dview} -> renderable?(dview) end)
+    classified =
+      log
+      |> Log.topo_ops()
+      |> Enum.filter(&(&1.kind == :authority))
+      |> Enum.flat_map(fn op -> classify(op.id, AuthorityBody.parse(op.body)) end)
+
+    {for({:event, kind, dview} <- classified, do: {kind, dview}),
+     for({:omitted, id} <- classified, do: id)}
   end
+
+  defp classify(id, {:genesis, dview}), do: event(id, "genesis", dview)
+  defp classify(id, {:grant, dview}), do: event(id, "grant", dview)
+
+  defp classify(id, {kind, {:name, _raw, role}, dview, _tick}) when kind in [:transfer, :succeed],
+    do: event(id, "#{kind}:#{role}", dview)
+
+  defp classify(id, {kind, {:malformed, _raw}, _dview, _tick})
+       when kind in [:transfer, :succeed],
+       do: [{:omitted, id}]
+
+  defp classify(_id, _other), do: []
+
+  defp event(id, kind, dview),
+    do: if(renderable?(dview), do: [{:event, kind, dview}], else: [{:omitted, id}])
 
   # Match every field the edge reads, not only `well_formed?`, so a drift
   # between the parser's member rule and the judge's cannot raise below.

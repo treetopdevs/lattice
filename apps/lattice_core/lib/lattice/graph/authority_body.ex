@@ -11,6 +11,16 @@ defmodule Lattice.Graph.AuthorityBody do
   This module only parses for display. It decides nothing about authority, and
   a parsed field is not evidence that the judge honored the op. `:malformed`
   markers stay in the output so a later reader can count omissions.
+
+  ## Display-safety contract
+
+  The contract covers text fields only. Every member of a `roles`/`ops`
+  `{:ok, names}` list, the text in `{:name, raw, text}`, and `t` in
+  `{:revoke, {:ok, t}}` are valid UTF-8 (`String.valid?/1`). `issuer` and
+  `audience` `{:ok, pub}` values are 32-byte raw keys, not text: a reader must
+  fingerprint them before display and never emit them raw. The raw terms in
+  `{:malformed, raw}`, `{:request, ref}`, `{:command, _, args}` and
+  `{:other, body}` are not text either; readers must `inspect/1` them.
   """
 
   alias Lattice.Authority.Delegation
@@ -32,7 +42,7 @@ defmodule Lattice.Graph.AuthorityBody do
           | {:transfer, role(), dview(), tick()}
           | {:succeed, role(), dview(), tick()}
           | {:heartbeat, role(), tick()}
-          | {:revoke, {:ok, binary()} | {:malformed, term()}}
+          | {:revoke, {:ok, String.t()} | {:malformed, term()}}
           | {:request, term()}
           | {:command, atom(), list()}
           | {:other, term()}
@@ -52,7 +62,14 @@ defmodule Lattice.Graph.AuthorityBody do
     do: {:succeed, role(role), dview(deleg), tick(tick)}
 
   def parse({:heartbeat, role, tick}), do: {:heartbeat, role(role), tick(tick)}
-  def parse({:revoke, target}) when is_binary(target), do: {:revoke, {:ok, target}}
+
+  def parse({:revoke, target}) when is_binary(target),
+    do:
+      if(String.valid?(target),
+        do: {:revoke, {:ok, target}},
+        else: {:revoke, {:malformed, target}}
+      )
+
   def parse({:revoke, target}), do: {:revoke, {:malformed, target}}
   def parse({:request, ref, _payload}), do: {:request, ref}
   def parse({cmd, args}) when is_atom(cmd) and is_list(args), do: {:command, cmd, args}

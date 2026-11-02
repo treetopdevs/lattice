@@ -9,6 +9,7 @@ defmodule Lattice.Graph.Export do
   def export(snapshot, :dot) do
     lines =
       ["digraph lattice {"]
+      |> Kernel.++(omitted_comment(snapshot, "//"))
       |> Kernel.++(Enum.map(snapshot.nodes, &dot_node/1))
       |> Kernel.++(Enum.map(snapshot.edges, &dot_edge/1))
       |> Kernel.++(["}"])
@@ -21,6 +22,7 @@ defmodule Lattice.Graph.Export do
   def export(snapshot, :mermaid) do
     lines =
       ["graph TD"]
+      |> Kernel.++(omitted_comment(snapshot, "%%"))
       |> Kernel.++(Enum.map(snapshot.nodes, &mermaid_node/1))
       |> Kernel.++(Enum.map(snapshot.edges, &mermaid_edge/1))
 
@@ -28,6 +30,18 @@ defmodule Lattice.Graph.Export do
   end
 
   def export(snapshot, "mermaid"), do: export(snapshot, :mermaid)
+
+  # Row 306: a snapshot may name ops it could not draw. Without the key, or with
+  # an empty list, the output is byte-identical to before.
+  defp omitted_comment(snapshot, marker) do
+    case Map.get(snapshot, :omitted, []) do
+      [] ->
+        []
+
+      ids ->
+        ["  #{marker} omitted #{length(ids)} ill-formed delegation op(s): #{Enum.join(ids, " ")}"]
+    end
+  end
 
   defp dot_node(node) do
     id = node.id
