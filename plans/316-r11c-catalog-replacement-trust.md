@@ -76,7 +76,7 @@ A "retained client" keeps its original bootstrap review and accepted watermark (
 | # | Attacker or loss | What the retained client checks | Outcome |
 |---|---|---|---|
 | a | Catalog signer seed and backup both lost (custody `:417`) | — | Recovery is a bounded-admin replacement. The old key is not an input. |
-| b | Catalog signer compromised, admin intact. It can sign catalogs and old-key rotations under bindings it holds; it cannot change keys through a catalog or service identity through rotation. | Entry/inventory checks; route-reuse refusal; fork detection; the closing rule (D-275) | Bad catalogs refused; two signed revisions fork and pause transport. An admin replacement cites the attacker's heads in `parents` and **closes** every cited binding: later old-key rotations or catalogs under it are retained evidence and refused, so one resolution ends the attacker's ability to force `catalog_fork`. Suspected exposure is loss (`:420`). |
+| b | Catalog signer compromised, admin intact. It can sign catalogs and old-key rotations under bindings it holds; it cannot change keys through a catalog or service identity through rotation. | Entry/inventory checks; route-reuse refusal; fork detection; the closing rule (D-275) | Bad catalogs refused; two signed revisions fork and pause transport. An admin replacement cites the attacker's heads in `parents` and **closes** every cited binding and its ancestry: later old-key rotations or catalogs under it are retained evidence and refused, so one resolution ends the attacker's ability to force `catalog_fork`. Suspected exposure is loss (`:420`). |
 | c | Service key lost | Possession under `:service` | A partial-loss replacement keeps the catalog key (fresh `:catalog` possession) and sets a new service ID, key and, if needed, origin. |
 | d | Founder, old catalog key and old service key all lost (C10/A09) | Full stage B | Only an R04 bounded successor acts, and only if its pre-loss ceiling includes `replace_catalog_v1`. No old key, injected trust or root change. |
 | e | Malicious current admin | Ordinary revoke, transfer and lease rules | Accepted residual (contract §1). A concurrent revoke, transfer or lapse reclassifies it (row g). |
@@ -88,7 +88,7 @@ A "retained client" keeps its original bootstrap review and accepted watermark (
 | k | Rollback to an older generation, a wrong predecessor, or a child of a closed binding | Generation, predecessor and closing checks | `catalog_rollback` / `invalid_catalog_transition` |
 | l | Incomplete or wrong cutoff for the new service | `log_digest` against the restored raw log | `recovery_incomplete`; never an invented empty replica. |
 | m | Missing control or history page | Closure | `trust_pending`; bounded fetch, no switch. |
-| n | Head or budget overflow (rotation and replacement heads count together; closed children are not heads but count against parser bounds) | `overflow/2` | `control_history_limit`; no partial promotion or eviction. |
+| n | Head or budget overflow (rotation and replacement heads count together; closed children and raw refusal evidence are not heads but count against parser bounds) | `overflow/2` | `control_history_limit`; no partial promotion or eviction. |
 | o | Trust injected into a fresh client, a new operator key, a URL or a test object | Not a resolver input | Never proof |
 | p | Withheld unknown ops; whole-store rollback; compromised-webview re-observation (OD-10, row 260) | — | **Non-claims** (§10) |
 
@@ -101,8 +101,8 @@ Contract §3 restated with code names. **Claim** (closed map; extra or missing f
 |---|---|
 | `version`, `product`, `space`, `bootstrap` | `1`, `:treehouse`, pinned Space, pinned bootstrap ID |
 | `profile_genesis`, `profile_id` | Equal the retained bootstrap and `Authority.continuation_profile/1` at the strict prefix |
-| `parents` | Binding-head IDs (bootstrap, rotation or replacement, refused-but-observed included): sorted, distinct, nonempty. First replacement: the bootstrap ID. |
-| `prior_catalogs` | **Pinned (D-271):** sorted, distinct `%{binding, catalog}`; at least one per parent; every retained catalog head under that parent (more than one when that binding's catalog chain forked); `catalog: nil` only as the sole entry for a parent with no known catalog. |
+| `parents` | Binding-head IDs (bootstrap, rotation or replacement, D-276 refused nodes included): sorted, distinct, nonempty. First replacement: the bootstrap ID. |
+| `prior_catalogs` | **Pinned (D-271):** sorted, distinct `%{binding, catalog}`; at least one per parent; every retained catalog head under that parent (more than one when that binding's catalog chain forked); `catalog: nil` only as the sole entry for a parent with no known catalog. Coverage is an authoring obligation (PR 2), judged by the verifier only at step 7. |
 | `generation` | `max(parent generation) + 1`, within the safe-integer horizon |
 | `nonce` | Fresh 32-byte `Nonce`; also the local journal attempt ID |
 | `new_catalog_key`, `new_service_id`, `new_service_key`, `new_origin` | 32-byte keys, `new_catalog_key != new_service_key`; for each parent a changed service key means a changed service ID; canonical origin grammar |
@@ -133,24 +133,28 @@ required even when a key is kept.
   `catalog_ancestor?/3`, TS `:290-310`, `:515`, `:523`) become multi-parent. Persisted
   single-`parent` trust stores (TS `:479`, BEAM restore) must restore unchanged on upgrade.
   Same change in TS, and in `chains.rs` in PR 5.
-- **Refused nodes are evidence (D-276).** A `replace_catalog_v1` op that is authenticated but not
-  honored on the full union becomes a node with `refused?: true`. It may be cited in `parents` and
-  `prior_catalogs`; catalogs under it are retained conflict evidence, never `trust_pending`. It
-  authorizes nothing: a rotation, catalog or route under it is refused. A resolution derives its
-  authority independently (contract §4).
-- **Closing rule (D-275, OD-16).** A binding cited in `parents` of any retained honored
-  replacement is closed to old-key children. A rotation from it, or a catalog under it past the
-  cited `prior_catalogs`, is retained evidence and refused (`catalog_rollback`); if it had been
-  accepted, the result is `authority_changed`, never a silent switch. Evaluated over the retained
-  graph on every re-resolution, so it is delivery-order independent. Two **admin** siblings from
-  one parent still fork (C12). Rationale: the contract's sibling-fork rule covers controls of
-  equal standing; without the rule an old-key holder forces `catalog_fork` forever.
+- **Refused nodes are evidence (D-276).** A `replace_catalog_v1` op that passes step 4
+  (strict-prefix admin authority, intrinsic to its own ancestry) but is not honored on the full
+  union (step 3) is a node with `refused?: true`, in every delivery order. It may be cited in
+  `parents` and `prior_catalogs`; catalogs under it are retained conflict evidence. It authorizes
+  nothing: a rotation, catalog or route under it is refused. Any other authenticated refused op
+  (a non-admin's, or one failing scope, prefix or declared-graph checks) is **raw refusal
+  evidence**: kept and exported (plan 266), never a node, head or citable parent, and counted only
+  against parser bounds, so non-admin proposals cannot force `control_history_limit`.
+- **Closing rule (D-275, OD-16).** Every binding that is an ancestor-or-self of a `parents` entry
+  of any D-276-eligible replacement node (honored or refused) is closed to old-key children. A
+  rotation from it, or a catalog under it past the cited `prior_catalogs`, is retained evidence
+  and refused (`catalog_rollback`); if it had been accepted, the result is `authority_changed`,
+  never a silent switch, cleared by a fresh admin resolution citing the current heads. The node
+  set only grows, so closure is monotone: it survives reclassification and is delivery-order
+  independent. Two **admin** siblings still fork (C12). Rationale: the contract's sibling-fork
+  rule covers controls of equal standing; without the rule an old-key holder forces
+  `catalog_fork` forever.
 - **Possession domain reuse (D-269).** Rotation and replacement share the domain and `:catalog`
-  purpose. `Canonical.term` encodes map keys and the closed key sets differ (`parent`,
-  `prior_catalog` vs `parents`, `prior_catalogs`, `author`, `cap`, `deps`, `epoch`, …); each
-  normalizer refuses the other's set. A negative cross-use test pins both directions (OD-12).
-- **Retention (D-271, OD-15).** A claim may keep both keys and the service ID; the plan 274 no-op
-  refusal applies to rotation only.
+  purpose; `Canonical.term` encodes map keys, the closed key sets differ (`parent` vs `parents`,
+  …), each normalizer refuses the other's, and a negative cross-use test pins both ways (OD-12).
+- **Retention (D-271, OD-15).** A claim may keep both keys and the service ID (no-op refusal is
+  rotation-only, plan 274).
 
 **Proposed names** (PR 1 fixes them): BEAM `TransportCatalog.normalize_replacement_claim/1`,
 `replacement_claim_bytes/1`, `replacement_possession_bytes/2`, `verify_replacement_possession/3`;
@@ -175,9 +179,9 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
 1. **Scope.** `version`, `product`, `space`, `bootstrap` and `profile_genesis` against the
    retained bootstrap: `wrong_catalog_scope` (precedence 2).
 2. **Closure.** Every frame authenticated, dependency closure exact; else `trust_pending`.
-3. **Full union.** `Authority.analyze(Treehouse.Space, full_union)`. Not honored: the node is
-   kept with `refused?: true` (D-276); the candidate is `catalog_authority_refused` with the
-   unchanged Core reason, or `authority_changed` if it was accepted earlier.
+3. **Full union.** `Authority.analyze(Treehouse.Space, full_union)`. Not honored: a refused node
+   if step 4 passes, else raw refusal evidence (D-276); the candidate is `catalog_authority_refused`
+   with the unchanged Core reason, or `authority_changed` if it was accepted earlier.
 4. **Strict prefix**, one `Authority.analyze_with_records(Treehouse.Space, strict_ancestor_log)`:
    `holder_epoch(:admin) == %{holder: op.author, op_id: claim.holder_epoch}`; the acquisition
    record `{claim.holder_epoch, author, delegation_id}` has `delegation_id == op.cap`, attenuated
@@ -187,24 +191,25 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
    (D-274), with a resolver-supplied detail when Core honored the op. A `profile_id` mismatch
    with `continuation_profile/1` on the prefix is `wrong_catalog_scope`; it is evaluated here only
    because it needs the prefix.
-5. **Declared graph, intrinsic (D-277).** Judged without the installed heads: every parent is a
-   known binding node (refused nodes included); each `prior_catalogs` entry names an
-   authenticated catalog under its binding, or is the sole `nil` for a parent with none known;
-   generation is `max + 1`; inventory and entries match the first catalog. Failure is
-   `invalid_catalog_transition`. Then cutoffs against `cutoff_proofs` (`recovery_incomplete`).
+5. **Declared graph, intrinsic (D-277).** Structural only, without installed heads or
+   later-arriving catalogs: every parent is a known binding node (refused nodes included); each
+   `prior_catalogs` entry names a catalog under its binding (unheld is `trust_pending`), and `nil`
+   is its parent's sole entry; generation is `max + 1`; inventory and entries match the first
+   catalog. Failure is `invalid_catalog_transition`; an accepted candidate is never re-judged here.
 6. **Conflict deps (D-278).** If the candidate cites more than one head, a refused node, or a
    catalog-forked binding, its op deps' causal closure includes every cited replacement op and
    every Core control op (revoke, transfer, beacon) that refused a cited node. Rotation heads are
    not Space ops and are covered by `parents` alone. Else `invalid_catalog_transition`.
-7. **Against installed heads.** Omitting a retained head or later catalog makes the candidate a
-   **sibling**, retained as `catalog_fork` (never `invalid_catalog_transition`); nonce reuse with
-   a different claim is `catalog_fork`; the closing rule (D-275) applies; lower generation is
+7. **Against retained evidence.** Omitting another D-276-eligible replacement head makes the
+   candidate a **sibling**, retained as `catalog_fork` (never `invalid_catalog_transition`); nonce
+   reuse with a different claim is `catalog_fork`; an uncovered old-key child (rotation or
+   catalog, whenever it arrived) of a closed binding falls under D-275; lower generation is
    `catalog_rollback`.
-8. Store the atomic watermark with every observed head. Restore readiness against the new
-   identity is still required (`carrier_pending`).
-
-If steps 3–4 need more than these bounded public APIs, stop for interface review
-(contract §3, PR 0).
+8. **Cutoffs** against `cutoff_proofs`, only after conflicts are classified:
+   `recovery_incomplete` gates promotion of an otherwise sole valid head, never a fork record.
+9. Store the atomic watermark with every observed head. Restore readiness against the new
+   identity is still required (`carrier_pending`). Steps 3–4 needing more than these public APIs
+   is a STOP for interface review (contract §3, PR 0).
 
 ## 4. Refusal reasons
 
@@ -295,18 +300,23 @@ accepted state between resolver calls and runs both delivery orders.
   give `catalog_fork` (never `invalid_catalog_transition`); nonce reuse; a resolution covering
   both heads with both ops in its deps is accepted; one whose parents cover both but whose deps
   omit the sibling is refused; one omitting a head stays a fork; an old-key-only resolution is
-  refused; a catalog fork within one binding resolved by a replacement citing both catalogs.
+  refused; a catalog fork within one binding resolved by a replacement citing both catalogs;
+  valid sibling B without its cutoff proof is still `catalog_fork`, both orders, and after the proof.
 - **Closing rule (D-275):** an old-key rotation of a binding cited by an accepted replacement is
   refused in both delivery orders; a later catalog under it is refused; a previously accepted
   such child yields `authority_changed`; after one resolution, a further attacker rotation cannot
-  produce `catalog_fork`.
+  produce `catalog_fork`. Ancestry: with B, B→T, T→R accepted, B→Z is `catalog_rollback`, not a
+  fork, both orders, and B→Z and T→Z′ stay refused after R is reclassified. R citing `{P, nil}`
+  stays accepted when a C0 under P arrives later (C0 refused); C0 first gives `authority_changed`.
 - **C13:** a concurrent revoke after accepting R1 gives `authority_changed`, freezes routes and
-  keeps the watermark; a fresh current-admin resolution citing refused R1, with the revoke in its
-  deps, is accepted and unfreezes (a permanently frozen implementation fails); a rotation or
-  catalog under refused R1 is refused; a causally later revoke keeps the history.
+  keeps the watermark; a client that saw the revoke first still holds R1 as a refused node; a
+  fresh admin resolution citing refused R1, with the revoke in its deps, is accepted and unfreezes
+  (a permanently frozen implementation fails); a rotation or catalog under refused R1 is refused;
+  a causally later revoke keeps the history.
 - **C14:** a third head is `control_history_limit`; a rotation head plus a replacement head count
-  as two; a missing page is `trust_pending` with no partial promotion.
-- Same bytes are idempotent; a rollback is refused.
+  as two; three non-admin proposals with `parents: [bootstrap]` are raw evidence, add no head and
+  leave the bootstrap catalog resolving; a missing page is `trust_pending` with no partial
+  promotion. Same bytes are idempotent; a rollback is refused.
 
 **PR 5** — native parity (a `catalog_eval` replacement node, D-270 nodes in `chains.rs`), owned by
 the native track after plan 267, consuming the PR 1 and PR 4 vectors; this slice only files a row.
@@ -366,34 +376,24 @@ Copied into `plans/README.md` and `plans/decisions-2026-10-17-backlog-run.html` 
 `| 316 | [R11c catalog replacement trust and recovery](316-r11c-catalog-replacement-trust.md) | P1 | L | 224 PRs 1–3; 263; 267/269 for PR 4; R03/R04 DONE | DESIGNED (plan 316, design only; PRs 0–3 and 6 startable on fixtures; PR 4 waits on 267/269 and OD-16; PR 5 native-track; PR 7 rule 8) |`
 
 - **D-265.** Plan 316 implements lifecycle §2–§4/§7 and founder §6; it pins only R11c-review gaps.
-- **D-266.** PRs 0–3 and 6 start now on fixtures; PR 4 waits on 267/269 (seven
-  `codex/treehouse-*` branches rewrite `catalog_trust.ex/.ts`) and OD-16; PR 5 native track; PR 7
-  rule 8.
+- **D-266.** PRs 0–3 and 6 start on fixtures; PR 4 waits on 267/269 and OD-16; PR 5 native; PR 7 rule 8.
 - **D-267.** No catalog quorum: authority is the root's delegation to an honored bounded admin;
   R04 witnesses govern acquisition and renewal only; the custodian is a key holder (OD-11).
-- **D-268.** Binding ID is the final `replace_catalog_v1` op ID; first catalog revision 0,
-  `previous: nil`, inventory equals `claim.inventory_digest`, entries carry the new service; realm
-  `"treehouse-service:" <> new_service_id`; no page field (§2).
+- **D-268.** Binding ID is the final op ID; first catalog revision 0 as §2; no page field (§2).
 - **D-269.** Possession domain reused; disjoint closed key sets; negative test both ways (§2).
-- **D-270.** Binding nodes carry `{key, service_id, service_key, origin, parents, refused?}`;
-  entry, realm, distinctness and route origin/URL read the current binding; heads, forks and
-  ancestry are multi-parent; old single-`parent` stores restore on upgrade; BEAM, TS, native (§2).
-- **D-271.** `prior_catalogs`: sorted distinct `{binding, catalog}`, at least one per parent,
-  every retained catalog head under it, `nil` only as a sole entry; distinct new keys; changed
-  service key means changed service ID; both keys may be kept (OD-15) (§2).
+- **D-270.** Multi-parent binding nodes carry service, origin and `refused?`; checks and routes read
+  the current binding; old single-`parent` stores restore on upgrade; BEAM, TS, native (§2).
+- **D-271.** `prior_catalogs` and key rules as §2; both keys may be kept (OD-15).
 - **D-272.** Op-ID and rotation-ID bindings share one namespace; pre-image domains differ (§2).
-- **D-273.** Grounding corrections: custody doc path; native fails closed with `trust_pending`;
-  TS naming; no new wire atoms (§0).
-- **D-274.** Stage B acquisition, cap, attenuation, ceiling, lease and epoch/basis failures are
-  `catalog_authority_refused` (resolver detail when Core honored the op). Scope, version and both
-  profile fields are `wrong_catalog_scope` per contract §4 (§3 steps 1, 4).
-- **D-275.** Closing rule: a binding cited by a retained honored replacement admits no old-key
-  rotation or later catalog; such children are refused evidence, or `authority_changed` if
-  accepted; order-independent; admin siblings still fork (OD-16) (§2).
-- **D-276.** Authenticated but refused replacement ops are evidence nodes: citable as parents,
-  authorize nothing (§2).
-- **D-277.** The resolver validates a candidate's declared graph before comparing it with
-  installed heads; an omitting sibling is `catalog_fork`, not `invalid_catalog_transition` (§3
-  steps 5, 7).
+- **D-273.** Grounding corrections: custody path, native `trust_pending`, TS naming, no atoms (§0).
+- **D-274.** Stage B authority failures are `catalog_authority_refused` (resolver detail when Core
+  honored the op); scope, version and profile are `wrong_catalog_scope` (§3 steps 1, 4).
+- **D-275.** Closing rule: every ancestor-or-self of a parent of a D-276-eligible replacement
+  admits no old-key rotation or later catalog; such children are refused, or `authority_changed`
+  if accepted; monotone, order-independent; admin siblings still fork (OD-16) (§2).
+- **D-276.** A replacement authorized at its strict prefix but refused on the full union is a
+  citable node that authorizes nothing; other refused ops are raw evidence, never heads (§2).
+- **D-277.** Declared-graph checks are structural; coverage, siblings (`catalog_fork`) and then
+  cutoffs are judged against retained evidence (§3 steps 5, 7, 8).
 - **D-278.** A resolution's deps causally include every cited replacement op and every Core
   control op that refused a cited node; rotation heads are covered by `parents` (§3 step 6).
