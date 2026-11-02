@@ -2,7 +2,7 @@
 
 Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 1–2, PR 3's generation keying and PR 6's
 exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
-and rows 320 and 335; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
+and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 
 - **Row, priority, effort**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`); P1 / L
 - **Depends on**: plan 224 PRs 1–3 (DONE), plan 263 (DONE, custodian ledger), R03 and R04 (DONE,
@@ -297,7 +297,7 @@ ancestor B of cited rotation T) with a named reason; replay and crash refusals k
 
 **PR 4 — resolver integration** (`catalog_trust.ex` / `.ts`, D-270, D-275–D-278). **GATED on
 plans 267 and 269 merging** (seven `codex/treehouse-*` branches rewrite both files), **OD-16
-sign-off, OD-17, row 320** (the resolution shape that clears a closed-out accepted catalog) **and row 335** (ceiling monotonicity over the acquisition sequence). Scope includes the multi-parent graph functions, current-binding route
+sign-off, OD-17 and row 320** (the resolution shape that clears a closed-out accepted catalog). Row 335 (ceiling monotonicity over the acquisition sequence) is a PR 4 acceptance requirement, not a gate. Scope includes the multi-parent graph functions, current-binding route
 origin/URL, refused nodes, and restoring pre-upgrade single-`parent` trust stores. Tests in
 `catalog_replacement_trust_test.exs` and the TS twin. Every multi-delivery test persists the
 accepted state between resolver calls and runs both delivery orders.
@@ -306,7 +306,7 @@ accepted state between resolver calls and runs both delivery orders.
   author is an R04 continuation successor whose delegation is self-issued with `parent_id: nil`
   and an inherited ceiling containing `replace_catalog_v1` (a resolver that demands a linked root
   parent fails this case).
-- **C11 negatives:** missing pre-loss permission (no `replace_catalog_v1` in the ceiling); restored permission (a later transfer from an older, broader continuation cap regains `replace_catalog_v1` after a narrower continuation dropped it; Core honors every hop, so a current-record check accepts it; row 335); wrong
+- **C11 negatives:** missing pre-loss permission (no `replace_catalog_v1` in the ceiling); restored permission (a later transfer from an older, broader continuation cap regains `replace_catalog_v1` after a narrower continuation dropped it; Core honors every hop, so a current-record check accepts it; row 335 acceptance); wrong
   profile, incl. a same-`profile_id` repin with another genesis (`wrong_catalog_scope`); a kept
   parent service ID with a new service key; wrong generation; no beacon; root genesis cap; unleased cap; wrong acquisition
   cap; stale holder; bad parent; a parent-linked delegation not attenuated from the root (Core
@@ -395,6 +395,6 @@ reason or wire atom; no production, Phase G or receipt-free W4. C10–C15 stay O
   design-slice gates pass. **Implementation done:** every PR's tests pass; vectors agree in BEAM,
   TS and, after PR 5, native.
 - **STOP:** PR 0 needs a Core primitive or context field; a historical Space vector or wire byte
-  changes; PR 4 starts before 267/269, OD-16, OD-17 and rows 320 and 335; C10 needs an old key, new root or injected trust.
+  changes; PR 4 starts before 267/269, OD-16, OD-17 and row 320; C10 needs an old key, new root or injected trust.
 
 **Decisions:** D-265–D-280 (design), D-281+ (process): `plans/decisions-2026-10-17-backlog-run.html`.
