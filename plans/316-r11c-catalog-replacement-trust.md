@@ -261,25 +261,7 @@ acquisition"; "an R04 continuation acquisition (`parent_id: nil`) is observable 
 `acquisitions/3` and its delegation ceiling is readable from the prefix log" (`acquisition()`
 carries only `delegation_id`, so reaching the delegation struct without a new API is part of the
 probe); "a refused replacement op stays in the authenticated history with its Core reason". STOP if any check needs a new Core primitive: file a row and return for interface
-review (contract §3). Do not approximate.
-
-*PR 0 outcome (2026-11-02): GO.* All five probes pass on the real `Treehouse.Space` through the
-public Sim fixture; no Core primitive or context field was needed. The genesis ceiling is read
-from `Space.prepare_bounded_creation/4`'s own delegation, not a copy. The delegation struct is
-read from the honored acquisition's introducing op (`Log.ops/1` by its `op_id`, checking the
-`delegation_id`), never by scanning for the id: any author can retain a refused op carrying a
-copied (`invalid_transfer`) or forged-expiry (`bad_delegation_sig`) delegation under the same id,
-which the probe pins. Step-4 provenance: each hop is subset-checked (an R04 continuation against
-its predecessor acquisition's ceiling, `Continuation.scope?/4` / `continuation_scope_exceeded`; a
-transfer against its *chosen* parent, `Delegation.attenuates?/2`, which Core reports on the op as
-`invalid_transfer`; both probed with an honored control), but that is not monotone provenance: a transfer may
-attenuate an older, broader rootless continuation cap and restore `replace_catalog_v1` after a
-narrower continuation dropped it, and Core honors every hop (pinned in the T4 probe; Sol review).
-PR 4 must therefore validate the ceiling chain over the acquisition sequence itself; the public
-APIs suffice for that, so this is a resolver residual, not a STOP. A root
-genesis cap is the `:admin` acquisition itself with `expires_epoch: nil`. Lapse needs a beacon
-epoch strictly greater than `expires_epoch` (6 honors, 7 lapses). Until PR 1 adds the command, a
-`replace_catalog_v1` op is retained with `:unknown_command` (tripwire in the probe test).
+review (contract §3). Do not approximate. *Outcome (2026-11-02): GO*, no Core primitive needed (evidence in PR #213); the PR 4 resolver must check ceiling monotonicity over the whole acquisition sequence (row 335).
 
 **PR 1 — claim codec and the Space command.** Files: `transport_catalog.ex`; `space.ex` (the
 `command(:replace_catalog_v1, [:_claim, :_catalog_possession, :_service_possession], ...)`
