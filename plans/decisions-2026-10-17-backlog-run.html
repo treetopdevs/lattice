@@ -2193,6 +2193,106 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Decision</dt><dd>This is intended. D-331 pinned <code>:unknown_command</code> as a tripwire that PR 1 must flip. Space now declares the command, so the op clears <code>command_status</code> and the leased admin cap. Stage A then refuses the probe's stub claim and zero possessions. T5(a) now asserts <code>:application_invalid_catalog</code> from both <code>Sim.quarantined/3</code> and <code>Authority.analyze/2</code>, and the op stays in every realm's authenticated log. T5(b) is unchanged.</dd>
 <dt>Reason</dt><dd>The new reason confirms that the BEAM refusal for this path now comes from the application gate, as plan 316 §3 intends. Native still refuses with <code>unknown_command</code> until PR 5 (D-375).</dd>
 </dl></section>
+<section id="d380"><h2><span>D-380</span> Preferred row taken, numbered 342</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>Rows on origin/main ended at 335. PR #214's branch added 336-337, and no branch carried 338-341. The slice's files are test files that no open PR touches.</dd>
+<dt>Options</dt><dd>File 342; fall back to row 226; fall back to row 225.</dd>
+<dt>Decision</dt><dd>File row 342 and take the preferred slice.</dd>
+<dt>Reason</dt><dd>It is open, unblocked and free of overlap. It does not claim the number was safe from a concurrent slice filing it first; it was rechecked before commit.</dd>
+</dl></section>
+<section id="d381"><h2><span>D-381</span> The reproduced class is concurrent node/tsx subprocess tests</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>Two runs with 16 busy-loop shells and <code>+S 4:4</code> gave 6 and 5 timeouts, every one in a test that runs <code>node --import tsx</code>. Tests already raised to 120 s and 180 s still failed. The serial control under the same load had 0 failures and was only about 15% slower.</dd>
+<dt>Options</dt><dd>Raise timeouts; make the files <code>async: false</code>; ExUnit <code>group: :node_subprocess</code>; cut probe work.</dd>
+<dt>Decision</dt><dd>Put every async node-spawning lattice_core module in an ExUnit <code>group:</code> (later split in two, D-389).</dd>
+<dt>Reason</dt><dd>Concurrent node processes cause the failures and buy almost no wall time. A group serializes them but keeps overlap with BEAM-only async tests, which <code>async: false</code> would lose. It does not claim the class is gone on hosted CI until the exact-tip run is green.</dd>
+</dl></section>
+<section id="d382"><h2><span>D-382</span> One commented timeout raise for <code>catalog_incoming_order_test:8</code></h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>The CI stack timed out in BEAM delegation validation after the probe had returned. Replayed from cached probe JSON, the BEAM half takes 3.4 s unloaded and 51.5 s under the recipe load.</dd>
+<dt>Options</dt><dd>Group only; group plus a commented raise; split the loop into tests sharing a probe in <code>setup_all</code>.</dd>
+<dt>Decision</dt><dd>Group it and add <code>@tag timeout: 180_000</code>, with the measured numbers in the comment.</dd>
+<dt>Reason</dt><dd>The BEAM work alone nears 60 s under load, so grouping cannot protect it. The work is legitimately long, and splitting adds structure without removing CPU. It does not claim a product slowness; at about 20 ms per evaluation, no row is filed.</dd>
+</dl></section>
+<section id="d383"><h2><span>D-383</span> Other named sites recorded as not reproduced</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd><code>wire_vocabulary:99</code>, <code>carrier_wire:302</code> and township <code>read_model:11</code> passed in both loaded runs. <code>audit_bundle</code> and <code>catalog_valid_capacity</code> carry 120 s and 300 s tags that predate the report, so a 60 s timeout cannot happen there at this commit.</dd>
+<dt>Options</dt><dd>Fix them speculatively; escalate the load to force them; record them as a residual.</dd>
+<dt>Decision</dt><dd>Leave them untouched and name them as a residual in row 342, with candidate fixes.</dd>
+<dt>Reason</dt><dd>A root cause cannot be claimed for something not observed. The wire tests are rule-3-adjacent, and read_model is Township (rule 10). It does not claim these sites are stable at load 130-160.</dd>
+</dl></section>
+<section id="d384"><h2><span>D-384</span> No bounded node-probe helper</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>The task suggested bounding subprocess boot with a clear error. No orphaned tsx processes were found after the timed-out runs.</dd>
+<dt>Options</dt><dd>Add a Port-based helper that kills on timeout; skip.</dd>
+<dt>Decision</dt><dd>Skip it in this slice.</dd>
+<dt>Reason</dt><dd>There is no evidence of orphans adding load, and skipping keeps the diff small. It does not claim orphans never happen mid-run.</dd>
+</dl></section>
+<section id="d385"><h2><span>D-385</span> No new tests; the load harness is the proof</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>A meta-test asserting that each node-spawning file declares the group would pin another file's source text.</dd>
+<dt>Options</dt><dd>Add a source-scan test; prove with before-and-after load runs.</dd>
+<dt>Decision</dt><dd>Add no test. Report 3+ before and 3 after loaded runs, plus unloaded full-suite wall times, in the PR.</dd>
+<dt>Reason</dt><dd>Rule 6 forbids new source-text pins. It does not claim the harness is a CI gate.</dd>
+</dl></section>
+<section id="d386"><h2><span>D-386</span> No second review needed (rule 3)</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>The diff touches only <code>apps/lattice_core/test/treehouse</code> files and <code>plans/</code>, not authority, canonical, carrier lib, codec, src-tauri or workflows.</dd>
+<dt>Options</dt><dd>rule3 true; rule3 false.</dd>
+<dt>Decision</dt><dd>rule3 false, with one adversarial review.</dd>
+<dt>Reason</dt><dd>No listed path is touched, and the wire test files were scoped out on purpose. If the peer-file fixes are added, the call flips to true.</dd>
+</dl></section>
+<section id="d387"><h2><span>D-387</span> Guard against the serial group becoming the long pole</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>All node probes in one group run one at a time. The CI async phase was 218 s.</dd>
+<dt>Options</dt><dd>Accept any growth; split the group on a threshold.</dd>
+<dt>Decision</dt><dd>Measure the unloaded full lattice_core wall time before and after. If it grows by more than 60 s, split into two balanced groups.</dd>
+<dt>Reason</dt><dd>This keeps the fix from trading flakes for a slower gate. It does not claim a hosted wall-time figure until CI runs.</dd>
+</dl></section>
+<section id="d388"><h2><span>D-388</span> Rule 3: measured 240 s timeout on both <code>catalog_artifact_integer</code> tests</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>The plan only anticipated a comment on <code>incoming_order:8</code>; rule 3 covers any other test that keeps timing out.</dd>
+<dt>Decision</dt><dd>Raised the existing 120 s tags on <code>artifact_integer:8</code> and <code>:18</code> to 240 s, with a comment giving the measurements (16.0 s and 12.7 s without the busy-loop load; 106.0 s and 118.7 s under the recipe, load ~21) and noting they were measured with a single group.</dd>
+<dt>Reason</dt><dd>The tests timed out at 120 s in every loaded run before and after grouping. The stack trace showed BEAM CPU work (<code>Authority.analyze</code> and signature checks), not a node hang. The measurement run took the timeout off to get a real number, and 240 s is about twice the worst.</dd>
+</dl></section>
+<section id="d389"><h2><span>D-389</span> Rule 4: split the group into <code>:node_subprocess_a</code> and <code>_b</code></h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>With one group the unloaded async phase grew from 81.5 s to 182.5 s, about +94 s total at comparable sync time. That is over the 60 s guard (D-387).</dd>
+<dt>Options</dt><dd>Single group (failed the guard); two groups (chosen).</dd>
+<dt>Decision</dt><dd>Two groups of about equal measured unloaded time: a = 76.9 s, b = 83.7 s. The reason is recorded in the commit message and the PR body, not in a code comment.</dd>
+<dt>Reason</dt><dd>After the split the total grew by only 7.9 s, and 3/3 loaded runs stayed clean.</dd>
+</dl></section>
+<section id="d390"><h2><span>D-390</span> Ambient load from other sessions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>The machine ran at load 23-103 from other agents, so without a wait the recipe was not reproducible.</dd>
+<dt>Decision</dt><dd>Before each loaded run the script waited until the 1-minute load average dropped below 25, and below 15 before unloaded runs. Start and end load averages are in the <code>run.sh</code> output. The first single-group unloaded run finished at load 103, so it was discarded and repeated.</dd>
+<dt>Reason</dt><dd>Wall times should be read alongside those load averages.</dd>
+</dl></section>
+<section id="d391"><h2><span>D-391</span> Temporary timing formatter, not committed</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>Rules 3 and 4 need per-test durations, and <code>--slowest</code> is forbidden because it forces trace mode.</dd>
+<dt>Decision</dt><dd>Added a <code>test_helper</code> hook behind an environment variable that loads <code>/tmp/slice9/timing_formatter.exs</code>, used it only for measurement, and reverted it. <code>git status</code> is clean.</dd>
+<dt>Reason</dt><dd>Per-test numbers were needed without changing the run mode, and the hook is not part of the change.</dd>
+</dl></section>
+<section id="d392"><h2><span>D-392</span> Environment prep in the fresh worktree</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>The first unloaded run had 2 failures in <code>native_preview_reciprocal_test</code> because tauri-shell's <code>node_modules</code> were missing (enoent).</dd>
+<dt>Decision</dt><dd>Ran <code>npm ci --ignore-scripts</code> in <code>clients/treehouse-tauri-shell</code> and <code>clients/lattice-client</code>.</dd>
+<dt>Reason</dt><dd>This was a local setup gap, not a product problem.</dd>
+</dl></section>
+<section id="d393"><h2><span>D-393</span> New tsx module from main joins <code>:node_subprocess_a</code></h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>Merging origin/main (PR #214, after the measurement runs) brought <code>catalog_replacement_claim_test.exs</code>, an <code>async: true</code> module that runs the tsx exporter once (about 1 s).</dd>
+<dt>Options</dt><dd>Leave it ungrouped and file a residual; add it to a group.</dd>
+<dt>Decision</dt><dd>Added <code>group: :node_subprocess_a</code>, the smaller measured group. The file passes in its group (9 tests, 0 failures), and <code>mix format --check-formatted</code> passes.</dd>
+<dt>Reason</dt><dd>D-381 covers every async node-spawning module, and one 1 s probe does not move the balance in D-389. It does not claim the group times were re-measured with this file.</dd>
+</dl></section>
+<section id="d394"><h2><span>D-394</span> PR #215 review: Codex Sol rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/215">#215</a></dd>
+<dt>Context</dt><dd>The slice ran one adversarial review (D-386: rule 3 does not apply).</dd>
+<dt>Decision</dt><dd>No Codex review rounds or findings were reported to the coordinator for this slice, and the final round has no findings recorded. Nothing was fixed or deferred. The bot rounds under D-38 run on this PR.</dd>
+<dt>Reason</dt><dd>It makes no claim beyond row 342. It does not claim that the flake class is gone on hosted CI, that the residual sites are stable, or anything about R13, custody, W4 or Phase G.</dd>
+</dl></section>
 </main>
 </body>
 </html>
