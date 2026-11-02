@@ -83,17 +83,8 @@ defmodule Lattice2.AuthorityBodyTest do
   end
 
   defp attacker_body_gen(good) do
-    deleg =
-      one_of([
-        constant(good),
-        bind(member_of(@fields -- [:expires_epoch]), fn field ->
-          map(encodable_gen(), &%{good | field => &1})
-        end),
-        map(one_of([constant(nil), integer(0..100)]), &%{good | expires_epoch: &1}),
-        encodable_gen()
-      ])
-
     role = one_of([constant(:clerk), encodable_gen()])
+    deleg = deleg_gen(good)
     tick = one_of([integer(0..100), encodable_gen()])
 
     one_of([
@@ -105,6 +96,17 @@ defmodule Lattice2.AuthorityBodyTest do
       map({role, tick}, fn {r, t} -> {:heartbeat, r, t} end),
       map(encodable_gen(), &{:revoke, &1}),
       map({encodable_gen(), encodable_gen()}, fn {r, p} -> {:request, r, p} end),
+      encodable_gen()
+    ])
+  end
+
+  defp deleg_gen(good) do
+    one_of([
+      constant(good),
+      bind(member_of(@fields -- [:expires_epoch]), fn field ->
+        map(encodable_gen(), &%{good | field => &1})
+      end),
+      map(one_of([constant(nil), integer(0..100)]), &%{good | expires_epoch: &1}),
       encodable_gen()
     ])
   end
@@ -214,23 +216,45 @@ defmodule Lattice2.AuthorityBodyTest do
     end
   end
 
-  property "Toolshed.ReadModel.observe/1 never raises on admitted attacker-shaped authority bodies" do
+  # D-317: the property must reach loan/3, Toolshed's only AuthorityBody
+  # consumer, so it first establishes custody with the borrower and an active
+  # leased borrow Cap, then lets the borrower append attacker-shaped grants.
+  property "Toolshed.ReadModel loan projection stays display-safe on admitted attacker-shaped authority bodies" do
     sim = Sim.new(Toolshed.Tool, "replica:tool:authority-body", ["owner", "borrower"], seed: "ab")
     {sim, _genesis} = Sim.create_replica(sim, "owner")
-    {sim, good} = Sim.grant(sim, "owner", "borrower", ops: [:note_condition])
+    {sim, request} = Sim.request(sim, "borrower", "custody", {:custody_transfer, []})
+    sim = Sim.sync_all(sim)
+    owner = Sim.identity(sim, "owner")
+    borrower = Sim.identity(sim, "borrower")
+
+    consent =
+      Lattice.Authority.Consent.sign_custody(borrower, Sim.replica(sim), request.id, owner.pub)
+
+    {sim, _transfer} =
+      Sim.command(sim, "owner", :custody_transfer, [borrower.pub, request.id, consent])
+
+    {sim, good} = Sim.grant(sim, "owner", "borrower", ops: [:note_condition], expires_epoch: 4)
     sim = Sim.sync_all(sim)
 
-    check all(body <- attacker_body_gen(good) |> filter(&signable?/1, 50), max_runs: 50) do
-      {sim, _op} = Sim.append(sim, "owner", :authority, body)
+    base = sim |> Sim.log("owner") |> Toolshed.ReadModel.observe()
+    assert %{due_epoch: 4, overdue?: false} = base.loan
+    fingerprint = Lattice.Identity.fingerprint(borrower.pub)
+
+    # Half the bodies are grants, the only tag loan/3 reads.
+    bodies = one_of([map(deleg_gen(good), &{:grant, &1}), attacker_body_gen(good)])
+
+    check all(body <- bodies |> filter(&signable?/1, 50), max_runs: 50) do
+      {sim, _op} = Sim.append(sim, "borrower", :authority, body)
       model = sim |> Sim.sync_all() |> Sim.log("owner") |> Toolshed.ReadModel.observe()
-      assert is_map(model)
 
-      fingerprints =
-        [model.custody.holder_fingerprint] ++
-          if(model.loan, do: [model.loan.borrower_fingerprint], else: []) ++
-          Enum.map(model.requests, & &1.author_fingerprint)
+      assert %{borrower_fingerprint: ^fingerprint, overdue?: overdue?} = model.loan,
+             inspect(body)
 
-      for fp <- fingerprints, fp != nil, do: assert(String.valid?(fp))
+      assert is_boolean(overdue?)
+      assert model.loan.due_epoch == 4, inspect(body)
+      assert String.valid?(model.loan.borrower_fingerprint)
+      assert String.valid?(model.custody.holder_fingerprint)
+      for r <- model.requests, do: assert(String.valid?(r.author_fingerprint))
     end
   end
 
