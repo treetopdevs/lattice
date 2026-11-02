@@ -2027,6 +2027,160 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 The bot rounds under D-38 run on this PR.</dd>
 <dt>Reason</dt><dd>Rule 3 by subject (D-335). Test only: PR 0 GO. No claim that PRs 1–4 are unblocked, and no R13, native parity, custody, W4 or Phase G claim. C10–C15 stay OPEN.</dd>
 </dl></section>
+<section id="d350"><h2><span>D-350</span> Plan 178 vocabulary amendment already landed</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>Plan 316 PR 1 lists 'the plan 178 copy-contract amendment with the lifecycle §7 vocabulary text'. On origin/main, plans/178 already lists both catalog commands with the dated 2026-09-06 adoption paragraph. <code>contract_test.exs</code> <code>@commands</code> already carries both.</dd>
+<dt>Options</dt><dd>Re-edit plan 178 to quote the §7 text verbatim; or verify and leave it unchanged.</dd>
+<dt>Decision</dt><dd>Verify and leave plan 178 and <code>contract_test.exs</code> unchanged. The test must pass unmodified.</dd>
+<dt>Reason</dt><dd>The adopted amendment is in place and pinned. Rewording protected copy would loosen the exact-command assertion. It does not claim the command is enabled in the root-only preview.</dd>
+</dl></section>
+<section id="d351"><h2><span>D-351</span> Replacement nonce uses the catalog id form</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>Plan 316 says 'fresh 32-byte Nonce'. Bootstrap and rotation nonces are 43-char base64url text (<code>id?</code>). Member continuity nonces are raw 32 bytes.</dd>
+<dt>Options</dt><dd>Raw 32-byte binary; or the catalog-family <code>id?</code> text form.</dd>
+<dt>Decision</dt><dd>Use the <code>id?</code> text form, as in <code>normalize_rotation</code> and <code>normalize_bootstrap</code>.</dd>
+<dt>Reason</dt><dd>It is the same 32 bytes of entropy, and it keeps one nonce shape across catalog controls and the journal attempt ID. It does not change member continuity.</dd>
+</dl></section>
+<section id="d352"><h2><span>D-352</span> <code>prior_catalogs</code> order and binding-set equality</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>The plan requires sorted, distinct {binding, catalog} entries, at least one per parent, and nil only as a sole entry. It does not say where nil sorts, or whether an entry may name a non-parent binding.</dd>
+<dt>Options</dt><dd>Tolerate extra bindings; or require the entry binding set to equal parents. Sort nil first or last.</dd>
+<dt>Decision</dt><dd>Strict order by binding, then catalog, with nil before any ID (Erlang term order, mirrored with <code>compareUtf8</code> in TS). The set of entry bindings must equal parents; an extra binding is <code>malformed_catalog</code>.</dd>
+<dt>Reason</dt><dd>A closed codec should not carry entries that no check reads. Nil-first matches BEAM's natural term order, so both runtimes sort one way. Coverage of retained catalog heads stays a PR 2/PR 4 obligation.</dd>
+</dl></section>
+<section id="d353"><h2><span>D-353</span> Parser bounds on claim lists</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>The claim lists parents, prior_catalogs, deps and epoch_basis have no stated bounds. Head budget overflow (<code>control_history_limit</code>) is a resolver concern.</dd>
+<dt>Options</dt><dd>Leave them unbounded; or set closed codec bounds.</dd>
+<dt>Decision</dt><dd>parents 1..16, prior_catalogs 1..32, deps 1..64, epoch_basis 1..64; cutoffs keep the existing 1..13.</dd>
+<dt>Reason</dt><dd>A closed codec must bound its input. The values sit well above the head budget (two) and the 13-entry catalog, so no valid claim is refused. The resolver's head limit is unchanged. These are codec ceilings, not policy.</dd>
+</dl></section>
+<section id="d354"><h2><span>D-354</span> TS decoder returns null, never throws</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>In TS, a decoder that throws yields <code>malformed_command</code>. The bootstrap decoder returns null and lets <code>spaceStatus</code> refuse with <code>application_invalid_catalog</code>. BEAM refuses with <code>application_invalid_catalog</code> from the Stage A clause.</dd>
+<dt>Options</dt><dd>A throwing decoder; or the null-args bootstrap pattern.</dd>
+<dt>Decision</dt><dd>Follow the <code>catalog_bootstrap_v1</code> pattern: a malformed claim or a non-binary possession decodes to null, and Stage A refuses with <code>application_invalid_catalog</code>. A parity test pins the same reason in both runtimes.</dd>
+<dt>Reason</dt><dd>Without this, BEAM and TS would quarantine one frame with different reasons.</dd>
+</dl></section>
+<section id="d355"><h2><span>D-355</span> Stage A also binds <code>claim.space</code> to <code>op.replica</code></h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>Plan 316 §3 Stage A lists bootstrap visibility, author, cap, deps, holder_epoch and both possessions. Scope checks are Stage B step 1.</dd>
+<dt>Options</dt><dd>Leave space to Stage B; or check it in Stage A as a literal claim-to-op binding.</dd>
+<dt>Decision</dt><dd>Check <code>claim.space == op.replica</code> in Stage A. Profile, product and bootstrap scope stay in Stage B.</dd>
+<dt>Reason</dt><dd>It is a literal binding to the op, like author and cap, and costs nothing. It does not make Stage A a scope judge or a route decision.</dd>
+</dl></section>
+<section id="d356"><h2><span>D-356</span> Vector custody without a workflow edit</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>Flagship regenerates only named writers, then fails on any diff or untracked file under test/vectors. Plan §5 wants BEAM→TS and TS→BEAM vectors.</dd>
+<dt>Options</dt><dd>Add a writer step to flagship.yml (a rule-3 path); or self-checking tests.</dd>
+<dt>Decision</dt><dd><code>replacement_v1.json</code> is BEAM-written from seeded keys and committed. A BEAM test regenerates it and asserts byte equality. The TS→BEAM direction runs a tsx exporter into a scratch dir from the BEAM test, as <code>catalog_cutoff_reciprocal_test</code> does. No .github change.</dd>
+<dt>Reason</dt><dd>Ed25519 is deterministic, so regeneration is exact. This keeps .github/workflows out of the diff.</dd>
+</dl></section>
+<section id="d357"><h2><span>D-357</span> Claim byte form is vector-only</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>The contract defines only the possession signing domain. Vectors want claim pre-hash bytes.</dd>
+<dt>Options</dt><dd>No claim byte function; or a named claim domain used only for vectors.</dd>
+<dt>Decision</dt><dd>Add <code>replacement_claim_bytes</code> with the domain <code>lattice-treehouse-catalog-replacement-claim-v1</code> as a comparison form only. It is not signed, hashed into an ID, or carried on the wire.</dd>
+<dt>Reason</dt><dd>Reciprocal tests need a full byte string to compare. The binding ID is the op ID, so no new identity domain is created. If review prefers comparing only the possession bytes, it can be dropped.</dd>
+</dl></section>
+<section id="d358"><h2><span>D-358</span> Arity-1 replacement flips to <code>bad_command_arity</code></h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd><code>treehouse_catalog_bootstrap.ts:147</code> asserts that an arity-1 <code>replace_catalog_v1</code> is <code>unknown_command</code>. With a 3-arity command defined, both runtimes return <code>bad_command_arity</code>.</dd>
+<dt>Options</dt><dd>Delete the assertion; or update it.</dd>
+<dt>Decision</dt><dd>Change the expected reason to <code>bad_command_arity</code> and add arity-2 and arity-3 cases.</dd>
+<dt>Reason</dt><dd>The old reason recorded that no command existed. The new one is the correct Core outcome and keeps the negative case.</dd>
+</dl></section>
+<section id="d359"><h2><span>D-359</span> Sim default Space ceiling widens</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd><code>Sim.create_replica(Treehouse.Space)</code> without <code>ops:</code> derives the genesis ceiling from <code>__lattice_commands__</code>, so it now includes <code>replace_catalog_v1</code>. The preview, the bounded genesis and the vector exporter use explicit ceilings.</dd>
+<dt>Options</dt><dd>Pin the Sim default; or accept it and pin the preview bytes.</dd>
+<dt>Decision</dt><dd>Accept the wider Sim default. <code>catalog_bootstrap_test.exs:58</code> follows the registry. Add a byte pin (SHA-256 captured on origin/main) of the root-only preview genesis, and run the full mix test plus the vector-regeneration diff.</dd>
+<dt>Reason</dt><dd>Only test-local Sim fixtures change. Committed vectors and the preview's six-command ceiling stay byte-identical, which is the STOP condition the plan names.</dd>
+</dl></section>
+<section id="d360"><h2><span>D-360</span> Historical vector writers pin the pre-PR Space ceiling</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>Registering <code>replace_catalog_v1</code> widens the Sim default Space genesis ceiling. <code>EnrollmentVectors</code> and <code>MemberContinuitySemanticFixture</code> used that default, so their committed vectors (the R13 enrollment corpus and <code>beam_semantics.json</code>) changed. The plan lists a changed historical Space vector as a STOP.</dd>
+<dt>Options</dt><dd>Regenerate the vectors (violates gate 4 and the STOP rule); pin the writers to the old ceiling; stop and ask.</dd>
+<dt>Decision</dt><dd>Both writers now pass the explicit pre-PR eight-command list as <code>ops:</code> for <code>Treehouse.Space</code>; the member-continuity fixture uses <code>Keyword.put_new</code>, so callers can still override. Committed vectors stay byte-identical.</dd>
+<dt>Reason</dt><dd>This satisfies both 'the Sim default ceiling widens' and 'historical vectors byte-identical'. I checked that the TS consumers re-author from the ops recorded in each vector, not from the registry.</dd>
+</dl></section>
+<section id="d361"><h2><span>D-361</span> Native <code>catalog_eval</code> keeps no <code>replace_catalog_v1</code> entry</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>The cargo test <code>native_command_preflight_matches_actual_capability_and_role_owners</code> iterates the TS Space registry. With the command registered, BEAM and TS return <code>bad_command_arity</code> while native returns <code>unknown_command</code>.</dd>
+<dt>Options</dt><dd>Add a native registry entry; exclude the command from the parity peer.</dd>
+<dt>Decision</dt><dd>I first added a native entry, then reverted it. <code>native_catalog_command_peer.ts</code> now filters <code>replace_catalog_v1</code> out of its command list, with a comment pointing to PR 5.</dd>
+<dt>Reason</dt><dd>Native has no Stage A. A registry entry with an opaque payload would let native accept replacements that BEAM and TS refuse, turning a fail-closed path into a fail-open one. Native <code>catalog_eval</code> is PR 5 scope.</dd>
+</dl></section>
+<section id="d362"><h2><span>D-362</span> <code>holder_epoch</code> is checked for visibility only, on both sides</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>The BEAM spec says 'is in visible'. The TS line pairs <code>visible.has</code> with an honored-verdict check for 'the bootstrap and holder_epoch'.</dd>
+<dt>Decision</dt><dd>The bootstrap must be visible, honored, a <code>catalog_bootstrap_v1</code> command and on the same replica. <code>holder_epoch</code> must only be visible. BEAM and TS do the same.</dd>
+<dt>Reason</dt><dd>This follows plan §3 ('a visible ancestor') and keeps the two sides at strict parity.</dd>
+</dl></section>
+<section id="d363"><h2><span>D-363</span> A member without the admin role gets <code>role_not_granted</code>, not <code>not_holder</code></h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Context</dt><dd>The plan text says a member with no <code>:admin</code> role gets <code>{true, :not_holder}</code>.</dd>
+<dt>Decision</dt><dd>The test asserts what Core actually returns: <code>:operation_not_granted</code> when the cap lacks the op, <code>:role_not_granted</code> when the cap has no admin role, and <code>:not_holder</code> when the cap has the admin role but its holder is someone else.</dd>
+<dt>Reason</dt><dd>All three are Core reasons raised before Stage A, so they still show non-admin refusal comes from Core.</dd>
+</dl></section>
+<section id="d364"><h2><span>D-364</span> Stage A parity is carried by the vector and the exporter</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd><code>replacement_v1.json</code> carries the BEAM-judged Stage A frames (13 at first, 16 after review round 1), and <code>treehouse_catalog_bootstrap.ts</code> checks that TS returns the same reasons. The TS exporter emits TS-judged frames, and the BEAM claim test checks those reasons. The 'bootstrap-quarantined' case uses a visible <code>catalog_bootstrap_v1</code> that Core quarantines (wrong <code>space_root</code>).</dd>
+<dt>Reason</dt><dd>This gives parity in both directions without changing <code>lifecycle_quarantine_parity_test</code>. It is also why the vector is about 236 KB: every frame embeds the full claim.</dd>
+</dl></section>
+<section id="d365"><h2><span>D-365</span> Dropped one JSON-shape assertion in the TS→BEAM test</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd>Removed <code>Wire.encode_value(claim) == ts['claim_term']</code>. The test compares canonical claim and possession bytes instead.</dd>
+<dt>Reason</dt><dd>TS emits map pairs in declared field order and BEAM sorts them. The canonical bytes match, and those are what is signed.</dd>
+</dl></section>
+<section id="d366"><h2><span>D-366</span> README row and decisions-log edits deferred (superseded at PR open)</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd>During the implementation slice, only the plans/316 status line was appended; <code>plans/README.md</code> and these entries were not edited, because the slice's closing instruction said not to edit them yet. They were added in the PR-open commit on #214.</dd>
+<dt>Reason</dt><dd>Keeps index and log edits in the step that knows the PR number.</dd>
+</dl></section>
+<section id="d367"><h2><span>D-367</span> Rule 3 Sol review timing</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd>The second independent review (<code>codex exec -m gpt-6.1-sol</code> over the diff, plan 316 §2/§3/§7 and lifecycle §3) was not run inside the implementation slice. It ran afterwards as the Codex Sol 6.1 xhigh rounds recorded in D-374.</dd>
+<dt>Reason</dt><dd>It is a pre-merge step beyond the implementation slice.</dd>
+</dl></section>
+<section id="d368"><h2><span>D-368</span> Where to fix the TS high-integer bypass</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Options</dt><dd>(a) per-command opaque context in <code>decodeCarrierBody</code>; (b) opaque sentinel for all command args; (c) catch in the replacement decoder (impossible, because the throw comes first).</dd>
+<dt>Decision</dt><dd>Branch in <code>decodeCarrierBody</code> for command bodies shaped exactly as tuple(atom <code>replace_catalog_v1</code>, list). Everything else falls through to the unchanged strict decode.</dd>
+<dt>Reason</dt><dd>The throw happens in the generic body decoder before any command decoder runs, so the replacement decoder cannot catch it. Limiting the change to <code>replace_catalog_v1</code> avoids changing refusal reasons for other commands whose BEAM behaviour has not been checked. The general decision is row 336.</dd>
+</dl></section>
+<section id="d369"><h2><span>D-369</span> Sentinel type</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd>Added a new <code>DecodedTerm</code> variant <code>{type:'opaque_high_integer'}</code> and the <code>opaque_integer</code> context, which passes to child terms explicitly. The beacon sentinel is not reused.</dd>
+<dt>Reason</dt><dd><code>invalid_beacon_integer</code> is named for beacons, and non-strict contexts otherwise fall back to <code>beacon_metadata</code>. <code>decodedToCarrierTerm</code> and <code>possession()</code> already return null for unknown variants.</dd>
+</dl></section>
+<section id="d370"><h2><span>D-370</span> Regression evidence path</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd>New Stage A vector cases on the signed-frame path in both directions, with <code>replacement_v1.json</code> regenerated.</dd>
+<dt>Reason</dt><dd>The finding notes that tests calling the normalizer directly miss this path. The vector is new in this PR, so regenerating it (only additions) is in scope.</dd>
+</dl></section>
+<section id="d371"><h2><span>D-371</span> Scope of the strict version check</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd>Changed only the replacement normalizer (line 101). The same <code>== 1</code> check in the other normalizers is filed as row 337.</dd>
+<dt>Reason</dt><dd>Keeps the change to what the review found; the other sites are local-API only and outside this PR's codec.</dd>
+</dl></section>
+<section id="d372"><h2><span>D-372</span> Package-entry test uses a runtime dynamic import</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Options</dt><dd>Static import (breaks the clean build); package self-reference (TS still resolves the types to dist); dynamic runtime import (chosen).</dd>
+<dt>Decision</dt><dd>The test loads the package with <code>await import("../dist/src/index.js")</code> from a string variable, typed as <code>typeof publicApi</code> (src). It does not use a static import.</dd>
+<dt>Reason</dt><dd>tsconfig compiles the test into dist, so a static import of dist fails the CI step that rebuilds from an empty dist with TS2307. With a runtime import, tsc never needs dist to exist.</dd>
+</dl></section>
+<section id="d373"><h2><span>D-373</span> No design row for repeated findings</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Decision</dt><dd>Treat this as a one-off packaging miss rather than a repeat of the same class of finding.</dd>
+<dt>Reason</dt><dd>The r1 finding was a decode-parity bug and r2 is a dist that was not rebuilt. CI already has a dist-staleness gate in flagship.yml, and the new test also guards the package entry locally.</dd>
+</dl></section>
+<section id="d374"><h2><span>D-374</span> PR #214 review: Codex Sol rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/214">#214</a></dd>
+<dt>Finding</dt><dd>Codex Sol 6.1 xhigh. Round 1 (2): P2 <code>clients/lattice-client/src/treehouse.ts:330</code>, large wire integers bypass the replacement decoder (BEAM/TS parity); P3 <code>apps/lattice_core/lib/treehouse/transport_catalog.ex:101</code>, a float version <code>1.0</code> passes normalization then crashes possession verification. Round 2 (1): P2 <code>clients/lattice-client/src/carrier.ts:1631</code>, the integer fix was missing from the committed package build (tracked <code>dist/src/carrier.js</code> not regenerated). Final round: no findings.</dd>
+<dt>Decision</dt><dd>All fixed:<ul><li>Round 1 P2 (<code>477424b31</code>): <code>decodeCarrierBody</code> (carrier.ts) now decodes <code>replace_catalog_v1</code> argument lists under a new <code>opaque_integer</code> context, so canonical high-uint64 text becomes a <code>{type:'opaque_high_integer'}</code> sentinel. The claim and possession decoders refuse it, and <code>replacementStatus</code> returns <code>application_invalid_catalog</code>. Three signed-frame Stage A cases were added on both sides (high-generation, high-epoch, high-integer-possession): BEAM <code>stage_a_cases</code> and the TS exporter, with counts moved from 13 to 16. <code>replacement_v1.json</code> was regenerated and only gained lines. The TS test failed on high-generation before the fix and passes after it (D-368–D-370).</li><li>Round 1 P3 (<code>477424b31</code>): <code>replacement_scope?</code> now checks <code>value.version === 1</code>. The closed-field-set test asserts that version <code>1.0</code> is malformed and that <code>verify_replacement_possession(%{claim | version: 1.0}, sig64, sig64) == {:error, :malformed_catalog}</code>. It failed before the fix and passes after it (D-371).</li><li>Round 2 P2 (<code>ee44d7c72</code>): dist was rebuilt from an empty folder (<code>rm -rf dist &amp;&amp; tsc</code>). A new test in <code>treehouse_catalog_bootstrap.ts</code> replays all 16 BEAM-authored Stage A vectors through <code>dist/src/index.js</code>. Against the old dist it failed on high-generation (<code>malformed_term</code> instead of <code>application_invalid_catalog</code>), and it passes after the rebuild (D-372, D-373).</li></ul>Follow-ups filed: rows 336 (high-uint64 argument decode parity for every command) and 337 (strict version checks in the other catalog normalizers). The bot rounds under D-38 run on this PR.</dd>
+<dt>Reason</dt><dd>Rule 3 by subject (catalog trust and authority path). PR 1 covers only the codec and Stage A. It makes no claim about the resolver, replacement acceptance, recovery or closed-binding refusal (PRs 2–4), native <code>catalog_eval</code> parity (PR 5), R13, custody, W4 or Phase G.</dd>
+</dl></section>
 </main>
 </body>
 </html>
