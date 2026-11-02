@@ -6,6 +6,12 @@ and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
 implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
 atom and claims no route switch, catalog trust or C10–C15.
+Native `catalog_eval` fails closed on `replace_catalog_v1`: it refuses the command as
+`unknown_command` (`commands.rs:89`) before Space policy or projection, until PR 5 (row 319,
+after plan 267). BEAM/TS admit it to Stage A while native refuses it; this is a known,
+fail-closed parity gap (D-375). PR 5 must add both a `space_policy` Stage A check and a
+`space_projection` arm, and replace `unreachable!` with an error return; the cargo test
+`native_refuses_replace_catalog_v1_as_unknown_command_without_panicking` fails on a table-only edit.
 
 - **Row, priority, effort**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`); P1 / L
 - **Depends on**: plan 224 PRs 1–3 (DONE), plan 263 (DONE, custodian ledger), R03 and R04 (DONE,
