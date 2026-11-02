@@ -332,6 +332,24 @@ defmodule LatticeCore.LiveOpsTest do
       assert ids == Enum.sort(ids) and ids == Enum.uniq(ids)
     end
 
+    # Row 310 round 1: bounded batches must not turn a reset against a live
+    # Audit into a gap; reset drains everything Audit accepts first.
+    test "reset with a healthy Audit drains a multi-batch backlog" do
+      total = Lattice.LiveOps.audit_batch() + 100
+      stop_audit!()
+
+      for n <- 1..total do
+        assert :ok = Lattice.LiveOps.record_denial("tab-#{n}", :publish, :cap_required, %{})
+      end
+
+      start_audit!()
+      assert :ok = Lattice.LiveOps.reset()
+
+      assert length(liveops_audit()) == total
+      assert audit_of(:liveops_audit_gap) == []
+      assert %{counters: %{audit_gap: 0, audit_pending: 0}} = Lattice.LiveOps.snapshot()
+    end
+
     test "Audit.try_record reports unavailable instead of exiting" do
       stop_audit!()
 

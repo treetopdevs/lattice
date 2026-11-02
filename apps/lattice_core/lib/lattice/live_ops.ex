@@ -166,8 +166,11 @@ defmodule Lattice.LiveOps do
   def handle_call(:snapshot, _from, state), do: {:reply, Serializer.snapshot(state), state}
   def handle_call(:events, _from, state), do: {:reply, Enum.reverse(state.events), state}
 
+  # Reset is a destructive control call, so it drains the whole backlog to a
+  # live Audit before discarding events; only what Audit cannot take becomes
+  # the gap (row 310 round 1).
   def handle_call(:reset, _from, state) do
-    state = flush_audit(state)
+    state = drain_audit(state)
     cancel_audit_retry(state)
     gap = state.audit_gap + audit_pending(state)
     {:reply, :ok, schedule_audit_retry(%{fresh_state() | audit_gap: gap}, @audit_retry_ms)}
@@ -760,6 +763,17 @@ defmodule Lattice.LiveOps do
 
       delay = if outcome == :ok, do: 0, else: @audit_retry_ms
       schedule_audit_retry(state, delay)
+    end
+  end
+
+  defp drain_audit(state) do
+    before = {state.audit_cursor, state.audit_gap}
+    state = flush_audit(state)
+
+    cond do
+      state.audit_gap == 0 and audit_pending(state) == 0 -> state
+      {state.audit_cursor, state.audit_gap} == before -> state
+      true -> drain_audit(state)
     end
   end
 
