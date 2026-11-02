@@ -313,6 +313,49 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
     # Inherited ceiling: a subset of the leased transfer's ops, which the prefix also holds.
     assert MapSet.subset?(d.ops, fx.delegation.ops)
     assert delegation(p, fx.delegation.id) == fx.delegation
+
+    # Residual (Sol review): per-hop subset is not monotone provenance. A later
+    # continuation may drop :replace_catalog_v1, and a transfer may still attenuate an
+    # older, broader rootless continuation cap, restoring it. Core honors every hop, so
+    # the PR 4 resolver must validate the ceiling chain over the acquisition sequence.
+    {sim, narrow} =
+      Sim.continue_role(sim, "admin", :admin,
+        ops: @admin_ops -- [:replace_catalog_v1],
+        expires_epoch: 8,
+        witnesses: ["w1", "w2"]
+      )
+
+    sim = Sim.sync_all(sim)
+    nominee = Sim.identity(sim, "nominee")
+
+    restored =
+      Delegation.new(admin, sim.replica, nominee.pub,
+        ops: @admin_ops,
+        roles: [:admin],
+        parent_id: d.id,
+        expires_epoch: 8
+      )
+
+    {sim, restore_op} = Sim.append(sim, "admin", :authority, {:transfer, :admin, restored, 0})
+    sim = Sim.sync_all(sim)
+    {sim, late} = replace_candidate(sim, "nominee", restored.id)
+    q = prefix(Sim.log(sim, "nominee"), late)
+
+    # Genesis and the leased transfer precede these three hops.
+    assert [_, _, %{op_id: cont_id}, %{op_id: narrow_id}, %{op_id: restore_id}] =
+             Authority.acquisitions(Space, q, :admin)
+
+    assert {cont_id, narrow_id, restore_id} == {cont.id, narrow.id, restore_op.id}
+    {:succeed, :admin, narrow_d, _} = narrow.body
+    refute :replace_catalog_v1 in narrow_d.ops
+    assert :replace_catalog_v1 in restored.ops
+
+    assert Authority.holder_epoch(Space, q, :admin) == %{
+             holder: nominee.pub,
+             op_id: restore_op.id
+           }
+
+    refute MapSet.member?(Authority.quarantine(Space, q), restore_op.id)
   end
 
   # --- T5 -------------------------------------------------------------------

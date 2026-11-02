@@ -265,10 +265,14 @@ review (contract §3). Do not approximate.
 
 *PR 0 outcome (2026-11-02): GO.* All five probes pass on the real `Treehouse.Space` through the
 public Sim fixture; no Core primitive or context field was needed. The delegation struct is read
-by matching the transfer/succeed op in the strict prefix's `Log.ops/1`. Step-4 provenance: an R04
-continuation's self-issued ceiling must be a subset of its predecessor acquisition's ceiling
-(`Continuation.scope?/4`, `continuation_scope_exceeded`), and leased transfers are attenuated
-(`not_attenuated`), so both acquisition paths inherit, never widen, `replace_catalog_v1`. A root
+by matching the transfer/succeed op in the strict prefix's `Log.ops/1`. Step-4 provenance: each
+hop is subset-checked (an R04 continuation against its predecessor acquisition's ceiling,
+`Continuation.scope?/4` / `continuation_scope_exceeded`; a transfer against its *chosen* parent,
+`Delegation.attenuates?/2` / `not_attenuated`), but that is not monotone provenance: a transfer may
+attenuate an older, broader rootless continuation cap and restore `replace_catalog_v1` after a
+narrower continuation dropped it, and Core honors every hop (pinned in the T4 probe; Sol review).
+PR 4 must therefore validate the ceiling chain over the acquisition sequence itself; the public
+APIs suffice for that, so this is a resolver residual, not a STOP. A root
 genesis cap is the `:admin` acquisition itself with `expires_epoch: nil`. Lapse needs a beacon
 epoch strictly greater than `expires_epoch` (6 honors, 7 lapses). Until PR 1 adds the command, a
 `replace_catalog_v1` op is retained with `:unknown_command` (tripwire in the probe test).
