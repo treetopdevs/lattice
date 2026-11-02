@@ -97,7 +97,9 @@ defmodule Lattice.Graph.AuthorityBody do
   # Same member rule as Delegation.well_formed?/1: a map-backed MapSet of
   # atoms, binaries, integers or binary-name Canonical.Atom wrappers. Members
   # sort in Erlang term order, then convert through String.Chars (`nil` becomes
-  # ""), so the joined text matches what the readers printed before.
+  # ""), so the joined text matches what the readers printed before. A binary
+  # name that is not valid UTF-8 is admissible but not display text (it would
+  # break JSON and LiveView serialization), so it makes the field `:malformed`.
   defp names(map, field) do
     case Map.get(map, field) do
       %MapSet{map: backing} = set when is_map(backing) ->
@@ -112,8 +114,9 @@ defmodule Lattice.Graph.AuthorityBody do
     end
   end
 
-  defp name?(name) when is_atom(name) or is_binary(name) or is_integer(name), do: true
-  defp name?(%Canonical.Atom{name: name}) when is_binary(name), do: true
+  defp name?(name) when is_atom(name) or is_integer(name), do: true
+  defp name?(name) when is_binary(name), do: String.valid?(name)
+  defp name?(%Canonical.Atom{name: name}) when is_binary(name), do: String.valid?(name)
   defp name?(_other), do: false
 
   defp text(name) when is_binary(name), do: name
@@ -122,10 +125,15 @@ defmodule Lattice.Graph.AuthorityBody do
 
   # --- Role and tick ----------------------------------------------------------
 
+  # The parsed text is display-safe: a binary role name that is not valid UTF-8
+  # stays `{:malformed, raw}` rather than becoming text.
   defp role(role) when is_atom(role), do: {:name, role, to_string(role)}
-  defp role(role) when is_binary(role), do: {:name, role, role}
-  defp role(%Canonical.Atom{name: name} = role) when is_binary(name), do: {:name, role, name}
+  defp role(role) when is_binary(role), do: text_role(role, role)
+  defp role(%Canonical.Atom{name: name} = role) when is_binary(name), do: text_role(role, name)
   defp role(role), do: {:malformed, role}
+
+  defp text_role(raw, name),
+    do: if(String.valid?(name), do: {:name, raw, name}, else: {:malformed, raw})
 
   defp tick(tick) when is_integer(tick), do: {:tick, tick}
   defp tick(tick), do: {:malformed, tick}

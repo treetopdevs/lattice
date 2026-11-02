@@ -193,6 +193,7 @@ defmodule Lattice2.AuthorityBodyTest do
     check all(body <- attacker_body_gen(good) |> filter(&signable?/1, 50), max_runs: 50) do
       log = append_log(sim, body)
       model = ReadModel.observe(log, labels: %{}, vouches: [])
+      assert is_binary(Jason.encode!(model.trust_graph))
       assert is_map(ReadModel.replay(log))
       graph = ReplicaSnapshot.build(Matter, log)
 
@@ -224,6 +225,32 @@ defmodule Lattice2.AuthorityBodyTest do
     assert is_binary(ReplicaSnapshot.export(graph, :json))
     labels = Enum.map(graph.nodes, & &1.label)
     assert Enum.any?(labels, &String.contains?(&1, "revoke 12345678")), inspect(labels)
+  end
+
+  test "invalid UTF-8 role or delegation names never reach the trust graph as text" do
+    {sim, good} = base_sim()
+    base_edges = ReadModel.observe(Sim.log(sim, "clerk")).trust_graph.edges
+    bad_roles = %{good | roles: MapSet.new([<<255>>])}
+    bad_ops = %{good | ops: MapSet.new([%Canonical.Atom{name: <<255>>}])}
+
+    for body <- [
+          {:transfer, <<255>>, good, 0},
+          {:succeed, %Canonical.Atom{name: <<255>>}, good, 0},
+          {:grant, bad_roles},
+          {:grant, bad_ops}
+        ] do
+      log = append_log(sim, body)
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      assert is_binary(Jason.encode!(model.trust_graph)), inspect(body)
+      assert model.trust_graph.edges -- base_edges == [], inspect(body)
+      assert is_binary(ReplicaSnapshot.export(ReplicaSnapshot.build(Matter, log), :json))
+    end
+
+    assert {:transfer, {:malformed, <<255>>}, _, _} =
+             AuthorityBody.parse({:transfer, <<255>>, good, 0})
+
+    assert {:grant, %{roles: :malformed, well_formed?: true}} =
+             AuthorityBody.parse({:grant, bad_roles})
   end
 
   test "parse/1 parses each delegation field on its own" do
