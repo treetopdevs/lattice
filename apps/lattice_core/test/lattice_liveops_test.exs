@@ -158,6 +158,35 @@ defmodule LatticeCore.LiveOpsTest do
              |> Enum.find(&(&1.id == observe_cap))
   end
 
+  # Row 231: `Audit.events/0` is a plain call, so a snapshot taken while Audit
+  # is mid-restart used to exit `:noproc` inside LiveOps. Terminating the child
+  # through the supervisor makes the unavailable window deterministic. No tab
+  # is registered while Audit is down: `emit/3` still records through a call
+  # and would crash LiveOps (row 310).
+  test "snapshot survives an unavailable Audit" do
+    before = Process.whereis(Lattice.LiveOps)
+    :ok = Supervisor.terminate_child(LatticeCore.Supervisor, Lattice.Audit)
+
+    on_exit(fn ->
+      case Supervisor.restart_child(LatticeCore.Supervisor, Lattice.Audit) do
+        {:ok, _pid} -> :ok
+        {:error, :running} -> :ok
+        {:error, {:already_started, _pid}} -> :ok
+      end
+    end)
+
+    assert %{counters: %{audit: 0}} = Lattice.LiveOps.snapshot()
+    assert Process.whereis(Lattice.LiveOps) == before
+    assert Lattice.Audit.count() == 0
+
+    assert {:ok, _pid} = Supervisor.restart_child(LatticeCore.Supervisor, Lattice.Audit)
+    Lattice.Audit.record(:row_231_probe, %{})
+
+    assert Lattice.Audit.count() == 1
+    assert %{counters: %{audit: 1}} = Lattice.LiveOps.snapshot()
+    assert Process.whereis(Lattice.LiveOps) == before
+  end
+
   defp connect_role(role) do
     {:ok, _pid, tab} =
       TestTabClient.connect(identity: %{surface: "liveops-demo", role: Atom.to_string(role)})

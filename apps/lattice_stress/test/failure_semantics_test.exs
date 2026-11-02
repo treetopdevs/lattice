@@ -4,12 +4,15 @@ defmodule LatticeStress.FailureSemanticsTest do
   alias LatticeStress.{ProbeServer, ProbeTab}
 
   # `LatticeCore.Supervisor` is `one_for_one` with the default intensity (3
-  # restarts per 5 s). These tests intentionally kill core children, and a
-  # kill can cascade (for example `LatticeServer.DemoHub` crashing `Lattice.LiveOps`
-  # when `Lattice.Audit` is mid-restart), so restarts left over from earlier
-  # tests can push a later kill past the limit. The supervisor then shuts the
-  # whole app down and the process never comes back. A restarted app has a fresh
-  # restart budget, so each test starts from one without changing production.
+  # restarts per 5 s). These tests intentionally kill core children. The
+  # snapshot cascade where `LatticeServer.DemoHub` crashed `Lattice.LiveOps`
+  # while `Lattice.Audit` was mid-restart is fixed (row 231): snapshots now read
+  # the tolerant `Lattice.Audit.count/0`. Other cascades remain, notably the
+  # LiveOps `emit/3` path that records audit events through a call (row 310),
+  # so restarts left over from earlier tests can still push a later kill past
+  # the limit. The supervisor then shuts the whole app down and the process
+  # never comes back. The per-test `restart_core!` stays as budget isolation: a
+  # restarted app has a fresh restart budget without changing production.
   setup do
     restart_core!()
     Lattice.reset!()
@@ -64,6 +67,7 @@ defmodule LatticeStress.FailureSemanticsTest do
     probe: probe,
     tab: tab
   } do
+    liveops = Process.whereis(Lattice.LiveOps)
     old = Process.whereis(Lattice.Audit)
     Process.exit(old, :kill)
     wait_until(fn -> restarted?(Lattice.Audit, old) end)
@@ -71,6 +75,8 @@ defmodule LatticeStress.FailureSemanticsTest do
     assert {:error, :unknown_cap} = Lattice.call(tab.id, "forged-after-audit-crash", %{})
     assert %{call_count: 0} = ProbeServer.stats(probe)
     assert Enum.any?(Lattice.audit_events(), &(&1.type == :deny))
+    # Row 231 regression signal, not a proof: the restart window is racy here.
+    assert Process.whereis(Lattice.LiveOps) == liveops
   end
 
   test "tab transport crash disconnects tab and revokes owned caps", %{

@@ -1260,6 +1260,104 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>Round 1: (P2 read_model.ex:254 role interpolation before guard) fixed with role_event/3, new transfer/succeed map-role test red without fix; (P3 non-binary audience crashes ReplicaSnapshot.summary) fixed with audience_fp/1; (P3/P2 InitialBundle test passes with guard reverted) fixed by removing the unreachable guard and test; (P3 silent omission from the trust graph) follow-up row 306. Round 2: (P2 short binary audiences crash Identity.fingerprint) fixed: audience_fp/1 fingerprints only 32-byte binaries and ReadModel drops events whose issuer or audience is not 32 bytes; test red with ArgumentError when stashed. Round 3: (P2 malformed ticks crash both readers) fixed with tick_text/1 over transfer, succeed and heartbeat summaries, new regression test with map ticks; (P3 short-audience test masks the audience guard) fixed by keeping roles a MapSet. Final-round findings were the round-3 findings; both were addressed in the last commit, so no P1/P2 is known open on the tip. Follow-up rows 306 to 309.</dd>
 <dt>Reason</dt><dd>Rule 3 by intent; no workflow, W4 or Phase G claim.</dd>
 </dl></section>
+<section id="d191"><h2><span>D-191</span> Correction to D-176: model pins for workflow stages</h2><dl>
+<dt>Context</dt><dd>D-176 says slices run on Opus 5.5. That was not true for slice 1.</dd>
+<dt>Options</dt><dd>Leave D-176 as written; or record a correction entry.</dd>
+<dt>Decision</dt><dd>Slice 1 (PR #207) workflow stages ran on Sonnet 5.5, the workflow default, not Opus 5.5 as D-176 states; from slice 2 the plan, implement, fix, independent-review and PR stages pin Opus 5.5 and the Codex-driver stage stays on Sonnet.</dd>
+<dt>Reason</dt><dd>The decisions log must match what ran. This entry corrects the record. It does not change any slice 1 result or review outcome.</dd>
+</dl></section>
+<section id="d192"><h2><span>D-192</span> Take row 231 as the slice</h2><dl>
+<dt>Context</dt><dd>Row 231 is the preferred slice. It must still be open, unblocked and not touched by an open PR.</dd>
+<dt>Options</dt><dd>Row 231; fallback row 226; then row 225.</dd>
+<dt>Decision</dt><dd>Take row 231. No fallback.</dd>
+<dt>Reason</dt><dd>origin/main README line 410 shows row 231 TODO. Its dependency, row 228, is DONE (line 407). The only open PR is #207, and its files (replica_snapshot.ex, read_model.ex, read_model_test.exs, the plans files) do not include live_ops/, audit.ex, demo_hub.ex or failure_semantics_test.exs. No branch or worktree for 231 exists. Rows 226 and 225 were not examined further. It does not claim they are still open.</dd>
+</dl></section>
+<section id="d193"><h2><span>D-193</span> Crash guard, allowed under rule 10</h2><dl>
+<dt>Context</dt><dd>Rule 10 freezes Township and Toolshed product work.</dd>
+<dt>Options</dt><dd>Treat row 231 as frozen product work; or as a maintenance crash guard.</dd>
+<dt>Decision</dt><dd>Treat it as a crash guard. LiveOps and DemoHub are the core/browser demo, not Township or Toolshed.</dd>
+<dt>Reason</dt><dd>The change stops a supervisor restart cascade and adds no feature. It does not claim any Treehouse progress.</dd>
+</dl></section>
+<section id="d194"><h2><span>D-194</span> Fix the whole snapshot cascade, not only serializer.ex:53</h2><dl>
+<dt>Context</dt><dd>The row names serializer.ex:53 and says the crash goes on through DemoHub. DemoHub also reads Audit directly at demo_hub.ex:153, :165 and :200, and it calls LiveOps.snapshot after a whereis check, which can race.</dd>
+<dt>Options</dt><dd>Guard line 53 only; or guard every Audit read in the snapshot path plus DemoHub's LiveOps call.</dd>
+<dt>Decision</dt><dd>Guard line 53, the three DemoHub audit_count reads, and DemoHub's liveops_snapshot/0 call (an exit returns nil, which the not-running branch already returns).</dd>
+<dt>Reason</dt><dd>Guarding only line 53 leaves DemoHub crashing on its own reads after the same kill. It does not make DemoHub tolerate every LiveOps failure, only an exit during the snapshot call.</dd>
+</dl></section>
+<section id="d195"><h2><span>D-195</span> One public total Audit.count/0 with a server-side count</h2><dl>
+<dt>Context</dt><dd>Serializer and DemoHub are in different apps. Today they copy the whole event list across processes just to call length/1. The CapStore precedent is a private safe_cap_store_snapshot/0.</dd>
+<dt>Options</dt><dd>Private exit-safe helpers in each caller; or a public Lattice.Audit.count/0 backed by handle_call(:count).</dd>
+<dt>Decision</dt><dd>Add handle_call(:count) and a public count/0 that catches exits and returns 0. Its doc says it is a projection counter, not evidence.</dd>
+<dt>Reason</dt><dd>One helper serves both apps, and counting in the server avoids the copy. events/0 stays loud for evidence readers. The catch also swallows :timeout, as the CapStore precedent does.</dd>
+</dl></section>
+<section id="d196"><h2><span>D-196</span> Report 0, not nil, while Audit is unavailable</h2><dl>
+<dt>Context</dt><dd>The snapshot counter is an integer on the wire. A restarted Audit starts empty.</dd>
+<dt>Options</dt><dd>0; nil; an 'unavailable' marker.</dd>
+<dt>Decision</dt><dd>Report 0.</dd>
+<dt>Reason</dt><dd>It keeps the integer type, follows the CapStore 'treat as empty' precedent, and a restarted Audit reports 0 anyway because its history is volatile. It does not claim the count is accurate during the restart window.</dd>
+</dl></section>
+<section id="d197"><h2><span>D-197</span> Leave emit/3 → Audit.record out of scope; file row 310</h2><dl>
+<dt>Context</dt><dd>LiveOps.emit/3 calls Audit.record/2 synchronously. Any state-changing LiveOps call during the restart window still kills LiveOps.</dd>
+<dt>Options</dt><dd>Also catch the record exit (dropping an audit write); or file a row.</dd>
+<dt>Decision</dt><dd>File row 310: LiveOps emit/3 crashes on Audit.record during an Audit restart; decide whether to drop, buffer or fail the call. Not fixed here.</dd>
+<dt>Reason</dt><dd>Dropping audit writes silently is a policy change, beyond 'make the snapshot tolerate a restarting Audit'. Other audit_events readers (graph/flagship snapshots, diagnostics, mix tasks) are evidence paths and stay loud on purpose.</dd>
+</dl></section>
+<section id="d198"><h2><span>D-198</span> Keep restart_core! in the stress test</h2><dl>
+<dt>Context</dt><dd>The failure_semantics_test.exs setup comment names this exact cascade as the reason for restarting the core app before each test.</dd>
+<dt>Options</dt><dd>Remove restart_core!; or keep it and rewrite the comment.</dd>
+<dt>Decision</dt><dd>Keep it. Rewrite the comment to say the snapshot cascade is fixed (row 231) and the restart stays as budget isolation for the rest (row 310). Add a LiveOps pid-unchanged assertion to the Audit-crash test.</dd>
+<dt>Reason</dt><dd>Other cascades remain and the isolation is cheap. The pid assertion is a regression signal, not a proof, because the kill and the snapshot do not reliably overlap.</dd>
+</dl></section>
+<section id="d199"><h2><span>D-199</span> Deterministic tests via terminate_child; one new server test file</h2><dl>
+<dt>Context</dt><dd>Killing Audit restarts it almost instantly, so a kill-and-call test would flake. DemoHub has no test file.</dd>
+<dt>Options</dt><dd>Kill and hammer; or Supervisor.terminate_child, which unregisters the name so calls exit :noproc. Put the DemoHub test in liveops_web_socket_test.exs or in a new file.</dd>
+<dt>Decision</dt><dd>Use terminate_child and restart_child in on_exit. Add the LiveOps test to lattice_liveops_test.exs. Add a new apps/lattice_server/test/demo_hub_audit_restart_test.exs.</dd>
+<dt>Reason</dt><dd>terminate_child gives the exact mid-restart state every time. The WebSocket test file is about the transport, so a small dedicated file is clearer than stretching it.</dd>
+</dl></section>
+<section id="d200"><h2><span>D-200</span> Rule 3 does not apply</h2><dl>
+<dt>Context</dt><dd>Rule 3 requires a second review for authority, canonical, carrier, codec, src-tauri custody or workflow diffs.</dd>
+<dt>Options</dt><dd>One review; or two.</dd>
+<dt>Decision</dt><dd>One adversarial review only.</dd>
+<dt>Reason</dt><dd>The diff touches audit.ex, live_ops/serializer.ex, lattice_server demo_hub.ex, tests and plans. None is a rule-3 path. DemoHub's moduledoc says it is outside the authority path, and lattice_server is the browser demo, not lattice_carrier_server. The serializer's CapStore read is not changed.</dd>
+</dl></section>
+<section id="d201"><h2><span>D-201</span> Expected append conflict with PR #207</h2><dl>
+<dt>Context</dt><dd>PR #207 appends rows 306-309 to plans/README.md and D-176..D-190 to the decisions log. This slice appends row 310 and D-191 onward.</dd>
+<dt>Options</dt><dd>Wait for #207; or resolve on sync.</dd>
+<dt>Decision</dt><dd>Resolve on sync by keeping both appends in number order. Renumber only if #207 merges with numbers other than D-176..D-190 and rows 306-309.</dd>
+<dt>Reason</dt><dd>The appends do not overlap in content. Only their positions conflict. (PR #207 merged with D-176..D-190 and rows 306-309; the sync merged cleanly with no renumbering.)</dd>
+</dl></section>
+<section id="d202"><h2><span>D-202</span> Ran the stress test file from the umbrella root, not inside apps/lattice_stress</h2><dl>
+<dt>Context</dt><dd>Not caused by this change; the app has no standalone lockfile setup.</dd>
+<dt>Options</dt><dd>Run from the umbrella root (chosen) | fix the stress app's mix.exs deps (out of scope)</dd>
+<dt>Decision</dt><dd>Ran `mix test apps/.../failure_semantics_test.exs` together with the other two gate files from the worktree root.</dd>
+<dt>Reason</dt><dd>Run on its own inside apps/lattice_stress, mix refuses to start because of an existing dependency config mismatch (stream_data :only differs, and jason/sobelow/cowboy are not locked). The plan already allows this fallback, and running from the root works.</dd>
+</dl></section>
+<section id="d203"><h2><span>D-203</span> Installed client node_modules in the worktree so mix verify runs fully</h2><dl>
+<dt>Context</dt><dd>Environment only; git status stayed clean apart from the intended changes.</dd>
+<dt>Decision</dt><dd>Ran `npm ci --ignore-scripts` in clients/{lattice-client,lattice-shell-kit,treehouse-tauri-shell,township-tauri-shell,lattice-mobile-core} with the Node 22 npm binary called directly.</dd>
+<dt>Reason</dt><dd>In a fresh worktree, 41 TS-reciprocal Elixir tests fail with ERR_MODULE_NOT_FOUND for tsx. Installing the locked dependencies is purely environment setup; no tracked files changed.</dd>
+</dl></section>
+<section id="d204"><h2><span>D-204</span> Extra pid assertion and catch-all exit handling</h2><dl>
+<dt>Context</dt><dd>These are small additions to the plan, not departures from it.</dd>
+<dt>Decision</dt><dd>The core test also checks that the LiveOps pid is unchanged after the Audit restart and record. Audit.count/0 and liveops_snapshot/0 catch every `:exit` reason, not just :noproc.</dd>
+<dt>Reason</dt><dd>The plan specifies `catch :exit, _`. Catching every reason also covers timeouts and a process that dies mid-call, which is the race being closed. The extra pid check makes the regression test slightly stronger.</dd>
+</dl></section>
+<section id="d205"><h2><span>D-205</span> Adversarial review not run in the implement stage</h2><dl>
+<dt>Decision</dt><dd>The implement stage did not run the Codex Sol 6.1 review.</dd>
+<dt>Reason</dt><dd>That stage covered implement, gate and commit. The review and the plans/README.md and decisions edits (row 231 IN REVIEW, row 310, D-191 onward) were later stages; the review is summarised in D-206.</dd>
+</dl></section>
+<section id="d206"><h2><span>D-206</span> PR #208 review: Codex Sol 6.1 xhigh rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-01</dd>
+<dt>Finding</dt><dd>No earlier rounds with dispositions. Final round: (P3 apps/lattice_server/test/demo_hub_audit_restart_test.exs:28) two fixed DemoHub crash paths lack regression coverage: reverting only the presence counter change, or only the liveops_snapshot/0 catch, leaves all seven affected tests passing; (P3 apps/lattice_core/lib/lattice/audit.ex:27) the snapshot-safety doc overclaims timeout resilience: with :sys.suspend(Lattice.Audit), count/0 returns 0 after five seconds but both snapshot callers exit :timeout because their outer calls share the five-second deadline (behaviour predates the patch).</dd>
+<dt>Decision</dt><dd>No P1/P2 reported. Both P3 findings were open on the reviewed tip; both are fixed in D-207, so no follow-up row was filed for them.</dd>
+<dt>Reason</dt><dd>Rule 3 does not apply (D-200); one review. No workflow, W4 or Phase G claim.</dd>
+</dl></section>
+<section id="d207"><h2><span>D-207</span> PR #208: both D-206 P3 findings fixed</h2><dl>
+<dt>When</dt><dd>2026-11-01</dd>
+<dt>Finding</dt><dd>D-206 left two P3 findings open: missing regression coverage for two fixed DemoHub crash paths, and the Audit.count/0 doc claiming the snapshot survives a stalled Audit.</dd>
+<dt>Decision</dt><dd>Fixed both. apps/lattice_server/test/demo_hub_audit_restart_test.exs adds two tests: register (auto_story? false) and unregister with Audit terminated leave the DemoHub pid unchanged; and with LiveOps suspended by :sys.suspend, a DemoHub snapshot started in a Task waits until its call is in the LiveOps mailbox, LiveOps is killed, and the reply has nil liveops with the DemoHub pid unchanged. Each test was checked by reverting only its fix (the presence counter line, then the liveops_snapshot/0 catch): the matching test failed and the other two passed. The apps/lattice_core/lib/lattice/audit.ex count/0 doc now covers only an Audit that is not running or exits during the call, and says a stalled Audit is not covered because the inner and outer calls share the five-second deadline. The doc change does not change behaviour.</dd>
+<dt>Reason</dt><dd>Both were in-scope P3 findings on the PR's own change, and fixing them was cheaper than a follow-up row. No workflow, W4 or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
