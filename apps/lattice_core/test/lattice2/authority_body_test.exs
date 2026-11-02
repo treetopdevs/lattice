@@ -252,6 +252,7 @@ defmodule Lattice2.AuthorityBodyTest do
 
       assert is_boolean(overdue?)
       assert model.loan.due_epoch == 4, inspect(body)
+      assert is_binary(Jason.encode!(model.loan))
       assert String.valid?(model.loan.borrower_fingerprint)
       assert String.valid?(model.custody.holder_fingerprint)
       for r <- model.requests, do: assert(String.valid?(r.author_fingerprint))
