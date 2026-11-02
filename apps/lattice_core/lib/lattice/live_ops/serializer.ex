@@ -51,7 +51,9 @@ defmodule Lattice.LiveOps.Serializer do
         approvals: map_size(state.approvals),
         operations: length(state.operations),
         denials: state.denials,
-        audit: Audit.count()
+        audit: Audit.count(),
+        audit_pending: state.sequence - state.audit_cursor,
+        audit_gap: state.audit_gap
       }
     }
   end
