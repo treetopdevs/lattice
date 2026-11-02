@@ -1,5 +1,5 @@
 defmodule Treehouse.CatalogCutoffReciprocalTest do
-  use ExUnit.Case, async: true, group: :node_subprocess
+  use ExUnit.Case, async: true, group: :node_subprocess_a
 
   alias Lattice.{Log, Op}
   alias Lattice.Carrier.Wire

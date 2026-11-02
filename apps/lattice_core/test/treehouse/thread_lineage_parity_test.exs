@@ -1,5 +1,5 @@
 defmodule Treehouse.ThreadLineageParityTest do
-  use ExUnit.Case, async: true, group: :node_subprocess
+  use ExUnit.Case, async: true, group: :node_subprocess_a
 
   alias Lattice.{Authority, Log, Op, Sim}
   alias Lattice.Carrier.Wire

@@ -1,5 +1,5 @@
 defmodule Treehouse.CatalogIncomingOrderTest do
-  use ExUnit.Case, async: true, group: :node_subprocess
+  use ExUnit.Case, async: true, group: :node_subprocess_b
 
   alias Treehouse.CatalogTrust
 

@@ -1,5 +1,5 @@
 defmodule Treehouse.CatalogRawRetentionTest do
-  use ExUnit.Case, async: true, group: :node_subprocess
+  use ExUnit.Case, async: true, group: :node_subprocess_a
   alias Lattice.Carrier.Wire
   alias Lattice.{Log, Op}
   alias Treehouse.{CatalogCutoff, CatalogTrust, CatalogTrustVectors}

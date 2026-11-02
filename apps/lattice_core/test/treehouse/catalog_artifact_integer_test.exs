@@ -1,5 +1,5 @@
 defmodule Treehouse.CatalogArtifactIntegerTest do
-  use ExUnit.Case, async: true, group: :node_subprocess
+  use ExUnit.Case, async: true, group: :node_subprocess_b
   alias Treehouse.{CatalogTrust, CatalogTrustVectors}
   @client Path.expand("../../../../clients/lattice-client", __DIR__)
   @expected %{trust_revision: 0, history_generation: 0}
