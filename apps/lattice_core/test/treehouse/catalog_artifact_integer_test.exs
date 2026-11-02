@@ -9,7 +9,8 @@ defmodule Treehouse.CatalogArtifactIntegerTest do
   # (:8) and 12.7 s (:18) without hogs (ambient load avg 88); 106.0 s and 118.7 s
   # under the row 342 load recipe (16 hogs, `+S 4:4`, ambient ~21, 2026-11-02).
   # One or both tests exceeded the old 120 s tag in all 5 earlier loaded runs.
-  # The tag is about 2x the worst measured duration.
+  # The tag is about 2x the worst measured duration. Measured with all node
+  # modules in one group; the shipped two-group split passed 3/3 loaded runs.
   @tag timeout: 240_000
   test "fresh TypeScript raw artifact spellings agree with BEAM" do
     {json, 0} =
