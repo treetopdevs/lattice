@@ -381,6 +381,53 @@ defmodule LatticeCore.LiveOpsTest do
       assert Process.alive?(self())
       assert catch_exit(Lattice.Audit.record(:probe, %{}))
     end
+
+    # Row 315: Audit dies while LiveOps' write is already queued in its
+    # mailbox. `try_record/2` must turn the in-flight `:killed` exit into a
+    # deferral rather than crash LiveOps; the supervisor restarts Audit and the
+    # record replays. The retry timer is held so only `flush_audit/0` replays.
+    test "Audit killed with a LiveOps write in flight defers the record" do
+      hold_audit_retry!()
+      liveops = Process.whereis(Lattice.LiveOps)
+      audit = Process.whereis(Lattice.Audit)
+      audit_ref = Process.monitor(audit)
+      :ok = :sys.suspend(audit)
+
+      task =
+        Task.async(fn ->
+          Lattice.LiveOps.record_denial("tab-x", :publish, :cap_required, %{})
+        end)
+
+      # Wait until LiveOps' own `:liveops_denied` call sits in Audit's mailbox.
+      assert eventually(fn ->
+               {:messages, messages} = Process.info(audit, :messages)
+
+               Enum.any?(messages, fn
+                 {:"$gen_call", {^liveops, _}, {:record, :liveops_denied, _}} -> true
+                 _ -> false
+               end)
+             end)
+
+      Process.exit(audit, :kill)
+      assert_receive {:DOWN, ^audit_ref, :process, ^audit, :killed}, 5_000
+
+      assert Task.await(task, 10_000) == :ok
+      assert Process.whereis(Lattice.LiveOps) == liveops
+
+      assert eventually(fn ->
+               case Process.whereis(Lattice.Audit) do
+                 nil -> false
+                 pid -> pid != audit
+               end
+             end)
+
+      assert {:ok, %{flushed: 1, pending: 0, gap: 0}} = Lattice.LiveOps.flush_audit()
+
+      assert [%{metadata: %{tab_id: "tab-x", audit_deferred: true}}] =
+               audit_of(:liveops_denied)
+
+      assert Process.whereis(Lattice.LiveOps) == liveops
+    end
   end
 
   defp eventually(fun, timeout_ms \\ 5_000) do
