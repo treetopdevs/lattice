@@ -1653,6 +1653,120 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>The test terminates the real Audit, registers a stub that replies to unrelated calls at once and kills itself on LiveOps&#x27; :liveops_denied call, then asserts the deferral before restarting Audit and replaying through flush_audit/0. Commit ff0534935. Calling LiveOps.snapshot/0 in a loop during the test reproduced the timeout on the old version; the stub version passes. It still fails with try_record/2&#x27;s exit handler removed.</dd>
 <dt>Reason</dt><dd>The in-flight kill stays exact and no longer depends on what else in the VM calls Audit. Test change only; no production change.</dd>
 </dl></section>
+<section id="d300"><h2><span>D-300</span> Take rows 311 and 306 together</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>Both are row 309 follow-ups on the same two read surfaces. Open PRs #210 and #211 share only plans/README.md and the decisions log with this slice.</dd>
+<dt>Options</dt><dd>Take 311+306 / fall back to row 226 / fall back to row 225</dd>
+<dt>Decision</dt><dd>Take 311 and 306 in one slice on claude/311-306-display-safe-trust-graph.</dd>
+<dt>Reason</dt><dd>Both rows are open and unblocked, and no open PR touches their code files. This is maintenance and audit visibility on frozen Township and Toolshed read surfaces, which rule 10 allows (D-217 precedent). It adds no Township or Toolshed feature.</dd>
+</dl></section>
+<section id="d301"><h2><span>D-301</span> The display contract covers text fields only</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>Row 311 says every {:ok, text} is valid UTF-8, but dview issuer/audience are {:ok, pub} with 32 raw key bytes, which are almost never valid UTF-8.</dd>
+<dt>Options</dt><dd>Contract on every {:ok, _} (fails on honest logs) / contract on text fields only</dd>
+<dt>Decision</dt><dd>The contract covers roles/ops members, {:name, _, text} and the revoke {:ok, text}. Keys are {:ok, pubkey}, and a reader must fingerprint them before display. Raw terms in :malformed, :request, :command and :other must be inspected.</dd>
+<dt>Reason</dt><dd>A contract that honest logs break would be wrong. It does not claim that raw terms or keys are display text.</dd>
+</dl></section>
+<section id="d302"><h2><span>D-302</span> Move the revoke check into the parser, superseding D-218</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>D-218 checked only the 8-character prefix the renderer shows, so earlier labels did not move. The parser cannot know the display width, so moving the check means validating the whole target.</dd>
+<dt>Options</dt><dd>Whole-target String.valid? in parse/1 / parser returns a truncated prefix / leave the check in render</dd>
+<dt>Decision</dt><dd>parse/1 returns {:revoke, {:malformed, t}} for a binary target that is not valid UTF-8, and render drops its check. The pinned test &#x27;revoke label checks only the shown prefix&#x27; is replaced by one that expects &#x27;revoke (malformed)&#x27; for &quot;12345678&quot; &lt;&gt; &lt;&lt;255&gt;&gt;.</dd>
+<dt>Reason</dt><dd>Row 311 asks for this move, and display width is a renderer concern. The only label that changes is an attacker-shaped binary with a valid prefix and an invalid tail. Honest delegation ids are base64url, and the demo artifact diff gate checks that honest labels stay the same. It does not claim the target is a real delegation id.</dd>
+</dl></section>
+<section id="d303"><h2><span>D-303</span> Toolshed is covered for totality, not for Jason encoding</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>Row 311 lists &#x27;the Toolshed model&#x27; as a Jason-encodable output. Toolshed.ReadModel returns custody.holder as raw key bytes and request payloads as raw terms (tuples), even on an honest log. No code JSON-encodes it.</dd>
+<dt>Options</dt><dd>Jason on the whole model (fails on honest logs) / change the Toolshed model shape (product work, frozen) / totality plus valid fingerprint strings</dd>
+<dt>Decision</dt><dd>The new property asserts that Toolshed.ReadModel.observe/1 never raises on admitted attacker-shaped authority bodies and that its fingerprint fields are valid UTF-8. Request ref/payload text safety is a candidate residual row (324+).</dd>
+<dt>Reason</dt><dd>The model is not a JSON surface, and its raw fields come from :inbox ops and state, not from authority bodies. It does not claim the Toolshed model is display-safe.</dd>
+</dl></section>
+<section id="d304"><h2><span>D-304</span> Make the encodability property check bytes, not types</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>The row 309 property asserted is_binary on mermaid/dot exports, which is also true for invalid UTF-8, and only is_map on replay.</dd>
+<dt>Options</dt><dd>Keep is_binary / String.valid? and Jason checks on each output</dd>
+<dt>Decision</dt><dd>Layer 1 adds String.valid? to every parsed text field. Layer 2 checks Jason.encode! on trust_graph, op_dag and replay, Jason.decode! on the ReplicaSnapshot json, and String.valid? on the ReplicaSnapshot mermaid/dot and on the Export dot/mermaid bytes AuditBundle writes.</dd>
+<dt>Reason</dt><dd>This is the &#x27;readers that copy text out verbatim&#x27; gap the row names. It covers only bodies Sim admits, as D-214 says.</dd>
+</dl></section>
+<section id="d305"><h2><span>D-305</span> What counts as an omitted delegation</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>delegation_events/1 drops ill-formed delegations, malformed-role transfer/succeed, and every non-delegation body in one catch-all clause.</dd>
+<dt>Options</dt><dd>Count every dropped authority op / count only delegation-carrying bodies</dd>
+<dt>Decision</dt><dd>Count an authority op as omitted when it parses as genesis, grant, transfer or succeed but has a malformed role or a dview that fails renderable?/1. Heartbeat, revoke, request, command and other bodies do not count. The shape is omitted: [op_id] in topo order, and an honest log has [].</dd>
+<dt>Reason</dt><dd>Only delegation-carrying ops could have drawn an edge, so only they make the graph look complete when they are dropped. The marker says these ops are present in the log but not drawn. It does not claim the log is complete, which AuditBundle already disclaims.</dd>
+</dl></section>
+<section id="d306"><h2><span>D-306</span> Emit the marker in Lattice.Graph.Export, only when non-empty</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>Export.export/2 reads only nodes and edges, so a new map key alone would leave trust_graph.dot and .mermaid looking complete.</dd>
+<dt>Options</dt><dd>An optional :omitted key read by Export / AuditBundle appends a line / a synthetic graph node</dd>
+<dt>Decision</dt><dd>Export reads Map.get(snapshot, :omitted, []) and, when it is non-empty, writes one comment line after the header (&#x27;//&#x27; in DOT, &#x27;%%&#x27; in mermaid) with the count and op ids.</dd>
+<dt>Reason</dt><dd>Callers without the key (v1 snapshot, mix lattice.graph.snapshot, flagship, fault_scenario, ReplicaSnapshot) and honest Township logs stay byte-identical. A synthetic node would break AuditBundle.known_fingerprints/1 label validation. The township-audit-bundle-v1 schema is not bumped, because verify re-derives the same bytes from matter.log.</dd>
+</dl></section>
+<section id="d307"><h2><span>D-307</span> Show the omitted count on the LiveView trust panel</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>The panel metric reads &#x27;N identities · M grants&#x27;, which also looks complete. township_web is frozen under rule 10.</dd>
+<dt>Options</dt><dd>Leave the LiveView alone / add one conditional marker span</dd>
+<dt>Decision</dt><dd>Append &#x27; · K omitted&#x27; in a data-trust-omitted span only when the list is non-empty, and test it with the existing LiveCarrier harness.</dd>
+<dt>Reason</dt><dd>It is the same audit-visibility fix on the second surface that shows the graph, under the D-217 maintenance precedent. Honest renders are unchanged. It adds no new control or feature.</dd>
+</dl></section>
+<section id="d308"><h2><span>D-308</span> Mark row 309 DONE</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>PR #209 merged as cb7ffa3bc, but row 309 still reads IN REVIEW on main.</dd>
+<dt>Options</dt><dd>Leave it / flip it here</dd>
+<dt>Decision</dt><dd>Flip row 309 to DONE with the merge SHA in this slice&#x27;s README edit.</dd>
+<dt>Reason</dt><dd>This is low-conflict housekeeping, and rows 311 and 306 depend on 309 (D-216 precedent).</dd>
+</dl></section>
+<section id="d309"><h2><span>D-309</span> Rule 3 is not triggered, and the rest is out of scope</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>The diff touches graph/authority_body.ex, graph/replica_snapshot.ex, graph/export.ex, township/read_model.ex, township_web heex and tests.</dd>
+<dt>Options</dt><dd>One adversarial review / two reviews</dd>
+<dt>Decision</dt><dd>One Codex Sol 6.1 High review. Out of scope: admission, the judge, Delegation, Identity.fingerprint, Canonical, wire, TS, src-tauri, Toolshed request/holder raw fields, Matter state values, the D-222 leftovers and InitialBundle.</dd>
+<dt>Reason</dt><dd>No rule-3 path is in the diff. This slice makes read surfaces display-safe and honest about omissions. It does not claim the judge honoured anything displayed, and it claims no Township feature, W4 or Phase G.</dd>
+</dl></section>
+<section id="d310"><h2><span>D-310</span> plans/README.md and decisions log deferred to the PR-open step</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>The build step&#x27;s closing instruction said not to edit plans/README.md or the decisions log yet, which overrode plan step 8.</dd>
+<dt>Decision</dt><dd>The build commits d9db02c7f and b7ddc3d87 skipped plan step 8. The row 309, 311 and 306 status changes and D-300 to D-317 land in the PR-open commit on PR #212 instead.</dd>
+<dt>Reason</dt><dd>Keeps the planning files out of the code commits until the PR number is known.</dd>
+</dl></section>
+<section id="d311"><h2><span>D-311</span> listform_log/1 returns the appended op id</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Decision</dt><dd>The read_model_test helper now returns {log, op_id} (nil for the baseline) instead of {log, nil}.</dd>
+<dt>Reason</dt><dd>Test (b) needs the id to assert omitted == [op_id]. Existing callers match {_, _}, so nothing else breaks.</dd>
+</dl></section>
+<section id="d312"><h2><span>D-312</span> Export byte-identity test is stronger than planned</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Context</dt><dd>This is in read_model_test.exs because there is no graph export test file.</dd>
+<dt>Decision</dt><dd>Besides comparing no key against omitted: [], the test pins the exact DOT and mermaid bytes for a populated graph with no omissions, and checks the exact comment line for a two-id list.</dd>
+<dt>Reason</dt><dd>The codex review noted that comparing an empty graph against itself does not pin the old bytes.</dd>
+</dl></section>
+<section id="d313"><h2><span>D-313</span> Second commit not re-reviewed</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Decision</dt><dd>Commit b7ddc3d87 changes only tests, in response to the codex findings; no second codex pass was run.</dd>
+<dt>Reason</dt><dd>The plan says a second review is not required.</dd>
+</dl></section>
+<section id="d314"><h2><span>D-314</span> npm ci in three client dirs</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Decision</dt><dd>Ran <code>npm ci</code> in clients/lattice-client, clients/lattice-shell-kit and clients/treehouse-tauri-shell with Node 22, calling npm-cli.js through node rather than the shell wrapper.</dd>
+<dt>Reason</dt><dd>The fresh worktree had no node_modules, so the TypeScript cross-runtime tests in lattice_core could not find <code>tsx</code>. node_modules is gitignored and there is no tracked change.</dd>
+</dl></section>
+<section id="d315"><h2><span>D-315</span> Fingerprint check in the Toolshed property skips nil</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Decision</dt><dd>The new Toolshed property checks String.valid? on custody.holder_fingerprint, loan.borrower_fingerprint and each request&#x27;s author_fingerprint, skipping nil values.</dd>
+<dt>Reason</dt><dd>holder_fingerprint is nil when nobody holds the tool and loan is nil while the tool is available. As the plan says (D-302), the whole model is not Jason-encoded.</dd>
+</dl></section>
+<section id="d316"><h2><span>D-316</span> Residual rows (324 and up) for the orchestrator</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Options</dt><dd>(1) A Toolshed text contract for request ref and payload copied verbatim from :inbox ops. (2) Township Matter state values and members.denied member terms copied verbatim into the model.</dd>
+<dt>Decision</dt><dd>Not implemented; flagged as candidates. No row was filed in this slice.</dd>
+<dt>Reason</dt><dd>Both are out of scope for this slice.</dd>
+</dl></section>
+<section id="d317"><h2><span>D-317</span> PR #212 review: Codex Sol 6.1 rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/212">#212</a></dd>
+<dt>Finding</dt><dd>Round 1 (gpt-6.1-sol, reasoning high, commit d9db02c7f): no correctness bugs; read-only probes passed 16 classification cases, topo ordering for concurrent and causal omissions, and a check that op ids are base64url so they cannot inject into the comment line. Two test weaknesses: the transfer/succeed test exercised only transfer, and the byte-identity test did not pin the old bytes. Final round (P3, apps/lattice_core/test/lattice2/authority_body_test.exs:217): the new Toolshed property bypasses the parser it should exercise. Setup never transfers custody and generated ops are all :authority, so holder and loan stay nil, requests are empty, fingerprints == [nil], and the UTF-8 assertion checks nothing; Toolshed&#x27;s only AuthorityBody consumer, loan/3, never runs. Codex confirmed that removing its parser guard in memory leaves the property green. Codex found no production regression or BEAM/TS/native parity gap; focused validation passed (3 properties, 24 tests); full suite and LiveView tests were not run by Codex.</dd>
+<dt>Decision</dt><dd>Round 1: both weaknesses fixed in commit b7ddc3d87 (D-312, D-313). Final round: the P3 is open on the reviewed tip. Its fix is to establish an active loan before generating malformed grants, assert the loan remains present, and validate its display output. No follow-up row was filed in this slice. No P1 or P2 was reported.</dd>
+<dt>Reason</dt><dd>One adversarial review, since rule 3 does not apply to this diff (D-309). The open P3 is test coverage only; production behaviour on HEAD is correct. No Township feature, W4 or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
