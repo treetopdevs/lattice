@@ -218,6 +218,14 @@ defmodule Lattice2.AuthorityBodyTest do
     end
   end
 
+  test "revoke label checks only the shown prefix of the target" do
+    {sim, _good} = base_sim()
+    graph = ReplicaSnapshot.build(Matter, append_log(sim, {:revoke, "12345678" <> <<255>>}))
+    assert is_binary(ReplicaSnapshot.export(graph, :json))
+    labels = Enum.map(graph.nodes, & &1.label)
+    assert Enum.any?(labels, &String.contains?(&1, "revoke 12345678")), inspect(labels)
+  end
+
   test "parse/1 parses each delegation field on its own" do
     good = delegation_template()
 
