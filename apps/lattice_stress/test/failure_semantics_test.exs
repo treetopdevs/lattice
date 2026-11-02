@@ -7,11 +7,13 @@ defmodule LatticeStress.FailureSemanticsTest do
   # restarts per 5 s). These tests intentionally kill core children. The
   # snapshot cascade where `LatticeServer.DemoHub` crashed `Lattice.LiveOps`
   # while `Lattice.Audit` was mid-restart is fixed (row 231): snapshots now read
-  # the tolerant `Lattice.Audit.count/0`. Other cascades remain, notably the
-  # LiveOps `emit/3` path that records audit events through a call (row 310),
-  # so restarts left over from earlier tests can still push a later kill past
-  # the limit. The supervisor then shuts the whole app down and the process
-  # never comes back. The per-test `restart_core!` stays as budget isolation: a
+  # the tolerant `Lattice.Audit.count/0`. The LiveOps `emit/3` cascade is fixed
+  # too (row 310): LiveOps defers its audit writes while Audit is down. The
+  # `Lattice.CapStore` and `Lattice.Topology` cascade remains (row 313): both
+  # record through `Audit.record/2` inside `handle_call`, so restarts left over
+  # from earlier tests can still push a later kill past the limit. The
+  # supervisor then shuts the whole app down and the process never comes back.
+  # The per-test `restart_core!` is kept as restart-budget isolation: a
   # restarted app has a fresh restart budget without changing production.
   setup do
     restart_core!()
