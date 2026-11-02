@@ -264,11 +264,15 @@ probe); "a refused replacement op stays in the authenticated history with its Co
 review (contract §3). Do not approximate.
 
 *PR 0 outcome (2026-11-02): GO.* All five probes pass on the real `Treehouse.Space` through the
-public Sim fixture; no Core primitive or context field was needed. The delegation struct is read
-by matching the transfer/succeed op in the strict prefix's `Log.ops/1`. Step-4 provenance: each
-hop is subset-checked (an R04 continuation against its predecessor acquisition's ceiling,
-`Continuation.scope?/4` / `continuation_scope_exceeded`; a transfer against its *chosen* parent,
-`Delegation.attenuates?/2` / `not_attenuated`), but that is not monotone provenance: a transfer may
+public Sim fixture; no Core primitive or context field was needed. The genesis ceiling is read
+from `Space.prepare_bounded_creation/4`'s own delegation, not a copy. The delegation struct is
+read from the honored acquisition's introducing op (`Log.ops/1` by its `op_id`, checking the
+`delegation_id`), never by scanning for the id: any author can retain a refused op carrying a
+copied (`invalid_transfer`) or forged-expiry (`bad_delegation_sig`) delegation under the same id,
+which the probe pins. Step-4 provenance: each hop is subset-checked (an R04 continuation against
+its predecessor acquisition's ceiling, `Continuation.scope?/4` / `continuation_scope_exceeded`; a
+transfer against its *chosen* parent, `Delegation.attenuates?/2`, which Core reports on the op as
+`invalid_transfer`; both probed with an honored control), but that is not monotone provenance: a transfer may
 attenuate an older, broader rootless continuation cap and restore `replace_catalog_v1` after a
 narrower continuation dropped it, and Core honors every hop (pinned in the T4 probe; Sol review).
 PR 4 must therefore validate the ceiling chain over the acquisition sequence itself; the public

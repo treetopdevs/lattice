@@ -26,10 +26,6 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
     :admit_member,
     :remove_member
   ]
-  # Mirrors Space's private bounded genesis ceiling; a mismatch would surface as a
-  # refused transfer or continuation, not a silent pass.
-  @bounded_genesis_ops @preview ++
-                         [:catalog_bootstrap_v1, :attest_member_key_v1, :replace_catalog_v1]
   @admin_ops @preview ++ [:replace_catalog_v1]
   # Placeholder only: PR 0 does not judge claim shape (PR 1 owns the codec).
   @claim_stub %{"probe" => "r11c-pr0"}
@@ -38,6 +34,19 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
 
   defp digest(bytes), do: :crypto.hash(:sha256, bytes) |> Base.url_encode64(padding: false)
 
+  # The real bounded genesis ceiling, read from the delegation Space's own constructor
+  # authors, so drift in Space's private ceiling reaches every probe.
+  defp bounded_genesis_ops(%Lattice.Identity{} = root) do
+    {:ok, %{pending: [%Op{body: {:genesis, %Delegation{ops: ops}, _}}, _]}} =
+      Space.prepare_bounded_creation(
+        root,
+        "replica:treehouse:space:" <> digest("r11c-pr0-nonce"),
+        "Canopy"
+      )
+
+    Enum.sort(ops)
+  end
+
   # Genesis (bounded ceiling incl. :replace_catalog_v1), create_space, and the root's
   # continuation + witnessed-beacon pin. No admin transfer yet.
   defp space do
@@ -45,7 +54,9 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
       "replica:treehouse:space:#{digest("r11c-pr0-nonce")}#authority:bounded-continuation-v1"
 
     sim = Sim.new(Space, replica, @realms, seed: "r11c-pr0")
-    {sim, genesis} = Sim.create_replica(sim, "root", ops: @bounded_genesis_ops)
+    ceiling = bounded_genesis_ops(Sim.identity(sim, "root"))
+    assert :replace_catalog_v1 in ceiling
+    {sim, genesis} = Sim.create_replica(sim, "root", ops: ceiling)
     {sim, _creation} = Sim.command(sim, "root", :create_space, ["Canopy"])
     sim = Sim.sync_all(sim)
     {sim, pin} = pin(sim)
@@ -148,7 +159,9 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
              op_id: fx.transfer.id
            }
 
-    assert List.last(Authority.acquisitions(Space, p, :admin)) == %{
+    acquisition = List.last(Authority.acquisitions(Space, p, :admin))
+
+    assert acquisition == %{
              op_id: fx.transfer.id,
              holder: admin.pub,
              delegation_id: d.id
@@ -156,21 +169,51 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
 
     assert d.id == candidate.cap
 
-    # acquisition() carries only delegation_id; the struct is reachable from the prefix.
-    id = candidate.cap
-
-    assert [%Delegation{} = observed] =
-             for(
-               %Op{body: {:transfer, :admin, %Delegation{id: ^id} = x, _}} <- ops_list(p),
-               do: x
-             )
-
+    # acquisition() carries only delegation_id; the struct is read from the honored
+    # acquisition's own introducing op in the prefix.
+    observed = acquired_delegation(p, acquisition)
     assert observed == d
     assert :replace_catalog_v1 in observed.ops
     assert observed.expires_epoch == 6
     # Read, not assumed: Sim.transfer does not pass :live, so Delegation.new's default holds.
     assert observed.live == false
     assert observed.parent_id == fx.genesis.body |> elem(1) |> Map.fetch!(:id)
+  end
+
+  test "T1 extraction survives poisoned history: a copied and a forged delegation under the honored id" do
+    fx = leased()
+    d = fx.delegation
+    # Any author can sign a fresh transfer op that carries the admin delegation verbatim,
+    # or one with the same id and a forged expiry. Core retains both and honors neither.
+    {sim, copied} = Sim.append(fx.sim, "observer", :authority, {:transfer, :admin, d, 0})
+
+    {sim, forged} =
+      Sim.append(sim, "observer", :authority, {:transfer, :admin, %{d | expires_epoch: 0}, 0})
+
+    sim = Sim.sync_all(sim)
+    {sim, candidate} = replace_candidate(sim, "admin", d.id)
+    p = prefix(Sim.log(sim, "admin"), candidate)
+    reasons = Authority.analyze(Space, p).reasons
+
+    assert Log.has?(p, copied.id) and Log.has?(p, forged.id)
+    assert reasons[copied.id] == :invalid_transfer
+    assert reasons[forged.id] == :bad_delegation_sig
+
+    # The id scan is ambiguous: it sees the honored struct, the copy and the forgery.
+    assert length(scan_delegations(p, d.id)) == 3
+    assert %{d | expires_epoch: 0} in scan_delegations(p, d.id)
+
+    # The honored acquisition is unchanged, and its op yields exactly the honored struct.
+    acquisition = List.last(Authority.acquisitions(Space, p, :admin))
+    assert acquisition.op_id == fx.transfer.id
+
+    refute Enum.any?(
+             Authority.acquisitions(Space, p, :admin),
+             &(&1.op_id in [copied.id, forged.id])
+           )
+
+    assert acquired_delegation(p, acquisition) == d
+    assert acquired_delegation(p, acquisition).expires_epoch == 6
   end
 
   # --- T2 -------------------------------------------------------------------
@@ -233,12 +276,7 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
     assert genesis_d.parent_id == nil
 
     acquisitions = Authority.acquisitions(Space, p, :admin)
-
-    refute Enum.any?(acquisitions, fn %{delegation_id: id} ->
-             id == candidate.cap and not is_nil(delegation(p, id).expires_epoch)
-           end)
-
-    refute Enum.any?(acquisitions, &(not is_nil(delegation(p, &1.delegation_id).expires_epoch)))
+    refute Enum.any?(acquisitions, &(not is_nil(acquired_delegation(p, &1).expires_epoch)))
 
     # Recorded observation: Core names the root genesis as the :admin acquisition.
     assert Authority.holder_epoch(Space, p, :admin) == %{holder: root.pub, op_id: fx.genesis.id}
@@ -248,15 +286,20 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
            ]
   end
 
-  # Any delegation struct introduced by a genesis/grant/transfer/succeed op in `log`.
-  defp delegation(%Log{} = log, id) do
-    Enum.find_value(ops_list(log), fn
-      %Op{kind: :authority, body: body} when is_tuple(body) ->
-        body |> Tuple.to_list() |> Enum.find(&match?(%Delegation{id: ^id}, &1))
+  # The delegation struct introduced by the honored acquisition's own op. Fetched by the
+  # acquisition's op_id, never by scanning for its delegation id: any author can retain a
+  # (refused) op that carries a copied or forged delegation under the same id.
+  defp acquired_delegation(%Log{} = log, %{op_id: op_id, delegation_id: id}) do
+    %Op{kind: :authority, body: body} = Map.fetch!(Log.ops(log), op_id)
+    assert [%Delegation{id: ^id} = d] = for(%Delegation{} = x <- Tuple.to_list(body), do: x)
+    d
+  end
 
-      _ ->
-        nil
-    end)
+  # The pre-fix extraction: every authority op body carrying a delegation with `id`.
+  defp scan_delegations(%Log{} = log, id) do
+    for %Op{kind: :authority, body: body} when is_tuple(body) <- ops_list(log),
+        %Delegation{id: ^id} = x <- Tuple.to_list(body),
+        do: x
   end
 
   # --- T4 -------------------------------------------------------------------
@@ -279,6 +322,38 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
                witnesses: ["w1", "w2"]
              )
 
+    # Transfer hop (step 4): a transfer whose ops widen past its chosen parent `d` fails
+    # Delegation.attenuates?/2 (Core's :not_attenuated delegation check), which Core
+    # reports on the op as :invalid_transfer. The control differs only in ops and is
+    # honored. Both run on discarded branches.
+    nominee = Sim.identity(sim, "nominee")
+
+    hop = fn ops ->
+      deleg =
+        Delegation.new(Sim.identity(sim, "admin"), sim.replica, nominee.pub,
+          ops: ops,
+          roles: [:admin],
+          parent_id: fx.delegation.id,
+          expires_epoch: 6
+        )
+
+      {branch, op} = Sim.append(sim, "admin", :authority, {:transfer, :admin, deleg, 0})
+      log = Sim.log(Sim.sync_all(branch), "observer")
+
+      {deleg, op, Authority.analyze(Space, log).reasons[op.id],
+       Authority.acquisitions(Space, log, :admin)}
+    end
+
+    {wide, wide_op, wide_reason, wide_acqs} = hop.(@admin_ops ++ [:catalog_bootstrap_v1])
+    refute Delegation.attenuates?(wide, fx.delegation)
+    assert wide_reason == :invalid_transfer
+    refute Enum.any?(wide_acqs, &(&1.op_id == wide_op.id))
+
+    {narrow_hop, narrow_op, narrow_reason, narrow_acqs} = hop.(@admin_ops)
+    assert Delegation.attenuates?(narrow_hop, fx.delegation)
+    assert narrow_reason == nil
+    assert List.last(narrow_acqs).op_id == narrow_op.id
+
     {sim, cont} =
       Sim.continue_role(sim, "admin", :admin,
         ops: @admin_ops,
@@ -292,19 +367,14 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
     admin = Sim.identity(sim, "admin")
     p = prefix(Sim.log(sim, "admin"), candidate)
 
-    last = List.last(Authority.acquisitions(Space, p, :admin))
+    acquisitions = Authority.acquisitions(Space, p, :admin)
+    last = List.last(acquisitions)
     assert last.op_id == cont.id
     assert last.delegation_id == candidate.cap
     assert Authority.holder_epoch(Space, p, :admin) == %{holder: admin.pub, op_id: cont.id}
 
-    id = candidate.cap
-
-    assert [%Delegation{} = d] =
-             for(
-               %Op{body: {:succeed, :admin, %Delegation{id: ^id} = x, {:continuation_v1, _}}} <-
-                 ops_list(p),
-               do: x
-             )
+    d = acquired_delegation(p, last)
+    assert {:succeed, :admin, ^d, {:continuation_v1, _}} = Log.ops(p)[cont.id].body
 
     assert d.parent_id == nil
     assert d.issuer == admin.pub and d.audience == admin.pub
@@ -312,7 +382,10 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
     assert is_integer(d.expires_epoch) and d.expires_epoch == 8
     # Inherited ceiling: a subset of the leased transfer's ops, which the prefix also holds.
     assert MapSet.subset?(d.ops, fx.delegation.ops)
-    assert delegation(p, fx.delegation.id) == fx.delegation
+
+    assert Enum.find(acquisitions, &(&1.op_id == fx.transfer.id))
+           |> then(&acquired_delegation(p, &1)) ==
+             fx.delegation
 
     # Residual (Sol review): per-hop subset is not monotone provenance. A later
     # continuation may drop :replace_catalog_v1, and a transfer may still attenuate an
@@ -326,7 +399,6 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
       )
 
     sim = Sim.sync_all(sim)
-    nominee = Sim.identity(sim, "nominee")
 
     restored =
       Delegation.new(admin, sim.replica, nominee.pub,
