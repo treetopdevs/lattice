@@ -1477,6 +1477,155 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertic
 <dt>Decision</dt><dd>Merge only when the exact head SHA has a completed, successful "Flagship evidence" run and no GitHub Actions check suite is still pending. <code>poll.sh</code> now reads check suites, not only the rollup. PR #208 and this PR merged under the new rule.</dd>
 <dt>Reason</dt><dd>A check that has not registered is missing from the rollup, so the rollup can look green before the required evidence exists. Check suites show pending work before its check runs appear. No workflow, W4 or Phase G claim.</dd>
 </dl></section>
+<section id="d265"><h2><span>D-265</span> Plan 316 implements the adopted lifecycle contract; it does not redesign it</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a> (row 316)</dd>
+<dt>Context</dt><dd><code>docs/research/treehouse_catalog_lifecycle.md</code> sections 2–4 and 7 were adopted at <code>789ab235</code>. They fix the <code>replace_catalog_v1</code> command, claim fields, byte domains, verification stages, refusal order and cases C10–C15. Founder lifecycle section 6 leaves the exact wire contract to R11c review.</dd>
+<dt>Options</dt><dd>(1) A fresh design from the task prompt. (2) An implementation plan that cites the contract as normative and pins only its gaps.</dd>
+<dt>Decision</dt><dd>Option 2. The contract is normative. Plan 316 adds function names, the binding id rule, vectors, PR order and tests.</dd>
+<dt>Reason</dt><dd>Re-deciding adopted text would contradict reviewed work and invite review findings. It does not claim any of C10–C15 is green.</dd>
+</dl></section>
+<section id="d266"><h2><span>D-266</span> Plan 316 PR order: PR 0 probe, fixture PRs now, PR 4 gated, PR 5 native, PR 7 rule 8</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd>Contract section 3 says that if the strict-prefix acquisition, cap, ceiling, lease and beacon-basis checks cannot use existing bounded APIs, the work returns for interface review rather than approximating. The task excludes native evaluator edits (plans 267–279). <code>treehouse_catalog_signer_custody.md:417</code> sends seed-plus-backup loss to R11c, and the plan 263 custodian ledger must accept a new binding generation.</dd>
+<dt>Options</dt><dd>(1) Assume the APIs suffice and include native and custodian work inline. (2) Probe first with a stop condition, name native work for its own track, and build the ledger rule on disposable keys.</dd>
+<dt>Decision</dt><dd>Option 2. PR 0 is a test-only probe of <code>holder_epoch/3</code>, <code>acquisitions/3</code> and <code>analyze_with_beacon_evidence/2</code>; if a new Core primitive is needed, file a row and stop. PRs 0–3 and 6 start on fixtures. PR 4 (resolver) waits on plans 267/269 and OD-16. PR 5 belongs to the native track, fed by BEAM/TS reciprocal vectors. PR 3 builds the custodian ledger generation rule on disposable keys; the real re-init is PR 7 under rule 8 (OD-13).</dd>
+<dt>Reason</dt><dd>The probe is cheap and prevents a silent Core change on a rule-3 path. One owner for <code>catalog_eval</code>. Until PR 5 lands, packaged clients refuse replacements, which is a non-claim. Nothing is claimed about the real signer.</dd>
+</dl></section>
+<section id="d267"><h2><span>D-267</span> A bounded Space admin authorizes a replacement, not a root or custodian quorum</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd>The task prompt said "root/custodian quorum". The adopted contract (section 1) delegates replacement to an honored bounded Space-admin action: the admin's pre-loss ceiling includes <code>replace_catalog_v1</code>, with <code>live: false</code>, a finite lease and an honored R03 beacon. The contract rejects a catalog witness quorum, and the living root's unleased genesis cap cannot authorize.</dd>
+<dt>Options</dt><dd>(1) A root or custodian quorum, as the prompt says. (2) A bounded admin, as the contract says. (3) Both.</dd>
+<dt>Decision</dt><dd>Option 2. R04 witnesses govern acquisition and renewal only. The custodian only proves possession of the new key. Optional co-signing is OD-11, default no.</dd>
+<dt>Reason</dt><dd>Follow the adopted contract over the computed prompt. A malicious current admin can replace transport during its lease; that is a stated residual, not hidden.</dd>
+</dl></section>
+<section id="d268"><h2><span>D-268</span> The replacement binding id is the final op id, read from Space history</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd>The contract avoids a circular op id: the final <code>replace_catalog_v1</code> op id becomes the next binding id. Rotation is a standalone artifact in the rotations page field.</dd>
+<dt>Options</dt><dd>(1) Add a new evidence page field for replacements. (2) Read replacement ops from the retained Space history already carried in histories.</dd>
+<dt>Decision</dt><dd>Option 2. <code>resolve_binding!</code> gains a third node source: bootstrap op, rotation artifact or replacement op. The first catalog under a new binding is revision 0 with <code>previous</code> nil.</dd>
+<dt>Reason</dt><dd>Catalog controls come from signed command history (contract section 8 correction), and no page shape changes. The plan 266 exporter needs only a carry test; this does not claim the exporter already handles it.</dd>
+</dl></section>
+<section id="d269"><h2><span>D-269</span> Reuse the possession domain without a discriminator</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd>Rotation possession already signs <code>['lattice-treehouse-transport-possession-v1', :catalog, rotation_record]</code>. A replacement signs the same domain and purpose over the claim.</dd>
+<dt>Options</dt><dd>(1) Reuse the domain and rely on the closed, differing field sets (the claim has <code>parents</code> and <code>prior_catalogs</code>; a rotation has <code>parent</code> and <code>prior_catalog</code>). (2) Add a kind discriminator.</dd>
+<dt>Decision</dt><dd>Option 1, with a named negative test: rotation possession bytes never verify as replacement possession, and the reverse. Filed as OD-12 for the operator.</dd>
+<dt>Reason</dt><dd>Canonical map encoding includes keys and both records are closed, so the bytes cannot coincide. The contract fixes this domain. No domain separation is claimed beyond the closed grammars.</dd>
+</dl></section>
+<section id="d270"><h2><span>D-270</span> Multi-parent binding nodes carry the service identity, origin and <code>refused?</code></h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a>; extended in review round 1</dd>
+<dt>Context</dt><dd>A gap the contract leaves open. Today the resolver reads the service from the bootstrap (<code>catalog_trust.ex:566</code> and <code>:672</code>), and <code>routes/1</code> (<code>:1349</code>/<code>:1351</code>), TS <code>catalogRoutes</code> (<code>:794-797</code>) and the head/fork/ancestry code (<code>catalog_trust.ex:1288-1351</code>, TS <code>:290-310</code>, <code>:515</code>, <code>:523</code>) are single-parent. A replacement changes the service, so without this the new catalog's entries would be refused.</dd>
+<dt>Decision</dt><dd>Every binding node carries the catalog key, service ID, service key, origin, <code>parents</code> and <code>refused?</code>. Entry, realm and key-distinctness checks, routes, heads, forks and ancestry read the current binding and are multi-parent. Persisted single-<code>parent</code> trust stores (TS <code>:479</code>) still restore after upgrade. Applies in BEAM, TS and (PR 5) native.</dd>
+<dt>Reason</dt><dd>Confirmed against the cited source lines in review round 1. The C10 test asserts that routes dial <code>new_origin</code>.</dd>
+</dl></section>
+<section id="d271"><h2><span>D-271</span> <code>prior_catalogs</code> cardinality and key rules; both keys may be kept (OD-15)</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a>; revised in review round 1</dd>
+<dt>Context</dt><dd>The first draft pinned exactly one <code>prior_catalogs</code> entry per parent. Contract line 251 does not require that, and the pin made a catalog fork inside one binding impossible to resolve.</dd>
+<dt>Decision</dt><dd>Sorted, distinct <code>{binding, catalog}</code> entries, at least one per parent, covering every retained catalog head; <code>nil</code> only as a sole entry. A changed service key means a changed service ID. A replacement may keep both keys and the service ID, which a fork resolution needs (OD-15); the plan 274 no-op refusal stays rotation-only.</dd>
+<dt>Reason</dt><dd>Each is a choice the contract leaves to R11c review, and the vectors would otherwise be ambiguous. Tests in PR 1 (codec) and PR 4 C12 (a fork inside one binding, resolved).</dd>
+</dl></section>
+<section id="d272"><h2><span>D-272</span> Op-ID and rotation-ID bindings share one namespace</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Decision</dt><dd>Bindings identified by a replacement op id and by a rotation id live in one map.</dd>
+<dt>Reason</dt><dd>Their pre-image domains differ, so the ids cannot collide, and one map keeps head and ancestry code single-pathed.</dd>
+</dl></section>
+<section id="d273"><h2><span>D-273</span> Corrections to the task's grounding</h2><dl>
+<dt>When</dt><dd>2026-11-01, read at <code>cb7ffa3bc</code></dd>
+<dt>Options</dt><dd>Follow the task text as written, or follow the source.</dd>
+<dt>Decision</dt><dd>The plan records four corrections. (1) The custody reference is <code>docs/treehouse_catalog_signer_custody.md:417</code>, and line 420 ("suspected exposure: treat as loss") is cited in threat (b). (2) Native no longer refuses with <code>catalog_rotation_unsupported</code>: plan 267's <code>chains.rs</code> already resolves rotations, and a replacement binding fails closed with <code>trust_pending</code> (<code>chains.rs:290-297</code>), so PR 5 adds a replacement node rather than lifting a rotation refusal. (3) TS names follow the codec convention (<code>normalizeCatalogReplacementClaim</code>, <code>canonicalBytesForCatalogReplacementClaim</code>, <code>canonicalBytesForCatalogReplacementPossession(purpose, claim)</code>). (4) Every claim atom is already in <code>WireVocabulary</code> and the cutoff atoms, so PR 1 adds no wire atoms.</dd>
+<dt>Reason</dt><dd>These come from reading the source.</dd>
+</dl></section>
+<section id="d274"><h2><span>D-274</span> Stage B authority failures are <code>catalog_authority_refused</code>; scope, version and profile are <code>wrong_catalog_scope</code></h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a>; narrowed in review round 1</dd>
+<dt>Context</dt><dd>Round 1 found the first draft sent profile mismatches to <code>catalog_authority_refused</code>, against the contract refusal order (line 420).</dd>
+<dt>Decision</dt><dd>Every resolver authority failure is <code>catalog_authority_refused</code>, with a resolver detail when Core honored the op, so each C11 vector has exactly one reason. Scope, version, <code>profile_genesis</code> (step 1) and <code>profile_id</code> (step 4) mismatches are <code>wrong_catalog_scope</code>.</dd>
+<dt>Reason</dt><dd>Contract §4 refusal order. The C11 wrong-profile vector expects <code>wrong_catalog_scope</code>.</dd>
+</dl></section>
+<section id="d275"><h2><span>D-275</span> Closing rule for superseded bindings (OD-16)</h2><dl>
+<dt>When</dt><dd>2026-11-01, review rounds 1 and 2</dd>
+<dt>Context</dt><dd>Round 1 finding at plan:95: anyone holding the old key could keep rotating a superseded binding and force <code>catalog_fork</code> forever. Round 2: closing only direct parents left ancestor keys able to recreate forks.</dd>
+<dt>Options</dt><dd>Leave the attack as an accepted residual; refuse rotations by arrival order (rejected, order-dependent); the closing rule (chosen).</dd>
+<dt>Decision</dt><dd>Every ancestor-or-self of a parent of any D-276-eligible replacement, honored or refused, admits no old-key rotation or later catalog. Such children are kept as evidence and refused, or reported as <code>authority_changed</code> if already accepted. Admin siblings still fork (C12). Integrator sign-off is required before PR 4 (row 317).</dd>
+<dt>Reason</dt><dd>The node set only grows, so closure only grows: independent of delivery order and stable after reclassification. It reads as an interpretation of the contract, so it is flagged as an operator decision instead of being pinned silently.</dd>
+</dl></section>
+<section id="d276"><h2><span>D-276</span> Refused replacement ops are evidence nodes only when authorized at their strict prefix</h2><dl>
+<dt>When</dt><dd>2026-11-01, review rounds 1 and 2</dd>
+<dt>Context</dt><dd>Contract §4 lets a resolution cite a head that is now refused; without refused nodes, recovery after <code>authority_changed</code> is impossible (round 1). Round 2 P1: making every authenticated refused op a node let never-authorized proposals become conflict heads.</dd>
+<dt>Options</dt><dd>Previously-accepted-only (rejected: depends on order across clients); every authenticated op (round-1 text, rejected: the spam attack); strict-prefix admin authority (chosen).</dd>
+<dt>Decision</dt><dd>A replacement that passes step 4 (strict-prefix admin authority) but is refused on the full union is a citable binding node with <code>refused?</code> set; it authorizes nothing. Every other authenticated refused op is raw refusal evidence: exported, never a head or a citable parent, counted only against parser bounds.</dd>
+<dt>Reason</dt><dd>An attacker without an admin acquisition cannot pass this test, and it comes from the op's own ancestry, so delivery order does not matter. Spam reduces to the accepted malicious-admin residual (threat row e). D-275 closure is built on the same test, so it only grows.</dd>
+</dl></section>
+<section id="d277"><h2><span>D-277</span> Validate the declared graph structurally before comparing with retained evidence</h2><dl>
+<dt>When</dt><dd>2026-11-01, review rounds 1 and 2</dd>
+<dt>Context</dt><dd>Round 1 P1: valid sibling replacements were rejected before fork detection. Round 2: the intrinsic <code>nil</code>-predecessor check was still arrival-dependent, and a cutoff failure masked a retained fork.</dd>
+<dt>Decision</dt><dd>Stage B order: scope, closure, full union, strict prefix, intrinsic declared graph (structural only; an unheld cited catalog is <code>trust_pending</code>; <code>nil</code> is its parent's sole entry), conflict deps, then comparison with retained evidence, where an omitting sibling is <code>catalog_fork</code>, and finally cutoffs (step 8). <code>recovery_incomplete</code> only gates promotion of an otherwise sole valid head and never suppresses a fork record.</dd>
+<dt>Reason</dt><dd>Contract §4 requires this order. It makes verdicts independent of delivery order; PR 4 C12 tests run sequential deliveries in both orders with acceptance persisted between calls.</dd>
+</dl></section>
+<section id="d278"><h2><span>D-278</span> A resolution's deps causally include every cited replacement op, not the refusing controls</h2><dl>
+<dt>When</dt><dd>2026-11-01, review round 1; revised in round 3</dd>
+<dt>Context</dt><dd>Round 1 asked for the causal conflict in a resolution's deps. Round 3 P2 (plan:199): requiring every Core control that refused a cited node let a valid late beacon E8 (a descendant of E7, concurrent with R1/R2) invalidate accepted resolution R2.</dd>
+<dt>Options</dt><dd>Keep "every" (rejected: the E8 case); "at least one in closure" (rejected: order-dependent); intrinsic closure-only (chosen).</dd>
+<dt>Decision</dt><dd>Step 6 requires only that the candidate's deps closure includes every cited replacement op. Rotation heads are covered by <code>parents</code>. A cited node's refusal stays a D-276 property of that node.</dd>
+<dt>Reason</dt><dd>Every formulation that reads the union is either unbounded (each later beacon lapses the node again) or depends on delivery order. Lifecycle contract §4 only requires that a resolution cover the observed conflict, and citing the node does that. C13 carries the E7/E8 persisted-state case in both delivery orders.</dd>
+</dl></section>
+<section id="d279"><h2><span>D-279</span> Intrinsic-check invariant</h2><dl>
+<dt>When</dt><dd>2026-11-01, review round 3</dd>
+<dt>Context</dt><dd>Rule 3: the class "immutable check judged against growing evidence" recurred in rounds 2 and 3, so a general fix plus a property row replaces per-step patches.</dd>
+<dt>Decision</dt><dd>Steps 1, 2 and 4–6 read only the candidate and its own causal closure and never re-judge an accepted candidate; steps 3, 7 and 8 consult the union and only reclassify. Pinned by the PR 4 StreamData monotonicity property (row 321).</dd>
+<dt>Reason</dt><dd>It removes the whole class of findings, so later rounds do not need per-step patches.</dd>
+</dl></section>
+<section id="d280"><h2><span>D-280</span> Core owns delegation-chain validity in step 4; rootless R04 continuation is accepted</h2><dl>
+<dt>When</dt><dd>2026-11-01, review round 3</dd>
+<dt>Context</dt><dd>Round 3 P1 (plan:187): requiring attenuation from the root bootstrap delegation refused a witnessed R04 continuation, whose delegation is self-issued with <code>parent_id: nil</code> (<code>continuation.ex:144-148</code>, <code>scope?/4</code>).</dd>
+<dt>Decision</dt><dd>Step 4 requires the Core-honored current <code>:admin</code> acquisition record with <code>delegation_id == op.cap</code>. Signature, issuer, audience, attenuation and activation are Core's. The resolver checks only the <code>replace_catalog_v1</code> ceiling with inherited provenance, <code>live: false</code>, the lease and the epoch basis. A new C10 test "R04 continuation successor accepted" fails against the old linked-parent rule; PR 0 probes that the continuation acquisition and ceiling are readable through public APIs.</dd>
+<dt>Reason</dt><dd>Contract §3 step 3 already lists parent attenuation as an ordinary Core check; demanding a linked root parent blocks the C10/A09 combined-loss recovery.</dd>
+</dl></section>
+<section id="d281"><h2><span>D-281</span> Slice 5 takes R11c design, not a fallback</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd>R11c was PLANNED with no plan file, and R13 needs it. Seven <code>codex/treehouse-*</code> branches rewrite <code>catalog_trust.ex</code> and <code>treehouse_catalog_trust.ts</code>; none touch <code>space.ex</code>, <code>transport_catalog.ex</code>, <code>treehouse.ts</code>, the codec or <code>carrier_server</code>. The only open PR, #210, touches <code>plans/README.md</code> and this log, but no R11c file.</dd>
+<dt>Options</dt><dd>(1) Design R11c now. (2) Fall back to R12. (3) Fall back to row 226.</dd>
+<dt>Decision</dt><dd>Design R11c as plan 316, row 316. The resolver PR (PR 4) is gated on plans 267/269 merging; the other software PRs can start on fixtures. The README row and these entries were deferred from the implement stage (its task said not to edit them yet) and are added in the index stage of this PR.</dd>
+<dt>Reason</dt><dd>A design doc conflicts with no in-flight file, and sequencing the one shared file removes that conflict. It does not claim R11c is buildable end to end today.</dd>
+</dl></section>
+<section id="d282"><h2><span>D-282</span> The roadmap R11c row links plan 316 and stays PLANNED</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd><code>r13_lite_contract_test.exs</code> pins the R13, R16 and R21a Requires strings that name R11c.</dd>
+<dt>Options</dt><dd>(1) Move R11c to IN PROGRESS. (2) Link the plan only and keep PLANNED until PR 1 merges.</dd>
+<dt>Decision</dt><dd>Option 2; effort changed from M to L (round 1 P3). <code>r13_lite_contract_test.exs</code> was run after the edit.</dd>
+<dt>Reason</dt><dd>A design doc is not implementation. No downstream Requires column changes.</dd>
+</dl></section>
+<section id="d283"><h2><span>D-283</span> Operator decisions OD-11 to OD-16, each with a default</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd>The highest existing OD was OD-10 (D-44). Open questions: co-signing, the possession discriminator, the custodian re-init report, fork/<code>authority_changed</code> UI copy, keeping both keys, and the closing rule.</dd>
+<dt>Options</dt><dd>(1) Block on the operator. (2) File ODs with recommended defaults.</dd>
+<dt>Decision</dt><dd>Option 2. OD-11 no co-sign; OD-12 reuse the domain; OD-13 a new ceremony report; OD-14 a plain "transport paused" copy with no automatic retry; OD-15 both keys may be kept; OD-16 the D-275 closing rule, which needs integrator sign-off before PR 4 (row 317). Row 320 adds the operator question on clearing <code>authority_changed</code> after a close-out.</dd>
+<dt>Reason</dt><dd>The task says to mark open questions as ODs, not blocks. The defaults keep the adopted contract unchanged.</dd>
+</dl></section>
+<section id="d284"><h2><span>D-284</span> Rule 3 round count: resolver conflict-graph semantics recurred in three rounds</h2><dl>
+<dt>When</dt><dd>2026-11-01, after review round 3</dd>
+<dt>Context</dt><dd>Round 1 touched refused nodes, the closing rule and the declared-graph order; round 2 the node test, closure scope and step order; round 3 an immutable check judged against growing evidence (step 6) plus Core-owned attenuation (step 4).</dd>
+<dt>Decision</dt><dd>Rounds 2 and 3 were fixed in place, round 3 with the general D-279 invariant and a property row (321) rather than another one-off patch. If a further round raises this class, it goes to the operator as an OD or design row, not more repairs.</dd>
+<dt>Reason</dt><dd>Policy rule 3 makes a repeat of the same class a design question.</dd>
+</dl></section>
+<section id="d285"><h2><span>D-285</span> Plan 316 line budget</h2><dl>
+<dt>When</dt><dd>2026-11-01</dd>
+<dt>Context</dt><dd>Policy rule 4 caps a plan file at 400 lines. After round 1 the plan was compressed to 399 lines (appendix one line per decision, sections 5, 6, 10 and PRs 5–7 tightened). The round 2 and 3 fixes grew it to 437 lines.</dd>
+<dt>Decision</dt><dd>Recorded as open on the PR tip: compress back to 400 lines or fewer before merge, or record a waiver. No detail moves into README or this log beyond the index-stage copies.</dd>
+<dt>Reason</dt><dd>The full detail belongs in plan §2 and §3, and the cap is a policy rule, not a test.</dd>
+</dl></section>
+<section id="d286"><h2><span>D-286</span> Rule 3 applies by subject; tests run for a docs-only slice</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Context</dt><dd>Plan 316's PRs touch authority, canonical bytes, the codec, the Space command and the catalog trust resolver. This slice edits only docs.</dd>
+<dt>Options</dt><dd>(1) One review. (2) Codex Sol 6.1 xhigh plus an independent Claude review.</dd>
+<dt>Decision</dt><dd>Option 2 on the plan doc, and every later PR gets a second review. Tests run: format check, test compile, <code>r13_lite_contract_test.exs</code> and <code>contract_test.exs</code> (28 tests, 0 failures), and <code>apps/lattice_core/test/treehouse/</code> (381 tests, all passing after <code>npm ci</code> under Node 22 in the fresh worktree). The full lattice_core suite, credo, tsc and the src-tauri cargo tests were not run because no code changed.</dd>
+<dt>Reason</dt><dd>Authority and catalog trust are rule 3 paths by intent. Every test that reads these files is in the treehouse directory.</dd>
+</dl></section>
+<section id="d287"><h2><span>D-287</span> PR #211 review: Codex Sol 6.1 xhigh rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-01, <a href="https://github.com/treetopdevs/lattice/pull/211">#211</a></dd>
+<dt>Finding</dt><dd>Round 1 (13): P1 plan:211 valid sibling replacements rejected before fork detection; P2 plan:121 no recovery from a catalog fork within one binding; P2 plan:188 authority reclassification makes recovery impossible; P2 plan:144 refused heads dropped; P2 plan:147 route origin/URL omitted; P2 plan:147 single-parent binding graph; P2 plan:213 order-dependent "latest retained catalog"; P2 plan:95 superseded binding still rotatable; P2 plan:493 profile mismatches mapped to <code>catalog_authority_refused</code>; P2 plan:214 missing conflict-deps rule; P3 plan:356 C11/C13 tests a subset of contract rows; P3 plan:401 over 400 lines; P3 roadmap:92 effort M vs L. Round 2 (4): P1 plan:136 never-authorized proposals become conflict heads; P2 plan:141 ancestor keys recreate forks; P2 plan:190 <code>nil</code>-predecessor check arrival-dependent; P2 plan:194 cutoff failure masks a fork. Round 3 / final (2): P1 plan:187 step 4 refuses valid R04 successors; P2 plan:199 a redundant late beacon invalidates an accepted resolution.</dd>
+<dt>Decision</dt><dd>All 19 fixed in the plan text. Round 1: D-277, D-271, D-276, D-270, D-275 (OD-16), D-274, D-278, wider C11/C13 tests, compression, roadmap effort L. Round 2: D-276 strict-prefix node test, D-275 ancestor-or-self closure, structural step 5, cutoffs as step 8. Round 3 (tip <code>525795111</code>): D-280 and D-278 revised plus the D-279 invariant. The final-round fixes were not re-reviewed, so each is filed as a confirm-pass row (322, 323). Other follow-ups: row 317 (OD-16 integrator review, gates PR 4), 318 (bootstrap size preflight), 319 (PR 5 native mirror), 320 (operator question on clearing <code>authority_changed</code>), 321 (monotonicity property).</dd>
+<dt>Reason</dt><dd>Rule 3 review by subject (D-286); repeat-class handling per D-284. No independent Claude review is recorded for this slice. Design only: C10–C15 stay OPEN; no R13, native parity, custodian re-init, W4 or Phase G claim.</dd>
+</dl></section>
 </main>
 </body>
 </html>
