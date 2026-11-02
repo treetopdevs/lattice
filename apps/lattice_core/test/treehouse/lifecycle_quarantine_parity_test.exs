@@ -1,5 +1,5 @@
 defmodule Treehouse.LifecycleQuarantineParityTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: true, group: :node_subprocess
 
   alias Lattice.{Authority, Log, Op, Sim}
   alias Lattice.Carrier.Wire

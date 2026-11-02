@@ -1,5 +1,5 @@
 defmodule Treehouse.CatalogEntryPriorityTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: true, group: :node_subprocess
   alias Lattice.{Identity, Log, Op}
   alias Treehouse.{CatalogEntries, CatalogTrust, CatalogTrustVectors, TransportCatalog}
   @expected %{trust_revision: 0, history_generation: 0}
