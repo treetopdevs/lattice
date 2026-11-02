@@ -433,9 +433,9 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
   # --- T5 -------------------------------------------------------------------
 
   test "a refused replacement op stays in the authenticated history with its Core reason" do
-    # (a) Tripwire: Space has no :replace_catalog_v1 command, and command_status runs
-    # before cap_ok, so the reason is :unknown_command. PR 1 adds the command and must
-    # flip this assertion to an authority (or application) reason.
+    # (a) Tripwire, flipped by plan 316 PR 1 (D-376): Space now declares
+    # :replace_catalog_v1, so the op passes command_status and the admin cap/lease
+    # gates, and Stage A refuses the stub claim with the application reason.
     fx = leased()
     {sim, candidate} = replace_candidate(fx.sim, "admin", fx.delegation.id)
     sim = Sim.sync_all(sim)
@@ -444,8 +444,10 @@ defmodule Treehouse.CatalogReplacementAuthorityProbeTest do
     for realm <- @realms do
       log = Sim.log(sim, realm)
       assert MapSet.member?(Log.op_ids(log), candidate.id)
-      assert Sim.quarantined(sim, realm, candidate.id) == {true, :unknown_command}
-      assert Authority.analyze(Space, log).reasons[candidate.id] == :unknown_command
+      assert Sim.quarantined(sim, realm, candidate.id) == {true, :application_invalid_catalog}
+
+      assert Authority.analyze(Space, log).reasons[candidate.id] ==
+               :application_invalid_catalog
     end
 
     # (b) A declared admin command under the leased cap is retained with a Core
