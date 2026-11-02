@@ -12,6 +12,7 @@ after plan 267). BEAM/TS admit it to Stage A while native refuses it; this is a 
 fail-closed parity gap (D-375). PR 5 must add both a `space_policy` Stage A check and a
 `space_projection` arm, and replace `unreachable!` with an error return; the cargo test
 `native_refuses_replace_catalog_v1_as_unknown_command_without_panicking` fails on a table-only edit.
+Decisions: D-265–D-289, D-330–D-342, D-350–D-375.
 
 - **Row, priority, effort**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`); P1 / L
 - **Depends on**: plan 224 PRs 1–3 (DONE), plan 263 (DONE, custodian ledger), R03 and R04 (DONE,
