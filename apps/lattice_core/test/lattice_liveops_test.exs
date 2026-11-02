@@ -382,6 +382,30 @@ defmodule LatticeCore.LiveOpsTest do
       assert catch_exit(Lattice.Audit.record(:probe, %{}))
     end
 
+    # Row 310 round 3 (Codex P2): during an outage every emit retries the
+    # flush. Selecting the batch by scanning the newest-first event list made
+    # each emit O(backlog) and an outage O(N^2). The cost of one deferred emit
+    # is measured in LiveOps reductions (deterministic, unlike wall time) and
+    # must not grow with the backlog.
+    test "a deferred emit does not scale with the backlog" do
+      hold_audit_retry!()
+      liveops = Process.whereis(Lattice.LiveOps)
+      stop_audit!()
+
+      small = emit_reductions(liveops, 10)
+      large = emit_reductions(liveops, 5_000)
+
+      assert large < small * 3 + 2_000,
+             "deferred emit cost grew with backlog: #{small} -> #{large} reductions"
+
+      assert %{counters: %{audit_pending: pending}} = Lattice.LiveOps.snapshot()
+      start_audit!()
+      # The retry timer is held, so kick the first batch; continuations follow.
+      assert {:ok, _} = Lattice.LiveOps.flush_audit()
+      assert eventually(fn -> Lattice.LiveOps.snapshot().counters.audit_pending == 0 end)
+      assert length(liveops_audit()) == pending
+    end
+
     # Row 315: Audit dies while LiveOps' write is already queued in its
     # mailbox. `try_record/2` must turn the in-flight `:killed` exit into a
     # deferral rather than crash LiveOps; the supervisor restarts Audit and the
@@ -428,6 +452,21 @@ defmodule LatticeCore.LiveOpsTest do
 
       assert Process.whereis(Lattice.LiveOps) == liveops
     end
+  end
+
+  # Grows the deferred backlog to `backlog` events, then returns the LiveOps
+  # reductions spent on one more deferred emit.
+  defp emit_reductions(liveops, backlog) do
+    pending = Lattice.LiveOps.snapshot().counters.audit_pending
+
+    for n <- (pending + 1)..backlog//1 do
+      :ok = Lattice.LiveOps.record_denial("tab-#{n}", :publish, :cap_required, %{})
+    end
+
+    {:reductions, before} = Process.info(liveops, :reductions)
+    :ok = Lattice.LiveOps.record_denial("tab-probe", :publish, :cap_required, %{})
+    {:reductions, after_emit} = Process.info(liveops, :reductions)
+    after_emit - before
   end
 
   defp eventually(fun, timeout_ms \\ 5_000) do

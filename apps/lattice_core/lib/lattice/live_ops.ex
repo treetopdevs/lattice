@@ -14,9 +14,11 @@ defmodule Lattice.LiveOps do
   capability's status from `CapStore` so the two can never drift.
 
   Every event is mirrored to `Lattice.Audit`. Audit writes are deferred, not
-  dropped, while Audit is unavailable (row 310): `state.events` already holds
-  each event's exact `kind` and `data`, and `audit_cursor` marks the newest
-  event Audit acknowledged. Later events are replayed in order, tagged
+  dropped, while Audit is unavailable (row 310): `audit_queue` holds the
+  unacknowledged events (exact `kind` and `data`) oldest first, and
+  `audit_cursor` marks the newest event Audit acknowledged, so a flush touches
+  only the batch it writes, never the whole backlog (row 310 round 3). Later
+  events are replayed in order, tagged
   `audit_deferred: true`, on the next emit, on a 1 s retry timer, or through
   `flush_audit/0`. Each of those writes at most `@audit_batch` (500) records, a
   pending `:liveops_audit_gap` record included, and, if more
@@ -257,6 +259,7 @@ defmodule Lattice.LiveOps do
       denials: 0,
       device_refs: %{},
       audit_cursor: 0,
+      audit_queue: :queue.new(),
       audit_gap: 0,
       audit_retry: nil
     }
@@ -727,7 +730,14 @@ defmodule Lattice.LiveOps do
       data: data
     }
 
-    state = flush_audit(%{state | events: [event | state.events], sequence: event.id}, event.id)
+    state = %{
+      state
+      | events: [event | state.events],
+        sequence: event.id,
+        audit_queue: :queue.in(event, state.audit_queue)
+    }
+
+    state = flush_audit(state, event.id)
     push_demo_event(kind, data)
     state
   end
@@ -749,27 +759,36 @@ defmodule Lattice.LiveOps do
       # A gap record written by this call counts toward the batch (row 310 round 2).
       allowance = if gap_before > 0, do: @audit_batch - 1, else: @audit_batch
 
-      batch =
-        state.events
-        |> Enum.take_while(&(&1.id > state.audit_cursor))
-        |> Enum.reverse()
-        |> Enum.take(allowance)
-
-      {state, outcome} =
-        Enum.reduce_while(batch, {state, :ok}, fn event, {state, :ok} ->
-          metadata =
-            event.data
-            |> Map.put(:liveops_event_id, event.id)
-            |> mark_deferred(event.id != current_id)
-
-          case Audit.try_record(event.kind, metadata) do
-            {:ok, _record} -> {:cont, {%{state | audit_cursor: event.id}, :ok}}
-            {:error, :unavailable} -> {:halt, {state, :unavailable}}
-          end
-        end)
-
+      {state, outcome} = write_audit_batch(state, allowance, current_id)
       delay = if outcome == :ok, do: 0, else: audit_retry_ms()
       schedule_audit_retry(state, delay)
+    end
+  end
+
+  # Pops from the front of the oldest-first `audit_queue`, so the work is
+  # bounded by `allowance` plus one failed write, not by the backlog size
+  # (row 310 round 3: the old newest-first scan made an outage O(N^2)).
+  defp write_audit_batch(state, 0, _current_id), do: {state, :ok}
+
+  defp write_audit_batch(state, allowance, current_id) do
+    case :queue.peek(state.audit_queue) do
+      :empty ->
+        {state, :ok}
+
+      {:value, event} ->
+        metadata =
+          event.data
+          |> Map.put(:liveops_event_id, event.id)
+          |> mark_deferred(event.id != current_id)
+
+        case Audit.try_record(event.kind, metadata) do
+          {:ok, _record} ->
+            state = %{state | audit_cursor: event.id, audit_queue: :queue.drop(state.audit_queue)}
+            write_audit_batch(state, allowance - 1, current_id)
+
+          {:error, :unavailable} ->
+            {state, :unavailable}
+        end
     end
   end
 
