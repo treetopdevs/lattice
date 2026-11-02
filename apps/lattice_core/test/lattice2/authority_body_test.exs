@@ -151,12 +151,13 @@ defmodule Lattice2.AuthorityBodyTest do
   defp parsed_shape?({:other, _}), do: true
   defp parsed_shape?(_), do: false
 
+  # `well_formed?` is the delegation shape plus both keys. Roles and ops are
+  # display fields: a well-formed delegation may still carry a name that is not
+  # valid UTF-8, so they may be `:malformed` independently of `well_formed?`.
   defp dview?(%{issuer: i, audience: a, roles: r, ops: o, well_formed?: w} = d)
        when map_size(d) == 5 and is_boolean(w) do
     key?(i) and key?(a) and names?(r) and names?(o) and
-      (not w or
-         (match?({:ok, _}, i) and match?({:ok, _}, a) and match?({:ok, _}, r) and
-            match?({:ok, _}, o)))
+      (not w or (match?({:ok, _}, i) and match?({:ok, _}, a)))
   end
 
   defp dview?(_), do: false
@@ -251,6 +252,19 @@ defmodule Lattice2.AuthorityBodyTest do
 
     assert {:grant, %{roles: :malformed, well_formed?: true}} =
              AuthorityBody.parse({:grant, bad_roles})
+  end
+
+  test "a well-formed delegation with a non-UTF-8 name satisfies the totality shape" do
+    good = delegation_template()
+
+    for body <- [
+          {:grant, %{good | roles: MapSet.new([<<255>>])}},
+          {:grant, %{good | ops: MapSet.new([%Canonical.Atom{name: <<255>>}])}}
+        ] do
+      parsed = AuthorityBody.parse(body)
+      assert {:grant, %{well_formed?: true}} = parsed
+      assert parsed_shape?(parsed), inspect(parsed)
+    end
   end
 
   test "parse/1 parses each delegation field on its own" do
