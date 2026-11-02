@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { authorCarrierDelegation, authorCarrierOp } from "../src/codec";
 import { bindTownshipReplica, townshipCapTerm } from "../src/township";
 import { deriveTreehouseCatalogCutoff } from "../src/treehouse_catalog_cutoff";
-import { catalogReplacementClaimToCarrierTerm } from "../src/treehouse_catalog_codec";
+import { canonicalBytesForCatalogReplacementPossession, catalogReplacementClaimToCarrierTerm } from "../src/treehouse_catalog_codec";
 import { authorTreehouseCatalogReplacementFromFrames, prepareTreehouseCatalogReplacementFromFrames, } from "../src/index";
 import { judge, replacementBaseFixture, seededSigner } from "./support/export_treehouse_catalog_replacement";
 const atom = (name) => ["atom", name];
@@ -217,4 +217,22 @@ test("an identical retry under the same nonce is idempotent", async () => {
     const wrong = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt, possession: possess(f, attempt), signer: f.root });
     assert.deepEqual(wrong.ok ? null : wrong.reason, "wrong_signer");
     assert.deepEqual(await prepare(f, f.frames, { ...request(f), author: b64(f.root.publicKey) }), { ok: false, reason: "not_holder" });
+});
+test("a tampered attempt or a corrupt re-read never yields a frame", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    // A caller-held claim that differs from the fresh derivation, with matching possessions, refuses.
+    const tampered = { ...attempt, claim: { ...attempt.claim, newOrigin: "wss://attacker.invalid" } };
+    const tamperedPossession = possess(f, { ...tampered, catalogPossessionBytes: canonicalBytesForCatalogReplacementPossession("catalog", tampered.claim),
+        servicePossessionBytes: canonicalBytesForCatalogReplacementPossession("service", tampered.claim) });
+    signed = [];
+    const stale = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt: tampered,
+        possession: tamperedPossession, signer: spy(f.nominee, "op") });
+    assert.deepEqual(stale.ok ? null : [stale.reason, stale.journalEntry.status], ["stale_verified_state", "cancelled"]);
+    assert.deepEqual(signed, []);
+    // Forged rejected-signature evidence on the post-signature re-read withholds the frame.
+    let reads = 0;
+    const corrupt = await authorTreehouseCatalogReplacementFromFrames({ attempt, possession: possess(f, attempt), signer: f.nominee,
+        currentFrames: () => (++reads === 1 ? f.frames : { frames: f.frames, rejected: [{ frame: f.genesis, reason: "bad_signature" }] }) });
+    assert.deepEqual(corrupt.ok ? null : [corrupt.reason, corrupt.journalEntry.status], ["invalid_verified_history", "cancelled_after_signature"]);
 });

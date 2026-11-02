@@ -39,7 +39,7 @@ export async function authorTreehouseCatalogReplacementFromFrames(input) {
     if (!attemptShape(attempt))
         return { ok: false, reason: "stale_verified_state", journalEntry: entry(null, "cancelled", "stale_verified_state", null) };
     const cancel = (reason) => ({ ok: false, reason, journalEntry: entry(attempt, "cancelled", reason, null) });
-    let candidate;
+    let candidate, claim;
     try {
         const current = await read(input.currentFrames, attempt.replica);
         if (!current.ok)
@@ -52,14 +52,16 @@ export async function authorTreehouseCatalogReplacementFromFrames(input) {
             return cancel(fresh.reason === "invalid_verified_history" ? fresh.reason : "stale_verified_state");
         if (!samePrepared(fresh.attempt, attempt))
             return cancel("stale_verified_state");
+        // Sign only the freshly derived claim, never the caller-held copy.
+        claim = fresh.attempt.claim;
         const possession = input.possession;
         if (!object(possession) || !same(Object.keys(possession).sort(), ["catalog", "service"]) ||
-            !verifyCatalogReplacementPossession(attempt.claim, possession.catalog, possession.service))
+            !verifyCatalogReplacementPossession(claim, possession.catalog, possession.service))
             return cancel("invalid_possession");
         const author = canonicalBase64Bytes(attempt.author, 32);
         if (author === null || !equalBytes(input.signer.publicKey, author))
             return cancel("wrong_signer");
-        candidate = await intent(attempt.claim, possession.catalog, possession.service, { publicKey: author, sign: zero });
+        candidate = await intent(claim, possession.catalog, possession.service, { publicKey: author, sign: zero });
         if (envelopeBytes(candidate) > 64_000)
             return cancel(tooLarge);
         const reason = (await judgeCandidate(current.history.frames, candidate)).quarantineReasons.get(candidate.id);
@@ -72,7 +74,7 @@ export async function authorTreehouseCatalogReplacementFromFrames(input) {
     let frame;
     try {
         const possession = input.possession;
-        frame = await intent(attempt.claim, possession.catalog, possession.service, input.signer);
+        frame = await intent(claim, possession.catalog, possession.service, input.signer);
     }
     catch {
         return cancel("signer_failed");
@@ -207,6 +209,10 @@ async function read(source, replica) {
         return refuse("stale_verified_state");
     }
     const history = await authenticateJudgedHistory(replica, raw.frames);
+    // Retained bad-signature evidence is validated on every read, as BEAM's Log.verify_authenticity does.
+    const evidence = await deriveTreehouseCatalogCutoff({ replica, frames: raw.frames, rejected: raw.rejected });
+    if (!evidence.ok && evidence.reason === "invalid_verified_history")
+        return refuse("invalid_verified_history");
     return history === null ? refuse("invalid_verified_history") : { ok: true, raw, history };
 }
 // C13: an op honored in the frozen analysis that the union quarantines, a moved admin holder epoch,
@@ -238,7 +244,7 @@ async function reclassified(current, attempt, signed) {
 }
 // Every changed dep, key, cutoff, inventory or acquisition changes these bytes.
 function samePrepared(fresh, attempt) {
-    return fresh.attemptId === attempt.attemptId && fresh.author === attempt.author && fresh.cap === attempt.cap &&
+    return equalBytes(canonicalBytesForCatalogReplacementClaim(attempt.claim), fresh.claimBytes) && fresh.attemptId === attempt.attemptId && fresh.author === attempt.author && fresh.cap === attempt.cap &&
         same(fresh.frozenFrontier, attempt.frozenFrontier) && equalBytes(fresh.claimBytes, attempt.claimBytes) &&
         equalBytes(fresh.catalogPossessionBytes, attempt.catalogPossessionBytes) &&
         equalBytes(fresh.servicePossessionBytes, attempt.servicePossessionBytes);

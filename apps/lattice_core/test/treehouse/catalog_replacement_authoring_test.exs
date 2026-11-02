@@ -418,4 +418,50 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     assert {:error, :not_holder} =
              Space.prepare_replace_catalog(f.space_log, %{request(f) | author: f.root.pub}, %{})
   end
+
+  # --- 7 --------------------------------------------------------------------
+
+  test "a tampered attempt or a corrupt re-read never yields a frame" do
+    f = fixture()
+    attempt = prepared(f)
+
+    # A caller-held claim that differs from the fresh derivation, with matching possessions.
+    claim = %{attempt.claim | new_origin: "wss://attacker.invalid"}
+
+    tampered = %{
+      attempt
+      | claim: claim,
+        catalog_possession_bytes:
+          Treehouse.TransportCatalog.replacement_possession_bytes(:catalog, claim),
+        service_possession_bytes:
+          Treehouse.TransportCatalog.replacement_possession_bytes(:service, claim)
+    }
+
+    assert {:error, :stale_verified_state, %{status: :cancelled}} =
+             Space.author_replace_catalog(
+               op_signer(f),
+               f.space_log,
+               tampered,
+               possess(f, tampered)
+             )
+
+    refute_received {:signed, :op}
+
+    # A re-read after the signing call that fails authentication withholds the frame.
+    {pid, source} = agent(f.space_log)
+
+    corrupt = fn ->
+      Agent.update(pid, fn log -> %{log | ops: Map.put(log.ops, "forged", f.genesis)} end)
+    end
+
+    assert {:error, :invalid_verified_history, %{status: :cancelled_after_signature, op_id: nil}} =
+             Space.author_replace_catalog(
+               op_signer(f, corrupt),
+               source,
+               attempt,
+               possess(f, attempt)
+             )
+
+    assert_received {:signed, :op}
+  end
 end

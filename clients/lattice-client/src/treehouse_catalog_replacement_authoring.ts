@@ -109,7 +109,7 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
   const attempt = input.attempt;
   if (!attemptShape(attempt)) return {ok: false, reason: "stale_verified_state", journalEntry: entry(null, "cancelled", "stale_verified_state", null)};
   const cancel = (reason: string) => ({ok: false as const, reason, journalEntry: entry(attempt, "cancelled", reason, null)});
-  let candidate: CarrierOpFrame;
+  let candidate: CarrierOpFrame, claim: CatalogReplacementClaim;
   try {
     const current = await read(input.currentFrames, attempt.replica);
     if (!current.ok) return cancel(current.reason);
@@ -118,12 +118,14 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
     const fresh = await derive(attempt.replica, current.raw, attempt.request, null);
     if (!fresh.ok) return cancel(fresh.reason === "invalid_verified_history" ? fresh.reason : "stale_verified_state");
     if (!samePrepared(fresh.attempt, attempt)) return cancel("stale_verified_state");
+    // Sign only the freshly derived claim, never the caller-held copy.
+    claim = fresh.attempt.claim;
     const possession = input.possession as unknown;
     if (!object(possession) || !same(Object.keys(possession).sort(), ["catalog", "service"]) ||
-        !verifyCatalogReplacementPossession(attempt.claim, possession.catalog, possession.service)) return cancel("invalid_possession");
+        !verifyCatalogReplacementPossession(claim, possession.catalog, possession.service)) return cancel("invalid_possession");
     const author = canonicalBase64Bytes(attempt.author, 32);
     if (author === null || !equalBytes(input.signer.publicKey, author)) return cancel("wrong_signer");
-    candidate = await intent(attempt.claim, possession.catalog as string, possession.service as string, {publicKey: author, sign: zero});
+    candidate = await intent(claim, possession.catalog as string, possession.service as string, {publicKey: author, sign: zero});
     if (envelopeBytes(candidate) > 64_000) return cancel(tooLarge);
     const reason = (await judgeCandidate(current.history.frames, candidate)).quarantineReasons.get(candidate.id);
     if (reason !== undefined) return cancel(reason);
@@ -131,7 +133,7 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
   let frame: CarrierOpFrame;
   try {
     const possession = input.possession;
-    frame = await intent(attempt.claim, possession.catalog, possession.service, input.signer);
+    frame = await intent(claim, possession.catalog, possession.service, input.signer);
   } catch { return cancel("signer_failed"); }
   try {
     if (frame.id !== candidate.id || !(await verifyCarrierOp(frame, {verify: async (author, bytes, signature) =>
@@ -242,6 +244,9 @@ async function read(source: () => TreehouseCatalogReplacementCurrent | Promise<T
     if (!object(raw) || !Array.isArray(raw.frames) || !Array.isArray(raw.rejected)) return refuse("stale_verified_state");
   } catch { return refuse("stale_verified_state"); }
   const history = await authenticateJudgedHistory(replica, raw.frames);
+  // Retained bad-signature evidence is validated on every read, as BEAM's Log.verify_authenticity does.
+  const evidence = await deriveTreehouseCatalogCutoff({replica, frames: raw.frames, rejected: raw.rejected});
+  if (!evidence.ok && evidence.reason === "invalid_verified_history") return refuse("invalid_verified_history");
   return history === null ? refuse("invalid_verified_history") : {ok: true, raw, history};
 }
 
@@ -268,7 +273,7 @@ async function reclassified(current: JudgedHistory, attempt: TreehouseCatalogRep
 
 // Every changed dep, key, cutoff, inventory or acquisition changes these bytes.
 function samePrepared(fresh: Prepared, attempt: TreehouseCatalogReplacementAttempt): boolean {
-  return fresh.attemptId === attempt.attemptId && fresh.author === attempt.author && fresh.cap === attempt.cap &&
+  return equalBytes(canonicalBytesForCatalogReplacementClaim(attempt.claim), fresh.claimBytes) && fresh.attemptId === attempt.attemptId && fresh.author === attempt.author && fresh.cap === attempt.cap &&
     same(fresh.frozenFrontier, attempt.frozenFrontier) && equalBytes(fresh.claimBytes, attempt.claimBytes) &&
     equalBytes(fresh.catalogPossessionBytes, attempt.catalogPossessionBytes) &&
     equalBytes(fresh.servicePossessionBytes, attempt.servicePossessionBytes);
