@@ -1,8 +1,8 @@
 # 316 — R11c catalog replacement trust and recovery
 
 Status: DESIGNED (design only, 2026-11-01). PRs 0–2, PR 3's generation keying and PR 6's
-exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), plans 267/269 and
-row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
+exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
+and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 
 - **Row, priority, effort**: 316 (roadmap R11c, `plans/roadmaps/treehouse-unified-2026-09-06.md`); P1 / L
 - **Depends on**: plan 224 PRs 1–3 (DONE), plan 263 (DONE, custodian ledger), R03 and R04 (DONE,
@@ -186,8 +186,8 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
    rule already implies it, and PR 0 decides whether the check is redundant), `live: false`, a
    finite lease unexpired at the prefix epoch, and `epoch`/`epoch_basis` equal to that pass's
    beacons (reuse `member_continuity.ex` `epoch/2`). Each failure is `catalog_authority_refused`
-   (D-274), with a resolver-supplied detail when Core honored the op. A `profile_id` mismatch
-   with `continuation_profile/1` on the prefix is `wrong_catalog_scope`; it is evaluated here only
+   (D-274), with a resolver-supplied detail when Core honored the op. A `profile_genesis` or
+   `profile_id` mismatch with `continuation_profile/1` on the prefix is `wrong_catalog_scope`; it is evaluated here only
    because it needs the prefix. Step order is evaluation order; the reported reason is the
    highest-precedence failure among steps 1–6 (§4), so a profile mismatch outranks step 3. The
    epoch rule matches the private `member_continuity.ex` `epoch/2` but is recomputed from
@@ -195,7 +195,8 @@ third node source: an authenticated `replace_catalog_v1` op in Space history. Fo
 5. **Declared graph, intrinsic (D-277).** Structural only, without installed heads or
    later-arriving catalogs: every parent is a known binding node (refused nodes included); each
    `prior_catalogs` entry names a catalog under its binding (unheld is `trust_pending`), and `nil`
-   is its parent's sole entry; generation is `max + 1`; inventory and entries match the first
+   is its parent's sole entry; generation is `max + 1`; against each parent binding, a changed
+   service key comes with a changed service ID; inventory and entries match the first
    catalog, whose entries extend every cited non-nil prior catalog (`inventory_extends?/2`: no
    replica dropped, `root`/`genesis`/`creation`/`reference`/`kind`/`schema` unchanged; only
    route and service fields change; lifecycle §2 no slot recycling). Failure is `invalid_catalog_transition`; an accepted candidate is never re-judged here.
@@ -240,15 +241,13 @@ attached); 6 `invalid_catalog_transition`; 7 `catalog_rollback` / `catalog_fork`
 BEAM and TS share reciprocal vectors in `clients/lattice-client/test/vectors/catalog/replacement_v1.json`
 (claim, both possession, inventory and cutoff pre-hash bytes including bad-signature `rejected`
 evidence; the binding ID; every refusal reason), BEAM writing and TS reading, then the reverse.
-Native `catalog_eval` is the third twin (OD-6/D-44, PR 5); until then packaged clients fail closed
-with `trust_pending`. Exporter (PR 6) and ledger (PR 3) obligations are listed under their PRs.
+Native `catalog_eval` is the third twin (OD-6/D-44, PR 5); until then packaged clients fail closed.
 
 ## 6. Buildable now vs parked
 
-**Now, on disposable-key fixtures** (Sim bounded Space with explicit `ops:`, root bootstrap, R04
-leased admin with `replace_catalog_v1`, R03 beacons): PRs 0–2, early parts of 3 and 6; PR 4 gated (§7). **Parked
-(rule 8):** the real Space (row 224 BLOCKED on the ceremony), custodian re-init, new-signer
-ceremony, field and packaged runs. **Native:** after plan 267.
+**Now, on disposable-key fixtures** (Sim bounded Space with `ops:`, root bootstrap, R04 leased
+admin, R03 beacons): see Status. **Parked (rule 8):** real Space (row 224), custodian re-init,
+new-signer ceremony, field and packaged runs. **Native:** after plan 267.
 
 ## 7. PR breakdown
 
@@ -271,7 +270,8 @@ writing the `admin_actions` marker, plus the stage A clause); `treehouse_catalog
 vocabulary text, keeping its exact-command assertion. Codec tests
 (`catalog_replacement_claim_test.exs` and TS twin): closed field set; parents sorted and distinct;
 `prior_catalogs` sorted and distinct, at least one per parent, two entries for one forked binding
-accepted, `nil` only as a sole entry; generation max + 1; possession under the new keys; swapped
+accepted, `nil` only as a sole entry; generation a safe positive integer (the max + 1 relation
+is PR 4's); possession under the new keys; swapped
 purpose fails; rotation and replacement possession bytes refuse each other; reciprocal byte
 vectors match, including cutoff bytes with bad-signature evidence. Space command tests: non-admin
 refused by cap; root-only preview ceiling bytes unchanged; bad possession, or author/cap/deps that
@@ -297,7 +297,7 @@ ancestor B of cited rotation T) with a named reason; replay and crash refusals k
 
 **PR 4 — resolver integration** (`catalog_trust.ex` / `.ts`, D-270, D-275–D-278). **GATED on
 plans 267 and 269 merging** (seven `codex/treehouse-*` branches rewrite both files), **OD-16
-sign-off and row 320** (the resolution shape that clears a closed-out accepted catalog). Scope includes the multi-parent graph functions, current-binding route
+sign-off, OD-17 and row 320** (the resolution shape that clears a closed-out accepted catalog). Scope includes the multi-parent graph functions, current-binding route
 origin/URL, refused nodes, and restoring pre-upgrade single-`parent` trust stores. Tests in
 `catalog_replacement_trust_test.exs` and the TS twin. Every multi-delivery test persists the
 accepted state between resolver calls and runs both delivery orders.
@@ -307,7 +307,8 @@ accepted state between resolver calls and runs both delivery orders.
   and an inherited ceiling containing `replace_catalog_v1` (a resolver that demands a linked root
   parent fails this case).
 - **C11 negatives:** missing pre-loss permission (no `replace_catalog_v1` in the ceiling); wrong
-  profile (`wrong_catalog_scope`); no beacon; root genesis cap; unleased cap; wrong acquisition
+  profile, incl. a same-`profile_id` repin with another genesis (`wrong_catalog_scope`); a kept
+  parent service ID with a new service key; wrong generation; no beacon; root genesis cap; unleased cap; wrong acquisition
   cap; stale holder; bad parent; a parent-linked delegation not attenuated from the root (Core
   refuses it, so the resolver sees no honored record); revoked or lapsed authority; wrong nonce,
   deps, epoch, basis or cutoff; each bad possession signature; a first catalog that drops a prior
@@ -347,8 +348,7 @@ accepted state between resolver calls and runs both delivery orders.
   leave the bootstrap catalog resolving; a missing page is `trust_pending` with no partial
   promotion. Same bytes are idempotent; a rollback is refused.
 
-**PR 5** — native parity (a `catalog_eval` replacement node, D-270 nodes in `chains.rs`), owned by
-the native track after plan 267, consuming the PR 1 and PR 4 vectors; this slice only files a row.
+**PR 5** — native parity (`catalog_eval` replacement node, D-270 nodes in `chains.rs`, row 319).
 **PR 6** — a plan 266 exporter test now; after PR 4, the C15 two-cycle BEAM/TS reconstruction
 (Space plus 12 Threads, one new child, a combined replacement). **PR 7** — the operator run, rule 8.
 
@@ -359,10 +359,10 @@ Per PR, on a fresh checkout first (`AGENTS.md`, Node 22 via `source ~/.nvm/nvm.s
 `npm --prefix clients/treehouse-tauri-shell ci`. Then `~/.asdf/shims/mix format --check-formatted`;
 `MIX_ENV=test ~/.asdf/shims/mix compile`; `~/.asdf/shims/mix test apps/lattice_core/test/treehouse/`; for PR 3
 `(cd apps/lattice_carrier_server && MIX_ENV=test ~/.asdf/shims/mix test)`;
-`clients/lattice-client/node_modules/.bin/tsc -p clients/lattice-client` and the lattice-client
-test runner from that `node_modules/.bin`; `cargo test` in
-`clients/treehouse-tauri-shell/src-tauri` for any TS codec change; regenerate the dist files. Before
-merge, the lifecycle §6 gates: `ERL_FLAGS='+S 4:4' ~/.asdf/shims/mix check` with the `AGENTS.md` PATH prefix, every named TS gate, reciprocal exporters and protected legacy vectors.
+`clients/lattice-client/node_modules/.bin/tsc -p clients/lattice-client` and the client test
+runner there; `cargo test` in `clients/treehouse-tauri-shell/src-tauri` for any TS codec change;
+regenerate dist. Before merge, lifecycle §6 gates: `ERL_FLAGS='+S 4:4' ~/.asdf/shims/mix check`
+(`AGENTS.md` PATH prefix), every named TS gate, reciprocal exporters, protected legacy vectors.
 
 For this design slice:
 ```sh
@@ -384,10 +384,10 @@ grep -o '](\.\./[^)]*)' plans/316-r11c-catalog-replacement-trust.md   # every ta
 
 ## 10. Explicit non-claims
 
-No completeness against withheld ops; no whole-store rollback resistance; no re-observation from a
-compromised webview (OD-10, row 260); no native or packaged acceptance until PR 5; no real-Space
-replacement or ceremony; no R13, R16 or R18 completion; no catalog witness quorum, new Core primitive, quarantine reason or wire atom; no
-production deployment, Phase G or receipt-free W4. C10–C15 stay OPEN until their PRs land.
+No completeness against withheld ops, whole-store rollback resistance or compromised-webview
+re-observation (OD-10, row 260); no native or packaged acceptance until PR 5; no real-Space
+replacement or ceremony; no R13/R16/R18 completion; no catalog quorum, Core primitive, quarantine
+reason or wire atom; no production, Phase G or receipt-free W4. C10–C15 stay OPEN.
 
 ## Done criteria and STOP conditions
 
@@ -395,6 +395,6 @@ production deployment, Phase G or receipt-free W4. C10–C15 stay OPEN until the
   design-slice gates pass. **Implementation done:** every PR's tests pass; vectors agree in BEAM,
   TS and, after PR 5, native.
 - **STOP:** PR 0 needs a Core primitive or context field; a historical Space vector or wire byte
-  changes; PR 4 starts before 267/269, OD-16 and row 320; C10 needs an old key, new root or injected trust.
+  changes; PR 4 starts before 267/269, OD-16, OD-17 and row 320; C10 needs an old key, new root or injected trust.
 
 **Decisions:** D-265–D-280 (design), D-281+ (process): `plans/decisions-2026-10-17-backlog-run.html`.
