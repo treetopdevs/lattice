@@ -2529,6 +2529,12 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Decision</dt><dd>Review thread P2 TS <code>:329</code> reported a default UTF-16 sort. At the reviewed SHA 13fee3c47 both sides already use <code>sort(compareUtf8)</code>, and <code>compareUtf8</code> compares UTF-8 bytes. No code change. Added the reviewer's U+E000 / U+10000 pair as a test in both runtimes. A mutation to the default sort fails the TS test.</dd>
 <dt>Reason</dt><dd>The finding does not match the code, but the case it describes is real and was unpinned.</dd>
 </dl></section>
+<section id="d440"><h2><span>D-440</span> Row 316 PR 2 review round 4 (Codex Sol 6.1 xhigh) dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>Four findings. P2: a signed successor catalog that swaps routes between replicas passes the preflight, but <code>CatalogTrust</code> route history refuses it. P2: duplicate catalog ids let a later valid copy mask an invalid signature. P2: a foreign or unauthorized retained proposal reserves the nonce. P3: BEAM reports a malformed catalog signature as <code>invalid_catalog_signature</code> where TS and the resolver report <code>malformed_catalog</code>. Commits 13fee3c47 and 7a5cbad53 had no findings.</dd>
+<dt>Decision</dt><dd>Fixed all four in both runtimes, each with a regression that failed before the fix. (1) After resolution, every held catalog must keep each route bound to one replica, otherwise <code>invalid_catalog_transition</code>. Unlike the resolver, this applies even to entry-pending catalogs, which can only refuse more (row 354). (2) Every distinct signature given for one catalog id is kept and must verify. (3) A nonce is reserved only by a retained replacement of this Space and bootstrap that Core honored at its strict prefix, the same eligibility as a binding node. (4) BEAM checks 64-byte signature shape at envelope parse, giving <code>malformed_catalog</code>, and passes through the verifier's own reason.</dd>
+<dt>Reason</dt><dd>All four only tighten the mirror toward the resolver or narrow a false refusal. None widens acceptance beyond <code>CatalogTrust</code>'s structural rules.</dd>
+</dl></section>
 </main>
 </body>
 </html>

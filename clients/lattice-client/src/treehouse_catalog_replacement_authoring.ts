@@ -217,10 +217,15 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   const covered = coverage(history, replica, bootstrap, claim, request);
   if (covered !== null) return refuse(covered);
   const claimBytes = canonicalBytesForCatalogReplacementClaim(claim);
-  // The journal is caller-owned and may be lost or belong to another device, so a nonce already carried by any
-  // retained replacement in this Space is reused regardless of the journal.
-  if (history.ops.some((op) => op.command === "replace_catalog_v1" &&
-    normalizeCatalogReplacementClaim(op.commandArgs?.[0])?.nonce === claim.nonce)) return refuse("attempt_nonce_reused");
+  // The journal is caller-owned and may be lost or belong to another device, so a nonce already carried by a retained
+  // replacement of this Space and bootstrap that Core honored at its strict prefix (binding-node eligibility) is reused
+  // regardless of the journal. A raw, unauthorized proposal reserves nothing.
+  if (history.ops.some((op) => {
+    if (op.command !== "replace_catalog_v1") return false;
+    const cited = normalizeCatalogReplacementClaim(op.commandArgs?.[0]);
+    return cited !== null && cited.nonce === claim.nonce && cited.space === replica && cited.bootstrap === bootstrap.id &&
+      honoredAtPrefix(history, op.id, replica);
+  })) return refuse("attempt_nonce_reused");
   // The attempt journal is keyed by the claim nonce; identical bytes are an idempotent retry.
   const prior = journal === null ? undefined : Object.hasOwn(journal, claim.nonce) ? journal[claim.nonce] : undefined;
   if (prior !== undefined && !(prior.claimBytes instanceof Uint8Array && equalBytes(prior.claimBytes, claimBytes))) {
@@ -243,6 +248,7 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
 type BindingNode = {generation: number; key: string; parents: readonly string[]; inventory: string | null;
   serviceId: string; serviceKey: string};
 type BootstrapRecord = {catalogKey: string; serviceId: string; serviceKey: string};
+type HeldCatalog = {catalog: CatalogEnvelope["catalog"]; signatures: string[]};
 class CoverageRefusal { constructor(readonly reason: string) {} }
 const refuseCoverage = (reason: string): never => { throw new CoverageRefusal(reason); };
 const maxSafe = Number.MAX_SAFE_INTEGER;
@@ -274,19 +280,23 @@ function coverage(history: JudgedHistory, replica: string, bootstrap: {id: strin
     if (envelope.rotation.space !== replica || envelope.rotation.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
     rotations.set(catalogRotationId(envelope), envelope);
   }
-  const catalogs = new Map<string, CatalogEnvelope>();
+  // A catalog id covers the payload only, so every distinct signature supplied for one id is kept and each must verify;
+  // a later valid copy never masks an earlier invalid one.
+  const catalogs = new Map<string, HeldCatalog>();
   for (const value of request.catalogs as unknown[]) {
     const envelope = normalizeCatalogEnvelope(value);
     if (envelope === null) return "malformed_catalog";
     if (envelope.catalog.space !== replica || envelope.catalog.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
-    catalogs.set(transportCatalogId(envelope.catalog), envelope);
+    const id = transportCatalogId(envelope.catalog), known = catalogs.get(id);
+    if (known === undefined) catalogs.set(id, {catalog: envelope.catalog, signatures: [envelope.signature]});
+    else if (!known.signatures.includes(envelope.signature)) known.signatures.push(envelope.signature);
   }
   try { resolveGraph(nodes, rotations, catalogs); } catch (error) {
     if (error instanceof CoverageRefusal) return error.reason;
     throw error;
   }
   if ([...nodes.values()].some((node) => node.parents.some((parent) => !nodes.has(parent)))) return "trust_pending";
-  const held = [...catalogs].map(([id, envelope]) => ({id, binding: envelope.catalog.binding, previous: envelope.catalog.previous}));
+  const held = [...catalogs].map(([id, item]) => ({id, binding: item.catalog.binding, previous: item.catalog.previous}));
   // D-275: every ancestor-or-self of a cited parent is closed; the rest are heads.
   const closed = new Set<string>();
   const stack = [...nodes.values()].flatMap((node) => [...node.parents]);
@@ -318,7 +328,7 @@ function coverage(history: JudgedHistory, replica: string, bootstrap: {id: strin
 
 // Same traversal as CatalogTrust: every catalog in id order, then every rotation; a cycle is a transition failure.
 function resolveGraph(nodes: Map<string, BindingNode>, rotations: Map<string, CatalogRotationEnvelope>,
-  catalogs: Map<string, CatalogEnvelope>): void {
+  catalogs: Map<string, HeldCatalog>): void {
   const ready = new Set<string>(), visiting = new Set<string>();
   const bindingFor = (id: string): BindingNode => {
     const known = nodes.get(id);
@@ -345,14 +355,16 @@ function resolveGraph(nodes: Map<string, BindingNode>, rotations: Map<string, Ca
     visiting.delete(`b:${id}`);
     return node;
   };
-  const catalogFor = (id: string): CatalogEnvelope => {
+  const catalogFor = (id: string): HeldCatalog => {
     const envelope = catalogs.get(id);
     if (envelope === undefined) return refuseCoverage("trust_pending");
     if (ready.has(id)) return envelope;
     if (visiting.has(`c:${id}`)) refuseCoverage("invalid_catalog_transition");
     visiting.add(`c:${id}`);
     const c = envelope.catalog, binding = bindingFor(c.binding);
-    if (!verifyCatalogEnvelope(envelope, binding.key)) refuseCoverage("invalid_catalog_signature");
+    if (envelope.signatures.some((signature) => !verifyCatalogEnvelope({catalog: c, signature}, binding.key))) {
+      refuseCoverage("invalid_catalog_signature");
+    }
     if (c.entries.some((item) => item.serviceId !== binding.serviceId || item.serviceKey !== binding.serviceKey)) refuseCoverage("wrong_catalog_scope");
     if (c.previous !== null) {
       const prior = catalogFor(c.previous).catalog;
@@ -364,6 +376,16 @@ function resolveGraph(nodes: Map<string, BindingNode>, rotations: Map<string, Ca
   };
   for (const id of [...catalogs.keys()].sort(compareUtf8)) catalogFor(id);
   for (const id of [...rotations.keys()].sort(compareUtf8)) bindingFor(id);
+  // CatalogTrust route history: across every held catalog a route names one replica. The resolver exempts entry-pending
+  // catalogs; without entry observation (row 354) this mirror holds every catalog to it, which can only refuse more.
+  const routes = new Map<string, string>();
+  for (const id of [...catalogs.keys()].sort(compareUtf8)) {
+    for (const entry of catalogs.get(id)!.catalog.entries) {
+      const replica = routes.get(entry.route);
+      if (replica === undefined) routes.set(entry.route, entry.replica);
+      else if (replica !== entry.replica) refuseCoverage("invalid_catalog_transition");
+    }
+  }
 }
 
 const extendedKeys = ["root", "genesis", "creation", "reference", "kind", "schema"] as const;

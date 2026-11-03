@@ -878,6 +878,65 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     assert Enum.map(attempt.claim.cutoffs, & &1.replica) == Enum.map(all, & &1.replica)
   end
 
+  # Codex round 4: route reservation, duplicate-id signatures, nonce eligibility, signature shape.
+  test "retained catalogs that swap routes, or hide a bad signature behind a good copy, refuse" do
+    f = fixture()
+    first = catalog(f, f.bootstrap.id, 0, nil)
+    first_id = TransportCatalog.catalog_id(first.catalog)
+
+    cite = fn catalogs, head ->
+      request(f, %{
+        catalogs: catalogs,
+        prior_catalogs: [%{binding: f.bootstrap.id, catalog: head}]
+      })
+    end
+
+    [a, b] = bound_entries(f)
+
+    swapped =
+      catalog(f, f.bootstrap.id, 1, first_id, [%{a | route: b.route}, %{b | route: a.route}])
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               cite.([first, swapped], TransportCatalog.catalog_id(swapped.catalog)),
+               %{}
+             )
+
+    bad = %{first | signature: :binary.copy(<<7>>, 64)}
+
+    for order <- [[bad, first], [first, bad]] do
+      assert {:error, :invalid_catalog_signature} =
+               Space.prepare_replace_catalog(f.space_log, cite.(order, first_id), %{})
+    end
+
+    assert {:error, :malformed_catalog} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               cite.([%{first | signature: <<1>>}], first_id),
+               %{}
+             )
+  end
+
+  test "an unauthorized retained proposal does not reserve the nonce" do
+    f = fixture()
+    attempt = prepared(f)
+    stranger = Identity.from_seed("stranger", "r316-pr2-stranger")
+
+    raw =
+      Op.new(
+        stranger,
+        f.replica,
+        Log.frontier(f.space_log),
+        :command,
+        {:replace_catalog_v1, [attempt.claim, <<0::512>>, <<0::512>>]}
+      )
+
+    log = Log.append!(f.space_log, raw)
+    assert Authority.analyze(Space, log).reasons[raw.id] != nil
+    assert {:ok, _} = Space.prepare_replace_catalog(log, request(f), %{})
+  end
+
   defp resign_rotation(envelope, old, new) do
     %{
       envelope

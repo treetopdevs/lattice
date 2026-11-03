@@ -87,7 +87,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
            ),
          :ok <- coverage(log, claim, request, bootstrap),
          claim_bytes = TransportCatalog.replacement_claim_bytes(claim),
-         :ok <- nonce_unused(log, claim.nonce),
+         :ok <- nonce_unused(log, bootstrap, claim.nonce),
          :ok <- nonce_free(journal, claim.nonce, claim_bytes),
          candidate = intent(claim, @zero, @zero),
          :ok <- envelope(candidate),
@@ -293,7 +293,8 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     Enum.reduce_while(rotations, {:ok, %{}}, fn envelope, {:ok, acc} ->
       with true <-
              is_map(envelope) and
-               Enum.sort(Map.keys(envelope)) == [:new_signature, :old_signature, :rotation],
+               Enum.sort(Map.keys(envelope)) == [:new_signature, :old_signature, :rotation] and
+               signature?(envelope.old_signature) and signature?(envelope.new_signature),
            {:ok, rotation} <- TransportCatalog.normalize_rotation(envelope.rotation) do
         if rotation.space == log.replica and rotation.bootstrap == bootstrap.id,
           do:
@@ -312,16 +313,27 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     _ -> {:error, :malformed_catalog}
   end
 
+  # A catalog id covers the payload only, so every distinct signature supplied for one id is
+  # kept and each must verify; a later valid copy never masks an earlier invalid one.
   defp catalog_envelopes(log, catalogs, bootstrap) do
     Enum.reduce_while(catalogs, {:ok, %{}}, fn envelope, {:ok, acc} ->
-      with true <- is_map(envelope) and Enum.sort(Map.keys(envelope)) == [:catalog, :signature],
+      with true <-
+             is_map(envelope) and Enum.sort(Map.keys(envelope)) == [:catalog, :signature] and
+               signature?(envelope.signature),
            {:ok, catalog} <- TransportCatalog.normalize_catalog(envelope.catalog) do
-        if catalog.space == log.replica and catalog.bootstrap == bootstrap.id,
-          do:
-            {:cont,
-             {:ok,
-              Map.put(acc, TransportCatalog.catalog_id(catalog), %{envelope | catalog: catalog})}},
-          else: {:halt, {:error, :wrong_catalog_scope}}
+        if catalog.space == log.replica and catalog.bootstrap == bootstrap.id do
+          held =
+            Map.update(
+              acc,
+              TransportCatalog.catalog_id(catalog),
+              %{catalog: catalog, signatures: [envelope.signature]},
+              &%{&1 | signatures: Enum.uniq(&1.signatures ++ [envelope.signature])}
+            )
+
+          {:cont, {:ok, held}}
+        else
+          {:halt, {:error, :wrong_catalog_scope}}
+        end
       else
         _ -> {:halt, {:error, :malformed_catalog}}
       end
@@ -363,9 +375,27 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     graph =
       Enum.reduce(Enum.sort(Map.keys(rotations)), graph, &resolve_binding(&1, &2, MapSet.new()))
 
+    reserve_routes(catalogs)
     {:ok, graph.nodes}
   catch
     {:catalog_refusal, reason} -> {:error, reason}
+  end
+
+  # `CatalogTrust.validate_route_history!/1`: across every held catalog a route names one
+  # replica. The resolver exempts entry-pending catalogs; without entry observation (row 354)
+  # this mirror holds every catalog to it, which can only refuse more.
+  defp reserve_routes(catalogs) do
+    catalogs
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.reduce(%{}, fn {_id, %{catalog: catalog}}, used ->
+      Enum.reduce(catalog.entries, used, fn entry, routes ->
+        case Map.get(routes, entry.route) do
+          nil -> Map.put(routes, entry.route, entry.replica)
+          replica when replica == entry.replica -> routes
+          _other -> refuse(:invalid_catalog_transition)
+        end
+      end)
+    end)
   end
 
   defp resolve_catalog(id, graph, visiting) do
@@ -383,8 +413,12 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     graph = resolve_binding(catalog.binding, graph, visiting)
     binding = Map.fetch!(graph.nodes, catalog.binding)
 
-    if TransportCatalog.verify_catalog(envelope, binding.key) != :ok,
-      do: refuse(:invalid_catalog_signature)
+    Enum.each(envelope.signatures, fn signature ->
+      case TransportCatalog.verify_catalog(%{catalog: catalog, signature: signature}, binding.key) do
+        :ok -> :ok
+        {:error, reason} -> refuse(reason)
+      end
+    end)
 
     if Enum.any?(catalog.entries, &({&1.service_id, &1.service_key} != binding.service)),
       do: refuse(:wrong_catalog_scope)
@@ -563,13 +597,19 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   end
 
   # The journal is caller-owned and may be lost or belong to another device, so a nonce already
-  # carried by any retained replacement in this Space is reused regardless of the journal. No
-  # retained claim can equal a new one byte-for-byte (its deps would include that op).
-  defp nonce_unused(log, nonce) do
+  # carried by a retained replacement of this Space and bootstrap that Core honored at its
+  # strict prefix (the same eligibility as a binding node) is reused regardless of the journal.
+  # A raw, unauthorized proposal reserves nothing. No retained claim can equal a new one
+  # byte-for-byte (its deps would include that op).
+  defp nonce_unused(log, bootstrap, nonce) do
     reused? =
       Enum.any?(log.ops, fn
-        {_id, %Op{kind: :command, body: {:replace_catalog_v1, [claim | _]}}} ->
-          match?({:ok, %{nonce: ^nonce}}, TransportCatalog.normalize_replacement_claim(claim))
+        {id, %Op{kind: :command, body: {:replace_catalog_v1, [claim | _]}}} ->
+          match?(
+            {:ok, %{nonce: ^nonce, space: space, bootstrap: boot}}
+            when space == log.replica and boot == bootstrap.id,
+            TransportCatalog.normalize_replacement_claim(claim)
+          ) and honored_at_prefix?(log, id)
 
         _ ->
           false
@@ -827,4 +867,5 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   end
 
   defp key?(value), do: is_binary(value) and byte_size(value) == 32
+  defp signature?(value), do: is_binary(value) and byte_size(value) == 64
 end

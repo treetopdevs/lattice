@@ -438,3 +438,28 @@ test("non-ASCII thread replicas order by UTF-8 bytes on both sides of the recove
     if (result.ok)
         assert.deepEqual(result.attempt.claim.cutoffs.map((cutoff) => cutoff.replica), all.map((item) => item.replica));
 });
+// Codex round 4: route reservation, duplicate-id signatures and nonce eligibility.
+test("retained catalogs that swap routes, or hide a bad signature behind a good copy, refuse", async () => {
+    const f = await fixture();
+    const first = catalog(f, f.bootstrap.id, 0, null), firstId = transportCatalogId(first.catalog);
+    const cite = (catalogs, head) => request(f, { catalogs, priorCatalogs: [{ binding: f.bootstrap.id, catalog: head }] });
+    const [a, b] = boundEntries(f);
+    const swapped = catalog(f, f.bootstrap.id, 1, firstId, [{ ...a, route: b.route }, { ...b, route: a.route }]);
+    assert.equal(reason(await prepare(f, f.frames, cite([first, swapped], transportCatalogId(swapped.catalog)))), "invalid_catalog_transition");
+    const bad = { ...first, signature: b64(new Uint8Array(64).fill(7)) };
+    for (const order of [[bad, first], [first, bad]]) {
+        assert.equal(reason(await prepare(f, f.frames, cite(order, firstId))), "invalid_catalog_signature");
+    }
+    assert.equal(reason(await prepare(f, f.frames, cite([{ ...first, signature: b64(new Uint8Array([1])) }], firstId))), "malformed_catalog");
+});
+test("an unauthorized retained proposal does not reserve the nonce", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const stranger = seededSigner("r316-pr2-ts-stranger");
+    const zeroB64 = b64(new Uint8Array(64));
+    const raw = await authorCarrierOp({ replica: f.replica, signer: stranger, deps: attempt.frozenFrontier, kind: "command", cap: nil,
+        body: tuple(atom("replace_catalog_v1"), ["list", [catalogReplacementClaimToCarrierTerm(attempt.claim), ["bin", zeroB64], ["bin", zeroB64]]]) });
+    const frames = [...f.frames, raw];
+    assert.notEqual((await judge(frames)).get(raw.id), undefined);
+    assert.equal(reason(await prepare(f, frames, request(f))), "ok");
+});
