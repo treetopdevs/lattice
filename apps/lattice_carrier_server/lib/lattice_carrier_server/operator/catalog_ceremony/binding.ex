@@ -75,6 +75,54 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
       Store.timestamp?(found["verified_at"])
   end
 
+  @doc """
+  The ledger key for a binding map: the replacement op id for a binding derived by
+  `replacement/3`, otherwise the bootstrap op id. A bootstrap binding map carries no
+  `:binding_id` key, so every existing caller and artifact stays byte-identical.
+  """
+  @spec binding_id(map()) :: String.t()
+  def binding_id(binding), do: Map.get(binding, :binding_id, binding.bootstrap_id)
+
+  @doc """
+  Derive the binding a `replace_catalog_v1` claim installs over a bootstrap binding
+  (plan 316 PR 3).
+
+  Derivation only, not trust: this checks the claim's closed shape and that it names
+  the parent's bootstrap and Space. Whether `op_id` is an accepted, authorized
+  replacement (generation relation, profile, lease, epoch, closed bindings) is the
+  PR 4 resolver's decision, and that resolver must supply both the op id and the
+  claim. No production caller exists in this PR. The parent must be a bootstrap
+  binding; the derived map has no `attested` evidence until its own ceremony runs.
+  """
+  @spec replacement(map(), term(), term()) :: {:ok, map()} | {:error, :malformed_binding}
+  def replacement(%{bootstrap_id: bootstrap, record: record} = parent, claim, op_id) do
+    with false <- Map.has_key?(parent, :binding_id),
+         {:ok, claim} <- TransportCatalog.normalize_replacement_claim(claim),
+         true <- claim.bootstrap == bootstrap and claim.space == record.space,
+         true <- ContinuationCertificate.id?(op_id) and op_id != bootstrap do
+      {:ok,
+       %{
+         kind: :replacement,
+         bootstrap_id: bootstrap,
+         binding_id: op_id,
+         generation: claim.generation,
+         inventory_digest: claim.inventory_digest,
+         record: %{
+           record
+           | catalog_key: claim.new_catalog_key,
+             service_id: claim.new_service_id,
+             service_key: claim.new_service_key,
+             origin: claim.new_origin
+         },
+         realm: TransportCatalog.service_realm(claim.new_service_id)
+       }}
+    else
+      _ -> {:error, :malformed_binding}
+    end
+  end
+
+  def replacement(_parent, _claim, _op_id), do: {:error, :malformed_binding}
+
   @doc "The exact top-level keys of `binding.json`."
   @spec binding_keys() :: [String.t()]
   def binding_keys, do: @binding_keys

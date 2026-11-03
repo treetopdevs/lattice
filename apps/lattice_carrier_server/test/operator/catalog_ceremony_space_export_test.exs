@@ -323,6 +323,83 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremonySpaceExportTest do
     refused!(f, "dir", dir)
   end
 
+  # Plan 316 PR 3: an export only checks authenticity, so a Space whose history
+  # carries an admin-authored replace_catalog_v1 op (honored or refused by Core)
+  # loads to the dump's Log and re-encodes byte for byte.
+  test "a Space export carrying a replace_catalog_v1 op loads and re-encodes byte-identically",
+       f do
+    space = f.space
+    record = record_of(elem(Ceremony.binding_payload(args(f, export_path(f, space.before))), 1))
+    bootstrapped = sign(space, record)
+
+    bootstrap =
+      Enum.find(Map.values(bootstrapped.ops), &match?(%{body: {:catalog_bootstrap_v1, _}}, &1))
+
+    service = Identity.generate("new-service")
+    catalog = Identity.generate("new-catalog")
+
+    claim = %{
+      version: 1,
+      product: :treehouse,
+      space: space.replica,
+      bootstrap: bootstrap.id,
+      profile_genesis: record.profile_genesis,
+      profile_id: record.profile_id,
+      parents: [bootstrap.id],
+      prior_catalogs: [%{binding: bootstrap.id, catalog: nil}],
+      generation: 1,
+      nonce: uid(),
+      new_catalog_key: catalog.pub,
+      new_service_id: uid(),
+      new_service_key: service.pub,
+      new_origin: "wss://replacement-relay.invalid:8443",
+      inventory_digest: uid(),
+      cutoffs: [%{replica: space.replica, frontier: [bootstrap.id], log_digest: uid()}],
+      author: space.root.pub,
+      cap: space.delegation.id,
+      holder_epoch: uid(),
+      deps: [bootstrap.id],
+      epoch: 1,
+      epoch_basis: [uid()]
+    }
+
+    assert {:ok, ^claim} = Treehouse.TransportCatalog.normalize_replacement_claim(claim)
+
+    possession = fn identity, purpose ->
+      Identity.sign(
+        identity,
+        Treehouse.TransportCatalog.replacement_possession_bytes(purpose, claim)
+      )
+    end
+
+    op =
+      Op.new(
+        space.root,
+        space.replica,
+        [bootstrap.id],
+        :command,
+        {:replace_catalog_v1,
+         [claim, possession.(catalog, :catalog), possession.(service, :service)]},
+        cap: space.delegation.id
+      )
+
+    log = Log.append!(bootstrapped, op)
+    bytes = SpaceExport.encode(log, space.root.pub)
+    path = write!(f, "replacement.frames.json", bytes)
+    assert {:ok, loaded} = SpaceExport.load(path)
+    assert Map.has_key?(loaded.ops, op.id)
+    assert SpaceExport.encode(loaded, space.root.pub) == bytes
+    assert loaded == elem(Log.restore_verified(dump_of(log)), 1).log
+  end
+
+  defp export_path(f, log),
+    do:
+      write!(
+        f,
+        "pre-#{System.unique_integer([:positive])}.json",
+        SpaceExport.encode(log, f.space.root.pub)
+      )
+
   # ------------------------------------------------------------ app parity
 
   test "the app's committed export fixture loads and re-encodes byte for byte" do
