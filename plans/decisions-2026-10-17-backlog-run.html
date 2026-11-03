@@ -2293,6 +2293,78 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Decision</dt><dd>No Codex review rounds or findings were reported to the coordinator for this slice, and the final round has no findings recorded. Nothing was fixed or deferred. The bot rounds under D-38 run on this PR.</dd>
 <dt>Reason</dt><dd>It makes no claim beyond row 342. It does not claim that the flake class is gone on hosted CI, that the residual sites are stable, or anything about R13, custody, W4 or Phase G.</dd>
 </dl></section>
+<section id="d480"><h2><span>D-480</span> Reading of “plan 266 4-exporter test”</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>The slice brief says “the plan 266 4-exporter test”. Plan 316 §7 says “a plan 266 exporter test now”. The decisions log calls plan 266 “the PR 4 exporter” of plan 245.</dd>
+<dt>Options</dt><dd>(a) The plan 266 operator catalog evidence exporter (plan 245 PR 4). (b) The reciprocal BEAM/TS signed exporters named in §8.</dd>
+<dt>Decision</dt><dd>(a). The test drives the plan 266 exporter's packet layer and its TS consumer.</dd>
+<dt>Reason</dt><dd>Plan 316 line 136 says raw refusal evidence is “kept and exported (plan 266)”. The reciprocal exporters are a general lifecycle gate, not a PR 6 item. This does not claim the reciprocal-exporter gate.</dd>
+</dl></section>
+<section id="d481"><h2><span>D-481</span> Test the portable Packet layer, not the Linux export path</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>CatalogEvidence.export/4 needs a listed journal, an archived manifest and the Linux operator owner, and export_test.exs skips on macOS. Packet.encode/decode authenticates histories and runs the real CatalogTrust pipeline, and the TS consumer re-runs the TS evaluator.</dd>
+<dt>Options</dt><dd>(a) Packet layer plus the TS consumer, portable. (b) Add a Linux export_test case with a replacement in the on-disk Space log. (c) Both.</dd>
+<dt>Decision</dt><dd>(a) now. (b) follows with the C15 run after PR 4.</dd>
+<dt>Reason</dt><dd>(a) is startable now, test only, and runs on both hosts. Getting a replacement into the operator fixture's Space log goes near PR #217's ceremony files. This does not claim that the operator journal and manifest path exports a replacement.</dd>
+</dl></section>
+<section id="d482"><h2><span>D-482</span> Rebuild the replacement claim over the merged log</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>CatalogReplacementVectors builds its claim over a log without the trust fixture's Thread references, so its deps and cutoffs would not match the exported Space log.</dd>
+<dt>Options</dt><dd>(a) Append the vector op as is (Core honors it anyway). (b) Re-derive the cutoff and deps over the merged log and re-sign the possessions with signed_args/2.</dd>
+<dt>Decision</dt><dd>(b).</dd>
+<dt>Reason</dt><dd>It is cheap, the probe showed it stays Core-honored, and C15 can reuse the fixture without a reviewer finding an incoherent claim. It claims nothing about resolver evaluation of the claim, which PR 4 builds.</dd>
+</dl></section>
+<section id="d483"><h2><span>D-483</span> Pin today's behavior: the head stays at bootstrap and evidence is kept</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>Before PR 4, both resolvers ignore replace_catalog_v1. The probe showed BEAM and TS accept the bootstrap head with an honored replacement, a :role_not_granted replacement and a bad-signature rejected frame, and the snapshot bytes match (20894).</dd>
+<dt>Options</dt><dd>(a) Assert that the head does not move and every frame is exported verbatim. (b) Leave the head unasserted so PR 4 need not edit the test.</dd>
+<dt>Decision</dt><dd>(a). Also pin that a zeroed signature on the replacement frame gives :invalid_verified_history on decode.</dd>
+<dt>Reason</dt><dd>Silently promoting a route before PR 4 would be a defect, and PR 4 should have to change this assertion deliberately. This does not claim C10–C15 or any replacement trust.</dd>
+</dl></section>
+<section id="d484"><h2><span>D-484</span> Docs scope: plan 316 Status only</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>PRs #216 and #217 both edit plans/README.md row 316, plan 316 and the decisions html. Row 316's cell is already stale (it says PR #214 in review).</dd>
+<dt>Options</dt><dd>(a) Update the row 316 cell and the decisions html here. (b) One sentence in plan 316 Status; the coordinator reconciles the README cell and records D-480..D-484.</dd>
+<dt>Decision</dt><dd>(b).</dd>
+<dt>Reason</dt><dd>It avoids a three-way conflict on shared ledger files. Rule 5 keeps the cell to one line, and the coordinator owns it. No new plan-index row is filed, because the probe found no parity gap.</dd>
+</dl></section>
+<section id="d485"><h2><span>D-485</span> No second review</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>Rule 3 requires a second review only for authority, canonical, lattice/carrier, the TS authority/codec/carrier, src-tauri custody or .github/workflows.</dd>
+<dt>Options</dt><dd>(a) One adversarial review. (b) Add a second review because the file sits under the carrier server.</dd>
+<dt>Decision</dt><dd>(a). The diff is one new test file under apps/lattice_carrier_server/test plus one plan sentence, with no lib code.</dd>
+<dt>Reason</dt><dd>No rule-3 path is touched, and the change cannot alter carrier-server behavior.</dd>
+</dl></section>
+<section id="d486"><h2><span>D-486</span> Consumer test name narrowed to head and size parity</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>The plan's test 2 name said 'the same candidate snapshot'.</dd>
+<dt>Options</dt><dd>Keep the planned name (overclaims); change consume_catalog_evidence.ts to print a digest (out of scope); narrow the name (chosen).</dd>
+<dt>Decision</dt><dd>Renamed the test to 'the independent TS consumer reconstructs the same head and candidate snapshot size' and added a comment saying the consumer prints only the head and a byte length.</dd>
+<dt>Reason</dt><dd>Codex P2: snapshotBytes is only a byte length, so two different snapshots of the same size would pass. Changing the TS consumer to output a digest is out of scope for this slice.</dd>
+</dl></section>
+<section id="d487"><h2><span>D-487</span> Plan 316 was already over 400 lines</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>The gate says the plan stays at or under 400 lines.</dd>
+<dt>Options</dt><dd>Trim other plan text (out of scope, conflicts with #216/#217); add a new line (411); append inline (chosen).</dd>
+<dt>Decision</dt><dd>Appended the status sentence to the end of the existing line 8, so the line count stays at 410 and does not grow.</dd>
+<dt>Reason</dt><dd>On origin/main the plan is already 410 lines, so the 'at or under 400 lines' gate could not pass without shortening other content. That was not part of this slice, and the coordinator owns the shared plan edits.</dd>
+</dl></section>
+<section id="d488"><h2><span>D-488</span> Timeout tag value for the consumer test</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Decision</dt><dd>@tag timeout: 120_000 on the node-spawning test.</dd>
+<dt>Reason</dt><dd>The test took about 1.2 s locally. The margin follows the row 342 flake class on loaded CI runners.</dd>
+</dl></section>
+<section id="d489"><h2><span>D-489</span> Shared setup encodes the packet once</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Decision</dt><dd>A setup block builds the fixture and runs Packet.encode/decode for all three tests, instead of each test doing it.</dd>
+<dt>Reason</dt><dd>This removes repetition. Test 1 still asserts that re-encoding gives the same bytes.</dd>
+</dl></section>
+<section id="d490"><h2><span>D-490</span> PR #218 review: Codex Sol rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
+<dt>Context</dt><dd>The slice ran one adversarial review (D-485: rule 3 does not apply).</dd>
+<dt>Decision</dt><dd>The coordinator recorded no Codex Sol 6.1 xhigh rounds and no final-round findings for this slice. The slice's own test record lists one Codex Sol 6.1 high review with one P2 (the consumer test name overclaimed), fixed by narrowing the name (D-486), and no other findings. Nothing was deferred. The bot rounds under D-38 run on this PR.</dd>
+<dt>Reason</dt><dd>It makes no claim beyond the row 316 PR 6 exporter test. It does not claim the Linux operator export path with a replacement, resolver evaluation of replacements, C10–C15, the reciprocal-exporter gate, or anything about R13, custody, W4 or Phase G.</dd>
+</dl></section>
 </main>
 </body>
 </html>
