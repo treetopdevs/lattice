@@ -313,26 +313,25 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     _ -> {:error, :malformed_catalog}
   end
 
-  # A catalog id covers the payload only, so every distinct signature supplied for one id is
-  # kept and each must verify; a later valid copy never masks an earlier invalid one.
+  # A catalog id covers the payload only. As in `CatalogTrust.artifacts!/6`, a repeated id must
+  # carry the identical signature; any differing copy (even a second valid one) refuses.
   defp catalog_envelopes(log, catalogs, bootstrap) do
     Enum.reduce_while(catalogs, {:ok, %{}}, fn envelope, {:ok, acc} ->
       with true <-
              is_map(envelope) and Enum.sort(Map.keys(envelope)) == [:catalog, :signature] and
                signature?(envelope.signature),
            {:ok, catalog} <- TransportCatalog.normalize_catalog(envelope.catalog) do
-        if catalog.space == log.replica and catalog.bootstrap == bootstrap.id do
-          held =
-            Map.update(
-              acc,
-              TransportCatalog.catalog_id(catalog),
-              %{catalog: catalog, signatures: [envelope.signature]},
-              &%{&1 | signatures: Enum.uniq(&1.signatures ++ [envelope.signature])}
-            )
+        id = TransportCatalog.catalog_id(catalog)
 
-          {:cont, {:ok, held}}
-        else
-          {:halt, {:error, :wrong_catalog_scope}}
+        cond do
+          catalog.space != log.replica or catalog.bootstrap != bootstrap.id ->
+            {:halt, {:error, :wrong_catalog_scope}}
+
+          Map.has_key?(acc, id) and acc[id].signature != envelope.signature ->
+            {:halt, {:error, :invalid_catalog_signature}}
+
+          true ->
+            {:cont, {:ok, Map.put(acc, id, %{envelope | catalog: catalog})}}
         end
       else
         _ -> {:halt, {:error, :malformed_catalog}}
@@ -413,12 +412,10 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     graph = resolve_binding(catalog.binding, graph, visiting)
     binding = Map.fetch!(graph.nodes, catalog.binding)
 
-    Enum.each(envelope.signatures, fn signature ->
-      case TransportCatalog.verify_catalog(%{catalog: catalog, signature: signature}, binding.key) do
-        :ok -> :ok
-        {:error, reason} -> refuse(reason)
-      end
-    end)
+    case TransportCatalog.verify_catalog(envelope, binding.key) do
+      :ok -> :ok
+      {:error, reason} -> refuse(reason)
+    end
 
     if Enum.any?(catalog.entries, &({&1.service_id, &1.service_key} != binding.service)),
       do: refuse(:wrong_catalog_scope)

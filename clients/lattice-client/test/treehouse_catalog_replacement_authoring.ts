@@ -492,6 +492,14 @@ test("retained catalogs that swap routes, or hide a bad signature behind a good 
     assert.equal(reason(await prepare(f, f.frames, cite(order, firstId))), "invalid_catalog_signature");
   }
   assert.equal(reason(await prepare(f, f.frames, cite([{ ...first, signature: b64(new Uint8Array([1])) }], firstId))), "malformed_catalog");
+  // Round 5: like CatalogTrust, any differing copy for one id refuses at parse, before any verification, so a second
+  // valid signature cannot pass either. Under an unknown binding (otherwise trust_pending) that is observable.
+  const orphan = catalog(f, id("unknown-binding"), 0, null), orphanId = transportCatalogId(orphan.catalog);
+  const other = { ...orphan, signature: b64(new Uint8Array([...Buffer.from(orphan.signature, "base64").subarray(0, 32), ...new Uint8Array(32).fill(9)])) };
+  assert.equal(reason(await prepare(f, f.frames, cite([orphan], orphanId))), "trust_pending");
+  for (const order of [[orphan, other], [other, orphan]]) {
+    assert.equal(reason(await prepare(f, f.frames, cite(order, orphanId))), "invalid_catalog_signature");
+  }
 });
 
 test("an unauthorized retained proposal does not reserve the nonce", async () => {

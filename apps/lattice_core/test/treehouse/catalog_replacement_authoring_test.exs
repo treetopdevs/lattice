@@ -916,6 +916,21 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
                cite.([%{first | signature: <<1>>}], first_id),
                %{}
              )
+
+    # Round 5: like `CatalogTrust`, any differing copy for one id refuses at parse, before any
+    # verification, so a second valid signature cannot pass either. Under an unknown binding
+    # (otherwise `trust_pending`) the parse-time refusal is observable.
+    orphan = catalog(f, id("unknown-binding"), 0, nil)
+    orphan_id = TransportCatalog.catalog_id(orphan.catalog)
+    other = %{orphan | signature: other_signature(orphan.signature)}
+
+    assert {:error, :trust_pending} =
+             Space.prepare_replace_catalog(f.space_log, cite.([orphan], orphan_id), %{})
+
+    for order <- [[orphan, other], [other, orphan]] do
+      assert {:error, :invalid_catalog_signature} =
+               Space.prepare_replace_catalog(f.space_log, cite.(order, orphan_id), %{})
+    end
   end
 
   test "an unauthorized retained proposal does not reserve the nonce" do
@@ -936,6 +951,8 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     assert Authority.analyze(Space, log).reasons[raw.id] != nil
     assert {:ok, _} = Space.prepare_replace_catalog(log, request(f), %{})
   end
+
+  defp other_signature(<<r::binary-32, _s::binary-32>>), do: r <> :binary.copy(<<9>>, 32)
 
   defp resign_rotation(envelope, old, new) do
     %{

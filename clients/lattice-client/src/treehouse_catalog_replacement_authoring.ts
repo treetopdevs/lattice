@@ -248,7 +248,7 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
 type BindingNode = {generation: number; key: string; parents: readonly string[]; inventory: string | null;
   serviceId: string; serviceKey: string};
 type BootstrapRecord = {catalogKey: string; serviceId: string; serviceKey: string};
-type HeldCatalog = {catalog: CatalogEnvelope["catalog"]; signatures: string[]};
+type HeldCatalog = CatalogEnvelope;
 class CoverageRefusal { constructor(readonly reason: string) {} }
 const refuseCoverage = (reason: string): never => { throw new CoverageRefusal(reason); };
 const maxSafe = Number.MAX_SAFE_INTEGER;
@@ -280,16 +280,16 @@ function coverage(history: JudgedHistory, replica: string, bootstrap: {id: strin
     if (envelope.rotation.space !== replica || envelope.rotation.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
     rotations.set(catalogRotationId(envelope), envelope);
   }
-  // A catalog id covers the payload only, so every distinct signature supplied for one id is kept and each must verify;
-  // a later valid copy never masks an earlier invalid one.
+  // A catalog id covers the payload only. As in CatalogTrust addCatalog, a repeated id must carry the identical
+  // signature; any differing copy (even a second valid one) refuses.
   const catalogs = new Map<string, HeldCatalog>();
   for (const value of request.catalogs as unknown[]) {
     const envelope = normalizeCatalogEnvelope(value);
     if (envelope === null) return "malformed_catalog";
     if (envelope.catalog.space !== replica || envelope.catalog.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
     const id = transportCatalogId(envelope.catalog), known = catalogs.get(id);
-    if (known === undefined) catalogs.set(id, {catalog: envelope.catalog, signatures: [envelope.signature]});
-    else if (!known.signatures.includes(envelope.signature)) known.signatures.push(envelope.signature);
+    if (known === undefined) catalogs.set(id, envelope);
+    else if (known.signature !== envelope.signature) return "invalid_catalog_signature";
   }
   try { resolveGraph(nodes, rotations, catalogs); } catch (error) {
     if (error instanceof CoverageRefusal) return error.reason;
@@ -362,9 +362,7 @@ function resolveGraph(nodes: Map<string, BindingNode>, rotations: Map<string, Ca
     if (visiting.has(`c:${id}`)) refuseCoverage("invalid_catalog_transition");
     visiting.add(`c:${id}`);
     const c = envelope.catalog, binding = bindingFor(c.binding);
-    if (envelope.signatures.some((signature) => !verifyCatalogEnvelope({catalog: c, signature}, binding.key))) {
-      refuseCoverage("invalid_catalog_signature");
-    }
+    if (!verifyCatalogEnvelope(envelope, binding.key)) refuseCoverage("invalid_catalog_signature");
     if (c.entries.some((item) => item.serviceId !== binding.serviceId || item.serviceKey !== binding.serviceKey)) refuseCoverage("wrong_catalog_scope");
     if (c.previous !== null) {
       const prior = catalogFor(c.previous).catalog;

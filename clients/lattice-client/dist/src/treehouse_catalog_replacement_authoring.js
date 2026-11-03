@@ -245,8 +245,8 @@ function coverage(history, replica, bootstrap, claim, request) {
             return "wrong_catalog_scope";
         rotations.set(catalogRotationId(envelope), envelope);
     }
-    // A catalog id covers the payload only, so every distinct signature supplied for one id is kept and each must verify;
-    // a later valid copy never masks an earlier invalid one.
+    // A catalog id covers the payload only. As in CatalogTrust addCatalog, a repeated id must carry the identical
+    // signature; any differing copy (even a second valid one) refuses.
     const catalogs = new Map();
     for (const value of request.catalogs) {
         const envelope = normalizeCatalogEnvelope(value);
@@ -256,9 +256,9 @@ function coverage(history, replica, bootstrap, claim, request) {
             return "wrong_catalog_scope";
         const id = transportCatalogId(envelope.catalog), known = catalogs.get(id);
         if (known === undefined)
-            catalogs.set(id, { catalog: envelope.catalog, signatures: [envelope.signature] });
-        else if (!known.signatures.includes(envelope.signature))
-            known.signatures.push(envelope.signature);
+            catalogs.set(id, envelope);
+        else if (known.signature !== envelope.signature)
+            return "invalid_catalog_signature";
     }
     try {
         resolveGraph(nodes, rotations, catalogs);
@@ -349,9 +349,8 @@ function resolveGraph(nodes, rotations, catalogs) {
             refuseCoverage("invalid_catalog_transition");
         visiting.add(`c:${id}`);
         const c = envelope.catalog, binding = bindingFor(c.binding);
-        if (envelope.signatures.some((signature) => !verifyCatalogEnvelope({ catalog: c, signature }, binding.key))) {
+        if (!verifyCatalogEnvelope(envelope, binding.key))
             refuseCoverage("invalid_catalog_signature");
-        }
         if (c.entries.some((item) => item.serviceId !== binding.serviceId || item.serviceKey !== binding.serviceKey))
             refuseCoverage("wrong_catalog_scope");
         if (c.previous !== null) {
