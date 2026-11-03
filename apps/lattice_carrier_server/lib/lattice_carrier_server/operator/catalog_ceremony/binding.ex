@@ -88,7 +88,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   (plan 316 PR 3).
 
   Derivation only, not trust: this checks the claim's closed shape and that it names
-  the parent's bootstrap and Space. Whether `op_id` is an accepted, authorized
+  the parent's bootstrap, Space and profile, with the bootstrap as its only parent at
+  generation 1 (a mismatched lineage is refused, never copied into consistency). Whether `op_id` is an accepted, authorized
   replacement (generation relation, profile, lease, epoch, closed bindings) is the
   PR 4 resolver's decision, and that resolver must supply both the op id and the
   claim. No production caller exists in this PR. The parent must be a bootstrap
@@ -99,6 +100,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
     with false <- Map.has_key?(parent, :binding_id),
          {:ok, claim} <- TransportCatalog.normalize_replacement_claim(claim),
          true <- claim.bootstrap == bootstrap and claim.space == record.space,
+         true <-
+           claim.profile_genesis == record.profile_genesis and
+             claim.profile_id == record.profile_id,
+         true <- claim.parents == [bootstrap] and claim.generation == 1,
          true <- ContinuationCertificate.id?(op_id) and op_id != bootstrap do
       {:ok,
        %{

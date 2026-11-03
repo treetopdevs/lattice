@@ -20,9 +20,14 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   @cap 67_108_864
   @timeout 35_000
 
+  # Envelope bound per binding. A Treehouse catalog holds at most 13 entries (one
+  # Space plus 12 Threads) and each successor adds one Thread. A bootstrap genesis
+  # already carries a Thread, so 12 envelopes reach the cap; a replacement genesis may
+  # be Space-only, so it needs 13. The owner helper enforces the outer bound (13).
   @doc false
-  @spec max_envelopes() :: pos_integer()
-  def max_envelopes, do: 12
+  @spec max_envelopes(map()) :: pos_integer()
+  def max_envelopes(binding),
+    do: if(Binding.binding_id(binding) == binding.bootstrap_id, do: 12, else: 13)
 
   @spec init(Path.t(), map()) :: {:ok, map()} | {:error, atom()}
   def init(dir, binding), do: transact(dir, binding, "init", &unchanged/1)
@@ -116,9 +121,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
       })
 
   defp verify(%{"head" => bytes, "envelopes" => envelopes} = raw, binding)
-       when map_size(raw) == 2 and is_binary(bytes) and is_list(envelopes) and
-              length(envelopes) <= 12 do
-    with {:ok, head} <- JSON.decode(bytes),
+       when map_size(raw) == 2 and is_binary(bytes) and is_list(envelopes) do
+    with true <- length(envelopes) <= max_envelopes(binding),
+         {:ok, head} <- JSON.decode(bytes),
          true <- Enum.sort(Map.keys(head)) == ~w(binding id key revision),
          true <- head["binding"] == Binding.binding_id(binding),
          true <- head["key"] == Base.encode64(binding.record.catalog_key),

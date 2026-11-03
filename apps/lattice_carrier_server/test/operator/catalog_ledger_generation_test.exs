@@ -244,6 +244,23 @@ defmodule LatticeCarrierServer.Operator.CatalogLedgerGenerationTest do
     for bad <- [
           {b, %{claim | bootstrap: id("another-bootstrap")}, f.op_id},
           {b, %{claim | space: "replica:treehouse:space:another"}, f.op_id},
+          {b, %{claim | profile_genesis: id("another-profile-genesis")}, f.op_id},
+          {b, %{claim | profile_id: id("another-profile-id")}, f.op_id},
+          {b, %{claim | generation: 2}, f.op_id},
+          {b,
+           %{
+             claim
+             | parents: [id("r316-other-parent")],
+               prior_catalogs: [%{binding: id("r316-other-parent"), catalog: nil}]
+           }, f.op_id},
+          {b,
+           %{
+             claim
+             | parents: Enum.sort([b.bootstrap_id, id("r316-other-parent")]),
+               prior_catalogs:
+                 Enum.sort([b.bootstrap_id, id("r316-other-parent")])
+                 |> Enum.map(&%{binding: &1, catalog: nil})
+           }, f.op_id},
           {b, Map.put(claim, :extra, 1), f.op_id},
           {b, Map.delete(claim, :cutoffs), f.op_id},
           {b, nil, f.op_id},
@@ -315,6 +332,55 @@ defmodule LatticeCarrierServer.Operator.CatalogLedgerGenerationTest do
     b = f.bootstrap
     [space_only, _] = bootstrap_catalog(f).entries
     refute SigningLedger.extends?(%{bootstrap_catalog(f) | entries: [space_only]}, nil, b)
+  end
+
+  test "a space-only replacement genesis reaches all 12 Threads within the envelope bound",
+       f do
+    [space_entry, _] = f.inventory
+    claim = %{f.claim | inventory_digest: TransportCatalog.inventory_id([space_entry])}
+    {:ok, r} = Binding.replacement(f.bootstrap, claim, f.op_id)
+    dir = ledger_dir(f, "space-only-full")
+    {:ok, _} = SigningLedger.init(dir, r)
+
+    genesis = replacement_catalog(f, [space_entry])
+    assert {:ok, _} = commit(dir, r, genesis, f.new_catalog)
+
+    last =
+      Enum.reduce(1..12, genesis, fn n, previous ->
+        label = "full-#{String.pad_leading(Integer.to_string(n), 2, "0")}"
+
+        thread =
+          entry(
+            "replica:treehouse:thread:r316-" <> label,
+            :thread,
+            id("r316-ref-" <> label),
+            label,
+            claim.new_service_id,
+            claim.new_service_key
+          )
+
+        next = %{
+          previous
+          | revision: n,
+            previous: TransportCatalog.catalog_id(previous),
+            entries: Enum.sort_by(previous.entries ++ [thread], & &1.replica)
+        }
+
+        assert {:ok, state} = SigningLedger.status(dir, r)
+        assert SigningLedger.extends?(next, state.committed, r)
+        assert {:ok, _} = commit(dir, r, next, f.new_catalog)
+        next
+      end)
+
+    assert {:ok, state} = SigningLedger.status(dir, r)
+    assert state.committed.catalog == last
+    assert length(state.chain) == 13
+    assert Enum.count(last.entries, &(&1.kind == :thread)) == 12
+    assert {:ok, _} = SigningLedger.verify_status(SigningLedger.export_status(state, r), r)
+
+    # A bootstrap ledger keeps its 12-envelope bound: its genesis already holds a Thread.
+    assert SigningLedger.max_envelopes(f.bootstrap) == 12
+    assert SigningLedger.max_envelopes(r) == 13
   end
 
   test "replacement revision 0 must match the claim inventory digest", f do
