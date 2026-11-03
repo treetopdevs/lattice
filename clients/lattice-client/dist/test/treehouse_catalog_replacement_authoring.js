@@ -5,6 +5,8 @@ import { createHash } from "node:crypto";
 import { authorCarrierDelegation, authorCarrierOp } from "../src/codec";
 import { bindTownshipReplica, townshipCapTerm } from "../src/township";
 import { deriveTreehouseCatalogCutoff } from "../src/treehouse_catalog_cutoff";
+import { continuationProfileFromCarrierTerm, continuationProfileToCarrierTerm } from "../src/continuation";
+import { resolveContinuationProfileFromFrames } from "../src/authority";
 import { canonicalBytesForCatalogReplacementPossession, canonicalBytesForCatalogRotation, canonicalBytesForCatalogRotationPossession, canonicalBytesForTransportCatalog, catalogInventoryId, catalogReplacementClaimToCarrierTerm, catalogRotationId, transportCatalogId, } from "../src/treehouse_catalog_codec";
 import { authorTreehouseCatalogReplacementFromFrames, prepareTreehouseCatalogReplacementFromFrames, } from "../src/index";
 import { judge, replacementBaseFixture, seededSigner } from "./support/export_treehouse_catalog_replacement";
@@ -501,4 +503,48 @@ test("a request mutated while preparation is pending never changes the prepared 
     assert.equal(result.attempt.claim.newOrigin, "wss://replacement-relay.invalid");
     assert.equal(result.attempt.request.newOrigin, "wss://replacement-relay.invalid");
     assert.deepEqual(result.attempt.request.entries, request(f).entries);
+});
+// Review round 7: plan 316 §3 step 4 acquisition predicates, the current profile pin and possession snapshot.
+test("an acquisition Stage B would refuse is never signed over", async () => {
+    const f = await fixture();
+    const beacon = async (frames, deps) => [...frames, await authorCarrierOp({ replica: f.replica, signer: f.root,
+            deps, kind: "authority", cap: nil, body: tuple(atom("beacon"), ["int", 1]) })];
+    // The root holds admin through its live, unleased genesis capability.
+    const rooted = await beacon(f.frames.slice(0, 4), [f.bootstrap.id]);
+    assert.equal(reason(await prepare(f, rooted, request(f, { author: b64(f.root.publicKey) }))), "catalog_authority_refused");
+    for (const extra of [{}, { live: true, expiresEpoch: 10 }]) {
+        const d = await authorCarrierDelegation({ replica: f.replica, signer: f.root, audiencePubkey: f.nominee.publicKey,
+            parentId: f.delegation.id, ops: ["create_space", "create_thread", "replace_catalog_v1"], roles: ["admin"], ...extra });
+        const transfer = await authorCarrierOp({ replica: f.replica, signer: f.root, deps: [f.bootstrap.id], kind: "authority", cap: nil,
+            body: tuple(atom("transfer"), atom("admin"), ["delegation", d], ["int", 0]) });
+        const frames = await beacon([...f.frames.slice(0, 4), transfer], [transfer.id]);
+        assert.equal(reason(await prepare(f, frames, request(f))), "catalog_authority_refused");
+    }
+});
+test("a bootstrap honored under an earlier continuation pin lends no stale profile fields", async () => {
+    const f = await fixture();
+    const pinArgs = f.pin.body[1];
+    const pinned = continuationProfileFromCarrierTerm((pinArgs[2][1][0])[1]);
+    const empty = await authorCarrierDelegation({ replica: f.replica, signer: f.root, audiencePubkey: f.root.publicKey, ops: [], roles: [],
+        live: false });
+    const repin = await authorCarrierOp({ replica: f.replica, signer: f.root, deps: f.frames.map((frame) => frame.id).slice(-1), kind: "authority",
+        cap: nil, body: tuple(atom("genesis"), ["delegation", empty], ["map", [[atom("__continuation__"),
+                    continuationProfileToCarrierTerm({ ...pinned, maxLeaseEpochs: 6 })]]]) });
+    const frames = [...f.frames, repin];
+    const observed = await resolveContinuationProfileFromFrames({ replica: f.replica, frames });
+    assert.ok(observed.ok && observed.profileGenesis !== f.record.profileGenesis);
+    assert.equal(reason(await prepare(f, frames, request(f))), "wrong_catalog_scope");
+});
+test("possessions mutated while authoring awaits never reach the signer", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const possession = possess(f, attempt);
+    const genuine = { ...possession };
+    const pending = authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt, possession, signer: f.nominee });
+    possession.catalog = b64(new Uint8Array(64).fill(3));
+    const result = await pending;
+    if (!result.ok)
+        assert.fail(result.reason);
+    const args = result.frame.body[1][1][1];
+    assert.deepEqual(args.slice(1), [["bin", genuine.catalog], ["bin", genuine.service]]);
 });

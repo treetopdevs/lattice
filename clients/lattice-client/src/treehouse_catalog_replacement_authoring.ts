@@ -6,7 +6,7 @@
 // and full §4 refusal precedence are Stage B resolver semantics owned by plan 316 PR 4, whose binding-graph function
 // replaces this mirror once it lands (row 354).
 import { verifyEd25519 } from "./signature";
-import { analyzeAuthority } from "./authority";
+import { analyzeAuthority, resolveContinuationProfileFromFrames } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
 import { authorCarrierOp, canonicalBase64Bytes, verifyCarrierOp } from "./codec";
@@ -128,8 +128,9 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
   attempt: TreehouseCatalogReplacementAttempt; possession: {catalog: string; service: string}; signer: CarrierOpSigner;
 }): Promise<TreehouseCatalogReplacementAuthorResult> {
   // Snapshot the caller's attempt: a mutation during the async signer must never reach the post-sign checks.
-  let attempt: TreehouseCatalogReplacementAttempt;
-  try { attempt = structuredClone(input.attempt); } catch {
+  // Possessions are snapshotted with it, so validation, preflight and signing all see the same signatures.
+  let attempt: TreehouseCatalogReplacementAttempt, possessionInput: unknown;
+  try { attempt = structuredClone(input.attempt); possessionInput = structuredClone(input.possession); } catch {
     return {ok: false, reason: "stale_verified_state", journalEntry: entry(null, "cancelled", "stale_verified_state", null)};
   }
   if (!attemptShape(attempt)) return {ok: false, reason: "stale_verified_state", journalEntry: entry(null, "cancelled", "stale_verified_state", null)};
@@ -145,7 +146,7 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
     if (!samePrepared(fresh.attempt, attempt)) return cancel("stale_verified_state");
     // Sign only the freshly derived claim, never the caller-held copy.
     claim = fresh.attempt.claim;
-    const possession = input.possession as unknown;
+    const possession = possessionInput;
     if (!object(possession) || !same(Object.keys(possession).sort(), ["catalog", "service"]) ||
         !verifyCatalogReplacementPossession(claim, possession.catalog, possession.service)) return cancel("invalid_possession");
     const author = canonicalBase64Bytes(attempt.author, 32);
@@ -157,7 +158,7 @@ export async function authorTreehouseCatalogReplacementFromFrames(input: {
   } catch { return cancel("invalid_verified_history"); }
   let frame: CarrierOpFrame;
   try {
-    const possession = input.possession;
+    const possession = possessionInput as {catalog: string; service: string};
     frame = await intent(claim, possession.catalog, possession.service, input.signer);
   } catch { return cancel("signer_failed"); }
   try {
@@ -193,6 +194,12 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   if (!observed.ok) return observed;
   if (observed.bootstraps.length !== 1) return refuse("application_invalid_catalog");
   const bootstrap = observed.bootstraps[0]!;
+  // Plan 316 §3 step 4: the claim's profile fields must be the pin selected at this frozen prefix, not the one the
+  // bootstrap was honored under.
+  const profile = await resolveContinuationProfileFromFrames({replica, frames: space.frames});
+  if (!profile.ok || profile.profileGenesis !== bootstrap.record.profileGenesis || profile.profileId !== bootstrap.record.profileId) {
+    return refuse("wrong_catalog_scope");
+  }
   // Holder and capability come from the judge only; the caller never supplies either.
   const acquire = history.authority.acquiresByRole.get("admin")?.at(-1);
   if (acquire === undefined || acquire.holderPubkey !== request.author) return refuse("not_holder");
@@ -204,6 +211,11 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   const values = beacons.map((beacon) => typeof beacon.epoch === "number" ? beacon.epoch : Number(beacon.epoch));
   const epoch = Math.max(...values);
   const epochBasis = beacons.filter((_beacon, index) => values[index] === epoch).map((beacon) => beacon.opId).sort(compareUtf8);
+  // Plan 316 §3 step 4 resolver predicates on the selected acquisition: it grants replace_catalog_v1, is not live and
+  // carries a finite lease unexpired at the claim epoch. A root holder or live/unleased capability is refused.
+  const granted = evidence !== undefined && "delegation" in evidence ? evidence.delegation : undefined;
+  if (granted === undefined || granted.live || typeof granted.expiresEpoch !== "number" || granted.expiresEpoch < epoch ||
+    !granted.ops.includes("replace_catalog_v1")) return refuse("catalog_authority_refused");
   let inventoryDigest: string;
   try {
     if (!request.entries.every((item) => object(item) && item.serviceId === request.newServiceId && item.serviceKey === request.newServiceKey) ||

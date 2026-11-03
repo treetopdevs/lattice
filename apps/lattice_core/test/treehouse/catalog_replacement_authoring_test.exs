@@ -1016,6 +1016,65 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
              )
   end
 
+  # Review round 7: plan 316 §3 step 4 acquisition predicates and the current profile pin.
+  test "an acquisition Stage B would refuse is never signed over" do
+    f = fixture()
+
+    beacon = fn log ->
+      Log.append!(log, Op.new(f.root, f.replica, Log.frontier(log), :authority, {:beacon, 1}))
+    end
+
+    # The root holds :admin through its live, unleased genesis capability.
+    rooted = beacon.(f.log)
+
+    assert {:error, :catalog_authority_refused} =
+             Space.prepare_replace_catalog(rooted, request(f, %{author: f.root.pub}), %{})
+
+    for opts <- [[], [live: true, expires_epoch: 10]] do
+      d =
+        Delegation.new(
+          f.root,
+          f.replica,
+          f.nominee.pub,
+          [
+            parent_id: f.delegation.id,
+            ops: [:create_space, :create_thread, :replace_catalog_v1],
+            roles: [:admin]
+          ] ++ opts
+        )
+
+      transfer =
+        Op.new(f.root, f.replica, Log.frontier(f.log), :authority, {:transfer, :admin, d, 0})
+
+      log = beacon.(Log.append!(f.log, transfer))
+      assert Authority.holder_epoch(Space, log, :admin).holder == f.nominee.pub
+
+      assert {:error, :catalog_authority_refused} =
+               Space.prepare_replace_catalog(log, request(f), %{})
+    end
+  end
+
+  test "a bootstrap honored under an earlier continuation pin lends no stale profile fields" do
+    f = fixture()
+    empty = Delegation.genesis(f.root, f.replica, ops: [], roles: [], live: false)
+    profile = %{f.profile | max_lease_epochs: 6}
+
+    repin =
+      Op.new(
+        f.root,
+        f.replica,
+        Log.frontier(f.space_log),
+        :authority,
+        {:genesis, empty, %{__continuation__: profile}}
+      )
+
+    log = Log.append!(f.space_log, repin)
+    assert {:ok, %{profile_genesis: genesis}} = Authority.continuation_profile(log)
+    assert genesis != f.record.profile_genesis
+
+    assert {:error, :wrong_catalog_scope} = Space.prepare_replace_catalog(log, request(f), %{})
+  end
+
   defp other_signature(<<r::binary-32, _s::binary-32>>), do: r <> :binary.copy(<<9>>, 32)
 
   defp resign_rotation(envelope, old, new) do

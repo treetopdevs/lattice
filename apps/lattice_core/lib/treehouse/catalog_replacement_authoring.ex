@@ -34,6 +34,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   """
 
   alias Lattice.{Authority, Dag, Identity, Log, Op}
+  alias Lattice.Authority.Delegation
   alias Lattice.Carrier.Wire
   alias Treehouse.{CatalogBootstrap, CatalogCutoff, MemberContinuityAuthoring, Space}
   alias Treehouse.TransportCatalog
@@ -77,8 +78,10 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          :ok <- authentic(log),
          deps = Log.frontier(log),
          {:ok, bootstrap} <- bootstrap(log),
+         :ok <- current_profile(log, bootstrap),
          {:ok, author, holder_epoch, cap} <- holder(log, request.author),
          {:ok, epoch, basis} <- epoch(log),
+         :ok <- replacement_authority(log, holder_epoch, cap, epoch),
          {:ok, inventory} <- inventory(log, request, bootstrap),
          {:ok, cutoffs} <- cutoffs(log, request),
          {:ok, claim} <-
@@ -155,6 +158,48 @@ defmodule Treehouse.CatalogReplacementAuthoring do
 
   defp acquired(%{op_id: op_id} = record, op_id), do: record
   defp acquired(_, _), do: nil
+
+  # Plan 316 §3 step 4: Stage B compares the claim's profile fields with the continuation pin
+  # selected at the action's strict prefix, which is this frozen log. A bootstrap honored under
+  # an earlier pin must not lend the claim stale fields (`wrong_catalog_scope`).
+  defp current_profile(log, bootstrap) do
+    case Authority.continuation_profile(log) do
+      {:ok, %{profile_genesis: genesis, profile_id: id}}
+      when genesis == bootstrap.record.profile_genesis and id == bootstrap.record.profile_id ->
+        :ok
+
+      _ ->
+        {:error, :wrong_catalog_scope}
+    end
+  end
+
+  # Plan 316 §3 step 4 resolver-specific predicates on the selected acquisition: its delegation
+  # grants `replace_catalog_v1`, is not live and carries a finite lease unexpired at the claim
+  # epoch. A root holder or a live/unleased capability Core would honor is refused here
+  # (`catalog_authority_refused`). An acquisition whose op carries no delegation (for example
+  # an R04 continuation) is also refused until the PR 4 resolver decides it (row 356).
+  defp replacement_authority(log, holder_epoch, cap, epoch) do
+    case acquisition_delegation(Map.get(log.ops, holder_epoch)) do
+      %Delegation{id: ^cap, live: false, expires_epoch: expires} = d
+      when is_integer(expires) and expires >= epoch ->
+        if :replace_catalog_v1 in d.ops, do: :ok, else: {:error, :catalog_authority_refused}
+
+      _ ->
+        {:error, :catalog_authority_refused}
+    end
+  end
+
+  defp acquisition_delegation(%Op{kind: :authority, body: body}) do
+    case body do
+      {:transfer, _role, %Delegation{} = d, _tick} -> d
+      {:succeed, _role, %Delegation{} = d, _tick} -> d
+      {:grant, %Delegation{} = d} -> d
+      {:genesis, %Delegation{} = d, _policies} -> d
+      _ -> nil
+    end
+  end
+
+  defp acquisition_delegation(_), do: nil
 
   # Same rule as `MemberContinuityAuthoring.epoch/1`; an out-of-range maximum is the claim
   # codec's `malformed_catalog`.

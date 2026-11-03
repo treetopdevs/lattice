@@ -2565,6 +2565,18 @@ The bot rounds under D-38 run on this PR.</dd>
 The resolver's JSON byte budgets are deferred to row 355. The TS test fixture's default <code>newServiceId</code> was the bootstrap's own ID with a new key, which is invalid under the new rule, so it now uses a distinct ID; the BEAM fixture already did.</dd>
 <dt>Reason</dt><dd>The P1s are intrinsic step-5 rules that Stage B applies to the candidate's own bytes, so checking them here can only refuse a replacement Stage B would refuse anyway. The byte budgets are measured on artifact JSON, which this API does not receive. A P2 that only leaves a signed replacement unusable, never one that is wrongly accepted, can be deferred under the task rules.</dd>
 </dl></section>
+<section id="d443"><h2><span>D-443</span> Row 316 PR 2 review round 7 (connector) dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>Three findings. P1: the selected acquisition's resolver predicates are not checked, so a root holder or a live or unleased capability that Core honors can still be signed over. P1: a bootstrap honored under an earlier continuation pin lends stale <code>profile_genesis</code>/<code>profile_id</code> fields, which Stage B refuses as <code>wrong_catalog_scope</code>. P2: TS author reads <code>input.possession</code> again after the awaited preflight.</dd>
+<dt>Decision</dt><dd>Fixed all three in both runtimes, with regressions that failed before the fix (the BEAM loop cases were mutation-checked separately).
+<ul>
+<li>Prepare now refuses <code>wrong_catalog_scope</code> unless <code>continuation_profile/1</code> on the frozen log selects the bootstrap's own pin and profile ID.</li>
+<li>It refuses <code>catalog_authority_refused</code> unless the acquisition op's delegation is the claimed cap, grants <code>replace_catalog_v1</code>, is not live, and carries a finite lease at or above the claim epoch. Core quarantines when epoch > expires, so equal epochs pass.</li>
+<li>TS author clones the possession with the attempt.</li>
+</ul>
+An acquisition with no delegation in its op (R04 continuation) is refused fail-closed, as is the unmirrored inherited-provenance check (row 335). Both are filed as row 356.</dd>
+<dt>Reason</dt><dd>These are plan §3 step 4 rules that Stage B applies to the candidate's strict prefix, which is the frozen log here, so checking them can only refuse what Stage B refuses. For continuation acquisitions, refusing is the safe default until the PR 4 resolver evaluates them. That costs availability, never correctness.</dd>
+</dl></section>
 </main>
 </body>
 </html>
