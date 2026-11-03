@@ -6,6 +6,12 @@ and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
 implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
 atom and claims no route switch, catalog trust or C10–C15.
+PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
+the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
+bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
+(derivation only, no production caller), and a replacement revision 0 must equal the claim's
+inventory digest under the new service identity. The closed-binding refusal still waits on PR 4;
+binding-id threading through signing/evidence/listing/staging is row 361.
 Native `catalog_eval` fails closed on `replace_catalog_v1`: it refuses the command as
 `unknown_command` (`commands.rs:89`) before Space policy or projection, until PR 5 (row 319,
 after plan 267). BEAM/TS admit it to Stage A while native refuses it; this is a known,

@@ -17,7 +17,9 @@ import tempfile
 
 CAP = 131072
 TOTAL = 67108864
-MAX_ENVELOPES = 12
+# Outer bound: a replacement ledger with a Space-only genesis needs 13 envelopes to
+# reach 12 Threads; BEAM verification keeps bootstrap ledgers at 12.
+MAX_ENVELOPES = 13
 mutation_guard = lambda: None
 
 
