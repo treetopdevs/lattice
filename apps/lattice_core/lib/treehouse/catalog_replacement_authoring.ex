@@ -300,12 +300,13 @@ defmodule Treehouse.CatalogReplacementAuthoring do
 
   # Step 5 (D-277): against each parent binding, a changed service key needs a changed ID.
   defp cover_service(claim, nodes) do
-    if Enum.all?(claim.parents, fn parent ->
-         {service_id, service_key} = Map.fetch!(nodes, parent).service
-         claim.new_service_key == service_key or claim.new_service_id != service_id
-       end),
-       do: :ok,
-       else: {:error, :invalid_catalog_transition}
+    if Enum.all?(claim.parents, &service_rotates?(claim, Map.fetch!(nodes, &1).service)),
+      do: :ok,
+      else: {:error, :invalid_catalog_transition}
+  end
+
+  defp service_rotates?(claim, {service_id, service_key}) do
+    claim.new_service_key == service_key or claim.new_service_id != service_id
   end
 
   # Step 5 (D-277): the first catalog's entries extend every cited non-nil prior catalog.
