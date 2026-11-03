@@ -2292,6 +2292,290 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Context</dt><dd>The slice ran one adversarial review (D-386: rule 3 does not apply).</dd>
 <dt>Decision</dt><dd>No Codex review rounds or findings were reported to the coordinator for this slice, and the final round has no findings recorded. Nothing was fixed or deferred. The bot rounds under D-38 run on this PR.</dd>
 <dt>Reason</dt><dd>It makes no claim beyond row 342. It does not claim that the flake class is gone on hosted CI, that the residual sites are stable, or anything about R13, custody, W4 or Phase G.</dd>
+<section id="d400"><h2><span>D-400</span> Two-step authoring: a prepare twin plus the named author_replace_catalog/4</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Plan §7 names only <code>Space.author_replace_catalog/4</code>. The contract order is: freeze, derive the claim, get possession signatures from the new keys, re-verify, sign last. The possession signers need the claim bytes before the op can be signed.</dd>
+<dt>Options</dt><dd>(a) One /4 call that takes possession signer callbacks; (b) <code>prepare_replace_catalog/3</code>, then <code>author_replace_catalog/4</code> with the finished signatures, as in member_continuity_authoring review/assemble; (c) put the claim derivation in the caller.</dd>
+<dt>Decision</dt><dd>(b). <code>Space.prepare_replace_catalog/3</code> returns the attempt and the possession bytes. <code>Space.author_replace_catalog/4</code> takes the signer, a log source, the attempt and both possession signatures, and signs last. The code lives in a new <code>Treehouse.CatalogReplacementAuthoring</code> module. Space only delegates.</dd>
+<dt>Reason</dt><dd>The new keys may be held by other people or devices, so the possession step is not a function call. This follows the existing member continuity pattern. It adds one public function the plan does not name; it does not change the named one.</dd>
+</dl></section>
+<section id="d401"><h2><span>D-401</span> The log source is re-read before and after the signing call</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>C13 says an authority reclassification must cancel a pending attempt before and after the signing call. A fixed <code>%Log{}</code> argument cannot change while the signer runs.</dd>
+<dt>Options</dt><dd>(a) A fixed log; (b) a <code>%Log{}</code> or a 0-arity function that returns the current log (TS: a <code>currentFrames</code> function); (c) a GenServer store.</dd>
+<dt>Decision</dt><dd>(b). The source is read once before signing and once after. Tests drive the after case with a signer that appends a concurrent revoke or lapse beacon to an Agent.</dd>
+<dt>Reason</dt><dd>This is the smallest shape that makes both C13 cases testable. It does not add a store. It does not claim R17 native presence or generation-token behaviour.</dd>
+</dl></section>
+<section id="d402"><h2><span>D-402</span> Check for reclassification before comparing bytes</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>A concurrent revoke also moves the frontier, so a byte comparison would report it as <code>stale_verified_state</code>.</dd>
+<dt>Options</dt><dd>(a) Compare bytes first; (b) judge reclassification on the union first, then compare bytes.</dd>
+<dt>Decision</dt><dd>(b). <code>authority_changed</code> comes first when one of three things is true on the union: a frozen honored op is now quarantined, <code>holder_epoch(:admin)</code> changed, or the placeholder intent is quarantined. Any other change is <code>stale_verified_state</code>.</dd>
+<dt>Reason</dt><dd>The caller has to tell an authority change apart from a routine refresh. Contract §4 names <code>authority_changed</code> as the cancel-and-freeze event. This is an authoring outcome, not a resolver verdict.</dd>
+</dl></section>
+<section id="d403"><h2><span>D-403</span> After signing, a reclassification withholds the frame</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>The signer may already have produced bytes when the post-sign check fails.</dd>
+<dt>Options</dt><dd>(a) Return the frame marked unsafe; (b) withhold the frame and record <code>cancelled_after_signature</code> in the journal entry.</dd>
+<dt>Decision</dt><dd>(b). The result is <code>{:error, :authority_changed, entry}</code> with status <code>:cancelled_after_signature</code>, and no op or frame.</dd>
+<dt>Reason</dt><dd>A frame that is never returned cannot be submitted by mistake. This does not claim the signed bytes could not leak from the signer itself.</dd>
+</dl></section>
+<section id="d404"><h2><span>D-404</span> Derived fields against supplied fields</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>The plan says to derive inventory, cutoffs and the epoch basis. The binding graph fields need the PR 4 resolver, which is gated.</dd>
+<dt>Options</dt><dd>(a) Derive everything, including parents and generation; (b) derive holder_epoch, cap, deps, epoch, epoch_basis, inventory_digest, cutoffs and profile from the frozen log and bootstrap, and take parents, prior_catalogs, generation, the new keys, service ID, origin, entries and nonce from the caller.</dd>
+<dt>Decision</dt><dd>(b). The caller never supplies a holder or a cap. The graph fields come from the caller's retained trust until PR 4 can supply them.</dd>
+<dt>Reason</dt><dd>Contract §3: 'No caller-supplied holder is accepted as authority.' Deriving the graph would mean building PR 4's resolver early.</dd>
+</dl></section>
+<section id="d405"><h2><span>D-405</span> Authoring does not re-implement Stage B</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Some claims pass Stage A and authoring but would fail in the resolver: a living-root genesis cap, an unleased cap, a live delegation, a ceiling without provenance, a wrong generation.</dd>
+<dt>Options</dt><dd>(a) Copy the step 4 to 7 checks into authoring; (b) run only the ordinary Core judge (with Stage A) on the placeholder, and leave Stage B to PR 4.</dd>
+<dt>Decision</dt><dd>(b).</dd>
+<dt>Reason</dt><dd>Two copies of the Stage B rules would drift. PR 4 owns them, and row 335 is its acceptance requirement. A successful authoring result is not resolver acceptance, a route switch or catalog trust.</dd>
+</dl></section>
+<section id="d406"><h2><span>D-406</span> Caller-owned nonce journal; a changed claim needs a fresh nonce</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>The plan keys the attempt journal by the claim nonce. Two authorized claims that reuse one nonce make a fork (contract §3, C12).</dd>
+<dt>Options</dt><dd>(a) A durable journal store in this PR; (b) a caller-owned map <code>%{nonce =&gt; entry}</code> passed to prepare and returned by both calls; (c) no journal.</dd>
+<dt>Decision</dt><dd>(b). The same nonce with identical claim bytes is an idempotent retry. The same nonce with different bytes refuses <code>attempt_nonce_reused</code>. Entry statuses are <code>awaiting_possession</code>, <code>cancelled</code>, <code>cancelled_after_signature</code> and <code>signed</code>.</dd>
+<dt>Reason</dt><dd>This follows the member continuity rule that the caller owns serialization. It blocks a self-made nonce-reuse fork without new storage. It does not claim the durable operator journal or lock from lifecycle §5.</dd>
+</dl></section>
+<section id="d407"><h2><span>D-407</span> Caller-supplied nonce</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Generating the nonce inside the function would make retries impossible to reproduce.</dd>
+<dt>Options</dt><dd>(a) Generate inside; (b) take it from the request and keep it across retries.</dd>
+<dt>Decision</dt><dd>(b).</dd>
+<dt>Reason</dt><dd>Lifecycle §3 says the nonce is kept across retries and is the journal attempt ID. Member continuity also takes the nonce from the caller.</dd>
+</dl></section>
+<section id="d408"><h2><span>D-408</span> Size check uses a zero-signature placeholder of the exact body</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd><code>catalog_command_too_large</code> must be reported before any signature exists.</dd>
+<dt>Options</dt><dd>(a) Estimate from the claim size; (b) run envelope_status on the real body with 64-byte zero signatures in both possession slots and the op sig, using the checked Wire encode and the one-push JSON 64,000-byte cap, then check the signed frame again.</dd>
+<dt>Decision</dt><dd>(b). It is the same pattern as member_continuity_authoring placeholder/intent/envelope_status.</dd>
+<dt>Reason</dt><dd>The signature slots have a fixed size, so the placeholder measures the same bytes as the signed frame. A test pins that the two sizes are equal.</dd>
+</dl></section>
+<section id="d409"><h2><span>D-409</span> The Space cutoff is the frozen log; Thread cutoffs come from caller logs</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Lifecycle §3 says the Space cutoff cannot include the action being signed.</dd>
+<dt>Options</dt><dd>(a) Derive the cutoff after signing; (b) run <code>CatalogCutoff.derive</code> on the frozen pre-action Space log and on each supplied Thread log, and require the cutoff replicas to equal the entry replicas.</dd>
+<dt>Decision</dt><dd>(b). A missing Thread log refuses <code>recovery_incomplete</code>.</dd>
+<dt>Reason</dt><dd>This is the contract rule. It is also the plan test 'the cutoff excludes the action'. It does not prove that no history was withheld (plan §10).</dd>
+</dl></section>
+<section id="d410"><h2><span>D-410</span> Fixtures built inside the new test files</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Slice 9 excludes test support files. The PR 1 fixture authors with the root genesis cap, so it cannot be revoked and cannot carry the C13 case.</dd>
+<dt>Options</dt><dd>(a) Extend <code>CatalogReplacementVectors</code> in test/support; (b) build a leased-admin, beacon and Thread fixture privately in the new test files, and import existing support helpers read-only.</dd>
+<dt>Decision</dt><dd>(b). There is no new reciprocal vector file. PR 1's <code>replacement_v1.json</code> already covers the bytes.</dd>
+<dt>Reason</dt><dd>This avoids colliding with slice 9 and adds no byte format. BEAM and TS run the same named cases and reason strings, but they do not exchange vectors.</dd>
+</dl></section>
+<section id="d411"><h2><span>D-411</span> TS cap derivation goes through the acquisition op's evidence, with a STOP</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>TS <code>HonoredAcquire</code> has no <code>delegationId</code>. BEAM <code>acquisitions/3</code> does.</dd>
+<dt>Options</dt><dd>(a) Add <code>delegationId</code> to authority.ts; (b) read it from the acquisition op's authority evidence delegation, or the genesis delegation; (c) take the cap from the caller in TS only.</dd>
+<dt>Decision</dt><dd>(b). If (b) needs a new authority export, stop and file a row.</dd>
+<dt>Reason</dt><dd>Option (a) would change a shared Core-twin type. Option (c) would split from BEAM and from the contract.</dd>
+</dl></section>
+<section id="d412"><h2><span>D-412</span> TS test wired through the existing catalog:codec script</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>A new TS test has to run in CI.</dd>
+<dt>Options</dt><dd>(a) A new npm script and a flagship.yml step; (b) append it to <code>catalog:codec</code>, which flagship.yml:369 already runs.</dd>
+<dt>Decision</dt><dd>(b).</dd>
+<dt>Reason</dt><dd>No workflow edit is needed. Rule 3 already applies because of the authority subject.</dd>
+</dl></section>
+<section id="d413"><h2><span>D-413</span> Row 350 for the bootstrap size preflight</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Plan §7 says <code>author_catalog_bootstrap/3</code> has no <code>catalog_command_too_large</code> preflight, and that this is a separate row.</dd>
+<dt>Options</dt><dd>(a) Fix it in this PR; (b) file row 350.</dd>
+<dt>Decision</dt><dd>(b). Row 350 is P3/S, TODO. Superseded by D-429: the row already existed as 318, and review round 1 asked for the fix, so this PR implements row 318 and uses row 350 for a different follow-up.</dd>
+<dt>Reason</dt><dd>The plan scopes it out. It touches a different command and its existing tests. It does not claim the bootstrap envelope is unbounded today; it only has no explicit preflight.</dd>
+</dl></section>
+<section id="d414"><h2><span>D-414</span> Rule 3 review and conservative gates</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>The subject is authority and canonical bytes. The TS source changes, but no codec bytes should.</dd>
+<dt>Options</dt><dd>(a) Skip cargo and dist; (b) rebuild lattice-client dist, run the src-tauri cargo tests, and run an independent Codex review.</dd>
+<dt>Decision</dt><dd>(b). The review uses <code>codex exec -m gpt-6.1-sol</code> with high reasoning effort.</dd>
+<dt>Reason</dt><dd>This is working-policy rule 3 by subject and the plan §8 gates. It claims no native parity; native stays fail-closed with <code>unknown_command</code> until PR 5.</dd>
+</dl></section>
+<section id="d415"><h2><span>D-415</span> author step c checks the claim against the current log, not the frozen sub-log</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>author re-runs prepare on the full current log and requires the claim, its bytes, both possession bytes, the author, the cap and the frozen frontier to be unchanged. The frozen closure is still used for step b's set of ops that were honored in the frozen analysis.</dd>
+<dt>Reason</dt><dd>Ops are content-addressed, so the current log cut back to the frozen frontier always gives the same claim again. With that check, the planned 'appended Space command → stale_verified_state' case could not fire. Checking against the current log matches what the plan's text intends whenever nothing has moved.</dd>
+</dl></section>
+<section id="d416"><h2><span>D-416</span> Errors while re-checking the claim inside author become stale_verified_state</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Any error from re-running prepare inside author maps to <code>stale_verified_state</code>, except <code>invalid_verified_history</code>, which passes through.</dd>
+<dt>Reason</dt><dd>Test 1's widened-Thread case expects <code>stale_verified_state</code>; passing errors through would report <code>catalog_command_too_large</code> there instead. This differs from member continuity's fresh_review, which passes capacity_stop through.</dd>
+</dl></section>
+<section id="d417"><h2><span>D-417</span> Thread logs stay static inside the request</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd><code>replica_logs</code> (TS: <code>replicaHistories</code>) hold plain logs, not functions. The Thread-cutoff staleness tests substitute a changed log into <code>attempt.request</code> before calling author.</dd>
+<dt>Reason</dt><dd>log_source only covers the Space log, and the plan describes the request as a closed map. Allowing functions here would also force the same change on the TS twin.</dd>
+</dl></section>
+<section id="d418"><h2><span>D-418</span> prepare returns the journal entry inside the attempt</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>The attempt map carries a <code>journal_entry</code> key with the shape <code>{attempt_id, claim_bytes, status, reason, op_id}</code>; TS uses the same keys in camelCase.</dd>
+<dt>Reason</dt><dd>This keeps the planned <code>{:ok, attempt}</code> return type, and author's result already carries <code>journal_entry</code> as a map key.</dd>
+</dl></section>
+<section id="d419"><h2><span>D-419</span> Zero or several honored bootstraps refuse with application_invalid_catalog</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Exactly one honored bootstrap is required; otherwise prepare returns <code>application_invalid_catalog</code>.</dd>
+<dt>Reason</dt><dd>The plan names no reason for this case. Choosing between competing bootstraps (D-275 closing) belongs to the PR 4 resolver, and this is the same reason Stage A gives when no honored bootstrap is cited.</dd>
+</dl></section>
+<section id="d420"><h2><span>D-420</span> replica_logs may not contain the Space replica</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>If <code>replica_logs</code> includes the Space replica, prepare refuses with <code>recovery_incomplete</code>, in both BEAM and TS.</dd>
+<dt>Reason</dt><dd>The Space cutoff must always come from the frozen Space log. Refusing in both implementations keeps them in parity.</dd>
+</dl></section>
+<section id="d421"><h2><span>D-421</span> Fixture: the grant and the acquisition are one root-authored transfer</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>"Root grants nominee a leased :admin delegation, then nominee acquires" is built as one root-authored <code>{:transfer, :admin, leased(expires_epoch: 10), 0}</code> op, followed by root <code>{:beacon, 1}</code>.</dd>
+<dt>Reason</dt><dd>Core acquires a role only through genesis, transfer or succeed; a grant alone does not acquire. The probe test's leased/0 fixture uses the same transfer shape.</dd>
+</dl></section>
+<section id="d422"><h2><span>D-422</span> TS input shapes for retained bad-signature evidence</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Each TS <code>replicaHistories</code> entry is <code>{frames, rejected}</code>. prepare accepts an optional <code>rejected</code> list for the Space log, and <code>currentFrames</code> may return either frames or <code>{frames, rejected}</code>.</dd>
+<dt>Reason</dt><dd>BEAM's Space cutoff includes the log's bad-signature evidence, so TS must be given the same evidence for the cutoff digests to match.</dd>
+</dl></section>
+<section id="d423"><h2><span>D-423</span> Codex review: two findings fixed, one declined</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Fixed: the TS author path now signs only the freshly derived claim and checks the caller-held claim's bytes, and every TS re-read validates retained bad-signature evidence (BEAM already did both). Added a seventh test in both languages. Declined: running the freshness check again after the signing call.</dd>
+<dt>Reason</dt><dd>Per plan steps c and i, freshness is checked before signing and only reclassification after. An ordinary op arriving during the signer call leaves the signed op valid, with deps and cutoffs at the frozen frontier by design. Withholding the frame would refuse a valid op for a condition that can recur a moment later anyway. (Review round 1 later reversed this for a changed claim: see D-435.)</dd>
+</dl></section>
+<section id="d424"><h2><span>D-424</span> Tracked dist output is committed</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Rebuilt <code>clients/lattice-client/dist</code> and committed the new src and test outputs.</dd>
+<dt>Reason</dt><dd>The repo already tracks dist/src and dist/test for the other catalog tests.</dd>
+</dl></section>
+<section id="d425"><h2><span>D-425</span> Docs deferred, including the plan's Status line</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Did not edit plans/README.md, the decisions log, row 350, or the Plan 316 Status PR 2 line in <code>plans/316-r11c-catalog-replacement-trust.md</code> during implementation. They were written in the PR #216 docs commit.</dd>
+<dt>Reason</dt><dd>The task said not to edit README or the decisions log yet. The Status line cites the D-400+ range, which only exists once the log is written, so it belongs in the same docs step.</dd>
+</dl></section>
+<section id="d426"><h2><span>D-426</span> replace_catalog_v1 authoring request gains retained-evidence inputs</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Review round 1 findings on catalog_replacement_authoring.ex:186 and :192</dd>
+<dt>Options</dt><dd>(a) new evidence inputs [chosen]; (b) Space-only checks, which wrongly refuse rotation heads or miss off-Space ids; (c) defer to PR 4, which contradicts the plan</dd>
+<dt>Decision</dt><dd>Add <code>rotations</code> (rotation envelopes) and <code>catalogs</code> (signed catalog envelopes) to the closed request field set in BEAM (<code>rotations</code>/<code>catalogs</code>) and TS (<code>rotations</code>/<code>catalogs</code>); both are verified in the preflight.</dd>
+<dt>Reason</dt><dd>Plan 316 line 101 makes parents/prior_catalogs coverage a PR 2 authoring obligation. Rotations are off-Space, so Space history alone can't tell a legitimate rotation head from an arbitrary id. This follows the replica_logs retained-evidence pattern.</dd>
+</dl></section>
+<section id="d427"><h2><span>D-427</span> Authoring binding-node definition</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Nodes are: the honored bootstrap (generation 0, key record.catalog_key); every on-Space replace_catalog_v1 op that Core honored at its strict prefix (Dag.reachable + full judge, so refused-on-union nodes are included per D-276); and every retained rotation chained from a known node, generation parent+1, verified under the parent key. Heads are the nodes left after removing the ancestor-or-self closure of all cited parents (D-275).</dd>
+<dt>Reason</dt><dd>Mirrors the plan's resolver node rule and catalog_trust.ex's rotation chaining (bootstrap generation 0), using only public APIs.</dd>
+</dl></section>
+<section id="d428"><h2><span>D-428</span> Coverage refusal reasons and precedence</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Unknown parent, generation not max+1, or a prior entry for a non-parent: <code>invalid_catalog_transition</code>. A cited non-nil catalog that isn't held, an unchained rotation, or a catalog under an unknown binding: <code>trust_pending</code>. Omitting a known binding head or catalog head: <code>catalog_fork</code>. Bad evidence signature: <code>invalid_catalog_signature</code>; wrong scope: <code>wrong_catalog_scope</code>; malformed: <code>malformed_catalog</code>. Intrinsic (step 5) checks run before step-7 <code>catalog_fork</code>.</dd>
+<dt>Reason</dt><dd>Reuses existing catalog_trust atoms, and plan §4 says the highest-precedence step failure is the one reported, so authoring and the PR 4 resolver agree.</dd>
+</dl></section>
+<section id="d429"><h2><span>D-429</span> Row 350 is row 318</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Review finding plans/README.md:497</dd>
+<dt>Decision</dt><dd>The bootstrap size preflight is tracked as existing row 318 (now IN REVIEW). No row 350 was added for it; row 350 was later used for the unprovable-parent residual.</dd>
+<dt>Reason</dt><dd>Row 318 already records this follow-up on main, and no row 350 existed anywhere.</dd>
+</dl></section>
+<section id="d430"><h2><span>D-430</span> F2/F3/F5 go to a design row, not another patch</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Context</dt><dd>Working policy rule 3</dd>
+<dt>Options</dt><dd>Patch intrinsic generation checks plus closure in both runtimes / fail-closed narrowing / design row</dd>
+<dt>Decision</dt><dd>Did not patch coverage. Added an interim non-claim to the BEAM moduledoc and the TS header, and filed the PR 4 binding-graph design row (row 352).</dd>
+<dt>Reason</dt><dd>This is the third round of the same coverage/node-eligibility class (plan OD-17 already says 'Rule 3: third round on node eligibility'). D-275/D-276/§4 are Stage B semantics owned by PR 4 and gated on OD-16/OD-17. Partial reimplementations keep producing the next finding, e.g. inventory_extends? or service-key change on nodes.</dd>
+</dl></section>
+<section id="d431"><h2><span>D-431</span> Snapshot rather than compare-to-fresh for the TS attempt</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd><code>structuredClone</code> the attempt at the entry of author.</dd>
+<dt>Reason</dt><dd>The post-sign reclassified check also reads <code>attempt.frozenFrontier</code> and <code>claim.holderEpoch</code>. Comparing only against <code>fresh.attempt</code> would leave those reads mutable.</dd>
+</dl></section>
+<section id="d432"><h2><span>D-432</span> Bootstrap preflight measures every cap</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Measure each candidate cap, skip oversize ones, and refuse too_large only when none fits.</dd>
+<dt>Reason</dt><dd>Malformed retained delegations can carry an id of any length. An oversize cap could never produce a valid signed envelope anyway, so skipping it preserves first-honored-in-canonical-order among the caps that can.</dd>
+</dl></section>
+<section id="d433"><h2><span>D-433</span> Error reason for bad signer output</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Options</dt><dd>Size-only remeasure vs verify + remeasure</dd>
+<dt>Decision</dt><dd>Throw <code>invalid_signer_signature</code> when verification fails and <code>catalog_command_too_large</code> when the signed envelope is oversized.</dd>
+<dt>Reason</dt><dd>Uses the same reason names as TS replacement authoring, so callers see one vocabulary. A 50,000-byte signature fails Ed25519 verification first, so it is reported as <code>invalid_signer_signature</code>.</dd>
+</dl></section>
+<section id="d434"><h2><span>D-434</span> Treat as a patch, not a design row</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Patched in place and filed the shared-helper row as a follow-up (row 353).</dd>
+<dt>Reason</dt><dd>The fix only brings bootstrap in line with the checks replacement authoring already does, so it is small and settled. The follow-up row is for the recurring pattern across the authoring paths.</dd>
+</dl></section>
+<section id="d435"><h2><span>D-435</span> Row 316 PR 2 review (Codex Sol 6.1 xhigh): rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>Round 1 (6): P2 <code>catalog_replacement_authoring.ex:301</code> (+TS <code>:145</code>), a state change during signing returns a stale replacement; P2 <code>:192</code> (+TS <code>:188</code>), authoring permits omission of a known replacement head; P2 <code>space.ex:358</code> (+<code>treehouse_bounded.ts:339</code>), the bootstrap size preflight is missing; P3 <code>:57</code>, corrupt BEAM history crashes preparation; P2 <code>:186</code>, parents/prior_catalogs/generation copied unchecked and the moduledoc overclaims; P3 <code>plans/README.md:497</code>, row 350 is not on the branch. Round 2 (5): P2 TS mutable attempt bypasses the post-sign freshness check (<code>treehouse_catalog_replacement_authoring.ts:164</code>); P2 intrinsically invalid replacements become required heads (<code>ex:278</code>, TS <code>:241</code>); P2 old-key rotations reopen closed bindings (<code>ex:321</code>, TS <code>:259</code>); P2 bootstrap sizing trusts malformed capability-ID lengths (<code>space.ex:370</code>, <code>treehouse_bounded.ts:339</code>); P3 head coverage still masks higher-precedence failures (<code>ex:242</code>, TS <code>:286</code>). Round 3 (1): P2 <code>treehouse_bounded.ts:351</code>, bootstrap sizing never checks the actual signed frame; the placeholder assumes a 64-byte signature.</dd>
+<dt>Decision</dt><dd><ul><li>Round 1: fixed the stale-replacement case (after_signature runs <code>fresh/2</code> after <code>reclassified/3</code>, TS re-runs derive + samePrepared; a changed claim gives <code>stale_verified_state</code> / <code>cancelled_after_signature</code>; regression in both runtimes, mutation-checked). Fixed omitted heads and unchecked graph fields with one binding-graph coverage step (D-426–D-428). Fixed the bootstrap preflight (row 318). Fixed the corrupt-history crash (<code>derive/3</code> runs <code>Log.verify_authenticity</code> first, returning <code>invalid_verified_history</code>). Rejected the row 350 finding: the row exists as 318 (D-429).</li><li>Round 2: fixed the mutable TS attempt with <code>structuredClone</code> on entry (D-431) and the cap-ID sizing by measuring each cap (D-432), each with regression tests that failed before the fix. Sent the three coverage/node-eligibility findings to design row 352 under rule 3 (D-430), with interim non-claims in the BEAM moduledoc and TS header.</li><li>Round 3: fixed in <code>13fee3c47</code>. <code>authorTreehouseCatalogBootstrap</code> verifies each signed frame with Ed25519 (<code>invalid_signer_signature</code>) and remeasures the signed push envelope against 64,000 bytes (<code>catalog_command_too_large</code>) before the judge trial. A regression test covers a 50,000-byte signer and a zeroed 64-byte signer. No BEAM change, because the concrete BEAM signer guarantees 64 bytes (D-433, D-434). Shared-helper row 353 filed.</li></ul>Follow-up rows: 350 (unprovable-parent node rule), 351 (TS script duration), 352 (PR 4 binding-graph design row), 353 (shared TS signed-frame leave gate).</dd>
+<dt>Reason</dt><dd>Rule 3 by subject (catalog trust, authority and canonical bytes). Authoring can only check consistency with the retained evidence the caller supplies. A withheld catalog cannot be detected here; plan line 101 leaves that to verifier step 7. No resolver acceptance, route switch, catalog trust, native parity, R13, custody, W4 or Phase G claim.</dd>
+</dl></section>
+<section id="d436"><h2><span>D-436</span> Copy replacement authoring into the browser shared sources</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Added <code>treehouse/catalog_cutoff.ex</code> and <code>treehouse/catalog_replacement_authoring.ex</code> to <code>domainSources</code> in <code>apps/lattice_popcorn_spike/scripts/shared.mjs</code>, keeping the <code>Space.prepare_replace_catalog/3</code> and <code>author_replace_catalog/4</code> delegators. Also split <code>coverage/4</code> so <code>mix credo --strict</code> stops reporting nesting depth 4.</dd>
+<dt>Reason</dt><dd>Plan 316 lines 9 and 295 name the Space API, so the delegators stay. The browser build compiles copied <code>space.ex</code> with <code>--warnings-as-errors</code> and failed on the missing module (run 41456073341). The precedent is b9f56b03b. The two files need no new browser dependencies. <code>evidence/vectors.json</code> is dated evidence and was not regenerated.</dd>
+</dl></section>
+<section id="d437"><h2><span>D-437</span> Retained rotations and catalogs: fail-closed structural mirror now, resolver call later</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>For review threads P1 <code>:318</code> and <code>:413</code>, the preflight now resolves every retained catalog and then every rotation (the <code>graph!</code> order) through a memoized, cycle-guarded mirror of the <code>CatalogTrust</code> checks. Rotation checks: generation step and safe range, new key different from the parent key and the parent service key, old and new signatures (<code>invalid_catalog_signature</code> / <code>invalid_possession</code>), prior catalog present (else <code>trust_pending</code>) under the parent, and inventory digest and cutoff replica order equal to that prior catalog. Catalog checks: signature under the binding key, entry service pair equal to the binding's, then a first catalog must match a binding inventory, and a successor needs its <code>previous</code> present, the same binding, a +1 revision, and an inventory extension. Any failure refuses the whole preflight. A node's service pair is the bootstrap's, inherited by rotations, or the claim's <code>new_service_*</code> for on-Space replacements. Entry-fact observation is deferred to row 354.</dd>
+<dt>Reason</dt><dd><code>CatalogTrust</code> is private and gated (PR 4), so it cannot be called here. Mirroring its structural rules can only add refusals and never widens acceptance, which closes the "sign over an unvalidated head" P1 safely. The service-pair check uses the binding node rather than the bootstrap because the resolver does not yet know replacement bindings. Copying it verbatim would refuse valid catalogs under a replacement. Regressions in both runtimes failed before the fix.</dd>
+</dl></section>
+<section id="d438"><h2><span>D-438</span> Nonce reuse is also checked against retained Space replacements</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>For review thread P2 <code>:82</code>, preparation refuses <code>attempt_nonce_reused</code> when any retained <code>replace_catalog_v1</code> on the Space log carries the claim nonce, whatever the journal says. During <code>author</code> the same check runs inside <code>fresh</code>, so a same-nonce op that lands between prepare and sign gives <code>stale_verified_state</code>.</dd>
+<dt>Reason</dt><dd>The journal is caller-owned and can be lost or belong to another device. A retained claim can never equal a new claim byte for byte, because the new claim's deps include it, so there is no idempotent on-log case.</dd>
+</dl></section>
+<section id="d439"><h2><span>D-439</span> TS entry-replica ordering finding: already canonical, now pinned</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Decision</dt><dd>Review thread P2 TS <code>:329</code> reported a default UTF-16 sort. At the reviewed SHA 13fee3c47 both sides already use <code>sort(compareUtf8)</code>, and <code>compareUtf8</code> compares UTF-8 bytes. No code change. Added the reviewer's U+E000 / U+10000 pair as a test in both runtimes. A mutation to the default sort fails the TS test.</dd>
+<dt>Reason</dt><dd>The finding does not match the code, but the case it describes is real and was unpinned.</dd>
+</dl></section>
+<section id="d440"><h2><span>D-440</span> Row 316 PR 2 review round 4 (Codex Sol 6.1 xhigh) dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>Four findings. P2: a signed successor catalog that swaps routes between replicas passes the preflight, but <code>CatalogTrust</code> route history refuses it. P2: duplicate catalog ids let a later valid copy mask an invalid signature. P2: a foreign or unauthorized retained proposal reserves the nonce. P3: BEAM reports a malformed catalog signature as <code>invalid_catalog_signature</code> where TS and the resolver report <code>malformed_catalog</code>. Commits 13fee3c47 and 7a5cbad53 had no findings.</dd>
+<dt>Decision</dt><dd>Fixed all four in both runtimes, each with a regression that failed before the fix. (1) After resolution, every held catalog must keep each route bound to one replica, otherwise <code>invalid_catalog_transition</code>. Unlike the resolver, this applies even to entry-pending catalogs, which can only refuse more (row 354). (2) Every distinct signature given for one catalog id is kept and must verify (superseded in round 5 by D-441). (3) A nonce is reserved only by a retained replacement of this Space and bootstrap that Core honored at its strict prefix, the same eligibility as a binding node. (4) BEAM checks 64-byte signature shape at envelope parse, giving <code>malformed_catalog</code>, and passes through the verifier's own reason.</dd>
+<dt>Reason</dt><dd>All four only tighten the mirror toward the resolver or narrow a false refusal. None widens acceptance beyond <code>CatalogTrust</code>'s structural rules.</dd>
+</dl></section>
+<section id="d441"><h2><span>D-441</span> Round 5 (final Codex round): a repeated catalog id must carry the identical signature</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>P2: two distinct valid signatures over one catalog payload both verify under D-440's rule, but <code>CatalogTrust</code> refuses any differing duplicate (<code>catalog_trust.ex</code> <code>artifacts!/6</code>, TS <code>addCatalog</code>) with <code>invalid_catalog_signature</code>. No other P1/P2 findings.</dd>
+<dt>Decision</dt><dd>Both runtimes now refuse <code>invalid_catalog_signature</code> at envelope parse when a repeated catalog id carries a different signature, before any verification, matching the resolver exactly. The regression runs a catalog under an unknown binding: alone it gives <code>trust_pending</code>, and with a differing copy it gives <code>invalid_catalog_signature</code> in either order. This failed on the round-4 code. A genuinely second valid Ed25519 signature cannot be produced with the deterministic test signer, so the regression proves the refusal happens at parse instead.</dd>
+<dt>Reason</dt><dd>Matching the resolver's parse rule leaves no verification path to reason about. This was the second and last Codex round allowed for this pass.</dd>
+</dl></section>
+<section id="d442"><h2><span>D-442</span> Row 316 PR 2 review round 6 (connector threads after CI went green) dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>Seven threads:
+<ul>
+<li>CodeRabbit: the row 318 Status cell is longer than 200 characters.</li>
+<li>P1: conflicting duplicate catalog signatures. Raised against a pre-D-441 commit and already fixed in cb5764f28.</li>
+<li>P2: the resolver's retained-evidence budgets are not applied.</li>
+<li>P2: TS prepare did not snapshot its inputs before awaiting.</li>
+<li>P1: the new entries are not checked against every cited prior catalog.</li>
+<li>P1: a changed service key under the parent's service ID is accepted.</li>
+<li>P1: the Space entry's reference is not bound to the bootstrap.</li>
+</ul></dd>
+<dt>Decision</dt><dd>Fixed in both runtimes, with a mutation-checked regression per rule:
+<ul>
+<li>The Space entry's reference must equal the honored bootstrap, else <code>application_invalid_catalog</code>.</li>
+<li>Plan §3 step 5: against each parent node, a changed service key needs a changed service ID. Keeping the whole pair stays allowed (OD-15).</li>
+<li>Plan §3 step 5: the entries must extend every cited non-nil prior catalog. Both step-5 failures are <code>invalid_catalog_transition</code>.</li>
+<li>More than 1,024 retained catalogs plus rotations is <code>control_history_limit</code>.</li>
+<li>TS prepare runs <code>structuredClone</code> over its whole input before deriving.</li>
+<li>The row 318 cell is shortened.</li>
+</ul>
+The resolver's JSON byte budgets are deferred to row 355. The TS test fixture's default <code>newServiceId</code> was the bootstrap's own ID with a new key, which is invalid under the new rule, so it now uses a distinct ID; the BEAM fixture already did.</dd>
+<dt>Reason</dt><dd>The P1s are intrinsic step-5 rules that Stage B applies to the candidate's own bytes, so checking them here can only refuse a replacement Stage B would refuse anyway. The byte budgets are measured on artifact JSON, which this API does not receive. A P2 that only leaves a signed replacement unusable, never one that is wrongly accepted, can be deferred under the task rules.</dd>
+</dl></section>
+<section id="d443"><h2><span>D-443</span> Row 316 PR 2 review round 7 (connector) dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>Three findings. P1: the selected acquisition's resolver predicates are not checked, so a root holder or a live or unleased capability that Core honors can still be signed over. P1: a bootstrap honored under an earlier continuation pin lends stale <code>profile_genesis</code>/<code>profile_id</code> fields, which Stage B refuses as <code>wrong_catalog_scope</code>. P2: TS author reads <code>input.possession</code> again after the awaited preflight.</dd>
+<dt>Decision</dt><dd>Fixed all three in both runtimes, with regressions that failed before the fix (the BEAM loop cases were mutation-checked separately).
+<ul>
+<li>Prepare now refuses <code>wrong_catalog_scope</code> unless <code>continuation_profile/1</code> on the frozen log selects the bootstrap's own pin and profile ID.</li>
+<li>It refuses <code>catalog_authority_refused</code> unless the acquisition op's delegation is the claimed cap, grants <code>replace_catalog_v1</code>, is not live, and carries a finite lease at or above the claim epoch. Core quarantines when epoch > expires, so equal epochs pass.</li>
+<li>TS author clones the possession with the attempt.</li>
+</ul>
+An acquisition with no delegation in its op (R04 continuation) is refused fail-closed, as is the unmirrored inherited-provenance check (row 335). Both are filed as row 356.</dd>
+<dt>Reason</dt><dd>These are plan §3 step 4 rules that Stage B applies to the candidate's strict prefix, which is the frozen log here, so checking them can only refuse what Stage B refuses. For continuation acquisitions, refusing is the safe default until the PR 4 resolver evaluates them. That costs availability, never correctness.</dd>
 </dl></section>
 <section id="d450"><h2><span>D-450</span> Take plan 316 PR 3 keying, not a fallback</h2><dl>
 <dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
@@ -2417,6 +2701,11 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Decision</dt><dd>Round 1 had two findings, both fixed. P2 <code>signing_ledger.ex:196</code>: Space-only replacement ledgers could not reach 12 Threads (envelope bound 12, 13 needed). Fixed with <code>max_envelopes/1</code> per binding (12 bootstrap, 13 replacement), used by <code>verify/2</code> and <code>SignCatalog</code> capacity, Python <code>MAX_ENVELOPES</code> 13 as the outer bound, and a regression test that commits a Space-only genesis plus all 12 additions and fails with <code>:catalog_ledger_corrupt</code> without the fix. P3 <code>binding.ex:99</code>: <code>Binding.replacement/3</code> did not check profile, parents or generation against the parent. Fixed: profile_genesis and profile_id must match the parent record, parents == [bootstrap] and generation == 1, with five new bad cases that fail without the fix. The final round had no findings, and the second independent review reported no findings. The bot rounds under D-38 run on this PR.</dd>
 <dt>Reason</dt><dd>It makes no claim beyond this fixture-only part of PR 3. It does not claim the closed-binding refusal (row 360), end-to-end replacement signing (row 361), catalog trust, R13, custody beyond this ledger, W4 or Phase G.</dd>
 </dl></section>
+<section id="d444"><h2><span>D-444</span> Row 316 PR 2 review round 8: inherited provenance mirrored in the preflight</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>P1 (connector, <code>catalog_replacement_authoring.ex:185</code>): the round-7 check reads only the current acquisition's ceiling. A hop that narrows away <code>replace_catalog_v1</code>, followed by a transfer that attenuates the older, broader cap, restores the permission. Core honors every hop, but C11 requires Stage B to refuse it.</dd>
+<dt>Decision</dt><dd>Both runtimes now walk the honored <code>:admin</code> acquisitions (<code>Authority.acquisitions/3</code>, TS <code>acquiresByRole</code>) back to the latest record whose delegation is issued by the Space root. They require <code>replace_catalog_v1</code> in that record and in every later one, otherwise <code>catalog_authority_refused</code>; an unreadable delegation also refuses. The regression in both runtimes uses two self-transfers under the leased cap. Narrow-then-restore refuses, while the same two hops keeping the permission still prepare. It was mutation-checked. Row 356 is reworded: R04 continuations come in as <code>succeed</code> and are read, not refused. The remaining question is whether "root-attenuated" means <code>issuer == space_root</code>, for the PR 4 resolver to confirm. The merge of main (#217) only touched plan files; its PR 3 status was folded into the row 316 cell.</dd>
+<dt>Reason</dt><dd>The task requires closing in this PR any P1 that lets an invalid authority be signed over. Reading it as root-issued is stricter than or equal to the plan's reading for the histories in the PR 0 probe (T4), so the check can only refuse more.</dd>
 <section id="d480"><h2><span>D-480</span> Reading of “plan 266 4-exporter test”</h2><dl>
 <dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
 <dt>Context</dt><dd>The slice brief says “the plan 266 4-exporter test”. Plan 316 §7 says “a plan 266 exporter test now”. The decisions log calls plan 266 “the PR 4 exporter” of plan 245.</dd>

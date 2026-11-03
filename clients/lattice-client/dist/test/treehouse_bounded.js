@@ -9,7 +9,8 @@ import { authorCarrierDelegation, authorCarrierOp, canonicalBytesForCarrierTerm 
 import { carrierDelegationsFromFrames } from "../src/carrier";
 import { continuationProfileToCarrierTerm } from "../src/continuation";
 import { canonicalOrder, carrierOpsToSemanticOps, index } from "../src/index";
-import { treehouseCommandDecoders } from "../src/treehouse";
+import { treehouseCommandDecoders, treehouseSpaceSchema } from "../src/treehouse";
+import { materialize } from "../src/materialize";
 import { authorTownshipGenesis, authorTownshipRevocation, bindTownshipReplica } from "../src/township";
 import { catalogBootstrapToCarrierTerm } from "../src/treehouse_catalog_codec";
 const here = dirname(fileURLToPath(import.meta.url));
@@ -116,6 +117,54 @@ for (const change of [{ catalogKey: bootstrapRecord.spaceRoot }, { serviceKey: b
     await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, record: { ...bootstrapRecord, ...change } }), "binding_key_reuse");
 }
 await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [...withPin, bootstrap] }), "catalog_bootstrap_exists");
+// Row 318: a bootstrap whose signed push envelope would exceed 64,000 bytes refuses before any signature.
+{
+    const bin = (value) => ["bin", Buffer.from(value).toString("base64")];
+    const wide = [...withPin];
+    for (let n = 1; n <= 1_500; n++) {
+        wide.push(await authorCarrierOp({ replica: vector.replica, signer: root, deps: [pin.id], kind: "command", cap: ["nil"],
+            body: ["tuple", [["atom", "create_thread"], ["list", [bin(`t${n}`), bin("t")]]]] }));
+    }
+    let signatures = 0;
+    const counted = { publicKey: root.publicKey, sign: (bytes) => { signatures++; return root.sign(bytes); } };
+    await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: wide, signer: counted }), "catalog_command_too_large");
+    assert.equal(signatures, 0);
+}
+// Review round 3 (row 350): the placeholder assumes a 64-byte signature, so the signed frame is verified and remeasured.
+// An oversized or wrong signature from a caller signer never leaves, even though the semantic judge ignores signatures.
+{
+    const oversized = { publicKey: root.publicKey, sign: () => new Uint8Array(50_000) };
+    await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, signer: oversized }), "invalid_signer_signature");
+    const zeroed = { publicKey: root.publicKey, sign: () => new Uint8Array(64) };
+    await rejects(() => authorTreehouseCatalogBootstrap({ ...bootstrapInput, signer: zeroed }), "invalid_signer_signature");
+}
+// Review round 2 (row 350): a retained root genesis with a malformed oversized delegation id, sorted before the valid
+// genesis, is measured per capability and skipped; the bootstrap that fits is still authored and honored.
+{
+    const validCap = (await authorTreehouseCatalogBootstrap(bootstrapInput)).cap;
+    let widened = null, badId = "";
+    for (let n = 1; n <= 500 && widened === null; n++) {
+        const delegation = await authorCarrierDelegation({ replica: vector.replica, signer: root, audiencePubkey: root.publicKey,
+            parentId: null, ops: ["catalog_bootstrap_v1"], roles: ["admin"], live: true });
+        const bad = await authorCarrierOp({ replica: vector.replica, signer: root, deps: [], kind: "authority", cap: ["nil"],
+            body: ["tuple", [["atom", "genesis"], ["delegation", { ...delegation, id: "a".repeat(50_000) + n }], ["map", []]]] });
+        const frames = [...withPin, bad];
+        const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
+        const order = canonicalOrder(ops, index(ops));
+        const valid = ops.find((op) => op.kind === "authority" && op.authority?.type === "genesis" &&
+            op.authority.delegation.ops.includes("catalog_bootstrap_v1") && op.authority.delegation.id.length < 100);
+        if (order.indexOf(bad.id) < order.indexOf(valid.id)) {
+            widened = frames;
+            badId = bad.id;
+        }
+    }
+    assert.notEqual(widened, null);
+    const frame = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: widened });
+    assert.deepEqual(frame.cap, validCap);
+    const ops = carrierOpsToSemanticOps([...widened, frame], {}, treehouseCommandDecoders("Treehouse.Space"));
+    assert.equal(ops.some((op) => op.id === badId), true);
+    assert.equal(materialize(treehouseSpaceSchema, ops).quarantineReasons.has(frame.id), false);
+}
 // The capability is chosen in canonical order, so a second root admin genesis cannot make the bytes depend on array order.
 const extra = await authorTownshipGenesis({ replica: vector.replica, signer: root, ops: ["create_space"], roles: ["admin"], policies: {} });
 const first = await authorTreehouseCatalogBootstrap({ ...bootstrapInput, frames: [...withPin, extra] });

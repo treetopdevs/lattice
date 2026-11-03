@@ -64,6 +64,12 @@ export type {
 export * from "./treehouse_member_continuity_codec";
 
 // Authenticated complete-history continuity APIs; attestation grants no membership or rights.
+export { prepareTreehouseCatalogReplacementFromFrames, authorTreehouseCatalogReplacementFromFrames } from "./treehouse_catalog_replacement_authoring";
+export type {
+  TreehouseCatalogReplacementAttempt, TreehouseCatalogReplacementAuthorResult, TreehouseCatalogReplacementCurrent,
+  TreehouseCatalogReplacementHistory, TreehouseCatalogReplacementJournal, TreehouseCatalogReplacementJournalEntry,
+  TreehouseCatalogReplacementPrepareResult, TreehouseCatalogReplacementRequest, TreehouseCatalogReplacementStatus,
+} from "./treehouse_catalog_replacement_authoring";
 export { observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, assembleMemberContinuityFromFrames } from "./treehouse_member_continuity";
 export type { MemberContinuityObservation, MemberContinuityReviewRequest, MemberContinuityReview, MemberContinuityReviewResult, MemberContinuityAssemblyResult } from "./treehouse_member_continuity";
 

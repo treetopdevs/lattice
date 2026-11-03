@@ -325,25 +325,90 @@ defmodule Treehouse.Space do
     end
   end
 
+  @doc """
+  Review step for one `replace_catalog_v1` attempt (plan 316 PR 2); signs nothing.
+
+  Freezes the frontier and derives the claim from the judged history: the honored bootstrap,
+  the current `:admin` holder and its acquisition capability, the beacon epoch basis, the
+  inventory and the recovery cutoffs. Returns the exact possession bytes to sign and a
+  caller-owned journal entry keyed by the claim nonce. See `Treehouse.CatalogReplacementAuthoring`.
+  """
+  @spec prepare_replace_catalog(Log.t(), map(), map()) :: {:ok, map()} | {:error, atom()}
+  def prepare_replace_catalog(log, request, journal),
+    do: Treehouse.CatalogReplacementAuthoring.prepare(log, request, journal)
+
+  @doc """
+  Sign one prepared `replace_catalog_v1` attempt last, after re-reading `log_source`, refusing a
+  reclassified frozen state or a moved claim, and verifying both possession signatures. The frame
+  is withheld when the re-read after the signing call shows reclassification.
+  """
+  @spec author_replace_catalog(Identity.t() | map(), Log.t() | (-> Log.t()), map(), map()) ::
+          {:ok, map()} | {:error, atom(), map()}
+  def author_replace_catalog(signer, log_source, attempt, possession),
+    do: Treehouse.CatalogReplacementAuthoring.author(signer, log_source, attempt, possession)
+
   # Try each root genesis capability, in canonical order, and return the first authored op the
   # judge honors; an op that would quarantine (revoked, expired, not granted) is never returned.
   defp honored_bootstrap(identity, log, record) do
     deps = Enum.sort(Log.frontier(log))
+    caps = root_capabilities(log, identity)
 
-    log
-    |> root_capabilities(identity)
-    |> Enum.find_value({:error, :bootstrap_not_honored}, fn cap ->
-      with {:ok, op} <-
-             Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
-               cap: cap
-             ),
-           false <-
-             MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
-        {:ok, op}
-      else
-        _ -> nil
-      end
-    end)
+    with {:ok, fitting} <- bootstrap_envelope(identity, log.replica, deps, record, caps) do
+      Enum.find_value(
+        fitting,
+        {:error, :bootstrap_not_honored},
+        &honored_bootstrap(identity, log, deps, record, &1)
+      )
+    end
+  end
+
+  # Lifecycle contract §2 (row 318): the signature slot is fixed at 64 bytes, so a zero-signed
+  # placeholder measures the signed push envelope byte-exactly before any signature is made. A
+  # retained genesis may carry a malformed capability id of any length, so each candidate cap is
+  # measured; one that does not fit is skipped, and only when none fits is the bootstrap refused.
+  defp bootstrap_envelope(_identity, _replica, _deps, _record, []), do: {:ok, []}
+
+  defp bootstrap_envelope(identity, replica, deps, record, caps) do
+    statuses = for cap <- caps, do: {cap, bootstrap_status(identity, replica, deps, record, cap)}
+
+    case for({cap, :ok} <- statuses, do: cap) do
+      [] ->
+        case Enum.find(statuses, fn {_, status} -> status != {:error, :capacity_stop} end) do
+          nil -> {:error, :catalog_command_too_large}
+          {_, error} -> error
+        end
+
+      fitting ->
+        {:ok, fitting}
+    end
+  end
+
+  defp bootstrap_status(identity, replica, deps, record, cap) do
+    op = %Op{
+      id: "",
+      replica: replica,
+      author: identity.pub,
+      deps: deps,
+      kind: :command,
+      body: {:catalog_bootstrap_v1, [record]},
+      cap: cap,
+      sig: <<0::512>>
+    }
+
+    Treehouse.MemberContinuityAuthoring.envelope_status(%{op | id: Op.recompute_id(op)})
+  end
+
+  defp honored_bootstrap(identity, log, deps, record, cap) do
+    with {:ok, op} <-
+           Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
+             cap: cap
+           ),
+         false <-
+           MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
+      {:ok, op}
+    else
+      _ -> nil
+    end
   end
 
   defp bootstrap_profile(log) do

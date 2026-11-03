@@ -3,10 +3,14 @@
 Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 1–2, PR 3's generation keying and PR 6's
 exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
-PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) was
-merged in PR #214 (branch `claude/316-pr1-replacement-codec`); it adds no wire
-atom and claims no route switch, catalog trust or C10–C15. PR 6's exporter test is implemented on branch `claude/316-pr6-exporter-evidence` (test only); C15 still waits on PR 4.
-PR 3's generation keying (fixture only) was merged in PR #217:
+PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
+implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
+atom and claims no route switch, catalog trust or C10–C15.
+PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_catalog/4`, the TS
+twin, and the row 318 bootstrap size preflight) is in review as PR #216 (D-400–D-435). Its binding-graph
+coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
+authoring result is not resolver acceptance, a route switch or catalog trust.
+PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
 the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
 bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
 (derivation only, no production caller), and a replacement revision 0 must equal the claim's

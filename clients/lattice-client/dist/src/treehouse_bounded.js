@@ -363,10 +363,37 @@ export async function authorTreehouseCatalogBootstrap(input) {
         if (!caps.includes(delegation.id))
             caps.push(delegation.id);
     }
-    // Return the first authored op the judge honors; one that would quarantine (revoked, expired, not granted) never leaves.
+    // Lifecycle contract §2 (row 318): the signature slot is fixed at 64 bytes, so a zero-signed placeholder measures the
+    // signed push envelope byte-exactly before any signature is made. A retained genesis may carry a malformed capability
+    // id of any length, so each candidate cap is measured; one that does not fit is skipped, and only when none fits is the
+    // bootstrap refused.
+    const fitting = [];
     for (const capId of caps) {
+        const placeholder = await authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier,
+            signer: { publicKey: input.signer.publicKey, sign: () => new Uint8Array(64) }, capId,
+            command: { command: "catalog_bootstrap_v1", record } });
+        if (new TextEncoder().encode(JSON.stringify({ type: "push", ops: [placeholder] })).length <= 64_000)
+            fitting.push(capId);
+    }
+    if (caps.length > 0 && fitting.length === 0)
+        throw new Error("catalog_command_too_large");
+    // Return the first authored op the judge honors; one that would quarantine (revoked, expired, not granted) never leaves.
+    for (const capId of fitting) {
         const frame = await authorTreehouseCommand({ product: "Treehouse.Space", replica, deps: history.frontier, signer: input.signer,
             capId, command: { command: "catalog_bootstrap_v1", record } });
+        // The placeholder measured a 64-byte signature; a caller signer may return anything, so the signed frame itself must
+        // verify and fit before it can leave (lifecycle contract §2). The semantic judge below ignores signatures.
+        let signatureValid = false;
+        try {
+            signatureValid = (await verifyCarrierOp(frame, { verify: async (author, bytes, signature) => verifyEd25519(signature, bytes, base64ToBytes(author)) })).valid;
+        }
+        catch {
+            signatureValid = false;
+        }
+        if (!signatureValid)
+            throw new Error("invalid_signer_signature");
+        if (new TextEncoder().encode(JSON.stringify({ type: "push", ops: [frame] })).length > 64_000)
+            throw new Error("catalog_command_too_large");
         const ops = carrierOpsToSemanticOps([...history.frames, frame], {}, treehouseCommandDecoders("Treehouse.Space"));
         if (!materialize(treehouseSpaceSchema, ops).quarantineReasons.has(frame.id))
             return frame;
