@@ -1054,6 +1054,45 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     end
   end
 
+  # Review round 8 (C11, row 335): a permission dropped by one honored hop and restored by a
+  # later transfer from the older, broader cap lacks inherited provenance.
+  test "a replace permission restored after a narrowed hop is never signed over" do
+    f = fixture()
+
+    hop = fn log, ops ->
+      d =
+        Delegation.new(f.nominee, f.replica, f.nominee.pub,
+          parent_id: f.leased.id,
+          ops: ops,
+          roles: [:admin],
+          expires_epoch: 10
+        )
+
+      op = Op.new(f.nominee, f.replica, Log.frontier(log), :authority, {:transfer, :admin, d, 0})
+      {Log.append!(log, op), op}
+    end
+
+    full = [:create_space, :create_thread, :replace_catalog_v1]
+
+    # The control: the same two hops that both keep the permission are preparable.
+    {kept, _} = hop.(f.space_log, full)
+    {kept, _} = hop.(kept, full)
+    assert {:ok, _} = Space.prepare_replace_catalog(kept, request(f), %{})
+
+    {narrowed, narrow} = hop.(f.space_log, [:create_space, :create_thread])
+    {restored, restore} = hop.(narrowed, full)
+    analysis = Authority.analyze(Space, restored)
+    assert analysis.reasons[narrow.id] == nil and analysis.reasons[restore.id] == nil
+
+    assert Authority.holder_epoch(Space, restored, :admin) == %{
+             holder: f.nominee.pub,
+             op_id: restore.id
+           }
+
+    assert {:error, :catalog_authority_refused} =
+             Space.prepare_replace_catalog(restored, request(f), %{})
+  end
+
   test "a bootstrap honored under an earlier continuation pin lends no stale profile fields" do
     f = fixture()
     empty = Delegation.genesis(f.root, f.replica, ops: [], roles: [], live: false)

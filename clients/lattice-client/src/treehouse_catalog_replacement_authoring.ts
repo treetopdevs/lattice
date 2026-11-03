@@ -216,6 +216,16 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   const granted = evidence !== undefined && "delegation" in evidence ? evidence.delegation : undefined;
   if (granted === undefined || granted.live || typeof granted.expiresEpoch !== "number" || granted.expiresEpoch < epoch ||
     !granted.ops.includes("replace_catalog_v1")) return refuse("catalog_authority_refused");
+  // Inherited provenance (C11, row 335): replace_catalog_v1 must be in every honored admin ceiling from the latest
+  // root-issued acquisition to the current one; a narrowed hop followed by a restoring transfer is refused.
+  const chain = (history.authority.acquiresByRole.get("admin") ?? []).map((record) => {
+    const held = history.byId.get(record.opId)?.authority;
+    return held !== undefined && "delegation" in held ? held.delegation : undefined;
+  });
+  let rooted = chain.length - 1;
+  while (rooted >= 0 && chain[rooted] !== undefined && chain[rooted]!.issuer !== bootstrap.record.spaceRoot) rooted--;
+  if (rooted < 0 || chain[rooted] === undefined ||
+    chain.slice(rooted).some((d) => d === undefined || !d.ops.includes("replace_catalog_v1"))) return refuse("catalog_authority_refused");
   let inventoryDigest: string;
   try {
     if (!request.entries.every((item) => object(item) && item.serviceId === request.newServiceId && item.serviceKey === request.newServiceKey) ||

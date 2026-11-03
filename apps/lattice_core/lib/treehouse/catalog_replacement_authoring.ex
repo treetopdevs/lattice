@@ -82,6 +82,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          {:ok, author, holder_epoch, cap} <- holder(log, request.author),
          {:ok, epoch, basis} <- epoch(log),
          :ok <- replacement_authority(log, holder_epoch, cap, epoch),
+         :ok <- inherited_provenance(log, bootstrap.record.space_root),
          {:ok, inventory} <- inventory(log, request, bootstrap),
          {:ok, cutoffs} <- cutoffs(log, request),
          {:ok, claim} <-
@@ -176,8 +177,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   # Plan 316 §3 step 4 resolver-specific predicates on the selected acquisition: its delegation
   # grants `replace_catalog_v1`, is not live and carries a finite lease unexpired at the claim
   # epoch. A root holder or a live/unleased capability Core would honor is refused here
-  # (`catalog_authority_refused`). An acquisition whose op carries no delegation (for example
-  # an R04 continuation) is also refused until the PR 4 resolver decides it (row 356).
+  # (`catalog_authority_refused`). An acquisition whose op carries no delegation is refused.
   defp replacement_authority(log, holder_epoch, cap, epoch) do
     case acquisition_delegation(Map.get(log.ops, holder_epoch)) do
       %Delegation{id: ^cap, live: false, expires_epoch: expires} = d
@@ -187,6 +187,34 @@ defmodule Treehouse.CatalogReplacementAuthoring do
       _ ->
         {:error, :catalog_authority_refused}
     end
+  end
+
+  # Plan 316 §3 step 4 inherited provenance (C11, row 335): `replace_catalog_v1` must be in
+  # every honored `:admin` ceiling from the latest root-issued acquisition to the current one.
+  # Core honors each hop on its own, so a narrowed ceiling followed by a transfer that
+  # attenuates an older, broader cap restores a permission Stage B refuses
+  # (`catalog_authority_refused`). An acquisition whose delegation is unreadable refuses.
+  defp inherited_provenance(log, root) do
+    delegations =
+      for record <- Authority.acquisitions(Space, log, :admin) do
+        case acquisition_delegation(Map.get(log.ops, record.op_id)) do
+          %Delegation{id: id} = d when id == record.delegation_id -> d
+          _ -> nil
+        end
+      end
+
+    since_root =
+      delegations
+      |> Enum.reverse()
+      |> Enum.split_while(&(&1 != nil and &1.issuer != root))
+      |> then(fn
+        {later, [%Delegation{} = rooted | _]} -> [rooted | later]
+        _ -> nil
+      end)
+
+    if is_list(since_root) and Enum.all?(since_root, &(:replace_catalog_v1 in &1.ops)),
+      do: :ok,
+      else: {:error, :catalog_authority_refused}
   end
 
   defp acquisition_delegation(%Op{kind: :authority, body: body}) do

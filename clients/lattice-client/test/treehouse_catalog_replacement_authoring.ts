@@ -567,6 +567,26 @@ test("an acquisition Stage B would refuse is never signed over", async () => {
   }
 });
 
+// Review round 8 (C11, row 335): a permission dropped by one honored hop and restored by a later transfer from the
+// older, broader cap lacks inherited provenance.
+test("a replace permission restored after a narrowed hop is never signed over", async () => {
+  const f = await fixture();
+  const full = ["create_space", "create_thread", "replace_catalog_v1"];
+  const hop = async (frames: CarrierOpFrame[], ops: string[]) => {
+    const d = await authorCarrierDelegation({ replica: f.replica, signer: f.nominee, audiencePubkey: f.nominee.publicKey,
+      parentId: f.leased.id, ops, roles: ["admin"], expiresEpoch: 10 });
+    const op = await authorCarrierOp({ replica: f.replica, signer: f.nominee, deps: [frames.at(-1)!.id], kind: "authority", cap: nil,
+      body: tuple(atom("transfer"), atom("admin"), ["delegation", d], ["int", 0]) });
+    return [...frames, op];
+  };
+  const kept = await hop(await hop(f.frames, full), full);
+  assert.equal(reason(await prepare(f, kept, request(f))), "ok");
+  const restored = await hop(await hop(f.frames, ["create_space", "create_thread"]), full);
+  const verdicts = await judge(restored);
+  assert.deepEqual(restored.slice(-2).map((frame) => verdicts.get(frame.id)), [undefined, undefined]);
+  assert.equal(reason(await prepare(f, restored, request(f))), "catalog_authority_refused");
+});
+
 test("a bootstrap honored under an earlier continuation pin lends no stale profile fields", async () => {
   const f = await fixture();
   const pinArgs = (f.pin.body as ["tuple", CarrierTerm[]])[1];
