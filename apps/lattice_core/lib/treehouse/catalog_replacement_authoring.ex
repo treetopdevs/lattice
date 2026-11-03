@@ -20,11 +20,17 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   catalog trust: the Stage B resolver (PR 4) and the operator journal (lifecycle §5) remain
   the caller's. The returned journal entry is caller-owned and is not persisted here.
 
-  Non-claim: the binding-graph coverage here is interim. It does not apply D-276 node
-  eligibility (an on-Space replacement failing the intrinsic checks is still treated as a node),
-  the D-275 closing rule (an old-key rotation of a closed binding is still chained), or the full
-  §4 refusal precedence; those are Stage B resolver semantics owned by plan 316 PR 4, whose
-  binding-graph function this coverage is to call once it lands (review round 2 follow-up row).
+  Retained rotations and catalogs pass an interim structural mirror of the `CatalogTrust`
+  resolver (chain, step, key separation, both signatures, prior/previous presence, binding,
+  inventory, cutoff and service-pair agreement) before they can become nodes or heads; any
+  failure refuses, so nothing is signed over evidence Stage B rejects structurally.
+
+  Non-claim: the binding-graph coverage here is interim. It does not observe catalog entry
+  facts against retained histories, apply D-276 node eligibility (an on-Space replacement
+  failing the intrinsic checks is still treated as a node), the D-275 closing rule (an old-key
+  rotation of a closed binding is still chained), or the full §4 refusal precedence; those are
+  Stage B resolver semantics owned by plan 316 PR 4, whose binding-graph function replaces this
+  mirror once it lands (row 354).
   """
 
   alias Lattice.{Authority, Dag, Identity, Log, Op}
@@ -35,6 +41,8 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   @request_fields ~w(author nonce parents prior_catalogs generation new_catalog_key new_service_id new_service_key new_origin entries replica_logs rotations catalogs)a
   @attempt_fields ~w(attempt_id request claim claim_bytes catalog_possession_bytes service_possession_bytes author cap frozen_frontier)a
   @zero <<0::512>>
+  @max_safe_integer 9_007_199_254_740_991
+  @extended_keys ~w(root genesis creation reference kind schema)a
 
   @spec prepare(Log.t(), map(), map()) :: {:ok, map()} | {:error, atom()}
   def prepare(log, request, journal) do
@@ -79,6 +87,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
            ),
          :ok <- coverage(log, claim, request, bootstrap),
          claim_bytes = TransportCatalog.replacement_claim_bytes(claim),
+         :ok <- nonce_unused(log, claim.nonce),
          :ok <- nonce_free(journal, claim.nonce, claim_bytes),
          candidate = intent(claim, @zero, @zero),
          :ok <- envelope(candidate),
@@ -236,15 +245,34 @@ defmodule Treehouse.CatalogReplacementAuthoring do
 
   # Binding nodes are the honored bootstrap (generation 0), every on-Space replacement honored
   # at its strict prefix (D-276, refused-on-the-union nodes included) and every retained
-  # rotation chained and verified from a known node. A cited but unknown node is
+  # rotation that resolves under the Stage B structural rules. A cited but unknown node is
   # `trust_pending`: the caller must supply the retained evidence before authoring.
+  #
+  # Retained rotations and catalogs are hostile until resolved: each one must pass the same
+  # structural checks `CatalogTrust` applies (chain, generation/revision step, key separation,
+  # both signatures, prior/previous catalog presence, binding, inventory and cutoff agreement)
+  # before it may become a node, a held catalog or a head. Any failure refuses the whole
+  # preflight, so a replacement is never signed over evidence Stage B would reject. Entry-fact
+  # observation against the retained histories stays with the PR 4 resolver (row 354).
   defp coverage(log, claim, request, bootstrap) do
-    root = %{bootstrap.id => %{generation: 0, key: bootstrap.record.catalog_key, parents: []}}
+    record = bootstrap.record
 
-    with {:ok, pending} <- rotation_envelopes(log, request.rotations, bootstrap),
-         {:ok, nodes} <- chain(pending, Map.merge(replacement_nodes(log, bootstrap), root)),
+    root = %{
+      bootstrap.id => %{
+        generation: 0,
+        key: record.catalog_key,
+        parents: [],
+        inventory: nil,
+        service: {record.service_id, record.service_key}
+      }
+    }
+
+    with {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
+         {:ok, catalogs} <- catalog_envelopes(log, request.catalogs, bootstrap),
+         {:ok, nodes} <-
+           resolve_graph(Map.merge(replacement_nodes(log, bootstrap), root), rotations, catalogs),
          :ok <- known_parents(nodes),
-         {:ok, catalog_heads, held} <- catalog_heads(log, request.catalogs, bootstrap, nodes),
+         {catalog_heads, held} = catalog_heads(catalogs),
          :ok <- cover_parents(claim.parents, nodes),
          :ok <- cover_generation(claim, nodes),
          :ok <- held_priors(claim, held) do
@@ -268,7 +296,31 @@ defmodule Treehouse.CatalogReplacementAuthoring do
                Enum.sort(Map.keys(envelope)) == [:new_signature, :old_signature, :rotation],
            {:ok, rotation} <- TransportCatalog.normalize_rotation(envelope.rotation) do
         if rotation.space == log.replica and rotation.bootstrap == bootstrap.id,
-          do: {:cont, {:ok, Map.put(acc, TransportCatalog.rotation_id(envelope), envelope)}},
+          do:
+            {:cont,
+             {:ok,
+              Map.put(acc, TransportCatalog.rotation_id(envelope), %{
+                envelope
+                | rotation: rotation
+              })}},
+          else: {:halt, {:error, :wrong_catalog_scope}}
+      else
+        _ -> {:halt, {:error, :malformed_catalog}}
+      end
+    end)
+  rescue
+    _ -> {:error, :malformed_catalog}
+  end
+
+  defp catalog_envelopes(log, catalogs, bootstrap) do
+    Enum.reduce_while(catalogs, {:ok, %{}}, fn envelope, {:ok, acc} ->
+      with true <- is_map(envelope) and Enum.sort(Map.keys(envelope)) == [:catalog, :signature],
+           {:ok, catalog} <- TransportCatalog.normalize_catalog(envelope.catalog) do
+        if catalog.space == log.replica and catalog.bootstrap == bootstrap.id,
+          do:
+            {:cont,
+             {:ok,
+              Map.put(acc, TransportCatalog.catalog_id(catalog), %{envelope | catalog: catalog})}},
           else: {:halt, {:error, :wrong_catalog_scope}}
       else
         _ -> {:halt, {:error, :malformed_catalog}}
@@ -286,7 +338,13 @@ defmodule Treehouse.CatalogReplacementAuthoring do
         into: %{},
         do:
           {id,
-           %{generation: claim.generation, key: claim.new_catalog_key, parents: claim.parents}}
+           %{
+             generation: claim.generation,
+             key: claim.new_catalog_key,
+             parents: claim.parents,
+             inventory: claim.inventory_digest,
+             service: {claim.new_service_id, claim.new_service_key}
+           }}
   end
 
   defp honored_at_prefix?(log, id) do
@@ -295,45 +353,141 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     Authority.analyze(Space, prefix).reasons[id] == nil
   end
 
-  # Rotations chain only from a known node, verified under that node's catalog key.
-  defp chain(pending, nodes) when map_size(pending) == 0, do: {:ok, nodes}
+  # Same traversal as `CatalogTrust.graph!/6`: every catalog in id order, then every rotation.
+  defp resolve_graph(nodes, rotations, catalogs) do
+    graph = %{nodes: nodes, rotations: rotations, catalogs: catalogs, ready: MapSet.new()}
 
-  defp chain(pending, nodes) do
-    case Enum.filter(pending, fn {_id, envelope} ->
-           Map.has_key?(nodes, envelope.rotation.parent)
-         end) do
-      [] ->
-        {:error, :trust_pending}
+    graph =
+      Enum.reduce(Enum.sort(Map.keys(catalogs)), graph, &resolve_catalog(&1, &2, MapSet.new()))
 
-      ready ->
-        ready
-        |> Enum.reduce_while({:ok, nodes}, fn {id, envelope}, {:ok, acc} ->
-          rotation = envelope.rotation
-          parent = Map.fetch!(acc, rotation.parent)
+    graph =
+      Enum.reduce(Enum.sort(Map.keys(rotations)), graph, &resolve_binding(&1, &2, MapSet.new()))
 
-          cond do
-            Map.has_key?(acc, id) or rotation.generation != parent.generation + 1 ->
-              {:halt, {:error, :invalid_catalog_transition}}
+    {:ok, graph.nodes}
+  catch
+    {:catalog_refusal, reason} -> {:error, reason}
+  end
 
-            TransportCatalog.verify_rotation(envelope, parent.key) != :ok ->
-              {:halt, {:error, :invalid_catalog_signature}}
-
-            true ->
-              node = %{
-                generation: rotation.generation,
-                key: rotation.new_catalog_key,
-                parents: [rotation.parent]
-              }
-
-              {:cont, {:ok, Map.put(acc, id, node)}}
-          end
-        end)
-        |> case do
-          {:ok, nodes} -> chain(Map.drop(pending, Enum.map(ready, &elem(&1, 0))), nodes)
-          error -> error
-        end
+  defp resolve_catalog(id, graph, visiting) do
+    cond do
+      MapSet.member?(graph.ready, id) -> graph
+      not Map.has_key?(graph.catalogs, id) -> refuse(:trust_pending)
+      MapSet.member?(visiting, {:catalog, id}) -> refuse(:invalid_catalog_transition)
+      true -> resolve_unready_catalog(id, graph, MapSet.put(visiting, {:catalog, id}))
     end
   end
+
+  defp resolve_unready_catalog(id, graph, visiting) do
+    envelope = Map.fetch!(graph.catalogs, id)
+    catalog = envelope.catalog
+    graph = resolve_binding(catalog.binding, graph, visiting)
+    binding = Map.fetch!(graph.nodes, catalog.binding)
+
+    if TransportCatalog.verify_catalog(envelope, binding.key) != :ok,
+      do: refuse(:invalid_catalog_signature)
+
+    if Enum.any?(catalog.entries, &({&1.service_id, &1.service_key} != binding.service)),
+      do: refuse(:wrong_catalog_scope)
+
+    graph = resolve_catalog_parent(catalog, binding, graph, visiting)
+    %{graph | ready: MapSet.put(graph.ready, id)}
+  end
+
+  defp resolve_catalog_parent(%{previous: nil} = catalog, binding, graph, _visiting) do
+    if binding.inventory != nil and
+         TransportCatalog.inventory_id(catalog.entries) != binding.inventory,
+       do: refuse(:invalid_catalog_transition)
+
+    graph
+  end
+
+  defp resolve_catalog_parent(catalog, _binding, graph, visiting) do
+    graph = resolve_catalog(catalog.previous, graph, visiting)
+    previous = Map.fetch!(graph.catalogs, catalog.previous).catalog
+
+    if previous.binding != catalog.binding or catalog.revision != previous.revision + 1 or
+         not safe?(previous.revision + 1) or
+         not inventory_extends?(previous.entries, catalog.entries),
+       do: refuse(:invalid_catalog_transition)
+
+    graph
+  end
+
+  defp resolve_binding(id, graph, visiting) do
+    cond do
+      Map.has_key?(graph.nodes, id) -> graph
+      not Map.has_key?(graph.rotations, id) -> refuse(:trust_pending)
+      MapSet.member?(visiting, {:binding, id}) -> refuse(:invalid_catalog_transition)
+      true -> resolve_rotation(id, graph, MapSet.put(visiting, {:binding, id}))
+    end
+  end
+
+  defp resolve_rotation(id, graph, visiting) do
+    envelope = Map.fetch!(graph.rotations, id)
+    rotation = envelope.rotation
+    graph = resolve_binding(rotation.parent, graph, visiting)
+    parent = Map.fetch!(graph.nodes, rotation.parent)
+
+    if rotation.generation != parent.generation + 1 or not safe?(parent.generation + 1) or
+         rotation.new_catalog_key == parent.key or
+         rotation.new_catalog_key == elem(parent.service, 1),
+       do: refuse(:invalid_catalog_transition)
+
+    verify_rotation(envelope, parent.key)
+    graph = resolve_catalog(rotation.prior_catalog, graph, visiting)
+    prior = Map.fetch!(graph.catalogs, rotation.prior_catalog).catalog
+
+    if prior.binding != rotation.parent or
+         TransportCatalog.inventory_id(prior.entries) != rotation.inventory_digest or
+         Enum.map(rotation.cutoffs, & &1.replica) != Enum.map(prior.entries, & &1.replica),
+       do: refuse(:invalid_catalog_transition)
+
+    node = %{
+      generation: rotation.generation,
+      key: rotation.new_catalog_key,
+      parents: [rotation.parent],
+      inventory: rotation.inventory_digest,
+      service: parent.service
+    }
+
+    %{graph | nodes: Map.put(graph.nodes, id, node)}
+  end
+
+  defp verify_rotation(envelope, parent_key) do
+    rotation = envelope.rotation
+
+    cond do
+      not Identity.verify(
+        parent_key,
+        TransportCatalog.rotation_bytes(rotation),
+        envelope.old_signature
+      ) ->
+        refuse(:invalid_catalog_signature)
+
+      not Identity.verify(
+        rotation.new_catalog_key,
+        TransportCatalog.rotation_possession_bytes(rotation),
+        envelope.new_signature
+      ) ->
+        refuse(:invalid_possession)
+
+      true ->
+        :ok
+    end
+  end
+
+  defp refuse(reason), do: throw({:catalog_refusal, reason})
+
+  defp inventory_extends?(before, next_entries) do
+    Enum.all?(before, fn entry ->
+      case Enum.find(next_entries, &(&1.replica == entry.replica)) do
+        nil -> false
+        next -> Map.take(entry, @extended_keys) == Map.take(next, @extended_keys)
+      end
+    end)
+  end
+
+  defp safe?(value), do: is_integer(value) and value >= 0 and value <= @max_safe_integer
 
   defp known_parents(nodes) do
     if Enum.all?(nodes, fn {_id, node} -> Enum.all?(node.parents, &Map.has_key?(nodes, &1)) end),
@@ -393,48 +547,35 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     if claim.generation == max + 1, do: :ok, else: {:error, :invalid_catalog_transition}
   end
 
-  # Retained catalogs, verified under their binding's key; heads are those no other catalog
-  # under the same binding names as `previous`.
-  defp catalog_heads(log, catalogs, bootstrap, nodes) do
-    catalogs
-    |> Enum.reduce_while({:ok, []}, fn envelope, {:ok, acc} ->
-      with true <- is_map(envelope) and Enum.sort(Map.keys(envelope)) == [:catalog, :signature],
-           {:ok, catalog} <- TransportCatalog.normalize_catalog(envelope.catalog) do
-        cond do
-          catalog.space != log.replica or catalog.bootstrap != bootstrap.id ->
-            {:halt, {:error, :wrong_catalog_scope}}
+  # Every retained catalog has resolved; heads are those no other catalog under the same binding
+  # names as `previous`.
+  defp catalog_heads(catalogs) do
+    verified = Enum.map(catalogs, fn {id, envelope} -> {id, envelope.catalog} end)
+    previous = MapSet.new(verified, fn {_id, catalog} -> {catalog.binding, catalog.previous} end)
 
-          not Map.has_key?(nodes, catalog.binding) ->
-            {:halt, {:error, :trust_pending}}
+    heads =
+      verified
+      |> Enum.reject(fn {id, catalog} -> MapSet.member?(previous, {catalog.binding, id}) end)
+      |> Enum.group_by(fn {_id, catalog} -> catalog.binding end, &elem(&1, 0))
+      |> Map.new(fn {binding, ids} -> {binding, Enum.sort(ids)} end)
 
-          TransportCatalog.verify_catalog(envelope, nodes[catalog.binding].key) != :ok ->
-            {:halt, {:error, :invalid_catalog_signature}}
+    {heads, MapSet.new(verified, fn {id, catalog} -> {catalog.binding, id} end)}
+  end
 
-          true ->
-            {:cont, {:ok, [{TransportCatalog.catalog_id(catalog), catalog} | acc]}}
-        end
-      else
-        _ -> {:halt, {:error, :malformed_catalog}}
-      end
-    end)
-    |> case do
-      {:ok, verified} ->
-        previous =
-          MapSet.new(verified, fn {_id, catalog} -> {catalog.binding, catalog.previous} end)
+  # The journal is caller-owned and may be lost or belong to another device, so a nonce already
+  # carried by any retained replacement in this Space is reused regardless of the journal. No
+  # retained claim can equal a new one byte-for-byte (its deps would include that op).
+  defp nonce_unused(log, nonce) do
+    reused? =
+      Enum.any?(log.ops, fn
+        {_id, %Op{kind: :command, body: {:replace_catalog_v1, [claim | _]}}} ->
+          match?({:ok, %{nonce: ^nonce}}, TransportCatalog.normalize_replacement_claim(claim))
 
-        heads =
-          verified
-          |> Enum.reject(fn {id, catalog} -> MapSet.member?(previous, {catalog.binding, id}) end)
-          |> Enum.group_by(fn {_id, catalog} -> catalog.binding end, &elem(&1, 0))
-          |> Map.new(fn {binding, ids} -> {binding, ids |> Enum.uniq() |> Enum.sort()} end)
+        _ ->
+          false
+      end)
 
-        {:ok, heads, MapSet.new(verified, fn {id, catalog} -> {catalog.binding, id} end)}
-
-      error ->
-        error
-    end
-  rescue
-    _ -> {:error, :malformed_catalog}
+    if reused?, do: {:error, :attempt_nonce_reused}, else: :ok
   end
 
   # The attempt journal is keyed by the claim nonce; identical bytes are an idempotent retry.

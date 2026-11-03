@@ -1,9 +1,10 @@
 // TS twin of Treehouse.CatalogReplacementAuthoring (plan 316 PR 2): freeze, derive, review, sign last.
 // Unsigned intents are private full-judge inputs; they are never appended or exported. A Core-honored
 // result is an authorized signed proposal, not a route switch or installed catalog trust.
-// Non-claim: the binding-graph coverage below is interim. D-276 node eligibility, the D-275 closing rule and full §4
-// refusal precedence are Stage B resolver semantics owned by plan 316 PR 4; coverage is to call that resolver's
-// binding-graph function once it lands (review round 2 follow-up row).
+// Retained rotations and catalogs pass an interim structural mirror of the CatalogTrust resolver before they can become
+// nodes or heads; any failure refuses. Non-claim: entry-fact observation, D-276 node eligibility, the D-275 closing rule
+// and full §4 refusal precedence are Stage B resolver semantics owned by plan 316 PR 4, whose binding-graph function
+// replaces this mirror once it lands (row 354).
 import { verifyEd25519 } from "./signature";
 import { analyzeAuthority } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
@@ -21,7 +22,7 @@ import {
   canonicalBytesForCatalogReplacementClaim, canonicalBytesForCatalogReplacementPossession, catalogInventoryId,
   catalogReplacementClaimToCarrierTerm, catalogRotationId, normalizeCatalogEnvelope, normalizeCatalogReplacementClaim,
   normalizeCatalogRotationEnvelope, transportCatalogId, verifyCatalogEnvelope, verifyCatalogReplacementPossession,
-  verifyCatalogRotationEnvelope,
+  verifyCatalogRotationEnvelope, canonicalBytesForCatalogRotation,
 } from "./treehouse_catalog_codec";
 import type {
   CatalogCutoff, CatalogEntry, CatalogEnvelope, CatalogPriorCatalog, CatalogReplacementClaim, CatalogRotationEnvelope,
@@ -216,6 +217,10 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   const covered = coverage(history, replica, bootstrap, claim, request);
   if (covered !== null) return refuse(covered);
   const claimBytes = canonicalBytesForCatalogReplacementClaim(claim);
+  // The journal is caller-owned and may be lost or belong to another device, so a nonce already carried by any
+  // retained replacement in this Space is reused regardless of the journal.
+  if (history.ops.some((op) => op.command === "replace_catalog_v1" &&
+    normalizeCatalogReplacementClaim(op.commandArgs?.[0])?.nonce === claim.nonce)) return refuse("attempt_nonce_reused");
   // The attempt journal is keyed by the claim nonce; identical bytes are an idempotent retry.
   const prior = journal === null ? undefined : Object.hasOwn(journal, claim.nonce) ? journal[claim.nonce] : undefined;
   if (prior !== undefined && !(prior.claimBytes instanceof Uint8Array && equalBytes(prior.claimBytes, claimBytes))) {
@@ -235,49 +240,53 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
 
 // --- retained-evidence coverage (plan 316 §3: parents, priorCatalogs, generation) ----------
 
-type BindingNode = {generation: number; key: string; parents: readonly string[]};
+type BindingNode = {generation: number; key: string; parents: readonly string[]; inventory: string | null;
+  serviceId: string; serviceKey: string};
+type BootstrapRecord = {catalogKey: string; serviceId: string; serviceKey: string};
+class CoverageRefusal { constructor(readonly reason: string) {} }
+const refuseCoverage = (reason: string): never => { throw new CoverageRefusal(reason); };
+const maxSafe = Number.MAX_SAFE_INTEGER;
+const safe = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= maxSafe;
 
 // Nodes: the honored bootstrap (generation 0), every on-Space replacement honored at its strict prefix (D-276,
-// refused-on-the-union nodes included) and every retained rotation chained and verified from a known node.
-function coverage(history: JudgedHistory, replica: string, bootstrap: {id: string; record: {catalogKey: string}},
+// refused-on-the-union nodes included) and every retained rotation that resolves under the Stage B structural rules.
+// Retained rotations and catalogs are hostile until resolved: each must pass the checks CatalogTrust applies (chain,
+// generation/revision step, key separation, both signatures, prior/previous presence, binding, inventory and cutoff
+// agreement) before it may become a node, a held catalog or a head; any failure refuses the whole preflight.
+// Entry-fact observation against the retained histories stays with the PR 4 resolver (row 354).
+function coverage(history: JudgedHistory, replica: string, bootstrap: {id: string; record: BootstrapRecord},
   claim: CatalogReplacementClaim, request: TreehouseCatalogReplacementRequest): string | null {
-  const nodes = new Map<string, BindingNode>([[bootstrap.id, {generation: 0, key: bootstrap.record.catalogKey, parents: []}]]);
+  const record = bootstrap.record;
+  const nodes = new Map<string, BindingNode>();
   for (const op of history.ops) {
     if (op.command !== "replace_catalog_v1") continue;
     const cited = normalizeCatalogReplacementClaim(op.commandArgs?.[0]);
     if (cited === null || cited.space !== replica || cited.bootstrap !== bootstrap.id || !honoredAtPrefix(history, op.id, replica)) continue;
-    nodes.set(op.id, {generation: cited.generation, key: cited.newCatalogKey, parents: cited.parents});
+    nodes.set(op.id, {generation: cited.generation, key: cited.newCatalogKey, parents: cited.parents, inventory: cited.inventoryDigest,
+      serviceId: cited.newServiceId, serviceKey: cited.newServiceKey});
   }
-  const pending = new Map<string, CatalogRotationEnvelope>();
+  nodes.set(bootstrap.id, {generation: 0, key: record.catalogKey, parents: [], inventory: null, serviceId: record.serviceId,
+    serviceKey: record.serviceKey});
+  const rotations = new Map<string, CatalogRotationEnvelope>();
   for (const value of request.rotations as unknown[]) {
     const envelope = normalizeCatalogRotationEnvelope(value);
     if (envelope === null) return "malformed_catalog";
     if (envelope.rotation.space !== replica || envelope.rotation.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
-    pending.set(catalogRotationId(envelope), envelope);
+    rotations.set(catalogRotationId(envelope), envelope);
   }
-  // Rotations chain only from a known node, verified under that node's catalog key.
-  while (pending.size > 0) {
-    const ready = [...pending].filter(([, envelope]) => nodes.has(envelope.rotation.parent));
-    if (ready.length === 0) return "trust_pending";
-    for (const [id, envelope] of ready) {
-      const parent = nodes.get(envelope.rotation.parent)!;
-      if (nodes.has(id) || envelope.rotation.generation !== parent.generation + 1) return "invalid_catalog_transition";
-      if (!verifyCatalogRotationEnvelope(envelope, parent.key)) return "invalid_catalog_signature";
-      nodes.set(id, {generation: envelope.rotation.generation, key: envelope.rotation.newCatalogKey, parents: [envelope.rotation.parent]});
-      pending.delete(id);
-    }
-  }
-  if ([...nodes.values()].some((node) => node.parents.some((parent) => !nodes.has(parent)))) return "trust_pending";
-  const catalogs: {id: string; binding: string; previous: string | null}[] = [];
+  const catalogs = new Map<string, CatalogEnvelope>();
   for (const value of request.catalogs as unknown[]) {
     const envelope = normalizeCatalogEnvelope(value);
     if (envelope === null) return "malformed_catalog";
     if (envelope.catalog.space !== replica || envelope.catalog.bootstrap !== bootstrap.id) return "wrong_catalog_scope";
-    const binding = nodes.get(envelope.catalog.binding);
-    if (binding === undefined) return "trust_pending";
-    if (!verifyCatalogEnvelope(envelope, binding.key)) return "invalid_catalog_signature";
-    catalogs.push({id: transportCatalogId(envelope.catalog), binding: envelope.catalog.binding, previous: envelope.catalog.previous});
+    catalogs.set(transportCatalogId(envelope.catalog), envelope);
   }
+  try { resolveGraph(nodes, rotations, catalogs); } catch (error) {
+    if (error instanceof CoverageRefusal) return error.reason;
+    throw error;
+  }
+  if ([...nodes.values()].some((node) => node.parents.some((parent) => !nodes.has(parent)))) return "trust_pending";
+  const held = [...catalogs].map(([id, envelope]) => ({id, binding: envelope.catalog.binding, previous: envelope.catalog.previous}));
   // D-275: every ancestor-or-self of a cited parent is closed; the rest are heads.
   const closed = new Set<string>();
   const stack = [...nodes.values()].flatMap((node) => [...node.parents]);
@@ -297,14 +306,72 @@ function coverage(history: JudgedHistory, replica: string, bootstrap: {id: strin
   // Step 5: each prior entry names a cited parent and, unless null, a catalog held under it.
   if (claim.priorCatalogs.some((item) => !claim.parents.includes(item.binding))) return "invalid_catalog_transition";
   if (claim.priorCatalogs.some((item) => item.catalog !== null &&
-    !catalogs.some((held) => held.binding === item.binding && held.id === item.catalog))) return "trust_pending";
-  const previous = new Set(catalogs.map((item) => `${item.binding}\u0000${item.previous}`));
+    !held.some((entry) => entry.binding === item.binding && entry.id === item.catalog))) return "trust_pending";
+  const previous = new Set(held.map((item) => `${item.binding}\u0000${item.previous}`));
   const expected = claim.parents.flatMap((binding): CatalogPriorCatalog[] => {
-    const under = [...new Set(catalogs.filter((item) => item.binding === binding && !previous.has(`${binding}\u0000${item.id}`))
+    const under = [...new Set(held.filter((item) => item.binding === binding && !previous.has(`${binding}\u0000${item.id}`))
       .map((item) => item.id))];
     return under.length === 0 ? [{binding, catalog: null}] : under.map((catalog) => ({binding, catalog}));
   });
   return cover(expected, claim.priorCatalogs, (item) => `${item.binding}\u0000${item.catalog}`);
+}
+
+// Same traversal as CatalogTrust: every catalog in id order, then every rotation; a cycle is a transition failure.
+function resolveGraph(nodes: Map<string, BindingNode>, rotations: Map<string, CatalogRotationEnvelope>,
+  catalogs: Map<string, CatalogEnvelope>): void {
+  const ready = new Set<string>(), visiting = new Set<string>();
+  const bindingFor = (id: string): BindingNode => {
+    const known = nodes.get(id);
+    if (known !== undefined) return known;
+    const envelope = rotations.get(id);
+    if (envelope === undefined) return refuseCoverage("trust_pending");
+    if (visiting.has(`b:${id}`)) refuseCoverage("invalid_catalog_transition");
+    visiting.add(`b:${id}`);
+    const r = envelope.rotation, parent = bindingFor(r.parent);
+    if (r.generation !== parent.generation + 1 || !safe(parent.generation + 1) || r.newCatalogKey === parent.key ||
+      r.newCatalogKey === parent.serviceKey) refuseCoverage("invalid_catalog_transition");
+    if (!verifyCatalogRotationEnvelope(envelope, parent.key)) {
+      // Distinguish old signer authorization from possession under the new key.
+      const old = canonicalBase64Bytes(envelope.oldSignature, 64), pub = canonicalBase64Bytes(parent.key, 32);
+      if (old === null || pub === null || !verifyEd25519(old, canonicalBytesForCatalogRotation(r), pub)) refuseCoverage("invalid_catalog_signature");
+      refuseCoverage("invalid_possession");
+    }
+    const prior = catalogFor(r.priorCatalog).catalog;
+    if (prior.binding !== r.parent || catalogInventoryId(prior.entries) !== r.inventoryDigest ||
+      !same(r.cutoffs.map((cutoff) => cutoff.replica), prior.entries.map((item) => item.replica))) refuseCoverage("invalid_catalog_transition");
+    const node: BindingNode = {generation: r.generation, key: r.newCatalogKey, parents: [r.parent], inventory: r.inventoryDigest,
+      serviceId: parent.serviceId, serviceKey: parent.serviceKey};
+    nodes.set(id, node);
+    visiting.delete(`b:${id}`);
+    return node;
+  };
+  const catalogFor = (id: string): CatalogEnvelope => {
+    const envelope = catalogs.get(id);
+    if (envelope === undefined) return refuseCoverage("trust_pending");
+    if (ready.has(id)) return envelope;
+    if (visiting.has(`c:${id}`)) refuseCoverage("invalid_catalog_transition");
+    visiting.add(`c:${id}`);
+    const c = envelope.catalog, binding = bindingFor(c.binding);
+    if (!verifyCatalogEnvelope(envelope, binding.key)) refuseCoverage("invalid_catalog_signature");
+    if (c.entries.some((item) => item.serviceId !== binding.serviceId || item.serviceKey !== binding.serviceKey)) refuseCoverage("wrong_catalog_scope");
+    if (c.previous !== null) {
+      const prior = catalogFor(c.previous).catalog;
+      if (prior.binding !== c.binding || c.revision !== prior.revision + 1 || !safe(prior.revision + 1) ||
+        !inventoryExtends(prior.entries, c.entries)) refuseCoverage("invalid_catalog_transition");
+    } else if (binding.inventory !== null && catalogInventoryId(c.entries) !== binding.inventory) refuseCoverage("invalid_catalog_transition");
+    visiting.delete(`c:${id}`); ready.add(id);
+    return envelope;
+  };
+  for (const id of [...catalogs.keys()].sort(compareUtf8)) catalogFor(id);
+  for (const id of [...rotations.keys()].sort(compareUtf8)) bindingFor(id);
+}
+
+const extendedKeys = ["root", "genesis", "creation", "reference", "kind", "schema"] as const;
+function inventoryExtends(before: readonly CatalogEntry[], after: readonly CatalogEntry[]): boolean {
+  return before.every((entry) => {
+    const next = after.find((item) => item.replica === entry.replica);
+    return next !== undefined && extendedKeys.every((key) => entry[key] === next[key]);
+  });
 }
 
 function honoredAtPrefix(history: JudgedHistory, id: string, replica: string): boolean {

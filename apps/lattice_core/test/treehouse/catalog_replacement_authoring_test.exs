@@ -505,7 +505,7 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
              Space.prepare_replace_catalog(%{f.space_log | ops: nil}, request(f), %{})
   end
 
-  defp catalog(f, binding, revision, previous) do
+  defp catalog(f, binding, revision, previous, entries \\ nil) do
     catalog = %{
       version: 1,
       product: :treehouse,
@@ -514,7 +514,7 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
       binding: binding,
       revision: revision,
       previous: previous,
-      entries: entries(f, f.service.pub)
+      entries: entries || bound_entries(f)
     }
 
     %{
@@ -523,8 +523,21 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     }
   end
 
-  defp rotation(f, parent, generation, old, new, label) do
+  # Catalog entries under the bootstrap binding carry the bootstrap's own service pair.
+  defp bound_entries(f) do
+    for entry <- entries(f, f.service.pub), do: %{entry | service_id: f.record.service_id}
+  end
+
+  defp rotation(f, parent, generation, old, new, label, prior \\ nil) do
     attempt = prepared(f)
+
+    prior_catalog =
+      if prior, do: TransportCatalog.catalog_id(prior.catalog), else: id("prior-" <> label)
+
+    inventory =
+      if prior,
+        do: TransportCatalog.inventory_id(prior.catalog.entries),
+        else: attempt.claim.inventory_digest
 
     rotation = %{
       version: 1,
@@ -532,11 +545,11 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
       space: f.replica,
       bootstrap: f.bootstrap.id,
       parent: parent,
-      prior_catalog: id("prior-" <> label),
+      prior_catalog: prior_catalog,
       generation: generation,
       new_catalog_key: new.pub,
       nonce: id("rotation-" <> label),
-      inventory_digest: attempt.claim.inventory_digest,
+      inventory_digest: inventory,
       cutoffs: attempt.claim.cutoffs
     }
 
@@ -628,17 +641,19 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
   test "a retained rotation advances the head the replacement must cite" do
     f = fixture()
     next = Identity.from_seed("catalog", "r316-pr2-rotated-catalog")
-    {t, rotated} = rotation(f, f.bootstrap.id, 1, f.catalog, next, "t")
+    prior = catalog(f, f.bootstrap.id, 0, nil)
+    {t, rotated} = rotation(f, f.bootstrap.id, 1, f.catalog, next, "t", prior)
+    retained = %{rotations: [rotated], catalogs: [prior]}
 
     assert {:error, :catalog_fork} =
-             Space.prepare_replace_catalog(f.space_log, request(f, %{rotations: [rotated]}), %{})
+             Space.prepare_replace_catalog(f.space_log, request(f, retained), %{})
 
-    over_t = %{
-      rotations: [rotated],
-      parents: [t],
-      prior_catalogs: [%{binding: t, catalog: nil}],
-      generation: 2
-    }
+    over_t =
+      Map.merge(retained, %{
+        parents: [t],
+        prior_catalogs: [%{binding: t, catalog: nil}],
+        generation: 2
+      })
 
     assert {:ok, attempt} = Space.prepare_replace_catalog(f.space_log, request(f, over_t), %{})
     assert attempt.claim.parents == [t] and attempt.claim.generation == 2
@@ -651,15 +666,225 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
              )
 
     # Signed by a key that is not the parent binding's, or chained from an unknown node.
-    {_, forged} = rotation(f, f.bootstrap.id, 1, f.root, next, "forged")
+    {_, forged} = rotation(f, f.bootstrap.id, 1, f.root, next, "forged", prior)
 
     assert {:error, :invalid_catalog_signature} =
-             Space.prepare_replace_catalog(f.space_log, request(f, %{rotations: [forged]}), %{})
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{retained | rotations: [forged]}),
+               %{}
+             )
 
-    {_, orphan} = rotation(f, id("unknown-parent"), 1, f.catalog, next, "orphan")
+    {_, orphan} = rotation(f, id("unknown-parent"), 1, f.catalog, next, "orphan", prior)
 
     assert {:error, :trust_pending} =
-             Space.prepare_replace_catalog(f.space_log, request(f, %{rotations: [orphan]}), %{})
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{retained | rotations: [orphan]}),
+               %{}
+             )
+  end
+
+  # Review thread (P1, :318): a correctly signed rotation is not a binding node until it
+  # resolves under the Stage B structural rules; otherwise the preflight refuses rather than
+  # require a replacement to cite it.
+  test "a signed rotation that Stage B would reject never becomes a head to sign over" do
+    f = fixture()
+    next = Identity.from_seed("catalog", "r316-pr2-hostile-rotation")
+    prior = catalog(f, f.bootstrap.id, 0, nil)
+
+    over = fn {t, rotation}, catalogs ->
+      request(f, %{
+        rotations: [rotation],
+        catalogs: catalogs,
+        parents: [t],
+        prior_catalogs: [%{binding: t, catalog: nil}],
+        generation: 2
+      })
+    end
+
+    # Its prior catalog is not retained: pending, never a head.
+    missing = rotation(f, f.bootstrap.id, 1, f.catalog, next, "missing-prior")
+
+    assert {:error, :trust_pending} =
+             Space.prepare_replace_catalog(f.space_log, over.(missing, []), %{})
+
+    # Inventory digest disagrees with the prior catalog it names.
+    {t, honest} = rotation(f, f.bootstrap.id, 1, f.catalog, next, "drift", prior)
+    drifted = put_in(honest.rotation.inventory_digest, id("other-inventory"))
+    drifted = resign_rotation(drifted, f.catalog, next)
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               over.({TransportCatalog.rotation_id(drifted), drifted}, [prior]),
+               %{}
+             )
+
+    # The new catalog key is the binding's service key.
+    {_, as_service} = rotation(f, f.bootstrap.id, 1, f.catalog, f.service, "service", prior)
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               over.({TransportCatalog.rotation_id(as_service), as_service}, [prior]),
+               %{}
+             )
+
+    # A second rotation whose prior catalog sits under the grandparent, not its parent.
+    later = Identity.from_seed("catalog", "r316-pr2-hostile-rotation-2")
+    {t2, crossed} = rotation(f, t, 2, next, later, "crossed", prior)
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{
+                 rotations: [honest, crossed],
+                 catalogs: [prior],
+                 parents: [t2],
+                 prior_catalogs: [%{binding: t2, catalog: nil}],
+                 generation: 3
+               }),
+               %{}
+             )
+
+    refute_received {:signed, :op}
+  end
+
+  # Review thread (P1, :413): a signed catalog is held, and may be a head, only once its chain
+  # and binding semantics resolve.
+  test "a signed catalog whose chain Stage B would reject never becomes a held head" do
+    f = fixture()
+    first = catalog(f, f.bootstrap.id, 0, nil)
+    first_id = TransportCatalog.catalog_id(first.catalog)
+
+    cite = fn catalogs, head ->
+      request(f, %{
+        catalogs: catalogs,
+        prior_catalogs: [%{binding: f.bootstrap.id, catalog: head}]
+      })
+    end
+
+    # `previous` names a catalog that is not retained.
+    dangling = catalog(f, f.bootstrap.id, 1, id("absent-previous"))
+    dangling_id = TransportCatalog.catalog_id(dangling.catalog)
+
+    assert {:error, :trust_pending} =
+             Space.prepare_replace_catalog(f.space_log, cite.([dangling], dangling_id), %{})
+
+    # A revision that does not step by one.
+    skipped = catalog(f, f.bootstrap.id, 5, first_id)
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               cite.([first, skipped], TransportCatalog.catalog_id(skipped.catalog)),
+               %{}
+             )
+
+    # A successor that drops a retained replica does not extend the inventory.
+    shrunk = catalog(f, f.bootstrap.id, 1, first_id, Enum.take(bound_entries(f), 1))
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               cite.([first, shrunk], TransportCatalog.catalog_id(shrunk.catalog)),
+               %{}
+             )
+
+    # Entries served by a credential other than the binding's.
+    stranger = catalog(f, f.bootstrap.id, 0, nil, entries(f, f.service.pub))
+
+    assert {:error, :wrong_catalog_scope} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               cite.([stranger], TransportCatalog.catalog_id(stranger.catalog)),
+               %{}
+             )
+
+    refute_received {:signed, :op}
+  end
+
+  # Review thread (P2, :82): the caller-owned journal may be lost or belong to another device.
+  test "a nonce already carried by a retained replacement is reused even with an empty journal" do
+    f = fixture()
+    attempt = prepared(f)
+
+    {:ok, %{op: r1}} =
+      Space.author_replace_catalog(op_signer(f), f.space_log, attempt, possess(f, attempt))
+
+    log = Log.append!(f.space_log, r1)
+
+    reused = %{
+      parents: [r1.id],
+      prior_catalogs: [%{binding: r1.id, catalog: nil}],
+      generation: 2,
+      new_catalog_key: Identity.from_seed("catalog", "r316-pr2-nonce-reuse").pub
+    }
+
+    assert {:error, :attempt_nonce_reused} =
+             Space.prepare_replace_catalog(log, request(f, reused), %{})
+
+    assert {:ok, _} =
+             Space.prepare_replace_catalog(
+               log,
+               request(f, Map.put(reused, :nonce, id("fresh"))),
+               %{}
+             )
+  end
+
+  # Review thread (P2, TS :329) twin: replica sets compare in UTF-8 byte order on both sides.
+  test "non-ASCII thread replicas order by UTF-8 bytes on both sides of the recovery check" do
+    f = fixture()
+    service_key = f.new_service.pub
+    [space] = Enum.filter(entries(f, service_key), &(&1.kind == :space))
+
+    threads =
+      for suffix <- ["\u{E000}", "\u{10000}"] do
+        replica = Authority.bind_replica("replica:treehouse:thread:" <> suffix, f.root.pub)
+        d = Delegation.genesis(f.root, replica, ops: [:post], roles: [])
+        genesis = Op.new(f.root, replica, [], :authority, {:genesis, d, %{}})
+        {replica, genesis}
+      end
+
+    thread_entries =
+      for {replica, genesis} <- threads do
+        %{
+          space
+          | replica: replica,
+            kind: :thread,
+            schema: :treehouse_thread_v1,
+            genesis: genesis.id,
+            creation: genesis.id,
+            reference: id("reference-" <> replica),
+            route: "/r/" <> id("route-" <> replica)
+        }
+      end
+
+    all = Enum.sort_by([space | thread_entries], & &1.replica)
+
+    logs =
+      Map.new(threads, fn {replica, genesis} ->
+        {replica, Log.append!(Log.new(replica), genesis)}
+      end)
+
+    assert {:ok, attempt} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{entries: all, replica_logs: logs}),
+               %{}
+             )
+
+    assert Enum.map(attempt.claim.cutoffs, & &1.replica) == Enum.map(all, & &1.replica)
+  end
+
+  defp resign_rotation(envelope, old, new) do
+    %{
+      envelope
+      | old_signature: Identity.sign(old, TransportCatalog.rotation_bytes(envelope.rotation)),
+        new_signature:
+          Identity.sign(new, TransportCatalog.rotation_possession_bytes(envelope.rotation))
+    }
   end
 
   test "an appended replacement is a head a later replacement must cite (D-276)" do
