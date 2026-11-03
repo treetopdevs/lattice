@@ -248,16 +248,17 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          :ok <- cover_parents(claim.parents, nodes),
          :ok <- cover_generation(claim, nodes),
          :ok <- held_priors(claim, held) do
-      expected =
-        Enum.flat_map(claim.parents, fn parent ->
-          case Map.get(catalog_heads, parent, []) do
-            [] -> [%{binding: parent, catalog: nil}]
-            catalogs -> for catalog <- catalogs, do: %{binding: parent, catalog: catalog}
-          end
-        end)
-
-      cover(expected, claim.prior_catalogs)
+      cover(expected_priors(claim.parents, catalog_heads), claim.prior_catalogs)
     end
+  end
+
+  defp expected_priors(parents, catalog_heads) do
+    Enum.flat_map(parents, fn parent ->
+      case Map.get(catalog_heads, parent, []) do
+        [] -> [%{binding: parent, catalog: nil}]
+        catalogs -> for catalog <- catalogs, do: %{binding: parent, catalog: catalog}
+      end
+    end)
   end
 
   defp rotation_envelopes(log, rotations, bootstrap) do
