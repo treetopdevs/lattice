@@ -2541,6 +2541,30 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Decision</dt><dd>Both runtimes now refuse <code>invalid_catalog_signature</code> at envelope parse when a repeated catalog id carries a different signature, before any verification, matching the resolver exactly. The regression runs a catalog under an unknown binding: alone it gives <code>trust_pending</code>, and with a differing copy it gives <code>invalid_catalog_signature</code> in either order. This failed on the round-4 code. A genuinely second valid Ed25519 signature cannot be produced with the deterministic test signer, so the regression proves the refusal happens at parse instead.</dd>
 <dt>Reason</dt><dd>Matching the resolver's parse rule leaves no verification path to reason about. This was the second and last Codex round allowed for this pass.</dd>
 </dl></section>
+<section id="d442"><h2><span>D-442</span> Row 316 PR 2 review round 6 (connector threads after CI went green) dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
+<dt>Finding</dt><dd>Seven threads:
+<ul>
+<li>CodeRabbit: the row 318 Status cell is longer than 200 characters.</li>
+<li>P1: conflicting duplicate catalog signatures. Raised against a pre-D-441 commit and already fixed in cb5764f28.</li>
+<li>P2: the resolver's retained-evidence budgets are not applied.</li>
+<li>P2: TS prepare did not snapshot its inputs before awaiting.</li>
+<li>P1: the new entries are not checked against every cited prior catalog.</li>
+<li>P1: a changed service key under the parent's service ID is accepted.</li>
+<li>P1: the Space entry's reference is not bound to the bootstrap.</li>
+</ul></dd>
+<dt>Decision</dt><dd>Fixed in both runtimes, with a mutation-checked regression per rule:
+<ul>
+<li>The Space entry's reference must equal the honored bootstrap, else <code>application_invalid_catalog</code>.</li>
+<li>Plan §3 step 5: against each parent node, a changed service key needs a changed service ID. Keeping the whole pair stays allowed (OD-15).</li>
+<li>Plan §3 step 5: the entries must extend every cited non-nil prior catalog. Both step-5 failures are <code>invalid_catalog_transition</code>.</li>
+<li>More than 1,024 retained catalogs plus rotations is <code>control_history_limit</code>.</li>
+<li>TS prepare runs <code>structuredClone</code> over its whole input before deriving.</li>
+<li>The row 318 cell is shortened.</li>
+</ul>
+The resolver's JSON byte budgets are deferred to row 355. The TS test fixture's default <code>newServiceId</code> was the bootstrap's own ID with a new key, which is invalid under the new rule, so it now uses a distinct ID; the BEAM fixture already did.</dd>
+<dt>Reason</dt><dd>The P1s are intrinsic step-5 rules that Stage B applies to the candidate's own bytes, so checking them here can only refuse a replacement Stage B would refuse anyway. The byte budgets are measured on artifact JSON, which this API does not receive. A P2 that only leaves a signed replacement unusable, never one that is wrongly accepted, can be deferred under the task rules.</dd>
+</dl></section>
 </main>
 </body>
 </html>

@@ -952,6 +952,70 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     assert {:ok, _} = Space.prepare_replace_catalog(log, request(f), %{})
   end
 
+  # Review round 6: Space entry binding, service-ID rotation, prior-catalog extension, budget.
+  test "the proposed entries and service pair must be ones Stage B can accept" do
+    f = fixture()
+
+    rebound =
+      for entry <- entries(f, f.new_service.pub) do
+        if entry.kind == :space, do: %{entry | reference: id("not-the-bootstrap")}, else: entry
+      end
+
+    assert {:error, :application_invalid_catalog} =
+             Space.prepare_replace_catalog(f.space_log, request(f, %{entries: rebound}), %{})
+
+    # A new service key under the parent's service ID.
+    reused_id =
+      for entry <- entries(f, f.new_service.pub), do: %{entry | service_id: f.record.service_id}
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{new_service_id: f.record.service_id, entries: reused_id}),
+               %{}
+             )
+
+    # Keeping the parent's whole service pair is allowed (OD-15).
+    kept =
+      for entry <- entries(f, f.service.pub), do: %{entry | service_id: f.record.service_id}
+
+    assert {:ok, _} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{
+                 new_service_id: f.record.service_id,
+                 new_service_key: f.service.pub,
+                 entries: kept
+               }),
+               %{}
+             )
+
+    # Entries that change an immutable field of the cited prior catalog.
+    first = catalog(f, f.bootstrap.id, 0, nil)
+    first_id = TransportCatalog.catalog_id(first.catalog)
+    cited = %{catalogs: [first], prior_catalogs: [%{binding: f.bootstrap.id, catalog: first_id}]}
+    assert {:ok, _} = Space.prepare_replace_catalog(f.space_log, request(f, cited), %{})
+
+    drifted =
+      for entry <- entries(f, f.new_service.pub) do
+        if entry.kind == :thread, do: %{entry | reference: id("other-reference")}, else: entry
+      end
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, Map.put(cited, :entries, drifted)),
+               %{}
+             )
+
+    assert {:error, :control_history_limit} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{catalogs: List.duplicate(first, 1_025)}),
+               %{}
+             )
+  end
+
   defp other_signature(<<r::binary-32, _s::binary-32>>), do: r <> :binary.copy(<<9>>, 32)
 
   defp resign_rotation(envelope, old, new) do

@@ -56,7 +56,7 @@ const post = (f: Fixture, body: string) => authorCarrierOp({ replica: f.thread, 
 function entries(f: Fixture, serviceKey: string): CatalogEntry[] {
   const entry = (replica: string, kind: "space" | "thread", genesis: string, creation: string, reference: string): CatalogEntry => ({
     product: "treehouse", replica, kind, schema: kind === "space" ? "treehouse_space_v1" : "treehouse_thread_v1",
-    root: b64(f.root.publicKey), genesis, creation, reference, route: `/r/${id(`route-${replica}`)}`, serviceId: id("service"), serviceKey });
+    root: b64(f.root.publicKey), genesis, creation, reference, route: `/r/${id(`route-${replica}`)}`, serviceId: id("new-service"), serviceKey });
   return [entry(f.replica, "space", f.genesis.id, f.creation.id, f.bootstrap.id),
     entry(f.thread, "thread", f.threadGenesis.id, f.threadGenesis.id, id("thread-reference"))]
     .sort((a, b) => a.replica < b.replica ? -1 : a.replica > b.replica ? 1 : 0);
@@ -66,7 +66,7 @@ function request(f: Fixture, overrides: Partial<TreehouseCatalogReplacementReque
   const serviceKey = overrides.newServiceKey ?? b64(f.newService.publicKey);
   return { author: b64(f.nominee.publicKey), nonce: id("nonce"), parents: [f.bootstrap.id],
     priorCatalogs: [{ binding: f.bootstrap.id, catalog: null }], generation: 1, newCatalogKey: b64(f.newCatalog.publicKey),
-    newServiceId: id("service"), newServiceKey: serviceKey, newOrigin: "wss://replacement-relay.invalid",
+    newServiceId: id("new-service"), newServiceKey: serviceKey, newOrigin: "wss://replacement-relay.invalid",
     entries: entries(f, serviceKey), replicaHistories: { [f.thread]: { frames: threadFrames, rejected: [] } }, rotations: [], catalogs: [],
     ...overrides };
 }
@@ -512,4 +512,37 @@ test("an unauthorized retained proposal does not reserve the nonce", async () =>
   const frames = [...f.frames, raw];
   assert.notEqual((await judge(frames)).get(raw.id), undefined);
   assert.equal(reason(await prepare(f, frames, request(f))), "ok");
+});
+
+// Review round 6: Space entry binding, service-ID rotation, prior-catalog extension, budget, input snapshot.
+test("the proposed entries and service pair must be ones Stage B can accept", async () => {
+  const f = await fixture();
+  const fresh = b64(f.newService.publicKey);
+  const rebound = entries(f, fresh).map((item) => item.kind === "space" ? { ...item, reference: id("not-the-bootstrap") } : item);
+  assert.equal(reason(await prepare(f, f.frames, request(f, { entries: rebound }))), "application_invalid_catalog");
+  const reusedId = entries(f, fresh).map((item) => ({ ...item, serviceId: f.record.serviceId }));
+  assert.equal(reason(await prepare(f, f.frames, request(f, { newServiceId: f.record.serviceId, entries: reusedId }))),
+    "invalid_catalog_transition");
+  const kept = entries(f, f.record.serviceKey).map((item) => ({ ...item, serviceId: f.record.serviceId }));
+  assert.equal(reason(await prepare(f, f.frames, request(f, { newServiceId: f.record.serviceId, newServiceKey: f.record.serviceKey,
+    entries: kept }))), "ok");
+  const first = catalog(f, f.bootstrap.id, 0, null), firstId = transportCatalogId(first.catalog);
+  const cited = { catalogs: [first], priorCatalogs: [{ binding: f.bootstrap.id, catalog: firstId }] };
+  assert.equal(reason(await prepare(f, f.frames, request(f, cited))), "ok");
+  const drifted = entries(f, fresh).map((item) => item.kind === "thread" ? { ...item, reference: id("other-reference") } : item);
+  assert.equal(reason(await prepare(f, f.frames, request(f, { ...cited, entries: drifted }))), "invalid_catalog_transition");
+  assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: Array(1_025).fill(first) }))), "control_history_limit");
+});
+
+test("a request mutated while preparation is pending never changes the prepared attempt", async () => {
+  const f = await fixture();
+  const req = request(f);
+  const pending = prepareTreehouseCatalogReplacementFromFrames({ replica: f.replica, frames: f.frames, request: req, journal: {} });
+  req.newOrigin = "wss://mutated-relay.invalid";
+  req.entries.reverse();
+  const result = await pending;
+  if (!result.ok) assert.fail(result.reason);
+  assert.equal(result.attempt.claim.newOrigin, "wss://replacement-relay.invalid");
+  assert.equal(result.attempt.request.newOrigin, "wss://replacement-relay.invalid");
+  assert.deepEqual(result.attempt.request.entries, request(f).entries);
 });

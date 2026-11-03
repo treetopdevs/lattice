@@ -28,10 +28,19 @@ const refuse = (reason) => ({ ok: false, reason });
  * (honored bootstrap, retained rotations and catalogs, on-Space replacements honored at their strict prefix).
  */
 export async function prepareTreehouseCatalogReplacementFromFrames(input) {
+    // Snapshot every input first: a caller mutation while derivation awaits must never mix snapshots, and the attempt
+    // must retain the exact request its claim was derived from.
+    let snapshot;
     try {
-        if (!object(input.journal))
+        snapshot = structuredClone(input);
+    }
+    catch {
+        return refuse("application_invalid_catalog");
+    }
+    try {
+        if (!object(snapshot.journal))
             return refuse("application_invalid_catalog");
-        const prepared = await derive(input.replica, { frames: input.frames, rejected: input.rejected ?? [] }, input.request, input.journal);
+        const prepared = await derive(snapshot.replica, { frames: snapshot.frames, rejected: snapshot.rejected ?? [] }, snapshot.request, snapshot.journal);
         if (!prepared.ok)
             return prepared;
         const attempt = { ...prepared.attempt, journalEntry: entry(prepared.attempt, "awaiting_possession", null, null) };
@@ -157,8 +166,10 @@ async function derive(replica, space, value, journal) {
     try {
         if (!request.entries.every((item) => object(item) && item.serviceId === request.newServiceId && item.serviceKey === request.newServiceKey) ||
             !request.entries.some((item) => item.kind === "space") ||
-            !request.entries.every((item) => item.kind !== "space" || item.replica === replica))
+            // The Space entry is the one a first catalog can carry: its reference must be the bootstrap.
+            !request.entries.every((item) => item.kind !== "space" || (item.replica === replica && item.reference === bootstrap.id))) {
             return refuse("application_invalid_catalog");
+        }
         inventoryDigest = catalogInventoryId(request.entries);
     }
     catch {
@@ -215,6 +226,7 @@ class CoverageRefusal {
 }
 const refuseCoverage = (reason) => { throw new CoverageRefusal(reason); };
 const maxSafe = Number.MAX_SAFE_INTEGER;
+const maxArtifacts = 1_024;
 const safe = (n) => Number.isSafeInteger(n) && n >= 0 && n <= maxSafe;
 // Nodes: the honored bootstrap (generation 0), every on-Space replacement honored at its strict prefix (D-276,
 // refused-on-the-union nodes included) and every retained rotation that resolves under the Stage B structural rules.
@@ -236,6 +248,9 @@ function coverage(history, replica, bootstrap, claim, request) {
     }
     nodes.set(bootstrap.id, { generation: 0, key: record.catalogKey, parents: [], inventory: null, serviceId: record.serviceId,
         serviceKey: record.serviceKey });
+    // CatalogTrust refuses more than 1,024 retained artifacts; its JSON byte budgets are not mirrored here (row 355).
+    if (request.catalogs.length + request.rotations.length > maxArtifacts)
+        return "control_history_limit";
     const rotations = new Map();
     for (const value of request.rotations) {
         const envelope = normalizeCatalogRotationEnvelope(value);
@@ -303,6 +318,16 @@ function coverage(history, replica, bootstrap, claim, request) {
                 .map((item) => item.id))];
         return under.length === 0 ? [{ binding, catalog: null }] : under.map((catalog) => ({ binding, catalog }));
     });
+    // Step 5 (D-277): against each parent a changed service key needs a changed service ID, and the first catalog's
+    // entries extend every cited non-null prior catalog.
+    if (claim.parents.some((id) => {
+        const node = nodes.get(id);
+        return claim.newServiceKey !== node.serviceKey && claim.newServiceId === node.serviceId;
+    }))
+        return "invalid_catalog_transition";
+    if (claim.priorCatalogs.some((item) => item.catalog !== null &&
+        !inventoryExtends(catalogs.get(item.catalog).catalog.entries, request.entries)))
+        return "invalid_catalog_transition";
     return cover(expected, claim.priorCatalogs, (item) => `${item.binding}\u0000${item.catalog}`);
 }
 // Same traversal as CatalogTrust: every catalog in id order, then every rotation; a cycle is a transition failure.

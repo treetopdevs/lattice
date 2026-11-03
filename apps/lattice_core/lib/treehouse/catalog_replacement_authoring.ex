@@ -42,6 +42,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   @attempt_fields ~w(attempt_id request claim claim_bytes catalog_possession_bytes service_possession_bytes author cap frozen_frontier)a
   @zero <<0::512>>
   @max_safe_integer 9_007_199_254_740_991
+  @max_artifacts 1_024
   @extended_keys ~w(root genesis creation reference kind schema)a
 
   @spec prepare(Log.t(), map(), map()) :: {:ok, map()} | {:error, atom()}
@@ -78,7 +79,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          {:ok, bootstrap} <- bootstrap(log),
          {:ok, author, holder_epoch, cap} <- holder(log, request.author),
          {:ok, epoch, basis} <- epoch(log),
-         {:ok, inventory} <- inventory(log, request),
+         {:ok, inventory} <- inventory(log, request, bootstrap),
          {:ok, cutoffs} <- cutoffs(log, request),
          {:ok, claim} <-
            claim(log, request, bootstrap, {author, holder_epoch, cap}, {epoch, basis}, deps,
@@ -168,17 +169,22 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     end
   end
 
-  defp inventory(log, request) do
+  # The Space entry is the one a first catalog under the new binding can carry:
+  # `TransportCatalog.normalize_catalog/1` requires its reference to be the bootstrap.
+  defp inventory(log, request, bootstrap) do
     entries = request.entries
 
     if Enum.all?(entries, &service_entry?(&1, request)) and
          Enum.any?(entries, &match?(%{kind: :space}, &1)) and
-         Enum.all?(entries, &(&1.kind != :space or &1.replica == log.replica)),
+         Enum.all?(entries, &(&1.kind != :space or space_entry?(&1, log, bootstrap))),
        do: {:ok, TransportCatalog.inventory_id(entries)},
        else: {:error, :application_invalid_catalog}
   rescue
     _ -> {:error, :application_invalid_catalog}
   end
+
+  defp space_entry?(entry, log, bootstrap),
+    do: entry.replica == log.replica and Map.get(entry, :reference) == bootstrap.id
 
   defp service_entry?(entry, request),
     do:
@@ -267,7 +273,8 @@ defmodule Treehouse.CatalogReplacementAuthoring do
       }
     }
 
-    with {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
+    with :ok <- artifact_budget(request),
+         {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
          {:ok, catalogs} <- catalog_envelopes(log, request.catalogs, bootstrap),
          {:ok, nodes} <-
            resolve_graph(Map.merge(replacement_nodes(log, bootstrap), root), rotations, catalogs),
@@ -275,9 +282,40 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          {catalog_heads, held} = catalog_heads(catalogs),
          :ok <- cover_parents(claim.parents, nodes),
          :ok <- cover_generation(claim, nodes),
-         :ok <- held_priors(claim, held) do
+         :ok <- held_priors(claim, held),
+         :ok <- cover_service(claim, nodes),
+         :ok <- extends_priors(claim, request.entries, catalogs) do
       cover(expected_priors(claim.parents, catalog_heads), claim.prior_catalogs)
     end
+  end
+
+  # `CatalogTrust` refuses more than @max_artifacts retained artifacts as
+  # `control_history_limit`. Its per-artifact and total JSON byte budgets are not mirrored
+  # here (row 355): the preflight receives normalized maps, not the artifact JSON.
+  defp artifact_budget(request) do
+    if length(request.catalogs) + length(request.rotations) > @max_artifacts,
+      do: {:error, :control_history_limit},
+      else: :ok
+  end
+
+  # Step 5 (D-277): against each parent binding, a changed service key needs a changed ID.
+  defp cover_service(claim, nodes) do
+    if Enum.all?(claim.parents, fn parent ->
+         {service_id, service_key} = Map.fetch!(nodes, parent).service
+         claim.new_service_key == service_key or claim.new_service_id != service_id
+       end),
+       do: :ok,
+       else: {:error, :invalid_catalog_transition}
+  end
+
+  # Step 5 (D-277): the first catalog's entries extend every cited non-nil prior catalog.
+  defp extends_priors(claim, entries, catalogs) do
+    if Enum.all?(claim.prior_catalogs, fn
+         %{catalog: nil} -> true
+         %{catalog: id} -> inventory_extends?(Map.fetch!(catalogs, id).catalog.entries, entries)
+       end),
+       do: :ok,
+       else: {:error, :invalid_catalog_transition}
   end
 
   defp expected_priors(parents, catalog_heads) do
