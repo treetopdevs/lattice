@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { authorCarrierDelegation, authorCarrierOp } from "../src/codec";
 import { bindTownshipReplica, townshipCapTerm } from "../src/township";
 import { deriveTreehouseCatalogCutoff } from "../src/treehouse_catalog_cutoff";
-import { canonicalBytesForCatalogReplacementPossession, canonicalBytesForCatalogRotation, canonicalBytesForCatalogRotationPossession, canonicalBytesForTransportCatalog, catalogReplacementClaimToCarrierTerm, catalogRotationId, transportCatalogId, } from "../src/treehouse_catalog_codec";
+import { canonicalBytesForCatalogReplacementPossession, canonicalBytesForCatalogRotation, canonicalBytesForCatalogRotationPossession, canonicalBytesForTransportCatalog, catalogInventoryId, catalogReplacementClaimToCarrierTerm, catalogRotationId, transportCatalogId, } from "../src/treehouse_catalog_codec";
 import { authorTreehouseCatalogReplacementFromFrames, prepareTreehouseCatalogReplacementFromFrames, } from "../src/index";
 import { judge, replacementBaseFixture, seededSigner } from "./support/export_treehouse_catalog_replacement";
 const atom = (name) => ["atom", name];
@@ -278,16 +278,20 @@ test("a caller attempt mutated during an async signer never pairs the old frame 
     assert.notDeepEqual(attempt.claimBytes, original);
 });
 const catalogSigner = (_f) => seededSigner("r316-pr2-ts-catalog");
-function catalog(f, binding, revision, previous) {
+// Catalog entries under the bootstrap binding carry the bootstrap's own service pair.
+const boundEntries = (f) => entries(f, f.record.serviceKey).map((item) => ({ ...item, serviceId: f.record.serviceId }));
+function catalog(f, binding, revision, previous, entries) {
     const value = { version: 1, product: "treehouse", space: f.replica, bootstrap: f.bootstrap.id, binding, revision,
-        previous, entries: entries(f, f.record.serviceKey) };
+        previous, entries: entries ?? boundEntries(f) };
     return { catalog: value, signature: b64(catalogSigner(f).sign(canonicalBytesForTransportCatalog(value))) };
 }
-async function rotation(f, parent, generation, old, next, label) {
+async function rotation(f, parent, generation, old, next, label, prior, tamper = () => { }) {
     const attempt = await prepared(f);
     const value = { version: 1, product: "treehouse", space: f.replica, bootstrap: f.bootstrap.id, parent,
-        priorCatalog: id(`prior-${label}`), generation, newCatalogKey: b64(next.publicKey), nonce: id(`rotation-${label}`),
-        inventoryDigest: attempt.claim.inventoryDigest, cutoffs: attempt.claim.cutoffs };
+        priorCatalog: prior ? transportCatalogId(prior.catalog) : id(`prior-${label}`), generation, newCatalogKey: b64(next.publicKey),
+        nonce: id(`rotation-${label}`), inventoryDigest: prior ? catalogInventoryId(prior.catalog.entries) : attempt.claim.inventoryDigest,
+        cutoffs: attempt.claim.cutoffs };
+    tamper(value);
     const envelope = { rotation: value,
         oldSignature: b64(old.sign(canonicalBytesForCatalogRotation(value))),
         newSignature: b64(next.sign(canonicalBytesForCatalogRotationPossession(value))) };
@@ -322,18 +326,70 @@ test("parents, priorCatalogs and generation are checked against the binding grap
 test("a retained rotation advances the head the replacement must cite", async () => {
     const f = await fixture();
     const next = seededSigner("r316-pr2-ts-rotated-catalog");
-    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), next, "t");
-    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [t.envelope] }))), "catalog_fork");
-    const overT = { rotations: [t.envelope], parents: [t.id], priorCatalogs: [{ binding: t.id, catalog: null }], generation: 2 };
+    const prior = catalog(f, f.bootstrap.id, 0, null);
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), next, "t", prior);
+    const retained = { rotations: [t.envelope], catalogs: [prior] };
+    assert.equal(reason(await prepare(f, f.frames, request(f, retained))), "catalog_fork");
+    const overT = { ...retained, parents: [t.id], priorCatalogs: [{ binding: t.id, catalog: null }], generation: 2 };
     const ok = await prepare(f, f.frames, request(f, overT));
     assert.equal(reason(ok), "ok");
     if (ok.ok)
         assert.deepEqual([ok.attempt.claim.parents, ok.attempt.claim.generation], [[t.id], 2]);
     assert.equal(reason(await prepare(f, f.frames, request(f, { ...overT, generation: 1 }))), "invalid_catalog_transition");
-    const forged = await rotation(f, f.bootstrap.id, 1, f.root, next, "forged");
-    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [forged.envelope] }))), "invalid_catalog_signature");
-    const orphan = await rotation(f, id("unknown-parent"), 1, catalogSigner(f), next, "orphan");
-    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [orphan.envelope] }))), "trust_pending");
+    const forged = await rotation(f, f.bootstrap.id, 1, f.root, next, "forged", prior);
+    assert.equal(reason(await prepare(f, f.frames, request(f, { ...retained, rotations: [forged.envelope] }))), "invalid_catalog_signature");
+    const orphan = await rotation(f, id("unknown-parent"), 1, catalogSigner(f), next, "orphan", prior);
+    assert.equal(reason(await prepare(f, f.frames, request(f, { ...retained, rotations: [orphan.envelope] }))), "trust_pending");
+});
+// Review thread (P1, :318): a correctly signed rotation is not a binding node until it resolves under the Stage B
+// structural rules; otherwise the preflight refuses rather than require a replacement to cite it.
+test("a signed rotation that Stage B would reject never becomes a head to sign over", async () => {
+    const f = await fixture();
+    signed = [];
+    const next = seededSigner("r316-pr2-ts-hostile-rotation");
+    const prior = catalog(f, f.bootstrap.id, 0, null);
+    const over = (t, catalogs, extra = []) => request(f, { rotations: [...extra, t.envelope], catalogs, parents: [t.id], priorCatalogs: [{ binding: t.id, catalog: null }],
+        generation: 2 + extra.length });
+    const missing = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), next, "missing-prior");
+    assert.equal(reason(await prepare(f, f.frames, over(missing, []))), "trust_pending");
+    const drifted = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), next, "drift", prior, (value) => { value.inventoryDigest = id("other-inventory"); });
+    assert.equal(reason(await prepare(f, f.frames, over(drifted, [prior]))), "invalid_catalog_transition");
+    const serviceSigner = seededSigner("r316-pr2-ts-service");
+    assert.equal(b64(serviceSigner.publicKey), f.record.serviceKey);
+    const asService = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), serviceSigner, "service", prior);
+    assert.equal(reason(await prepare(f, f.frames, over(asService, [prior]))), "invalid_catalog_transition");
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), next, "honest", prior);
+    const crossed = await rotation(f, t.id, 2, next, seededSigner("r316-pr2-ts-hostile-rotation-2"), "crossed", prior);
+    assert.equal(reason(await prepare(f, f.frames, over(crossed, [prior], [t.envelope]))), "invalid_catalog_transition");
+    assert.deepEqual(signed, []);
+});
+// Review thread (P1, :413): a signed catalog is held, and may be a head, only once its chain and binding resolve.
+test("a signed catalog whose chain Stage B would reject never becomes a held head", async () => {
+    const f = await fixture();
+    const first = catalog(f, f.bootstrap.id, 0, null), firstId = transportCatalogId(first.catalog);
+    const cite = (catalogs, head) => request(f, { catalogs, priorCatalogs: [{ binding: f.bootstrap.id, catalog: head }] });
+    const dangling = catalog(f, f.bootstrap.id, 1, id("absent-previous"));
+    assert.equal(reason(await prepare(f, f.frames, cite([dangling], transportCatalogId(dangling.catalog)))), "trust_pending");
+    const skipped = catalog(f, f.bootstrap.id, 5, firstId);
+    assert.equal(reason(await prepare(f, f.frames, cite([first, skipped], transportCatalogId(skipped.catalog)))), "invalid_catalog_transition");
+    const shrunk = catalog(f, f.bootstrap.id, 1, firstId, boundEntries(f).slice(0, 1));
+    assert.equal(reason(await prepare(f, f.frames, cite([first, shrunk], transportCatalogId(shrunk.catalog)))), "invalid_catalog_transition");
+    const stranger = catalog(f, f.bootstrap.id, 0, null, entries(f, b64(f.newService.publicKey)));
+    assert.equal(reason(await prepare(f, f.frames, cite([stranger], transportCatalogId(stranger.catalog)))), "wrong_catalog_scope");
+});
+// Review thread (P2, :82): the caller-owned journal may be lost or belong to another device.
+test("a nonce already carried by a retained replacement is reused even with an empty journal", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const r1 = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt, possession: possess(f, attempt),
+        signer: f.nominee });
+    if (!r1.ok)
+        assert.fail(r1.reason);
+    const frames = [...f.frames, r1.frame];
+    const reused = { parents: [r1.frame.id], priorCatalogs: [{ binding: r1.frame.id, catalog: null }], generation: 2,
+        newCatalogKey: b64(seededSigner("r316-pr2-ts-nonce-reuse").publicKey) };
+    assert.equal(reason(await prepare(f, frames, request(f, reused), {})), "attempt_nonce_reused");
+    assert.equal(reason(await prepare(f, frames, request(f, { ...reused, nonce: id("fresh") }), {})), "ok");
 });
 test("an appended replacement is a head a later replacement must cite (D-276)", async () => {
     const f = await fixture();
@@ -354,4 +410,31 @@ test("an appended replacement is a head a later replacement must cite (D-276)", 
     const revoked = [...frames, revoke];
     assert.equal((await judge(revoked)).get(r1.frame.id), "revoked_capability");
     assert.equal(reason(await prepare(f, revoked, request(f, { nonce: id("r2") }))), "catalog_fork");
+});
+// Review thread (P2, :329): entry and supplied replica sets are both ordered by UTF-8 bytes. U+E000 sorts after
+// U+10000 under UTF-16 code units but before it under UTF-8, so a code-unit sort on either side would refuse this
+// complete set of retained histories as recovery_incomplete and diverge from BEAM.
+test("non-ASCII thread replicas order by UTF-8 bytes on both sides of the recovery check", async () => {
+    const f = await fixture();
+    const threads = await Promise.all(["", "\u{10000}"].map(async (suffix) => {
+        const replica = await bindTownshipReplica(`replica:treehouse:thread:${suffix}`, f.root.publicKey);
+        const delegation = await authorCarrierDelegation({ replica, signer: f.root, audiencePubkey: f.root.publicKey, ops: ["post"], roles: [],
+            live: true });
+        const genesis = await authorCarrierOp({ replica, signer: f.root, deps: [], kind: "authority", cap: nil,
+            body: tuple(atom("genesis"), ["delegation", delegation], ["map", []]) });
+        return { replica, genesis };
+    }));
+    const [bmp, astral] = threads;
+    assert.ok(bmp.replica > astral.replica, "UTF-16 code-unit order puts U+E000 after U+10000");
+    assert.ok(Buffer.compare(Buffer.from(bmp.replica), Buffer.from(astral.replica)) < 0, "UTF-8 order puts U+E000 first");
+    const serviceKey = b64(f.newService.publicKey);
+    const space = entries(f, serviceKey).find((item) => item.kind === "space");
+    const threadEntries = threads.map(({ replica, genesis }) => ({ ...space, replica, kind: "thread",
+        schema: "treehouse_thread_v1", genesis: genesis.id, creation: genesis.id, reference: id(`reference-${replica}`),
+        route: `/r/${id(`route-${replica}`)}` }));
+    const all = [space, ...threadEntries].sort((a, b) => Buffer.compare(Buffer.from(a.replica), Buffer.from(b.replica)));
+    const result = await prepare(f, f.frames, request(f, { entries: all, replicaHistories: Object.fromEntries(threads.map(({ replica, genesis }) => [replica, { frames: [genesis], rejected: [] }])) }));
+    assert.equal(reason(result), "ok");
+    if (result.ok)
+        assert.deepEqual(result.attempt.claim.cutoffs.map((cutoff) => cutoff.replica), all.map((item) => item.replica));
 });
