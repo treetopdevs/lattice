@@ -24,7 +24,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
   def sign(bytes, ceremony, signer_path, confirmed_digest) do
     with {:ok, package} <- review(bytes, ceremony),
          true <- confirmed_digest == package.digest,
-         :ok <- capacity(package.catalog) do
+         :ok <- capacity(package.catalog, package.binding) do
       SigningLedger.transact(ceremony, package.binding, "open", fn state ->
         choose(package, state, ceremony, signer_path)
       end)
@@ -38,8 +38,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
     _, _ -> {:error, :catalog_signing_refused}
   end
 
-  defp capacity(catalog) do
-    if catalog.revision < SigningLedger.max_envelopes(),
+  defp capacity(catalog, binding) do
+    if catalog.revision < SigningLedger.max_envelopes(binding),
       do: :ok,
       else: {:error, :catalog_ledger_capacity}
   end

@@ -19,7 +19,13 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
     ReleaseReadiness
   }
 
-  alias LatticeCarrierServer.Operator.CatalogCeremony.{SigningCommands, SigningLedger, Store}
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{
+    Binding,
+    SigningCommands,
+    SigningLedger,
+    Store
+  }
+
   alias Treehouse.TransportCatalog
 
   @spec prepare(Path.t(), binary(), Path.t(), Path.t(), Path.t()) ::
@@ -184,7 +190,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
            product: :treehouse,
            space: space.replica,
            bootstrap: review.binding.bootstrap_id,
-           binding: review.binding.bootstrap_id,
+           binding: Binding.binding_id(review.binding),
            revision: if(prior, do: prior.catalog.revision + 1, else: 0),
            previous: head,
            entries: entries

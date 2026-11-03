@@ -2293,6 +2293,130 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Decision</dt><dd>No Codex review rounds or findings were reported to the coordinator for this slice, and the final round has no findings recorded. Nothing was fixed or deferred. The bot rounds under D-38 run on this PR.</dd>
 <dt>Reason</dt><dd>It makes no claim beyond row 342. It does not claim that the flake class is gone on hosted CI, that the residual sites are stable, or anything about R13, custody, W4 or Phase G.</dd>
 </dl></section>
+<section id="d450"><h2><span>D-450</span> Take plan 316 PR 3 keying, not a fallback</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>The run prefers plan 316 PR 3's fixture-only part. PR #214 (PR 1) merged as e6df0497f. Open PRs #215 and #216 touch no carrier-server or scripts files.</dd>
+<dt>Options</dt><dd>Take PR 3 keying; take PR 6 exporter test; take row 226.</dd>
+<dt>Decision</dt><dd>Take PR 3 keying on branch <code>claude/316-pr3-ledger-generation</code>.</dd>
+<dt>Reason</dt><dd>The plan Status says it can start on fixtures now, its files are free, and only the closed-binding refusal waits on PR 4. Docs conflicts with #215/#216 in <code>plans/README.md</code>, the decisions log and the 316 plan are expected and textual. This does not claim PR 3 is complete.</dd>
+</dl></section>
+<section id="d451"><h2><span>D-451</span> Key by value, keep the helper and one ledger per ceremony directory</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>The Python owner keeps one <code>catalog-signing/</code> directory per ceremony directory and already checks the head's binding and key strings. A ceremony directory holds one <code>signer.json</code> and one <code>binding.json</code>. Custodian re-init after a replacement is a new ceremony (OD-13, rule 8).</dd>
+<dt>Options</dt><dd>(a) Pass <code>binding_id</code> as the helper's binding string; a replacement binding uses a fresh ceremony directory. (b) Per-binding subdirectories inside one ceremony directory, which changes the helper. (c) Let one ledger's head move from B to R, which loses B's chain verification.</dd>
+<dt>Decision</dt><dd>(a). <code>SigningLedger</code> sends <code>Binding.binding_id(binding)</code>, which equals <code>bootstrap_id</code> for every existing binding. A directory that holds binding B refuses init and open for R; a test pins that.</dd>
+<dt>Reason</dt><dd>It keys the ledger by <code>{binding_id, catalog_key}</code> with no custody-helper change and keeps bootstrap ledgers byte-identical. One binding per ceremony directory matches the existing <code>signer.json</code> and <code>binding.json</code> layout. It does not build custodian re-init or any ceremony step.</dd>
+</dl></section>
+<section id="d452"><h2><span>D-452</span> A mismatched binding refuses as <code>catalog_ledger_corrupt</code> for now</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>The helper's <code>head_shape</code> check uses the default reason <code>catalog_ledger_corrupt</code>. Opening B's directory with R therefore reads as corruption, not as a wrong binding.</dd>
+<dt>Options</dt><dd>Accept the existing reason and pin it; add a named reason in the helper now.</dd>
+<dt>Decision</dt><dd>Pin <code>catalog_ledger_corrupt</code> in the test and file row 362 for a named reason such as <code>catalog_ledger_binding_mismatch</code>.</dd>
+<dt>Reason</dt><dd>A named reason needs a helper and refusal-list change, which is custody code outside the PR 3 file list. The refusal is already fail-closed. It does not claim the current reason is the right operator message.</dd>
+</dl></section>
+<section id="d453"><h2><span>D-453</span> Replacement revision 0 has its own genesis rule</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd><code>extends?(catalog, nil)</code> accepts only entry kinds exactly <code>[:space, :thread]</code>. Under a replacement binding, revision 0 carries the whole inventory, its inventory_id must equal <code>claim.inventory_digest</code>, and every entry carries the new service ID and key (plan 316 §2, D-268).</dd>
+<dt>Options</dt><dd>Branch the genesis rule on the binding; reuse the bootstrap rule; skip the check and trust the resolver.</dd>
+<dt>Decision</dt><dd>Add <code>extends?/3</code> taking the binding. The bootstrap rule is unchanged and <code>extends?/2</code> stays as its public alias for <code>SignCatalog</code>. The replacement rule checks revision 0, previous nil, the inventory digest, exactly one <code>:space</code> entry and the new service identity on every entry. Later revisions use the unchanged successor rule.</dd>
+<dt>Reason</dt><dd>The custodian must not sign a revision 0 that a retained client would refuse, and the claim fixes the inventory. It does not check prior-catalog coverage or cutoffs, which are the resolver's (PR 4).</dd>
+</dl></section>
+<section id="d454"><h2><span>D-454</span> <code>Binding.replacement/3</code> derives, it does not trust</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>The ledger needs a binding map for a replacement, but deciding that a <code>replace_catalog_v1</code> op is accepted needs the PR 4 resolver over Space history plus retained rotations and catalogs.</dd>
+<dt>Options</dt><dd>Build fixture maps inline in tests; add a derivation helper in <code>binding.ex</code>; read the op from raw Space frames now.</dd>
+<dt>Decision</dt><dd>Add <code>Binding.replacement(bootstrap_binding, claim, op_id)</code>. It normalizes the claim with the PR 1 codec, checks bootstrap and Space, and returns a map with kind, <code>binding_id</code>, generation, inventory_digest, the new keys, service ID, origin and realm. Its docs say the op id and acceptance must come from the PR 4 resolver.</dd>
+<dt>Reason</dt><dd>One tested derivation keeps the field mapping from drifting between tests and the later PR 4 caller. Reading raw frames is what the plan forbids. There is no production caller in this PR, and it claims no catalog trust.</dd>
+</dl></section>
+<section id="d455"><h2><span>D-455</span> Leave other binding consumers fail-closed and file a row</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd><code>catalog_signing_package.ex</code>, <code>catalog_evidence.ex</code>, <code>release_listing.ex</code>, <code>staging.ex</code> and <code>initial_provisioning.ex</code> assume binding == bootstrap. They are outside the PR 3 file list. A replacement package would fail at <code>CatalogSigningPackage.review</code> with <code>catalog_binding_mismatch</code>.</dd>
+<dt>Options</dt><dd>Thread <code>binding_id</code> through all of them now; leave them and file a row.</dd>
+<dt>Decision</dt><dd>Leave them unchanged and file row 361. The new tests drive <code>SigningLedger.init</code> and transact directly with a fixture binding, not <code>SignCatalog.sign</code>.</dd>
+<dt>Reason</dt><dd>No replacement binding can reach those paths until the PR 4 resolver produces one, and the failure is a refusal, not a wrong signature. Widening the diff across the operator would grow a rule 3 review for no reachable behavior. It does not claim end-to-end replacement signing works.</dd>
+</dl></section>
+<section id="d456"><h2><span>D-456</span> <code>release_catalog.ex</code> gets the binding id only</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>release_catalog builds candidates with <code>binding: bootstrap_id</code>, and its revision-0 builder makes a Space entry plus one Thread. Under a replacement binding revision 0 must carry the whole inventory. <code>ReleaseReadiness.review</code> only yields bootstrap bindings until PR 4.</dd>
+<dt>Options</dt><dd>Build a full-inventory revision 0 now; change only the binding field; leave the file untouched.</dd>
+<dt>Decision</dt><dd>Change binding: to <code>Binding.binding_id(review.binding)</code>, a no-op for every reachable binding. Do not build the full-inventory revision 0; it is part of row 361.</dd>
+<dt>Reason</dt><dd>It keeps the release path consistent with the ledger key without building an unreachable path. It does not claim a release can publish under a replacement binding.</dd>
+</dl></section>
+<section id="d457"><h2><span>D-457</span> <code>space_export.ex</code>: a test, not a change</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>The plan lists <code>space_export.ex</code>, but nothing in it visibly depends on the binding. A Space export that carries a <code>replace_catalog_v1</code> op must still load once PR 1's command exists.</dd>
+<dt>Options</dt><dd>Change the module speculatively; add a load-and-round-trip test and change only on failure.</dd>
+<dt>Decision</dt><dd>Add the test. Change the module only if it fails, and record why.</dd>
+<dt>Reason</dt><dd>The export checks authenticity and exact bytes, not authority, so a refused or honored replacement op should load unchanged. It does not claim the export holds every op of the Space.</dd>
+</dl></section>
+<section id="d458"><h2><span>D-458</span> Rule 3 applies</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd><code>signing_ledger.ex</code> and <code>binding.ex</code> are custodian code in the carrier server. The ledger key value and the envelope check change. Head and status formats do not change, and bootstrap bytes stay identical.</dd>
+<dt>Options</dt><dd>Treat as rule 3; treat as ordinary.</dd>
+<dt>Decision</dt><dd>Rule 3 by subject: a second independent review (Codex Sol 6.1 high) besides the normal review, and a pinned byte vector for bootstrap head and status bytes.</dd>
+<dt>Reason</dt><dd>A wrong ledger key could let a custodian sign two revision-0 catalogs or sign under the wrong binding. No canonical, wire or src-tauri bytes change. It does not claim custody beyond this ledger.</dd>
+</dl></section>
+<section id="d459"><h2><span>D-459</span> The closed-binding refusal waits on PR 4</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>Plan 316 PR 3 also asks the ledger to refuse under a closed binding, including ancestor B of a cited rotation T. The closed set comes from the PR 4 resolver, which is gated on OD-16, OD-17, plans 267/269 and row 320.</dd>
+<dt>Options</dt><dd>Approximate the closed set from raw Space frames; leave a named TODO and row.</dd>
+<dt>Decision</dt><dd>Leave a named TODO in <code>signing_ledger.ex</code> that cites row 360, and file row 360 gated on PR 4 and OD-16.</dd>
+<dt>Reason</dt><dd>The plan forbids reading the closed set from raw frames, and an approximation would be a trust claim. Until then a custodian can still sign under a binding a replacement has cited. This PR does not claim the closing rule (D-275) or any of C10-C15.</dd>
+</dl></section>
+<section id="d460"><h2><span>D-460</span> How <code>extends?/3</code> chooses the replacement rule</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Options</dt><dd>key presence; <code>kind: :replacement</code>; <code>binding_id</code> != <code>bootstrap_id</code> (chosen)</dd>
+<dt>Decision</dt><dd>A ledger uses the replacement revision-0 rule exactly when <code>Binding.binding_id(binding)</code> != binding.<code>bootstrap_id</code>. It does not branch on whether a <code>:binding_id</code> key is present or on <code>kind: :replacement</code>.</dd>
+<dt>Reason</dt><dd>Branching on key presence crashed (KeyError, reported as <code>catalog_ledger_corrupt</code>) for a bootstrap map that carries an explicit <code>binding_id</code> equal to <code>bootstrap_id</code>. Test 1 needs that map to behave exactly like the bootstrap map. Using the ledger key itself as the test keeps the rule tied to <code>binding_id</code>/1.</dd>
+</dl></section>
+<section id="d461"><h2><span>D-461</span> <code>Binding.replacement/3</code> refuses more than the plan listed</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Options</dt><dd>plan-only checks; stricter (chosen)</dd>
+<dt>Decision</dt><dd>It also returns <code>:malformed_binding</code> when the parent already carries <code>:binding_id</code> (so the parent must be a bootstrap binding) and when op_id == <code>bootstrap_id</code>.</dd>
+<dt>Reason</dt><dd>The plan's signature names a bootstrap_binding. Chaining from a replacement parent needs the PR 4 resolver's lineage check. An op id equal to the bootstrap id would put two different rules under one ledger key.</dd>
+</dl></section>
+<section id="d462"><h2><span>D-462</span> Shape of the derived replacement binding</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Decision</dt><dd>The derived map has no attested key. Its record keeps the bootstrap's nonce, profile_genesis, profile_id and space_root, and replaces only catalog_key, service_id, service_key and origin with the claim's new_* values.</dd>
+<dt>Reason</dt><dd>This follows the plan's output map exactly. Attested evidence comes from the new ceremony (rule 8). Whether the record should take the claim's profile fields after a re-pin is for PR 4 / row 361.</dd>
+</dl></section>
+<section id="d463"><h2><span>D-463</span> Test changes against the plan</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Decision</dt><dd>Removed a planned refute in test 3. Added two tests: a space-only revision 0 is accepted under a replacement binding but not under a bootstrap one, and a revision-1 successor under a replacement binding. Test 1 also checks a SHA-256 of a committed status, recorded on e6df0497f.</dd>
+<dt>Reason</dt><dd>A space+thread replacement catalog does satisfy the bootstrap shape rule, so that refute was wrong. The bootstrap ledger refuses such a catalog through the binding and key checks, which test 6 covers. The added tests make the space-only difference intentional and cover later revisions.</dd>
+</dl></section>
+<section id="d464"><h2><span>D-464</span> Docs scope</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Decision</dt><dd>Edited only the plan 316 Status line during implementation. Did not edit <code>plans/README.md</code> (stale row 316 cell, new rows 360-362) or the D-450+ entries in the decisions log.</dd>
+<dt>Reason</dt><dd>The task said not to edit README or the decisions log yet. Rows 360-362 and these entries were filed when PR #217 opened.</dd>
+</dl></section>
+<section id="d465"><h2><span>D-465</span> <code>space_export.ex</code> unchanged</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Decision</dt><dd>Added only the <code>replace_catalog_v1</code> export round-trip test. It passed against the unchanged loader and encoder.</dd>
+<dt>Reason</dt><dd>Plan item 4: change the file only if the new test fails.</dd>
+</dl></section>
+<section id="d466"><h2><span>D-466</span> mix check result and base drift</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Decision</dt><dd>Committed before mix check finished. mix check exited 2 because of one load-related failure in lattice_core (catalog_valid_capacity_test; passes 2/2 alone) and repo-wide credo --strict issues in files outside this diff. origin/main advanced to d52cf4f85 (PR #215) during the work; the branch was based on e6df0497f.</dd>
+<dt>Reason</dt><dd>Neither failure involves files this branch changes. The branch was merged with d52cf4f85 cleanly when PR #217 opened.</dd>
+</dl></section>
+<section id="d467"><h2><span>D-467</span> Per-binding envelope bound instead of a global raise to 13</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Options</dt><dd>(a) per-binding bound; (b) raise global bound to 13; (c) forbid Space-only replacement genesis</dd>
+<dt>Decision</dt><dd><code>max_envelopes(binding)</code>: bootstrap 12, replacement 13; Python helper outer bound 13.</dd>
+<dt>Reason</dt><dd>A bootstrap genesis already has a Thread, so 12 envelopes reach the 13-entry catalog cap. Keeping it at 12 leaves bootstrap bytes and behaviour unchanged, including the <code>SignCatalog</code> revision-12 capacity refusal test. Only replacement ledgers, whose genesis may be Space-only, need 13.</dd>
+</dl></section>
+<section id="d468"><h2><span>D-468</span> Strict lineage check for a bootstrap parent</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Decision</dt><dd>Require <code>claim.parents</code> == [bootstrap] (not just membership) and generation == 1.</dd>
+<dt>Reason</dt><dd>With a bootstrap parent, generation 1 has exactly one possible parent. Membership alone would let a multi-parent claim through.</dd>
+</dl></section>
+<section id="d469"><h2><span>D-469</span> PR #217 review: Codex Sol rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/217">#217</a></dd>
+<dt>Context</dt><dd>Rule 3 applies (D-458): one Codex Sol review loop plus a second independent Codex review of the custody diff.</dd>
+<dt>Decision</dt><dd>Round 1 had two findings, both fixed. P2 <code>signing_ledger.ex:196</code>: Space-only replacement ledgers could not reach 12 Threads (envelope bound 12, 13 needed). Fixed with <code>max_envelopes/1</code> per binding (12 bootstrap, 13 replacement), used by <code>verify/2</code> and <code>SignCatalog</code> capacity, Python <code>MAX_ENVELOPES</code> 13 as the outer bound, and a regression test that commits a Space-only genesis plus all 12 additions and fails with <code>:catalog_ledger_corrupt</code> without the fix. P3 <code>binding.ex:99</code>: <code>Binding.replacement/3</code> did not check profile, parents or generation against the parent. Fixed: profile_genesis and profile_id must match the parent record, parents == [bootstrap] and generation == 1, with five new bad cases that fail without the fix. The final round had no findings, and the second independent review reported no findings. The bot rounds under D-38 run on this PR.</dd>
+<dt>Reason</dt><dd>It makes no claim beyond this fixture-only part of PR 3. It does not claim the closed-binding refusal (row 360), end-to-end replacement signing (row 361), catalog trust, R13, custody beyond this ledger, W4 or Phase G.</dd>
+</dl></section>
 <section id="d480"><h2><span>D-480</span> Reading of “plan 266 4-exporter test”</h2><dl>
 <dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
 <dt>Context</dt><dd>The slice brief says “the plan 266 4-exporter test”. Plan 316 §7 says “a plan 266 exporter test now”. The decisions log calls plan 266 “the PR 4 exporter” of plan 245.</dd>
