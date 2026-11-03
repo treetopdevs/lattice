@@ -2316,7 +2316,7 @@ The bot rounds under D-38 run on this PR.</dd>
 </dl></section>
 <section id="d483"><h2><span>D-483</span> Pin today's behavior: the head stays at bootstrap and evidence is kept</h2><dl>
 <dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
-<dt>Context</dt><dd>Before PR 4, both resolvers ignore replace_catalog_v1. The probe showed BEAM and TS accept the bootstrap head with an honored replacement, a :role_not_granted replacement and a bad-signature rejected frame, and the snapshot bytes match (20894).</dd>
+<dt>Context</dt><dd>Before PR 4, both resolvers ignore replace_catalog_v1. The probe showed BEAM and TS accept the bootstrap head with an honored replacement, a :role_not_granted replacement and a bad-signature rejected frame, and the snapshot byte lengths match (20894); the TS consumer reports only the length, not the bytes.</dd>
 <dt>Options</dt><dd>(a) Assert that the head does not move and every frame is exported verbatim. (b) Leave the head unasserted so PR 4 need not edit the test.</dd>
 <dt>Decision</dt><dd>(a). Also pin that a zeroed signature on the replacement frame gives :invalid_verified_history on decode.</dd>
 <dt>Reason</dt><dd>Silently promoting a route before PR 4 would be a defect, and PR 4 should have to change this assertion deliberately. This does not claim C10–C15 or any replacement trust.</dd>

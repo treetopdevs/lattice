@@ -3,8 +3,8 @@
 Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 1–2, PR 3's generation keying and PR 6's
 exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
-PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
-implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
+PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) was
+merged in PR #214 (branch `claude/316-pr1-replacement-codec`); it adds no wire
 atom and claims no route switch, catalog trust or C10–C15. PR 6's exporter test is implemented on branch `claude/316-pr6-exporter-evidence` (test only); C15 still waits on PR 4.
 Native `catalog_eval` fails closed on `replace_catalog_v1`: it refuses the command as
 `unknown_command` (`commands.rs:89`) before Space policy or projection, until PR 5 (row 319,
