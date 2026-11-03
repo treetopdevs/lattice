@@ -1,5 +1,5 @@
 defmodule Treehouse.CatalogReplacementClaimTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: true, group: :node_subprocess_a
 
   alias Lattice.Carrier.Wire
   alias Lattice.{Identity, Log, Op}

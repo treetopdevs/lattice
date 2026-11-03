@@ -1,10 +1,15 @@
 defmodule Treehouse.CatalogIncomingOrderTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: true, group: :node_subprocess_b
 
   alias Treehouse.CatalogTrust
 
   @client Path.expand("../../../../clients/lattice-client", __DIR__)
 
+  # Legitimately long CPU work, not a hang: an ~8 s TS signing probe, then a BEAM
+  # pass that re-judges every case in 4 frame/rejected orderings. Measured 11 s
+  # unloaded; the BEAM half alone took 51.5 s under 16-hog `+S 4:4` load
+  # (2026-11-02, row 342), so the default 60 s leaves no headroom.
+  @tag timeout: 180_000
   test "incoming signatures precede missing ancestors and unsupported vocabulary" do
     {json, 0} =
       System.cmd("node", ["--import", "tsx", "test/support/catalog_incoming_order_probe.ts"],
