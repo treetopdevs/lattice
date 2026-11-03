@@ -10,6 +10,12 @@ PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_c
 twin, and the row 318 bootstrap size preflight) is in review as PR #216 (D-400–D-435). Its binding-graph
 coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
 authoring result is not resolver acceptance, a route switch or catalog trust.
+PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
+the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
+bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
+(derivation only, no production caller), and a replacement revision 0 must equal the claim's
+inventory digest under the new service identity. The closed-binding refusal still waits on PR 4;
+binding-id threading through signing/evidence/listing/staging is row 361.
 Native `catalog_eval` fails closed on `replace_catalog_v1`: it refuses the command as
 `unknown_command` (`commands.rs:89`) before Space policy or projection, until PR 5 (row 319,
 after plan 267). BEAM/TS admit it to Stage A while native refuses it; this is a known,

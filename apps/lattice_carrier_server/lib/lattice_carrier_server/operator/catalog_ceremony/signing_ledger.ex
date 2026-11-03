@@ -2,11 +2,16 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   @moduledoc """
   Locked custodian revision ledger with immutable signed envelopes.
 
+  The ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`): the
+  bootstrap op id for a bootstrap binding, the replacement op id for a binding
+  derived by `Binding.replacement/3`. One ceremony directory holds one binding.
+
   The Python helper owns all public-file writes and the lifetime OS lock.
   Signature/chain checks and signing callbacks execute in BEAM while it holds
   that lock. A callback result is released only after durable ACK and exit.
   """
   alias Lattice.Carrier.Wire
+  alias LatticeCarrierServer.Operator.CatalogCeremony.Binding
   alias LatticeCarrierServer.Operator.PublicHistory
   alias Treehouse.TransportCatalog
 
@@ -15,9 +20,14 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   @cap 67_108_864
   @timeout 35_000
 
+  # Envelope bound per binding. A Treehouse catalog holds at most 13 entries (one
+  # Space plus 12 Threads) and each successor adds one Thread. A bootstrap genesis
+  # already carries a Thread, so 12 envelopes reach the cap; a replacement genesis may
+  # be Space-only, so it needs 13. The owner helper enforces the outer bound (13).
   @doc false
-  @spec max_envelopes() :: pos_integer()
-  def max_envelopes, do: 12
+  @spec max_envelopes(map()) :: pos_integer()
+  def max_envelopes(binding),
+    do: if(Binding.binding_id(binding) == binding.bootstrap_id, do: 12, else: 13)
 
   @spec init(Path.t(), map()) :: {:ok, map()} | {:error, atom()}
   def init(dir, binding), do: transact(dir, binding, "init", &unchanged/1)
@@ -30,7 +40,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   def export_status(state, binding) do
     PublicHistory.canonical(%{
       "format" => "treehouse-custodian-status-v1",
-      "binding" => binding.bootstrap_id,
+      "binding" => Binding.binding_id(binding),
       "key" => Base.encode64(binding.record.catalog_key),
       "head" => state.head_bytes,
       "envelopes" => Enum.map(state.chain, & &1.bytes)
@@ -42,7 +52,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
     with {:ok, doc} <- JSON.decode(bytes),
          true <- Enum.sort(Map.keys(doc)) == ~w(binding envelopes format head key),
          true <- doc["format"] == "treehouse-custodian-status-v1",
-         true <- doc["binding"] == binding.bootstrap_id,
+         true <- doc["binding"] == Binding.binding_id(binding),
          true <- doc["key"] == Base.encode64(binding.record.catalog_key),
          true <- PublicHistory.canonical(doc) == bytes do
       verify(Map.take(doc, ["head", "envelopes"]), binding)
@@ -73,7 +83,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
       try do
         send_json(port, %{
           action: action,
-          binding: binding.bootstrap_id,
+          binding: Binding.binding_id(binding),
           key: Base.encode64(binding.record.catalog_key)
         })
 
@@ -104,18 +114,18 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
   def head(binding, revision, id),
     do:
       PublicHistory.canonical(%{
-        "binding" => binding.bootstrap_id,
+        "binding" => Binding.binding_id(binding),
         "key" => Base.encode64(binding.record.catalog_key),
         "revision" => revision,
         "id" => id
       })
 
   defp verify(%{"head" => bytes, "envelopes" => envelopes} = raw, binding)
-       when map_size(raw) == 2 and is_binary(bytes) and is_list(envelopes) and
-              length(envelopes) <= 12 do
-    with {:ok, head} <- JSON.decode(bytes),
+       when map_size(raw) == 2 and is_binary(bytes) and is_list(envelopes) do
+    with true <- length(envelopes) <= max_envelopes(binding),
+         {:ok, head} <- JSON.decode(bytes),
          true <- Enum.sort(Map.keys(head)) == ~w(binding id key revision),
-         true <- head["binding"] == binding.bootstrap_id,
+         true <- head["binding"] == Binding.binding_id(binding),
          true <- head["key"] == Base.encode64(binding.record.catalog_key),
          true <- PublicHistory.canonical(head) == bytes,
          {:ok, chain} <- envelopes(envelopes, binding),
@@ -136,7 +146,8 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
            :ok <- TransportCatalog.verify_catalog(envelope, binding.record.catalog_key),
            true <- PublicHistory.canonical(Wire.encode_value(envelope)) == bytes,
            true <-
-             catalog.space == binding.record.space and catalog.binding == binding.bootstrap_id and
+             catalog.space == binding.record.space and
+               catalog.binding == Binding.binding_id(binding) and
                catalog.bootstrap == binding.bootstrap_id do
         {:cont,
          {:ok,
@@ -146,20 +157,24 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
       end
     end)
     |> case do
-      {:ok, entries} -> chain(Enum.sort_by(entries, & &1.catalog.revision))
+      {:ok, entries} -> chain(Enum.sort_by(entries, & &1.catalog.revision), binding)
       _ -> :error
     end
   end
 
-  defp chain(entries) do
+  defp chain(entries, binding) do
     result =
       Enum.reduce_while(entries, nil, fn entry, previous ->
-        if extends?(entry.catalog, previous), do: {:cont, entry}, else: {:halt, :error}
+        if extends?(entry.catalog, previous, binding),
+          do: {:cont, entry},
+          else: {:halt, :error}
       end)
 
     if result == :error, do: :error, else: {:ok, entries}
   end
 
+  # The bootstrap chain rule; `SignCatalog` only ever holds a bootstrap binding
+  # (threading the replacement binding through signing is row 361).
   @doc false
   @spec extends?(map(), map() | nil) :: boolean()
   def extends?(catalog, nil),
@@ -167,7 +182,34 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
       catalog.revision == 0 and catalog.previous == nil and
         Enum.sort(Enum.map(catalog.entries, & &1.kind)) == [:space, :thread]
 
-  def extends?(catalog, previous) do
+  def extends?(catalog, previous), do: successor?(catalog, previous)
+
+  # Revision 0 under a replacement binding is exactly the claim's committed
+  # inventory, wholly under the claim's new service identity. Later revisions
+  # use the unchanged successor rule. A ledger is a replacement ledger exactly
+  # when its key (`Binding.binding_id/1`) is not the bootstrap op id.
+  @doc false
+  @spec extends?(map(), map() | nil, map()) :: boolean()
+  def extends?(catalog, nil, binding) do
+    if Binding.binding_id(binding) == binding.bootstrap_id,
+      do: extends?(catalog, nil),
+      else: replacement_genesis?(catalog, binding)
+  end
+
+  def extends?(catalog, previous, _binding), do: extends?(catalog, previous)
+
+  defp replacement_genesis?(catalog, binding) do
+    catalog.revision == 0 and catalog.previous == nil and
+      TransportCatalog.inventory_id(catalog.entries) == binding.inventory_digest and
+      Enum.count(catalog.entries, &(&1.kind == :space)) == 1 and
+      Enum.all?(
+        catalog.entries,
+        &(&1.service_id == binding.record.service_id and
+            &1.service_key == binding.record.service_key)
+      )
+  end
+
+  defp successor?(catalog, previous) do
     before = previous.catalog
     old = Map.new(before.entries, &{&1.replica, &1})
     added = Enum.reject(catalog.entries, &Map.has_key?(old, &1.replica))
