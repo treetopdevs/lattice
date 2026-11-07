@@ -2,12 +2,11 @@
 
 ## Status and dependency
 
-DESIGN ONLY; publication waits for an explicit operator input-rule decision.
-The earlier engine-ceiling and early-resource-priority approvals remain in force.
-They did not authorize rejecting a previously admitted fitting request because a
-metadata callback changed the graph while its size was measured.
-The tested source draft is769df3f8edb238b5cf1bc1b460e371b5f879d13c.
-No source PR or native implementation is published by this packet.
+APPROVED on 2026-11-07. The operator chose stable input during synchronous capture
+and explicitly preserved support for changes after the call returns. This decision
+adds to the earlier engine-ceiling and early-resource-priority approvals.
+The counterexamples below were measured against source draft
+`769df3f8edb238b5cf1bc1b460e371b5f879d13c`.
 
 ## Executable conflict
 
@@ -45,7 +44,7 @@ The local `/tmp/lattice-preclone-mutated-alias-*` and
 hashes and read counts. Their durable manifest is recorded in the running HTML.
 The rejected prototype patch is preserved for review; it must not be published.
 
-## Recommendation: stable synchronous capture input
+## Approved rule: stable synchronous capture input
 
 Require captured values and their reported metadata structure to remain unchanged
 while the synchronous ownership walk runs. Ordinary JSON data satisfies this.
@@ -64,10 +63,9 @@ origins are already captured before the first await, so later caller changes
 cannot alter authentication or decisions. The proposed restriction is only on
 callbacks changing the input while it is being inspected.
 
-This is a new explicit compatibility rule, requiring operator approval. It is not
-implicit in the earlier permission to reject genuinely over-limit candidates.
-It also does not finish requirement4: ignored data, copied array decorations,
-initialization/expected clones, engine allocations and owner cost stay open.
+This rule addresses callback compatibility. Requirement 4 still covers ignored
+data, copied array decorations, initialization and expected-token clones,
+engine allocations and total owner cost.
 
 ## Alternative: preserve arbitrary legacy callback behavior
 
@@ -79,16 +77,10 @@ been demonstrated in this packet.
 Do not solve that conflict with an unreviewed manual clone or a native exception.
 A new compatible design must be demonstrated before changing production behavior.
 
-## Work after the operator chooses
+## Source verification
 
-If stable capture is approved, document that precondition at the public ownership
-boundary, retain ordinary after-call mutation guarantees, and add the observed
-conservative-refusal control without replaying callbacks. Keep the legacy and
-prototype receipts as history. Refresh the review dispositions and run the final
-focused/differential checks before publishing the isolated source PR and its exact
-tip hosted gate. The completed local full gate applies to the unchanged769df3f8
-production draft; evidence must identify any subsequent comment/test-only delta.
-
-If legacy callbacks are required, park this implementation and return a concrete
-alternative design. Neither choice authorizes a public merge, native publication,
-installation, completed resource envelope, or ordinary two-app relay proof.
+Document the precondition at the public ownership boundary. Keep the regression
+for changes after the call returns and exercise the reproduced conservative
+refusal with one metadata inspection. Preserve the legacy and prototype
+receipts as history. Run the source gates and refresh review before opening the
+isolated source PR. Record hosted results on that PR.

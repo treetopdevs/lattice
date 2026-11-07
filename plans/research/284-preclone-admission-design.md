@@ -126,6 +126,6 @@ Resource exceptions are correlated to the current walk's own measured overflow;
 a caller throwing a signal from a different capture retains ordinary refusal.
 
 The [mutating-metadata decision](284-mutating-metadata-admission-decision.md)
-now blocks publication: the current draft violates legacy callback behavior on a
-fitting input, and an extra-read repair also changes observable outcomes. No
-additional input precondition is assumed until the operator approves it.
+adds the separately approved stable-input rule. A callback that changes the
+input during synchronous capture may cause refusal. Changes after the call
+returns its Promise remain supported.

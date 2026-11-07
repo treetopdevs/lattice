@@ -142,6 +142,8 @@ function* children(value: object, frame: Frame, budget: Budget | undefined, memo
 // JSON ownership only: no signature, authority or trust validation. Evidence
 // accounting is opt-in. Sparse holes remain unreadable at normal validation;
 // ignored metadata, copied array decorations and engine key-array costs stay open.
+// The caller keeps values and metadata stable until capture returns so each
+// cached summary describes every later occurrence of its object.
 type EvidenceRoot = "snapshot" | "incoming";
 export function copyCatalogInput<T>(input: T, evidenceBounds?: EvidenceRoot): T {
   const budget: Budget | undefined = evidenceBounds !== undefined ? {nodes: 0, bytes: 0} : undefined;

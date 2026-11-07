@@ -238,6 +238,32 @@ test("expected and incoming keep one ownership walk for shared hidden metadata",
     assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected: token, incoming }), baseline);
     assert.equal(inspections, 1);
 });
+test("capture may refuse a self-changing hidden alias without inspecting its callback twice", async () => {
+    const fixture = await setup();
+    const shared = { payload: "x".repeat(2 * 1024 * 1024) };
+    const token = Object.defineProperty({ ...expected }, "hidden", { value: shared });
+    const cutoffProofs = [shared];
+    const { catalogs, rotations, histories } = fixture.incoming;
+    let inspections = 0;
+    const mutator = new Proxy({}, {
+        ownKeys() {
+            inspections++;
+            shared.payload = "";
+            cutoffProofs.push(...Array(39).fill(shared));
+            return [];
+        },
+    });
+    // Inspect the hidden alias in the token first, then the mutator, then proofs.
+    const incoming = Object.assign(Object.defineProperty({ catalogs, rotations, histories }, "hidden", { value: mutator }), { cutoffProofs });
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({ installed: fixture.installed, expected: token, incoming }), {
+        kind: "reject", reason: "invalid_verified_history",
+        detail: { ids: [], coreReason: null, pendingProofIds: [] },
+    });
+    assert.equal(inspections, 1);
+    const stable = await evaluateTreehouseCatalogTrust({ ...fixture, expected, incoming: { catalogs, rotations, histories, cutoffProofs } });
+    assert.equal(stable.kind, "retain_blocked");
+    assert.equal(stable.reason, "authority_changed");
+});
 test("earlier capture errors and ignored decoration data retain their existing outcomes", async () => {
     const fixture = await setup();
     const baseline = await evaluateTreehouseCatalogTrust({ ...fixture, expected });

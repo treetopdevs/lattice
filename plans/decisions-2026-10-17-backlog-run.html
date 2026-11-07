@@ -2810,6 +2810,18 @@ adds executable consumer evidence and completes that observation; it does not
 assume approval, change the contract or clear the older valid-MAX failure,
 remaining allocation accounting, native gates, installation or real-relay proof.</p>
 </section>
+<section id="d212"><h2>D212 — Approve stable input during synchronous catalog capture</h2>
+<p>On November 7 the operator approved stable values and metadata responses while
+the catalog API captures its inputs. Callbacks that change the input during
+inspection may cause refusal. Callers may change their data after the API returns
+its Promise because the synchronous capture has already finished. The
+<a href="research/284-mutating-metadata-admission-decision.md">decision record</a>
+preserves both callback controls and the rejected extra-read prototype.</p>
+<p>Document the contract in the public SDK and verify the observed one-inspection
+refusal against a stable control. The source PR builds on the gated input-capture
+branch from PR 188. The intermittent full-size rejection and the remaining
+allocation and native acceptance work stay open.</p>
+</section>
 </main>
 </body>
 </html>

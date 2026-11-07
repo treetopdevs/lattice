@@ -17,7 +17,11 @@ import { materialize } from "./materialize";
 import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema, treehouseThreadSchema } from "./treehouse";
 import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 import { catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, catalogInventoryId, catalogRotationId, catalogServiceRealm, normalizeCatalogBootstrap, normalizeCatalogCutoff, transportCatalogId, verifyCatalogEnvelope, verifyCatalogRotationEnvelope, canonicalBytesForCatalogRotation } from "./treehouse_catalog_codec";
-/** Pure preparation only. The trusted adapter, not this caller flag, proves fresh storage. */
+/**
+ * Pure preparation only. The trusted adapter, not this caller flag, proves fresh storage.
+ * Input values and metadata responses must stay stable during synchronous capture.
+ * Changes after this call returns its Promise do not affect the captured input.
+ */
 export async function prepareTreehouseCatalogInstallation(input) {
     try {
         const value = copyInput(input);
@@ -53,7 +57,12 @@ export async function prepareTreehouseCatalogInstallation(input) {
         return rejection(error);
     }
 }
-/** Pure authenticated decision over a caller-supplied current retained store snapshot. */
+/**
+ * Pure authenticated decision over a caller-supplied current retained store snapshot.
+ * Input values and metadata responses must stay stable during synchronous capture.
+ * Callbacks that mutate the input during capture are unsupported and may cause refusal.
+ * Changes after this call returns its Promise do not affect the captured input.
+ */
 export async function evaluateTreehouseCatalogTrust(input) {
     try {
         if (!closed(input, ["installed", "expected", "incoming"]))

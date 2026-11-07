@@ -81,7 +81,11 @@ export type TreehouseCatalogRouteDecision =
   | {ok: true; candidate: VerifiedTreehouseCatalogRoute; installationRequired: true}
   | {ok: false; reason: TreehouseCatalogTrustReason | "thread_not_authorized" | "thread_unavailable"};
 
-/** Pure preparation only. The trusted adapter, not this caller flag, proves fresh storage. */
+/**
+ * Pure preparation only. The trusted adapter, not this caller flag, proves fresh storage.
+ * Input values and metadata responses must stay stable during synchronous capture.
+ * Changes after this call returns its Promise do not affect the captured input.
+ */
 export async function prepareTreehouseCatalogInstallation(input: {
   review: TreehouseCatalogBootstrapReview; history: TreehouseCatalogRawHistory;
   store: {kind: "verified_fresh"; expected: TreehouseCatalogStoreToken};
@@ -111,7 +115,12 @@ export async function prepareTreehouseCatalogInstallation(input: {
   } catch (error) { return rejection(error); }
 }
 
-/** Pure authenticated decision over a caller-supplied current retained store snapshot. */
+/**
+ * Pure authenticated decision over a caller-supplied current retained store snapshot.
+ * Input values and metadata responses must stay stable during synchronous capture.
+ * Callbacks that mutate the input during capture are unsupported and may cause refusal.
+ * Changes after this call returns its Promise do not affect the captured input.
+ */
 export async function evaluateTreehouseCatalogTrust(input: {
   installed: InstalledTreehouseCatalogTrustV1; expected: TreehouseCatalogStoreToken; incoming: TreehouseCatalogEvidencePage;
 }): Promise<TreehouseCatalogTrustDecision> {
