@@ -2,11 +2,13 @@ import { canonicalUint64Scalar } from "./uint64";
 // Raw observation is wider than wire admission (64 generic composites), so a
 // signed depth-65 refusal can still be authenticated. Neither result is authority.
 export const CATALOG_RAW_NODE_LIMIT = 64 * 1024 * 1024;
-const MAX_STRING_BYTES = 64 * 1024 * 1024;
+export const CATALOG_RAW_STRING_LIMIT = 64 * 1024 * 1024;
+const MAX_STRING_BYTES = CATALOG_RAW_STRING_LIMIT;
 const MAX_DEPTH = 65;
 // A map uses term-array, pairs-array and pair-array wrappers; a flat
 // delegation leaf adds array/object/names-array beneath the frame object.
 const MAX_JSON_DEPTH = MAX_DEPTH * 3 + 4;
+export const CATALOG_RAW_EVIDENCE_DEPTH_LIMIT = MAX_JSON_DEPTH + 6;
 const encoder = new TextEncoder();
 function* fields(value: object): Generator<unknown> {
   for (const key of Object.keys(value)) { yield key; yield Reflect.get(value, key); }
@@ -51,7 +53,7 @@ export function withinCatalogRawHistoriesBounds(histories: unknown): boolean {
 
 // A proof-history adds page/list/proof/history/rejected/record wrappers.
 export function withinCatalogRawEvidenceBounds(value: unknown): boolean {
-  return withinJsonBounds(value, MAX_JSON_DEPTH + 6);
+  return withinJsonBounds(value, CATALOG_RAW_EVIDENCE_DEPTH_LIMIT);
 }
 
 export function withinCatalogRawObservationBounds(frame: unknown): boolean {

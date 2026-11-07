@@ -184,3 +184,113 @@ test("completed aliases in an older storage bucket are not inspected again", () 
   assert.throws(() => copyCatalogInput(rows), {name: "DataCloneError"});
   assert.equal(inspections, 1);
 });
+
+test("over-budget candidate refusal precedes later hidden metadata errors after saved recovery", async () => {
+  const fixture = await setup();
+  let getters = 0;
+  const catalogs = Object.defineProperty(["x".repeat(64 * 1024 * 1024 + 1)], "decoration", {
+    get() { getters++; throw Error("over-budget metadata getter executed"); },
+  });
+  const incoming = {...fixture.incoming, catalogs};
+  assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: fixture.installed, expected, incoming} as never), {
+    kind: "reject", reason: "invalid_verified_history",
+    detail: {ids: [], coreReason: null, pendingProofIds: []},
+  });
+  assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: {...fixture.installed, histories: []}, expected, incoming} as never), {
+    kind: "reject", reason: "trust_recovery_required",
+    detail: {ids: [], coreReason: null, pendingProofIds: []},
+  });
+  assert.equal(getters, 0);
+});
+
+test("UTF-8 bytes and repeated composite occurrences preserve admitted freezes and reject later over-budget metadata", async () => {
+  const fixture = await setup();
+  const baseline = await evaluateTreehouseCatalogTrust({...fixture, expected} as never);
+  assert.equal(baseline.kind, "retain_blocked");
+  for (const payload of ["é".repeat(1_048_576), "🙂".repeat(524_288)]) {
+    const shared = {payload};
+    const within = {...fixture.incoming, cutoffProofs: Array(31).fill(shared)};
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: fixture.installed, expected, incoming: within} as never), baseline);
+    let getters = 0;
+    const over = Object.defineProperty(Array(32).fill(shared), "decoration", {
+      get() { getters++; throw Error("later metadata getter executed"); },
+    });
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: fixture.installed, expected,
+      incoming: {...fixture.incoming, cutoffProofs: over}} as never), {
+      kind: "reject", reason: "invalid_verified_history",
+      detail: {ids: [], coreReason: null, pendingProofIds: []},
+    });
+    assert.equal(getters, 0);
+  }
+});
+
+test("expected and incoming keep one ownership walk for shared hidden metadata", async () => {
+  const fixture = await setup();
+  const baseline = await evaluateTreehouseCatalogTrust({...fixture, expected} as never);
+  let inspections = 0;
+  const shared = new Proxy({value: 0}, {ownKeys(value) { inspections++; return Reflect.ownKeys(value); }});
+  const token = Object.defineProperty({...expected}, "hidden", {value: shared});
+  const incoming = Object.defineProperty({...fixture.incoming}, "hidden", {value: shared});
+  assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: fixture.installed, expected: token, incoming} as never), baseline);
+  assert.equal(inspections, 1);
+});
+
+test("capture may refuse a self-changing hidden alias without inspecting its callback twice", async () => {
+  const fixture = await setup();
+  const shared = {payload: "x".repeat(2 * 1024 * 1024)};
+  const token = Object.defineProperty({...expected}, "hidden", {value: shared});
+  const cutoffProofs = [shared];
+  const {catalogs, rotations, histories} = fixture.incoming;
+  let inspections = 0;
+  const mutator = new Proxy({}, {
+    ownKeys() {
+      inspections++;
+      shared.payload = "";
+      cutoffProofs.push(...Array<typeof shared>(39).fill(shared));
+      return [];
+    },
+  });
+  // Inspect the hidden alias in the token first, then the mutator, then proofs.
+  const incoming = Object.assign(Object.defineProperty({catalogs, rotations, histories}, "hidden", {value: mutator}), {cutoffProofs});
+  assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: fixture.installed, expected: token, incoming} as never), {
+    kind: "reject", reason: "invalid_verified_history",
+    detail: {ids: [], coreReason: null, pendingProofIds: []},
+  });
+  assert.equal(inspections, 1);
+  const stable = await evaluateTreehouseCatalogTrust({...fixture, expected, incoming: {catalogs, rotations, histories, cutoffProofs}} as never);
+  assert.equal(stable.kind, "retain_blocked");
+  assert.equal(stable.reason, "authority_changed");
+});
+
+test("earlier capture errors and ignored decoration data retain their existing outcomes", async () => {
+  const fixture = await setup();
+  const baseline = await evaluateTreehouseCatalogTrust({...fixture, expected} as never);
+  const large = "x".repeat(64 * 1024 * 1024 + 1);
+  const hidden = Object.defineProperty({...fixture.incoming}, "decoration", {value: large});
+  const array = Object.assign([], {decoration: large});
+  for (const incoming of [hidden, {...fixture.incoming, cutoffProofs: [array]}]) {
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: fixture.installed, expected, incoming} as never), baseline);
+  }
+  let getters = 0;
+  const early = Object.defineProperty([], "decoration", {get() { getters++; throw Error("early getter executed"); }});
+  const incoming = {cutoffProofs: [early], catalogs: [large], rotations: [], histories: fixture.incoming.histories};
+  assert.deepEqual(await evaluateTreehouseCatalogTrust({installed: fixture.installed, expected, incoming} as never), {
+    kind: "reject", reason: "malformed_catalog",
+    detail: {ids: [], coreReason: null, pendingProofIds: []},
+  });
+  assert.equal(getters, 0);
+});
+
+test("an earlier capture's resource error cannot impersonate overflow in an in-bound candidate", async () => {
+  const fixture = await setup();
+  let foreign: unknown;
+  try { copyCatalogInput(["x".repeat(64 * 1024 * 1024 + 1)], "snapshot"); }
+  catch (error) { foreign = error; }
+  assert.ok(foreign instanceof Error);
+  const row = new Proxy([], {ownKeys() { throw foreign; }});
+  assert.deepEqual(await evaluateTreehouseCatalogTrust({...fixture, expected,
+    incoming: {...fixture.incoming, cutoffProofs: [row]}} as never), {
+    kind: "reject", reason: "malformed_catalog",
+    detail: {ids: [], coreReason: null, pendingProofIds: []},
+  });
+});

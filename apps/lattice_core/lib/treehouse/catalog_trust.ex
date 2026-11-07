@@ -158,11 +158,13 @@ defmodule Treehouse.CatalogTrust do
       original_context = validate_original!(input.installed)
       original = original_context.state
       expected = validate_token!(input.expected)
-      validate_page!(input.incoming)
+      validate_page_header!(input.incoming)
+      admission = RawObservationBounds.evidence_admission(input.incoming)
+      if admission == :resource_limit, do: refuse(:invalid_verified_history)
+      validate_page_rows!(input.incoming)
       preflight_incoming!(input.incoming.histories)
 
-      unless RawObservationBounds.within_evidence?(input.incoming),
-        do: refuse(:invalid_verified_history)
+      unless admission == :within, do: refuse(:invalid_verified_history)
 
       authenticate_incoming_headers!(input.incoming.histories)
       validate_incoming_rejected!(input.incoming.histories)
@@ -2133,7 +2135,7 @@ defmodule Treehouse.CatalogTrust do
       text?(route.service_id) and bytes?(route.service_key, 32) and text?(route.realm)
   end
 
-  defp validate_page!(page) do
+  defp validate_page_header!(page) do
     require_fields!(page, @page_fields, :malformed_catalog)
 
     if not Enum.all?(
@@ -2144,7 +2146,9 @@ defmodule Treehouse.CatalogTrust do
 
     if length(page.catalogs) + length(page.rotations) > 32,
       do: refuse(:control_history_limit)
+  end
 
+  defp validate_page_rows!(page) do
     if not Enum.all?(page.histories, &history_shape?/1), do: refuse(:malformed_catalog)
 
     if not Enum.all?(page.catalogs ++ page.rotations, &is_binary/1),

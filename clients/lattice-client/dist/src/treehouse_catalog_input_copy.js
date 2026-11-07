@@ -1,27 +1,110 @@
-import { CATALOG_RAW_NODE_LIMIT } from "./treehouse_catalog_raw_bounds";
+import { CATALOG_RAW_NODE_LIMIT, CATALOG_RAW_STRING_LIMIT, CATALOG_RAW_EVIDENCE_DEPTH_LIMIT } from "./treehouse_catalog_raw_bounds";
 function malformed() { throw new Error("malformed_catalog"); }
-// Storage buckets, not an input limit. Keep each weak table small even when
-// a valid observation contains millions of distinct composite values.
-class CompletedObjects {
-    buckets = [new WeakSet()];
+export class CatalogInputResourceError extends Error {
+}
+const metricBits = BigInt(Math.ceil(Math.log2(Math.max(CATALOG_RAW_NODE_LIMIT, CATALOG_RAW_STRING_LIMIT) + 2)));
+const metricMask = (1n << metricBits) - 1n;
+function summary(nodes, bytes, depth) {
+    return nodes < 1024 && bytes < 1024 && depth < 256 ? nodes * 256 + depth + bytes * 262144 :
+        BigInt(nodes) | (BigInt(bytes) << metricBits) | (BigInt(depth) << (2n * metricBits));
+}
+const nodeCount = (v) => typeof v === "number" ? Math.floor(v / 256) % 1024 : Number(v & metricMask);
+const stringCount = (v) => typeof v === "number" ? Math.floor(v / 262144) : Number((v >> metricBits) & metricMask);
+const containerDepth = (v) => typeof v === "number" ? v % 256 : Number(v >> (2n * metricBits));
+class CaptureMemo {
+    buckets = [new WeakMap()];
+    lastLongString;
+    lastLongStringBytes = 0;
     entries = 0;
-    has(value) {
+    get(value) {
         for (let index = this.buckets.length - 1; index >= 0; index--) {
-            if (this.buckets[index].has(value))
-                return true;
+            const found = this.buckets[index].get(value);
+            if (found !== undefined)
+                return found;
         }
-        return false;
+        return undefined;
     }
-    add(value) {
+    byteLength(value) {
+        // Reuse one long value across adjacent rows. A content-keyed Map can
+        // compare a long string with many equal-length entries on a hash collision.
+        if (value.length < 1024 || value.length > CATALOG_RAW_STRING_LIMIT)
+            return stringBytes(value);
+        if (value === this.lastLongString)
+            return this.lastLongStringBytes;
+        const bytes = stringBytes(value);
+        this.lastLongString = value;
+        this.lastLongStringBytes = bytes;
+        return bytes;
+    }
+    add(value, metrics) {
         if (this.entries === 1_000_000) {
-            this.buckets.push(new WeakSet());
+            this.buckets.push(new WeakMap());
             this.entries = 0;
         }
-        this.buckets[this.buckets.length - 1].add(value);
+        this.buckets[this.buckets.length - 1].set(value, metrics);
         this.entries++;
     }
 }
-function* children(value) {
+// Count UTF-8 bytes without allocating an input-sized Uint8Array. Lone
+// surrogates cost the encoder's replacement bytes; validation still owns refusal.
+function stringBytes(value) {
+    if (value.length > CATALOG_RAW_STRING_LIMIT)
+        return CATALOG_RAW_STRING_LIMIT + 1;
+    let bytes = 0;
+    for (let index = 0; index < value.length; index++) {
+        const code = value.charCodeAt(index);
+        if (code < 0x80)
+            bytes++;
+        else if (code < 0x800)
+            bytes += 2;
+        else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length &&
+            value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) {
+            bytes += 4;
+            index++;
+        }
+        else
+            bytes += 3;
+        if (bytes > CATALOG_RAW_STRING_LIMIT)
+            return CATALOG_RAW_STRING_LIMIT + 1;
+    }
+    return bytes;
+}
+function exhaust(budget) {
+    const error = new CatalogInputResourceError();
+    budget.failure = error;
+    throw error;
+}
+class CaptureFrame {
+    owner;
+    visible;
+    depth;
+    incomingRoot;
+    values;
+    json = false;
+    nodes = 1;
+    bytes = 0;
+    height = 0;
+    activate = false;
+    constructor(owner, visible, depth, incomingRoot, budget, memo) {
+        this.owner = owner;
+        this.visible = visible;
+        this.depth = depth;
+        this.incomingRoot = incomingRoot;
+        this.values = children(owner, this, budget, memo);
+    }
+}
+function charge(budget, nodes, bytes) {
+    budget.nodes += nodes;
+    budget.bytes += bytes;
+    if (budget.nodes > CATALOG_RAW_NODE_LIMIT || budget.bytes > CATALOG_RAW_STRING_LIMIT)
+        exhaust(budget);
+}
+function add(frame, nodes, bytes, height = 0) {
+    frame.nodes = Math.min(CATALOG_RAW_NODE_LIMIT + 1, frame.nodes + nodes);
+    frame.bytes = Math.min(CATALOG_RAW_STRING_LIMIT + 1, frame.bytes + bytes);
+    frame.height = Math.min(CATALOG_RAW_EVIDENCE_DEPTH_LIMIT, Math.max(frame.height, height));
+}
+function* children(value, frame, budget, memo) {
     const array = Array.isArray(value);
     let keys;
     try {
@@ -30,15 +113,13 @@ function* children(value) {
     catch (error) {
         if (!array || !(error instanceof RangeError))
             throw error;
-        // Only this engine failure permits the operator-approved exception for
-        // hidden non-index decorations. Own enumerable keys and descriptors never read them;
-        // structuredClone drops them. Ordinary arrays keep all-own-key validation.
+        // Preserve the operator-approved engine-ceiling exception. This early
+        // capture failure is not reclassified as a later resource observation.
         const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
         if (!Number.isSafeInteger(length) || length < 0 || length > CATALOG_RAW_NODE_LIMIT)
             malformed();
         if (Object.getOwnPropertySymbols(value).length !== 0)
             malformed();
-        // Own-only enumeration avoids executing traps on an array's prototype.
         for (const key of Object.keys(value)) {
             const index = Number(key);
             if (!Number.isInteger(index) || index < 0 || index >= length || String(index) !== key)
@@ -47,9 +128,11 @@ function* children(value) {
         for (let index = 0; index < length; index++) {
             const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
             if (descriptor === undefined)
-                continue; // Preserve sparse-array clone semantics.
+                continue;
             if (!Object.hasOwn(descriptor, "value"))
                 malformed();
+            frame.activate = false;
+            frame.json = descriptor.enumerable === true;
             yield descriptor.value;
         }
         return;
@@ -62,34 +145,85 @@ function* children(value) {
         const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (descriptor === undefined || !Object.hasOwn(descriptor, "value"))
             malformed();
+        const index = array && budget !== undefined ? Number(key) : 0;
+        frame.activate = frame.incomingRoot && key === "incoming";
+        frame.json = budget !== undefined && descriptor.enumerable === true && (!array ||
+            (Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === key));
+        if (budget !== undefined && frame.json && !array) {
+            const bytes = memo.byteLength(key);
+            add(frame, 1, bytes);
+            if (frame.visible)
+                charge(budget, 1, bytes);
+        }
         yield descriptor.value;
     }
 }
-// JSON ownership only: this performs no signature, authority or trust validation.
-export function copyCatalogInput(input) {
-    const pending = [{ values: [input].values() }];
-    const active = new WeakSet(), finished = new CompletedObjects();
+export function copyCatalogInput(input, evidenceBounds) {
+    const budget = evidenceBounds !== undefined ? { nodes: 0, bytes: 0 } : undefined;
+    try {
+        return capture(input, evidenceBounds, budget);
+    }
+    catch (error) {
+        // Caller metadata may throw an error from another capture. Only this
+        // walk's own measured overflow can change the owner's refusal priority.
+        if (error instanceof CatalogInputResourceError && error !== budget?.failure)
+            malformed();
+        throw error;
+    }
+}
+function capture(input, evidenceBounds, budget) {
+    const pending = [{ values: [input].values(), json: true, visible: evidenceBounds === "snapshot", depth: -1, nodes: 0, bytes: 0, height: 0, activate: false, incomingRoot: false }];
+    const active = new WeakSet(), memo = new CaptureMemo();
     while (pending.length > 0) {
         const current = pending[pending.length - 1], next = current.values.next();
         if (next.done) {
             if (current.owner !== undefined) {
                 active.delete(current.owner);
-                finished.add(current.owner);
+                const metrics = budget === undefined ? 0 : summary(current.nodes, current.bytes, current.height);
+                memo.add(current.owner, metrics);
+                const parent = pending[pending.length - 2];
+                if (budget !== undefined && parent.json)
+                    add(parent, current.nodes, current.bytes, current.height + 1);
             }
             pending.pop();
             continue;
         }
-        const value = next.value;
-        if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number")
+        const value = next.value, visible = current.activate || (current.visible && current.json);
+        if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") {
+            if (budget !== undefined && current.json) {
+                const bytes = typeof value === "string" ? memo.byteLength(value) : 0;
+                add(current, 1, bytes);
+                if (visible)
+                    charge(budget, 1, bytes);
+            }
             continue;
+        }
         if (typeof value !== "object" || active.has(value))
             malformed();
-        if (finished.has(value))
+        const cached = memo.get(value);
+        if (cached !== undefined) {
+            if (budget !== undefined && current.json) {
+                const nodes = nodeCount(cached), bytes = stringCount(cached), height = containerDepth(cached);
+                add(current, nodes, bytes, height + 1);
+                if (visible) {
+                    if ((current.activate ? 0 : current.depth + 1) + height >= CATALOG_RAW_EVIDENCE_DEPTH_LIMIT)
+                        exhaust(budget);
+                    charge(budget, nodes, bytes);
+                }
+            }
             continue;
+        }
         if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
             malformed();
+        const depth = visible && !current.activate ? current.depth + 1 : 0;
+        if (budget !== undefined && visible) {
+            if (depth >= CATALOG_RAW_EVIDENCE_DEPTH_LIMIT)
+                exhaust(budget);
+            charge(budget, 1, 0);
+        }
+        const frame = new CaptureFrame(value, visible, depth, evidenceBounds === "incoming" && value === input, budget, memo);
         active.add(value);
-        pending.push({ values: children(value), owner: value });
+        pending.push(frame);
     }
     return structuredClone(input);
 }
