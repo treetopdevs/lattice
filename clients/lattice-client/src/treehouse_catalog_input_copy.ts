@@ -18,8 +18,8 @@ const containerDepth = (v: Summary): number => typeof v === "number" ? v % 256 :
 
 class CaptureMemo {
   private readonly buckets = [new WeakMap<object, Summary>()];
-  private readonly stringBuckets: Map<string, number>[] = [];
-  private stringEntries = 0;
+  private lastLongString?: string;
+  private lastLongStringBytes = 0;
   private entries = 0;
   get(value: object): Summary | undefined {
     for (let index = this.buckets.length - 1; index >= 0; index--) {
@@ -29,19 +29,13 @@ class CaptureMemo {
     return undefined;
   }
   byteLength(value: string): number {
-    // This is a cache threshold, not admission. Repeated long strings in ignored
-    // metadata must not be rescanned through every distinct containing object.
+    // Reuse one long value across adjacent rows. A content-keyed Map can
+    // compare a long string with many equal-length entries on a hash collision.
     if (value.length < 1024 || value.length > CATALOG_RAW_STRING_LIMIT) return stringBytes(value);
-    for (let index = this.stringBuckets.length - 1; index >= 0; index--) {
-      const bytes = this.stringBuckets[index]!.get(value);
-      if (bytes !== undefined) return bytes;
-    }
+    if (value === this.lastLongString) return this.lastLongStringBytes;
     const bytes = stringBytes(value);
-    if (this.stringBuckets.length === 0 || this.stringEntries === 1_000_000) {
-      this.stringBuckets.push(new Map<string, number>()); this.stringEntries = 0;
-    }
-    this.stringBuckets[this.stringBuckets.length - 1]!.set(value, bytes);
-    this.stringEntries++;
+    this.lastLongString = value;
+    this.lastLongStringBytes = bytes;
     return bytes;
   }
   add(value: object, metrics: Summary): void {

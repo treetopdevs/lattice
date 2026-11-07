@@ -2822,6 +2822,19 @@ refusal against a stable control. The source PR builds on the gated input-captur
 branch from PR 188. The intermittent full-size rejection and the remaining
 allocation and native acceptance work stay open.</p>
 </section>
+<section id="d213"><h2>D213 — Bound long-string cache comparisons</h2>
+<p>Sonnet review found that a content-keyed map can compare many equal-length
+strings on a collision. Replace it with one cached long string per capture.
+In a local Node 22 capture probe, 4,096 distinct 16,400-character strings with
+the same prefix took 15.7 seconds before the change and 0.21 seconds after it.
+The adjacent reuse control with 128 references to an 8 MiB string took 25 ms in
+both runs. These are isolated timings for hidden metadata, with complete owner
+resource accounting still open.</p>
+<p>The installed snapshot budget applies the existing aggregate node, byte and
+depth limits before cloning. The previous TypeScript owner already applied the
+same limits in <code>stateValid</code>, and the BEAM owner applies them in
+<code>validate_original!</code>. Saved-state recovery retains priority.</p>
+</section>
 </main>
 </body>
 </html>
