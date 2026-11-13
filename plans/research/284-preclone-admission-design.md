@@ -120,9 +120,16 @@ Initialization, expected-token payloads, engine enumeration allocations and whol
 owner costs therefore remain explicit requirement4 work. No broader decoration
 rule, new quota or completed resource-envelope claim is implied.
 
-Capture reuses the byte length of the most recent long string to avoid rescanning
-shared text through adjacent hidden objects. This bounds cache lookup to one
-comparison even for many distinct strings with the same length.
+Capture reuses byte lengths for the four most recently inserted long strings to
+avoid rescanning alternating shared text through distinct hidden objects. Each
+entry records positions that distinguish it from other retained values of the
+same length. Lookup checks these positions before exact equality, avoiding
+repeated common-prefix scans against the wrong cached string. At most twelve
+character probes and four equality comparisons occur per lookup; a retained
+value reaches equality only at its matching entry. Misses scan for UTF-8 size
+and new distinguishing positions. Larger working sets and separately constructed
+equal-content strings can still incur scans; JavaScript does not expose primitive
+string identity. This does not close full resource accounting.
 Resource exceptions are correlated to the current walk's own measured overflow;
 a caller throwing a signal from a different capture retains ordinary refusal.
 

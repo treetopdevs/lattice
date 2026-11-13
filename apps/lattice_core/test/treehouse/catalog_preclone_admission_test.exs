@@ -18,11 +18,21 @@ defmodule Treehouse.CatalogPrecloneAdmissionTest do
 
     for row <- corpus["cases"] do
       name = row["name"]
-      saved = if name == "saved-corrupt", do: %{installed | histories: []}, else: installed
+
+      saved =
+        if String.ends_with?(name, "saved-corrupt"),
+          do: %{installed | histories: []},
+          else: installed
+
       token = if name == "cheap-token", do: %{expected | trust_revision: -1}, else: expected
 
       incoming =
         cond do
+          String.starts_with?(name, "alternating") ->
+            values = {String.duplicate("x", 1024 * 1024), String.duplicate("é", 1024 * 1024)}
+            proofs = for index <- 0..47, do: %{"payload" => elem(values, rem(index, 2))}
+            %{template | cutoff_proofs: proofs}
+
           name in ["over-depth", "over-nodes"] ->
             count = if name == "over-depth", do: 210, else: 26
 

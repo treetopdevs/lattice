@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {trustFixture, fixtureSigner} from "./support/export_treehouse_catalog_trust";
 import {authorTreehouseRoleTransfer} from "../src/treehouse";
 import {prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust} from "../src/treehouse_catalog_trust";
-import {copyCatalogInput} from "../src/treehouse_catalog_input_copy";
+import {copyCatalogInput, CatalogInputResourceError} from "../src/treehouse_catalog_input_copy";
 
 const expected = {trustRevision: 0, historyGeneration: 0};
 async function setup() {
@@ -293,4 +293,79 @@ test("an earlier capture's resource error cannot impersonate overflow in an in-b
     kind: "reject", reason: "malformed_catalog",
     detail: {ids: [], coreReason: null, pendingProofIds: []},
   });
+});
+
+test("alternating long strings reuse byte scans through distinct hidden containers", () => {
+  const values = ["x".repeat(8192), "é".repeat(8192)];
+  const hidden = Array.from({length: 128}, (_, index) => ({payload: values[index % 2]}));
+  const input = Object.defineProperty({incoming: []}, "hidden", {value: hidden});
+  const charCodeAt = String.prototype.charCodeAt;
+  let scanned = 0;
+  String.prototype.charCodeAt = function(index: number) {
+    scanned++;
+    return charCodeAt.call(this, index);
+  };
+  try {
+    assert.deepEqual(copyCatalogInput(input, "incoming"), {incoming: []});
+  } finally { String.prototype.charCodeAt = charCodeAt; }
+  assert.ok(scanned < 20_000, `scanned ${scanned} code units for two long values`);
+});
+
+test("alternating long evidence preserves complete refusal and saved recovery decisions", async () => {
+  const fixture = await setup();
+  const values = ["x".repeat(1024 * 1024), "é".repeat(1024 * 1024)];
+  const incoming = {...fixture.incoming,
+    cutoffProofs: Array.from({length: 48}, (_, index) => ({payload: values[index % 2]}))};
+  for (const corrupt of [false, true]) {
+    const installed = corrupt ? {...fixture.installed, histories: []} : fixture.installed;
+    assert.deepEqual(await evaluateTreehouseCatalogTrust({installed, expected, incoming} as never), {
+      kind: "reject", reason: corrupt ? "trust_recovery_required" : "invalid_verified_history",
+      detail: {ids: [], coreReason: null, pendingProofIds: []},
+    });
+  }
+});
+
+test("alternating common-prefix strings discriminate at their differing interior position", () => {
+  const index = 8192;
+  const values = ["x".repeat(index) + "a-tail", "x".repeat(index) + "b-tail"];
+  let warmed = false;
+  const marker = new Proxy({}, {ownKeys() { warmed = true; return []; }});
+  const hidden = [...values.map(payload => ({payload})), marker,
+    ...Array.from({length: 128}, (_, offset) => ({payload: values[offset % 2]}))];
+  const input = Object.defineProperty({incoming: []}, "hidden", {value: hidden});
+  const charCodeAt = String.prototype.charCodeAt;
+  let probes = 0, distinguishingProbes = 0;
+  String.prototype.charCodeAt = function(position: number) {
+    if (warmed && this.length === values[0]!.length) {
+      probes++;
+      if (position === index) distinguishingProbes++;
+    }
+    return charCodeAt.call(this, position);
+  };
+  try {
+    assert.deepEqual(copyCatalogInput(input, "incoming"), {incoming: []});
+  } finally { String.prototype.charCodeAt = charCodeAt; }
+  // Native string equality is not observable through charCodeAt. Require the
+  // cache to discriminate warmed values before equality, not just skip UTF-8 work.
+  assert.ok(probes >= 128 && probes <= 384, `expected bounded lookup probes, got ${probes}`);
+  assert.equal(distinguishingProbes, probes);
+});
+
+test("long-string cache eviction preserves exact Unicode byte accounting", () => {
+  const prefix = "x".repeat(8191);
+  const values = [prefix + "a", prefix + "é", prefix + "\ud800", prefix + "🙂", prefix + "b"];
+  const encoder = new TextEncoder();
+  for (const payload of values) {
+    // Five entries force eviction; revisiting each value exercises both the
+    // retained guards and replacement of stale guards at the reused slot.
+    const hidden = [...values, ...values].map(value => ({value}));
+    const row = [payload];
+    const count = Math.floor((64 * 1024 * 1024) / encoder.encode(payload).length);
+    const within = Object.defineProperty({}, "hidden", {value: hidden});
+    Object.assign(within, {incoming: Array(count).fill(row)});
+    assert.doesNotThrow(() => copyCatalogInput(within, "incoming"));
+    const over = Object.defineProperty({}, "hidden", {value: hidden});
+    Object.assign(over, {incoming: Array(count + 1).fill(row)});
+    assert.throws(() => copyCatalogInput(over, "incoming"), CatalogInputResourceError);
+  }
 });

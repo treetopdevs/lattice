@@ -11,8 +11,8 @@ assert.equal(accepted.kind, "propose");
 const template = { catalogs: [], rotations: [],
     histories: [{ replica: "outside-bounded-families", frames: [], rejected: [] }], cutoffProofs: [] };
 const cases = [];
-for (const name of ["over-string", "within", "saved-corrupt", "cheap-token", "cheap-count", "over-depth", "over-nodes"]) {
-    const installed = name === "saved-corrupt" ? { ...accepted.next, histories: [] } : accepted.next;
+for (const name of ["alternating", "alternating-saved-corrupt", "over-string", "within", "saved-corrupt", "cheap-token", "cheap-count", "over-depth", "over-nodes"]) {
+    const installed = name.endsWith("saved-corrupt") ? { ...accepted.next, histories: [] } : accepted.next;
     const token = name === "cheap-token" ? { ...expected, trustRevision: -1 } : expected;
     const incoming = structuredClone(template);
     if (name === "over-depth" || name === "over-nodes") {
@@ -21,6 +21,10 @@ for (const name of ["over-string", "within", "saved-corrupt", "cheap-token", "ch
             tree = name === "over-depth" ? [tree] : [tree, tree];
         incoming.cutoffProofs = [tree];
     }
+    else if (name.startsWith("alternating")) {
+        const values = ["x".repeat(1024 * 1024), "é".repeat(1024 * 1024)];
+        incoming.cutoffProofs = Array.from({ length: 48 }, (_, index) => ({ payload: values[index % 2] }));
+    }
     else {
         incoming.catalogs = [name === "within" ? "not JSON" : "x".repeat(64 * 1024 * 1024 + 1)];
         if (name === "cheap-count")
@@ -28,7 +32,7 @@ for (const name of ["over-string", "within", "saved-corrupt", "cheap-token", "ch
     }
     const decision = await evaluateTreehouseCatalogTrust({ installed, expected: token, incoming });
     assert.equal(decision.kind, "reject");
-    const reason = name === "within" ? "wrong_catalog_scope" : name === "saved-corrupt" ? "trust_recovery_required" :
+    const reason = name === "within" ? "wrong_catalog_scope" : name.endsWith("saved-corrupt") ? "trust_recovery_required" :
         name === "cheap-token" ? "malformed_catalog" : name === "cheap-count" ? "control_history_limit" : "invalid_verified_history";
     assert.equal(decision.reason, reason, name);
     cases.push({ name, decision });

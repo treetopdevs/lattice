@@ -16,10 +16,15 @@ const nodeCount = (v: Summary): number => typeof v === "number" ? Math.floor(v /
 const stringCount = (v: Summary): number => typeof v === "number" ? Math.floor(v / 262144) : Number((v >> metricBits) & metricMask);
 const containerDepth = (v: Summary): number => typeof v === "number" ? v % 256 : Number(v >> (2n * metricBits));
 
+interface LongStringEntry {
+  value: string;
+  bytes: number;
+  guards: ({index: number; code: number} | undefined)[];
+}
 class CaptureMemo {
   private readonly buckets = [new WeakMap<object, Summary>()];
-  private lastLongString?: string;
-  private lastLongStringBytes = 0;
+  private readonly longStrings: LongStringEntry[] = [];
+  private nextLongString = 0;
   private entries = 0;
   get(value: object): Summary | undefined {
     for (let index = this.buckets.length - 1; index >= 0; index--) {
@@ -29,13 +34,31 @@ class CaptureMemo {
     return undefined;
   }
   byteLength(value: string): number {
-    // Reuse one long value across adjacent rows. A content-keyed Map can
-    // compare a long string with many equal-length entries on a hash collision.
+    // Keep at most four values, with pairwise distinguishing positions. Comparing
+    // whole cached strings first would rescan common prefixes on every alternation.
+    // Misses still scan; this is an optimization, never an additional input limit.
     if (value.length < 1024 || value.length > CATALOG_RAW_STRING_LIMIT) return stringBytes(value);
-    if (value === this.lastLongString) return this.lastLongStringBytes;
+    for (const entry of this.longStrings) {
+      if (value.length === entry.value.length &&
+          entry.guards.every(guard => guard === undefined || value.charCodeAt(guard.index) === guard.code) &&
+          value === entry.value) return entry.bytes;
+    }
     const bytes = stringBytes(value);
-    this.lastLongString = value;
-    this.lastLongStringBytes = bytes;
+    const added: LongStringEntry = {value, bytes, guards: []};
+    for (let slot = 0; slot < this.longStrings.length; slot++) {
+      if (slot === this.nextLongString) continue;
+      const entry = this.longStrings[slot]!;
+      entry.guards[this.nextLongString] = undefined;
+      if (value.length !== entry.value.length) continue;
+      // A cache miss is distinct from every retained entry. Store the first
+      // mismatch once, wherever it occurs, rather than relying on fixed samples.
+      let index = 0;
+      while (value.charCodeAt(index) === entry.value.charCodeAt(index)) index++;
+      added.guards[slot] = {index, code: value.charCodeAt(index)};
+      entry.guards[this.nextLongString] = {index, code: entry.value.charCodeAt(index)};
+    }
+    this.longStrings[this.nextLongString] = added;
+    this.nextLongString = (this.nextLongString + 1) % 4;
     return bytes;
   }
   add(value: object, metrics: Summary): void {
