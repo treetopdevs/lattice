@@ -1,41 +1,46 @@
 defmodule Treehouse.CatalogBindingGraph do
   @moduledoc """
   Plan 316 PR 4a: the pure binding-graph resolver for `replace_catalog_v1` (steps 1-3 and
-  5-9, D-270, D-275 to D-279, OD-16, OD-17 and row 320). Not wired: nothing in
-  `Treehouse.CatalogTrust` calls it yet (4c), so it changes no route, watermark or retained
-  client behaviour. It adds no Core primitive, wire atom or quarantine reason, and it produces
-  no route.
+  5-9, D-270, D-275 to D-279, OD-16, OD-17, row 320, and the convergence design of rows 382
+  and 383). Not wired: nothing in `Treehouse.CatalogTrust` calls it yet (4c), so it changes no
+  route, watermark or retained client behaviour. It adds no Core primitive, wire atom or
+  quarantine reason, and it produces no route.
 
   Input (`resolve/1`): the honored `bootstrap` (`%{id, record}`), the authenticated `space`
   union log, retained `rotations` and `catalogs` as `%{id => normalized envelope}`, the
   `proven_cutoffs` the caller already verified page-level (whole `{replica, frontier,
-  log_digest}` cutoffs, D-A19), and the persisted `accepted` and
-  `blocked` state. `blocked` is read only to decide whether `authority_changed` may be lifted;
-  this module never writes it and never decides stickiness.
+  log_digest}` cutoffs, D-A19), and the persisted `accepted` watermark (`%{binding,
+  generation, catalog, revision, routes}`, where `routes` is the cumulative `route => replica`
+  map of every route ever served). This module persists nothing: `advance/2` is the pure merge
+  rule the caller applies to `%{accepted, frozen}` (row 383).
 
-  Intrinsic verdicts. Every Space `replace_catalog_v1` op is a candidate with one verdict: an
-  eligible node (D-276: steps 1, 2, 4, 5 and 6 pass; `refused?` when the full union refuses
-  it, step 3), raw evidence (any intrinsic failure, with the highest-precedence reason; no head,
-  no closure, OD-17) or pending (closure, or a cited parent or prior catalog, not yet held). A
-  candidate with an incomplete closure is refuted early only from facts no missing ancestor can
-  change (`CatalogReplacementAuthority.refute_without_closure/3`, its own literal bindings and
-  possession signatures); otherwise it stays pending. Rotations are nodes when their chain
-  checks pass under their parent node and inherit its service, origin, `refused?` and unproven
-  recovery cutoffs, plus their own unproven cutoffs (D-A15); a failing rotation is a retained
-  refusal, and a pending rotation under a closed binding is closed out (D-A16). A verdict only
-  ever moves out of pending.
+  One causal evaluation (row 382). A single memoized judgment covers rotations, replacement
+  candidates and catalogs. Every verdict reads only the artifact's bytes and its causal
+  ancestry, so it only ever moves out of pending (D-279). An eligible node passes steps 1, 2,
+  4, 5 and 6 (`refused?` when the full union refuses it, step 3); a cited prior catalog that is
+  intrinsically invalid makes a replacement raw evidence (OD-17) and a rotation a retained
+  refusal. A catalog is valid when its signature, scope and service match its binding node, its
+  chain is valid, its entries extend its floor (`Floor(bootstrap) = []`, `Floor(T) =
+  entries(T.prior_catalog)`, and for a replacement the union of its cited catalogs' entries, or
+  its parent's floor for a `nil` citation) and no route in its own ancestry names two replicas.
 
   Union classification (steps 7-8) only reclassifies: the closed set (D-275), closed-out
-  rotation and catalog children of closed bindings, heads, forks, catalog heads and per-node
-  pending recovery cutoffs. Catalog validity (chain and cited priors) is judged before that
-  classification, so a citation never makes an invalid catalog valid. Catalog failures are
-  retained refusals, never a resolve error.
+  rotation and catalog children of closed bindings, heads, forks (heads, nonce, catalog and
+  rotation forks), catalog heads and per-node pending recovery cutoffs.
+
+  The decision is derived on every call from the union and the watermark (row 383): a changed
+  watermark (its binding refused or closed out, or its catalog refused, closed out or uncovered)
+  sets `block.freeze`; a missing watermark artifact is a derived block that does not freeze; a
+  sole promotable head is accepted when it covers the watermark; `clears_authority_changed`
+  holds when that head descends from an honored replacement the watermark did not have; and
+  `serving` is the catalog the caller may serve.
 
   `resolve/1` returns `{:error, reason, detail}` only for malformed input,
   `control_history_limit` (more than two heads) and `trust_pending` (any held op with an
   incomplete closure except a candidate already refuted from its own bytes, a pending
   candidate, a pending rotation not under a closed binding, or a pending catalog under an open
-  binding or on a cited chain), the highest precedence first; everything else is in the graph and its `decision`.
+  binding or on a cited chain), the highest precedence first; everything else is in the graph
+  and its `decision`.
   """
 
   alias Lattice.{Authority, Dag, Identity, Log}
@@ -90,6 +95,139 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
+  @doc """
+  The merge rule over the persisted `%{accepted, frozen}` (row 383; TS
+  `advanceCatalogBindingState`). Returns `%{accepted, frozen, serving}`. Only an accepting
+  decision that clears (or any accepting decision while not frozen) moves the watermark and
+  lifts `frozen`; it adds the accepted catalog's routes to the cumulative `routes`. A block
+  with `freeze` sets `frozen`. Nothing is served while frozen. On an error the state is kept:
+  `trust_pending` serves `:unchanged` (the caller keeps its previous routes, an incomplete
+  page), any other error serves nothing.
+  """
+  @spec advance(map(), term()) :: %{accepted: map() | nil, frozen: boolean(), serving: term()}
+  def advance(state, {:ok, %{decision: d, catalogs: catalogs}}) do
+    frozen = Map.get(state, :frozen, false)
+    accepted = Map.get(state, :accepted)
+
+    cond do
+      d.accepted and (not frozen or d.clears_authority_changed) ->
+        routes =
+          Enum.reduce(catalogs[d.catalog].entries, routes(accepted), fn e, acc ->
+            Map.put(acc, e.route, e.replica)
+          end)
+
+        %{
+          accepted: %{
+            binding: d.head,
+            generation: d.generation,
+            catalog: d.catalog,
+            revision: d.revision,
+            routes: routes
+          },
+          frozen: false,
+          serving: d.serving
+        }
+
+      d.block != nil and d.block.freeze ->
+        %{accepted: accepted, frozen: true, serving: nil}
+
+      true ->
+        %{accepted: accepted, frozen: frozen, serving: if(frozen, do: nil, else: d.serving)}
+    end
+  end
+
+  def advance(state, {:error, :trust_pending, _}), do: keep(state, :unchanged)
+  def advance(state, _error), do: keep(state, nil)
+
+  defp keep(state, serving),
+    do: %{
+      accepted: Map.get(state, :accepted),
+      frozen: Map.get(state, :frozen, false),
+      serving: serving
+    }
+
+  defp routes(nil), do: %{}
+  defp routes(accepted), do: Map.get(accepted, :routes, %{})
+
+  @doc """
+  The authoring resolve for one claim (design section 2.7). As `resolve/1`, except that a
+  `control_history_limit` whose heads all reduce to head roots the claim cites (a rotation
+  head's root is its nearest non-rotation ancestor) is re-resolved without the rotations under
+  those roots and the catalogs bound to them: exactly the rotations the claim closes out. The
+  verifier keeps its head limit; the caller re-checks the signed op against the full input.
+  """
+  @spec resolve_for_claim(map(), map()) ::
+          {:ok, graph()} | {:error, atom(), %{ids: [String.t()], core_reason: nil}}
+  def resolve_for_claim(input, claim) do
+    case resolve(input) do
+      {:error, :control_history_limit, %{ids: heads}} = limit when is_map(input) ->
+        rotations = Map.get(input, :rotations, %{})
+        roots = Enum.map(heads, &head_root(&1, rotations, MapSet.new()))
+
+        if Enum.all?(roots, &(&1 in claim.parents)),
+          do: resolve(drop_under(input, rotations, claim.parents)),
+          else: limit
+
+      other ->
+        other
+    end
+  end
+
+  defp head_root(id, rotations, seen) do
+    case rotations do
+      %{^id => %{rotation: %{parent: parent}}} ->
+        if MapSet.member?(seen, id),
+          do: id,
+          else: head_root(parent, rotations, MapSet.put(seen, id))
+
+      _ ->
+        id
+    end
+  end
+
+  defp drop_under(input, rotations, parents) do
+    dropped =
+      for {id, _} <- rotations,
+          under?(id, rotations, parents, MapSet.new()),
+          into: MapSet.new(),
+          do: id
+
+    dropped = closure_drop(dropped, rotations)
+
+    catalogs =
+      for {id, e} <- input.catalogs,
+          not MapSet.member?(dropped, e.catalog.binding),
+          into: %{},
+          do: {id, e}
+
+    %{input | rotations: Map.drop(rotations, MapSet.to_list(dropped)), catalogs: catalogs}
+  end
+
+  defp under?(id, rotations, parents, seen) do
+    parent = rotations[id].rotation.parent
+
+    cond do
+      id in parents or MapSet.member?(seen, id) -> false
+      parent in parents -> true
+      Map.has_key?(rotations, parent) -> under?(parent, rotations, parents, MapSet.put(seen, id))
+      true -> false
+    end
+  end
+
+  # A rotation whose parent is dropped is dropped too.
+  defp closure_drop(dropped, rotations) do
+    more =
+      for {id, e} <- rotations,
+          not MapSet.member?(dropped, id),
+          MapSet.member?(dropped, e.rotation.parent),
+          into: MapSet.new(),
+          do: id
+
+    if MapSet.size(more) == 0,
+      do: dropped,
+      else: closure_drop(MapSet.union(dropped, more), rotations)
+  end
+
   # --- context ----------------------------------------------------------------
 
   defp context(%{
@@ -98,17 +236,24 @@ defmodule Treehouse.CatalogBindingGraph do
          rotations: rotations,
          catalogs: catalogs,
          proven_cutoffs: proven,
-         accepted: accepted,
-         blocked: blocked
+         accepted: accepted
        })
        when is_map(rotations) and is_map(catalogs) and is_list(proven) and is_binary(id) and
-              is_map(record) do
-    if Enum.all?(proven, &proven_shape?/1),
-      do: {:ok, build_context(bootstrap, space, rotations, catalogs, proven, accepted, blocked)},
+              is_map(record) and (is_nil(accepted) or is_map(accepted)) do
+    if Enum.all?(proven, &proven_shape?/1) and accepted_shape?(accepted),
+      do: {:ok, build_context(bootstrap, space, rotations, catalogs, proven, accepted)},
       else: :error
   end
 
   defp context(_), do: :error
+
+  defp accepted_shape?(nil), do: true
+
+  defp accepted_shape?(%{binding: b, catalog: c, revision: r} = a)
+       when is_binary(b) and is_binary(c) and is_integer(r),
+       do: is_map(Map.get(a, :routes, %{}))
+
+  defp accepted_shape?(_), do: false
 
   # A proven cutoff is the complete `{replica, frontier, log_digest}` triple (CatalogTrust
   # compares the whole cutoff); an entry without its frontier fails closed as malformed input.
@@ -120,7 +265,7 @@ defmodule Treehouse.CatalogBindingGraph do
 
   defp cutoff_key(c), do: {c.replica, c.frontier, c.log_digest}
 
-  defp build_context(bootstrap, space, rotations, catalogs, proven, accepted, blocked) do
+  defp build_context(bootstrap, space, rotations, catalogs, proven, accepted) do
     ops = Log.ops(space)
     complete = complete_ids(ops)
     cops = Map.take(ops, MapSet.to_list(complete))
@@ -144,7 +289,6 @@ defmodule Treehouse.CatalogBindingGraph do
       catalogs: catalogs,
       proven: MapSet.new(proven, &cutoff_key/1),
       accepted: accepted,
-      blocked: blocked,
       boot_honored: bootstrap_honored?(bootstrap, cops, replica)
     }
   end
@@ -174,12 +318,25 @@ defmodule Treehouse.CatalogBindingGraph do
   # --- run --------------------------------------------------------------------
 
   defp run(ctx) do
-    st = %{memo: %{}, visiting: MapSet.new(), detail: %{}}
+    st = %{
+      memo: %{},
+      cmemo: %{},
+      croutes: %{},
+      visiting: MapSet.new(),
+      cvisiting: MapSet.new(),
+      detail: %{}
+    }
 
     st =
       (Map.keys(ctx.rotations) ++ Map.keys(ctx.candidates))
       |> Enum.sort()
       |> Enum.reduce(st, fn id, st -> id |> eval(ctx, st) |> elem(1) end)
+
+    st =
+      ctx.catalogs
+      |> Map.keys()
+      |> Enum.sort()
+      |> Enum.reduce(st, fn id, st -> id |> judge_catalog(ctx, st) |> elem(1) end)
 
     memo = st.memo
 
@@ -193,11 +350,18 @@ defmodule Treehouse.CatalogBindingGraph do
     final = Map.drop(nodes_all, MapSet.to_list(out_rot))
     heads = heads_of(final)
 
+    {floors, st} =
+      Enum.reduce(final, {%{}, st}, fn {id, n}, {acc, st} ->
+        case floor_of(n, ctx, st) do
+          {{:ok, entries, _routes}, st} -> {Map.put(acc, id, entries), st}
+          {_, st} -> {acc, st}
+        end
+      end)
+
     cat =
       classify_catalogs(
-        Map.put(ctx, :memo, memo),
+        Map.merge(ctx, %{memo: memo, validity: st.cmemo}),
         nodes_all,
-        final,
         closed,
         {out_rot, out_pending}
       )
@@ -225,7 +389,7 @@ defmodule Treehouse.CatalogBindingGraph do
         {:error, :trust_pending, %{ids: pending, core_reason: nil}}
 
       true ->
-        assemble(ctx, memo, st.detail, nodes_all, final, heads, closed, out_rot, cat)
+        assemble(ctx, memo, st.detail, {nodes_all, final, heads, closed, out_rot}, cat, floors)
     end
   end
 
@@ -286,66 +450,76 @@ defmodule Treehouse.CatalogBindingGraph do
       {{:bad, :wrong_catalog_scope}, st}
     else
       case eval(r.parent, ctx, st) do
-        {{:node, p}, st} -> {rotation_node(id, e, p, ctx), st}
+        {{:node, p}, st} -> rotation_node(id, e, p, ctx, st)
         {{:bad, _}, st} -> {{:bad, :invalid_catalog_transition}, st}
         {_, st} -> {:pending, st}
       end
     end
   end
 
-  defp rotation_node(id, e, p, ctx) do
+  defp rotation_node(id, e, p, ctx, st) do
     r = e.rotation
 
     cond do
       next_generation([p.generation]) != {:ok, r.generation} ->
-        {:bad, :invalid_catalog_transition}
+        {{:bad, :invalid_catalog_transition}, st}
 
       r.new_catalog_key == p.key or r.new_catalog_key == p.service_key ->
-        {:bad, :invalid_catalog_transition}
+        {{:bad, :invalid_catalog_transition}, st}
 
       not Identity.verify(p.key, TransportCatalog.rotation_bytes(r), e.old_signature) ->
-        {:bad, :invalid_catalog_signature}
+        {{:bad, :invalid_catalog_signature}, st}
 
       not Identity.verify(
         r.new_catalog_key,
         TransportCatalog.rotation_possession_bytes(r),
         e.new_signature
       ) ->
-        {:bad, :invalid_possession}
+        {{:bad, :invalid_possession}, st}
 
       true ->
         case ctx.catalogs[r.prior_catalog] do
-          nil -> :pending
-          %{catalog: prior} -> rotation_prior(id, r, p, prior, ctx)
+          nil -> {:pending, st}
+          %{catalog: prior} -> rotation_prior(id, r, p, prior, ctx, st)
         end
     end
   end
 
-  defp rotation_prior(id, r, p, prior, ctx) do
+  # The prior catalog must be held and valid under the rotation's parent (row 382 item 3): an
+  # invalid prior makes the rotation a retained refusal, never a head.
+  defp rotation_prior(id, r, p, prior, ctx, st) do
     if prior.binding != r.parent or
          TransportCatalog.inventory_id(prior.entries) != r.inventory_digest or
          Enum.map(r.cutoffs, & &1.replica) != Enum.map(prior.entries, & &1.replica) do
-      {:bad, :invalid_catalog_transition}
+      {{:bad, :invalid_catalog_transition}, st}
     else
-      {:node,
-       %{
-         id: id,
-         kind: :rotation,
-         generation: r.generation,
-         key: r.new_catalog_key,
-         service_id: p.service_id,
-         service_key: p.service_key,
-         origin: p.origin,
-         parents: [r.parent],
-         prior: [%{binding: r.parent, catalog: r.prior_catalog}],
-         inventory: r.inventory_digest,
-         refused?: p.refused?,
-         core_reason: p.core_reason,
-         # A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs,
-         # and it owes its own declared cutoffs too (CatalogTrust parity).
-         pending: Enum.uniq(p.pending ++ unproven(r.cutoffs, ctx))
-       }}
+      case judge_catalog(r.prior_catalog, ctx, st) do
+        {:ok, st} -> {rotation_verdict(id, r, p, ctx), st}
+        {v, st} when v in [:pending, :binding_pending] -> {:pending, st}
+        {_, st} -> {{:bad, :invalid_catalog_transition}, st}
+      end
     end
+  end
+
+  defp rotation_verdict(id, r, p, ctx) do
+    {:node,
+     %{
+       id: id,
+       kind: :rotation,
+       generation: r.generation,
+       key: r.new_catalog_key,
+       service_id: p.service_id,
+       service_key: p.service_key,
+       origin: p.origin,
+       parents: [r.parent],
+       prior: [%{binding: r.parent, catalog: r.prior_catalog}],
+       inventory: r.inventory_digest,
+       refused?: p.refused?,
+       core_reason: p.core_reason,
+       # A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs,
+       # and it owes its own declared cutoffs too (CatalogTrust parity).
+       pending: Enum.uniq(p.pending ++ unproven(r.cutoffs, ctx))
+     }}
   end
 
   # --- candidates -------------------------------------------------------------
@@ -492,13 +666,11 @@ defmodule Treehouse.CatalogBindingGraph do
   defp declared_graph(claim, anc, ctx, st) do
     {results, st} =
       Enum.map_reduce(claim.parents, st, fn parent, st ->
-        cond do
-          Map.has_key?(ctx.candidates, parent) and not MapSet.member?(anc, parent) ->
-            {{parent, {:bad, :deps}}, st}
-
-          true ->
-            {res, st} = eval(parent, ctx, st)
-            {{parent, res}, st}
+        if Map.has_key?(ctx.candidates, parent) and not MapSet.member?(anc, parent) do
+          {{parent, {:bad, :deps}}, st}
+        else
+          {res, st} = eval(parent, ctx, st)
+          {{parent, res}, st}
         end
       end)
 
@@ -523,32 +695,204 @@ defmodule Treehouse.CatalogBindingGraph do
          do: [{:invalid_catalog_transition, :generation}],
          else: []
 
-    {prior_failures, prior_pending?} = priors(claim, ctx)
+    {prior_failures, prior_pending?, st} = priors(claim, ctx, st)
 
     {parent_failures ++ service_failures ++ generation_failures ++ prior_failures,
      held_pending? or prior_pending?, st}
   end
 
-  defp priors(claim, ctx) do
-    Enum.reduce(claim.prior_catalogs, {[], false}, fn %{binding: binding, catalog: catalog},
-                                                      {fails, pend?} ->
+  # A cited prior catalog must be held, bound to its cited parent and valid (OD-17: an invalid
+  # one makes the candidate raw evidence; one whose own chain is not yet held pends).
+  defp priors(claim, ctx, st) do
+    Enum.reduce(claim.prior_catalogs, {[], false, st}, fn %{binding: binding, catalog: catalog},
+                                                          {fails, pend?, st} ->
       cond do
         binding not in claim.parents ->
-          {[{:invalid_catalog_transition, :prior} | fails], pend?}
+          {[{:invalid_catalog_transition, :prior} | fails], pend?, st}
 
         catalog == nil ->
-          {fails, pend?}
+          {fails, pend?, st}
 
         not Map.has_key?(ctx.catalogs, catalog) ->
-          {fails, true}
+          {fails, true, st}
 
         ctx.catalogs[catalog].catalog.binding != binding ->
-          {[{:invalid_catalog_transition, :prior} | fails], pend?}
+          {[{:invalid_catalog_transition, :prior} | fails], pend?, st}
 
         true ->
-          {fails, pend?}
+          case judge_catalog(catalog, ctx, st) do
+            {:ok, st} -> {fails, pend?, st}
+            {v, st} when v in [:pending, :binding_pending] -> {fails, true, st}
+            {_, st} -> {[{:invalid_catalog_transition, :prior} | fails], pend?, st}
+          end
       end
     end)
+  end
+
+  # --- catalogs (intrinsic) -------------------------------------------------------
+
+  # A catalog verdict: `:ok` (with its cumulative route map in `croutes`), `{:refused,
+  # reason}`, `:binding_pending`, `:pending` or `:bad_chain`. It reads only the catalog bytes,
+  # its binding node and its own ancestry (its `previous` chain and its floor), never the union.
+  defp judge_catalog(id, ctx, st) do
+    cond do
+      Map.has_key?(st.cmemo, id) ->
+        {st.cmemo[id], st}
+
+      not Map.has_key?(ctx.catalogs, id) ->
+        {:pending, st}
+
+      MapSet.member?(st.cvisiting, id) ->
+        {:bad_chain, st}
+
+      true ->
+        st = %{st | cvisiting: MapSet.put(st.cvisiting, id)}
+        {v, routes, st} = judge_catalog_new(id, ctx, st)
+        st = %{st | cvisiting: MapSet.delete(st.cvisiting, id), cmemo: Map.put(st.cmemo, id, v)}
+        st = if v == :ok, do: %{st | croutes: Map.put(st.croutes, id, routes)}, else: st
+        {v, st}
+    end
+  end
+
+  defp judge_catalog_new(id, ctx, st) do
+    e = ctx.catalogs[id]
+    c = e.catalog
+
+    if c.space != ctx.replica or c.bootstrap != ctx.bootstrap.id do
+      {{:refused, :wrong_catalog_scope}, nil, st}
+    else
+      case eval(c.binding, ctx, st) do
+        {{:node, n}, st} -> catalog_under(c, e, n, ctx, st)
+        {{:bad, _}, st} -> {{:refused, :invalid_catalog_transition}, nil, st}
+        {_, st} -> {:binding_pending, nil, st}
+      end
+    end
+  end
+
+  defp catalog_under(c, e, n, ctx, st) do
+    cond do
+      not Identity.verify(n.key, TransportCatalog.catalog_bytes(c), e.signature) ->
+        {{:refused, :invalid_catalog_signature}, nil, st}
+
+      Enum.any?(c.entries, &({&1.service_id, &1.service_key} != {n.service_id, n.service_key})) ->
+        {{:refused, :wrong_catalog_scope}, nil, st}
+
+      c.previous == nil ->
+        first_catalog(c, n, ctx, st)
+
+      not Map.has_key?(ctx.catalogs, c.previous) ->
+        {:pending, nil, st}
+
+      true ->
+        chain_catalog(c, ctx, st)
+    end
+  end
+
+  # First-catalog checks (plan 316 section 1 (b)): revision 0 for a replacement (the codec
+  # already ties revision 0 to `previous: nil`), the declared inventory, the replacement's
+  # cutoffs covering every entry (D-A15), extension of the binding's floor, and the route rule.
+  defp first_catalog(c, n, ctx, st) do
+    {floor, st} = floor_of(n, ctx, st)
+
+    case floor do
+      {:ok, entries, routes} ->
+        cond do
+          n.kind == :replacement and c.revision != 0 ->
+            {:bad_chain, nil, st}
+
+          n.inventory != nil and TransportCatalog.inventory_id(c.entries) != n.inventory ->
+            {:bad_chain, nil, st}
+
+          n.kind == :replacement and
+              Enum.map(claim_of(ctx, n.id).cutoffs, & &1.replica) !=
+                Enum.sort(Enum.map(c.entries, & &1.replica)) ->
+            {:bad_chain, nil, st}
+
+          not extends?(entries, c.entries) ->
+            {:bad_chain, nil, st}
+
+          true ->
+            with_routes(routes, c.entries, st)
+        end
+
+      :pending ->
+        {:pending, nil, st}
+
+      :bad ->
+        {:bad_chain, nil, st}
+    end
+  end
+
+  defp chain_catalog(c, ctx, st) do
+    {prev, st} = judge_catalog(c.previous, ctx, st)
+    prior = ctx.catalogs[c.previous].catalog
+
+    cond do
+      prev in [:pending, :binding_pending] -> {:pending, nil, st}
+      prev != :ok or prior.binding != c.binding -> {:bad_chain, nil, st}
+      next_generation([prior.revision]) != {:ok, c.revision} -> {:bad_chain, nil, st}
+      not extends?(prior.entries, c.entries) -> {:bad_chain, nil, st}
+      true -> with_routes(st.croutes[c.previous], c.entries, st)
+    end
+  end
+
+  # Route rule: within a catalog's own ancestry plus its entries, a route names one replica.
+  defp with_routes(routes, entries, st) do
+    case add_routes(routes, entries) do
+      {:ok, routes} -> {:ok, routes, st}
+      :conflict -> {:bad_chain, nil, st}
+    end
+  end
+
+  defp add_routes(routes, entries) do
+    Enum.reduce_while(entries, {:ok, routes}, fn e, {:ok, acc} ->
+      if Map.get(acc, e.route, e.replica) == e.replica,
+        do: {:cont, {:ok, Map.put(acc, e.route, e.replica)}},
+        else: {:halt, :conflict}
+    end)
+  end
+
+  # Floor(N): the entries (and route map) every valid catalog under N must extend.
+  # `Floor(bootstrap) = []`, `Floor(T) = entries(T.prior_catalog)`, and for a replacement the
+  # union over its cited `{P, K}` of `entries(K)`, or `Floor(P)` when `K` is nil, so a nil
+  # citation of a node without a valid catalog still carries that node's inventory forward.
+  defp floor_of(%{kind: :bootstrap}, _ctx, st), do: {{:ok, [], %{}}, st}
+
+  defp floor_of(%{prior: priors}, ctx, st) do
+    Enum.reduce(priors, {{:ok, [], %{}}, st}, fn
+      _prior, {:bad, st} ->
+        {:bad, st}
+
+      %{binding: p, catalog: k}, {acc, st} ->
+        {part, st} = floor_part(p, k, ctx, st)
+        {merge_floor(acc, part), st}
+    end)
+  end
+
+  defp floor_part(p, nil, ctx, st) do
+    case eval(p, ctx, st) do
+      {{:node, n}, st} -> floor_of(n, ctx, st)
+      {_, st} -> {:pending, st}
+    end
+  end
+
+  defp floor_part(_p, k, ctx, st) do
+    case judge_catalog(k, ctx, st) do
+      {:ok, st} -> {{:ok, ctx.catalogs[k].catalog.entries, st.croutes[k]}, st}
+      {v, st} when v in [:pending, :binding_pending] -> {:pending, st}
+      {_, st} -> {:bad, st}
+    end
+  end
+
+  defp merge_floor(:bad, _), do: :bad
+  defp merge_floor(_, :bad), do: :bad
+  defp merge_floor(:pending, _), do: :pending
+  defp merge_floor(_, :pending), do: :pending
+
+  defp merge_floor({:ok, e1, r1}, {:ok, e2, r2}) do
+    if Enum.all?(r2, fn {route, replica} -> Map.get(r1, route, replica) == replica end),
+      do: {:ok, e1 ++ e2, Map.merge(r1, r2)},
+      else: :bad
   end
 
   # --- closure and heads ------------------------------------------------------
@@ -619,40 +963,34 @@ defmodule Treehouse.CatalogBindingGraph do
     final |> Map.keys() |> Enum.reject(&MapSet.member?(cited, &1)) |> Enum.sort()
   end
 
-  # --- catalogs ---------------------------------------------------------------
+  # --- catalogs (union classification) ----------------------------------------------
 
-  # Two passes. Validity is intrinsic to the catalog bytes, its binding node and its chain
-  # (`previous` links and, for a replacement's first catalog, every cited prior): `{:refused,
-  # reason}`, `:binding_pending`, `:pending`, `:bad_chain` or `:ok`. Status then classifies a
-  # valid catalog: :current (open binding), :covered / :closed_out / :uncovered (closed binding),
-  # :refused (with a reason) or :pending. A citation never makes an invalid catalog valid: an
-  # invalid cited catalog covers nothing, and a first catalog extending it is itself invalid.
-  defp classify_catalogs(ctx, nodes_all, final, closed, {out_rot, out_pending}) do
+  # Status classifies an intrinsic verdict against the union: :current (open binding),
+  # :covered / :closed_out / :uncovered (closed binding), :refused (with a reason) or :pending.
+  # A citation never makes an invalid catalog valid.
+  defp classify_catalogs(ctx, nodes_all, closed, {out_rot, out_pending}) do
     cites = citations(nodes_all, closed)
     previous = Map.new(ctx.catalogs, fn {id, e} -> {id, e.catalog.previous} end)
 
     env = %{
       ctx: ctx,
       nodes_all: nodes_all,
-      final: final,
       closed: closed,
       out_rot: out_rot,
       out_pending: out_pending,
       cites: cites,
-      previous: previous
+      previous: previous,
+      validity: ctx.validity
     }
 
-    ids = ctx.catalogs |> Map.keys() |> Enum.sort()
-    validity = Enum.reduce(ids, %{}, fn id, memo -> id |> validity(env, memo) |> elem(1) end)
-    env = Map.put(env, :validity, validity)
-
     acc =
-      Enum.reduce(ids, %{status: %{}, refusals: %{}}, fn id, acc ->
+      ctx.catalogs
+      |> Map.keys()
+      |> Enum.sort()
+      |> Enum.reduce(%{status: %{}, refusals: %{}}, fn id, acc ->
         {status, acc} = catalog_status(id, env, acc)
         %{acc | status: Map.put(acc.status, id, status)}
       end)
-
-    acc = route_history(ctx, acc)
 
     pending = for {id, :pending} <- acc.status, do: id
 
@@ -660,7 +998,7 @@ defmodule Treehouse.CatalogBindingGraph do
       pending: pending,
       cites: cites,
       previous: previous,
-      validity: validity,
+      validity: ctx.validity,
       out_pending: out_pending
     })
   end
@@ -669,134 +1007,6 @@ defmodule Treehouse.CatalogBindingGraph do
     do:
       {:refused,
        %{acc | refusals: Map.put(acc.refusals, id, %{reason: reason, core_reason: core})}}
-
-  # --- pass 1: validity ---------------------------------------------------------
-
-  defp validity(id, env, memo) do
-    case Map.fetch(memo, id) do
-      {:ok, v} ->
-        {v, memo}
-
-      :error ->
-        {v, memo} = validity_new(id, env, memo)
-        {v, Map.put(memo, id, v)}
-    end
-  end
-
-  defp validity_new(id, env, memo) do
-    e = env.ctx.catalogs[id]
-    c = e.catalog
-    n = env.nodes_all[c.binding]
-
-    cond do
-      c.space != env.ctx.replica or c.bootstrap != env.ctx.bootstrap.id ->
-        {{:refused, :wrong_catalog_scope}, memo}
-
-      n == nil ->
-        {binding_missing(c.binding, env), memo}
-
-      not Identity.verify(n.key, TransportCatalog.catalog_bytes(c), e.signature) ->
-        {{:refused, :invalid_catalog_signature}, memo}
-
-      Enum.any?(c.entries, &({&1.service_id, &1.service_key} != {n.service_id, n.service_key})) ->
-        {{:refused, :wrong_catalog_scope}, memo}
-
-      c.previous == nil ->
-        first_validity(c, n, env, memo)
-
-      not Map.has_key?(env.ctx.catalogs, c.previous) ->
-        {:pending, memo}
-
-      true ->
-        chain_validity(c, env, memo)
-    end
-  end
-
-  # The binding is a refused rotation, raw evidence, pending or unknown.
-  defp binding_missing(binding, env) do
-    cond do
-      Map.has_key?(env.ctx.candidates, binding) or Map.has_key?(env.ctx.rotations, binding) ->
-        if Map.has_key?(env.nodes_all, binding) or
-             match?({:bad, _}, Map.get(env.ctx.memo, binding)),
-           do: {:refused, :invalid_catalog_transition},
-           else: :binding_pending
-
-      Map.has_key?(env.ctx.ops, binding) or Map.has_key?(env.ctx.catalogs, binding) ->
-        {:refused, :invalid_catalog_transition}
-
-      true ->
-        :binding_pending
-    end
-  end
-
-  defp chain_validity(c, env, memo) do
-    {prev, memo} = validity(c.previous, env, memo)
-    prior = env.ctx.catalogs[c.previous].catalog
-
-    v =
-      cond do
-        prev in [:pending, :binding_pending] -> :pending
-        prev != :ok or prior.binding != c.binding -> :bad_chain
-        next_generation([prior.revision]) != {:ok, c.revision} -> :bad_chain
-        not extends?(prior.entries, c.entries) -> :bad_chain
-        true -> :ok
-      end
-
-    {v, memo}
-  end
-
-  # First-catalog checks (plan 316 section 1 (b)): revision 0 for a replacement (the codec
-  # already ties revision 0 to `previous: nil`), the declared inventory, and extension of every
-  # cited prior, which must itself be valid. A rotation's `prior_catalog` is a cited prior too,
-  # so an old-key rotation naming a refused catalog cannot drop a replica either.
-  defp first_validity(c, n, env, memo) do
-    priors = for %{catalog: k} <- n.prior, k != nil, do: k
-
-    {prior_vs, memo} =
-      Enum.map_reduce(priors, memo, fn k, memo ->
-        if Map.has_key?(env.ctx.catalogs, k), do: validity(k, env, memo), else: {:pending, memo}
-      end)
-
-    extends_all? =
-      Enum.all?(priors, fn k ->
-        case env.ctx.catalogs[k] do
-          nil -> true
-          %{catalog: prior} -> extends?(prior.entries, c.entries)
-        end
-      end)
-
-    v =
-      cond do
-        n.kind == :replacement and c.revision != 0 ->
-          :bad_chain
-
-        n.inventory != nil and TransportCatalog.inventory_id(c.entries) != n.inventory ->
-          :bad_chain
-
-        # A replacement's cutoffs cover every entry of its first catalog, as a rotation's
-        # cover its prior catalog's (D-A15); otherwise a replica carries no recovery proof.
-        n.kind == :replacement and
-            Enum.map(claim_of(env.ctx, n.id).cutoffs, & &1.replica) !=
-              Enum.sort(Enum.map(c.entries, & &1.replica)) ->
-          :bad_chain
-
-        not extends_all? ->
-          :bad_chain
-
-        Enum.any?(prior_vs, &(&1 not in [:ok, :pending, :binding_pending])) ->
-          :bad_chain
-
-        prior_vs != [] and not Enum.all?(prior_vs, &(&1 == :ok)) ->
-          :pending
-
-        true ->
-          :ok
-      end
-
-    {v, memo}
-  end
-
-  # --- pass 2: status -------------------------------------------------------------
 
   defp catalog_status(id, env, acc) do
     c = env.ctx.catalogs[id].catalog
@@ -880,6 +1090,16 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
+  # Is `a` ancestor-or-self of `b` along `previous` links and, for a first catalog under a
+  # rotation, the edge to that rotation's prior catalog (CatLineage; used only by Seen)?
+  defp cat_lineage?(a, b, parent, seen \\ MapSet.new()) do
+    cond do
+      a == b -> true
+      b == nil or MapSet.member?(seen, b) -> false
+      true -> cat_lineage?(a, Map.get(parent, b), parent, MapSet.put(seen, b))
+    end
+  end
+
   # D-275 / D-10: the catalogs a closed binding was cited with. A replacement cites its parents'
   # `prior_catalogs`; for an ancestor binding a closed rotation's `prior_catalog` stands in.
   defp citations(nodes, closed) do
@@ -891,30 +1111,6 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
-  # Across every current or covered catalog a route names one replica (CatalogTrust route
-  # history); a later conflicting one (id order) is refused, never a resolve error. Closed-out
-  # and uncovered old-key catalogs reserve no route, so they cannot refuse an honest head.
-  defp route_history(ctx, acc) do
-    ctx.catalogs
-    |> Enum.sort_by(&elem(&1, 0))
-    |> Enum.reduce({%{}, acc}, fn {id, %{catalog: c}}, {used, acc} ->
-      if acc.status[id] in [:current, :covered] do
-        conflict? =
-          Enum.any?(c.entries, fn e -> Map.get(used, e.route, e.replica) != e.replica end)
-
-        if conflict? do
-          {:refused, acc} = refuse(acc, id, :invalid_catalog_transition, nil)
-          {used, %{acc | status: Map.put(acc.status, id, :refused)}}
-        else
-          {Enum.reduce(c.entries, used, &Map.put(&2, &1.route, &1.replica)), acc}
-        end
-      else
-        {used, acc}
-      end
-    end)
-    |> elem(1)
-  end
-
   defp extends?(before, next) do
     Enum.all?(before, fn entry ->
       case Enum.find(next, &(&1.replica == entry.replica)) do
@@ -924,21 +1120,14 @@ defmodule Treehouse.CatalogBindingGraph do
     end)
   end
 
+  defp route_compat?(routes, entries),
+    do: Enum.all?(entries, &(Map.get(routes, &1.route, &1.replica) == &1.replica))
+
   # --- forks ------------------------------------------------------------------
 
   defp catalog_heads(final, closed, cat, ctx) do
     current = for {cid, :current} <- cat.status, do: cid
-
-    successors =
-      MapSet.new(for cid <- current, p = ctx.catalogs[cid].catalog.previous, p != nil, do: p)
-
-    open = for {id, _} <- final, not MapSet.member?(closed, id), into: MapSet.new(), do: id
-
-    current
-    |> Enum.reject(&MapSet.member?(successors, &1))
-    |> Enum.filter(&MapSet.member?(open, ctx.catalogs[&1].catalog.binding))
-    |> Enum.group_by(&ctx.catalogs[&1].catalog.binding)
-    |> Map.new(fn {binding, ids} -> {binding, Enum.sort(ids)} end)
+    heads_among(current, final, closed, ctx)
   end
 
   # The catalog heads a resolution must cite per open binding (authoring coverage): the current
@@ -952,19 +1141,49 @@ defmodule Treehouse.CatalogBindingGraph do
                cat.refusals[cid].reason == :catalog_authority_refused),
           do: cid
 
+    heads_among(citable, final, closed, ctx)
+  end
+
+  defp heads_among(ids, final, closed, ctx) do
     successors =
-      MapSet.new(for cid <- citable, p = ctx.catalogs[cid].catalog.previous, p != nil, do: p)
+      MapSet.new(for cid <- ids, p = ctx.catalogs[cid].catalog.previous, p != nil, do: p)
 
     open = for {id, _} <- final, not MapSet.member?(closed, id), into: MapSet.new(), do: id
 
-    citable
+    ids
     |> Enum.reject(&MapSet.member?(successors, &1))
     |> Enum.filter(&MapSet.member?(open, ctx.catalogs[&1].catalog.binding))
     |> Enum.group_by(&ctx.catalogs[&1].catalog.binding)
     |> Map.new(fn {binding, ids} -> {binding, Enum.sort(ids)} end)
   end
 
-  defp forks(final, heads, closed, cat, cat_heads, ctx) do
+  # C1: a final rotation T whose parent P is not closed forks with any chain-valid catalog under
+  # P that strictly descends from T's prior catalog (CatalogTrust `rotation_forks`); a pending
+  # descendant is already pending under the open P.
+  defp rotation_forks(final, closed, cat, ctx) do
+    final
+    |> Enum.flat_map(fn
+      {tid, %{kind: :rotation, prior: [%{binding: p, catalog: prior}]}} ->
+        descendants =
+          for {cid, e} <- ctx.catalogs,
+              not MapSet.member?(closed, p),
+              e.catalog.binding == p,
+              cid != prior,
+              cat.validity[cid] == :ok,
+              on_chain?(prior, cid, cat.previous),
+              do: cid
+
+        if descendants == [],
+          do: [],
+          else: [%{rotation: tid, binding: p, catalogs: Enum.sort(descendants), prior: prior}]
+
+      _ ->
+        []
+    end)
+    |> Enum.sort_by(& &1.rotation)
+  end
+
+  defp forks(final, heads, closed, cat, cat_heads, rot_forks, ctx) do
     heads_fork = if length(heads) > 1, do: [%{kind: :heads, binding: nil, ids: heads}], else: []
 
     # Differing claims sharing a nonce fork, sequential reuse included (a child reusing its
@@ -994,7 +1213,14 @@ defmodule Treehouse.CatalogBindingGraph do
         %{kind: :catalog, binding: binding, ids: Enum.sort(ids)}
       end)
 
-    Enum.sort_by(heads_fork ++ nonce ++ split ++ uncovered, &{&1.kind, &1.binding || "", &1.ids})
+    rotation =
+      for f <- rot_forks,
+          do: %{kind: :rotation, binding: f.binding, ids: Enum.sort([f.prior | f.catalogs])}
+
+    Enum.sort_by(
+      heads_fork ++ nonce ++ split ++ uncovered ++ rotation,
+      &{&1.kind, &1.binding || "", &1.ids}
+    )
   end
 
   defp claim_of(ctx, id) do
@@ -1006,12 +1232,13 @@ defmodule Treehouse.CatalogBindingGraph do
 
   # --- assembly and decision --------------------------------------------------
 
-  defp assemble(ctx, memo, detail, nodes_all, final, heads, closed, out_rot, cat) do
+  defp assemble(ctx, memo, detail, {nodes_all, final, heads, closed, out_rot}, cat, floors) do
     closed_out =
       Map.new(MapSet.union(out_rot, cat.out_pending), &{&1, :catalog_rollback})
       |> Map.merge(for({cid, :closed_out} <- cat.status, into: %{}, do: {cid, :catalog_rollback}))
 
     cat_heads = catalog_heads(final, closed, cat, ctx)
+    rot_forks = rotation_forks(final, closed, cat, ctx)
 
     raw =
       for {id, {:bad, reason}} <- memo,
@@ -1030,6 +1257,23 @@ defmodule Treehouse.CatalogBindingGraph do
           into: %{},
           do: {id, %{reason: :catalog_authority_refused, core_reason: n.core_reason}}
 
+    fork_bindings =
+      (for({cid, :uncovered} <- cat.status, do: ctx.catalogs[cid].catalog.binding) ++
+         Enum.map(rot_forks, & &1.binding))
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    cat_parent =
+      Map.new(ctx.catalogs, fn {id, %{catalog: c}} ->
+        parent =
+          case {c.previous, nodes_all[c.binding]} do
+            {nil, %{kind: :rotation, prior: [%{catalog: prior}]}} -> prior
+            {previous, _} -> previous
+          end
+
+        {id, parent}
+      end)
+
     graph = %{
       nodes: final,
       heads: heads,
@@ -1044,18 +1288,26 @@ defmodule Treehouse.CatalogBindingGraph do
       catalog_status: cat.status,
       citations: cat.cites,
       previous: cat.previous,
-      forks: forks(final, heads, closed, cat, cat_heads, ctx),
+      cat_parent: cat_parent,
+      forks: forks(final, heads, closed, cat, cat_heads, rot_forks, ctx),
+      rotation_forks: rot_forks,
+      fork_bindings: fork_bindings,
+      floors: floors,
       catalogs: Map.new(ctx.catalogs, fn {id, e} -> {id, e.catalog} end),
       decision: nil
     }
 
-    {:ok, %{graph | decision: decide(ctx, graph, nodes_all, closed, out_rot)}}
+    {:ok, %{graph | decision: decide(ctx.accepted, graph, nodes_all, closed, out_rot)}}
   end
 
-  defp decide(ctx, graph, nodes_all, closed, out_rot) do
-    accepted = ctx.accepted
-    abs = accepted_binding_status(accepted, nodes_all, closed, out_rot)
-    acs = accepted_catalog_status(accepted, graph)
+  defp decide(a, graph, nodes_all, closed, out_rot) do
+    abs = accepted_binding_status(a, nodes_all, closed, out_rot)
+    acs = accepted_catalog_status(a, graph)
+    missing? = a != nil and (abs == :missing or acs == :missing)
+
+    changed? =
+      a != nil and not missing? and
+        (abs in [:refused, :closed_out] or acs in [:refused, :closed_out])
 
     base = %{
       accepted: false,
@@ -1066,115 +1318,167 @@ defmodule Treehouse.CatalogBindingGraph do
       generation: nil,
       revision: nil,
       clears_authority_changed: false,
+      serving: nil,
       accepted_binding_status: abs,
       accepted_catalog_status: acs
     }
 
-    if graph.forks != [] do
-      ids = graph.forks |> Enum.flat_map(& &1.ids) |> Enum.uniq() |> Enum.sort()
-      %{base | reason: :catalog_fork, block: %{reason: :catalog_fork, triggers: ids}}
-    else
-      [h] = graph.heads
-      sole(ctx, graph, h, {abs, acs}, base)
-    end
-  end
-
-  # Step 9 triggers: the accepted binding refused or closed out, or the accepted catalog
-  # closed out or not covered by a citation of its closed binding. "Closed" alone is the
-  # ordinary success state and is never a trigger. With an accepted state, an accepted binding
-  # or catalog absent from the input fails closed as a trigger rather than promoting silently.
-  defp trigger?(nil, _statuses), do: false
-
-  defp trigger?(_accepted, {abs, acs}),
-    do: abs in [:refused, :closed_out, :missing] or acs in [:closed_out, :refused, :missing]
-
-  defp sole(ctx, graph, id, statuses, base) do
-    node = graph.nodes[id]
-    ready = graph.catalog_heads |> Map.get(id, []) |> List.first()
-    base = %{base | head: id}
-    promotable? = not node.refused? and node.pending == [] and ready != nil
-
     cond do
-      promotable? and row_320?(ctx, graph, id) ->
-        promote_or_rollback(ctx, graph, base, id, ready, true)
+      graph.forks != [] ->
+        ids = graph.forks |> Enum.flat_map(& &1.ids) |> Enum.uniq() |> Enum.sort()
+        %{base | reason: :catalog_fork, block: block(:catalog_fork, ids, changed?)}
 
-      promotable? and resolves_refusal?(ctx, graph, id, statuses) ->
-        promote_or_rollback(ctx, graph, base, id, ready, false)
+      missing? ->
+        [h] = graph.heads
 
-      trigger?(ctx.accepted, statuses) ->
         %{
           base
-          | reason: :authority_changed,
-            block: %{reason: :authority_changed, triggers: triggers(ctx, id)}
+          | head: h,
+            reason: :authority_changed,
+            block: block(:authority_changed, [h], false)
         }
 
+      true ->
+        [h] = graph.heads
+        serving = serving(a, graph, closed, changed?)
+        sole(a, graph, nodes_all, {h, changed?}, %{base | head: h, serving: serving})
+    end
+  end
+
+  defp block(reason, ids, freeze), do: %{reason: reason, ids: ids, freeze: freeze}
+
+  defp sole(a, graph, nodes_all, {h, changed?}, base) do
+    node = graph.nodes[h]
+    ready = graph.catalog_heads |> Map.get(h, []) |> List.first()
+    promotable? = not node.refused? and node.pending == [] and ready != nil
+    covers = if promotable? and a != nil, do: covers(a, h, ready, graph, nodes_all), else: :ok
+
+    cond do
+      promotable? and covers == :ok ->
+        %{
+          base
+          | accepted: true,
+            catalog: ready,
+            generation: node.generation,
+            revision: graph.catalogs[ready].revision,
+            clears_authority_changed: clears?(a, h, nodes_all),
+            serving: ready
+        }
+
+      changed? ->
+        %{base | reason: :authority_changed, block: block(:authority_changed, [h], true)}
+
+      promotable? ->
+        {:error, reason} = covers
+        %{base | reason: reason}
+
       node.refused? ->
-        %{base | reason: :catalog_authority_refused}
+        %{
+          base
+          | reason: :catalog_authority_refused,
+            block: block(:catalog_authority_refused, [h], false)
+        }
 
       node.pending != [] ->
-        %{base | reason: :recovery_incomplete}
-
-      ready == nil ->
-        base
+        %{base | reason: :recovery_incomplete, block: block(:recovery_incomplete, [h], false)}
 
       true ->
-        promote_or_rollback(ctx, graph, base, id, ready, false)
-    end
-  end
-
-  # A standing `authority_changed` block keeps its triggers (the heads at first block time), so a
-  # resolution delivered before its first catalog is still fresh on the next delivery.
-  defp triggers(%{blocked: %{reason: :authority_changed, triggers: triggers}}, _id), do: triggers
-  defp triggers(_ctx, id), do: [id]
-
-  # Row 320: after an `authority_changed` block, a fresh honored admin resolution (not a block
-  # trigger) that closes every trigger, as the sole head, clears it.
-  defp row_320?(ctx, graph, id) do
-    blocked = ctx.blocked
-
-    with %{reason: :authority_changed, triggers: triggers} <- blocked,
-         %{kind: :replacement} <- graph.nodes[id],
-         false <- id in triggers do
-      closed = MapSet.new(graph.closed)
-
-      Enum.all?(triggers, &MapSet.member?(closed, &1))
-    else
-      _ -> false
-    end
-  end
-
-  # A refused accepted binding is resolved in the same delivery by an honored replacement head
-  # that closes it and covers the accepted catalog (C13 with the resolution delivered together).
-  defp resolves_refusal?(ctx, graph, id, {abs, _acs}) do
-    a = ctx.accepted
-
-    abs == :refused and graph.nodes[id].kind == :replacement and a.binding in graph.closed and
-      graph.citations
-      |> Map.get(a.binding, [])
-      |> Enum.any?(&(&1 != nil and on_chain?(a.catalog, &1, graph.previous)))
-  end
-
-  defp promote_or_rollback(ctx, graph, base, id, ready, clears?) do
-    if rollback?(ctx.accepted, graph, id, ready) do
-      %{base | reason: :catalog_rollback}
-    else
-      %{
         base
-        | accepted: true,
-          catalog: ready,
-          generation: graph.nodes[id].generation,
-          revision: graph.catalogs[ready].revision,
-          clears_authority_changed: clears?
-      }
     end
   end
 
-  # A lower generation, or a lower catalog revision under the accepted binding.
-  defp rollback?(nil, _graph, _id, _ready), do: false
+  # Covers(H, K | A): under the watermark's own binding a previous-chain descendant at no lower
+  # revision; otherwise Carry (K extends the watermark catalog's entries), Seen (H's lineage
+  # cites the watermark catalog's lineage, or descends strictly from a replacement that closed
+  # it) and, in both cases, RouteCompat (no entry re-points a route ever served).
+  defp covers(a, h, k, graph, nodes_all) do
+    kc = graph.catalogs[k]
 
-  defp rollback?(accepted, graph, id, ready) do
-    graph.nodes[id].generation < accepted.generation or
-      (id == accepted.binding and graph.catalogs[ready].revision < accepted.revision)
+    cond do
+      not route_compat?(routes(a), kc.entries) ->
+        {:error, :invalid_catalog_transition}
+
+      h == a.binding ->
+        if on_chain?(a.catalog, k, graph.previous) and kc.revision >= a.revision,
+          do: :ok,
+          else: {:error, :catalog_rollback}
+
+      not seen?(a, h, graph, nodes_all) ->
+        {:error, :catalog_rollback}
+
+      not extends?(graph.catalogs[a.catalog].entries, kc.entries) ->
+        {:error, :invalid_catalog_transition}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp seen?(a, h, graph, nodes_all) do
+    lineage = closure([h], nodes_all, MapSet.new())
+
+    cited =
+      for id <- lineage, %{catalog: c} <- nodes_all[id].prior, c != nil, do: c
+
+    Enum.any?(cited, &cat_lineage?(a.catalog, &1, graph.cat_parent)) or
+      closed_by_descendant?(a, lineage, graph, nodes_all)
+  end
+
+  # Some replacement in H's lineage strictly descends from a closer of the watermark catalog: an
+  # eligible replacement citing the watermark binding (or, for a closed-out rotation, its nearest
+  # closed ancestor) with nil or with a strict CatLineage ancestor of the watermark catalog.
+  defp closed_by_descendant?(a, lineage, graph, nodes_all) do
+    target = closing_target(a.binding, nodes_all, MapSet.new(graph.closed))
+
+    closers =
+      for {id, %{kind: :replacement} = n} <- nodes_all,
+          %{binding: ^target, catalog: c} <- n.prior,
+          c == nil or (c != a.catalog and cat_lineage?(c, a.catalog, graph.cat_parent)),
+          uniq: true,
+          do: id
+
+    Enum.any?(lineage, fn y ->
+      nodes_all[y].kind == :replacement and
+        Enum.any?(closers, fn x ->
+          x != y and MapSet.member?(closure([y], nodes_all, MapSet.new()), x)
+        end)
+    end)
+  end
+
+  defp closing_target(binding, nodes_all, closed) do
+    case nodes_all[binding] do
+      %{kind: :rotation, parents: [parent]} ->
+        if MapSet.member?(closed, binding),
+          do: binding,
+          else: closing_target(parent, nodes_all, closed)
+
+      _ ->
+        binding
+    end
+  end
+
+  # An honored replacement in H's lineage that the watermark binding did not descend from.
+  defp clears?(nil, _h, _nodes_all), do: false
+
+  defp clears?(a, h, nodes_all) do
+    seen = closure([a.binding], nodes_all, MapSet.new())
+
+    Enum.any?(closure([h], nodes_all, MapSet.new()), fn x ->
+      match?(%{kind: :replacement, refused?: false}, nodes_all[x]) and
+        not MapSet.member?(seen, x)
+    end)
+  end
+
+  # Without promotion the caller may keep serving the watermark catalog only while it is held,
+  # unchanged, its binding open, nothing forks and its routes agree with the routes served.
+  defp serving(nil, _graph, _closed, _changed?), do: nil
+  defp serving(_a, _graph, _closed, true), do: nil
+
+  defp serving(a, graph, closed, false) do
+    if graph.forks == [] and Map.has_key?(graph.nodes, a.binding) and
+         not MapSet.member?(closed, a.binding) and
+         route_compat?(routes(a), graph.catalogs[a.catalog].entries),
+       do: a.catalog
   end
 
   defp accepted_binding_status(nil, _n, _closed, _o), do: :missing
@@ -1205,12 +1509,14 @@ defmodule Treehouse.CatalogBindingGraph do
 
   @doc """
   Check a candidate claim against a resolved graph, for the authoring preflight (rows 352,
-  354, 356). Order: pending (an unheld parent or prior catalog), then transition failures (a
-  cited parent that is raw evidence, refused or closed out, wrong generation, service rule),
-  then an omitted head (citing a non-head ancestor instead is a sibling of that head) or an
-  omitted catalog head (`catalog_fork`), then a prior entry that is not a retained catalog head
-  of its parent and first-catalog extension of every cited prior against `entries`. The catalog
-  heads are the citable ones: under a union-refused parent its chain-valid catalogs count.
+  354, 356 and the convergence design). Order: pending (an unheld parent or prior catalog), then
+  transition failures (a cited parent that is raw evidence, refused or closed out, wrong
+  generation, service rule), then an omitted head, fork binding or rotation-fork rotation, or an
+  omitted catalog head (`catalog_fork`), then a prior entry that is not an expected one, an
+  entry list that does not extend every cited prior and every nil-cited parent's floor, and a
+  route that some held catalog maps to another replica. The catalog heads are the citable ones:
+  under a union-refused parent its chain-valid catalogs count; under a fork binding its
+  uncovered catalogs.
   """
   @spec cover_claim(graph(), map(), [map()]) :: :ok | {:error, atom()}
   def cover_claim(graph, claim, entries) do
@@ -1246,7 +1552,10 @@ defmodule Treehouse.CatalogBindingGraph do
       end) ->
         {:error, :invalid_catalog_transition}
 
-      Enum.any?(graph.heads, &(&1 not in claim.parents)) ->
+      Enum.any?(
+        graph.heads ++ graph.fork_bindings ++ Enum.map(graph.rotation_forks, & &1.rotation),
+        &(&1 not in claim.parents)
+      ) ->
         {:error, :catalog_fork}
 
       Enum.any?(expected, &(&1 not in claim.prior_catalogs)) ->
@@ -1255,10 +1564,10 @@ defmodule Treehouse.CatalogBindingGraph do
       Enum.any?(claim.prior_catalogs, &(&1 not in expected)) ->
         {:error, :invalid_catalog_transition}
 
-      Enum.any?(
-        claim.prior_catalogs,
-        &(&1.catalog != nil and not extends?(graph.catalogs[&1.catalog].entries, entries))
-      ) ->
+      not carries?(graph, claim, entries) ->
+        {:error, :invalid_catalog_transition}
+
+      held_conflict?(graph, entries) ->
         {:error, :invalid_catalog_transition}
 
       true ->
@@ -1268,10 +1577,38 @@ defmodule Treehouse.CatalogBindingGraph do
 
   defp expected_priors(graph, parents) do
     Enum.flat_map(parents, fn parent ->
-      case Map.get(graph.citable_catalog_heads, parent, []) do
+      heads =
+        if parent in graph.fork_bindings and not Map.has_key?(graph.citable_catalog_heads, parent),
+          do:
+            for(
+              {cid, :uncovered} <- graph.catalog_status,
+              graph.catalogs[cid].binding == parent,
+              do: cid
+            ),
+          else: Map.get(graph.citable_catalog_heads, parent, [])
+
+      case Enum.sort(heads) do
         [] -> [%{binding: parent, catalog: nil}]
         heads -> for catalog <- heads, do: %{binding: parent, catalog: catalog}
       end
+    end)
+  end
+
+  # Every cited prior's entries and every nil-cited parent's floor (row 382 item 2).
+  defp carries?(graph, claim, entries) do
+    Enum.all?(claim.prior_catalogs, fn
+      %{binding: p, catalog: nil} -> extends?(Map.get(graph.floors, p, []), entries)
+      %{catalog: k} -> extends?(graph.catalogs[k].entries, entries)
+    end)
+  end
+
+  # The author cannot see a client's served routes, but every served route was in some held
+  # catalog, so no entry may map a held catalog's route to another replica.
+  defp held_conflict?(graph, entries) do
+    Enum.any?(entries, fn e ->
+      Enum.any?(graph.catalogs, fn {_id, c} ->
+        Enum.any?(c.entries, &(&1.route == e.route and &1.replica != e.replica))
+      end)
     end)
   end
 end

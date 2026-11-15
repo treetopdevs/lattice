@@ -1,8 +1,8 @@
 defmodule Treehouse.CatalogBindingGraphTest do
   @moduledoc """
   Plan 316 PR 4a resolver tests for `Treehouse.CatalogBindingGraph`. Every scenario in
-  `Treehouse.CatalogBindingGraphScenarios` runs here with persisted accepted and blocked
-  state between deliveries; each intermediate delivery is asserted against its hand-written
+  `Treehouse.CatalogBindingGraphScenarios` runs here with the persisted accepted
+  watermark and `frozen` bit between deliveries; each intermediate delivery is asserted against its hand-written
   label-space expectation (heads, closed, closed-out, nodes, refused, raw, refusals, pending
   cutoffs, fork kinds, decision). Disposable seeded keys only; no route, no trust.
   """
@@ -223,4 +223,180 @@ defmodule Treehouse.CatalogBindingGraphTest do
     assert G.cover_claim(g, claim.(both, nil_prior.(both), 2), a.entries) == :ok
     assert Log.has?(log, a.id) and match?(%Op{}, a.op)
   end
+
+  defp thread(space, suffix),
+    do: %{
+      space
+      | replica: space.replica <> "-" <> suffix,
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        route: "/r/" <> F.id("route-" <> suffix)
+    }
+
+  # S11 (C4): three old-key rotations under the accepted R1 make the verifier return
+  # control_history_limit, but the preflight prepares the R2 {R1, K1} resolution through the
+  # head-root escape, and the verifier accepts that R2.
+  test "authoring prepares a resolution past three rotation heads (head-limit escape)" do
+    c0 = F.c0(@base)
+
+    r1 =
+      F.replacement(@base, @base.log, "esc-r1",
+        prior_catalogs: [%{binding: @base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    k1 = F.first(@base, r1)
+    log = F.append(@base.log, [r1.op])
+
+    trs =
+      for n <- ~w(a b c),
+          do:
+            F.rotation(
+              @base,
+              %{id: r1.id, generation: 1},
+              k1,
+              r1.catalog_key,
+              F.identity("esc-" <> n),
+              "esc-" <> n
+            )
+
+    rotations = Map.new(trs, &{&1.id, &1.envelope})
+
+    assert {:error, :control_history_limit, _} =
+             resolve(%{space: log, rotations: rotations, catalogs: catalogs([c0, k1])})
+
+    service = F.identity("service-esc-r2")
+    service_id = F.id("service-id-esc-r2")
+
+    request = fn parents, priors ->
+      %{
+        author: @base.admin.pub,
+        nonce: F.id("nonce-esc-r2"),
+        parents: parents,
+        prior_catalogs: priors,
+        generation: 2,
+        new_catalog_key: F.identity("catalog-esc-r2").pub,
+        new_service_id: service_id,
+        new_service_key: service.pub,
+        new_origin: "wss://esc-r2-relay.invalid",
+        entries: F.entries(@base, "esc-r2", service_id, service.pub),
+        replica_logs: %{},
+        rotations: Enum.map(trs, & &1.envelope),
+        catalogs: [c0, k1]
+      }
+    end
+
+    assert {:ok, attempt} =
+             Treehouse.CatalogReplacementAuthoring.prepare(
+               log,
+               request.([r1.id], [%{binding: r1.id, catalog: F.cid(k1)}]),
+               %{}
+             )
+
+    # A claim that does not cite every head root keeps the verifier's limit.
+    assert Treehouse.CatalogReplacementAuthoring.prepare(
+             log,
+             request.([@base.boot.id], [%{binding: @base.boot.id, catalog: F.cid(c0)}]),
+             %{}
+           ) == {:error, :control_history_limit}
+
+    assert attempt.claim.prior_catalogs == [%{binding: r1.id, catalog: F.cid(k1)}]
+  end
+
+  # Row 382 item 2 in the preflight: a nil-cited parent's floor must be carried. R's first
+  # catalog is refused (Thread cutoff missing), so R2 citing {R, nil} must still carry C0's
+  # Thread.
+  test "cover_claim carries a nil-cited parent's floor" do
+    [space] = F.base_entries(@base)
+    th = thread(space, "floor-thread")
+    c0 = F.catalog(@base, @base.boot.id, 0, nil, @base.catalog, [space, th])
+    sid = F.id("service-id-floor-r")
+    key = F.identity("service-floor-r").pub
+    moved = for e <- [space, th], do: %{e | service_id: sid, service_key: key}
+
+    r =
+      F.replacement(@base, @base.log, "floor-r",
+        prior_catalogs: [%{binding: @base.boot.id, catalog: F.cid(c0)}],
+        entries: moved
+      )
+
+    kr = F.first(@base, r)
+    log = F.append(@base.log, [r.op])
+    {:ok, g} = resolve(%{space: log, catalogs: catalogs([c0, kr])})
+    assert g.refusals[F.cid(kr)].reason == :invalid_catalog_transition
+    assert g.floors[r.id] == [space, th]
+
+    claim = %{
+      r.claim
+      | parents: [r.id],
+        prior_catalogs: [%{binding: r.id, catalog: nil}],
+        generation: 2
+    }
+
+    assert G.cover_claim(g, claim, [space]) == {:error, :invalid_catalog_transition}
+    assert G.cover_claim(g, claim, [space, th]) == :ok
+  end
+
+  # C1 in the preflight: a rotation fork requires citing both the rotation and its open parent.
+  test "cover_claim requires a rotation fork's rotation and parent" do
+    c0 = F.c0(@base)
+    c1 = F.catalog(@base, @base.boot.id, 1, F.cid(c0), @base.catalog, F.base_entries(@base))
+    tkey = F.identity("fork-t-key")
+    t = F.rotation(@base, %{id: @base.boot.id, generation: 0}, c0, @base.catalog, tkey, "fork-t")
+    ct = F.catalog(@base, t.id, 0, nil, tkey, F.base_entries(@base))
+
+    {:ok, g} =
+      resolve(%{
+        space: @base.log,
+        rotations: %{t.id => t.envelope},
+        catalogs: catalogs([c0, c1, ct]),
+        proven:
+          Enum.map(t.envelope.rotation.cutoffs, &Map.take(&1, [:replica, :frontier, :log_digest]))
+      })
+
+    assert [%{kind: :rotation}] = g.forks
+    assert g.fork_bindings == [@base.boot.id]
+    r = F.replacement(@base, @base.log, "fork-r")
+    both = Enum.sort([t.id, @base.boot.id])
+
+    priors =
+      Enum.sort([
+        %{binding: t.id, catalog: F.cid(ct)},
+        %{binding: @base.boot.id, catalog: F.cid(c1)}
+      ])
+
+    entries = F.entries(@base, "fork-r-fresh", r.service_id, r.service_key.pub)
+
+    only_t = %{
+      r.claim
+      | parents: [t.id],
+        prior_catalogs: [%{binding: t.id, catalog: F.cid(ct)}],
+        generation: 2
+    }
+
+    assert G.cover_claim(g, only_t, entries) == {:error, :catalog_fork}
+    claim = %{r.claim | parents: both, prior_catalogs: priors, generation: 2}
+    assert G.cover_claim(g, claim, entries) == :ok
+    # An entry re-pointing a held catalog's route at another replica is refused.
+    [e] = entries
+    squat = %{e | replica: e.replica <> "-squat", kind: :thread, schema: :treehouse_thread_v1}
+    squat = %{squat | route: hd(c0.catalog.entries).route}
+    assert G.cover_claim(g, claim, [e, squat]) == {:error, :invalid_catalog_transition}
+  end
+
+  test "advance/2 keeps state on errors and serves unchanged only for trust_pending" do
+    state = %{
+      accepted: %{binding: "b", generation: 0, catalog: "c", revision: 0, routes: %{}},
+      frozen: true
+    }
+
+    assert G.advance(state, {:error, :trust_pending, %{ids: []}}).serving == :unchanged
+
+    assert %{frozen: true, serving: nil} =
+             G.advance(state, {:error, :control_history_limit, %{ids: []}})
+
+    assert %{frozen: true, serving: nil} =
+             G.advance(state, {:error, :malformed_catalog, %{ids: []}})
+  end
+
+  defp catalogs(list), do: Map.new(list, &{F.cid(&1), &1})
 end

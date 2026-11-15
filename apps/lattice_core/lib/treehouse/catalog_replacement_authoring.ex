@@ -275,24 +275,48 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     with :ok <- artifact_budget(request),
          {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
          {:ok, catalogs} <- catalog_envelopes(log, request.catalogs, bootstrap),
-         {:ok, graph} <- graph(log, bootstrap, rotations, catalogs),
+         {:ok, graph} <- graph(log, bootstrap, {rotations, catalogs}, claim),
          :ok <- retained_refusals(graph) do
       CatalogBindingGraph.cover_claim(graph, claim, request.entries)
     end
   end
 
-  defp graph(log, bootstrap, rotations, catalogs) do
-    case CatalogBindingGraph.resolve(%{
-           bootstrap: %{id: bootstrap.id, record: bootstrap.record},
-           space: log,
-           rotations: rotations,
-           catalogs: catalogs,
-           proven_cutoffs: [],
-           accepted: nil,
-           blocked: nil
-         }) do
+  # `resolve_for_claim/2` keeps the verifier's head limit but lets a claim citing every head
+  # root through it (design section 2.7): three old-key rotations under the accepted binding
+  # cannot block the one resolution that closes them out.
+  defp graph(log, bootstrap, {rotations, catalogs}, claim) do
+    case CatalogBindingGraph.resolve_for_claim(input(log, bootstrap, rotations, catalogs), claim) do
       {:ok, graph} -> {:ok, graph}
       {:error, reason, _detail} -> {:error, reason}
+    end
+  end
+
+  defp input(log, bootstrap, rotations, catalogs),
+    do: %{
+      bootstrap: %{id: bootstrap.id, record: bootstrap.record},
+      space: log,
+      rotations: rotations,
+      catalogs: catalogs,
+      proven_cutoffs: [],
+      accepted: nil
+    }
+
+  # After signing: the full retained evidence with the signed op appended must resolve with it
+  # as the sole binding head and no fork (the verifier's view, head limit included). Its first
+  # catalog and cutoff proofs are not held here, so promotion itself is not checked.
+  defp resolves(log, attempt, signed) do
+    request = attempt.request
+
+    with {:ok, bootstrap} <- bootstrap(log),
+         {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
+         {:ok, catalogs} <- catalog_envelopes(log, request.catalogs, bootstrap) do
+      case CatalogBindingGraph.resolve(
+             input(Log.append!(log, signed), bootstrap, rotations, catalogs)
+           ) do
+        {:ok, %{heads: [head], forks: []}} when head == signed.id -> :ok
+        {:ok, _graph} -> {:error, :catalog_fork}
+        {:error, reason, _detail} -> {:error, reason}
+      end
     end
   end
 
@@ -489,6 +513,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          :ok <- reclassified(current, attempt, signed),
          :ok <- fresh(current, attempt),
          :ok <- envelope(signed),
+         :ok <- resolves(current, attempt, signed),
          {:ok, frame} <- Wire.encode_op_checked(signed) do
       {:ok,
        %{

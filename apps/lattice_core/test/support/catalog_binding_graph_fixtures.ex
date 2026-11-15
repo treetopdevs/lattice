@@ -6,9 +6,10 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
   concurrent replacement ops, signed catalogs and rotations. Disposable seeded keys only; a
   Core-honored fixture op is an authorized signed proposal, not a route switch or trust.
 
-  `deliver/3` is the multi-delivery harness: it persists the accepted watermark and blocked
-  state between calls (the part `Treehouse.CatalogTrust` will own in 4c), so every
-  intermediate call can be asserted.
+  `deliver/3` is the multi-delivery harness: it persists the accepted watermark (with its
+  cumulative routes) and the `frozen` bit between calls through `CatalogBindingGraph.advance/2`
+  (the part `Treehouse.CatalogTrust` will own in 4c), so every intermediate call can be
+  asserted.
   """
 
   alias Lattice.{Authority, Dag, Identity, Log, Op, Sim}
@@ -368,15 +369,15 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
 
   # --- multi-delivery harness ---------------------------------------------------
 
-  @empty %{accepted: nil, blocked: nil}
+  @empty %{accepted: nil, frozen: false}
   def empty_state, do: @empty
 
   @doc """
   One delivery. `evidence` is the full retained set `%{space: Log, rotations: %{}, catalogs:
-  %{}, proven: []}`; `state` is the persisted `%{accepted, blocked}`. Returns the resolver
-  result and the state the caller would persist: the watermark advances on an accepted
-  decision, the block is cleared only when the graph reports `clears_authority_changed`, set
-  from `decision.block`, and otherwise kept (4c's `merge_security_block` owns that stickiness).
+  %{}, proven: []}`; `state` is the persisted `%{accepted, frozen}` (the accepted watermark
+  carries its cumulative `routes`). Returns the resolver result and
+  `CatalogBindingGraph.advance/2` of it: `%{accepted, frozen, serving}`, the state the caller
+  would persist plus the routes it would serve (the merge 4c's CatalogTrust will own).
   """
   def deliver(base, state, evidence) do
     input = %{
@@ -385,33 +386,19 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
       rotations: Map.get(evidence, :rotations, %{}),
       catalogs: Map.get(evidence, :catalogs, %{}),
       proven_cutoffs: Map.get(evidence, :proven, []),
-      accepted: state.accepted,
-      blocked: state.blocked
+      accepted: state.accepted
     }
 
     result = CatalogBindingGraph.resolve(input)
-    {result, persist(state, result)}
+    {result, CatalogBindingGraph.advance(state, result)}
   end
 
-  defp persist(state, {:ok, %{decision: d}}) do
-    accepted =
-      if d.accepted,
-        do: %{binding: d.head, generation: d.generation, catalog: d.catalog, revision: d.revision},
-        else: state.accepted
-
-    blocked =
-      cond do
-        d.clears_authority_changed -> nil
-        d.block -> d.block
-        true -> state.blocked
-      end
-
-    %{accepted: accepted, blocked: blocked}
-  end
-
-  defp persist(state, _error), do: state
+  @doc "The persisted part of `advance/2`'s result."
+  def persisted(next), do: Map.take(next, [:accepted, :frozen])
 
   @doc "Plain, sorted, JSON-friendly view of a result; the shape both runtimes compare."
+  def view(result, next), do: Map.put(view(result), "after", after_json(next))
+
   def view({:error, reason, %{ids: ids}}),
     do: %{"error" => to_string(reason), "ids" => Enum.sort(ids)}
 
@@ -441,15 +428,44 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
         "accepted" => d.accepted,
         "reason" => d.reason && to_string(d.reason),
         "block" =>
-          d.block && %{"reason" => to_string(d.block.reason), "triggers" => d.block.triggers},
+          d.block &&
+            %{
+              "reason" => to_string(d.block.reason),
+              "ids" => d.block.ids,
+              "freeze" => d.block.freeze
+            },
         "head" => d.head,
         "catalog" => d.catalog,
         "clears" => d.clears_authority_changed,
+        "serving" => d.serving,
         "binding_status" => to_string(d.accepted_binding_status),
         "catalog_status" => to_string(d.accepted_catalog_status)
       }
     }
   end
+
+  @doc "JSON view of a persisted state (accepted watermark with routes, frozen)."
+  def state_json(%{accepted: a, frozen: frozen}) do
+    %{
+      "accepted" =>
+        a &&
+          %{
+            "binding" => a.binding,
+            "generation" => a.generation,
+            "catalog" => a.catalog,
+            "revision" => a.revision,
+            "routes" => Map.get(a, :routes, %{})
+          },
+      "frozen" => frozen
+    }
+  end
+
+  defp after_json(next),
+    do:
+      next
+      |> persisted()
+      |> state_json()
+      |> Map.put("serving", if(next.serving == :unchanged, do: "unchanged", else: next.serving))
 
   defp jsonish(v) when is_atom(v) and not is_nil(v) and not is_boolean(v), do: to_string(v)
   defp jsonish(v), do: v

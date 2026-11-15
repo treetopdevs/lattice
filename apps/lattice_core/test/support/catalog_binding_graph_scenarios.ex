@@ -6,23 +6,39 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   Each scenario is a list of deliveries. A delivery carries the full retained evidence (Space
   log, rotations, catalogs, proven cutoffs) and a hand-written expectation in label terms:
   heads, closed set, closed-out children, nodes, refused nodes, raw evidence, retained
-  refusals, nodes with pending cutoffs, fork kinds and the decision. The accepted watermark
-  and blocked state persist between deliveries (`CatalogBindingGraphFixtures.deliver/3`);
+  refusals, nodes with pending cutoffs, fork kinds, the decision (with its `freeze` and
+  `serving`) and the state `advance/2` returns (`after`: `frozen` and the routes served). The
+  accepted watermark (with its cumulative routes) and the `frozen` bit persist between
+  deliveries (`CatalogBindingGraphFixtures.deliver/3`);
   multi-delivery scenarios are listed once per delivery order. Disposable seeded keys only.
   """
 
   alias Lattice.Carrier.Wire
   alias Lattice.{Log, Op}
   alias Treehouse.CatalogBindingGraphFixtures, as: F
+  alias Treehouse.CatalogCutoff
 
   # --- expectation helpers -----------------------------------------------------
 
-  @doc "A successful expectation; omitted fields mean empty / no decision."
+  @doc """
+  A successful expectation; omitted fields mean empty / no decision. The decision's `serving`
+  defaults to its catalog when it accepts (else nil) and `freeze` to false; `after:` is the
+  state `CatalogBindingGraph.advance/2` persists (`frozen`, default the decision's `freeze`,
+  and the routes it serves, default nil when frozen and otherwise the decision's `serving`).
+  """
   def ok(heads, opts \\ []) do
     closed = Keyword.get(opts, :closed, [])
     d = Keyword.get(opts, :decision, [])
+    accepted? = Keyword.get(d, :accepted, false)
+    serving = Keyword.get(d, :serving, if(accepted?, do: Keyword.get(d, :catalog)))
+    a = Keyword.get(opts, :after, [])
+    frozen = Keyword.get(a, :frozen, Keyword.get(d, :freeze, false))
 
     %{
+      "after" => %{
+        "frozen" => frozen,
+        "serving" => Keyword.get(a, :serving, if(frozen, do: nil, else: serving))
+      },
       "heads" => Enum.sort(heads),
       "closed" => Enum.sort(closed),
       "closed_out" => Enum.sort(Keyword.get(opts, :closed_out, [])),
@@ -33,17 +49,31 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       "pending" => Enum.sort(Keyword.get(opts, :pending, [])),
       "forks" => Enum.sort(Keyword.get(opts, :forks, [])),
       "decision" => %{
-        "accepted" => Keyword.get(d, :accepted, false),
+        "accepted" => accepted?,
         "reason" => Keyword.get(d, :reason),
         "block" => Keyword.get(d, :block),
+        "freeze" => Keyword.get(d, :freeze, false),
         "head" => Keyword.get(d, :head),
         "catalog" => Keyword.get(d, :catalog),
-        "clears" => Keyword.get(d, :clears, false)
+        "clears" => Keyword.get(d, :clears, false),
+        "serving" => serving
       }
     }
   end
 
-  def err(reason), do: %{"error" => reason}
+  @doc """
+  A resolve error. `advance/2` keeps the state on every error; `trust_pending` keeps the
+  caller's previous routes (`"unchanged"`), any other error serves nothing.
+  """
+  def err(reason, opts \\ []) do
+    %{
+      "error" => reason,
+      "after" => %{
+        "frozen" => Keyword.get(opts, :frozen, false),
+        "serving" => if(reason == "trust_pending", do: "unchanged")
+      }
+    }
+  end
 
   defp accept(head, catalog, opts \\ []),
     do: [accepted: true, head: head, catalog: catalog] ++ opts
@@ -146,7 +176,20 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &replacement_cutoff_coverage/1,
       &refused_parent_sibling/1,
       &invalid_old_key_catalog/1,
-      &cutoff_frontier/1
+      &cutoff_frontier/1,
+      &s1_rotation_trigger/1,
+      &s2_withheld_first/1,
+      &s3_nil_floor/1,
+      &s4_route_reuse/1,
+      &s6_invalid_prior_rotations/1,
+      &s7_missing_clears/1,
+      &s8_closed_out_rotation_watermark/1,
+      &s9_inventory_continuity/1,
+      &s10_rotation_fork/1,
+      &s11_head_limit/1,
+      &s12_cumulative_routes/1,
+      &s13_missing_watermark/1,
+      &s14_same_page_trade/1
     ]
   end
 
@@ -201,7 +244,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         ok(["T"],
           nodes: ["B", "T"],
           pending: ["T"],
-          decision: [head: "T", reason: "recovery_incomplete"]
+          decision: [head: "T", reason: "recovery_incomplete", block: "recovery_incomplete"]
         )
       ),
       step(
@@ -439,7 +482,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         closed: ["B"],
         refused: ["R1"],
         refusals: %{"K1" => "catalog_authority_refused"},
-        decision: [head: "R1", reason: "catalog_authority_refused"]
+        decision: [
+          head: "R1",
+          reason: "catalog_authority_refused",
+          block: "catalog_authority_refused"
+        ]
       )
 
     both(
@@ -456,7 +503,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
             closed: ["B"],
             refused: ["R1"],
             refusals: %{"K1" => "catalog_authority_refused"},
-            decision: [head: "R1", reason: "authority_changed", block: "authority_changed"]
+            decision: [
+              head: "R1",
+              reason: "authority_changed",
+              block: "authority_changed",
+              freeze: true
+            ]
           )
         )
       ],
@@ -483,7 +535,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           nodes: ["B", "R1", "TR"],
           refused: ["R1", "TR"],
           refusals: %{"K1" => "catalog_authority_refused", "TR" => "catalog_authority_refused"},
-          decision: [head: "TR", reason: "catalog_authority_refused"]
+          decision: [
+            head: "TR",
+            reason: "catalog_authority_refused",
+            block: "catalog_authority_refused"
+          ]
         )
       )
     ])
@@ -651,7 +707,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         ),
         step(
           ev(add(lab, [res]), catalogs: all ++ [kres]),
-          ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes"))
+          ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes", clears: true))
         )
       ],
       [
@@ -662,7 +718,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         step(ev(lab, catalogs: all), fork.([])),
         step(
           ev(add(lab, [res]), catalogs: all ++ [kres]),
-          ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes"))
+          ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes", clears: true))
         )
       ]
     )
@@ -775,7 +831,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         ok(["Bs"],
           closed: ["B"],
           pending: ["Bs"],
-          decision: [head: "Bs", reason: "recovery_incomplete"]
+          decision: [head: "Bs", reason: "recovery_incomplete", block: "recovery_incomplete"]
         )
       ),
       step(ev(lab, catalogs: all, unproven: [a.id, b.id]), fork.(["A", "Bs"])),
@@ -881,7 +937,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           ok(["R"],
             closed: ["B"],
             closed_out: ["CT", "T"],
-            decision: [head: "R", reason: "authority_changed", block: "authority_changed"]
+            decision: [
+              head: "R",
+              reason: "authority_changed",
+              block: "authority_changed",
+              freeze: true
+            ]
           )
         ),
         step(
@@ -948,7 +1009,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
             closed_out: out,
             refused: ["R"],
             refusals: %{"KR" => "catalog_authority_refused"},
-            decision: [head: "R", reason: "authority_changed", block: "authority_changed"]
+            decision: [
+              head: "R",
+              reason: "authority_changed",
+              block: "authority_changed",
+              freeze: true
+            ]
           )
         )
       ],
@@ -993,7 +1059,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           ok(["R"],
             closed: ["B"],
             closed_out: ["C0"],
-            decision: [head: "R", reason: "authority_changed", block: "authority_changed"]
+            decision: [
+              head: "R",
+              reason: "authority_changed",
+              block: "authority_changed",
+              freeze: true
+            ]
           )
         )
       ]
@@ -1013,7 +1084,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         closed: ["B"],
         closed_out: ["T"],
         refused: ["R"],
-        decision: [head: "R", reason: "catalog_authority_refused"]
+        decision: [
+          head: "R",
+          reason: "catalog_authority_refused",
+          block: "catalog_authority_refused"
+        ]
       )
 
     both(
@@ -1025,7 +1100,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           ok(["R"],
             closed: ["B"],
             refused: ["R"],
-            decision: [head: "R", reason: "catalog_authority_refused"]
+            decision: [
+              head: "R",
+              reason: "catalog_authority_refused",
+              block: "catalog_authority_refused"
+            ]
           )
         ),
         step(ev(l, rotations: [t], catalogs: [c0]), done)
@@ -1050,7 +1129,10 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     [
       one("ordinary success: honored resolution of the accepted catalog advances", labels, [
         step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
-        step(ev(lr, catalogs: [c0, k2]), ok(["R2"], closed: ["B"], decision: accept("R2", "K2")))
+        step(
+          ev(lr, catalogs: [c0, k2]),
+          ok(["R2"], closed: ["B"], decision: accept("R2", "K2", clears: true))
+        )
       ]),
       one("ordinary success without a ready first catalog holds without a block", labels, [
         step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
@@ -1150,7 +1232,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         closed: ["B"],
         refused: ["R1"],
         refusals: %{"K1" => "catalog_authority_refused"},
-        decision: [head: "R1", reason: "authority_changed", block: "authority_changed"]
+        decision: [
+          head: "R1",
+          reason: "authority_changed",
+          block: "authority_changed",
+          freeze: true
+        ]
       )
 
     [
@@ -1161,7 +1248,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       ]),
       one("C13: revoke and resolution delivered together after accepting R1", labels, [
         step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
-        step(ev(l3, catalogs: cats), resolved.(false)),
+        step(ev(l3, catalogs: cats), resolved.(true)),
         step(ev(l3, catalogs: cats), resolved.(false))
       ]),
       one("C13: a revoke-first client holds R1 as a refused node", labels, [
@@ -1172,10 +1259,14 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
             closed: ["B"],
             refused: ["R1"],
             refusals: %{"K1" => "catalog_authority_refused"},
-            decision: [head: "R1", reason: "catalog_authority_refused"]
+            decision: [
+              head: "R1",
+              reason: "catalog_authority_refused",
+              block: "catalog_authority_refused"
+            ]
           )
         ),
-        step(ev(l3, catalogs: cats), resolved.(false))
+        step(ev(l3, catalogs: cats), resolved.(true))
       ])
     ]
   end
@@ -1188,14 +1279,16 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     labels = Map.merge(base_labels(base, c0), %{"R1" => r1.id, "K1" => F.cid(k1)})
     done = ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
 
+    routes = Map.new(k1.catalog.entries, &{&1.route, &1.replica})
+
     high = %{
-      accepted: %{binding: r1.id, generation: 5, catalog: F.cid(k1), revision: 0},
-      blocked: nil
+      accepted: %{binding: r1.id, generation: 5, catalog: F.cid(k1), revision: 0, routes: routes},
+      frozen: false
     }
 
     revised = %{
-      accepted: %{binding: r1.id, generation: 1, catalog: F.cid(k1), revision: 3},
-      blocked: nil
+      accepted: %{binding: r1.id, generation: 1, catalog: F.cid(k1), revision: 3, routes: routes},
+      frozen: false
     }
 
     [
@@ -1203,17 +1296,19 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         step(ev(l1, catalogs: [c0, k1]), done),
         step(ev(l1, catalogs: [c0, k1]), done)
       ]),
-      one("lower generation than the watermark is catalog_rollback", labels, [
-        step(
-          ev(l1, catalogs: [c0, k1]),
-          ok(["R1"], closed: ["B"], decision: [head: "R1", reason: "catalog_rollback"]),
-          high
-        )
+      # The design's Covers drops the generation rollback clause: under the watermark's own
+      # binding only the catalog chain and revision are compared, so a higher stored generation
+      # is informational.
+      one("a higher stored generation under the same binding is informational", labels, [
+        step(ev(l1, catalogs: [c0, k1]), done, high)
       ]),
       one("lower catalog revision than the watermark is catalog_rollback", labels, [
         step(
           ev(l1, catalogs: [c0, k1]),
-          ok(["R1"], closed: ["B"], decision: [head: "R1", reason: "catalog_rollback"]),
+          ok(["R1"],
+            closed: ["B"],
+            decision: [head: "R1", reason: "catalog_rollback", serving: "K1"]
+          ),
           revised
         )
       ])
@@ -1335,7 +1430,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
             refused: ["R1"],
             refusals: refused,
             forks: ["catalog"],
-            decision: [reason: "catalog_fork", block: "catalog_fork"]
+            decision: [reason: "catalog_fork", block: "catalog_fork", freeze: true]
           )
         )
       ]),
@@ -1347,7 +1442,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
             closed: ["B", "R1"],
             refused: ["R1"],
             refusals: refused,
-            decision: accept("R2b", "K2b")
+            decision: accept("R2b", "K2b", clears: true)
           )
         )
       ])
@@ -1418,7 +1513,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           ok(["R"],
             closed: ["B"],
             pending: ["R"],
-            decision: [head: "R", reason: "recovery_incomplete"]
+            decision: [head: "R", reason: "recovery_incomplete", block: "recovery_incomplete"]
           )
         ),
         step(
@@ -1432,7 +1527,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           ok(["T"],
             nodes: ["B", "T"],
             pending: ["T"],
-            decision: [head: "T", reason: "recovery_incomplete"]
+            decision: [head: "T", reason: "recovery_incomplete", block: "recovery_incomplete"]
           )
         ),
         step(
@@ -1453,14 +1548,30 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       {result, next} = F.deliver(base, state, s.evidence)
 
       {%{
-         label_view: label_view(result, scenario.labels),
+         label_view: label_view(result, scenario.labels, next),
          expect: s.expect,
-         view: F.view(result),
+         view: F.view(result, next),
          evidence: s.evidence,
          state_in: state
-       }, next}
+       }, F.persisted(next)}
     end)
     |> elem(0)
+  end
+
+  @doc "The label-space view of one delivery and the state `advance/2` returns for it."
+  def label_view(result, labels, next) do
+    l = label_fun(labels)
+
+    serving =
+      case next.serving do
+        :unchanged -> "unchanged"
+        nil -> nil
+        id -> l.(id)
+      end
+
+    result
+    |> label_view(labels)
+    |> Map.put("after", %{"frozen" => next.frozen, "serving" => serving})
   end
 
   def label_view({:error, reason, _}, _labels), do: %{"error" => to_string(reason)}
@@ -1483,9 +1594,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         "accepted" => d.accepted,
         "reason" => d.reason && to_string(d.reason),
         "block" => d.block && to_string(d.block.reason),
+        "freeze" => (d.block && d.block.freeze) || false,
         "head" => d.head && l.(d.head),
         "catalog" => d.catalog && l.(d.catalog),
-        "clears" => d.clears_authority_changed
+        "clears" => d.clears_authority_changed,
+        "serving" => d.serving && l.(d.serving)
       }
     }
   end
@@ -1531,7 +1644,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
             "steps" =>
               Enum.map(rs, fn r ->
                 %{
-                  "state" => state_json(r.state_in),
+                  "state" => F.state_json(r.state_in),
                   "frames" => r.evidence.space |> Log.ops() |> Map.keys() |> Enum.sort(),
                   "rotations" => r.evidence.rotations |> Map.keys() |> Enum.sort(),
                   "catalogs" => r.evidence.catalogs |> Map.keys() |> Enum.sort(),
@@ -1564,20 +1677,6 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       %{"generations" => [max], "next" => nil},
       %{"generations" => [], "next" => nil}
     ]
-  end
-
-  defp state_json(%{accepted: a, blocked: b}) do
-    %{
-      "accepted" =>
-        a &&
-          %{
-            "binding" => a.binding,
-            "generation" => a.generation,
-            "catalog" => a.catalog,
-            "revision" => a.revision
-          },
-      "blocked" => b && %{"reason" => to_string(b.reason), "triggers" => b.triggers}
-    }
   end
 
   defp artifact(envelope), do: envelope |> Wire.encode_value() |> Jason.encode!()
@@ -1679,7 +1778,15 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     changed = fn head, opts ->
       ok(
         [head],
-        opts ++ [decision: [head: head, reason: "authority_changed", block: "authority_changed"]]
+        opts ++
+          [
+            decision: [
+              head: head,
+              reason: "authority_changed",
+              block: "authority_changed",
+              freeze: true
+            ]
+          ]
       )
     end
 
@@ -1847,7 +1954,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           closed: ["B"],
           refused: ["R1"],
           refusals: %{"K1" => "catalog_authority_refused"},
-          decision: [head: "R1", reason: "authority_changed", block: "authority_changed"]
+          decision: [
+            head: "R1",
+            reason: "authority_changed",
+            block: "authority_changed",
+            freeze: true
+          ]
         )
       )
     ])
@@ -1878,12 +1990,15 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         ok(["R"],
           closed: ["B"],
           pending: ["R"],
-          decision: [head: "R", reason: "recovery_incomplete"]
+          decision: [head: "R", reason: "recovery_incomplete", block: "recovery_incomplete"]
         )
       ),
       step(
         ev(lr, rotations: [t], catalogs: [kr, ct], unproven: [r.id]),
-        rotated.(pending: ["R", "T"], decision: [head: "T", reason: "recovery_incomplete"])
+        rotated.(
+          pending: ["R", "T"],
+          decision: [head: "T", reason: "recovery_incomplete", block: "recovery_incomplete"]
+        )
       ),
       step(
         ev(lr, rotations: [t], catalogs: [kr, ct]),
@@ -1893,8 +2008,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   end
 
   # C0 lists Space + Thread; C1 follows C0 but drops the Thread (refused). R cites {B, C1}
-  # with a Space-only first catalog: the citation does not make C1 valid, KR extends an
-  # invalid prior, and C0 stays an omitted catalog head, in both delivery orders.
+  # with a Space-only first catalog: the citation does not make C1 valid, and R citing an
+  # invalid prior is raw evidence (row 382), so B/C0 is kept, in both delivery orders.
   defp refused_catalog_citation(base) do
     [space] = F.base_entries(base)
 
@@ -1920,12 +2035,13 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     labels =
       Map.merge(base_labels(base, c0), %{"C1" => F.cid(c1), "R" => r.id, "KR" => F.cid(kr)})
 
+    # Row 382 (OD-17): an intrinsically invalid cited prior makes R raw evidence, so B stays
+    # open and B/C0 is kept and served.
     refused =
-      ok(["R"],
-        closed: ["B"],
+      ok(["B"],
+        raw: %{"R" => "invalid_catalog_transition"},
         refusals: %{"C1" => "invalid_catalog_transition", "KR" => "invalid_catalog_transition"},
-        forks: ["catalog"],
-        decision: [reason: "catalog_fork", block: "catalog_fork"]
+        decision: accept("B", "C0")
       )
 
     both(
@@ -1949,8 +2065,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   end
 
   # The same Thread removal through an old-key rotation: T from B names refused C1 as its
-  # prior, and CT (Space-only) matches T's inventory. CT extends an invalid prior, so it is
-  # refused and the accepted (B, C0) stays.
+  # prior, so T is a retained refusal rather than a head (row 382), CT under it is refused, and
+  # the accepted (B, C0) stays.
   defp rotation_refused_prior(base) do
     [space] = F.base_entries(base)
 
@@ -1977,10 +2093,13 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       ),
       step(
         ev(base.log, rotations: [t], catalogs: [c0, c1, ct]),
-        ok(["T"],
-          nodes: ["B", "T"],
-          refusals: %{"C1" => "invalid_catalog_transition", "CT" => "invalid_catalog_transition"},
-          decision: [head: "T"]
+        ok(["B"],
+          refusals: %{
+            "C1" => "invalid_catalog_transition",
+            "CT" => "invalid_catalog_transition",
+            "T" => "invalid_catalog_transition"
+          },
+          decision: accept("B", "C0")
         )
       )
     ])
@@ -2063,7 +2182,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       ),
       step(
         ev(add(l2, [r3]), catalogs: [c0, k1, k2, k3]),
-        ok(["R3"], closed: ["B", "R1", "R2"], decision: accept("R3", "K3"))
+        ok(["R3"], closed: ["B", "R1", "R2"], decision: accept("R3", "K3", clears: true))
       )
     ])
   end
@@ -2076,8 +2195,14 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     labels = Map.merge(base_labels(base, c0), %{"R" => r.id, "KR" => F.cid(kr)})
 
     state = %{
-      accepted: %{binding: base.boot.id, generation: 0, catalog: F.cid(c0), revision: 0},
-      blocked: nil
+      accepted: %{
+        binding: base.boot.id,
+        generation: 0,
+        catalog: F.cid(c0),
+        revision: 0,
+        routes: Map.new(c0.catalog.entries, &{&1.route, &1.replica})
+      },
+      frozen: false
     }
 
     one("an accepted catalog absent from the input fails closed", labels, [
@@ -2144,7 +2269,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         step(ev(l1, rotations: [t, t2], catalogs: [c0, k1, ct]), held.(out)),
         step(
           ev(l2, rotations: [t, t2], catalogs: [c0, k1, ct, k2]),
-          ok(["R2"], closed: ["B", "R1"], closed_out: out, decision: accept("R2", "K2"))
+          ok(["R2"],
+            closed: ["B", "R1"],
+            closed_out: out,
+            decision: accept("R2", "K2", clears: true)
+          )
         ),
         step(
           ev(l2, rotations: [t, t2], catalogs: [c0, c1, k1, ct, k2]),
@@ -2157,7 +2286,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         step(ev(l1, rotations: [t], catalogs: [c0, k1]), held.(["T"])),
         step(
           ev(l2, rotations: [t, t2], catalogs: [c0, k1, ct, k2]),
-          ok(["R2"], closed: ["B", "R1"], closed_out: out, decision: accept("R2", "K2"))
+          ok(["R2"],
+            closed: ["B", "R1"],
+            closed_out: out,
+            decision: accept("R2", "K2", clears: true)
+          )
         )
       ]
     )
@@ -2224,8 +2357,832 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       ),
       step(
         ev(add(base.log, [full]), catalogs: [c0, kf]),
-        ok(["Rf"], closed: ["B"], decision: accept("Rf", "KF"))
+        ok(["Rf"], closed: ["B"], decision: accept("Rf", "KF", clears: true))
       )
     ])
+  end
+
+  # --- rows 382 and 383: convergence (S1-S14) ------------------------------------------------
+
+  defp nominee(base, t2),
+    do: [
+      author: base.nominee,
+      claim: %{author: base.nominee.pub},
+      cap: t2.delegation.id,
+      holder_epoch: t2.op.id
+    ]
+
+  defp moved(entries, name) do
+    sid = F.id("service-id-" <> name)
+    key = F.identity("service-" <> name).pub
+    for e <- entries, do: %{e | service_id: sid, service_key: key}
+  end
+
+  defp route(name), do: "/r/" <> F.id("route-" <> name)
+
+  defp other(space, suffix, name),
+    do: %{
+      space
+      | replica: space.replica <> "-" <> suffix,
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        route: route(name)
+    }
+
+  # A replacement whose first catalog carries `entries` (moved to its own service), with a
+  # cutoff for every entry (D-A15).
+  defp carrying(base, log, name, entries, opts) do
+    deps = Keyword.get(opts, :deps, Log.frontier(log))
+    {:ok, %{cutoff: space_cut}} = CatalogCutoff.derive(F.prefix(base, log, deps))
+
+    extra =
+      for e <- entries,
+          e.kind != :space,
+          do: %{
+            replica: e.replica,
+            frontier: [F.id("f-" <> name <> e.replica)],
+            log_digest: F.id("d-" <> name <> e.replica)
+          }
+
+    claim =
+      Map.merge(
+        %{cutoffs: Enum.sort_by([space_cut | extra], & &1.replica)},
+        Keyword.get(opts, :claim, %{})
+      )
+
+    F.replacement(
+      base,
+      log,
+      name,
+      opts |> Keyword.put(:entries, moved(entries, name)) |> Keyword.put(:claim, claim)
+    )
+  end
+
+  defp frozen_at(head, opts),
+    do:
+      ok(
+        [head],
+        opts ++
+          [
+            decision: [
+              head: head,
+              reason: "authority_changed",
+              block: "authority_changed",
+              freeze: true
+            ],
+            after: [frozen: true]
+          ]
+      )
+
+  # S1 (row 383, PR #221 round 3 finding 4): accepted R1/K1, then a concurrent holder change
+  # T2 and an old-key rotation TR under R1. R2 citing {R1, K1} closes TR out; it clears in
+  # both delivery orders, and the TR head id is never compared again.
+  defp s1_rotation_trigger(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "s1-r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    {tn, t2, l2} = regrant(base, l1, Log.frontier(base.log))
+    tr = rotation(base, node(r1.id, 1), k1, r1.catalog_key, "s1-tr")
+
+    r2 =
+      F.replacement(
+        base,
+        l2,
+        "s1-r2",
+        [parents: [r1.id], prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}], generation: 2] ++
+          nominee(base, t2)
+      )
+
+    k2 = F.first(base, r2)
+    l3 = add(l2, [r2])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "T2" => tn.id,
+        "TR" => tr.id,
+        "R2" => r2.id,
+        "K2" => F.cid(k2)
+      })
+
+    accepted = ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
+    refused_k1 = %{"K1" => "catalog_authority_refused"}
+
+    resolved = fn out, clears ->
+      ok(["R2"],
+        closed: ["B", "R1"],
+        closed_out: out,
+        refused: ["R1"],
+        refusals: refused_k1,
+        decision: accept("R2", "K2", clears: clears)
+      )
+    end
+
+    both(
+      "S1: a rotation beside a holder change freezes, and an admin resolution clears it",
+      labels,
+      [
+        step(ev(l1, catalogs: [c0, k1]), accepted),
+        step(
+          ev(l2, rotations: [tr], catalogs: [c0, k1]),
+          frozen_at("TR",
+            closed: ["B"],
+            nodes: ["B", "R1", "TR"],
+            refused: ["R1", "TR"],
+            refusals: Map.put(refused_k1, "TR", "catalog_authority_refused")
+          )
+        ),
+        step(ev(l3, rotations: [tr], catalogs: [c0, k1, k2]), resolved.(["TR"], true))
+      ],
+      [
+        step(ev(l1, catalogs: [c0, k1]), accepted),
+        step(ev(l3, catalogs: [c0, k1, k2]), resolved.([], true)),
+        step(ev(l3, rotations: [tr], catalogs: [c0, k1, k2]), resolved.(["TR"], false))
+      ]
+    )
+  end
+
+  # S2: the resolution's first catalog is withheld, so the client stays frozen; a later R3
+  # descending from it clears.
+  defp s2_withheld_first(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "s2-r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    {tn, t2, l2} = regrant(base, l1, Log.frontier(base.log))
+
+    r2 =
+      F.replacement(
+        base,
+        l2,
+        "s2-r2",
+        [parents: [r1.id], prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}], generation: 2] ++
+          nominee(base, t2)
+      )
+
+    l3 = add(l2, [r2])
+
+    r3 =
+      F.replacement(
+        base,
+        l3,
+        "s2-r3",
+        [parents: [r2.id], prior_catalogs: [%{binding: r2.id, catalog: nil}], generation: 3] ++
+          nominee(base, t2)
+      )
+
+    k3 = F.first(base, r3)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "T2" => tn.id,
+        "R2" => r2.id,
+        "R3" => r3.id,
+        "K3" => F.cid(k3)
+      })
+
+    refused = [refused: ["R1"], refusals: %{"K1" => "catalog_authority_refused"}]
+
+    one("S2: a withheld resolution catalog stays frozen until a descendant clears", labels, [
+      step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
+      step(ev(add(l1, [tn]), catalogs: [c0, k1]), frozen_at("R1", [closed: ["B"]] ++ refused)),
+      step(ev(l3, catalogs: [c0, k1]), frozen_at("R2", [closed: ["B", "R1"]] ++ refused)),
+      step(
+        ev(add(l3, [r3]), catalogs: [c0, k1, k3]),
+        ok(
+          ["R3"],
+          [closed: ["B", "R1", "R2"], decision: accept("R3", "K3", clears: true)] ++ refused
+        )
+      )
+    ])
+  end
+
+  # S3 (row 382 item 2, PR #221 round 3 finding 3): KR is refused for missing Thread cutoffs.
+  # R2 citing {R, nil} must still carry C0's Thread (Floor(R2) = entries(C0)): a Space-only K2
+  # is refused, a K2f carrying the Thread promotes.
+  defp s3_nil_floor(base) do
+    [space] = F.base_entries(base)
+    thread = thread_of(space, "s3")
+    c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
+
+    r =
+      F.replacement(base, base.log, "s3-r",
+        prior_catalogs: [%{binding: base.boot.id, catalog: F.cid(c0)}],
+        entries: moved([space, thread], "s3-r")
+      )
+
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+    child = [parents: [r.id], prior_catalogs: [%{binding: r.id, catalog: nil}], generation: 2]
+    r2 = F.replacement(base, lr, "s3-r2", child)
+    k2 = F.first(base, r2)
+    r2f = carrying(base, lr, "s3-r2f", [space, thread], child)
+    k2f = F.first(base, r2f)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "R2" => r2.id,
+        "K2" => F.cid(k2),
+        "R2f" => r2f.id,
+        "K2f" => F.cid(k2f)
+      })
+
+    start = step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0")))
+
+    [
+      one("S3: a nil citation of a node without a valid catalog carries its floor", labels, [
+        start,
+        step(
+          ev(add(lr, [r2]), catalogs: [c0, kr, k2]),
+          ok(["R2"],
+            closed: ["B", "R"],
+            closed_out: ["KR"],
+            refusals: %{"K2" => "invalid_catalog_transition"},
+            decision: [head: "R2"]
+          )
+        )
+      ]),
+      one("S3: a second replacement carrying the floor's Thread promotes", labels, [
+        start,
+        step(
+          ev(add(lr, [r2f]), catalogs: [c0, kr, k2f]),
+          ok(["R2f"],
+            closed: ["B", "R"],
+            closed_out: ["KR"],
+            decision: accept("R2f", "K2f", clears: true)
+          )
+        )
+      ])
+    ]
+  end
+
+  # S4 (row 382 item 1, PR #221 round 3 finding 7): C0 maps Space->a, Thread->b; C1 extends it
+  # with Space->b, Thread->c. C1 is intrinsically invalid in any id order, and R citing it is
+  # raw evidence (OD-17), so B/C0 is kept and served.
+  defp s4_route_reuse(base) do
+    [space] = F.base_entries(base)
+    thread = other(space, "thread", "s4-b")
+
+    c0 =
+      F.catalog(base, base.boot.id, 0, nil, base.catalog, [
+        %{space | route: route("s4-a")},
+        thread
+      ])
+
+    c1 =
+      F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [
+        %{space | route: route("s4-b")},
+        %{thread | route: route("s4-c")}
+      ])
+
+    r =
+      carrying(
+        base,
+        base.log,
+        "s4-r",
+        [%{space | route: route("s4-r-space")}, %{thread | route: route("s4-r-thread")}],
+        prior_catalogs: [%{binding: base.boot.id, catalog: F.cid(c1)}]
+      )
+
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{"C1" => F.cid(c1), "R" => r.id, "KR" => F.cid(kr)})
+
+    kept =
+      ok(["B"],
+        raw: %{"R" => "invalid_catalog_transition"},
+        refusals: %{"C1" => "invalid_catalog_transition", "KR" => "invalid_catalog_transition"},
+        decision: accept("B", "C0")
+      )
+
+    both(
+      "S4: a route-reusing catalog is invalid in any order and validates no replacement",
+      labels,
+      [
+        step(
+          ev(base.log, catalogs: [c0, c1]),
+          ok(["B"],
+            refusals: %{"C1" => "invalid_catalog_transition"},
+            decision: accept("B", "C0")
+          )
+        ),
+        step(ev(lr, catalogs: [c0, c1, kr]), kept)
+      ],
+      [step(ev(lr, catalogs: [c0, c1, kr]), kept)]
+    )
+  end
+
+  # S6 (row 382 item 3, PR #221 round 3 finding 6): three rotations naming an intrinsically
+  # invalid prior catalog are three retained refusals, not heads.
+  defp s6_invalid_prior_rotations(base) do
+    c0 = F.c0(base)
+    cbad = F.catalog(base, base.boot.id, 2, F.cid(c0), base.catalog, F.base_entries(base))
+
+    ts =
+      for n <- ~w(1 2 3),
+          do: rotation(base, node(base.boot.id, 0), cbad, base.catalog, "s6-t" <> n)
+
+    labels =
+      ts
+      |> Enum.with_index(1)
+      |> Map.new(fn {t, i} -> {"T#{i}", t.id} end)
+      |> Map.merge(base_labels(base, c0))
+      |> Map.put("Cbad", F.cid(cbad))
+
+    bad = "invalid_catalog_transition"
+
+    one("S6: rotations naming an invalid prior catalog are refusals, not heads", labels, [
+      step(
+        ev(base.log, rotations: ts, catalogs: [c0, cbad]),
+        ok(["B"],
+          refusals: %{"Cbad" => bad, "T1" => bad, "T2" => bad, "T3" => bad},
+          decision: accept("B", "C0")
+        )
+      )
+    ])
+  end
+
+  # S7 (D-573, row 383): the accepted bootstrap catalog absent from one delivery is a derived
+  # block that does not freeze; the next complete delivery serves B/C0 again.
+  defp s7_missing_clears(base) do
+    c0 = F.c0(base)
+
+    one(
+      "S7: a missing accepted catalog serves nothing and does not freeze",
+      base_labels(base, c0),
+      [
+        step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+        step(
+          ev(base.log),
+          ok(["B"],
+            decision: [head: "B", reason: "authority_changed", block: "authority_changed"]
+          )
+        ),
+        step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0")))
+      ]
+    )
+  end
+
+  # S8: a watermark under a closed-out rotation chain at generation 4 (T, T1, T2 from R1). R2
+  # closing R1 freezes, whether it cites {R1, K1} or {R1, nil}; R3 descending from R2 and
+  # carrying KT2's entries clears.
+  defp s8_closed_out_rotation_watermark(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "s8-r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    t = rotation(base, node(r1.id, 1), k1, r1.catalog_key, "s8-t")
+    kt = F.catalog(base, t.id, 0, nil, F.identity("rot-s8-t"), r1.entries)
+    ta = rotation(base, node(t.id, 2), kt, F.identity("rot-s8-t"), "s8-ta")
+    kta = F.catalog(base, ta.id, 0, nil, F.identity("rot-s8-ta"), r1.entries)
+    tb = rotation(base, node(ta.id, 3), kta, F.identity("rot-s8-ta"), "s8-tb")
+    ktb = F.catalog(base, tb.id, 0, nil, F.identity("rot-s8-tb"), r1.entries)
+    rots = [t, ta, tb]
+    cats = [c0, k1, kt, kta, ktb]
+
+    for {variant, prior} <- [{"cite", F.cid(k1)}, {"nil", nil}] do
+      r2 =
+        F.replacement(base, l1, "s8-r2-" <> variant,
+          parents: [r1.id],
+          prior_catalogs: [%{binding: r1.id, catalog: prior}],
+          generation: 2
+        )
+
+      k2 = F.first(base, r2)
+      l2 = add(l1, [r2])
+
+      r3 =
+        F.replacement(base, l2, "s8-r3-" <> variant,
+          parents: [r2.id],
+          prior_catalogs: [%{binding: r2.id, catalog: F.cid(k2)}],
+          generation: 3
+        )
+
+      k3 = F.first(base, r3)
+
+      labels =
+        Map.merge(base_labels(base, c0), %{
+          "R1" => r1.id,
+          "K1" => F.cid(k1),
+          "T" => t.id,
+          "KT" => F.cid(kt),
+          "Ta" => ta.id,
+          "KTa" => F.cid(kta),
+          "Tb" => tb.id,
+          "KTb" => F.cid(ktb),
+          "R2" => r2.id,
+          "K2" => F.cid(k2),
+          "R3" => r3.id,
+          "K3" => F.cid(k3)
+        })
+
+      out =
+        ["KT", "KTa", "KTb", "T", "Ta", "Tb"] ++ if(variant == "nil", do: ["K1"], else: [])
+
+      one("S8: a closed-out rotation watermark freezes and clears (#{variant})", labels, [
+        step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
+        step(
+          ev(l1, rotations: [t], catalogs: [c0, k1, kt]),
+          ok(["T"], closed: ["B"], nodes: ["B", "R1", "T"], decision: accept("T", "KT"))
+        ),
+        step(
+          ev(l1, rotations: [t, ta], catalogs: [c0, k1, kt, kta]),
+          ok(["Ta"], closed: ["B"], nodes: ["B", "R1", "T", "Ta"], decision: accept("Ta", "KTa"))
+        ),
+        step(
+          ev(l1, rotations: rots, catalogs: cats),
+          ok(["Tb"],
+            closed: ["B"],
+            nodes: ["B", "R1", "T", "Ta", "Tb"],
+            decision: accept("Tb", "KTb")
+          )
+        ),
+        step(
+          ev(l2, rotations: rots, catalogs: cats ++ [k2]),
+          frozen_at("R2", closed: ["B", "R1"], closed_out: out)
+        ),
+        step(
+          ev(add(l2, [r3]), rotations: rots, catalogs: cats ++ [k2, k3]),
+          ok(["R3"],
+            closed: ["B", "R1", "R2"],
+            closed_out: out,
+            decision: accept("R3", "K3", clears: true)
+          )
+        )
+      ])
+    end
+  end
+
+  # S9: A = B/C1 (C1 adds a Thread). R citing {B, C0} closes C1 out and freezes; its child R2
+  # without the Thread stays frozen, R2t carrying the Thread clears.
+  defp s9_inventory_continuity(base) do
+    [space] = F.base_entries(base)
+    thread = thread_of(space, "s9")
+    c0 = F.c0(base)
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, thread])
+    r = cite_c0(base, c0, "s9-r")
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    child = [
+      parents: [r.id],
+      prior_catalogs: [%{binding: r.id, catalog: F.cid(kr)}],
+      generation: 2
+    ]
+
+    r2 = F.replacement(base, lr, "s9-r2", child)
+    k2 = F.first(base, r2)
+    r2t = carrying(base, lr, "s9-r2t", [space, thread], child)
+    k2t = F.first(base, r2t)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "C1" => F.cid(c1),
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "R2" => r2.id,
+        "K2" => F.cid(k2),
+        "R2t" => r2t.id,
+        "K2t" => F.cid(k2t)
+      })
+
+    prefix = [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(ev(base.log, catalogs: [c0, c1]), ok(["B"], decision: accept("B", "C1"))),
+      step(ev(lr, catalogs: [c0, c1, kr]), frozen_at("R", closed: ["B"], closed_out: ["C1"]))
+    ]
+
+    [
+      one(
+        "S9: a resolution dropping the watermark's Thread stays frozen",
+        labels,
+        prefix ++
+          [
+            step(
+              ev(add(lr, [r2]), catalogs: [c0, c1, kr, k2]),
+              frozen_at("R2", closed: ["B", "R"], closed_out: ["C1"])
+            )
+          ]
+      ),
+      one(
+        "S9: a resolution carrying the watermark's Thread clears",
+        labels,
+        prefix ++
+          [
+            step(
+              ev(add(lr, [r2t]), catalogs: [c0, c1, kr, k2t]),
+              ok(["R2t"],
+                closed: ["B", "R"],
+                closed_out: ["C1"],
+                decision: accept("R2t", "K2t", clears: true)
+              )
+            )
+          ]
+      )
+    ]
+  end
+
+  # S10 (C1): A = B/C1. A B-key rotation T from C0 beside C1 is a rotation fork (serving
+  # nil); R* citing [T, B] with {T, CT} and {B, C1} clears. A rotation from C1 is a planned
+  # rotation and is served.
+  defp s10_rotation_fork(base) do
+    c0 = F.c0(base)
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, F.base_entries(base))
+    t = rotation(base, node(base.boot.id, 0), c0, base.catalog, "s10-t")
+    ct = F.catalog(base, t.id, 0, nil, F.identity("rot-s10-t"), F.base_entries(base))
+    tp = rotation(base, node(base.boot.id, 0), c1, base.catalog, "s10-tp")
+    ctp = F.catalog(base, tp.id, 0, nil, F.identity("rot-s10-tp"), F.base_entries(base))
+
+    rs =
+      F.replacement(base, base.log, "s10-rs",
+        parents: Enum.sort([t.id, base.boot.id]),
+        prior_catalogs:
+          Enum.sort([
+            %{binding: t.id, catalog: F.cid(ct)},
+            %{binding: base.boot.id, catalog: F.cid(c1)}
+          ]),
+        generation: 2
+      )
+
+    krs = F.first(base, rs)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "C1" => F.cid(c1),
+        "T" => t.id,
+        "CT" => F.cid(ct),
+        "Tp" => tp.id,
+        "CTp" => F.cid(ctp),
+        "Rs" => rs.id,
+        "KRs" => F.cid(krs)
+      })
+
+    prefix = [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(ev(base.log, catalogs: [c0, c1]), ok(["B"], decision: accept("B", "C1")))
+    ]
+
+    [
+      one(
+        "S10: a rotation from an ancestor catalog forks until a resolution cites both",
+        labels,
+        prefix ++
+          [
+            step(
+              ev(base.log, rotations: [t], catalogs: [c0, c1, ct]),
+              ok(["T"],
+                nodes: ["B", "T"],
+                forks: ["rotation"],
+                decision: [reason: "catalog_fork", block: "catalog_fork"]
+              )
+            ),
+            step(
+              ev(add(base.log, [rs]), rotations: [t], catalogs: [c0, c1, ct, krs]),
+              ok(["Rs"], closed: ["B", "T"], decision: accept("Rs", "KRs", clears: true))
+            )
+          ]
+      ),
+      one(
+        "S10: a rotation from the current catalog is a planned rotation",
+        labels,
+        prefix ++
+          [
+            step(
+              ev(base.log, rotations: [tp], catalogs: [c0, c1, ctp]),
+              ok(["Tp"], nodes: ["B", "Tp"], decision: accept("Tp", "CTp"))
+            )
+          ]
+      )
+    ]
+  end
+
+  # S11 (C4): three old-key rotations under the accepted R1 are control_history_limit (no
+  # freeze, nothing served); a resolution citing {R1, K1} closes them out and clears, with R1
+  # union-refused or honored.
+  defp s11_head_limit(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "s11-r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    {tn, t2, l2} = regrant(base, l1, Log.frontier(base.log))
+
+    trs =
+      for n <- ~w(a b c), do: rotation(base, node(r1.id, 1), k1, r1.catalog_key, "s11-tr" <> n)
+
+    cite = [
+      parents: [r1.id],
+      prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}],
+      generation: 2
+    ]
+
+    r2 = F.replacement(base, l2, "s11-r2", cite ++ nominee(base, t2))
+    k2 = F.first(base, r2)
+    r2h = F.replacement(base, l1, "s11-r2h", cite)
+    k2h = F.first(base, r2h)
+
+    labels =
+      trs
+      |> Enum.zip(~w(TRa TRb TRc))
+      |> Map.new(fn {t, l} -> {l, t.id} end)
+      |> Map.merge(base_labels(base, c0))
+      |> Map.merge(%{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "T2" => tn.id,
+        "R2" => r2.id,
+        "K2" => F.cid(k2),
+        "R2h" => r2h.id,
+        "K2h" => F.cid(k2h)
+      })
+
+    accepted =
+      step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1")))
+
+    out = ~w(TRa TRb TRc)
+
+    [
+      one(
+        "S11: three rotation heads under a refused watermark are resolved by one citation",
+        labels,
+        [
+          accepted,
+          step(ev(l2, rotations: trs, catalogs: [c0, k1]), err("control_history_limit")),
+          step(
+            ev(add(l2, [r2]), rotations: trs, catalogs: [c0, k1, k2]),
+            ok(["R2"],
+              closed: ["B", "R1"],
+              closed_out: out,
+              refused: ["R1"],
+              refusals: %{"K1" => "catalog_authority_refused"},
+              decision: accept("R2", "K2", clears: true)
+            )
+          )
+        ]
+      ),
+      one(
+        "S11: three rotation heads under an honored watermark are resolved by one citation",
+        labels,
+        [
+          accepted,
+          step(ev(l1, rotations: trs, catalogs: [c0, k1]), err("control_history_limit")),
+          step(
+            ev(add(l1, [r2h]), rotations: trs, catalogs: [c0, k1, k2h]),
+            ok(["R2h"],
+              closed: ["B", "R1"],
+              closed_out: out,
+              decision: accept("R2h", "K2h", clears: true)
+            )
+          )
+        ]
+      )
+    ]
+  end
+
+  # S12 (C5): A = B/C1 after C0 served Thread at route b and C1 moved it to b2. R citing
+  # {B, nil} freezes. A descendant K2 mapping b to another replica is not accepted
+  # (RouteCompat against every route ever served), while fresh routes clear.
+  defp s12_cumulative_routes(base) do
+    [space] = F.base_entries(base)
+    thread = other(space, "thread", "s12-b")
+    c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
+
+    c1 =
+      F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [
+        space,
+        %{thread | route: route("s12-b2")}
+      ])
+
+    r = F.replacement(base, base.log, "s12-r")
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    child = [
+      parents: [r.id],
+      prior_catalogs: [%{binding: r.id, catalog: F.cid(kr)}],
+      generation: 2
+    ]
+
+    fresh = fn name ->
+      [%{space | route: route(name <> "-space")}, %{thread | route: route(name <> "-thread")}]
+    end
+
+    squat = %{other(space, "thread2", "unused") | route: thread.route}
+    r2 = carrying(base, lr, "s12-r2", fresh.("s12-r2") ++ [squat], child)
+    k2 = F.first(base, r2)
+    r2f = carrying(base, lr, "s12-r2f", fresh.("s12-r2f"), child)
+    k2f = F.first(base, r2f)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "C1" => F.cid(c1),
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "R2" => r2.id,
+        "K2" => F.cid(k2),
+        "R2f" => r2f.id,
+        "K2f" => F.cid(k2f)
+      })
+
+    out = ["C0", "C1"]
+
+    prefix = [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(ev(base.log, catalogs: [c0, c1]), ok(["B"], decision: accept("B", "C1"))),
+      step(ev(lr, catalogs: [c0, c1, kr]), frozen_at("R", closed: ["B"], closed_out: out))
+    ]
+
+    [
+      one(
+        "S12: a route served earlier is never re-pointed",
+        labels,
+        prefix ++
+          [
+            step(
+              ev(add(lr, [r2]), catalogs: [c0, c1, kr, k2]),
+              frozen_at("R2", closed: ["B", "R"], closed_out: out)
+            )
+          ]
+      ),
+      one(
+        "S12: a resolution with fresh routes clears",
+        labels,
+        prefix ++
+          [
+            step(
+              ev(add(lr, [r2f]), catalogs: [c0, c1, kr, k2f]),
+              ok(["R2f"],
+                closed: ["B", "R"],
+                closed_out: out,
+                decision: accept("R2f", "K2f", clears: true)
+              )
+            )
+          ]
+      )
+    ]
+  end
+
+  # S13 (C9): the accepted K1 missing from one delivery is a derived block (nothing served,
+  # no freeze); the next complete delivery serves R1/K1 again without a resolution.
+  defp s13_missing_watermark(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "s13-r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    labels = Map.merge(base_labels(base, c0), %{"R1" => r1.id, "K1" => F.cid(k1)})
+    accepted = ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
+
+    one("S13: a missing watermark catalog is a derived block that does not freeze", labels, [
+      step(ev(l1, catalogs: [c0, k1]), accepted),
+      step(
+        ev(l1, catalogs: [c0]),
+        ok(["R1"],
+          closed: ["B"],
+          decision: [head: "R1", reason: "authority_changed", block: "authority_changed"]
+        )
+      ),
+      step(ev(l1, catalogs: [c0, k1]), accepted)
+    ])
+  end
+
+  # S14 (C7, the D-275 trade): a B-key C1 delivered in the same page as R {B, C0} is dropped;
+  # delivered before R and accepted, it freezes the client. Both outcomes are intended.
+  defp s14_same_page_trade(base) do
+    [space] = F.base_entries(base)
+    c0 = F.c0(base)
+
+    c1 =
+      F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, thread_of(space, "s14")])
+
+    r = cite_c0(base, c0, "s14-r")
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{"C1" => F.cid(c1), "R" => r.id, "KR" => F.cid(kr)})
+
+    start = step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0")))
+
+    [
+      one("S14: a catalog delivered with the closing resolution is dropped", labels, [
+        start,
+        step(
+          ev(lr, catalogs: [c0, c1, kr]),
+          ok(["R"], closed: ["B"], closed_out: ["C1"], decision: accept("R", "KR", clears: true))
+        )
+      ]),
+      one("S14: a catalog accepted before the closing resolution freezes", labels, [
+        start,
+        step(ev(base.log, catalogs: [c0, c1]), ok(["B"], decision: accept("B", "C1"))),
+        step(ev(lr, catalogs: [c0, c1, kr]), frozen_at("R", closed: ["B"], closed_out: ["C1"]))
+      ])
+    ]
   end
 end
