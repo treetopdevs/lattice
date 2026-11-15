@@ -1293,11 +1293,31 @@ defmodule Treehouse.CatalogBindingGraph do
       rotation_forks: rot_forks,
       fork_bindings: fork_bindings,
       floors: floors,
+      verdicts: verdicts(memo, cat.validity),
       catalogs: Map.new(ctx.catalogs, fn {id, e} -> {id, e.catalog} end),
       decision: nil
     }
 
     {:ok, %{graph | decision: decide(ctx.accepted, graph, nodes_all, closed, out_rot)}}
+  end
+
+  # The intrinsic verdict of every judged rotation, candidate and catalog (D-279: each only ever
+  # moves out of `:pending`): `:node`, `{:bad, reason}`, `:ok`, `{:refused, reason}`,
+  # `:bad_chain` or `:pending`. Union classification never changes one.
+  defp verdicts(memo, validity) do
+    bindings =
+      Map.new(memo, fn
+        {id, {:node, _}} -> {id, :node}
+        {id, v} -> {id, v}
+      end)
+
+    Map.merge(
+      bindings,
+      Map.new(validity, fn
+        {id, :binding_pending} -> {id, :pending}
+        {id, v} -> {id, v}
+      end)
+    )
   end
 
   defp decide(a, graph, nodes_all, closed, out_rot) do
