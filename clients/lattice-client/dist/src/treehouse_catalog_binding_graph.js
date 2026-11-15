@@ -1,15 +1,14 @@
 // TS twin of Treehouse.CatalogBindingGraph (plan 316 PR 4a): the pure binding-graph resolver for replace_catalog_v1
-// (steps 1-3 and 5-9, D-270, D-275 to D-279, OD-16, OD-17, row 320). Not wired: treehouse_catalog_trust.ts does not call
-// it yet (4c), so it changes no route, watermark or retained-client behaviour, and it produces no route. It adds no Core
-// primitive, wire atom or quarantine reason. Both runtimes are pinned to the same hand-written label-space expectations
-// and to each other's outputs by binding_graph_v1.json / binding_graph_ts_v1.json.
+// (steps 1-3 and 5-9, D-270, D-275 to D-279, OD-16, OD-17, row 320, and the rows 382/383 convergence design). Not wired:
+// treehouse_catalog_trust.ts does not call it yet (4c), so it changes no route, watermark or retained-client behaviour,
+// and it produces no route. It adds no Core primitive, wire atom or quarantine reason. Both runtimes are pinned to the same
+// hand-written label-space expectations and to each other's outputs by binding_graph_v1.json / binding_graph_ts_v1.json.
 //
-// Intrinsic verdicts: every Space replace_catalog_v1 op is an eligible node (refused when the full union refuses it),
-// raw evidence (any intrinsic failure; no head, no closure) or pending. A candidate whose closure is incomplete is refuted
-// early only from facts no missing ancestor can change; otherwise it stays pending. Rotations are nodes when their chain
-// checks pass under their parent node and owe their parent's and their own unproven cutoffs (D-A15); a pending rotation under a
-// closed binding is closed out, never trust_pending (D-A16). Union classification only reclassifies. Catalog failures are
-// retained refusals.
+// One causal evaluation: a single memoized judgment covers rotations, candidates and catalogs, and every verdict reads
+// only the artifact's bytes and its causal ancestry (D-279). An invalid cited prior makes a replacement raw evidence and a
+// rotation a retained refusal. A catalog extends its binding's floor and no route in its own ancestry names two replicas.
+// Union classification only reclassifies. The decision is derived on every call from the union and the persisted
+// watermark; advanceCatalogBindingState is the merge rule over {accepted, frozen} (row 383). This module persists nothing.
 import { analyzeAuthority } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import { canonicalBase64Bytes, verifyCarrierOp } from "./codec";
@@ -50,6 +49,8 @@ export async function resolveCatalogBindingGraph(input) {
 async function context(input) {
     if (!Array.isArray(input.provenCutoffs) || !input.provenCutoffs.every(provenShape))
         return null;
+    if (!acceptedShape(input.accepted))
+        return null;
     const replica = input.bootstrap.record.space;
     const frames = new Map();
     for (const value of structuredClone([...input.frames])) {
@@ -86,9 +87,18 @@ async function context(input) {
     const ctx = { input, replica, bootstrapId: input.bootstrap.id, record: input.bootstrap.record, byId, frames, complete,
         completeById, ancestorCache: new Map(), reasons, candidates,
         proven: new Set(input.provenCutoffs.map(cutoffKey)), bootHonored: false,
-        memo: new Map(), visiting: new Set() };
+        memo: new Map(), visiting: new Set(), cmemo: new Map(), croutes: new Map(), cvisiting: new Set() };
     ctx.bootHonored = bootstrapHonored(ctx);
     return ctx;
+}
+function acceptedShape(a) {
+    if (a === null)
+        return true;
+    if (typeof a !== "object" || a === undefined)
+        return false;
+    const v = a;
+    return typeof v.binding === "string" && typeof v.catalog === "string" && typeof v.revision === "number" &&
+        (v.routes === undefined || (typeof v.routes === "object" && v.routes !== null));
 }
 function bodyAtom(body) {
     if (!Array.isArray(body) || body[0] !== "tuple" || !Array.isArray(body[1]))
@@ -124,6 +134,8 @@ function bootstrapHonored(ctx) {
 async function run(ctx) {
     for (const id of [...ctx.input.rotations.keys(), ...ctx.candidates.keys()].sort(compareUtf8))
         await evaluate(id, ctx);
+    for (const id of [...ctx.input.catalogs.keys()].sort(compareUtf8))
+        await judgeCatalog(id, ctx);
     const nodesAll = new Map();
     for (const [id, verdict] of ctx.memo)
         if (verdict.t === "node")
@@ -134,6 +146,12 @@ async function run(ctx) {
     const outPending = closedOutPending(ctx, closed, outRot);
     const final = new Map([...nodesAll].filter(([id]) => !outRot.has(id)));
     const heads = headsOf(final);
+    const floors = new Map();
+    for (const [id, n] of final) {
+        const f = await floorOf(n, ctx);
+        if (f.t === "ok")
+            floors.set(id, f.entries);
+    }
     const cat = classifyCatalogs(ctx, nodesAll, closed, outRot, outPending);
     // Any held op whose closure is incomplete is a missing history page: the authority fold over the complete ops would judge
     // a smaller history. Only a candidate already refuted from its own bytes is exempt.
@@ -145,7 +163,7 @@ async function run(ctx) {
         return { ok: false, reason: "control_history_limit", detail: { ids: heads } };
     if (pending.length > 0)
         return { ok: false, reason: "trust_pending", detail: { ids: pending } };
-    return { ok: true, graph: assemble(ctx, nodesAll, final, heads, closed, outRot, cat) };
+    return { ok: true, graph: assemble(ctx, nodesAll, final, heads, closed, outRot, cat, floors) };
 }
 // --- binding evaluation (intrinsic) ------------------------------------------------------------------------------------
 async function evaluate(id, ctx) {
@@ -203,6 +221,12 @@ async function evalRotation(id, ctx) {
         !same(r.cutoffs.map((c) => c.replica), prior.entries.map((entry) => entry.replica))) {
         return { t: "bad", reason: "invalid_catalog_transition" };
     }
+    // The prior catalog must be valid under the parent (row 382 item 3): an invalid prior makes the rotation a refusal.
+    const pv = await judgeCatalog(r.priorCatalog, ctx);
+    if (pv.t === "pending" || pv.t === "binding_pending")
+        return { t: "pending" };
+    if (pv.t !== "ok")
+        return { t: "bad", reason: "invalid_catalog_transition" };
     return { t: "node", node: { id, kind: "rotation", generation: r.generation, key: r.newCatalogKey, serviceId: p.serviceId,
             serviceKey: p.serviceKey, origin: p.origin, parents: [r.parent], prior: [{ binding: r.parent, catalog: r.priorCatalog }],
             // A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs, and it owes its own declared cutoffs
@@ -358,21 +382,18 @@ async function declaredGraph(claim, anc, ctx) {
             pending = true;
         else if (ctx.input.catalogs.get(catalog).catalog.binding !== binding)
             failures.push(["invalid_catalog_transition", "prior"]);
+        else {
+            // OD-17: an intrinsically invalid cited prior makes the candidate raw evidence; one whose chain is not held pends.
+            const v = await judgeCatalog(catalog, ctx);
+            if (v.t === "pending" || v.t === "binding_pending")
+                pending = true;
+            else if (v.t !== "ok")
+                failures.push(["invalid_catalog_transition", "prior"]);
+        }
     }
     return { failures, pending };
 }
 // --- closure and heads -------------------------------------------------------------------------------------------------
-function closure(seeds, nodes) {
-    const acc = new Set(), stack = [...seeds];
-    while (stack.length > 0) {
-        const id = stack.pop();
-        if (acc.has(id) || !nodes.has(id))
-            continue;
-        acc.add(id);
-        stack.push(...nodes.get(id).parents);
-    }
-    return acc;
-}
 // D-275: ancestor-or-self of every parent cited by an eligible replacement node.
 function closedSet(nodes) {
     return closure([...nodes.values()].filter((n) => n.kind === "replacement").flatMap((n) => [...n.parents]), nodes);
@@ -407,74 +428,122 @@ function headsOf(final) {
     const cited = closure([...final.values()].flatMap((n) => [...n.parents]), final);
     return [...final.keys()].filter((id) => !cited.has(id)).sort(compareUtf8);
 }
-// Two passes: validity, then status (current under an open binding; covered / closed_out / uncovered under a closed one;
-// refused with a reason; pending).
+async function judgeCatalog(id, ctx) {
+    const known = ctx.cmemo.get(id);
+    if (known !== undefined)
+        return known;
+    if (!ctx.input.catalogs.has(id))
+        return { t: "pending" };
+    if (ctx.cvisiting.has(id))
+        return { t: "bad_chain" };
+    ctx.cvisiting.add(id);
+    const [v, routes] = await judgeCatalogNew(id, ctx);
+    ctx.cvisiting.delete(id);
+    ctx.cmemo.set(id, v);
+    if (v.t === "ok")
+        ctx.croutes.set(id, routes);
+    return v;
+}
+async function judgeCatalogNew(id, ctx) {
+    const e = ctx.input.catalogs.get(id), c = e.catalog;
+    if (c.space !== ctx.replica || c.bootstrap !== ctx.bootstrapId)
+        return [{ t: "refused", reason: "wrong_catalog_scope" }, null];
+    const b = await evaluate(c.binding, ctx);
+    if (b.t === "bad" || b.t === "not_binding")
+        return [{ t: "refused", reason: "invalid_catalog_transition" }, null];
+    if (b.t !== "node")
+        return [{ t: "binding_pending" }, null];
+    const n = b.node;
+    if (!verifyCatalogEnvelope(e, n.key))
+        return [{ t: "refused", reason: "invalid_catalog_signature" }, null];
+    if (c.entries.some((entry) => entry.serviceId !== n.serviceId || entry.serviceKey !== n.serviceKey)) {
+        return [{ t: "refused", reason: "wrong_catalog_scope" }, null];
+    }
+    if (c.previous === null) {
+        // First-catalog checks: revision 0 for a replacement, the declared inventory, the replacement's cutoffs covering every
+        // entry (D-A15), extension of the binding's floor, and the route rule.
+        const floor = await floorOf(n, ctx);
+        if (floor.t === "pending")
+            return [{ t: "pending" }, null];
+        if (floor.t === "bad")
+            return [{ t: "bad_chain" }, null];
+        const uncovered = n.kind === "replacement" && !same(claimOf(ctx, n.id).cutoffs.map((cut) => cut.replica), c.entries.map((entry) => entry.replica).sort(compareUtf8));
+        if ((n.kind === "replacement" && c.revision !== 0) ||
+            (n.inventory !== null && catalogInventoryId(c.entries) !== n.inventory) || uncovered ||
+            !extendsEntries(floor.entries, c.entries))
+            return [{ t: "bad_chain" }, null];
+        return withRoutes(floor.routes, c.entries);
+    }
+    if (!ctx.input.catalogs.has(c.previous))
+        return [{ t: "pending" }, null];
+    const prev = await judgeCatalog(c.previous, ctx);
+    const prior = ctx.input.catalogs.get(c.previous).catalog;
+    if (prev.t === "pending" || prev.t === "binding_pending")
+        return [{ t: "pending" }, null];
+    if (prev.t !== "ok" || prior.binding !== c.binding)
+        return [{ t: "bad_chain" }, null];
+    if (nextCatalogGeneration([prior.revision]) !== c.revision || !extendsEntries(prior.entries, c.entries)) {
+        return [{ t: "bad_chain" }, null];
+    }
+    return withRoutes(ctx.croutes.get(c.previous), c.entries);
+}
+// Route rule: within a catalog's own ancestry plus its entries, a route names one replica.
+function withRoutes(routes, entries) {
+    const out = addRoutes(routes, entries);
+    return out === null ? [{ t: "bad_chain" }, null] : [{ t: "ok" }, out];
+}
+function addRoutes(routes, entries) {
+    const out = new Map(routes);
+    for (const e of entries) {
+        if ((out.get(e.route) ?? e.replica) !== e.replica)
+            return null;
+        out.set(e.route, e.replica);
+    }
+    return out;
+}
+// Floor(N): Floor(bootstrap) = [], Floor(T) = entries(T.priorCatalog), and for a replacement the union over its cited {P, K}
+// of entries(K), or Floor(P) when K is null, so a null citation of a node without a valid catalog still carries P's floor.
+async function floorOf(n, ctx) {
+    if (n.kind === "bootstrap")
+        return { t: "ok", entries: [], routes: new Map() };
+    let acc = { t: "ok", entries: [], routes: new Map() };
+    for (const { binding, catalog } of n.prior) {
+        if (acc.t === "bad")
+            return acc;
+        let part;
+        if (catalog === null) {
+            const p = await evaluate(binding, ctx);
+            part = p.t === "node" ? await floorOf(p.node, ctx) : { t: "pending" };
+        }
+        else {
+            const v = await judgeCatalog(catalog, ctx);
+            part = v.t === "ok" ? { t: "ok", entries: [...ctx.input.catalogs.get(catalog).catalog.entries], routes: ctx.croutes.get(catalog) }
+                : v.t === "pending" || v.t === "binding_pending" ? { t: "pending" } : { t: "bad" };
+        }
+        acc = mergeFloor(acc, part);
+    }
+    return acc;
+}
+function mergeFloor(a, b) {
+    if (a.t === "bad" || b.t === "bad")
+        return { t: "bad" };
+    if (a.t === "pending" || b.t === "pending")
+        return { t: "pending" };
+    for (const [route, replica] of b.routes)
+        if ((a.routes.get(route) ?? replica) !== replica)
+            return { t: "bad" };
+    return { t: "ok", entries: [...a.entries, ...b.entries], routes: new Map([...a.routes, ...b.routes]) };
+}
+// Status classifies an intrinsic verdict: current under an open binding; covered / closed_out / uncovered under a closed one;
+// refused with a reason; pending. A citation never makes an invalid catalog valid.
 function classifyCatalogs(ctx, nodesAll, closed, outRot, outPending) {
     const cites = citations(nodesAll, closed);
     const previous = new Map([...ctx.input.catalogs].map(([id, e]) => [id, e.catalog.previous]));
-    const validity = new Map();
+    const validity = ctx.cmemo;
     const acc = { status: new Map(), refusals: new Map(), pending: [], cites, previous, validity, outPending };
     const refuse = (id, reason, core) => {
         acc.refusals.set(id, { reason, coreReason: core });
         return "refused";
-    };
-    const valid = (id) => {
-        const known = validity.get(id);
-        if (known !== undefined)
-            return known;
-        const value = validityOf(id);
-        validity.set(id, value);
-        return value;
-    };
-    const isPending = (v) => v.t === "pending" || v.t === "binding_pending";
-    const validityOf = (id) => {
-        const e = ctx.input.catalogs.get(id), c = e.catalog, n = nodesAll.get(c.binding);
-        if (c.space !== ctx.replica || c.bootstrap !== ctx.bootstrapId)
-            return { t: "refused", reason: "wrong_catalog_scope" };
-        if (n === undefined) {
-            if (ctx.candidates.has(c.binding) || ctx.input.rotations.has(c.binding)) {
-                return ctx.memo.get(c.binding)?.t === "bad" ? { t: "refused", reason: "invalid_catalog_transition" } : { t: "binding_pending" };
-            }
-            if (ctx.byId.has(c.binding) || ctx.input.catalogs.has(c.binding))
-                return { t: "refused", reason: "invalid_catalog_transition" };
-            return { t: "binding_pending" };
-        }
-        if (!verifyCatalogEnvelope(e, n.key))
-            return { t: "refused", reason: "invalid_catalog_signature" };
-        if (c.entries.some((entry) => entry.serviceId !== n.serviceId || entry.serviceKey !== n.serviceKey)) {
-            return { t: "refused", reason: "wrong_catalog_scope" };
-        }
-        if (c.previous === null) {
-            // First-catalog checks: revision 0 for a replacement (the codec already ties revision 0 to previous: null), the declared
-            // inventory, and extension of every cited prior, which must itself be valid. A rotation's priorCatalog is a cited prior
-            // too, so an old-key rotation naming a refused catalog cannot drop a replica either.
-            const priors = n.prior.flatMap((p) => p.catalog === null ? [] : [p.catalog]);
-            const priorVs = priors.map((k) => ctx.input.catalogs.has(k) ? valid(k) : { t: "pending" });
-            const extendsAll = priors.every((k) => {
-                const prior = ctx.input.catalogs.get(k);
-                return prior === undefined || extendsEntries(prior.catalog.entries, c.entries);
-            });
-            // A replacement's cutoffs cover every entry of its first catalog, as a rotation's cover its prior catalog's (D-A15).
-            const uncovered = n.kind === "replacement" && !same(claimOf(ctx, n.id).cutoffs.map((cut) => cut.replica), c.entries.map((entry) => entry.replica).sort(compareUtf8));
-            if ((n.kind === "replacement" && c.revision !== 0) ||
-                (n.inventory !== null && catalogInventoryId(c.entries) !== n.inventory) || uncovered || !extendsAll ||
-                priorVs.some((v) => v.t !== "ok" && !isPending(v)))
-                return { t: "bad_chain" };
-            if (priorVs.some((v) => v.t !== "ok"))
-                return { t: "pending" };
-            return { t: "ok" };
-        }
-        if (!ctx.input.catalogs.has(c.previous))
-            return { t: "pending" };
-        const prev = valid(c.previous);
-        const prior = ctx.input.catalogs.get(c.previous).catalog;
-        if (isPending(prev))
-            return { t: "pending" };
-        if (prev.t !== "ok" || prior.binding !== c.binding)
-            return { t: "bad_chain" };
-        if (nextCatalogGeneration([prior.revision]) !== c.revision || !extendsEntries(prior.entries, c.entries))
-            return { t: "bad_chain" };
-        return { t: "ok" };
     };
     const statusOf = (id) => {
         const c = ctx.input.catalogs.get(id).catalog, n = nodesAll.get(c.binding), v = validity.get(id);
@@ -521,27 +590,8 @@ function classifyCatalogs(ctx, nodesAll, closed, outRot, outPending) {
             return "closed_out";
         return "uncovered";
     };
-    const ids = [...ctx.input.catalogs.keys()].sort(compareUtf8);
-    for (const id of ids)
-        valid(id);
-    for (const id of ids)
+    for (const id of [...ctx.input.catalogs.keys()].sort(compareUtf8))
         acc.status.set(id, statusOf(id));
-    // Across every current or covered catalog a route names one replica; a later conflicting one (id order) is refused.
-    // Closed-out and uncovered old-key catalogs reserve no route, so they cannot refuse an honest head.
-    const used = new Map();
-    for (const id of ids) {
-        const s = acc.status.get(id);
-        if (s !== "current" && s !== "covered")
-            continue;
-        const entries = ctx.input.catalogs.get(id).catalog.entries;
-        if (entries.some((entry) => (used.get(entry.route) ?? entry.replica) !== entry.replica)) {
-            refuse(id, "invalid_catalog_transition", null);
-            acc.status.set(id, "refused");
-        }
-        else
-            for (const entry of entries)
-                used.set(entry.route, entry.replica);
-    }
     acc.pending = [...acc.status].filter(([, s]) => s === "pending").map(([id]) => id);
     return acc;
 }
@@ -572,6 +622,9 @@ function extendsEntries(before, next) {
         return other !== undefined && extendedKeys.every((key) => entry[key] === other[key]);
     });
 }
+function routeCompat(routes, entries) {
+    return entries.every((e) => (Object.hasOwn(routes, e.route) ? routes[e.route] : e.replica) === e.replica);
+}
 // --- forks, assembly and decision ----------------------------------------------------------------------------------------
 function catalogHeadsOf(ctx, final, closed, cat) {
     return headsAmong(ctx, final, closed, [...cat.status].filter(([, s]) => s === "current").map(([id]) => id));
@@ -597,7 +650,24 @@ function headsAmong(ctx, final, closed, current) {
 function claimOf(ctx, id) {
     return ctx.candidates.get(id).op.commandArgs[0];
 }
-function forksOf(ctx, final, heads, closed, cat, catHeads) {
+// C1: a final rotation T whose parent P is not closed forks with any chain-valid catalog under P that strictly descends from
+// T's prior catalog (CatalogTrust rotationForks); a pending descendant is already pending under the open P.
+function rotationForksOf(ctx, final, closed, cat) {
+    const out = [];
+    for (const t of final.values()) {
+        if (t.kind !== "rotation")
+            continue;
+        const { binding: p, catalog: prior } = t.prior[0];
+        if (closed.has(p) || prior === null)
+            continue;
+        const descendants = [...ctx.input.catalogs].filter(([cid, e]) => e.catalog.binding === p && cid !== prior &&
+            cat.validity.get(cid)?.t === "ok" && onChain(prior, cid, cat.previous)).map(([cid]) => cid).sort(compareUtf8);
+        if (descendants.length > 0)
+            out.push({ rotation: t.id, binding: p, catalogs: descendants, prior });
+    }
+    return out.sort((a, b) => compareUtf8(a.rotation, b.rotation));
+}
+function forksOf(ctx, final, heads, closed, cat, catHeads, rotationForks) {
     const forks = [];
     if (heads.length > 1)
         forks.push({ kind: "heads", binding: null, ids: heads });
@@ -627,10 +697,12 @@ function forksOf(ctx, final, heads, closed, cat, catHeads) {
     }
     for (const [binding, ids] of uncovered)
         forks.push({ kind: "catalog", binding, ids: ids.sort(compareUtf8) });
+    for (const f of rotationForks)
+        forks.push({ kind: "rotation", binding: f.binding, ids: [f.prior, ...f.catalogs].sort(compareUtf8) });
     const key = (f) => `${f.kind}\u0000${f.binding ?? ""}\u0000${f.ids.join("\u0000")}`;
     return forks.sort((a, b) => compareUtf8(key(a), key(b)));
 }
-function assemble(ctx, nodesAll, final, heads, closed, outRot, cat) {
+function assemble(ctx, nodesAll, final, heads, closed, outRot, cat, floors) {
     const closedOut = new Map();
     for (const id of [...outRot, ...cat.outPending])
         closedOut.set(id, "catalog_rollback");
@@ -638,6 +710,7 @@ function assemble(ctx, nodesAll, final, heads, closed, outRot, cat) {
         if (s === "closed_out")
             closedOut.set(id, "catalog_rollback");
     const catHeads = catalogHeadsOf(ctx, final, closed, cat);
+    const rotationForks = rotationForksOf(ctx, final, closed, cat);
     const raw = new Map();
     const refusals = new Map(cat.refusals);
     for (const [id, v] of ctx.memo) {
@@ -652,80 +725,209 @@ function assemble(ctx, nodesAll, final, heads, closed, outRot, cat) {
         if (n.kind === "rotation" && n.refused)
             refusals.set(n.id, { reason: "catalog_authority_refused", coreReason: n.coreReason });
     }
+    const forkBindings = [...new Set([...[...cat.status].filter(([, s]) => s === "uncovered")
+                .map(([id]) => ctx.input.catalogs.get(id).catalog.binding), ...rotationForks.map((f) => f.binding)])].sort(compareUtf8);
+    const catParent = new Map();
+    for (const [id, e] of ctx.input.catalogs) {
+        const n = nodesAll.get(e.catalog.binding);
+        catParent.set(id, e.catalog.previous ?? (n?.kind === "rotation" ? n.prior[0].catalog : null));
+    }
     const graph = { nodes: final, heads, closed: [...closed].sort(compareUtf8), closedOut,
         pending: [...final.values()].filter((n) => n.pending.length > 0).map((n) => n.id).sort(compareUtf8), rawEvidence: raw,
         refusals, catalogHeads: catHeads, citableCatalogHeads: citableCatalogHeadsOf(ctx, final, closed, cat),
         catalogStatus: cat.status, citations: cat.cites, previous: cat.previous,
-        forks: forksOf(ctx, final, heads, closed, cat, catHeads),
+        forks: forksOf(ctx, final, heads, closed, cat, catHeads, rotationForks), rotationForks, forkBindings, floors, catParent,
         catalogs: new Map([...ctx.input.catalogs].map(([id, e]) => [id, e.catalog])),
         decision: undefined };
-    graph.decision = decide(ctx, graph, nodesAll, closed, outRot);
+    graph.decision = decide(ctx.input.accepted, graph, nodesAll, closed, outRot);
     return graph;
 }
-function decide(ctx, graph, nodesAll, closed, outRot) {
-    const a = ctx.input.accepted;
+function closure(seeds, nodes) {
+    const acc = new Set(), stack = [...seeds];
+    while (stack.length > 0) {
+        const id = stack.pop();
+        if (acc.has(id) || !nodes.has(id))
+            continue;
+        acc.add(id);
+        stack.push(...nodes.get(id).parents);
+    }
+    return acc;
+}
+// Is `a` ancestor-or-self of `b` along CatLineage (previous, and a rotation's first catalog to the rotation's prior)?
+function catLineage(a, b, parent) {
+    return onChain(a, b, parent);
+}
+function routesOf(a) { return a?.routes ?? {}; }
+function decide(a, graph, nodesAll, closed, outRot) {
     const abs = a === null ? "missing" : outRot.has(a.binding) ? "closed_out" :
         !nodesAll.has(a.binding) ? "missing" : nodesAll.get(a.binding).refused ? "refused" : closed.has(a.binding) ? "closed" : "current";
     const s = a === null ? undefined : graph.catalogStatus.get(a.catalog);
     const acs = a === null ? "missing" : s === "covered" ? "ancestor_of_cited" :
         s === "closed_out" || s === "uncovered" ? "closed_out" : s === "current" ? "current" : s === "refused" ? "refused" : "missing";
+    const missing = a !== null && (abs === "missing" || acs === "missing");
+    const changed = a !== null && !missing && (abs === "refused" || abs === "closed_out" || acs === "refused" || acs === "closed_out");
     const base = { accepted: false, reason: null, block: null, head: null, catalog: null, generation: null,
-        revision: null, clearsAuthorityChanged: false, acceptedBindingStatus: abs, acceptedCatalogStatus: acs };
+        revision: null, clearsAuthorityChanged: false, serving: null, acceptedBindingStatus: abs, acceptedCatalogStatus: acs };
     if (graph.forks.length > 0) {
         const ids = [...new Set(graph.forks.flatMap((f) => [...f.ids]))].sort(compareUtf8);
-        return { ...base, reason: "catalog_fork", block: { reason: "catalog_fork", triggers: ids } };
+        return { ...base, reason: "catalog_fork", block: { reason: "catalog_fork", ids, freeze: changed } };
     }
-    const id = graph.heads[0], node = graph.nodes.get(id);
+    const id = graph.heads[0];
+    if (missing)
+        return { ...base, head: id, reason: "authority_changed", block: { reason: "authority_changed", ids: [id], freeze: false } };
+    const node = graph.nodes.get(id);
     const ready = graph.catalogHeads.get(id)?.[0] ?? null;
-    const held = { ...base, head: id };
+    const held = { ...base, head: id, serving: changed ? null : serving(a, graph, closed) };
     const promotable = !node.refused && node.pending.length === 0 && ready !== null;
-    // With an accepted state, an accepted binding or catalog absent from the input fails closed as a trigger.
-    const trigger = a !== null && (abs === "refused" || abs === "closed_out" || abs === "missing" || acs === "closed_out" ||
-        acs === "refused" || acs === "missing");
-    const promote = (clears) => {
-        const revision = graph.catalogs.get(ready).revision;
-        if (a !== null && (node.generation < a.generation || (id === a.binding && revision < a.revision))) {
-            return { ...held, reason: "catalog_rollback" };
-        }
-        return { ...held, accepted: true, catalog: ready, generation: node.generation, revision, clearsAuthorityChanged: clears };
-    };
-    if (promotable && row320(ctx, graph, id))
-        return promote(true);
-    if (promotable && abs === "refused" && node.kind === "replacement" && a !== null && graph.closed.includes(a.binding) &&
-        (graph.citations.get(a.binding) ?? []).some((c) => c !== null && onChain(a.catalog, c, graph.previous)))
-        return promote(false);
-    // A standing authority_changed block keeps its triggers, so a resolution delivered before its first catalog stays fresh.
-    const standing = ctx.input.blocked?.reason === "authority_changed" ? [...ctx.input.blocked.triggers] : [id];
-    if (trigger)
-        return { ...held, reason: "authority_changed", block: { reason: "authority_changed", triggers: standing } };
-    if (node.refused)
-        return { ...held, reason: "catalog_authority_refused" };
-    if (node.pending.length > 0)
-        return { ...held, reason: "recovery_incomplete" };
-    if (ready === null)
-        return held;
-    return promote(false);
-}
-// Row 320: after an authority_changed block, a fresh honored admin resolution (not a block trigger) that closes every
-// trigger, as the sole head, clears it.
-function row320(ctx, graph, id) {
-    const b = ctx.input.blocked;
-    if (b === null || b.reason !== "authority_changed" || graph.nodes.get(id)?.kind !== "replacement" || b.triggers.includes(id)) {
-        return false;
+    const covered = promotable && a !== null ? covers(a, id, ready, graph, nodesAll) : null;
+    if (promotable && covered === null) {
+        return { ...held, accepted: true, catalog: ready, generation: node.generation, revision: graph.catalogs.get(ready).revision,
+            clearsAuthorityChanged: clears(a, id, nodesAll), serving: ready };
     }
-    return b.triggers.every((t) => graph.closed.includes(t));
+    if (changed)
+        return { ...held, reason: "authority_changed", block: { reason: "authority_changed", ids: [id], freeze: true } };
+    if (promotable)
+        return { ...held, reason: covered };
+    if (node.refused) {
+        return { ...held, reason: "catalog_authority_refused", block: { reason: "catalog_authority_refused", ids: [id], freeze: false } };
+    }
+    if (node.pending.length > 0) {
+        return { ...held, reason: "recovery_incomplete", block: { reason: "recovery_incomplete", ids: [id], freeze: false } };
+    }
+    return held;
+}
+// Covers(H, K | A): under the watermark's own binding a previous-chain descendant at no lower revision; otherwise Seen and
+// Carry; in both cases RouteCompat (no entry re-points a route ever served). Returns null when covered, else the reason.
+function covers(a, h, k, graph, nodesAll) {
+    const kc = graph.catalogs.get(k);
+    if (!routeCompat(routesOf(a), kc.entries))
+        return "invalid_catalog_transition";
+    if (h === a.binding)
+        return onChain(a.catalog, k, graph.previous) && kc.revision >= a.revision ? null : "catalog_rollback";
+    if (!seen(a, h, graph, nodesAll))
+        return "catalog_rollback";
+    if (!extendsEntries(graph.catalogs.get(a.catalog).entries, kc.entries))
+        return "invalid_catalog_transition";
+    return null;
+}
+function seen(a, h, graph, nodesAll) {
+    const lineage = closure([h], nodesAll);
+    const cited = [...lineage].flatMap((id) => nodesAll.get(id).prior.flatMap((p) => p.catalog === null ? [] : [p.catalog]));
+    if (cited.some((c) => catLineage(a.catalog, c, graph.catParent)))
+        return true;
+    // Some replacement in H's lineage strictly descends from a closer of the watermark catalog: an eligible replacement citing
+    // the watermark binding (or, for a closed-out rotation, its nearest closed ancestor) with null or a strict CatLineage ancestor.
+    const closedSet = new Set(graph.closed);
+    let target = a.binding;
+    for (let n = nodesAll.get(target); n?.kind === "rotation" && !closedSet.has(target); n = nodesAll.get(target))
+        target = n.parents[0];
+    const closers = [...nodesAll.values()].filter((n) => n.kind === "replacement" && n.prior.some((p) => p.binding === target &&
+        (p.catalog === null || (p.catalog !== a.catalog && catLineage(p.catalog, a.catalog, graph.catParent))))).map((n) => n.id);
+    return [...lineage].some((y) => nodesAll.get(y).kind === "replacement" &&
+        closers.some((x) => x !== y && closure([y], nodesAll).has(x)));
+}
+// An honored replacement in H's lineage that the watermark binding did not descend from.
+function clears(a, h, nodesAll) {
+    if (a === null)
+        return false;
+    const before = closure([a.binding], nodesAll);
+    return [...closure([h], nodesAll)].some((x) => {
+        const n = nodesAll.get(x);
+        return n.kind === "replacement" && !n.refused && !before.has(x);
+    });
+}
+// Without promotion the watermark catalog may keep being served only while held, unchanged, its binding open, nothing forks and
+// its routes agree with the routes served (the caller passes changed watermarks as null).
+function serving(a, graph, closed) {
+    if (a === null || graph.forks.length > 0 || !graph.nodes.has(a.binding) || closed.has(a.binding))
+        return null;
+    return routeCompat(routesOf(a), graph.catalogs.get(a.catalog).entries) ? a.catalog : null;
+}
+/**
+ * The merge rule over the persisted {accepted, frozen} (row 383; BEAM CatalogBindingGraph.advance/2). Only an accepting decision
+ * that clears (or any accepting decision while not frozen) moves the watermark, adds its catalog's routes to the cumulative
+ * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On an error the state is kept:
+ * trust_pending serves "unchanged" (an incomplete page), any other error serves nothing.
+ */
+export function advanceCatalogBindingState(state, result) {
+    if (!result.ok)
+        return { accepted: state.accepted, frozen: state.frozen, serving: result.reason === "trust_pending" ? "unchanged" : null };
+    const d = result.graph.decision;
+    if (d.accepted && (!state.frozen || d.clearsAuthorityChanged)) {
+        const routes = { ...routesOf(state.accepted) };
+        for (const e of result.graph.catalogs.get(d.catalog).entries)
+            routes[e.route] = e.replica;
+        return { accepted: { binding: d.head, generation: d.generation, catalog: d.catalog, revision: d.revision, routes },
+            frozen: false, serving: d.serving };
+    }
+    if (d.block?.freeze === true)
+        return { accepted: state.accepted, frozen: true, serving: null };
+    return { accepted: state.accepted, frozen: state.frozen, serving: state.frozen ? null : d.serving };
+}
+/**
+ * The authoring resolve for one claim (design section 2.7): as resolveCatalogBindingGraph, except that a control_history_limit
+ * whose heads all reduce to head roots the claim cites is re-resolved without the rotations under those roots and the
+ * catalogs bound to them (exactly the rotations the claim closes out). The verifier keeps its head limit.
+ */
+export async function resolveCatalogBindingGraphForClaim(input, claim) {
+    const first = await resolveCatalogBindingGraph(input);
+    if (first.ok || first.reason !== "control_history_limit")
+        return first;
+    const rotations = input.rotations;
+    const root = (id) => {
+        const seen = new Set();
+        let cursor = id;
+        while (rotations.has(cursor) && !seen.has(cursor)) {
+            seen.add(cursor);
+            cursor = rotations.get(cursor).rotation.parent;
+        }
+        return cursor;
+    };
+    if (!first.detail.ids.every((h) => claim.parents.includes(root(h))))
+        return first;
+    const under = (id) => {
+        const seen = new Set();
+        let cursor = id;
+        while (!seen.has(cursor)) {
+            if (claim.parents.includes(cursor))
+                return false;
+            seen.add(cursor);
+            const parent = rotations.get(cursor).rotation.parent;
+            if (claim.parents.includes(parent))
+                return true;
+            if (!rotations.has(parent))
+                return false;
+            cursor = parent;
+        }
+        return false;
+    };
+    const dropped = new Set([...rotations.keys()].filter(under));
+    for (let grew = true; grew;) {
+        grew = false;
+        for (const [id, e] of rotations)
+            if (!dropped.has(id) && dropped.has(e.rotation.parent)) {
+                dropped.add(id);
+                grew = true;
+            }
+    }
+    return resolveCatalogBindingGraph({ ...input, rotations: new Map([...rotations].filter(([id]) => !dropped.has(id))),
+        catalogs: new Map([...input.catalogs].filter(([, e]) => !dropped.has(e.catalog.binding))) });
 }
 // --- authoring coverage ----------------------------------------------------------------------------------------------------
 /**
- * Check a candidate claim against a resolved graph for the authoring preflight (rows 352, 354, 356): pending first, then
- * transition failures, then an omitted head or catalog head (catalog_fork), then a prior that is not a catalog head and
- * first-catalog extension of every cited prior against `entries`. Returns null when covered.
+ * Check a candidate claim against a resolved graph for the authoring preflight (rows 352, 354, 356 and the convergence design):
+ * pending first, then transition failures, then an omitted head, fork binding or rotation-fork rotation, or an omitted catalog
+ * head (catalog_fork), then a prior that is not expected, entries that do not extend every cited prior and every null-cited
+ * parent's floor, and a route that a held catalog maps to another replica. Returns null when covered.
  */
 export function coverCatalogReplacementClaim(graph, claim, entries) {
     const unknown = claim.parents.filter((p) => !graph.nodes.has(p));
     const dead = (id) => graph.rawEvidence.has(id) || graph.closedOut.has(id) || graph.refusals.has(id);
     const expected = claim.parents.flatMap((binding) => {
-        const heads = graph.citableCatalogHeads.get(binding) ?? [];
+        const heads = graph.forkBindings.includes(binding) && !graph.citableCatalogHeads.has(binding)
+            ? [...graph.catalogStatus].filter(([cid, st]) => st === "uncovered" && graph.catalogs.get(cid).binding === binding)
+                .map(([cid]) => cid).sort(compareUtf8)
+            : graph.citableCatalogHeads.get(binding) ?? [];
         return heads.length === 0 ? [{ binding, catalog: null }] : heads.map((catalog) => ({ binding, catalog }));
     });
     const has = (list, item) => list.some((x) => x.binding === item.binding && x.catalog === item.catalog);
@@ -743,13 +945,18 @@ export function coverCatalogReplacementClaim(graph, claim, entries) {
         return claim.newServiceKey !== n.serviceKey && claim.newServiceId === n.serviceId;
     }))
         return "invalid_catalog_transition";
-    if (graph.heads.some((h) => !claim.parents.includes(h)))
+    if ([...graph.heads, ...graph.forkBindings, ...graph.rotationForks.map((f) => f.rotation)].some((h) => !claim.parents.includes(h))) {
         return "catalog_fork";
+    }
     if (expected.some((p) => !has(claim.priorCatalogs, p)))
         return "catalog_fork";
     if (claim.priorCatalogs.some((p) => !has(expected, p)))
         return "invalid_catalog_transition";
-    if (claim.priorCatalogs.some((p) => p.catalog !== null && !extendsEntries(graph.catalogs.get(p.catalog).entries, entries))) {
+    if (!claim.priorCatalogs.every((p) => extendsEntries(p.catalog === null ? graph.floors.get(p.binding) ?? []
+        : graph.catalogs.get(p.catalog).entries, entries)))
+        return "invalid_catalog_transition";
+    // The author cannot see a client's served routes, but every served route was in some held catalog.
+    if (entries.some((e) => [...graph.catalogs.values()].some((c) => c.entries.some((x) => x.route === e.route && x.replica !== e.replica)))) {
         return "invalid_catalog_transition";
     }
     return null;

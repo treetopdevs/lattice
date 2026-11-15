@@ -17,7 +17,7 @@ import { frontier } from "./sync";
 import { townshipCapTerm } from "./township";
 import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema } from "./treehouse";
 import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
-import { catalogBindingReasonRank, coverCatalogReplacementClaim, resolveCatalogBindingGraph } from "./treehouse_catalog_binding_graph";
+import { catalogBindingReasonRank, coverCatalogReplacementClaim, resolveCatalogBindingGraph, resolveCatalogBindingGraphForClaim, } from "./treehouse_catalog_binding_graph";
 import { checkCatalogReplacementAuthority } from "./treehouse_catalog_replacement_authority";
 import { canonicalBytesForCatalogReplacementClaim, canonicalBytesForCatalogReplacementPossession, catalogInventoryId, catalogReplacementClaimToCarrierTerm, catalogRotationId, normalizeCatalogEnvelope, normalizeCatalogReplacementClaim, normalizeCatalogRotationEnvelope, transportCatalogId, verifyCatalogReplacementPossession, } from "./treehouse_catalog_codec";
 const requestFields = ["author", "nonce", "parents", "priorCatalogs", "generation", "newCatalogKey", "newServiceId",
@@ -132,6 +132,9 @@ export async function authorTreehouseCatalogReplacementFromFrames(input) {
             return late("stale_verified_state");
         if (envelopeBytes(frame) > 64_000)
             return late(tooLarge);
+        const unresolved = await resolvesSigned(current.history, attempt.replica, attempt.request, frame);
+        if (unresolved !== null)
+            return late(unresolved);
         return { ok: true, frame, bindingId: frame.id, attemptId: attempt.attemptId, journalEntry: entry(attempt, "signed", null, frame.id) };
     }
     catch {
@@ -229,20 +232,51 @@ async function derive(replica, space, value, journal) {
 }
 // --- retained-evidence coverage (plan 316 PR 4a-2) ------------------------------------------------------------------
 const maxArtifacts = 1_024;
-// D-276 eligibility, the D-275 closing rule and section-3 precedence are the resolver's (row 352). The caller's retained
-// rotations and catalogs are normalized and scoped here; any one the resolver refuses on its own bytes (anything but a
-// refusal inherited from a union-refused node) refuses the preflight, highest precedence first, before coverage.
 async function coverage(history, replica, bootstrap, claim, request) {
     // CatalogTrust refuses more than 1,024 retained artifacts; its JSON byte budgets are not mirrored here (row 355).
     if (request.catalogs.length + request.rotations.length > maxArtifacts)
         return "control_history_limit";
+    const held = retained(replica, bootstrap, request);
+    if (!held.ok)
+        return held.reason;
+    // resolveCatalogBindingGraphForClaim keeps the verifier's head limit but lets a claim citing every head root through it
+    // (design section 2.7): three old-key rotations under the accepted binding cannot block the resolution that closes them out.
+    const resolved = await resolveCatalogBindingGraphForClaim({ bootstrap, frames: history.frames, rotations: held.rotations,
+        catalogs: held.catalogs, provenCutoffs: [], accepted: null }, claim);
+    if (!resolved.ok)
+        return resolved.reason;
+    const refused = [...resolved.graph.refusals].filter(([, r]) => r.reason !== "catalog_authority_refused")
+        .sort(([a, x], [b, y]) => catalogBindingReasonRank(x.reason) - catalogBindingReasonRank(y.reason) || compareUtf8(a, b));
+    if (refused.length > 0)
+        return refused[0][1].reason;
+    return coverCatalogReplacementClaim(resolved.graph, claim, request.entries);
+}
+// After signing: the full retained evidence with the signed frame appended must resolve with it as the sole binding head and
+// no fork (the verifier's view, head limit included). Its first catalog and cutoff proofs are not held here, so promotion
+// itself is not checked.
+async function resolvesSigned(history, replica, request, frame) {
+    const observed = await treehouseCatalogBootstrapsFromFrames({ replica, frames: history.frames });
+    if (!observed.ok || observed.bootstraps.length !== 1)
+        return "application_invalid_catalog";
+    const bootstrap = observed.bootstraps[0];
+    const held = retained(replica, bootstrap, request);
+    if (!held.ok)
+        return held.reason;
+    const resolved = await resolveCatalogBindingGraph({ bootstrap, frames: [...history.frames, frame], rotations: held.rotations,
+        catalogs: held.catalogs, provenCutoffs: [], accepted: null });
+    if (!resolved.ok)
+        return resolved.reason;
+    const g = resolved.graph;
+    return g.heads.length === 1 && g.heads[0] === frame.id && g.forks.length === 0 ? null : "catalog_fork";
+}
+function retained(replica, bootstrap, request) {
     const rotations = new Map();
     for (const value of request.rotations) {
         const envelope = normalizeCatalogRotationEnvelope(value);
         if (envelope === null)
-            return "malformed_catalog";
+            return { ok: false, reason: "malformed_catalog" };
         if (envelope.rotation.space !== replica || envelope.rotation.bootstrap !== bootstrap.id)
-            return "wrong_catalog_scope";
+            return { ok: false, reason: "wrong_catalog_scope" };
         rotations.set(catalogRotationId(envelope), envelope);
     }
     // A catalog id covers the payload only. As in CatalogTrust addCatalog, a repeated id must carry the identical
@@ -251,24 +285,16 @@ async function coverage(history, replica, bootstrap, claim, request) {
     for (const value of request.catalogs) {
         const envelope = normalizeCatalogEnvelope(value);
         if (envelope === null)
-            return "malformed_catalog";
+            return { ok: false, reason: "malformed_catalog" };
         if (envelope.catalog.space !== replica || envelope.catalog.bootstrap !== bootstrap.id)
-            return "wrong_catalog_scope";
+            return { ok: false, reason: "wrong_catalog_scope" };
         const id = transportCatalogId(envelope.catalog), known = catalogs.get(id);
         if (known === undefined)
             catalogs.set(id, envelope);
         else if (known.signature !== envelope.signature)
-            return "invalid_catalog_signature";
+            return { ok: false, reason: "invalid_catalog_signature" };
     }
-    const resolved = await resolveCatalogBindingGraph({ bootstrap, frames: history.frames, rotations, catalogs, provenCutoffs: [],
-        accepted: null, blocked: null });
-    if (!resolved.ok)
-        return resolved.reason;
-    const refused = [...resolved.graph.refusals].filter(([, r]) => r.reason !== "catalog_authority_refused")
-        .sort(([a, x], [b, y]) => catalogBindingReasonRank(x.reason) - catalogBindingReasonRank(y.reason) || compareUtf8(a, b));
-    if (refused.length > 0)
-        return refused[0][1].reason;
-    return coverCatalogReplacementClaim(resolved.graph, claim, request.entries);
+    return { ok: true, rotations, catalogs };
 }
 function honoredAtPrefix(history, id, replica) {
     const closure = ancestors(id, history.byId, new Map());
