@@ -2778,6 +2778,343 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Two Codex Sol 6.1 rounds ran. A high review raised one P2 (the consumer test name overclaimed), fixed by narrowing the name (D-486). A final xhigh review on 0e99ba6e5 (model gpt-6.1-sol, reasoning effort xhigh) returned PASS with no P1/P2/P3 findings. Nothing was deferred. The bot rounds under D-38 run on this PR. (Corrected: this entry first said no xhigh round ran.)</dd>
 <dt>Reason</dt><dd>It makes no claim beyond the row 316 PR 6 exporter test. It does not claim the Linux operator export path with a replacement, resolver evaluation of replacements, C10–C15, the reciprocal-exporter gate, or anything about R13, custody, W4 or Phase G.</dd>
 </dl></section>
+<section id="d530"><h2><span>D-530</span> Operator sign-off: first goal, OD-16, OD-17, row 320 and the PR 4 split</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Operator sign-off 2026-11-15: the operator set the first goal as 'a client that has already trusted a Treehouse catalog accepts a replacement catalog signed by an authorized admin, without the old signer's key', adopted the recommended defaults for OD-16, OD-17 and row 320, and chose 'new modules now, wire later': PR 4 is split into 4a (logic in new files, this PR), 4b (remaining tests) and 4c (the hook into catalog_trust.ex/.ts after plans 267/269 merge). The 267/269 gate is not lifted; it now applies to 4c only. The goal is not met until 4c lands.</dd>
+</dl></section>
+<section id="d531"><h2><span>D-531</span> PR 4a D-1: cut for PR 4a</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Operator split PR 4 so it can start before plans 267/269 merge; catalog_trust.ex and its TS twin are off limits.</dd>
+<dt>Options</dt><dd>(a) steps 4 and 5 only; (b) full judgement and graph in new modules; (c) only the authoring switch.</dd>
+<dt>Decision</dt><dd>Ship the full judgement (steps 1-8), graph, closure, coverage and accepted-state advance as new pure modules in both runtimes, switch the authoring preflight, and defer test breadth to 4b and wiring to 4c.</dd>
+<dt>Reason</dt><dd>D-276 node eligibility needs steps 1-6 and head and fork logic needs the rest. Splitting the logic would leave nothing reviewable on its own. Coverage rule: every shipped branch has at least one test per runtime.</dd>
+</dl></section>
+<section id="d532"><h2><span>D-532</span> PR 4a D-2: operator override recorded against the STOP list</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Plan 316 STOP says PR 4 must not start before 267/269, OD-16, OD-17 and row 320. OD-16, OD-17 and row 320 were signed off 2026-11-15; 267/269 are still open.</dd>
+<dt>Options</dt><dd>Wait for 267/269; or start with new modules only.</dd>
+<dt>Decision</dt><dd>Start PR 4a under the operator decision 'new modules now, wire later': new files plus the PR 2 authoring files only, no edit to catalog_trust.ex, treehouse_catalog_trust.ts, dist of the trust file or native catalog_eval.</dd>
+<dt>Reason</dt><dd>The conflict risk is the rewrite of those files, which 4a avoids. This is a decision so reviewers do not read 4a as a STOP violation. PR 4c waits for 267/269.</dd>
+</dl></section>
+<section id="d533"><h2><span>D-533</span> PR 4a D-3: the new module owns a copy of rotation and catalog chain resolution</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>CatalogTrust exposes only prepare_installation, evaluate and resolve_route; its rotation and catalog resolution is private and excluded.</dd>
+<dt>Options</dt><dd>(a) take already-verified records as input; (b) call evaluate; (c) own a copy moved from the authoring mirror.</dd>
+<dt>Decision</dt><dd>Own a copy, taking normalized rotation and catalog envelopes. Add an equivalence test against CatalogTrust.evaluate on rotation-only evidence. 4c deletes the duplicate in catalog_trust.</dd>
+<dt>Reason</dt><dd>Replacement and rotation nodes are mutually dependent (a rotation can have a replacement parent and the reverse), so the graph cannot be built from pre-resolved rotation nodes. The equivalence test limits drift until 4c.</dd>
+</dl></section>
+<section id="d534"><h2><span>D-534</span> PR 4a D-4: step 5 split for order independence</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Step 5 compares the first catalog's inventory and entries, but that catalog may arrive after the replacement (#211 post-cutoff P2, order-independence, D-279).</dd>
+<dt>Options</dt><dd>Keep it in node eligibility; move it to catalog validation under the node.</dd>
+<dt>Decision</dt><dd>Node eligibility keeps only claim-intrinsic checks (parents known, prior_catalogs structure, generation, service rule). The inventory digest match and the entries-extend-priors check run when the first catalog under the node is validated, as the existing previous: nil rotation check does. A bad first catalog is refused as a catalog (invalid_catalog_transition); the node is unchanged.</dd>
+<dt>Reason</dt><dd>Eligibility must be a function of the candidate and its closure only. The cost is that a node whose digest matches no valid catalog can never be promoted; an admin resolution cites it, as with any head. This deviates from the plan text and needs rule 3 review.</dd>
+</dl></section>
+<section id="d535"><h2><span>D-535</span> PR 4a D-5: unknown parent is pending, ineligible parent is a transition failure (row 350)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The interim code returns invalid_catalog_transition for an unknown parent, which depends on whether the parent rotation has arrived.</dd>
+<dt>Options</dt><dd>(a) invalid_catalog_transition; (b) raw evidence; (c) pending.</dd>
+<dt>Decision</dt><dd>A parent id that is not yet a held rotation or a delivered replacement op makes the candidate pending (trust_pending): no node, no head, no closure. A parent that is a known ineligible candidate gives invalid_catalog_transition. Intrinsic failures are raw evidence per OD-17 and no longer block authoring. The preflight still refuses trust_pending for a Core-honored pending candidate so the operator supplies the evidence.</dd>
+<dt>Reason</dt><dd>Pending resolves monotonically as evidence arrives, so the verdict never flips. A permanently unprovable parent id can still pause authoring; that residual is recorded, not hidden.</dd>
+</dl></section>
+<section id="d536"><h2><span>D-536</span> PR 4a D-6: input and state shape</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The accepted state is a watermark plus a sticky block that catalog_trust persists; verdicts must not become persisted order-dependent state.</dd>
+<dt>Options</dt><dd>Persist node verdicts; or recompute from the evidence union each call.</dd>
+<dt>Decision</dt><dd>The judgement is a pure function of the evidence union plus the prior accepted watermark. Intrinsic verdicts are recomputed, nothing new is persisted, and the block is recomputed each call. The only order-dependent output is authority_changed versus a plain refusal. Stickiness stays in catalog_trust.</dd>
+<dt>Reason</dt><dd>This matches how catalog_trust already rebuilds its graph from state.histories, rotations and catalogs, and it keeps restore of pre-upgrade stores a non-issue on the graph side.</dd>
+</dl></section>
+<section id="d537"><h2><span>D-537</span> PR 4a D-7: replacement nodes store generation, service pair and origin (#211 P2 item 2)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Bootstrap and rotation nodes carry generation; entry service checks and route origin read context.bootstrap today.</dd>
+<dt>Options</dt><dd>Read the bootstrap; store per node.</dd>
+<dt>Decision</dt><dd>Every node stores generation, key, service_id, service_key, origin, parents, prior, inventory, refused? and pending. Entry and route checks must read the current node (used by 4c).</dd>
+<dt>Reason</dt><dd>A replacement changes service identity and origin; reading the bootstrap would dial the lost service.</dd>
+</dl></section>
+<section id="d538"><h2><span>D-538</span> PR 4a D-8: beacon evidence from analyze_with_records on the strict prefix (#211 P2 item 3)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Step 4 needs both acquisition records and beacons from one pass.</dd>
+<dt>Options</dt><dd>analyze_with_beacon_evidence plus acquisitions; analyze_with_records once.</dd>
+<dt>Decision</dt><dd>Use Authority.analyze_with_records(Space, prefix) once per candidate prefix, memoized by prefix frontier. TS uses analyzeAuthority on the prefix frames (validBeacons, acquiresByRole, delegations from op evidence).</dd>
+<dt>Reason</dt><dd>One pass keeps the epoch rule and the acquisition on the same causal position. Cost is bounded by existing evidence bounds; no new cap.</dd>
+</dl></section>
+<section id="d539"><h2><span>D-539</span> PR 4a D-9: root-attenuated means issuer == space_root (row 356)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Inherited provenance starts from the latest root-attenuated record; the PR 2 preflight read that as issuer == space_root.</dd>
+<dt>Options</dt><dd>Adopt the PR 2 reading; follow parent chains to the root.</dd>
+<dt>Decision</dt><dd>Adopt issuer == space_root, over the whole :admin acquisition sequence from the latest such record, with an unreadable delegation refusing. The preflight now calls the same function, so the two cannot differ.</dd>
+<dt>Reason</dt><dd>Core already owns attenuation. The resolver-specific predicate is only ceiling monotonicity, and a continuation record is self-issued so it is later in the sequence, never the root.</dd>
+</dl></section>
+<section id="d540"><h2><span>D-540</span> PR 4a D-10: closing rule at catalog level and for ancestor bindings</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>D-275 says a catalog 'past the cited prior_catalogs' is refused, while step 7 says an omitted retained catalog head stays catalog_fork. The plan does not say what is cited for an ancestor binding such as B in B-&gt;T-&gt;R.</dd>
+<dt>Options</dt><dd>Treat all uncovered catalogs as closed-out; treat all as forks; split by relation to the cited catalog.</dd>
+<dt>Decision</dt><dd>Under a closed binding: ancestor-or-self of a cited catalog is covered; a strict descendant of a cited catalog, or any catalog when the binding was cited with nil, is closed-out (catalog_rollback); a sibling of the cited catalog is an omitted head and stays catalog_fork. For an ancestor binding, the rotation's prior_catalog is the citation.</dd>
+<dt>Reason</dt><dd>This satisfies both the closing-rule tests (C0 under {P,nil} is refused in either order) and the C12 one-sided-citation test. It fills a plan gap, so it is flagged for rule 3 review and needs no new operator question.</dd>
+</dl></section>
+<section id="d541"><h2><span>D-541</span> PR 4a D-11: accepted state advance, refused head and row 320</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The contract does not say what a client does when the only non-closed head is a refused node, or how authority_changed clears.</dd>
+<dt>Options</dt><dd>Block on a refused head; hold the watermark.</dd>
+<dt>Decision</dt><dd>A sole refused head holds the watermark with reason catalog_authority_refused and no block. authority_changed applies only when the accepted binding or catalog is refused or closed-out. It clears when a sole honored head with a ready first catalog exists, which advances the watermark (a fresh admin resolution citing the current heads, row 320).</dd>
+<dt>Reason</dt><dd>A never-accepted refused node authorizes nothing, so it must not freeze routes the client already trusted. Reclassification of something accepted is the case the contract names for authority_changed.</dd>
+</dl></section>
+<section id="d542"><h2><span>D-542</span> PR 4a D-12: nonce-reuse fork applies among non-closed nodes</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Two eligible nodes with one nonce and different claims are catalog_fork, but a resolution citing both would otherwise leave a permanent fork.</dd>
+<dt>Options</dt><dd>All eligible nodes; heads only.</dd>
+<dt>Decision</dt><dd>Only non-closed (head) nodes count, so a covering resolution ends the fork.</dd>
+<dt>Reason</dt><dd>Order independent (heads are a function of the union) and consistent with the C12 resolution test.</dd>
+</dl></section>
+<section id="d543"><h2><span>D-543</span> PR 4a D-13: verdict tri-state and raw evidence</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>OD-17 makes a union-refused replacement a node only if steps 1, 2, 4-6 pass.</dd>
+<dt>Options</dt><dd>Two states; three states.</dd>
+<dt>Decision</dt><dd>eligible (refused? from step 3), ineligible (raw evidence, no head or closure effect, kept for export) and pending. The graph returns raw_evidence and pending lists. Reasons are only members of the closed CatalogTrust.reason set; the step-4 predicate name is a graph-local detail that 4c maps.</dd>
+<dt>Reason</dt><dd>Pending is needed for order independence; keeping the detail graph-local avoids changing the closed detail field set.</dd>
+</dl></section>
+<section id="d544"><h2><span>D-544</span> PR 4a D-14: rollback check against the watermark</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>catalog_rollback is in the reason set but CatalogTrust never emits it today.</dd>
+<dt>Options</dt><dd>Leave unused; emit when the promoted head is below the watermark.</dd>
+<dt>Decision</dt><dd>Emit catalog_rollback when the promotion head's generation, or its catalog revision under the same binding, is below the watermark, and for closed-out children (D-10). Same bytes remain idempotent.</dd>
+<dt>Reason</dt><dd>Plan section 7 C14 requires 'a rollback is refused'; this is the narrowest rule that does so.</dd>
+</dl></section>
+<section id="d545"><h2><span>D-545</span> PR 4a D-15: authoring switch and row dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Rows 350, 352, 354, 355, 356 and 360 point at PR 4.</dd>
+<dt>Options</dt><dd>Close all; close what the new modules honestly cover.</dd>
+<dt>Decision</dt><dd>Close 352, 356, 335 and 350 (intrinsic failures); partly close 354 (mirror deleted, entry-fact refusal moves to 4c); leave 355 and 360 open.</dd>
+<dt>Reason</dt><dd>TS keeps entry observation inside the excluded trust file, the graph input has no artifact JSON, and the custodian file is in apps/lattice_carrier_server, which a sibling slice is editing.</dd>
+</dl></section>
+<section id="d546"><h2><span>D-546</span> PR 4a D-16: vectors, CI wiring and dist</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>replacement_v1.json and ts_trust.json are protected; CI runs catalog:trust and a vector regeneration diff.</dd>
+<dt>Options</dt><dd>Extend existing vectors; add new files.</dd>
+<dt>Decision</dt><dd>New binding_graph_v1.json (BEAM-written) and binding_graph_ts_v1.json (TS-written) files; add the new TS tests to the catalog:trust npm script and the TS vector writer to the flagship regeneration step; after build check that no dist file under treehouse_catalog_trust.* changed. Decision numbers D-1 to D-16 here are provisional; the final D- numbers are allocated when the ledger rows are filed, after re-grepping origin/main (the sibling slice also allocates). (Filed as D-531 to D-546.)</dd>
+<dt>Reason</dt><dd>Existing vectors stay byte-identical, and the new tests actually run in CI.</dd>
+</dl></section>
+<section id="d547"><h2><span>D-547</span> PR 4a D-A0: PR 4a does not violate the 267/269 STOP condition</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Original plan section 0, unchanged by the critique.</dd>
+<dt>Decision</dt><dd>Proceed under the 2026-11-15 'new modules now, wire later' operator decision: only new files plus the PR 2 authoring preflight files; catalog_trust.ex, treehouse_catalog_trust.ts, dist and native catalog_eval untouched; no route switch. Recorded in plans/316.</dd>
+<dt>Reason</dt><dd>Matches the operator's hard file exclusion; reviewers must not read 4a as a STOP violation.</dd>
+</dl></section>
+<section id="d548"><h2><span>D-548</span> PR 4a D-A1 (critique): accept finding 1, add blocked input and clears_authority_changed</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Alternative: move stickiness into the graph. Rejected, it would pull catalog_trust logic into 4a and the file is excluded.</dd>
+<dt>Decision</dt><dd>resolve/1 takes blocked; decision gains clears_authority_changed. Stickiness stays in catalog_trust.merge_security_block, which 4c must change to lift only when the flag is true. Row 320 is 'closed in resolver, open in trust until 4c'.</dd>
+<dt>Reason</dt><dd>Verified catalog_trust.ex:1243: merge_security_block returns previous whenever previous.reason == :authority_changed, so a graph that only 'clears the block' is ignored by production. The original text contradicted itself.</dd>
+</dl></section>
+<section id="d549"><h2><span>D-549</span> PR 4a D-A2 (critique): accept finding 2, closed is not closed-out; pin triggers and add tests</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>authority_changed triggers only on accepted.binding refused, accepted.binding/catalog closed-out, or accepted catalog not under any citation of a closed accepted binding. Add the ordinary-success pin test and the no-ready-first-catalog hold test.</dd>
+<dt>Reason</dt><dd>Original step 9 wording could be read as blocking every successful replacement since the accepted binding is always closed by its replacement.</dd>
+</dl></section>
+<section id="d550"><h2><span>D-550</span> PR 4a D-A3 (critique): partially accept finding 3, expose status, do not take entry-proof state; list retained functions</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Do not add entry_proofs or accepted_support to the input. Graph exposes node/2, closed_out/1 and decision.accepted_binding_status/accepted_catalog_status; 4a-1 plans/316 lists accepted_support, entry_proofs, historical_accepted_entry_proof?, validate_watermark!, non-Space histories as retained in catalog_trust (4c).</dd>
+<dt>Reason</dt><dd>Verified entry_proofs and accepted_support are built inside graph!/6 from catalog_trust-internal source and state.blocked; passing them in would couple the new module to the excluded file's internals. The honest fix is a documented hand-off table plus the status outputs those functions need.</dd>
+</dl></section>
+<section id="d551"><h2><span>D-551</span> PR 4a D-A4 (critique): accept finding 4 with a modified cut, split slices not runtimes; stop copying chain logic</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>4a-1 resolver (both runtimes, rotations/catalogs as page-validated envelopes, only replacement-dependent catalog checks implemented) and 4a-2 preflight switch (both runtimes). Fallback axis is slice, not runtime. The CatalogTrust.evaluate equivalence test and generic chain-logic copy move to 4c.</dd>
+<dt>Reason</dt><dd>The runtime-split fallback breaks the reciprocal vectors and diverges the preflights, as the critique says. The suggested three-way split is collapsed to two because the equivalence test only exists to guard a copy that is no longer made. Not adopted verbatim: the critique's 4a-2 'chain-validation copy' is dropped rather than deferred.</dd>
+</dl></section>
+<section id="d552"><h2><span>D-552</span> PR 4a D-A5 (critique): accept finding 5, delegation lookup by delegation_id with a tripwire spike</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Resolve the acquisition delegation by record.delegation_id, with separate paths for grant/transfer and R04 continuation records; first build task is a spike; if it needs an authority.ex or Core edit, STOP. C10 test asserts ceiling and lease predicates run on the continuation delegation plus two negative twins.</dd>
+<dt>Reason</dt><dd>Verified the acquisition record is only {op_id, holder, delegation_id} and authority.ex has no public delegation-by-id accessor, so 'read from the acquisition op' is wrong for continuations and risks vacuous passes.</dd>
+</dl></section>
+<section id="d553"><h2><span>D-553</span> PR 4a D-A6 (critique): accept finding 6, pending is per-candidate; guard against attacker-forced trust_pending</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>A held-but-pending parent makes the child pending. A pending candidate holds the graph trust_pending only if it is not already refuted by an intrinsic prefix-only failure (step 4 authority); otherwise it is raw evidence. Tests for both sides.</dd>
+<dt>Reason</dt><dd>Without the guard an unauthorized candidate with a dangling dep could pin the whole graph at rank 3 indefinitely. Authority refusal needs only the strict prefix so it is safe to evaluate before closure completes, preserving monotonicity because a prefix-refused candidate never flips.</dd>
+</dl></section>
+<section id="d554"><h2><span>D-554</span> PR 4a D-A7 (critique): accept finding 7 in part, refused sole head holds watermark, no old-key material accepted, routes freeze deferred to operator</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Keep 'hold, catalog_authority_refused, no block' but make the closing rule keep rejecting later old-key catalogs and rotations under the closed binding (closed_out), test it, test refused-uncovered-head-beside-honored-sibling is catalog_fork, and file the routes-freeze policy as an operator question for 4c.</dd>
+<dt>Reason</dt><dd>The behavior is route policy that lives in the excluded catalog_trust routes/1, so 4a cannot decide it; but the graph can guarantee no new old-signer material is accepted, which removes the fallback risk. Rejected: forcing a block, since OD-17 and the plan's contract say no block for a refused sole head.</dd>
+</dl></section>
+<section id="d555"><h2><span>D-555</span> PR 4a D-A8 (critique): accept finding 8, hand-written expectations in vectors</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>binding_graph_v1.json holds hand-written reasons, heads, closed sets and decision for named scenarios checked by both runtimes; BEAM output only for incidental fields.</dd>
+<dt>Reason</dt><dd>Same-author BEAM-written vectors would reproduce a shared misreading of D-275.</dd>
+</dl></section>
+<section id="d556"><h2><span>D-556</span> PR 4a D-A9 (critique): accept finding 9, stronger assertions and boundary tests</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Per-step assertions of heads/closed/closed_out/refused/decision with persisted watermark and blocked; OD-17 test asserts absence from nodes, heads and closed; row 335 distinguishing variants; 2^53-1 generation cap in both runtimes.</dd>
+<dt>Reason</dt><dd>Listed tests could pass on an order-insensitive but wrong implementation; BEAM has no integer bound so parity needs an explicit cap.</dd>
+</dl></section>
+<section id="d557"><h2><span>D-557</span> PR 4a D-A10 (critique): accept finding 10 with verification, proof pages stay page-level; add fork-first test</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Verified merge_proofs! (catalog_trust.ex:841) throws page-level refusals before any graph exists; graph receives only valid proven cutoffs. Added tests: sole head with pending cutoffs is recovery_incomplete, two heads with pending cutoffs are catalog_fork.</dd>
+<dt>Reason</dt><dd>Matches the verified code and the rank 7-over-8 precedence.</dd>
+</dl></section>
+<section id="d558"><h2><span>D-558</span> PR 4a D-A11 (critique): accept finding 11, dispositions are closed-in-resolver, open-in-trust</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Rows 350, 356, 352 (resolver and authoring), 320 are recorded as closed in the resolver and open in catalog_trust until 4c; the D-430 flips are recorded as an authoring-only change to merged PR 2 behavior.</dd>
+<dt>Reason</dt><dd>Retained-client trust does not use the new resolver until 4c, so closing the rows outright would overclaim.</dd>
+</dl></section>
+<section id="d559"><h2><span>D-559</span> PR 4a D-A1 (build): early refutation of incomplete-closure candidates</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Plan section 3, pending scope (finding 6).</dd>
+<dt>Options</dt><dd>Run the check on the held prefix (rejected: not monotone); pend everything (rejected: lets junk ops block the graph).</dd>
+<dt>Decision</dt><dd>A candidate with missing deps is refuted only by facts no missing ancestor can change: its shape and scope, its own author/cap/deps bindings, its possession signatures, and the held holder_epoch op's own delegation under claim.cap (audience, replace_catalog_v1, live false, finite lease). Otherwise it stays pending and the resolve returns trust_pending.</dd>
+<dt>Reason</dt><dd>Running the step-4 check on a partial prefix misreads the continuation profile (the spike returned :error), so an authorized candidate would be refused as wrong_catalog_scope and flip later, which breaks D-279.</dd>
+</dl></section>
+<section id="d560"><h2><span>D-560</span> PR 4a D-A2 (build): the graph re-verifies rotation chains</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Plan section 1 said the graph would not copy the chain signature logic.</dd>
+<dt>Decision</dt><dd>The graph checks rotation step, key separation, both signatures and prior-catalog agreement under the parent node.</dd>
+<dt>Reason</dt><dd>A rotation under a replacement node has no page-level key, and 4a-2 deletes the authoring mirror. The equivalence test against CatalogTrust.evaluate moves to 4c.</dd>
+</dl></section>
+<section id="d561"><h2><span>D-561</span> PR 4a D-A4 (build): catalog and rotation failures are retained refusals; the preflight stays fail-closed</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>A bad catalog or rotation is recorded as a refusal and never aborts resolve. resolve errors only for malformed input, control_history_limit and trust_pending. The authoring preflight still refuses, highest precedence first, on any retained artifact refused on its own bytes, except refusals inherited from a refused node.</dd>
+<dt>Reason</dt><dd>This makes the plan's 'bad first catalog is refused as a catalog and the node is unchanged' case work, and keeps PR 2's promise that nothing is signed over evidence Stage B rejects.</dd>
+</dl></section>
+<section id="d562"><h2><span>D-562</span> PR 4a D-A5 (build): authority_changed triggers and the row 320 clear</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The block names the head at first block time, and a standing block keeps those triggers. A later sole, honored replacement head that is not a trigger and closes every trigger clears it (clears_authority_changed). A refused accepted binding is also resolved in the same delivery by an honored replacement that closes it and cites a descendant of the accepted catalog.</dd>
+<dt>Reason</dt><dd>This prevents a permanent freeze when the resolution arrives together with the revoke, or before its first catalog. A resolution that itself closes out the accepted catalog (R citing {P, nil} after C0) still blocks.</dd>
+</dl></section>
+<section id="d563"><h2><span>D-563</span> PR 4a D-A6 (build): holder predicate and C13 fixtures</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Step 4 requires both analysis.holder_epochs[:admin] and the last honored record to match. The C13 fixtures use a concurrent admin-to-nominee transfer (Core reason stale_holder) as the conflicting control.</dd>
+<dt>Reason</dt><dd>Observed: a revoke does not move holder_epochs, and a root re-transfer after a revoke is refused as revoked_capability.</dd>
+</dl></section>
+<section id="d564"><h2><span>D-564</span> PR 4a D-A9 (build): Core refusal on the candidate's own closure is intrinsic</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>If Core refuses the op on its strict prefix plus itself, the candidate gets catalog_authority_refused (predicate core_refused_at_prefix). Stage A's own application_invalid_catalog is excluded, because the literal and possession checks report those failures with their own reasons.</dd>
+<dt>Reason</dt><dd>Otherwise a replacement authored after a revoke already in its prefix became an eligible refused node that closed its parents, contrary to C11/C14. This uses only the public Authority.analyze/2; authority.ex is unchanged.</dd>
+</dl></section>
+<section id="d565"><h2><span>D-565</span> PR 4a D-A7 (build): cover_claim order</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Order: trust_pending (unheld parent or prior), then invalid_catalog_transition (raw, refused or closed-out parent; generation; service), then catalog_fork (omitted head or catalog head; citing a non-head ancestor counts as a sibling), then a prior that is not a catalog head, then first-catalog extension.</dd>
+<dt>Reason</dt><dd>This keeps PR 2's existing fork expectations and matches the plan's 'unheld prior, then transition failure, then fork' wording.</dd>
+</dl></section>
+<section id="d566"><h2><span>D-566</span> PR 4a D-A8/D-A10 (build): fixtures and route reservation</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The 4a fixtures build their own Sim bounded Space (continuation pin, root beacons, leased admin) instead of CatalogVectors.bootstrap_history. Only current and covered catalogs reserve routes.</dd>
+<dt>Reason</dt><dd>The step-4 and R04 cases need the witnessed-beacon pin. An old-key catalog under a closed binding must not be able to refuse the honest head's first catalog.</dd>
+</dl></section>
+<section id="d567"><h2><span>D-567</span> PR 4a: single branch, no stacked PR for 4a-2</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>4a-2 is a separate commit group on the same branch.</dd>
+<dt>Reason</dt><dd>4a-1 source stayed under the plan's 2.5k-line threshold for a stacked PR (about 1.9k lines including fixtures, excluding vectors and dist).</dd>
+</dl></section>
+<section id="d568"><h2><span>D-568</span> PR 4a: open operator questions recorded, not decided</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>plans/316 records two questions: (1) the routes-freeze policy for a sole refused head (a 4c decision); (2) a residual in the step-7 'omitted head stays catalog_fork' rule. An old-key signer can add a same-revision sibling catalog under a closed binding after the resolution; it cannot be told apart from an uncited fork that existed before, so the closing rule does not end it.</dd>
+<dt>Reason</dt><dd>Both need a contract call beyond the settled OD-16, OD-17 and row 320 sign-offs. The pinned one-sided-citation test is kept as specified.</dd>
+</dl></section>
+<section id="d569"><h2><span>D-569</span> PR 4a: finding 6 deferred to a design row instead of a third trigger patch</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Count closed-out triggers as resolved; record the accepted binding as the trigger; set clears in resolves_refusal? when a block stands; redesign (chosen).</dd>
+<dt>Decision</dt><dd>No code change for the trigger freeze. A design row is proposed in plan 316's PR 4a decisions (filed as row 383).</dd>
+<dt>Reason</dt><dd>Rule 3: the same trigger class was patched last round (D-A5), and that patch causes this freeze. 4a is unwired, so nothing ships frozen before 4c.</dd>
+</dl></section>
+<section id="d570"><h2><span>D-570</span> PR 4a D-A12: catalog validity is judged before closed-binding classification</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Catalogs under a refused node keep catalog_authority_refused; existing expectations are unchanged.</dd>
+<dt>Decision</dt><dd>Two passes: intrinsic validity (including every cited prior of any node kind, rotations included), then current/covered/closed_out/uncovered/refused. A catalog on a cited chain must have its whole previous chain held, or the resolve is trust_pending. An uncited old-key catalog with an unheld previous is closed out, never pending (pinned).</dd>
+<dt>Reason</dt><dd>A citation must not rehabilitate an invalid catalog. Limiting pending to cited chains stops an old-key holder from stalling a closed binding.</dd>
+</dl></section>
+<section id="d571"><h2><span>D-571</span> PR 4a: authoring refuses {R1, nil} after R1 is union-refused</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>cover_claim expects the citable catalog heads, so omitting chain-valid K1 under refused R1 is catalog_fork.</dd>
+<dt>Reason</dt><dd>Citing nil closes K1 out, and a resolution that closes out the accepted catalog still blocks (D-A5). Citing {R1,K1} is the claim that clears it.</dd>
+</dl></section>
+<section id="d572"><h2><span>D-572</span> PR 4a: any incomplete non-candidate op makes the resolve trust_pending</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Every held Space op with an incomplete closure pends the resolve, not just catalog controls. The only exception is a candidate early-refuted from its own bytes.</dd>
+<dt>Reason</dt><dd>Plan 316 step 2 and row m: dependency closure exact, else trust_pending. This fails closed, consistent with the 'missing control or history page' rule.</dd>
+</dl></section>
+<section id="d573"><h2><span>D-573</span> PR 4a: missing accepted artifacts fail closed on the sole-head path, not as trust_pending</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>When accepted is non-nil, :missing binding or catalog status is an authority_changed trigger.</dd>
+<dt>Reason</dt><dd>A trust_pending check in run/1 would have flipped the catalog_fork scenario's step 3, which legitimately omits the earlier accepted R/KR. The trigger is cheap and fails closed.</dd>
+</dl></section>
+<section id="d574"><h2><span>D-574</span> PR 4a: revision-0 first-catalog divergence is unreachable</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>BEAM now applies the revision-0 check only to replacements, matching TS and CatalogTrust. No vector was added.</dd>
+<dt>Reason</dt><dd>Both codecs bind revision 0 to previous: nil, so a first catalog with another revision can never be constructed.</dd>
+</dl></section>
+<section id="d575"><h2><span>D-575</span> PR 4a: round labelling (review round 2)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Commits and plan entries call this 'review round 2' of PR 4a, the first round after D-A9/D-A10 (commit 1cfcaf1d7). It corresponds to the task's 'Findings (round 1)'.</dd>
+<dt>Reason</dt><dd>The branch's plan ledger already records an earlier resolver review round.</dd>
+</dl></section>
+<section id="d576"><h2><span>D-576</span> PR 4a D-A15: refusal reason for replacement cutoff/entry mismatch (needs operator confirmation)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Review finding 2 (P1). Recorded as D-A15 in plan 316.</dd>
+<dt>Options</dt><dd>Chosen: refuse KR with invalid_catalog_transition. R can never be ready, and the result looks the same as 'first catalog not delivered yet'. Alternative: KR stays a valid catalog head and the decision is recovery_incomplete, so the next resolution must cite and extend KR. Plan row l's wording ('Incomplete or wrong cutoff ... recovery_incomplete') can be read as favouring the alternative.</dd>
+<dt>Decision</dt><dd>When a replacement's cutoff replicas differ from its first catalog's entry replicas, that first catalog is refused with invalid_catalog_transition. The replacement never becomes ready, and the decision is head R with no reason.</dd>
+<dt>Reason</dt><dd>The rotation precedent at catalog_trust.ex:681 already refuses a replica mismatch with invalid_catalog_transition. The inventory is fixed by the claim, so the mismatch is permanent. Plan row l's recovery_incomplete covers unproven or wrong proofs, which can still be cured.</dd>
+</dl></section>
+<section id="d577"><h2><span>D-577</span> PR 4a D-A16: D-275 non-stall rule for pending rotations</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Review finding 1 (P1).</dd>
+<dt>Decision</dt><dd>A pending rotation whose rotation-parent chain reaches a closed or closed-out binding is closed-out evidence, and so is every catalog bound to it. Neither is ever trust_pending. A pending rotation under an open, unknown or pending replacement parent still pends.</dd>
+<dt>Reason</dt><dd>Without this, an old-key signer can withhold a prior catalog and freeze recovery forever. Under D-275 the outcome is fixed whatever the missing catalog says.</dd>
+</dl></section>
+<section id="d578"><h2><span>D-578</span> PR 4a: rule 3 calls (review round 3)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>F1 and F3 repeat earlier classes: F1 the D-A12 uncited-pending case, F3 the D-A13 rotation inheritance. Each was closed with one general rule rather than another exemption: D-A16, and 'own plus inherited cutoffs' in D-A15. F4 is the second catalog-validity-versus-classification gap, so it is deferred to a design row and not patched. The D-A15 two-step residual joins that row (filed as row 382).</dd>
+<dt>Reason</dt><dd>The task says to stop special-casing a class once it repeats across rounds.</dd>
+</dl></section>
+<section id="d579"><h2><span>D-579</span> PR 4a: scenario evidence proves rotation cutoffs by default</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>ev/2 now adds each rotation's declared cutoffs to proven_cutoffs unless the rotation id is listed in unproven:.</dd>
+<dt>Reason</dt><dd>This keeps existing rotation expectations unchanged after the F3 fix, so every flip has to come from a rotation's own cutoffs. Only rotation_inherits gains a zero-proof step.</dd>
+</dl></section>
+<section id="d580"><h2><span>D-580</span> PR 4a: round label (review round 3)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The harness calls this review round 2. The commit message and the plan ledger call it review round 3, because the branch already had two resolver review-fix commits.</dd>
+<dt>Reason</dt><dd>Recorded so the ledger is not misread.</dd>
+</dl></section>
+<section id="d581"><h2><span>D-581</span> PR 4a D-A17: refused-parent coverage</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Finding 1. This task calls these round 3 findings; the commit and plan call them review round 4 because the plan's D-A15/D-A16 were labelled round 3.</dd>
+<dt>Decision</dt><dd>When a node is union-refused but its binding is closed, its chain-valid catalogs are still classified for coverage: an omitted one is uncovered (catalog_fork) and keeps its catalog_authority_refused refusal.</dd>
+<dt>Reason</dt><dd>This makes the verifier agree with authoring's citable_catalog_heads (D-A13). It leaves the cited and nil-cited C13 outcomes unchanged, so the existing vectors keep K1 as a refusal.</dd>
+</dl></section>
+<section id="d582"><h2><span>D-582</span> PR 4a D-A18: only a chain-valid catalog is an omitted head</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Finding 2.</dd>
+<dt>Decision</dt><dd>Under a closed binding, an uncited catalog that fails its own chain is refused as invalid_catalog_transition, and an uncited catalog whose chain is not held is closed-out evidence; neither forks.</dd>
+<dt>Reason</dt><dd>This applies D-A12/D-A16 to catalogs, so an old-key signer cannot fork or stall recovery with artifacts that fail their own chain. A chain-valid omitted old-key catalog still forks; that residual is filed as a design question (row 384).</dd>
+</dl></section>
+<section id="d583"><h2><span>D-583</span> PR 4a D-A19: whole-cutoff proofs, an input-contract change</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Finding 5. The binding-graph vectors now carry frontier in every proof.</dd>
+<dt>Decision</dt><dd>proven_cutoffs / provenCutoffs entries must be the complete {replica, frontier, log_digest}, with every frontier element a string. They are matched against a node's cutoffs whole, and any other shape is malformed_catalog.</dd>
+<dt>Reason</dt><dd>This matches CatalogTrust, which compares the whole cutoff. 4c and any future caller must pass the frontier. The current callers (both authoring preflights) pass an empty list, so they are unaffected.</dd>
+</dl></section>
+<section id="d584"><h2><span>D-584</span> PR 4a: rule 3 deferrals (review round 4)</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Patch each finding again, or redesign through the rows (chosen).</dd>
+<dt>Decision</dt><dd>Findings 3, 6 and 7 fold into the one catalog-validity design row (row 382), and finding 4 stays on the authority_changed clearing row (row 383), which gates 4c. No further patches for them.</dd>
+<dt>Reason</dt><dd>Each repeats a class already patched or deferred in earlier rounds. Finding 6 would need rotation eligibility to depend on catalog validity, which is that row's restructuring, and it would flip a pinned expectation.</dd>
+</dl></section>
+<section id="d585"><h2><span>D-585</span> PR 4a: commit message count</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Commit b5e19758a says four new scenarios; it actually adds five (refused-parent fork, refused-parent positive control, invalid old-key catalog, replacement frontier, rotation frontier), and the follow-up commit 877ca8de8 adds unit tests in both runtimes.</dd>
+<dt>Reason</dt><dd>Recorded for accuracy; nothing was pushed at the time.</dd>
+</dl></section>
+<section id="d586"><h2><span>D-586</span> PR 4a plan critique: 11 findings</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>An independent critique of the revised PR 4a plan raised 11 findings before the build.</dd>
+<dt>Decision</dt><dd>All 11 were accepted, findings 3 and 7 in part and finding 4 with a modified cut, as D-A0 to D-A11 (D-547 to D-558): blocked input plus clears_authority_changed (1); closed is not closed-out (2); status outputs instead of entry-proof input (3); split by slice, not runtime, and no generic chain copy (4); delegation lookup by delegation_id behind a tripwire spike (5); per-candidate pending with an anti-stall guard (6); refused sole head holds the watermark and the routes-freeze policy goes to the operator (7); hand-written vector expectations (8); stronger assertions and a 2^53-1 generation cap (9); proof pages stay page-level (10); closed-in-resolver, open-in-trust dispositions (11).</dd>
+<dt>Reason</dt><dd>Each was verified against catalog_trust.ex, authority.ex and the plan before acceptance; the tripwire spike needed no Core or authority.ex change.</dd>
+</dl></section>
+<section id="d587"><h2><span>D-587</span> PR 4a review: Codex Sol and independent rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>After the resolver round that produced D-A9/D-A10 (commit 1cfcaf1d7), three review rounds ran on the resolver: Codex Sol 6.1 xhigh plus an independent review. The plan ledger calls them review rounds 2 to 4 of PR 4a.</dd>
+<dt>Decision</dt><dd>Round 1, 7 findings: 6 fixed (incomplete control history is trust_pending; two-pass catalog validity; rotations inherit replacement cutoffs; citable_catalog_heads for the C13 authoring claim; sequential nonce reuse forks; a missing accepted artifact fails closed), 1 deferred by rule 3 (authority_changed trigger freeze, row 383). Round 2, 4 findings: 3 fixed (D-A16 non-stall; D-A15 replacement cutoffs cover every entry; rotations keep their own cutoffs), 1 deferred (route-refused catalogs validate priors, row 382). Round 3, 7 findings: 3 fixed (D-A17 refused-parent coverage; D-A18 invalid or unheld uncited old-key catalogs no longer fork, with a residual in row 384; D-A19 whole-cutoff proofs), 4 deferred (second-replacement inventory drop, rotations with invalid priors and route reuse to row 382; persisted authority_changed freeze to row 383). Still open: P1 catalog_binding_graph.ex:737 and :1097, P2 :308 and :859, each with its TS twin.</dd>
+<dt>Reason</dt><dd>Rule 3: each deferred finding repeats a class already patched in an earlier round, so it goes to a redesign row instead of another special case. All four open findings gate 4c, not 4a, because 4a is not wired into retained-client trust. No clean review round is claimed after the round 3 fixes (b5e19758a, 877ca8de8).</dd>
+</dl></section>
 </main>
 </body>
 </html>
