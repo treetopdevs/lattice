@@ -730,9 +730,7 @@ defmodule Treehouse.CatalogBindingGraph do
     ctx.catalogs
     |> Enum.sort_by(&elem(&1, 0))
     |> Enum.reduce({%{}, acc}, fn {id, %{catalog: c}}, {used, acc} ->
-      if acc.status[id] not in [:current, :covered] do
-        {used, acc}
-      else
+      if acc.status[id] in [:current, :covered] do
         conflict? =
           Enum.any?(c.entries, fn e -> Map.get(used, e.route, e.replica) != e.replica end)
 
@@ -742,6 +740,8 @@ defmodule Treehouse.CatalogBindingGraph do
         else
           {Enum.reduce(c.entries, used, &Map.put(&2, &1.route, &1.replica)), acc}
         end
+      else
+        {used, acc}
       end
     end)
     |> elem(1)

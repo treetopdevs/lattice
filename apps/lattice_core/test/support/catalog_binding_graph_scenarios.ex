@@ -11,10 +11,9 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   multi-delivery scenarios are listed once per delivery order. Disposable seeded keys only.
   """
 
-  alias Lattice.{Log, Op}
   alias Lattice.Carrier.Wire
+  alias Lattice.{Log, Op}
   alias Treehouse.CatalogBindingGraphFixtures, as: F
-  alias Treehouse.TransportCatalog
 
   # --- expectation helpers -----------------------------------------------------
 
@@ -1331,9 +1330,6 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   end
 
   def encode(vector), do: Jason.encode!(vector, pretty: true) <> "\n"
-
-  @doc false
-  def inventory_id(entries), do: TransportCatalog.inventory_id(entries)
 
   # --- review round: intrinsic Core refusal, block carry-forward, route reservation ----------
 

@@ -32,8 +32,8 @@ defmodule Treehouse.CatalogReplacementAuthoring do
 
   alias Lattice.{Authority, Dag, Identity, Log, Op}
   alias Lattice.Carrier.Wire
-  alias Treehouse.{CatalogBootstrap, CatalogCutoff, MemberContinuityAuthoring, Space}
-  alias Treehouse.{CatalogBindingGraph, CatalogReplacementAuthority}
+  alias Treehouse.{CatalogBindingGraph, CatalogBootstrap, CatalogCutoff}
+  alias Treehouse.{CatalogReplacementAuthority, MemberContinuityAuthoring, Space}
   alias Treehouse.TransportCatalog
 
   @request_fields ~w(author nonce parents prior_catalogs generation new_catalog_key new_service_id new_service_key new_origin entries replica_logs rotations catalogs)a
