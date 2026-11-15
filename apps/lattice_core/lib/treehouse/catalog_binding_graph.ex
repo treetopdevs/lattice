@@ -114,7 +114,7 @@ defmodule Treehouse.CatalogBindingGraph do
   # compares the whole cutoff); an entry without its frontier fails closed as malformed input.
   defp proven_shape?(%{replica: r, frontier: f, log_digest: d})
        when is_binary(r) and is_list(f) and is_binary(d),
-       do: true
+       do: Enum.all?(f, &is_binary/1)
 
   defp proven_shape?(_), do: false
 

@@ -8,8 +8,9 @@ import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "../src/carrier";
 import { prepareTreehouseCatalogReplacementFromFrames } from "../src/index";
 import type { TreehouseCatalogReplacementRequest } from "../src/index";
 import { treehouseCommandDecoders } from "../src/treehouse";
-import { nextCatalogGeneration } from "../src/treehouse_catalog_binding_graph";
-import { catalogEnvelopeFromCarrierTerm } from "../src/treehouse_catalog_codec";
+import { nextCatalogGeneration, resolveCatalogBindingGraph } from "../src/treehouse_catalog_binding_graph";
+import type { ProvenCutoff } from "../src/treehouse_catalog_binding_graph";
+import { catalogBootstrapFromCarrierTerm, catalogEnvelopeFromCarrierTerm } from "../src/treehouse_catalog_codec";
 import type { CatalogEnvelope, CatalogReplacementClaim } from "../src/treehouse_catalog_codec";
 import { loadVector, runVector, tsVectorUrl } from "./support/export_treehouse_catalog_binding_graph";
 
@@ -26,6 +27,25 @@ for (const o of outcomes) {
 
 test("generation arithmetic is capped at 2^53-1 identically in both runtimes", () => {
   for (const c of vector.generation_cases) assert.equal(nextCatalogGeneration(c.generations), c.next);
+});
+
+// D-A19: a proven cutoff is the whole {replica, frontier, logDigest}; an entry without a string frontier is malformed input.
+test("a proven cutoff without its frontier is malformed input", async () => {
+  const scenario = vector.scenarios.find((s: {name: string}) => s.name === "a replacement cutoff proof must match the claimed frontier");
+  const step = scenario.steps[0];
+  const record = catalogBootstrapFromCarrierTerm(vector.bootstrap.record)!;
+  const run = (provenCutoffs: unknown[]) => resolveCatalogBindingGraph({bootstrap: {id: vector.bootstrap.id, record},
+    frames: step.frames.map((id: string) => vector.frames[id]), rotations: new Map(), catalogs: new Map(),
+    provenCutoffs: provenCutoffs as ProvenCutoff[], accepted: null, blocked: null});
+  const [cut] = step.proven;
+  const {frontier: _dropped, ...noFrontier} = cut;
+  for (const bad of [noFrontier, {...cut, frontier: [1]}]) {
+    const result = await run([bad]);
+    assert.equal(result.ok ? null : result.reason, "malformed_catalog");
+  }
+  // The well-formed proof gets past input validation (C0 is not supplied here, so the result is trust_pending).
+  const good = await run([cut]);
+  assert.notEqual(good.ok ? null : good.reason, "malformed_catalog");
 });
 
 // Review round 2, finding 4: after accepted R1/K1 is union-refused by a concurrent holder change, the public preflight must

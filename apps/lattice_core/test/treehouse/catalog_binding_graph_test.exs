@@ -39,6 +39,18 @@ defmodule Treehouse.CatalogBindingGraphTest do
   defp proven(r),
     do: Enum.map(r.claim.cutoffs, &Map.take(&1, [:replica, :frontier, :log_digest]))
 
+  test "a proven cutoff without its frontier is malformed input (D-A19)" do
+    r = F.replacement(@base, @base.log, "no-frontier")
+    log = F.append(@base.log, [r.op])
+    [cut] = proven(r)
+
+    for bad <- [Map.delete(cut, :frontier), %{cut | frontier: [1]}] do
+      assert {:error, :malformed_catalog, _} = resolve(%{space: log, proven: [bad]})
+    end
+
+    assert {:ok, _} = resolve(%{space: log, proven: [cut]})
+  end
+
   test "replacement and rotation nodes carry generation, service, origin and parents (D-270)" do
     c0 = F.c0(@base)
     r = F.replacement(@base, @base.log, "fields")
