@@ -30709,7 +30709,7 @@
         "T": "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ",
         "T2": "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k"
       },
-      "name": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "name": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ab",
       "steps": [
         {
           "beam": {
@@ -31311,6 +31311,302 @@
               "binding": "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE",
               "catalog": "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64",
               "generation": 2,
+              "revision": 0
+            },
+            "blocked": null
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "C1": "RWF3lERv84tKq0iwg3EiQwVGux23Bw-h6MDh28nLjck",
+        "CT": "7Xr8tP-VLfUzdpMaUVt_2q83QTH9OtBAXyMIGnpPjZQ",
+        "K1": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+        "K2": "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64",
+        "R1": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+        "R2": "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE",
+        "T": "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ",
+        "T2": "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k"
+      },
+      "name": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ba",
+      "steps": [
+        {
+          "beam": {
+            "error": "trust_pending",
+            "ids": [
+              "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ"
+            ]
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ],
+          "expect": {
+            "error": "trust_pending"
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "lPsi_TG3DProRAJ5xLnTuTIL4vH19z79NOtdp-lzxvY",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [
+            "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ"
+          ],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+                "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {
+              "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback"
+            },
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [
+              "T"
+            ],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "K1",
+              "clears": false,
+              "head": "R1",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R1"
+            ],
+            "nodes": [
+              "B",
+              "R1"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "lPsi_TG3DProRAJ5xLnTuTIL4vH19z79NOtdp-lzxvY",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [
+            "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ"
+          ],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {
+              "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": [
+                "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "closed_out": {
+              "7Xr8tP-VLfUzdpMaUVt_2q83QTH9OtBAXyMIGnpPjZQ": "catalog_rollback",
+              "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback",
+              "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k": "catalog_rollback"
+            },
+            "decision": {
+              "accepted": true,
+              "binding_status": "closed",
+              "block": null,
+              "catalog": "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64",
+              "catalog_status": "ancestor_of_cited",
+              "clears": false,
+              "head": "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE"
+            ],
+            "nodes": {
+              "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": {
+                "core_reason": null,
+                "generation": 2,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              },
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "7Xr8tP-VLfUzdpMaUVt_2q83QTH9OtBAXyMIGnpPjZQ",
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+            "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64"
+          ],
+          "expect": {
+            "closed": [
+              "B",
+              "R1"
+            ],
+            "closed_out": [
+              "CT",
+              "T",
+              "T2"
+            ],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "K2",
+              "clears": false,
+              "head": "R2",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R2"
+            ],
+            "nodes": [
+              "B",
+              "R1",
+              "R2"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE",
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "3Wcm9f0Yawoy_qITgx4L16oeHbkFUUytEpgN7QCmo98",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "_9VEw-0VqiLQp6xn_del1OAnInD63D4M-ERmM4iE2qg",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "lPsi_TG3DProRAJ5xLnTuTIL4vH19z79NOtdp-lzxvY",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [
+            "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ",
+            "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k"
+          ],
+          "state": {
+            "accepted": {
+              "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "generation": 1,
               "revision": 0
             },
             "blocked": null

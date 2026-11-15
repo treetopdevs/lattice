@@ -8765,7 +8765,7 @@
       }
     },
     {
-      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ab",
       "step": 1,
       "label": {
         "heads": [
@@ -8838,7 +8838,7 @@
       }
     },
     {
-      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ab",
       "step": 2,
       "label": {
         "heads": [
@@ -8915,7 +8915,7 @@
       }
     },
     {
-      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ab",
       "step": 3,
       "label": {
         "heads": [
@@ -8996,7 +8996,7 @@
       }
     },
     {
-      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ab",
       "step": 4,
       "label": {
         "heads": [
@@ -9087,7 +9087,7 @@
       }
     },
     {
-      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ab",
       "step": 5,
       "label": {
         "heads": [
@@ -9176,6 +9176,187 @@
           "clears": false,
           "binding_status": "current",
           "catalog_status": "current"
+        }
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ba",
+      "step": 1,
+      "label": {
+        "error": "trust_pending"
+      },
+      "ts": {
+        "error": "trust_pending",
+        "ids": [
+          "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ"
+        ]
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ba",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R1"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [
+          "T"
+        ],
+        "nodes": [
+          "B",
+          "R1"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R1",
+          "catalog": "K1",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {
+          "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+          "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery/ba",
+      "step": 3,
+      "label": {
+        "heads": [
+          "R2"
+        ],
+        "closed": [
+          "B",
+          "R1"
+        ],
+        "closed_out": [
+          "CT",
+          "T",
+          "T2"
+        ],
+        "nodes": [
+          "B",
+          "R1",
+          "R2"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R2",
+          "catalog": "K2",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed_out": {
+          "7Xr8tP-VLfUzdpMaUVt_2q83QTH9OtBAXyMIGnpPjZQ": "catalog_rollback",
+          "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback",
+          "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k": "catalog_rollback"
+        },
+        "nodes": {
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": [
+            "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE",
+          "catalog": "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64",
+          "clears": false,
+          "binding_status": "closed",
+          "catalog_status": "ancestor_of_cited"
         }
       }
     },

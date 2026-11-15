@@ -479,7 +479,11 @@ PR 4a decisions:
   catalog's own ancestry (its `previous` chain and cited priors), so it feeds validity, and
   keep only cross-branch reuse as union classification. Acceptance: C0 `{Space->A, Thread->B}`,
   C1 extending it with `{Space->B, Thread->C}`, R citing C1 with fresh routes is refused in both
-  runtimes and C0 stays an omitted catalog head.
+  runtimes and C0 stays an omitted catalog head. The same row owns the D-A15 residual (probe,
+  not patched): once R's first catalog KR is refused, R2 citing `{R, nil}` with a Space-only
+  first catalog promotes and drops C0's Thread, because a node with no valid catalog is cited
+  with `nil` and nothing carries its covered prior's entries forward. Acceptance there: R2 is
+  refused or forks until it extends C0's entries.
 - **D-A8 (fixtures).** The 4a fixtures build their own Sim bounded Space (pin, root beacons,
   leased admin) instead of `CatalogVectors.bootstrap_history`, because the step-4 and R04 cases
   need the witnessed-beacon pin and continuation.

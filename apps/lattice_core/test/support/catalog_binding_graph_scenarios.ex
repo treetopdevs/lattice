@@ -1904,7 +1904,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
 
     out = ["CT", "T", "T2"]
 
-    one(
+    both(
       "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
       labels,
       [
@@ -1918,6 +1918,15 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         step(
           ev(l2, rotations: [t, t2], catalogs: [c0, c1, k1, ct, k2]),
           ok(["R2"], closed: ["B", "R1"], closed_out: ["C1" | out], decision: accept("R2", "K2"))
+        )
+      ],
+      [
+        # While B is open the withheld C1 is a missing page (D-5); R1 then closes T out.
+        step(ev(base.log, rotations: [t], catalogs: [c0]), err("trust_pending")),
+        step(ev(l1, rotations: [t], catalogs: [c0, k1]), held.(["T"])),
+        step(
+          ev(l2, rotations: [t, t2], catalogs: [c0, k1, ct, k2]),
+          ok(["R2"], closed: ["B", "R1"], closed_out: out, decision: accept("R2", "K2"))
         )
       ]
     )

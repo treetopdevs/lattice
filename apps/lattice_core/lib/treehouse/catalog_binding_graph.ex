@@ -33,8 +33,8 @@ defmodule Treehouse.CatalogBindingGraph do
   `resolve/1` returns `{:error, reason, detail}` only for malformed input,
   `control_history_limit` (more than two heads) and `trust_pending` (any held op with an
   incomplete closure except a candidate already refuted from its own bytes, a pending
-  candidate, a pending rotation, or a pending catalog under an open binding or on a cited
-  chain), the highest precedence first; everything else is in the graph and its `decision`.
+  candidate, a pending rotation not under a closed binding, or a pending catalog under an open
+  binding or on a cited chain), the highest precedence first; everything else is in the graph and its `decision`.
   """
 
   alias Lattice.{Authority, Dag, Identity, Log}

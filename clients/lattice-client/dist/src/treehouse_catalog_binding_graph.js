@@ -7,7 +7,9 @@
 // Intrinsic verdicts: every Space replace_catalog_v1 op is an eligible node (refused when the full union refuses it),
 // raw evidence (any intrinsic failure; no head, no closure) or pending. A candidate whose closure is incomplete is refuted
 // early only from facts no missing ancestor can change; otherwise it stays pending. Rotations are nodes when their chain
-// checks pass under their parent node. Union classification only reclassifies. Catalog failures are retained refusals.
+// checks pass under their parent node and owe their parent's and their own unproven cutoffs (D-A15); a pending rotation under a
+// closed binding is closed out, never trust_pending (D-A16). Union classification only reclassifies. Catalog failures are
+// retained refusals.
 import { analyzeAuthority } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import { canonicalBase64Bytes, verifyCarrierOp } from "./codec";
