@@ -319,7 +319,7 @@ defmodule LatticeCarrierServer.Operator.CatalogLedgerGenerationTest do
     assert {:ok, %{committed: %{catalog: ^next}}} = SigningLedger.status(dir, r)
 
     # The custodian status for R never verifies under B.
-    assert {:error, :catalog_ledger_corrupt} =
+    assert {:error, :catalog_ledger_binding_mismatch} =
              SigningLedger.verify_status(SigningLedger.export_status(state, r), f.bootstrap)
   end
 
@@ -449,10 +449,36 @@ defmodule LatticeCarrierServer.Operator.CatalogLedgerGenerationTest do
     {:ok, _} = SigningLedger.init(dir, f.bootstrap)
     before = File.read!(head_path(dir))
 
-    assert {:error, :catalog_ledger_corrupt} = SigningLedger.init(dir, f.replacement)
-    assert {:error, :catalog_ledger_corrupt} = SigningLedger.status(dir, f.replacement)
+    assert {:error, :catalog_ledger_binding_mismatch} = SigningLedger.init(dir, f.replacement)
+    assert {:error, :catalog_ledger_binding_mismatch} = SigningLedger.status(dir, f.replacement)
     assert File.read!(head_path(dir)) == before
     assert {:ok, _} = SigningLedger.status(dir, f.bootstrap)
+  end
+
+  test "row 362: a head with the right binding and a wrong key is corrupt, not a binding mismatch",
+       f do
+    b = f.bootstrap
+    dir = ledger_dir(f, "wrong-key-head")
+    {:ok, _} = SigningLedger.init(dir, b)
+    head = JSON.decode!(File.read!(head_path(dir)))
+
+    forged =
+      PublicHistory.canonical(%{head | "key" => Base.encode64(f.replacement.record.catalog_key)})
+
+    File.write!(head_path(dir), forged)
+
+    assert {:error, :catalog_ledger_corrupt} = SigningLedger.status(dir, b)
+  end
+
+  test "row 362: a tampered head naming another binding is the same named refusal", f do
+    b = f.bootstrap
+    dir = ledger_dir(f, "tampered-head")
+    {:ok, _} = SigningLedger.init(dir, b)
+    head = JSON.decode!(File.read!(head_path(dir)))
+    File.write!(head_path(dir), PublicHistory.canonical(%{head | "binding" => f.op_id}))
+
+    # Indistinguishable from a legitimate other binding's directory: asserted, not hidden.
+    assert {:error, :catalog_ledger_binding_mismatch} = SigningLedger.status(dir, b)
   end
 
   test "replay and crash refusals hold under a replacement binding", f do

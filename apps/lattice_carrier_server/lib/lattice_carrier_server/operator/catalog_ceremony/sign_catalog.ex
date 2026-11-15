@@ -20,10 +20,25 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
          do: SigningLedger.status(ceremony, package.binding)
   end
 
+  # The CLI, `sign/4` and `status/2` are bootstrap-only: no CLI path reaches a
+  # replacement binding. Refusing to sign under a closed binding is row 360 and the
+  # replacement ceremony is OD-13 (rows 360/361); `sign_reviewed/4` is the shared
+  # signing step for a package whose binding a caller has already reviewed.
   @spec sign(binary(), Path.t(), Path.t(), String.t()) :: {:ok, binary()} | {:error, atom()}
   def sign(bytes, ceremony, signer_path, confirmed_digest) do
     with {:ok, package} <- review(bytes, ceremony),
-         true <- confirmed_digest == package.digest,
+         do: sign_reviewed(package, ceremony, signer_path, confirmed_digest)
+  rescue
+    _ -> {:error, :catalog_signing_refused}
+  catch
+    _, _ -> {:error, :catalog_signing_refused}
+  end
+
+  @doc false
+  @spec sign_reviewed(map(), Path.t(), Path.t(), String.t()) ::
+          {:ok, binary()} | {:error, atom()}
+  def sign_reviewed(package, ceremony, signer_path, confirmed_digest) do
+    with true <- confirmed_digest == package.digest,
          :ok <- capacity(package.catalog, package.binding) do
       SigningLedger.transact(ceremony, package.binding, "open", fn state ->
         choose(package, state, ceremony, signer_path)
@@ -57,7 +72,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
       state.pending != nil ->
         {:error, :catalog_ledger_fork}
 
-      SigningLedger.extends?(package.catalog, state.committed) ->
+      SigningLedger.extends?(package.catalog, state.committed, package.binding) ->
         with {:ok, canonical} <- Paths.signer(path, Path.expand(ceremony), :real),
              {:ok, secret, pub} <- Signer.read_seed(canonical),
              true <- pub == package.binding.record.catalog_key do
