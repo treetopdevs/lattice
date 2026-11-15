@@ -64,12 +64,20 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
     }
 
     {sim, bootstrap} = Sim.command(sim, "root", :catalog_bootstrap_v1, [record])
-    {sim, beacon0} = Sim.beacon(sim, "root", 0)
+    beacons? = Keyword.get(opts, :beacons, true)
+    {sim, beacon0} = if beacons?, do: Sim.beacon(sim, "root", 0), else: {sim, nil}
 
     {sim, delegation} =
-      Sim.transfer(sim, "root", "admin", :admin, ops: @admin_ops, expires_epoch: expires)
+      if Keyword.get(opts, :transfer, true) do
+        Sim.transfer(sim, "root", "admin", :admin,
+          ops: Keyword.get(opts, :ops, @admin_ops),
+          expires_epoch: expires
+        )
+      else
+        {sim, nil}
+      end
 
-    {sim, beacon1} = Sim.beacon(sim, "root", 1)
+    {sim, beacon1} = if beacons?, do: Sim.beacon(sim, "root", 1), else: {sim, nil}
     sim = Sim.sync_all(sim)
     log = Sim.log(sim, "observer")
 
@@ -204,7 +212,7 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
       end
 
     {:ok, %{cutoff: cutoff}} = CatalogCutoff.derive(p)
-    cap = Keyword.get(opts, :cap, base.delegation.id)
+    cap = Keyword.get_lazy(opts, :cap, fn -> base.delegation.id end)
 
     claim =
       %{
@@ -227,7 +235,7 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
         cutoffs: [cutoff],
         author: author.pub,
         cap: cap,
-        holder_epoch: Keyword.get(opts, :holder_epoch, base.transfer.id),
+        holder_epoch: Keyword.get_lazy(opts, :holder_epoch, fn -> base.transfer.id end),
         deps: Enum.sort(deps),
         epoch: epoch,
         epoch_basis: basis
@@ -328,6 +336,7 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
       Delegation.new(issuer, base.replica, audience,
         ops: Keyword.get(opts, :ops, @admin_ops),
         roles: [:admin],
+        live: Keyword.get(opts, :live, false),
         parent_id: Keyword.get(opts, :parent_id, genesis_delegation(base).id),
         expires_epoch: Keyword.get(opts, :expires, 6)
       )

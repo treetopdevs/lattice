@@ -1228,41 +1228,42 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
 
   # --- vectors -----------------------------------------------------------------------
 
-  @doc "The JSON vector: inputs, hand-written expectations and BEAM incidental outputs."
+  @doc """
+  The JSON vector: inputs (frames and artifacts deduplicated by id), hand-written
+  expectations and BEAM incidental outputs.
+  """
   def vector(base \\ F.base()) do
-    scenarios = all(base)
+    runs = Enum.map(all(base), &{&1, run(base, &1)})
+    evidences = for {_s, rs} <- runs, r <- rs, do: r.evidence
+
+    frames =
+      for e <- evidences, {id, op} <- Log.ops(e.space), into: %{}, do: {id, Wire.encode_op(op)}
+
+    artifacts =
+      for e <- evidences,
+          {id, env} <- Map.to_list(e.rotations) ++ Map.to_list(e.catalogs),
+          into: %{},
+          do: {id, artifact(env)}
 
     %{
       "version" => 1,
-      "bootstrap" => %{
-        "id" => base.boot.id,
-        "record" => base.boot.record |> Wire.encode_value()
-      },
+      "bootstrap" => %{"id" => base.boot.id, "record" => Wire.encode_value(base.boot.record)},
       "space" => base.replica,
       "generation_cases" => generation_cases(),
+      "frames" => frames,
+      "artifacts" => artifacts,
       "scenarios" =>
-        Enum.map(scenarios, fn s ->
+        Enum.map(runs, fn {s, rs} ->
           %{
             "name" => s.name,
             "labels" => s.labels,
             "steps" =>
-              Enum.map(run(base, s), fn r ->
+              Enum.map(rs, fn r ->
                 %{
                   "state" => state_json(r.state_in),
-                  "frames" =>
-                    r.evidence.space
-                    |> Log.ops()
-                    |> Map.values()
-                    |> Enum.sort_by(& &1.id)
-                    |> Enum.map(&Wire.encode_op/1),
-                  "rotations" =>
-                    r.evidence.rotations
-                    |> Enum.sort()
-                    |> Enum.map(fn {_id, e} -> artifact(e) end),
-                  "catalogs" =>
-                    r.evidence.catalogs
-                    |> Enum.sort()
-                    |> Enum.map(fn {_id, e} -> artifact(e) end),
+                  "frames" => r.evidence.space |> Log.ops() |> Map.keys() |> Enum.sort(),
+                  "rotations" => r.evidence.rotations |> Map.keys() |> Enum.sort(),
+                  "catalogs" => r.evidence.catalogs |> Map.keys() |> Enum.sort(),
                   "proven" =>
                     Enum.map(
                       r.evidence.proven,
