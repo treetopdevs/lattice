@@ -457,6 +457,10 @@ PR 4a decisions:
   (the accepted binding refused or closed and its catalog covered or closed out by a sole
   promotable admin resolution), not from persisted head ids. Acceptance: the R1/T2/TR/R2
   interleaving clears in both delivery orders, and a later R3 clears a client that froze.
+  Review round 4 (finding 4) reproduced the freeze with the committed TS C13 fixtures: the block
+  records TR, R2 closes TR out rather than closing it, and no later ordinary resolution can
+  satisfy the trigger. Under adopted row 320 a fresh admin resolution citing the current heads
+  must clear, so this row gates 4c.
 - **D-A15 (cutoff obligations; review round 3, findings 2 and 3).** A node owes its own
   declared cutoffs plus those it inherits from a same-service parent: a rotation's pending set
   is its parent's plus its own unproven cutoffs (CatalogTrust parity, `catalog_trust.ex:505`).
@@ -483,7 +487,32 @@ PR 4a decisions:
   not patched): once R's first catalog KR is refused, R2 citing `{R, nil}` with a Space-only
   first catalog promotes and drops C0's Thread, because a node with no valid catalog is cited
   with `nil` and nothing carries its covered prior's entries forward. Acceptance there: R2 is
-  refused or forks until it extends C0's entries.
+  refused or forks until it extends C0's entries. Review round 4 reopened all three (findings 3
+  and 7) and added a fourth case of the same class (finding 6): a rotation whose prior catalog is
+  intrinsically invalid (Cbad: revision 2, `previous` a revision-0 C0) still counts as a binding
+  head, because rotation eligibility is judged before catalog validity; three such rotations
+  give `control_history_limit`. The pinned "rotation naming a refused prior" scenario expects T
+  as a head and changes under this row. The redesign is one causal evaluation in which node
+  eligibility and catalog validity (chain, cited priors, route ancestry, nil-cited inventory
+  carry-forward) read each other in causal order; acceptance adds: three rotations naming
+  intrinsically invalid priors are refusals, not heads.
+- **D-A17 (refused-parent coverage; review round 4, finding 1).** A chain-valid catalog under a
+  union-refused node whose binding is closed is classified for coverage like any other: if the
+  closing citations omit it, it is an uncovered catalog head (`catalog_fork`) and keeps its
+  `catalog_authority_refused` refusal. The verifier now agrees with authoring's
+  `citable_catalog_heads` (D-A13): R2 citing only `{R1, Ka}` beside sibling Kb forks; R2b citing
+  both is accepted.
+- **D-A18 (only a chain-valid catalog is an omitted head; finding 2).** Under a closed binding an
+  uncited catalog that fails its own chain is refused `invalid_catalog_transition`, and one
+  whose chain is not held is closed-out evidence (D-A16 applied to catalogs); neither forks. The
+  author omits such an artifact from the preflight's retained set (D-A4 still refuses on it).
+  Residual, not changed: a valid old-key catalog under a closed binding that the closing
+  citations omit (for example a second revision-0 catalog) is still an omitted head and forks;
+  that is D-275's coverage rule, not an invalid-artifact gap.
+- **D-A19 (whole-cutoff proofs; finding 5).** `proven_cutoffs` entries are the complete
+  `{replica, frontier, log_digest}` cutoff and match a node's cutoff only whole (CatalogTrust
+  parity); an entry without `frontier` is `malformed_catalog` input. The binding-graph vectors
+  carry `frontier` in each proof.
 - **D-A8 (fixtures).** The 4a fixtures build their own Sim bounded Space (pin, root beacons,
   leased admin) instead of `CatalogVectors.bootstrap_history`, because the step-4 and R04 cases
   need the witnessed-beacon pin and continuation.

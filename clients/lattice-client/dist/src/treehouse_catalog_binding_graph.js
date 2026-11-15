@@ -48,6 +48,8 @@ export async function resolveCatalogBindingGraph(input) {
 }
 // --- context ----------------------------------------------------------------------------------------------------------
 async function context(input) {
+    if (!Array.isArray(input.provenCutoffs) || !input.provenCutoffs.every(provenShape))
+        return null;
     const replica = input.bootstrap.record.space;
     const frames = new Map();
     for (const value of structuredClone([...input.frames])) {
@@ -83,7 +85,7 @@ async function context(input) {
     }
     const ctx = { input, replica, bootstrapId: input.bootstrap.id, record: input.bootstrap.record, byId, frames, complete,
         completeById, ancestorCache: new Map(), reasons, candidates,
-        proven: new Set(input.provenCutoffs.map((c) => `${c.replica}\u0000${c.logDigest}`)), bootHonored: false,
+        proven: new Set(input.provenCutoffs.map(cutoffKey)), bootHonored: false,
         memo: new Map(), visiting: new Set() };
     ctx.bootHonored = bootstrapHonored(ctx);
     return ctx;
@@ -297,14 +299,25 @@ async function evalCandidate(id, ctx) {
             prior: s.claim.priorCatalogs, inventory: s.claim.inventoryDigest, refused: core !== null, coreReason: core,
             pending: unproven(s.claim.cutoffs, ctx) } };
 }
+// A proof matches a cutoff only on the whole `{replica, frontier, logDigest}` (CatalogTrust compares the complete cutoff).
+function provenShape(c) {
+    if (typeof c !== "object" || c === null)
+        return false;
+    const cut = c;
+    return typeof cut.replica === "string" && typeof cut.logDigest === "string" && Array.isArray(cut.frontier) &&
+        cut.frontier.every((f) => typeof f === "string");
+}
+function cutoffKey(cut) {
+    return JSON.stringify([cut.replica, cut.frontier, cut.logDigest]);
+}
 function unproven(cutoffs, ctx) {
-    return cutoffs.filter((cut) => !ctx.proven.has(`${cut.replica}\u0000${cut.logDigest}`))
-        .map((cut) => ({ replica: cut.replica, logDigest: cut.logDigest }));
+    return cutoffs.filter((cut) => !ctx.proven.has(cutoffKey(cut)))
+        .map((cut) => ({ replica: cut.replica, frontier: [...cut.frontier], logDigest: cut.logDigest }));
 }
 function uniqCutoffs(cutoffs) {
     const seen = new Set();
     return cutoffs.filter((cut) => {
-        const key = `${cut.replica}\u0000${cut.logDigest}`;
+        const key = cutoffKey(cut);
         if (seen.has(key))
             return false;
         seen.add(key);
@@ -469,8 +482,13 @@ function classifyCatalogs(ctx, nodesAll, closed, outRot, outPending) {
             return refuse(id, v.reason, null);
         if (v.t === "binding_pending")
             return outPending.has(c.binding) ? "closed_out" : "pending";
-        if (n.refused)
-            return refuse(id, "catalog_authority_refused", n.coreReason);
+        if (n.refused) {
+            // A catalog under a union-refused node authorizes nothing, but under a closed binding a chain-valid one is still a
+            // citable catalog head (D-A13): omitted by the citations, it is an uncovered head (a fork). It keeps its refusal.
+            refuse(id, "catalog_authority_refused", n.coreReason);
+            return v.t === "ok" && closed.has(c.binding) && !outRot.has(c.binding) && closedStatus(id, c.binding, v) === "uncovered"
+                ? "uncovered" : "refused";
+        }
         if (outRot.has(c.binding))
             return "closed_out";
         if (closed.has(c.binding))
@@ -483,7 +501,8 @@ function classifyCatalogs(ctx, nodesAll, closed, outRot, outPending) {
     };
     // Under a closed binding: covered when ancestor-or-self of a valid cited catalog, closed out when a strict descendant of a
     // cited catalog or when the binding was cited with null, otherwise an omitted head (uncovered, a fork). A catalog on a cited
-    // chain is refused when invalid and pending when its chain is; an uncited old-key catalog is never pending.
+    // chain is refused when invalid and pending when its chain is. Only a chain-valid catalog can be an omitted head: an uncited
+    // invalid one is refused and an uncited one whose chain is not held is closed-out evidence (D-A16 for catalogs).
     const closedStatus = (id, binding, v) => {
         const cited = cites.get(binding) ?? [];
         const real = cited.filter((c) => c !== null);
@@ -495,6 +514,10 @@ function classifyCatalogs(ctx, nodesAll, closed, outRot, outPending) {
         if (real.some((c) => c !== id && onChain(c, id, previous)))
             return "closed_out";
         if (cited.includes(null))
+            return "closed_out";
+        if (v.t === "bad_chain")
+            return refuse(id, "invalid_catalog_transition", null);
+        if (v.t === "pending")
             return "closed_out";
         return "uncovered";
     };

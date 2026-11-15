@@ -62,7 +62,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           cutoff <- List.wrap(Map.get(claim, :cutoffs)),
           is_map(cutoff),
           uniq: true,
-          do: %{replica: cutoff.replica, log_digest: cutoff.log_digest}
+          do: Map.take(cutoff, [:replica, :frontier, :log_digest])
 
     # A rotation owes its own declared cutoffs too (review round 3, finding 3); `unproven`
     # takes rotation ids as well.
@@ -70,9 +70,10 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       for rot <- rotations,
           rot.id not in unproven,
           cutoff <- rot.envelope.rotation.cutoffs,
-          do: %{replica: cutoff.replica, log_digest: cutoff.log_digest}
+          do: Map.take(cutoff, [:replica, :frontier, :log_digest])
 
-    proven = Enum.uniq(proven ++ rotation_proven)
+    # `proven:` replaces the derived proofs (a proof for a different cutoff than the claim's).
+    proven = Keyword.get(opts, :proven, Enum.uniq(proven ++ rotation_proven))
 
     %{
       space: log,
@@ -142,7 +143,10 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &rotation_refused_prior/1,
       &uncited_pending/1,
       &closed_rotation_withheld_prior/1,
-      &replacement_cutoff_coverage/1
+      &replacement_cutoff_coverage/1,
+      &refused_parent_sibling/1,
+      &invalid_old_key_catalog/1,
+      &cutoff_frontier/1
     ]
   end
 
@@ -1216,6 +1220,229 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     ]
   end
 
+  defp thread_of(space, name) do
+    %{
+      space
+      | replica: space.replica <> "-thread",
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        route: "/r/" <> F.id("route-thread-" <> name)
+    }
+  end
+
+  # Review round 4, finding 1: accepted R1/K1 has two valid revision-1 siblings, Ka (Space) and
+  # Kb (Space + Thread). A concurrent holder change refuses R1. R2 citing only {R1, Ka} with a
+  # Space-only K2 omits Kb: Kb is a refused-node catalog but still a citable head, so it is an
+  # uncovered catalog head (catalog_fork), as authoring coverage reads it. R2b citing both
+  # siblings and carrying the Thread forward is accepted.
+  defp refused_parent_sibling(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    [space] = r1.entries
+    ka = F.catalog(base, r1.id, 1, F.cid(k1), r1.catalog_key, [space])
+    kb = F.catalog(base, r1.id, 1, F.cid(k1), r1.catalog_key, [space, thread_of(space, "r1")])
+    {_tn, t2, l2} = regrant(base, l1, Log.frontier(base.log))
+
+    nominee = [
+      parents: [r1.id],
+      generation: 2,
+      author: base.nominee,
+      cap: t2.delegation.id,
+      holder_epoch: t2.op.id
+    ]
+
+    r2 =
+      F.replacement(
+        base,
+        l2,
+        "r2",
+        nominee ++
+          [
+            prior_catalogs: [%{binding: r1.id, catalog: F.cid(ka)}],
+            claim: %{author: base.nominee.pub}
+          ]
+      )
+
+    k2 = F.first(base, r2)
+
+    sid = F.id("service-id-r2b")
+    skey = F.identity("service-r2b")
+    [space2] = F.entries(base, "r2b", sid, skey.pub)
+    thread2 = thread_of(space2, "r2b")
+
+    thread_cut = %{
+      replica: thread2.replica,
+      frontier: [F.id("f-thread-r2b")],
+      log_digest: F.id("d-thread-r2b")
+    }
+
+    [space_cut] = r2.claim.cutoffs
+
+    r2b =
+      F.replacement(
+        base,
+        l2,
+        "r2b",
+        nominee ++
+          [
+            prior_catalogs:
+              Enum.sort_by(
+                [%{binding: r1.id, catalog: F.cid(ka)}, %{binding: r1.id, catalog: F.cid(kb)}],
+                & &1.catalog
+              ),
+            service_id: sid,
+            service_key: skey,
+            entries: [space2, thread2],
+            claim: %{
+              author: base.nominee.pub,
+              cutoffs: Enum.sort_by([space_cut, thread_cut], & &1.replica)
+            }
+          ]
+      )
+
+    k2b = F.first(base, r2b)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "Ka" => F.cid(ka),
+        "Kb" => F.cid(kb),
+        "T2" => t2.op.id,
+        "R2" => r2.id,
+        "K2" => F.cid(k2),
+        "R2b" => r2b.id,
+        "K2b" => F.cid(k2b)
+      })
+
+    accepted = ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
+
+    refused = %{
+      "K1" => "catalog_authority_refused",
+      "Ka" => "catalog_authority_refused",
+      "Kb" => "catalog_authority_refused"
+    }
+
+    [
+      one("a resolution omitting a sibling catalog under a refused parent forks", labels, [
+        step(ev(l1, catalogs: [c0, k1]), accepted),
+        step(
+          ev(add(l2, [r2]), catalogs: [c0, k1, ka, kb, k2]),
+          ok(["R2"],
+            closed: ["B", "R1"],
+            refused: ["R1"],
+            refusals: refused,
+            forks: ["catalog"],
+            decision: [reason: "catalog_fork", block: "catalog_fork"]
+          )
+        )
+      ]),
+      one("a resolution citing both siblings under a refused parent is accepted", labels, [
+        step(ev(l1, catalogs: [c0, k1]), accepted),
+        step(
+          ev(add(l2, [r2b]), catalogs: [c0, k1, ka, kb, k2b]),
+          ok(["R2b"],
+            closed: ["B", "R1"],
+            refused: ["R1"],
+            refusals: refused,
+            decision: accept("R2b", "K2b")
+          )
+        )
+      ])
+    ]
+  end
+
+  # Review round 4, finding 2: accepted R/KR closes B citing C0. A B-signed X (revision 1,
+  # `previous` KR, which is bound to R) fails its own chain, so it is refused and never an
+  # omitted catalog head. An uncited X2 whose `previous` Y is not yet held is closed-out evidence,
+  # and stays closed out when Y (a descendant of the cited C0) arrives.
+  defp invalid_old_key_catalog(base) do
+    c0 = F.c0(base)
+    r = cite_c0(base, c0, "r")
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+    x = F.catalog(base, base.boot.id, 1, F.cid(kr), base.catalog, F.base_entries(base))
+    y = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, F.base_entries(base))
+    x2 = F.catalog(base, base.boot.id, 2, F.cid(y), base.catalog, F.base_entries(base))
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "X" => F.cid(x),
+        "Y" => F.cid(y),
+        "X2" => F.cid(x2)
+      })
+
+    held = fn opts -> ok(["R"], [closed: ["B"], decision: accept("R", "KR")] ++ opts) end
+
+    one("an old-key catalog failing its own chain cannot fork a closed binding", labels, [
+      step(ev(lr, catalogs: [c0, kr]), held.([])),
+      step(
+        ev(lr, catalogs: [c0, kr, x]),
+        held.(refusals: %{"X" => "invalid_catalog_transition"})
+      ),
+      step(ev(lr, catalogs: [c0, kr, x2]), held.(closed_out: ["X2"])),
+      step(ev(lr, catalogs: [c0, kr, x2, y]), held.(closed_out: ["X2", "Y"]))
+    ])
+  end
+
+  # Review round 4, finding 5: a proof matches a cutoff only on the whole
+  # `{replica, frontier, log_digest}`. A replacement and a rotation each claiming a different
+  # frontier than the proven one stay recovery_incomplete.
+  defp cutoff_frontier(base) do
+    c0 = F.c0(base)
+    genuine = hd(cite_c0(base, c0, "rq-genuine").claim.cutoffs)
+    forged = %{genuine | frontier: [F.id("forged-frontier")]}
+    r = cite_c0(base, c0, "rq", claim: %{cutoffs: [forged]})
+    kr = F.first(base, r)
+    t = rotation(base, node(base.boot.id, 0), c0, base.catalog, "tq")
+    ct = F.catalog(base, t.id, 0, nil, F.identity("rot-tq"), F.base_entries(base))
+    [tcut] = t.envelope.rotation.cutoffs
+    tproof = %{tcut | frontier: [F.id("forged-rotation-frontier")]}
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "T" => t.id,
+        "CT" => F.cid(ct)
+      })
+
+    [
+      one("a replacement cutoff proof must match the claimed frontier", labels, [
+        step(
+          ev(add(base.log, [r.op]), catalogs: [c0, kr], proven: [genuine]),
+          ok(["R"],
+            closed: ["B"],
+            pending: ["R"],
+            decision: [head: "R", reason: "recovery_incomplete"]
+          )
+        ),
+        step(
+          ev(add(base.log, [r.op]), catalogs: [c0, kr], proven: [forged]),
+          ok(["R"], closed: ["B"], decision: accept("R", "KR"))
+        )
+      ]),
+      one("a rotation cutoff proof must match the claimed frontier", labels, [
+        step(
+          ev(base.log, rotations: [t], catalogs: [c0, ct], proven: [tproof]),
+          ok(["T"],
+            nodes: ["B", "T"],
+            pending: ["T"],
+            decision: [head: "T", reason: "recovery_incomplete"]
+          )
+        ),
+        step(
+          ev(base.log, rotations: [t], catalogs: [c0, ct], proven: [tcut]),
+          ok(["T"], nodes: ["B", "T"], decision: accept("T", "CT"))
+        )
+      ])
+    ]
+  end
+
   # --- running and viewing ---------------------------------------------------------
 
   @doc "Run one scenario; returns `[%{label_view, expect, view, input, state_in}]` per step."
@@ -1311,7 +1538,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
                   "proven" =>
                     Enum.map(
                       r.evidence.proven,
-                      &%{"replica" => &1.replica, "logDigest" => &1.log_digest}
+                      &%{
+                        "replica" => &1.replica,
+                        "frontier" => &1.frontier,
+                        "logDigest" => &1.log_digest
+                      }
                     ),
                   "expect" => r.expect,
                   "beam" => r.view

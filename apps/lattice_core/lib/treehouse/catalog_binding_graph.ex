@@ -8,7 +8,8 @@ defmodule Treehouse.CatalogBindingGraph do
 
   Input (`resolve/1`): the honored `bootstrap` (`%{id, record}`), the authenticated `space`
   union log, retained `rotations` and `catalogs` as `%{id => normalized envelope}`, the
-  `proven_cutoffs` the caller already verified page-level, and the persisted `accepted` and
+  `proven_cutoffs` the caller already verified page-level (whole `{replica, frontier,
+  log_digest}` cutoffs, D-A19), and the persisted `accepted` and
   `blocked` state. `blocked` is read only to decide whether `authority_changed` may be lifted;
   this module never writes it and never decides stickiness.
 
@@ -102,6 +103,24 @@ defmodule Treehouse.CatalogBindingGraph do
        })
        when is_map(rotations) and is_map(catalogs) and is_list(proven) and is_binary(id) and
               is_map(record) do
+    if Enum.all?(proven, &proven_shape?/1),
+      do: {:ok, build_context(bootstrap, space, rotations, catalogs, proven, accepted, blocked)},
+      else: :error
+  end
+
+  defp context(_), do: :error
+
+  # A proven cutoff is the complete `{replica, frontier, log_digest}` triple (CatalogTrust
+  # compares the whole cutoff); an entry without its frontier fails closed as malformed input.
+  defp proven_shape?(%{replica: r, frontier: f, log_digest: d})
+       when is_binary(r) and is_list(f) and is_binary(d),
+       do: true
+
+  defp proven_shape?(_), do: false
+
+  defp cutoff_key(c), do: {c.replica, c.frontier, c.log_digest}
+
+  defp build_context(bootstrap, space, rotations, catalogs, proven, accepted, blocked) do
     ops = Log.ops(space)
     complete = complete_ids(ops)
     cops = Map.take(ops, MapSet.to_list(complete))
@@ -112,26 +131,23 @@ defmodule Treehouse.CatalogBindingGraph do
           into: %{},
           do: {oid, op}
 
-    {:ok,
-     %{
-       bootstrap: bootstrap,
-       replica: replica,
-       ops: ops,
-       cops: cops,
-       complete: complete,
-       ancestors: Dag.all_ancestors(cops),
-       analysis: Authority.analyze(Space, Log.from_ops(replica, cops)),
-       candidates: candidates,
-       rotations: rotations,
-       catalogs: catalogs,
-       proven: MapSet.new(proven, &{&1.replica, &1.log_digest}),
-       accepted: accepted,
-       blocked: blocked,
-       boot_honored: bootstrap_honored?(bootstrap, cops, replica)
-     }}
+    %{
+      bootstrap: bootstrap,
+      replica: replica,
+      ops: ops,
+      cops: cops,
+      complete: complete,
+      ancestors: Dag.all_ancestors(cops),
+      analysis: Authority.analyze(Space, Log.from_ops(replica, cops)),
+      candidates: candidates,
+      rotations: rotations,
+      catalogs: catalogs,
+      proven: MapSet.new(proven, &cutoff_key/1),
+      accepted: accepted,
+      blocked: blocked,
+      boot_honored: bootstrap_honored?(bootstrap, cops, replica)
+    }
   end
-
-  defp context(_), do: :error
 
   # An op's closure is complete when every dep is held and itself complete.
   defp complete_ids(ops) do
@@ -469,7 +485,7 @@ defmodule Treehouse.CatalogBindingGraph do
   end
 
   defp unproven(cutoffs, ctx),
-    do: Enum.reject(cutoffs, &MapSet.member?(ctx.proven, {&1.replica, &1.log_digest}))
+    do: Enum.reject(cutoffs, &MapSet.member?(ctx.proven, cutoff_key(&1)))
 
   # Steps 5 and 6, intrinsic part. Returns `{failures, pending?, st}`. A cited replacement op
   # outside the deps closure fails before it is evaluated, so recursion follows causality.
@@ -795,7 +811,7 @@ defmodule Treehouse.CatalogBindingGraph do
 
       v ->
         cond do
-          n.refused? -> refuse(acc, id, :catalog_authority_refused, n.core_reason)
+          n.refused? -> refused_node_status(id, c.binding, v, env, acc, n.core_reason)
           MapSet.member?(env.out_rot, c.binding) -> {:closed_out, acc}
           MapSet.member?(env.closed, c.binding) -> closed_status(id, c.binding, v, env, acc)
           v == :pending -> {:pending, acc}
@@ -805,11 +821,27 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
+  # A catalog under a union-refused node authorizes nothing, but under a closed binding a
+  # chain-valid one is still a citable catalog head (D-A13, `citable_catalog_heads`): if the
+  # citations omit it, it is an omitted head (`uncovered`, a fork), as authoring coverage reads
+  # it. It keeps its `catalog_authority_refused` refusal either way.
+  defp refused_node_status(id, binding, v, env, acc, core) do
+    {:refused, acc} = refuse(acc, id, :catalog_authority_refused, core)
+
+    if v == :ok and MapSet.member?(env.closed, binding) and
+         not MapSet.member?(env.out_rot, binding) and
+         match?({:uncovered, _}, closed_status(id, binding, v, env, acc)),
+       do: {:uncovered, acc},
+       else: {:refused, acc}
+  end
+
   # Under a closed binding: covered when ancestor-or-self of a valid cited catalog, closed out
   # when a strict descendant of a cited catalog or when the binding was cited with nil,
   # otherwise an omitted head (uncovered, a fork). A catalog on a cited chain is refused when
-  # invalid and pending when its chain is; an uncited old-key catalog is never pending, so it
-  # cannot stall the resolve.
+  # invalid and pending when its chain is. Only a chain-valid catalog can be an omitted head:
+  # an uncited invalid one is refused and an uncited one whose chain is not held is closed-out
+  # evidence (D-A16 for catalogs), so an old-key signer can neither stall nor fork the resolve
+  # with artifacts that fail their own chain.
   defp closed_status(id, binding, v, env, acc) do
     cited = Map.get(env.cites, binding, [])
     real = Enum.reject(cited, &is_nil/1)
@@ -826,6 +858,12 @@ defmodule Treehouse.CatalogBindingGraph do
         {:closed_out, acc}
 
       nil in cited ->
+        {:closed_out, acc}
+
+      v == :bad_chain ->
+        refuse(acc, id, :invalid_catalog_transition, nil)
+
+      v == :pending ->
         {:closed_out, acc}
 
       true ->

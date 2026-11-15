@@ -37,7 +37,7 @@ defmodule Treehouse.CatalogBindingGraphTest do
   end
 
   defp proven(r),
-    do: Enum.map(r.claim.cutoffs, &%{replica: &1.replica, log_digest: &1.log_digest})
+    do: Enum.map(r.claim.cutoffs, &Map.take(&1, [:replica, :frontier, :log_digest]))
 
   test "replacement and rotation nodes carry generation, service, origin and parents (D-270)" do
     c0 = F.c0(@base)

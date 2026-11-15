@@ -9566,6 +9566,953 @@
           "catalog_status": "ancestor_of_cited"
         }
       }
+    },
+    {
+      "scenario": "a resolution omitting a sibling catalog under a refused parent forks",
+      "step": 1,
+      "label": {
+        "heads": [
+          "R1"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R1"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R1",
+          "catalog": "K1",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+          "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a resolution omitting a sibling catalog under a refused parent forks",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R2"
+        ],
+        "closed": [
+          "B",
+          "R1"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R1",
+          "R2"
+        ],
+        "refused": [
+          "R1"
+        ],
+        "raw": {},
+        "refusals": {
+          "Kb": "catalog_authority_refused",
+          "Ka": "catalog_authority_refused",
+          "K1": "catalog_authority_refused"
+        },
+        "pending": [],
+        "forks": [
+          "catalog"
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": "catalog_fork",
+          "head": null,
+          "catalog": null,
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "UNjAVDhR5uPbGrxhEJXzyP77XEQmCklYTb3GHxW5XzQ"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "UNjAVDhR5uPbGrxhEJXzyP77XEQmCklYTb3GHxW5XzQ": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": true,
+            "core_reason": "stale_holder",
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {
+          "GdCZOcSV9aIZzxWyIYGrCSB1QVX0dLTyUabr5UcOs_8": "catalog_authority_refused",
+          "Hm3iyIGhrLhXgOuixpOy2IgvRBRwB7dys8J5arnRsVA": "catalog_authority_refused",
+          "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4": "catalog_authority_refused"
+        },
+        "catalog_heads": {
+          "UNjAVDhR5uPbGrxhEJXzyP77XEQmCklYTb3GHxW5XzQ": [
+            "uWOQr5oO_SDpDb0BNob7EYqcfhtD60Ib9iI4aRQrPUc"
+          ]
+        },
+        "forks": [
+          {
+            "kind": "catalog",
+            "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "ids": [
+              "GdCZOcSV9aIZzxWyIYGrCSB1QVX0dLTyUabr5UcOs_8"
+            ]
+          }
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": {
+            "reason": "catalog_fork",
+            "triggers": [
+              "GdCZOcSV9aIZzxWyIYGrCSB1QVX0dLTyUabr5UcOs_8"
+            ]
+          },
+          "head": null,
+          "catalog": null,
+          "clears": false,
+          "binding_status": "refused",
+          "catalog_status": "refused"
+        }
+      }
+    },
+    {
+      "scenario": "a resolution citing both siblings under a refused parent is accepted",
+      "step": 1,
+      "label": {
+        "heads": [
+          "R1"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R1"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R1",
+          "catalog": "K1",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+          "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a resolution citing both siblings under a refused parent is accepted",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R2b"
+        ],
+        "closed": [
+          "B",
+          "R1"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R1",
+          "R2b"
+        ],
+        "refused": [
+          "R1"
+        ],
+        "raw": {},
+        "refusals": {
+          "Kb": "catalog_authority_refused",
+          "Ka": "catalog_authority_refused",
+          "K1": "catalog_authority_refused"
+        },
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R2b",
+          "catalog": "K2b",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "XQk8q-VGcTy-EQMOcq3UueBVWy1H1-Z-gqGP81d34vU"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "XQk8q-VGcTy-EQMOcq3UueBVWy1H1-Z-gqGP81d34vU": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": true,
+            "core_reason": "stale_holder",
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {
+          "GdCZOcSV9aIZzxWyIYGrCSB1QVX0dLTyUabr5UcOs_8": "catalog_authority_refused",
+          "Hm3iyIGhrLhXgOuixpOy2IgvRBRwB7dys8J5arnRsVA": "catalog_authority_refused",
+          "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4": "catalog_authority_refused"
+        },
+        "catalog_heads": {
+          "XQk8q-VGcTy-EQMOcq3UueBVWy1H1-Z-gqGP81d34vU": [
+            "v5Bu69I7yOgBjix-6kKFUULqQC7s0NdObzM5raKPMi0"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "XQk8q-VGcTy-EQMOcq3UueBVWy1H1-Z-gqGP81d34vU",
+          "catalog": "v5Bu69I7yOgBjix-6kKFUULqQC7s0NdObzM5raKPMi0",
+          "clears": false,
+          "binding_status": "refused",
+          "catalog_status": "refused"
+        }
+      }
+    },
+    {
+      "scenario": "an old-key catalog failing its own chain cannot fork a closed binding",
+      "step": 1,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R",
+          "catalog": "KR",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": [
+            "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs",
+          "catalog": "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "an old-key catalog failing its own chain cannot fork a closed binding",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {
+          "X": "invalid_catalog_transition"
+        },
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R",
+          "catalog": "KR",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {
+          "hGzINenX5YfzE_D5b5D-Zkbu3HaTmhYZEBHXLBVbXvw": "invalid_catalog_transition"
+        },
+        "catalog_heads": {
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": [
+            "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs",
+          "catalog": "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY",
+          "clears": false,
+          "binding_status": "current",
+          "catalog_status": "current"
+        }
+      }
+    },
+    {
+      "scenario": "an old-key catalog failing its own chain cannot fork a closed binding",
+      "step": 3,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [
+          "X2"
+        ],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R",
+          "catalog": "KR",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {
+          "7xbVJqU5i18ZEgaSvbOQDB9NlNuSFgcdUX2KCm52rgQ": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": [
+            "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs",
+          "catalog": "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY",
+          "clears": false,
+          "binding_status": "current",
+          "catalog_status": "current"
+        }
+      }
+    },
+    {
+      "scenario": "an old-key catalog failing its own chain cannot fork a closed binding",
+      "step": 4,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [
+          "X2",
+          "Y"
+        ],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R",
+          "catalog": "KR",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {
+          "7xbVJqU5i18ZEgaSvbOQDB9NlNuSFgcdUX2KCm52rgQ": "catalog_rollback",
+          "RWF3lERv84tKq0iwg3EiQwVGux23Bw-h6MDh28nLjck": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs": [
+            "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs",
+          "catalog": "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY",
+          "clears": false,
+          "binding_status": "current",
+          "catalog_status": "current"
+        }
+      }
+    },
+    {
+      "scenario": "a replacement cutoff proof must match the claimed frontier",
+      "step": 1,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [
+          "R"
+        ],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "recovery_incomplete",
+          "block": null,
+          "head": "R",
+          "catalog": null,
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 1
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE": [
+            "6YfAS4Vvzo65kEVOtwYAkcUC_prJyYY6a8xp7y-LaWY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "recovery_incomplete",
+          "block": null,
+          "head": "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE",
+          "catalog": null,
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a replacement cutoff proof must match the claimed frontier",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R",
+          "catalog": "KR",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE": [
+            "6YfAS4Vvzo65kEVOtwYAkcUC_prJyYY6a8xp7y-LaWY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "tvE7caMJaYAMpCsmGTeeuf26LqtRtSI5QxiBuPllbsE",
+          "catalog": "6YfAS4Vvzo65kEVOtwYAkcUC_prJyYY6a8xp7y-LaWY",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a rotation cutoff proof must match the claimed frontier",
+      "step": 1,
+      "label": {
+        "heads": [
+          "T"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "T"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [
+          "T"
+        ],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "recovery_incomplete",
+          "block": null,
+          "head": "T",
+          "catalog": null,
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA": {
+            "kind": "rotation",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 1
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA": [
+            "Yf7WybxBGV2lklMd3JSw8tEfbdCRstAUOYejphPVw9s"
+          ],
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "recovery_incomplete",
+          "block": null,
+          "head": "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA",
+          "catalog": null,
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a rotation cutoff proof must match the claimed frontier",
+      "step": 2,
+      "label": {
+        "heads": [
+          "T"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "T"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "T",
+          "catalog": "CT",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA": {
+            "kind": "rotation",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA": [
+            "Yf7WybxBGV2lklMd3JSw8tEfbdCRstAUOYejphPVw9s"
+          ],
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "5fo_EyaVuf_3iDY7OzzGAiAuX8kgnYpSO_5H1IORlMA",
+          "catalog": "Yf7WybxBGV2lklMd3JSw8tEfbdCRstAUOYejphPVw9s",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
     }
   ]
 }

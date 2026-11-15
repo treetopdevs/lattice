@@ -12,10 +12,7 @@ export interface CatalogBindingNode {
     inventory: string | null;
     refused: boolean;
     coreReason: string | null;
-    pending: readonly {
-        replica: string;
-        logDigest: string;
-    }[];
+    pending: readonly ProvenCutoff[];
 }
 export interface CatalogBindingAccepted {
     binding: string;
@@ -77,6 +74,11 @@ export type CatalogBindingGraphResult = {
         ids: string[];
     };
 };
+export interface ProvenCutoff {
+    replica: string;
+    frontier: readonly string[];
+    logDigest: string;
+}
 export interface CatalogBindingGraphInput {
     bootstrap: {
         id: string;
@@ -86,10 +88,8 @@ export interface CatalogBindingGraphInput {
     frames: readonly unknown[];
     rotations: ReadonlyMap<string, CatalogRotationEnvelope>;
     catalogs: ReadonlyMap<string, CatalogEnvelope>;
-    provenCutoffs: readonly {
-        replica: string;
-        logDigest: string;
-    }[];
+    /** Complete `{replica, frontier, logDigest}` cutoffs; an entry without its frontier is malformed input. */
+    provenCutoffs: readonly ProvenCutoff[];
     accepted: CatalogBindingAccepted | null;
     blocked: CatalogBindingBlocked | null;
 }

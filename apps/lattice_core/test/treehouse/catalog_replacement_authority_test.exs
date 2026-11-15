@@ -165,7 +165,7 @@ defmodule Treehouse.CatalogReplacementAuthorityTest do
       F.deliver(@base, F.empty_state(), %{
         space: F.append(log, [r.op]),
         catalogs: %{F.cid(c0) => c0, F.cid(k) => k},
-        proven: Enum.map(r.claim.cutoffs, &%{replica: &1.replica, log_digest: &1.log_digest})
+        proven: Enum.map(r.claim.cutoffs, &Map.take(&1, [:replica, :frontier, :log_digest]))
       })
 
     n = G.node(g, r.id)
