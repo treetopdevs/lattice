@@ -8,7 +8,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
   alias Lattice.Carrier.Wire
   alias LatticeCarrierServer.Secret
   alias LatticeCarrierServer.Operator.{CatalogSigningPackage, PublicHistory}
-  alias LatticeCarrierServer.Operator.CatalogCeremony.{Paths, Signer, SigningLedger}
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{Binding, Paths, Signer, SigningLedger}
   alias Treehouse.TransportCatalog
 
   @spec review(binary(), Path.t()) :: {:ok, map()} | {:error, atom()}
@@ -39,6 +39,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
           {:ok, binary()} | {:error, atom()}
   def sign_reviewed(package, ceremony, signer_path, confirmed_digest) do
     with true <- confirmed_digest == package.digest,
+         # The confirmation must still describe the catalog being signed, and that
+         # catalog must belong to the ledger's binding, before any key access.
+         true <- CatalogSigningPackage.digest(package.catalog) == package.digest,
+         true <- catalog_in_scope?(package.catalog, package.binding),
          :ok <- capacity(package.catalog, package.binding) do
       SigningLedger.transact(ceremony, package.binding, "open", fn state ->
         choose(package, state, ceremony, signer_path)
@@ -52,6 +56,11 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
   catch
     _, _ -> {:error, :catalog_signing_refused}
   end
+
+  defp catalog_in_scope?(catalog, binding),
+    do:
+      catalog.binding == Binding.binding_id(binding) and
+        catalog.bootstrap == binding.bootstrap_id and catalog.space == binding.record.space
 
   defp capacity(catalog, binding) do
     if catalog.revision < SigningLedger.max_envelopes(binding),

@@ -89,6 +89,29 @@ defmodule LatticeCarrierServer.Operator.CatalogSigningPackageTest do
              CatalogSigningPackage.encode(f.catalog, f.histories, reference, "pending")
   end
 
+  test "bootstrap package modes keep their closed wire shape", f do
+    reference = f.fixture[:reference]
+    space = f.histories[f.catalog.space]
+
+    pending =
+      Map.put(
+        f.histories,
+        space.replica,
+        Log.from_ops(space.replica, Map.delete(space.ops, reference.id))
+      )
+
+    for {mode, histories} <- [{"pending", pending}, {"initial_existing", f.histories}] do
+      assert {:ok, bytes} =
+               CatalogSigningPackage.encode(f.catalog, histories, f.fixture[:reference], mode)
+
+      doc = JSON.decode!(bytes)
+      assert Enum.sort(Map.keys(doc["reference"])) == ["frame", "mode"]
+      assert doc["reference"]["mode"] == mode
+      assert doc["reference"]["frame"] == Lattice.Carrier.Wire.encode_op(reference)
+      assert {:ok, %{mode: ^mode}} = CatalogSigningPackage.decode(bytes)
+    end
+  end
+
   test "closed canonical package refuses malformed and incomplete public evidence", f do
     {:ok, bytes} = encode(f)
     doc = JSON.decode!(bytes)

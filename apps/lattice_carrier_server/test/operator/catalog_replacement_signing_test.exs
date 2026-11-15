@@ -4,8 +4,7 @@ defmodule LatticeCarrierServer.Operator.CatalogReplacementSigningTest do
   # Core-honored on a snapshot is not resolver acceptance; no production source of a
   # replacement binding exists (PR 4), and no CLI path reaches this.
   use ExUnit.Case, async: false
-  alias Lattice.{Log, Op}
-  alias Lattice.Carrier.Wire
+  alias Lattice.Log
   alias LatticeCarrierServer.Operator.{CatalogSigningPackage, PublicHistory, ReleaseCatalog}
 
   alias LatticeCarrierServer.Operator.CatalogCeremony.{
@@ -355,21 +354,55 @@ defmodule LatticeCarrierServer.Operator.CatalogReplacementSigningTest do
       assert {:error, :binding_not_found} = review(f, nil, parent)
     end
 
-    test "review refusals create no ledger", f do
+    test "sign_reviewed refusals create no ledger and read no key", f do
+      {:ok, package} = review(f)
+      signer = seed!(f, "none", f.r.new_catalog)
+
+      # Wrong confirmation.
       ceremony = dir!(f, "ceremony-none")
-      _ = review(f, nil, nil, nil, id("nope"))
+
+      assert {:error, :catalog_confirmation_mismatch} =
+               SignCatalog.sign_reviewed(package, ceremony, signer, "wrong")
+
+      assert_no_ledger(ceremony)
+
+      # A reviewed map altered after review: the confirmation no longer describes it.
+      stale = put_in(package, [:catalog, :binding], f.r.bootstrap.id)
+
+      assert {:error, :catalog_confirmation_mismatch} =
+               SignCatalog.sign_reviewed(stale, ceremony, signer, package.digest)
+
+      # Even with the digest recomputed, a catalog of another binding is out of scope.
+      rebound = put_in(package, [:catalog, :binding], f.r.bootstrap.id)
+      rebound = %{rebound | digest: CatalogSigningPackage.digest(rebound.catalog)}
+
+      assert {:error, :catalog_confirmation_mismatch} =
+               SignCatalog.sign_reviewed(rebound, ceremony, signer, rebound.digest)
+
       assert_no_ledger(ceremony)
     end
-  end
 
-  test "bootstrap package modes keep their closed wire shape", f do
-    # A bootstrap mode still carries exactly {mode, frame} with an encoded op frame.
-    ref = f.r.bootstrap
-    doc = %{"mode" => "pending", "frame" => Wire.encode_op(ref)}
-    assert Enum.sort(Map.keys(doc)) == ["frame", "mode"]
+    test "a Thread-bearing replacement genesis is accepted by the chain rule", f do
+      [space] = f.catalog.entries
 
-    # The replacement mode uses the same two keys with a nil frame.
-    assert JSON.decode!(f.bytes)["reference"] == %{"mode" => "replacement", "frame" => nil}
-    assert %Op{} = ref
+      thread = %{
+        space
+        | replica: "replica:treehouse:thread:" <> id("t"),
+          kind: :thread,
+          schema: :treehouse_thread_v1,
+          reference: id("t-ref"),
+          route: "/r/" <> id("t-route")
+      }
+
+      wide = %{f.catalog | entries: Enum.sort_by([space, thread], & &1.replica)}
+      claim = %{f.r.claim | inventory_digest: TransportCatalog.inventory_id(wide.entries)}
+      {:ok, binding} = Binding.replacement(f.parent, claim, f.r.replacement.id)
+
+      assert SigningLedger.max_envelopes(binding) == 13
+      assert SigningLedger.extends?(wide, nil, binding)
+
+      # Without the committed Thread the inventory no longer matches.
+      refute SigningLedger.extends?(f.catalog, nil, binding)
+    end
   end
 end

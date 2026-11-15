@@ -184,8 +184,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
     if result == :error, do: :error, else: {:ok, entries}
   end
 
-  # The bootstrap chain rule; `SignCatalog` only ever holds a bootstrap binding
-  # (threading the replacement binding through signing is row 361).
+  # The binding-less (bootstrap) chain rule. `extends?/3` below is the binding-aware
+  # form that `SignCatalog.sign_reviewed/4` and ledger verification use, and it adds
+  # the replacement-genesis arm; keep both.
   @doc false
   @spec extends?(map(), map() | nil) :: boolean()
   def extends?(catalog, nil),
