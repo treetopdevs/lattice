@@ -98,8 +98,8 @@ export declare function catalogBindingReasonRank(reason: string): number;
 export declare function resolveCatalogBindingGraph(input: CatalogBindingGraphInput): Promise<CatalogBindingGraphResult>;
 /**
  * Check a candidate claim against a resolved graph for the authoring preflight (rows 352, 354, 356): pending first, then
- * transition failures, then an omitted head or catalog head (catalog_fork), then first-catalog extension of every cited
- * prior against `entries`. Returns null when covered.
+ * transition failures, then an omitted head or catalog head (catalog_fork), then a prior that is not a catalog head and
+ * first-catalog extension of every cited prior against `entries`. Returns null when covered.
  */
 export declare function coverCatalogReplacementClaim(graph: CatalogBindingGraph, claim: CatalogReplacementClaim, entries: readonly CatalogEntry[]): string | null;
 export {};

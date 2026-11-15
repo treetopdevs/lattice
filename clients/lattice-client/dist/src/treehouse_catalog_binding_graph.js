@@ -597,8 +597,8 @@ function row320(ctx, graph, id) {
 // --- authoring coverage ----------------------------------------------------------------------------------------------------
 /**
  * Check a candidate claim against a resolved graph for the authoring preflight (rows 352, 354, 356): pending first, then
- * transition failures, then an omitted head or catalog head (catalog_fork), then first-catalog extension of every cited
- * prior against `entries`. Returns null when covered.
+ * transition failures, then an omitted head or catalog head (catalog_fork), then a prior that is not a catalog head and
+ * first-catalog extension of every cited prior against `entries`. Returns null when covered.
  */
 export function coverCatalogReplacementClaim(graph, claim, entries) {
     const unknown = claim.parents.filter((p) => !graph.nodes.has(p));
@@ -614,8 +614,6 @@ export function coverCatalogReplacementClaim(graph, claim, entries) {
         return "trust_pending";
     if (unknown.length > 0)
         return "invalid_catalog_transition";
-    if (claim.parents.some((p) => !graph.heads.includes(p)))
-        return "invalid_catalog_transition";
     if (nextCatalogGeneration(claim.parents.map((p) => graph.nodes.get(p).generation)) !== claim.generation) {
         return "invalid_catalog_transition";
     }
@@ -624,12 +622,12 @@ export function coverCatalogReplacementClaim(graph, claim, entries) {
         return claim.newServiceKey !== n.serviceKey && claim.newServiceId === n.serviceId;
     }))
         return "invalid_catalog_transition";
-    if (claim.priorCatalogs.some((p) => !has(expected, p)))
-        return "invalid_catalog_transition";
     if (graph.heads.some((h) => !claim.parents.includes(h)))
         return "catalog_fork";
     if (expected.some((p) => !has(claim.priorCatalogs, p)))
         return "catalog_fork";
+    if (claim.priorCatalogs.some((p) => !has(expected, p)))
+        return "invalid_catalog_transition";
     if (claim.priorCatalogs.some((p) => p.catalog !== null && !extendsEntries(graph.catalogs.get(p.catalog).entries, entries))) {
         return "invalid_catalog_transition";
     }

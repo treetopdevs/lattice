@@ -983,9 +983,10 @@ defmodule Treehouse.CatalogBindingGraph do
   @doc """
   Check a candidate claim against a resolved graph, for the authoring preflight (rows 352,
   354, 356). Order: pending (an unheld parent or prior catalog), then transition failures (a
-  cited parent that is not a current head, wrong generation, service rule, a prior entry that
-  is not a retained head or names no cited parent), then an omitted head or catalog head
-  (`catalog_fork`), then first-catalog extension of every cited prior against `entries`.
+  cited parent that is raw evidence, refused or closed out, wrong generation, service rule),
+  then an omitted head (citing a non-head ancestor instead is a sibling of that head) or an
+  omitted catalog head (`catalog_fork`), then a prior entry that is not a retained catalog head
+  of its parent and first-catalog extension of every cited prior against `entries`.
   """
   @spec cover_claim(graph(), map(), [map()]) :: :ok | {:error, atom()}
   def cover_claim(graph, claim, entries) do
@@ -1011,9 +1012,6 @@ defmodule Treehouse.CatalogBindingGraph do
       unknown != [] ->
         {:error, :invalid_catalog_transition}
 
-      Enum.any?(claim.parents, &(&1 not in graph.heads)) ->
-        {:error, :invalid_catalog_transition}
-
       next_generation(Enum.map(claim.parents, &graph.nodes[&1].generation)) !=
           {:ok, claim.generation} ->
         {:error, :invalid_catalog_transition}
@@ -1024,14 +1022,14 @@ defmodule Treehouse.CatalogBindingGraph do
       end) ->
         {:error, :invalid_catalog_transition}
 
-      Enum.any?(claim.prior_catalogs, &(&1 not in expected)) ->
-        {:error, :invalid_catalog_transition}
-
       Enum.any?(graph.heads, &(&1 not in claim.parents)) ->
         {:error, :catalog_fork}
 
       Enum.any?(expected, &(&1 not in claim.prior_catalogs)) ->
         {:error, :catalog_fork}
+
+      Enum.any?(claim.prior_catalogs, &(&1 not in expected)) ->
+        {:error, :invalid_catalog_transition}
 
       Enum.any?(
         claim.prior_catalogs,

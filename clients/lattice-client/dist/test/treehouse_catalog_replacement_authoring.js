@@ -304,11 +304,12 @@ test("parents, priorCatalogs and generation are checked against the binding grap
     const f = await fixture();
     assert.equal(b64(catalogSigner(f).publicKey), f.record.catalogKey);
     const unrelated = id("unrelated-binding");
+    // An off-graph parent is not yet held: the preflight stays pending (row 350, PR 4a-2; PR 2 reported a transition failure).
     assert.equal(reason(await prepare(f, f.frames, request(f, { parents: [unrelated], priorCatalogs: [{ binding: unrelated, catalog: null }],
-        generation: 9 }))), "invalid_catalog_transition");
+        generation: 9 }))), "trust_pending");
     const both = [f.bootstrap.id, unrelated].sort();
     assert.equal(reason(await prepare(f, f.frames, request(f, { parents: both,
-        priorCatalogs: both.map((binding) => ({ binding, catalog: null })) }))), "invalid_catalog_transition");
+        priorCatalogs: both.map((binding) => ({ binding, catalog: null })) }))), "trust_pending");
     assert.equal(reason(await prepare(f, f.frames, request(f, { generation: 9 }))), "invalid_catalog_transition");
     const first = catalog(f, f.bootstrap.id, 0, null), firstId = transportCatalogId(first.catalog);
     assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first] }))), "catalog_fork");
@@ -566,4 +567,54 @@ test("possessions mutated while authoring awaits never reach the signer", async 
         assert.fail(result.reason);
     const args = result.frame.body[1][1][1];
     assert.deepEqual(args.slice(1), [["bin", genuine.catalog], ["bin", genuine.service]]);
+});
+// --- PR 4a-2: the preflight runs the binding-graph resolver (rows 350, 352) -----------------------------------------
+test("a Core-honored replacement failing an intrinsic check is raw evidence and not a required head", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const claim = { ...attempt.claim, generation: 2, nonce: id("ineligible") };
+    const sig = (signer, purpose) => b64(signer.sign(canonicalBytesForCatalogReplacementPossession(purpose, claim)));
+    const raw = await authorCarrierOp({ replica: f.replica, signer: f.nominee, deps: [...claim.deps], kind: "command",
+        cap: townshipCapTerm(claim.cap), body: tuple(atom("replace_catalog_v1"), ["list", [catalogReplacementClaimToCarrierTerm(claim),
+                ["bin", sig(f.newCatalog, "catalog")], ["bin", sig(f.newService, "service")]]]) });
+    const frames = [...f.frames, raw];
+    assert.equal((await judge(frames)).get(raw.id), undefined);
+    const after = await prepare(f, frames, request(f, { nonce: id("after-raw") }));
+    if (!after.ok)
+        assert.fail(after.reason);
+    assert.deepEqual(after.attempt.claim.parents, [f.bootstrap.id]);
+    assert.equal(reason(await prepare(f, frames, request(f, { nonce: id("cite-raw"), parents: [raw.id],
+        priorCatalogs: [{ binding: raw.id, catalog: null }], generation: 3 }))), "invalid_catalog_transition");
+});
+test("an old-key rotation of a closed binding is not chained", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const r1 = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt, possession: possess(f, attempt),
+        signer: f.nominee });
+    if (!r1.ok)
+        assert.fail(r1.reason);
+    const frames = [...f.frames, r1.frame];
+    const prior = catalog(f, f.bootstrap.id, 0, null);
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), seededSigner("r316-4a2-ts-old-key"), "old-key", prior);
+    const over = (parents) => request(f, { nonce: id(`over-${parents.length}`),
+        newCatalogKey: b64(seededSigner("r316-4a2-ts-second").publicKey), rotations: [t.envelope], catalogs: [prior],
+        parents: [...parents].sort(), priorCatalogs: [...parents].sort().map((binding) => ({ binding, catalog: null })), generation: 2 });
+    assert.equal(reason(await prepare(f, frames, over([r1.frame.id]))), "ok");
+    assert.equal(reason(await prepare(f, frames, over([r1.frame.id, t.id]))), "invalid_catalog_transition");
+});
+test("coverage reports unheld prior, then transition failure, then fork", async () => {
+    const f = await fixture();
+    const prior = catalog(f, f.bootstrap.id, 0, null), priorId = transportCatalogId(prior.catalog);
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), seededSigner("r316-4a2-ts-order"), "order", prior);
+    const cited = [{ binding: f.bootstrap.id, catalog: priorId }];
+    assert.equal(reason(await prepare(f, f.frames, request(f, { priorCatalogs: cited, generation: 9 }))), "trust_pending");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [t.envelope], catalogs: [prior], priorCatalogs: cited,
+        generation: 9 }))), "invalid_catalog_transition");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [t.envelope], catalogs: [prior], priorCatalogs: cited }))), "catalog_fork");
+});
+test("an unheld parent keeps the preflight pending", async () => {
+    const f = await fixture();
+    const unknown = id("not-yet-held");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { parents: [unknown], priorCatalogs: [{ binding: unknown, catalog: null }],
+        generation: 2 }))), "trust_pending");
 });

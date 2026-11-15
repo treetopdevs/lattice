@@ -566,14 +566,15 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     f = fixture()
     unrelated = id("unrelated-binding")
 
-    # An off-graph parent with a wrong generation is an intrinsic transition failure.
+    # An off-graph parent is not yet held: the preflight stays pending (row 350, PR 4a-2;
+    # PR 2 reported it as an intrinsic transition failure).
     off_graph = %{
       parents: [unrelated],
       prior_catalogs: [%{binding: unrelated, catalog: nil}],
       generation: 9
     }
 
-    assert {:error, :invalid_catalog_transition} =
+    assert {:error, :trust_pending} =
              Space.prepare_replace_catalog(f.space_log, request(f, off_graph), %{})
 
     both = %{
@@ -585,7 +586,7 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
         ])
     }
 
-    assert {:error, :invalid_catalog_transition} =
+    assert {:error, :trust_pending} =
              Space.prepare_replace_catalog(f.space_log, request(f, both), %{})
 
     assert {:error, :invalid_catalog_transition} =
@@ -1160,5 +1161,135 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
 
     assert {:error, :catalog_fork} =
              Space.prepare_replace_catalog(revoked, request(f, %{nonce: id("r2")}), %{})
+  end
+
+  # --- PR 4a-2: the preflight runs the binding-graph resolver (rows 350, 352) -------------
+
+  # A Core-honored replacement whose claim fails an intrinsic check (here its generation).
+  defp honored_but_ineligible(f) do
+    attempt = prepared(f)
+    claim = %{attempt.claim | generation: 2, nonce: id("ineligible")}
+
+    args = [
+      claim,
+      Identity.sign(
+        f.new_catalog,
+        TransportCatalog.replacement_possession_bytes(:catalog, claim)
+      ),
+      Identity.sign(f.new_service, TransportCatalog.replacement_possession_bytes(:service, claim))
+    ]
+
+    Op.new(f.nominee, f.replica, claim.deps, :command, {:replace_catalog_v1, args},
+      cap: claim.cap
+    )
+  end
+
+  test "a Core-honored replacement failing an intrinsic check is raw evidence and not a required head" do
+    f = fixture()
+    raw = honored_but_ineligible(f)
+    log = Log.append!(f.space_log, raw)
+    assert Authority.analyze(Space, log).reasons[raw.id] == nil
+
+    assert {:ok, attempt} =
+             Space.prepare_replace_catalog(log, request(f, %{nonce: id("after-raw")}), %{})
+
+    assert attempt.claim.parents == [f.bootstrap.id]
+
+    # Citing it is a transition failure, never a sibling to cover.
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               log,
+               request(f, %{
+                 nonce: id("cite-raw"),
+                 parents: [raw.id],
+                 prior_catalogs: [%{binding: raw.id, catalog: nil}],
+                 generation: 3
+               }),
+               %{}
+             )
+  end
+
+  test "an old-key rotation of a closed binding is not chained" do
+    f = fixture()
+    attempt = prepared(f)
+
+    {:ok, %{op: r1}} =
+      Space.author_replace_catalog(op_signer(f), f.space_log, attempt, possess(f, attempt))
+
+    log = Log.append!(f.space_log, r1)
+    prior = catalog(f, f.bootstrap.id, 0, nil)
+    next = Identity.from_seed("catalog", "r316-4a2-old-key")
+    {t, rotated} = rotation(f, f.bootstrap.id, 1, f.catalog, next, "old-key", prior)
+
+    over = fn parents, generation ->
+      request(f, %{
+        nonce: id("over-" <> Integer.to_string(length(parents))),
+        new_catalog_key: Identity.from_seed("catalog", "r316-4a2-second").pub,
+        rotations: [rotated],
+        catalogs: [prior],
+        parents: Enum.sort(parents),
+        prior_catalogs: for(p <- Enum.sort(parents), do: %{binding: p, catalog: nil}),
+        generation: generation
+      })
+    end
+
+    assert {:ok, prepared_r2} = Space.prepare_replace_catalog(log, over.([r1.id], 2), %{})
+    assert prepared_r2.claim.parents == [r1.id]
+
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(log, over.([r1.id, t], 2), %{})
+  end
+
+  test "coverage reports unheld prior, then transition failure, then fork" do
+    f = fixture()
+    prior = catalog(f, f.bootstrap.id, 0, nil)
+    prior_id = TransportCatalog.catalog_id(prior.catalog)
+    next = Identity.from_seed("catalog", "r316-4a2-order")
+    {_t, rotated} = rotation(f, f.bootstrap.id, 1, f.catalog, next, "order", prior)
+    cited = [%{binding: f.bootstrap.id, catalog: prior_id}]
+
+    # Unheld prior outranks a wrong generation.
+    assert {:error, :trust_pending} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{prior_catalogs: cited, generation: 9}),
+               %{}
+             )
+
+    # Held: the wrong generation (a transition failure) outranks the omitted rotation head.
+    assert {:error, :invalid_catalog_transition} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{
+                 rotations: [rotated],
+                 catalogs: [prior],
+                 prior_catalogs: cited,
+                 generation: 9
+               }),
+               %{}
+             )
+
+    assert {:error, :catalog_fork} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{rotations: [rotated], catalogs: [prior], prior_catalogs: cited}),
+               %{}
+             )
+  end
+
+  test "an unheld parent keeps the preflight pending" do
+    f = fixture()
+    unknown = id("not-yet-held")
+
+    assert {:error, :trust_pending} =
+             Space.prepare_replace_catalog(
+               f.space_log,
+               request(f, %{
+                 parents: [unknown],
+                 prior_catalogs: [%{binding: unknown, catalog: nil}],
+                 generation: 2
+               }),
+               %{}
+             )
   end
 end

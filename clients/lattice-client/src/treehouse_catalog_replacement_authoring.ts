@@ -1,12 +1,13 @@
 // TS twin of Treehouse.CatalogReplacementAuthoring (plan 316 PR 2): freeze, derive, review, sign last.
 // Unsigned intents are private full-judge inputs; they are never appended or exported. A Core-honored
 // result is an authorized signed proposal, not a route switch or installed catalog trust.
-// Retained rotations and catalogs pass an interim structural mirror of the CatalogTrust resolver before they can become
-// nodes or heads; any failure refuses. Non-claim: entry-fact observation, D-276 node eligibility, the D-275 closing rule
-// and full §4 refusal precedence are Stage B resolver semantics owned by plan 316 PR 4, whose binding-graph function
-// replaces this mirror once it lands (row 354).
+// Binding-graph coverage (plan 316 PR 4a-2, rows 352, 354, 356) is resolveCatalogBindingGraph over the frozen history and
+// the caller's retained rotations and catalogs, then coverCatalogReplacementClaim; step 4 is
+// checkCatalogReplacementAuthority on the frozen history. A retained rotation or catalog the resolver refuses on its own
+// bytes still refuses, so nothing is signed over evidence Stage B rejects structurally. Authoring-only: retained-client
+// trust waits on 4c. Non-claim: catalog entry facts are not observed against retained histories here (row 354, 4c).
 import { verifyEd25519 } from "./signature";
-import { analyzeAuthority, resolveContinuationProfileFromFrames } from "./authority";
+import { analyzeAuthority } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
 import { authorCarrierOp, canonicalBase64Bytes, verifyCarrierOp } from "./codec";
@@ -18,14 +19,16 @@ import { frontier } from "./sync";
 import { townshipCapTerm } from "./township";
 import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema } from "./treehouse";
 import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
+import { catalogBindingReasonRank, coverCatalogReplacementClaim, resolveCatalogBindingGraph } from "./treehouse_catalog_binding_graph";
+import { checkCatalogReplacementAuthority } from "./treehouse_catalog_replacement_authority";
 import {
   canonicalBytesForCatalogReplacementClaim, canonicalBytesForCatalogReplacementPossession, catalogInventoryId,
   catalogReplacementClaimToCarrierTerm, catalogRotationId, normalizeCatalogEnvelope, normalizeCatalogReplacementClaim,
-  normalizeCatalogRotationEnvelope, transportCatalogId, verifyCatalogEnvelope, verifyCatalogReplacementPossession,
-  verifyCatalogRotationEnvelope, canonicalBytesForCatalogRotation,
+  normalizeCatalogRotationEnvelope, transportCatalogId, verifyCatalogReplacementPossession,
 } from "./treehouse_catalog_codec";
 import type {
-  CatalogCutoff, CatalogEntry, CatalogEnvelope, CatalogPriorCatalog, CatalogReplacementClaim, CatalogRotationEnvelope,
+  CatalogBootstrap, CatalogCutoff, CatalogEntry, CatalogEnvelope, CatalogPriorCatalog, CatalogReplacementClaim,
+  CatalogRotationEnvelope,
 } from "./treehouse_catalog_codec";
 
 /** One retained complete history: authenticated frames plus retained bad-signature evidence. */
@@ -194,12 +197,6 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   if (!observed.ok) return observed;
   if (observed.bootstraps.length !== 1) return refuse("application_invalid_catalog");
   const bootstrap = observed.bootstraps[0]!;
-  // Plan 316 §3 step 4: the claim's profile fields must be the pin selected at this frozen prefix, not the one the
-  // bootstrap was honored under.
-  const profile = await resolveContinuationProfileFromFrames({replica, frames: space.frames});
-  if (!profile.ok || profile.profileGenesis !== bootstrap.record.profileGenesis || profile.profileId !== bootstrap.record.profileId) {
-    return refuse("wrong_catalog_scope");
-  }
   // Holder and capability come from the judge only; the caller never supplies either.
   const acquire = history.authority.acquiresByRole.get("admin")?.at(-1);
   if (acquire === undefined || acquire.holderPubkey !== request.author) return refuse("not_holder");
@@ -211,21 +208,6 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   const values = beacons.map((beacon) => typeof beacon.epoch === "number" ? beacon.epoch : Number(beacon.epoch));
   const epoch = Math.max(...values);
   const epochBasis = beacons.filter((_beacon, index) => values[index] === epoch).map((beacon) => beacon.opId).sort(compareUtf8);
-  // Plan 316 §3 step 4 resolver predicates on the selected acquisition: it grants replace_catalog_v1, is not live and
-  // carries a finite lease unexpired at the claim epoch. A root holder or live/unleased capability is refused.
-  const granted = evidence !== undefined && "delegation" in evidence ? evidence.delegation : undefined;
-  if (granted === undefined || granted.live || typeof granted.expiresEpoch !== "number" || granted.expiresEpoch < epoch ||
-    !granted.ops.includes("replace_catalog_v1")) return refuse("catalog_authority_refused");
-  // Inherited provenance (C11, row 335): replace_catalog_v1 must be in every honored admin ceiling from the latest
-  // root-issued acquisition to the current one; a narrowed hop followed by a restoring transfer is refused.
-  const chain = (history.authority.acquiresByRole.get("admin") ?? []).map((record) => {
-    const held = history.byId.get(record.opId)?.authority;
-    return held !== undefined && "delegation" in held ? held.delegation : undefined;
-  });
-  let rooted = chain.length - 1;
-  while (rooted >= 0 && chain[rooted] !== undefined && chain[rooted]!.issuer !== bootstrap.record.spaceRoot) rooted--;
-  if (rooted < 0 || chain[rooted] === undefined ||
-    chain.slice(rooted).some((d) => d === undefined || !d.ops.includes("replace_catalog_v1"))) return refuse("catalog_authority_refused");
   let inventoryDigest: string;
   try {
     if (!request.entries.every((item) => object(item) && item.serviceId === request.newServiceId && item.serviceKey === request.newServiceKey) ||
@@ -244,7 +226,11 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
     newServiceId: request.newServiceId, newServiceKey: request.newServiceKey, newOrigin: request.newOrigin, inventoryDigest,
     cutoffs: cutoffs.cutoffs, author: request.author, cap, holderEpoch: acquire.opId, deps, epoch, epochBasis});
   if (claim === null) return refuse("malformed_catalog");
-  const covered = coverage(history, replica, bootstrap, claim, request);
+  // Plan 316 section 3 step 4 on the frozen history, which is the action's strict prefix.
+  const authority = await checkCatalogReplacementAuthority({replica, frames: history.frames, ops: history.ops},
+    {author: request.author, cap}, claim, bootstrap.record.spaceRoot);
+  if (authority !== null) return refuse(authority.reason);
+  const covered = await coverage(history, replica, bootstrap, claim, request);
   if (covered !== null) return refuse(covered);
   const claimBytes = canonicalBytesForCatalogReplacementClaim(claim);
   // The journal is caller-owned and may be lost or belong to another device, so a nonce already carried by a retained
@@ -273,37 +259,15 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
     author: request.author, cap, frozenFrontier: deps}};
 }
 
-// --- retained-evidence coverage (plan 316 §3: parents, priorCatalogs, generation) ----------
+// --- retained-evidence coverage (plan 316 PR 4a-2) ------------------------------------------------------------------
 
-type BindingNode = {generation: number; key: string; parents: readonly string[]; inventory: string | null;
-  serviceId: string; serviceKey: string};
-type BootstrapRecord = {catalogKey: string; serviceId: string; serviceKey: string};
-type HeldCatalog = CatalogEnvelope;
-class CoverageRefusal { constructor(readonly reason: string) {} }
-const refuseCoverage = (reason: string): never => { throw new CoverageRefusal(reason); };
-const maxSafe = Number.MAX_SAFE_INTEGER;
 const maxArtifacts = 1_024;
-const safe = (n: number) => Number.isSafeInteger(n) && n >= 0 && n <= maxSafe;
 
-// Nodes: the honored bootstrap (generation 0), every on-Space replacement honored at its strict prefix (D-276,
-// refused-on-the-union nodes included) and every retained rotation that resolves under the Stage B structural rules.
-// Retained rotations and catalogs are hostile until resolved: each must pass the checks CatalogTrust applies (chain,
-// generation/revision step, key separation, both signatures, prior/previous presence, binding, inventory and cutoff
-// agreement) before it may become a node, a held catalog or a head; any failure refuses the whole preflight.
-// Entry-fact observation against the retained histories stays with the PR 4 resolver (row 354).
-function coverage(history: JudgedHistory, replica: string, bootstrap: {id: string; record: BootstrapRecord},
-  claim: CatalogReplacementClaim, request: TreehouseCatalogReplacementRequest): string | null {
-  const record = bootstrap.record;
-  const nodes = new Map<string, BindingNode>();
-  for (const op of history.ops) {
-    if (op.command !== "replace_catalog_v1") continue;
-    const cited = normalizeCatalogReplacementClaim(op.commandArgs?.[0]);
-    if (cited === null || cited.space !== replica || cited.bootstrap !== bootstrap.id || !honoredAtPrefix(history, op.id, replica)) continue;
-    nodes.set(op.id, {generation: cited.generation, key: cited.newCatalogKey, parents: cited.parents, inventory: cited.inventoryDigest,
-      serviceId: cited.newServiceId, serviceKey: cited.newServiceKey});
-  }
-  nodes.set(bootstrap.id, {generation: 0, key: record.catalogKey, parents: [], inventory: null, serviceId: record.serviceId,
-    serviceKey: record.serviceKey});
+// D-276 eligibility, the D-275 closing rule and section-3 precedence are the resolver's (row 352). The caller's retained
+// rotations and catalogs are normalized and scoped here; any one the resolver refuses on its own bytes (anything but a
+// refusal inherited from a union-refused node) refuses the preflight, highest precedence first, before coverage.
+async function coverage(history: JudgedHistory, replica: string, bootstrap: {id: string; record: CatalogBootstrap},
+  claim: CatalogReplacementClaim, request: TreehouseCatalogReplacementRequest): Promise<string | null> {
   // CatalogTrust refuses more than 1,024 retained artifacts; its JSON byte budgets are not mirrored here (row 355).
   if (request.catalogs.length + request.rotations.length > maxArtifacts) return "control_history_limit";
   const rotations = new Map<string, CatalogRotationEnvelope>();
@@ -315,7 +279,7 @@ function coverage(history: JudgedHistory, replica: string, bootstrap: {id: strin
   }
   // A catalog id covers the payload only. As in CatalogTrust addCatalog, a repeated id must carry the identical
   // signature; any differing copy (even a second valid one) refuses.
-  const catalogs = new Map<string, HeldCatalog>();
+  const catalogs = new Map<string, CatalogEnvelope>();
   for (const value of request.catalogs as unknown[]) {
     const envelope = normalizeCatalogEnvelope(value);
     if (envelope === null) return "malformed_catalog";
@@ -324,128 +288,19 @@ function coverage(history: JudgedHistory, replica: string, bootstrap: {id: strin
     if (known === undefined) catalogs.set(id, envelope);
     else if (known.signature !== envelope.signature) return "invalid_catalog_signature";
   }
-  try { resolveGraph(nodes, rotations, catalogs); } catch (error) {
-    if (error instanceof CoverageRefusal) return error.reason;
-    throw error;
-  }
-  if ([...nodes.values()].some((node) => node.parents.some((parent) => !nodes.has(parent)))) return "trust_pending";
-  const held = [...catalogs].map(([id, item]) => ({id, binding: item.catalog.binding, previous: item.catalog.previous}));
-  // D-275: every ancestor-or-self of a cited parent is closed; the rest are heads.
-  const closed = new Set<string>();
-  const stack = [...nodes.values()].flatMap((node) => [...node.parents]);
-  while (stack.length > 0) {
-    const id = stack.pop()!;
-    if (closed.has(id)) continue;
-    closed.add(id);
-    stack.push(...nodes.get(id)!.parents);
-  }
-  const heads = [...nodes.keys()].filter((id) => !closed.has(id));
-  // Plan 316 §4 precedence: an unknown parent is the intrinsic step-5 failure, before the step-7 sibling.
-  if (claim.parents.some((id) => !nodes.has(id))) return "invalid_catalog_transition";
-  const parents = cover(heads, claim.parents, (id) => id);
-  if (parents !== null) return parents;
-  const generation = Math.max(...claim.parents.map((id) => nodes.get(id)!.generation)) + 1;
-  if (claim.generation !== generation) return "invalid_catalog_transition";
-  // Step 5: each prior entry names a cited parent and, unless null, a catalog held under it.
-  if (claim.priorCatalogs.some((item) => !claim.parents.includes(item.binding))) return "invalid_catalog_transition";
-  if (claim.priorCatalogs.some((item) => item.catalog !== null &&
-    !held.some((entry) => entry.binding === item.binding && entry.id === item.catalog))) return "trust_pending";
-  const previous = new Set(held.map((item) => `${item.binding}\u0000${item.previous}`));
-  const expected = claim.parents.flatMap((binding): CatalogPriorCatalog[] => {
-    const under = [...new Set(held.filter((item) => item.binding === binding && !previous.has(`${binding}\u0000${item.id}`))
-      .map((item) => item.id))];
-    return under.length === 0 ? [{binding, catalog: null}] : under.map((catalog) => ({binding, catalog}));
-  });
-  // Step 5 (D-277): against each parent a changed service key needs a changed service ID, and the first catalog's
-  // entries extend every cited non-null prior catalog.
-  if (claim.parents.some((id) => {
-    const node = nodes.get(id)!;
-    return claim.newServiceKey !== node.serviceKey && claim.newServiceId === node.serviceId;
-  })) return "invalid_catalog_transition";
-  if (claim.priorCatalogs.some((item) => item.catalog !== null &&
-    !inventoryExtends(catalogs.get(item.catalog)!.catalog.entries, request.entries))) return "invalid_catalog_transition";
-  return cover(expected, claim.priorCatalogs, (item) => `${item.binding}\u0000${item.catalog}`);
-}
-
-// Same traversal as CatalogTrust: every catalog in id order, then every rotation; a cycle is a transition failure.
-function resolveGraph(nodes: Map<string, BindingNode>, rotations: Map<string, CatalogRotationEnvelope>,
-  catalogs: Map<string, HeldCatalog>): void {
-  const ready = new Set<string>(), visiting = new Set<string>();
-  const bindingFor = (id: string): BindingNode => {
-    const known = nodes.get(id);
-    if (known !== undefined) return known;
-    const envelope = rotations.get(id);
-    if (envelope === undefined) return refuseCoverage("trust_pending");
-    if (visiting.has(`b:${id}`)) refuseCoverage("invalid_catalog_transition");
-    visiting.add(`b:${id}`);
-    const r = envelope.rotation, parent = bindingFor(r.parent);
-    if (r.generation !== parent.generation + 1 || !safe(parent.generation + 1) || r.newCatalogKey === parent.key ||
-      r.newCatalogKey === parent.serviceKey) refuseCoverage("invalid_catalog_transition");
-    if (!verifyCatalogRotationEnvelope(envelope, parent.key)) {
-      // Distinguish old signer authorization from possession under the new key.
-      const old = canonicalBase64Bytes(envelope.oldSignature, 64), pub = canonicalBase64Bytes(parent.key, 32);
-      if (old === null || pub === null || !verifyEd25519(old, canonicalBytesForCatalogRotation(r), pub)) refuseCoverage("invalid_catalog_signature");
-      refuseCoverage("invalid_possession");
-    }
-    const prior = catalogFor(r.priorCatalog).catalog;
-    if (prior.binding !== r.parent || catalogInventoryId(prior.entries) !== r.inventoryDigest ||
-      !same(r.cutoffs.map((cutoff) => cutoff.replica), prior.entries.map((item) => item.replica))) refuseCoverage("invalid_catalog_transition");
-    const node: BindingNode = {generation: r.generation, key: r.newCatalogKey, parents: [r.parent], inventory: r.inventoryDigest,
-      serviceId: parent.serviceId, serviceKey: parent.serviceKey};
-    nodes.set(id, node);
-    visiting.delete(`b:${id}`);
-    return node;
-  };
-  const catalogFor = (id: string): HeldCatalog => {
-    const envelope = catalogs.get(id);
-    if (envelope === undefined) return refuseCoverage("trust_pending");
-    if (ready.has(id)) return envelope;
-    if (visiting.has(`c:${id}`)) refuseCoverage("invalid_catalog_transition");
-    visiting.add(`c:${id}`);
-    const c = envelope.catalog, binding = bindingFor(c.binding);
-    if (!verifyCatalogEnvelope(envelope, binding.key)) refuseCoverage("invalid_catalog_signature");
-    if (c.entries.some((item) => item.serviceId !== binding.serviceId || item.serviceKey !== binding.serviceKey)) refuseCoverage("wrong_catalog_scope");
-    if (c.previous !== null) {
-      const prior = catalogFor(c.previous).catalog;
-      if (prior.binding !== c.binding || c.revision !== prior.revision + 1 || !safe(prior.revision + 1) ||
-        !inventoryExtends(prior.entries, c.entries)) refuseCoverage("invalid_catalog_transition");
-    } else if (binding.inventory !== null && catalogInventoryId(c.entries) !== binding.inventory) refuseCoverage("invalid_catalog_transition");
-    visiting.delete(`c:${id}`); ready.add(id);
-    return envelope;
-  };
-  for (const id of [...catalogs.keys()].sort(compareUtf8)) catalogFor(id);
-  for (const id of [...rotations.keys()].sort(compareUtf8)) bindingFor(id);
-  // CatalogTrust route history: across every held catalog a route names one replica. The resolver exempts entry-pending
-  // catalogs; without entry observation (row 354) this mirror holds every catalog to it, which can only refuse more.
-  const routes = new Map<string, string>();
-  for (const id of [...catalogs.keys()].sort(compareUtf8)) {
-    for (const entry of catalogs.get(id)!.catalog.entries) {
-      const replica = routes.get(entry.route);
-      if (replica === undefined) routes.set(entry.route, entry.replica);
-      else if (replica !== entry.replica) refuseCoverage("invalid_catalog_transition");
-    }
-  }
-}
-
-const extendedKeys = ["root", "genesis", "creation", "reference", "kind", "schema"] as const;
-function inventoryExtends(before: readonly CatalogEntry[], after: readonly CatalogEntry[]): boolean {
-  return before.every((entry) => {
-    const next = after.find((item) => item.replica === entry.replica);
-    return next !== undefined && extendedKeys.every((key) => entry[key] === next[key]);
-  });
+  const resolved = await resolveCatalogBindingGraph({bootstrap, frames: history.frames, rotations, catalogs, provenCutoffs: [],
+    accepted: null, blocked: null});
+  if (!resolved.ok) return resolved.reason;
+  const refused = [...resolved.graph.refusals].filter(([, r]) => r.reason !== "catalog_authority_refused")
+    .sort(([a, x], [b, y]) => catalogBindingReasonRank(x.reason) - catalogBindingReasonRank(y.reason) || compareUtf8(a, b));
+  if (refused.length > 0) return refused[0]![1].reason;
+  return coverCatalogReplacementClaim(resolved.graph, claim, request.entries);
 }
 
 function honoredAtPrefix(history: JudgedHistory, id: string, replica: string): boolean {
   const closure = ancestors(id, history.byId, new Map());
   const frames = history.frames.filter((frame) => frame.id === id || closure.has(frame.id));
   return !judge(frames, replica).quarantineReasons.has(id);
-}
-
-// Omitting a known head would author a sibling (catalog_fork); any other mismatch is wrong.
-function cover<T>(expected: readonly T[], supplied: readonly T[], key: (value: T) => string): string | null {
-  const want = expected.map(key).sort(compareUtf8), have = supplied.map(key).sort(compareUtf8);
-  if (same(want, have)) return null;
-  return want.some((value) => !have.includes(value)) ? "catalog_fork" : "invalid_catalog_transition";
 }
 
 // The Space cutoff is the frozen pre-action history itself, so it never includes the action.
