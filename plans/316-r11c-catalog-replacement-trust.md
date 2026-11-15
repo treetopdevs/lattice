@@ -562,7 +562,7 @@ native `catalog_eval`; no custodian closed-binding refusal; C10–C15 stay OPEN 
 authority acceptance and node fields only); no Core primitive, wire atom or quarantine reason;
 historical vectors (`replacement_v1.json`, `ts_trust.json`) and wire bytes unchanged; disposable
 keys only. Not written in 4a: the D-279 StreamData monotonicity property and the C13
-redundant-late-beacon case (4c, with persisted trust state).
+redundant-late-beacon case (PR 4b, row 380, with persisted trust state).
 
 **PR 5** — native parity (`catalog_eval` replacement node, D-270 nodes in `chains.rs`, row 319).
 **PR 6** — a plan 266 exporter test now; after PR 4, the C15 two-cycle BEAM/TS reconstruction

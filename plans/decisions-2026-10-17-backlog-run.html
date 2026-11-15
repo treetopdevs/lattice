@@ -3107,7 +3107,7 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
 <dt>Context</dt><dd>An independent critique of the revised PR 4a plan raised 11 findings before the build.</dd>
 <dt>Decision</dt><dd>All 11 were accepted, findings 3 and 7 in part and finding 4 with a modified cut, as D-A0 to D-A11 (D-547 to D-558): blocked input plus clears_authority_changed (1); closed is not closed-out (2); status outputs instead of entry-proof input (3); split by slice, not runtime, and no generic chain copy (4); delegation lookup by delegation_id behind a tripwire spike (5); per-candidate pending with an anti-stall guard (6); refused sole head holds the watermark and the routes-freeze policy goes to the operator (7); hand-written vector expectations (8); stronger assertions and a 2^53-1 generation cap (9); proof pages stay page-level (10); closed-in-resolver, open-in-trust dispositions (11).</dd>
-<dt>Reason</dt><dd>Each was verified against catalog_trust.ex, authority.ex and the plan before acceptance; the tripwire spike needed no Core or authority.ex change.</dd>
+<dt>Reason</dt><dd>Findings 1, 3, 5 and 10 were checked against catalog_trust.ex and authority.ex before acceptance (their entries say what was verified); the others were accepted on the plan text.</dd>
 </dl></section>
 <section id="d587"><h2><span>D-587</span> PR 4a review: Codex Sol and independent rounds and dispositions</h2><dl>
 <dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
