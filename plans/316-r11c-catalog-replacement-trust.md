@@ -403,8 +403,9 @@ PR 4a decisions:
   only malformed input, `control_history_limit` (more than two heads) and `trust_pending` do.
   The preflight stays fail-closed: any retained artifact refused on its own bytes (anything but
   `catalog_authority_refused` inherited from a refused node) refuses the preflight first.
-- **D-A5 (block triggers and row 320).** An `authority_changed` block names the head at block
-  time. A later sole honored replacement head that is not a trigger and closes every trigger
+- **D-A5 (block triggers and row 320).** An `authority_changed` block names the head at first
+  block time and a standing block keeps its triggers, so a resolution delivered before its first
+  catalog still clears on the next delivery. A later sole honored replacement head that is not a trigger and closes every trigger
   clears it (`clears_authority_changed`). A refused accepted binding is also resolved in the
   same delivery by an honored replacement head that closes it and cites a descendant of the
   accepted catalog (no freeze when the revoke and the resolution arrive together). A
@@ -418,6 +419,14 @@ PR 4a decisions:
   closed-out parent, generation and service (`invalid_catalog_transition`), then an omitted head
   or catalog head (`catalog_fork`; citing a non-head ancestor is a sibling of that head), then a
   prior that is not a catalog head and first-catalog extension.
+- **D-A9 (Core refusal on the candidate's own closure).** Step 4 also refuses
+  (`catalog_authority_refused`, predicate `core_refused_at_prefix`) when Core refuses the op on
+  its strict prefix plus itself, excluding Stage A's own `application_invalid_catalog` (its
+  literal and possession checks are re-run with their own reasons). A revoke or lapse already
+  in the prefix therefore adds no head or closure (C11/C14); only a union-only refusal (C13) is a
+  D-276 refused node. Read from the public `Authority.analyze/2`; no `authority.ex` change.
+- **D-A10 (route reservation).** Only current and covered catalogs reserve routes, so a
+  closed-out old-key catalog cannot refuse the honest head's first catalog.
 - **D-A8 (fixtures).** The 4a fixtures build their own Sim bounded Space (pin, root beacons,
   leased admin) instead of `CatalogVectors.bootstrap_history`, because the step-4 and R04 cases
   need the witnessed-beacon pin and continuation.
@@ -425,7 +434,9 @@ PR 4a decisions:
 Row dispositions: 352 closed in resolver and authoring (both runtimes). 356 closed in resolver
 (D-9 reading). 350 closed in resolver for intrinsic failures (raw evidence); an unheld parent
 stays pending by design (D-5); open in trust until 4c. 335 closed by the restored-permission
-test (broad, narrowed, restored: Core honors, resolver refuses `inherited_provenance`). 354
+test (broad, narrowed, restored: Core honors, resolver refuses `inherited_provenance`); the
+variant whose latest root-issued record is itself narrowed is not written (no Core-honored
+construction found with the current fixtures; root cannot re-transfer while the admin holds). 354
 partly closed: mirror deleted, resolver called; entry-fact refusal
 (`CatalogEntries.observe_with_detail`) moves to 4c. 355 open (byte budgets). 360 open. Row 320:
 implemented and tested in the graph; open in trust until 4c.
