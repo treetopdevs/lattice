@@ -55,7 +55,9 @@ export interface CatalogBindingGraph {
   nodes: ReadonlyMap<string, CatalogBindingNode>; heads: readonly string[]; closed: readonly string[];
   closedOut: ReadonlyMap<string, string>; pending: readonly string[]; rawEvidence: ReadonlyMap<string, string>;
   refusals: ReadonlyMap<string, {reason: string; coreReason: string | null}>;
-  catalogHeads: ReadonlyMap<string, readonly string[]>; catalogStatus: ReadonlyMap<string, CatalogStatus>;
+  catalogHeads: ReadonlyMap<string, readonly string[]>;
+  /** Catalog heads a resolution must cite: current heads plus chain-valid catalogs under a union-refused node. */
+  citableCatalogHeads: ReadonlyMap<string, readonly string[]>; catalogStatus: ReadonlyMap<string, CatalogStatus>;
   citations: ReadonlyMap<string, readonly (string | null)[]>; previous: ReadonlyMap<string, string | null>;
   forks: readonly CatalogBindingFork[]; catalogs: ReadonlyMap<string, TransportCatalog>; decision: CatalogBindingDecision;
 }
@@ -183,8 +185,11 @@ async function run(ctx: Ctx): Promise<CatalogBindingGraphResult> {
   const final = new Map([...nodesAll].filter(([id]) => !outRot.has(id)));
   const heads = headsOf(final);
   const cat = classifyCatalogs(ctx, nodesAll, closed, outRot);
-  const pending = [...new Set([...[...ctx.memo].filter(([, v]) => v.t === "pending").map(([id]) => id), ...cat.pending])]
-    .sort(compareUtf8);
+  // Any held op whose closure is incomplete is a missing history page: the authority fold over the complete ops would judge
+  // a smaller history. Only a candidate already refuted from its own bytes is exempt.
+  const incomplete = [...ctx.byId.keys()].filter((id) => !ctx.complete.has(id) && ctx.memo.get(id)?.t !== "bad");
+  const pending = [...new Set([...[...ctx.memo].filter(([, v]) => v.t === "pending").map(([id]) => id), ...cat.pending,
+    ...incomplete])].sort(compareUtf8);
   if (heads.length > 2) return {ok: false, reason: "control_history_limit", detail: {ids: heads}};
   if (pending.length > 0) return {ok: false, reason: "trust_pending", detail: {ids: pending}};
   return {ok: true, graph: assemble(ctx, nodesAll, final, heads, closed, outRot, cat)};
@@ -236,7 +241,8 @@ async function evalRotation(id: string, ctx: Ctx): Promise<Verdict> {
   }
   return {t: "node", node: {id, kind: "rotation", generation: r.generation, key: r.newCatalogKey, serviceId: p.serviceId,
     serviceKey: p.serviceKey, origin: p.origin, parents: [r.parent], prior: [{binding: r.parent, catalog: r.priorCatalog}],
-    inventory: r.inventoryDigest, refused: p.refused, coreReason: p.coreReason, pending: []}};
+    // A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs.
+    inventory: r.inventoryDigest, refused: p.refused, coreReason: p.coreReason, pending: p.pending}};
 }
 
 function verifyKey(key: string, bytes: Uint8Array, signature: string): boolean {
@@ -385,64 +391,99 @@ function headsOf(final: ReadonlyMap<string, CatalogBindingNode>): string[] {
 
 interface Classified {
   status: Map<string, CatalogStatus>; refusals: Map<string, {reason: string; coreReason: string | null}>; pending: string[];
-  cites: Map<string, (string | null)[]>; previous: Map<string, string | null>;
+  cites: Map<string, (string | null)[]>; previous: Map<string, string | null>; validity: Map<string, Validity>;
 }
 
+// Intrinsic to the catalog bytes, its binding node and its chain (previous links and, for a replacement's first catalog,
+// every cited prior). A citation never makes an invalid catalog valid.
+type Validity = {t: "refused"; reason: string} | {t: "binding_pending"} | {t: "pending"} | {t: "bad_chain"} | {t: "ok"};
+
+// Two passes: validity, then status (current under an open binding; covered / closed_out / uncovered under a closed one;
+// refused with a reason; pending).
 function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, closed: Set<string>, outRot: Set<string>): Classified {
   const cites = citations(nodesAll, closed);
   const previous = new Map([...ctx.input.catalogs].map(([id, e]) => [id, e.catalog.previous] as [string, string | null]));
-  const acc: Classified = {status: new Map(), refusals: new Map(), pending: [], cites, previous};
+  const validity = new Map<string, Validity>();
+  const acc: Classified = {status: new Map(), refusals: new Map(), pending: [], cites, previous, validity};
   const refuse = (id: string, reason: string, core: string | null): CatalogStatus => {
     acc.refusals.set(id, {reason, coreReason: core}); return "refused";
   };
-  const status = (id: string): CatalogStatus => {
-    const known = acc.status.get(id);
+  const valid = (id: string): Validity => {
+    const known = validity.get(id);
     if (known !== undefined) return known;
-    const value = statusOf(id);
-    acc.status.set(id, value);
+    const value = validityOf(id);
+    validity.set(id, value);
     return value;
   };
-  const statusOf = (id: string): CatalogStatus => {
+  const isPending = (v: Validity) => v.t === "pending" || v.t === "binding_pending";
+  const validityOf = (id: string): Validity => {
     const e = ctx.input.catalogs.get(id)!, c = e.catalog, n = nodesAll.get(c.binding);
-    if (c.space !== ctx.replica || c.bootstrap !== ctx.bootstrapId) return refuse(id, "wrong_catalog_scope", null);
+    if (c.space !== ctx.replica || c.bootstrap !== ctx.bootstrapId) return {t: "refused", reason: "wrong_catalog_scope"};
     if (n === undefined) {
       if (ctx.candidates.has(c.binding) || ctx.input.rotations.has(c.binding)) {
-        return ctx.memo.get(c.binding)?.t === "bad" ? refuse(id, "invalid_catalog_transition", null) : "pending";
+        return ctx.memo.get(c.binding)?.t === "bad" ? {t: "refused", reason: "invalid_catalog_transition"} : {t: "binding_pending"};
       }
-      if (ctx.byId.has(c.binding) || ctx.input.catalogs.has(c.binding)) return refuse(id, "invalid_catalog_transition", null);
-      return "pending";
+      if (ctx.byId.has(c.binding) || ctx.input.catalogs.has(c.binding)) return {t: "refused", reason: "invalid_catalog_transition"};
+      return {t: "binding_pending"};
     }
-    if (!verifyCatalogEnvelope(e, n.key)) return refuse(id, "invalid_catalog_signature", null);
+    if (!verifyCatalogEnvelope(e, n.key)) return {t: "refused", reason: "invalid_catalog_signature"};
     if (c.entries.some((entry) => entry.serviceId !== n.serviceId || entry.serviceKey !== n.serviceKey)) {
-      return refuse(id, "wrong_catalog_scope", null);
+      return {t: "refused", reason: "wrong_catalog_scope"};
     }
-    if (n.refused) return refuse(id, "catalog_authority_refused", n.coreReason);
-    if (outRot.has(c.binding)) return "closed_out";
-    if (closed.has(c.binding)) return closedStatus(id, c.binding, cites, previous);
     if (c.previous === null) {
-      const priorsOk = n.kind !== "replacement" || n.prior.every((p) => p.catalog === null ||
-        extendsEntries(ctx.input.catalogs.get(p.catalog)!.catalog.entries, c.entries));
+      // Replacement-dependent first-catalog checks: revision 0, the declared inventory, and extension of every cited prior,
+      // which must itself be valid. A bootstrap or rotation first catalog takes any revision, as in CatalogTrust.
+      const priors = n.kind === "replacement" ? n.prior.flatMap((p) => p.catalog === null ? [] : [p.catalog]) : [];
+      const priorVs = priors.map((k) => ctx.input.catalogs.has(k) ? valid(k) : {t: "pending"} as Validity);
+      const extendsAll = priors.every((k) => {
+        const prior = ctx.input.catalogs.get(k);
+        return prior === undefined || extendsEntries(prior.catalog.entries, c.entries);
+      });
       if ((n.kind === "replacement" && c.revision !== 0) ||
-        (n.inventory !== null && catalogInventoryId(c.entries) !== n.inventory) || !priorsOk) {
-        return refuse(id, "invalid_catalog_transition", null);
-      }
-      return "current";
+        (n.inventory !== null && catalogInventoryId(c.entries) !== n.inventory) || !extendsAll ||
+        priorVs.some((v) => v.t !== "ok" && !isPending(v))) return {t: "bad_chain"};
+      if (priorVs.some((v) => v.t !== "ok")) return {t: "pending"};
+      return {t: "ok"};
     }
-    if (!ctx.input.catalogs.has(c.previous)) return "pending";
-    const prev = status(c.previous);
+    if (!ctx.input.catalogs.has(c.previous)) return {t: "pending"};
+    const prev = valid(c.previous);
     const prior = ctx.input.catalogs.get(c.previous)!.catalog;
-    if (prev === "pending") return "pending";
-    if (prev !== "current" || prior.binding !== c.binding) return refuse(id, "invalid_catalog_transition", null);
-    if (nextCatalogGeneration([prior.revision]) !== c.revision || !extendsEntries(prior.entries, c.entries)) {
-      return refuse(id, "invalid_catalog_transition", null);
-    }
+    if (isPending(prev)) return {t: "pending"};
+    if (prev.t !== "ok" || prior.binding !== c.binding) return {t: "bad_chain"};
+    if (nextCatalogGeneration([prior.revision]) !== c.revision || !extendsEntries(prior.entries, c.entries)) return {t: "bad_chain"};
+    return {t: "ok"};
+  };
+  const statusOf = (id: string): CatalogStatus => {
+    const c = ctx.input.catalogs.get(id)!.catalog, n = nodesAll.get(c.binding), v = validity.get(id)!;
+    if (v.t === "refused") return refuse(id, v.reason, null);
+    if (v.t === "binding_pending") return "pending";
+    if (n!.refused) return refuse(id, "catalog_authority_refused", n!.coreReason);
+    if (outRot.has(c.binding)) return "closed_out";
+    if (closed.has(c.binding)) return closedStatus(id, c.binding, v);
+    if (v.t === "pending") return "pending";
+    if (v.t === "bad_chain") return refuse(id, "invalid_catalog_transition", null);
     return "current";
   };
-  for (const id of [...ctx.input.catalogs.keys()].sort(compareUtf8)) status(id);
+  // Under a closed binding: covered when ancestor-or-self of a valid cited catalog, closed out when a strict descendant of a
+  // cited catalog or when the binding was cited with null, otherwise an omitted head (uncovered, a fork). A catalog on a cited
+  // chain is refused when invalid and pending when its chain is; an uncited old-key catalog is never pending.
+  const closedStatus = (id: string, binding: string, v: Validity): CatalogStatus => {
+    const cited = cites.get(binding) ?? [];
+    const real = cited.filter((c): c is string => c !== null);
+    const validCited = real.filter((c) => { const cv = validity.get(c); return cv?.t === "ok" || cv?.t === "pending"; });
+    if (v.t === "bad_chain" && real.some((c) => onChain(id, c, previous))) return refuse(id, "invalid_catalog_transition", null);
+    if (validCited.some((c) => onChain(id, c, previous))) return v.t === "pending" ? "pending" : "covered";
+    if (real.some((c) => c !== id && onChain(c, id, previous))) return "closed_out";
+    if (cited.includes(null)) return "closed_out";
+    return "uncovered";
+  };
+  const ids = [...ctx.input.catalogs.keys()].sort(compareUtf8);
+  for (const id of ids) valid(id);
+  for (const id of ids) acc.status.set(id, statusOf(id));
   // Across every current or covered catalog a route names one replica; a later conflicting one (id order) is refused.
   // Closed-out and uncovered old-key catalogs reserve no route, so they cannot refuse an honest head.
   const used = new Map<string, string>();
-  for (const id of [...ctx.input.catalogs.keys()].sort(compareUtf8)) {
+  for (const id of ids) {
     const s = acc.status.get(id);
     if (s !== "current" && s !== "covered") continue;
     const entries = ctx.input.catalogs.get(id)!.catalog.entries;
@@ -452,16 +493,6 @@ function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, c
   }
   acc.pending = [...acc.status].filter(([, s]) => s === "pending").map(([id]) => id);
   return acc;
-}
-
-function closedStatus(id: string, binding: string, cites: Map<string, (string | null)[]>, previous: Map<string, string | null>):
-  CatalogStatus {
-  const cited = cites.get(binding) ?? [];
-  const real = cited.filter((c): c is string => c !== null);
-  if (real.some((c) => onChain(id, c, previous))) return "covered";
-  if (real.some((c) => c !== id && onChain(c, id, previous))) return "closed_out";
-  if (cited.includes(null)) return "closed_out";
-  return "uncovered";
 }
 
 function onChain(a: string, b: string | null, previous: ReadonlyMap<string, string | null>): boolean {
@@ -495,7 +526,20 @@ function extendsEntries(before: readonly CatalogEntry[], next: readonly CatalogE
 
 function catalogHeadsOf(ctx: Ctx, final: Map<string, CatalogBindingNode>, closed: Set<string>, cat: Classified):
   Map<string, string[]> {
-  const current = [...cat.status].filter(([, s]) => s === "current").map(([id]) => id);
+  return headsAmong(ctx, final, closed, [...cat.status].filter(([, s]) => s === "current").map(([id]) => id));
+}
+
+// The catalog heads a resolution must cite per open binding (authoring coverage): the current heads plus, under a
+// union-refused node, the chain-valid catalogs refused only because that node authorizes nothing (C13: R2 cites {R1, K1}).
+function citableCatalogHeadsOf(ctx: Ctx, final: Map<string, CatalogBindingNode>, closed: Set<string>, cat: Classified):
+  Map<string, string[]> {
+  return headsAmong(ctx, final, closed, [...cat.status].filter(([id, s]) => s === "current" ||
+    (s === "refused" && cat.validity.get(id)?.t === "ok" && cat.refusals.get(id)?.reason === "catalog_authority_refused"))
+    .map(([id]) => id));
+}
+
+function headsAmong(ctx: Ctx, final: Map<string, CatalogBindingNode>, closed: Set<string>, current: string[]):
+  Map<string, string[]> {
   const successors = new Set(current.map((id) => ctx.input.catalogs.get(id)!.catalog.previous).filter((p) => p !== null));
   const heads = new Map<string, string[]>();
   for (const id of current) {
@@ -514,15 +558,17 @@ function forksOf(ctx: Ctx, final: Map<string, CatalogBindingNode>, heads: string
   catHeads: Map<string, string[]>): CatalogBindingFork[] {
   const forks: CatalogBindingFork[] = [];
   if (heads.length > 1) forks.push({kind: "heads", binding: null, ids: heads});
+  // Differing claims sharing a nonce fork, sequential reuse included (a child reusing its closed parent's nonce). A group
+  // whose members are all closed has been resolved by a later citation, so it no longer forks.
   const byNonce = new Map<string, string[]>();
   for (const n of final.values()) {
-    if (n.kind !== "replacement" || closed.has(n.id)) continue;
+    if (n.kind !== "replacement") continue;
     const nonce = claimOf(ctx, n.id).nonce;
     byNonce.set(nonce, [...(byNonce.get(nonce) ?? []), n.id]);
   }
   for (const ids of byNonce.values()) {
     const bytes = new Set(ids.map((id) => JSON.stringify([...canonicalBytesForCatalogReplacementClaim(claimOf(ctx, id))])));
-    if (bytes.size > 1) forks.push({kind: "nonce", binding: null, ids: [...ids].sort(compareUtf8)});
+    if (bytes.size > 1 && ids.some((id) => !closed.has(id))) forks.push({kind: "nonce", binding: null, ids: [...ids].sort(compareUtf8)});
   }
   for (const [binding, ids] of catHeads) if (ids.length > 1) forks.push({kind: "catalog", binding, ids});
   const uncovered = new Map<string, string[]>();
@@ -554,7 +600,8 @@ function assemble(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, final: Ma
   }
   const graph: CatalogBindingGraph = {nodes: final, heads, closed: [...closed].sort(compareUtf8), closedOut,
     pending: [...final.values()].filter((n) => n.pending.length > 0).map((n) => n.id).sort(compareUtf8), rawEvidence: raw,
-    refusals, catalogHeads: catHeads, catalogStatus: cat.status, citations: cat.cites, previous: cat.previous,
+    refusals, catalogHeads: catHeads, citableCatalogHeads: citableCatalogHeadsOf(ctx, final, closed, cat),
+    catalogStatus: cat.status, citations: cat.cites, previous: cat.previous,
     forks: forksOf(ctx, final, heads, closed, cat, catHeads),
     catalogs: new Map([...ctx.input.catalogs].map(([id, e]) => [id, e.catalog] as [string, TransportCatalog])),
     decision: undefined as unknown as CatalogBindingDecision};
@@ -580,7 +627,9 @@ function decide(ctx: Ctx, graph: CatalogBindingGraph, nodesAll: Map<string, Cata
   const ready = graph.catalogHeads.get(id)?.[0] ?? null;
   const held = {...base, head: id};
   const promotable = !node.refused && node.pending.length === 0 && ready !== null;
-  const trigger = abs === "refused" || abs === "closed_out" || acs === "closed_out" || acs === "refused";
+  // With an accepted state, an accepted binding or catalog absent from the input fails closed as a trigger.
+  const trigger = a !== null && (abs === "refused" || abs === "closed_out" || abs === "missing" || acs === "closed_out" ||
+    acs === "refused" || acs === "missing");
   const promote = (clears: boolean): CatalogBindingDecision => {
     const revision = graph.catalogs.get(ready!)!.revision;
     if (a !== null && (node.generation < a.generation || (id === a.binding && revision < a.revision))) {
@@ -622,7 +671,7 @@ export function coverCatalogReplacementClaim(graph: CatalogBindingGraph, claim: 
   const unknown = claim.parents.filter((p) => !graph.nodes.has(p));
   const dead = (id: string) => graph.rawEvidence.has(id) || graph.closedOut.has(id) || graph.refusals.has(id);
   const expected = claim.parents.flatMap((binding): CatalogPriorCatalog[] => {
-    const heads = graph.catalogHeads.get(binding) ?? [];
+    const heads = graph.citableCatalogHeads.get(binding) ?? [];
     return heads.length === 0 ? [{binding, catalog: null}] : heads.map((catalog) => ({binding, catalog}));
   });
   const has = (list: readonly CatalogPriorCatalog[], item: CatalogPriorCatalog) =>

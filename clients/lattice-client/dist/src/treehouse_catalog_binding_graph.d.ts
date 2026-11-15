@@ -58,6 +58,8 @@ export interface CatalogBindingGraph {
         coreReason: string | null;
     }>;
     catalogHeads: ReadonlyMap<string, readonly string[]>;
+    /** Catalog heads a resolution must cite: current heads plus chain-valid catalogs under a union-refused node. */
+    citableCatalogHeads: ReadonlyMap<string, readonly string[]>;
     catalogStatus: ReadonlyMap<string, CatalogStatus>;
     citations: ReadonlyMap<string, readonly (string | null)[]>;
     previous: ReadonlyMap<string, string | null>;

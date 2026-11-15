@@ -123,7 +123,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &late_first_catalog/1,
       &route_reservation/1,
       &pending_parent/1,
-      &possession_each/1
+      &possession_each/1,
+      &incomplete_control/1,
+      &rotation_recovery/1,
+      &refused_catalog_citation/1,
+      &sequential_nonce/1,
+      &missing_accepted/1
     ]
   end
 
@@ -1553,6 +1558,217 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           },
           decision: accept("B", "C0")
         )
+      )
+    ])
+  end
+
+  # --- review round 2: incomplete control history, rotation recovery, refused citations,
+  # sequential nonce reuse, an absent accepted catalog -----------------------------------------
+
+  # A concurrent revoke V whose dependency E is not held: the union is a smaller history, so
+  # the resolve is trust_pending, never a judgment that later flips.
+  defp incomplete_control(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    e = F.beacon(base, Log.frontier(base.log), 2)
+    v = F.revoke(base, Enum.sort([e.id | Log.frontier(base.log)]), base.delegation.id)
+    loose = Log.from_ops(base.replica, Map.put(Log.ops(l1), v.id, v))
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "E" => e.id,
+        "V" => v.id
+      })
+
+    one("a held control op with an incomplete closure is trust_pending", labels, [
+      step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
+      step(ev(loose, catalogs: [c0, k1]), err("trust_pending")),
+      step(
+        ev(add(l1, [e, v]), catalogs: [c0, k1]),
+        ok(["R1"],
+          closed: ["B"],
+          refused: ["R1"],
+          refusals: %{"K1" => "catalog_authority_refused"},
+          decision: [head: "R1", reason: "authority_changed", block: "authority_changed"]
+        )
+      )
+    ])
+  end
+
+  # A rotation from a replacement keeps its service, so it inherits the unproven cutoffs.
+  defp rotation_recovery(base) do
+    c0 = F.c0(base)
+    r = F.replacement(base, base.log, "r")
+    kr = F.first(base, r)
+    t = rotation(base, node(r.id, 1), kr, r.catalog_key, "t")
+    ct = F.catalog(base, t.id, 0, nil, F.identity("rot-t"), r.entries)
+    lr = add(base.log, [r])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "T" => t.id,
+        "CT" => F.cid(ct)
+      })
+
+    rotated = fn opts -> ok(["T"], [closed: ["B"], nodes: ["B", "R", "T"]] ++ opts) end
+
+    one("a rotation does not bypass its replacement's recovery cutoffs", labels, [
+      step(
+        ev(lr, catalogs: [kr], unproven: [r.id]),
+        ok(["R"],
+          closed: ["B"],
+          pending: ["R"],
+          decision: [head: "R", reason: "recovery_incomplete"]
+        )
+      ),
+      step(
+        ev(lr, rotations: [t], catalogs: [kr, ct], unproven: [r.id]),
+        rotated.(pending: ["R", "T"], decision: [head: "T", reason: "recovery_incomplete"])
+      ),
+      step(
+        ev(lr, rotations: [t], catalogs: [kr, ct]),
+        rotated.(decision: accept("T", "CT"))
+      )
+    ])
+  end
+
+  # C0 lists Space + Thread; C1 follows C0 but drops the Thread (refused). R cites {B, C1}
+  # with a Space-only first catalog: the citation does not make C1 valid, KR extends an
+  # invalid prior, and C0 stays an omitted catalog head, in both delivery orders.
+  defp refused_catalog_citation(base) do
+    [space] = F.base_entries(base)
+
+    thread = %{
+      space
+      | replica: base.replica <> "-thread",
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        route: "/r/" <> F.id("route-thread")
+    }
+
+    c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space])
+
+    r =
+      F.replacement(base, base.log, "r",
+        prior_catalogs: [%{binding: base.boot.id, catalog: F.cid(c1)}]
+      )
+
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{"C1" => F.cid(c1), "R" => r.id, "KR" => F.cid(kr)})
+
+    refused =
+      ok(["R"],
+        closed: ["B"],
+        refusals: %{"C1" => "invalid_catalog_transition", "KR" => "invalid_catalog_transition"},
+        forks: ["catalog"],
+        decision: [reason: "catalog_fork", block: "catalog_fork"]
+      )
+
+    both(
+      "citing a refused catalog neither rehabilitates it nor drops a Thread",
+      labels,
+      [
+        step(
+          ev(base.log, catalogs: [c0, c1]),
+          ok(["B"],
+            refusals: %{"C1" => "invalid_catalog_transition"},
+            decision: accept("B", "C0")
+          )
+        ),
+        step(ev(lr, catalogs: [c0, c1, kr]), refused)
+      ],
+      [
+        step(ev(lr, catalogs: [c1, kr]), err("trust_pending")),
+        step(ev(lr, catalogs: [c0, c1, kr]), refused)
+      ]
+    )
+  end
+
+  # R2 reuses its closed parent R1's nonce with a different claim (lifecycle section 3): a
+  # nonce fork, resolved once a later R3 closes R2 as well.
+  defp sequential_nonce(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+
+    r2 =
+      F.replacement(base, l1, "r2",
+        parents: [r1.id],
+        prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}],
+        generation: 2,
+        claim: %{nonce: r1.claim.nonce}
+      )
+
+    k2 = F.first(base, r2)
+    l2 = add(l1, [r2])
+
+    r3 =
+      F.replacement(base, l2, "r3",
+        parents: [r2.id],
+        prior_catalogs: [%{binding: r2.id, catalog: F.cid(k2)}],
+        generation: 3
+      )
+
+    k3 = F.first(base, r3)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "R2" => r2.id,
+        "K2" => F.cid(k2),
+        "R3" => r3.id,
+        "K3" => F.cid(k3)
+      })
+
+    one("a child reusing its closed parent's nonce is catalog_fork until resolved", labels, [
+      step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
+      step(
+        ev(l2, catalogs: [c0, k1, k2]),
+        ok(["R2"],
+          closed: ["B", "R1"],
+          forks: ["nonce"],
+          decision: [reason: "catalog_fork", block: "catalog_fork"]
+        )
+      ),
+      step(
+        ev(add(l2, [r3]), catalogs: [c0, k1, k2, k3]),
+        ok(["R3"], closed: ["B", "R1", "R2"], decision: accept("R3", "K3"))
+      )
+    ])
+  end
+
+  # Accepted (B, C0), but the caller omits C0: the resolver fails closed instead of promoting.
+  defp missing_accepted(base) do
+    c0 = F.c0(base)
+    r = F.replacement(base, base.log, "r")
+    kr = F.first(base, r)
+    labels = Map.merge(base_labels(base, c0), %{"R" => r.id, "KR" => F.cid(kr)})
+
+    state = %{
+      accepted: %{binding: base.boot.id, generation: 0, catalog: F.cid(c0), revision: 0},
+      blocked: nil
+    }
+
+    one("an accepted catalog absent from the input fails closed", labels, [
+      step(
+        ev(add(base.log, [r]), catalogs: [kr]),
+        ok(["R"],
+          closed: ["B"],
+          decision: [head: "R", reason: "authority_changed", block: "authority_changed"]
+        ),
+        state
       )
     ])
   end

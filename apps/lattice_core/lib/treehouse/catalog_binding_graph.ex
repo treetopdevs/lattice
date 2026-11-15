@@ -19,17 +19,21 @@ defmodule Treehouse.CatalogBindingGraph do
   candidate with an incomplete closure is refuted early only from facts no missing ancestor can
   change (`CatalogReplacementAuthority.refute_without_closure/3`, its own literal bindings and
   possession signatures); otherwise it stays pending. Rotations are nodes when their chain
-  checks pass under their parent node and inherit its service, origin and `refused?`; a
-  failing rotation is a retained refusal. A verdict only ever moves out of pending.
+  checks pass under their parent node and inherit its service, origin, `refused?` and unproven
+  recovery cutoffs; a failing rotation is a retained refusal. A verdict only ever moves out of
+  pending.
 
   Union classification (steps 7-8) only reclassifies: the closed set (D-275), closed-out
   rotation and catalog children of closed bindings, heads, forks, catalog heads and per-node
-  pending recovery cutoffs. Catalog failures are retained refusals, never a resolve error.
+  pending recovery cutoffs. Catalog validity (chain and cited priors) is judged before that
+  classification, so a citation never makes an invalid catalog valid. Catalog failures are
+  retained refusals, never a resolve error.
 
   `resolve/1` returns `{:error, reason, detail}` only for malformed input,
-  `control_history_limit` (more than two heads) and `trust_pending` (a pending candidate not
-  yet refuted, a pending rotation, or a pending catalog under an open binding), the highest
-  precedence first; everything else is in the graph and its `decision`.
+  `control_history_limit` (more than two heads) and `trust_pending` (any held op with an
+  incomplete closure except a candidate already refuted from its own bytes, a pending
+  candidate, a pending rotation, or a pending catalog under an open binding or on a cited
+  chain), the highest precedence first; everything else is in the graph and its `decision`.
   """
 
   alias Lattice.{Authority, Dag, Identity, Log}
@@ -173,8 +177,17 @@ defmodule Treehouse.CatalogBindingGraph do
 
     cat = classify_catalogs(Map.put(ctx, :memo, memo), nodes_all, final, closed, out_rot)
 
+    # Any held op whose closure is incomplete is a missing history page (row m): the authority
+    # fold over the complete ops would judge a smaller history. Only a candidate already refuted
+    # from its own bytes (D-A1) is exempt.
+    incomplete =
+      for {id, _op} <- ctx.ops,
+          not MapSet.member?(ctx.complete, id),
+          not match?({:bad, _}, Map.get(memo, id)),
+          do: id
+
     pending =
-      (for({id, :pending} <- memo, do: id) ++ cat.pending)
+      (for({id, :pending} <- memo, do: id) ++ cat.pending ++ incomplete)
       |> Enum.uniq()
       |> Enum.sort()
 
@@ -302,7 +315,8 @@ defmodule Treehouse.CatalogBindingGraph do
          inventory: r.inventory_digest,
          refused?: p.refused?,
          core_reason: p.core_reason,
-         pending: []
+         # A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs.
+         pending: p.pending
        }}
     end
   end
@@ -548,8 +562,12 @@ defmodule Treehouse.CatalogBindingGraph do
 
   # --- catalogs ---------------------------------------------------------------
 
-  # Status per catalog: :current (open binding, valid chain), :covered / :closed_out /
-  # :uncovered (closed binding), :refused (with a reason) or :pending.
+  # Two passes. Validity is intrinsic to the catalog bytes, its binding node and its chain
+  # (`previous` links and, for a replacement's first catalog, every cited prior): `{:refused,
+  # reason}`, `:binding_pending`, `:pending`, `:bad_chain` or `:ok`. Status then classifies a
+  # valid catalog: :current (open binding), :covered / :closed_out / :uncovered (closed binding),
+  # :refused (with a reason) or :pending. A citation never makes an invalid catalog valid: an
+  # invalid cited catalog covers nothing, and a first catalog extending it is itself invalid.
   defp classify_catalogs(ctx, nodes_all, final, closed, out_rot) do
     cites = citations(nodes_all, closed)
     previous = Map.new(ctx.catalogs, fn {id, e} -> {id, e.catalog.previous} end)
@@ -564,29 +582,20 @@ defmodule Treehouse.CatalogBindingGraph do
       previous: previous
     }
 
+    ids = ctx.catalogs |> Map.keys() |> Enum.sort()
+    validity = Enum.reduce(ids, %{}, fn id, memo -> id |> validity(env, memo) |> elem(1) end)
+    env = Map.put(env, :validity, validity)
+
     acc =
-      ctx.catalogs
-      |> Map.keys()
-      |> Enum.sort()
-      |> Enum.reduce(%{status: %{}, refusals: %{}}, fn id, acc ->
-        catalog(id, env, acc) |> elem(1)
+      Enum.reduce(ids, %{status: %{}, refusals: %{}}, fn id, acc ->
+        {status, acc} = catalog_status(id, env, acc)
+        %{acc | status: Map.put(acc.status, id, status)}
       end)
 
     acc = route_history(ctx, acc)
 
     pending = for {id, :pending} <- acc.status, do: id
-    Map.merge(acc, %{pending: pending, cites: cites, previous: previous})
-  end
-
-  defp catalog(id, env, acc) do
-    case Map.fetch(acc.status, id) do
-      {:ok, status} ->
-        {status, acc}
-
-      :error ->
-        {status, acc} = catalog_status(id, env, acc)
-        {status, %{acc | status: Map.put(acc.status, id, status)}}
-    end
+    Map.merge(acc, %{pending: pending, cites: cites, previous: previous, validity: validity})
   end
 
   defp refuse(acc, id, reason, core),
@@ -594,112 +603,175 @@ defmodule Treehouse.CatalogBindingGraph do
       {:refused,
        %{acc | refusals: Map.put(acc.refusals, id, %{reason: reason, core_reason: core})}}
 
-  defp catalog_status(id, env, acc) do
+  # --- pass 1: validity ---------------------------------------------------------
+
+  defp validity(id, env, memo) do
+    case Map.fetch(memo, id) do
+      {:ok, v} ->
+        {v, memo}
+
+      :error ->
+        {v, memo} = validity_new(id, env, memo)
+        {v, Map.put(memo, id, v)}
+    end
+  end
+
+  defp validity_new(id, env, memo) do
     e = env.ctx.catalogs[id]
     c = e.catalog
     n = env.nodes_all[c.binding]
 
     cond do
       c.space != env.ctx.replica or c.bootstrap != env.ctx.bootstrap.id ->
-        refuse(acc, id, :wrong_catalog_scope, nil)
+        {{:refused, :wrong_catalog_scope}, memo}
 
       n == nil ->
-        binding_missing(id, c.binding, env, acc)
+        {binding_missing(c.binding, env), memo}
 
       not Identity.verify(n.key, TransportCatalog.catalog_bytes(c), e.signature) ->
-        refuse(acc, id, :invalid_catalog_signature, nil)
+        {{:refused, :invalid_catalog_signature}, memo}
 
       Enum.any?(c.entries, &({&1.service_id, &1.service_key} != {n.service_id, n.service_key})) ->
-        refuse(acc, id, :wrong_catalog_scope, nil)
+        {{:refused, :wrong_catalog_scope}, memo}
 
-      n.refused? ->
-        refuse(acc, id, :catalog_authority_refused, n.core_reason)
+      c.previous == nil ->
+        first_validity(c, n, env, memo)
 
-      MapSet.member?(env.out_rot, c.binding) ->
-        {:closed_out, acc}
-
-      MapSet.member?(env.closed, c.binding) ->
-        {closed_status(id, c.binding, env), acc}
+      not Map.has_key?(env.ctx.catalogs, c.previous) ->
+        {:pending, memo}
 
       true ->
-        open_status(id, c, n, env, acc)
+        chain_validity(c, env, memo)
     end
   end
 
   # The binding is a refused rotation, raw evidence, pending or unknown.
-  defp binding_missing(id, binding, env, acc) do
+  defp binding_missing(binding, env) do
     cond do
       Map.has_key?(env.ctx.candidates, binding) or Map.has_key?(env.ctx.rotations, binding) ->
         if Map.has_key?(env.nodes_all, binding) or
              match?({:bad, _}, Map.get(env.ctx.memo, binding)),
-           do: refuse(acc, id, :invalid_catalog_transition, nil),
-           else: {:pending, acc}
+           do: {:refused, :invalid_catalog_transition},
+           else: :binding_pending
 
       Map.has_key?(env.ctx.ops, binding) or Map.has_key?(env.ctx.catalogs, binding) ->
-        refuse(acc, id, :invalid_catalog_transition, nil)
+        {:refused, :invalid_catalog_transition}
 
       true ->
-        {:pending, acc}
+        :binding_pending
     end
   end
 
-  defp open_status(id, c, n, env, acc) do
-    cond do
-      c.previous == nil ->
-        first_status(id, c, n, env, acc)
+  defp chain_validity(c, env, memo) do
+    {prev, memo} = validity(c.previous, env, memo)
+    prior = env.ctx.catalogs[c.previous].catalog
 
-      not Map.has_key?(env.ctx.catalogs, c.previous) ->
+    v =
+      cond do
+        prev in [:pending, :binding_pending] -> :pending
+        prev != :ok or prior.binding != c.binding -> :bad_chain
+        next_generation([prior.revision]) != {:ok, c.revision} -> :bad_chain
+        not extends?(prior.entries, c.entries) -> :bad_chain
+        true -> :ok
+      end
+
+    {v, memo}
+  end
+
+  # Replacement-dependent first-catalog checks (plan 316 section 1 (b)): revision 0, the
+  # declared inventory, and extension of every cited prior, which must itself be valid. A
+  # bootstrap or rotation first catalog takes any revision, as in `CatalogTrust`.
+  defp first_validity(c, n, env, memo) do
+    priors =
+      if n.kind == :replacement, do: for(%{catalog: k} <- n.prior, k != nil, do: k), else: []
+
+    {prior_vs, memo} =
+      Enum.map_reduce(priors, memo, fn k, memo ->
+        if Map.has_key?(env.ctx.catalogs, k), do: validity(k, env, memo), else: {:pending, memo}
+      end)
+
+    extends_all? =
+      Enum.all?(priors, fn k ->
+        case env.ctx.catalogs[k] do
+          nil -> true
+          %{catalog: prior} -> extends?(prior.entries, c.entries)
+        end
+      end)
+
+    v =
+      cond do
+        n.kind == :replacement and c.revision != 0 ->
+          :bad_chain
+
+        n.inventory != nil and TransportCatalog.inventory_id(c.entries) != n.inventory ->
+          :bad_chain
+
+        not extends_all? ->
+          :bad_chain
+
+        Enum.any?(prior_vs, &(&1 not in [:ok, :pending, :binding_pending])) ->
+          :bad_chain
+
+        prior_vs != [] and not Enum.all?(prior_vs, &(&1 == :ok)) ->
+          :pending
+
+        true ->
+          :ok
+      end
+
+    {v, memo}
+  end
+
+  # --- pass 2: status -------------------------------------------------------------
+
+  defp catalog_status(id, env, acc) do
+    c = env.ctx.catalogs[id].catalog
+    n = env.nodes_all[c.binding]
+
+    case env.validity[id] do
+      {:refused, reason} ->
+        refuse(acc, id, reason, nil)
+
+      :binding_pending ->
         {:pending, acc}
 
-      true ->
-        {prev_status, acc} = catalog(c.previous, env, acc)
-        prior = env.ctx.catalogs[c.previous].catalog
-
+      v ->
         cond do
-          prev_status == :pending ->
-            {:pending, acc}
-
-          prev_status != :current or prior.binding != c.binding ->
-            refuse(acc, id, :invalid_catalog_transition, nil)
-
-          next_generation([prior.revision]) != {:ok, c.revision} or
-              not extends?(prior.entries, c.entries) ->
-            refuse(acc, id, :invalid_catalog_transition, nil)
-
-          true ->
-            {:current, acc}
+          n.refused? -> refuse(acc, id, :catalog_authority_refused, n.core_reason)
+          MapSet.member?(env.out_rot, c.binding) -> {:closed_out, acc}
+          MapSet.member?(env.closed, c.binding) -> closed_status(id, c.binding, v, env, acc)
+          v == :pending -> {:pending, acc}
+          v == :bad_chain -> refuse(acc, id, :invalid_catalog_transition, nil)
+          true -> {:current, acc}
         end
     end
   end
 
-  # Replacement-dependent first-catalog checks (plan 316 section 1 (b)).
-  defp first_status(id, c, n, env, acc) do
-    priors_ok? =
-      n.kind != :replacement or
-        Enum.all?(n.prior, fn
-          %{catalog: nil} -> true
-          %{catalog: k} -> extends?(env.ctx.catalogs[k].catalog.entries, c.entries)
-        end)
-
-    if c.revision != 0 or
-         (n.inventory != nil and TransportCatalog.inventory_id(c.entries) != n.inventory) or
-         not priors_ok?,
-       do: refuse(acc, id, :invalid_catalog_transition, nil),
-       else: {:current, acc}
-  end
-
-  # Under a closed binding: covered when ancestor-or-self of a cited catalog, closed out when a
-  # strict descendant of a cited catalog or when the binding was cited with nil, otherwise an
-  # omitted head (uncovered, a fork).
-  defp closed_status(id, binding, env) do
+  # Under a closed binding: covered when ancestor-or-self of a valid cited catalog, closed out
+  # when a strict descendant of a cited catalog or when the binding was cited with nil,
+  # otherwise an omitted head (uncovered, a fork). A catalog on a cited chain is refused when
+  # invalid and pending when its chain is; an uncited old-key catalog is never pending, so it
+  # cannot stall the resolve.
+  defp closed_status(id, binding, v, env, acc) do
     cited = Map.get(env.cites, binding, [])
     real = Enum.reject(cited, &is_nil/1)
+    valid = Enum.filter(real, &(env.validity[&1] in [:ok, :pending]))
 
     cond do
-      Enum.any?(real, &on_chain?(id, &1, env.previous)) -> :covered
-      Enum.any?(real, &(&1 != id and on_chain?(&1, id, env.previous))) -> :closed_out
-      nil in cited -> :closed_out
-      true -> :uncovered
+      v == :bad_chain and Enum.any?(real, &on_chain?(id, &1, env.previous)) ->
+        refuse(acc, id, :invalid_catalog_transition, nil)
+
+      Enum.any?(valid, &on_chain?(id, &1, env.previous)) ->
+        {if(v == :pending, do: :pending, else: :covered), acc}
+
+      Enum.any?(real, &(&1 != id and on_chain?(&1, id, env.previous))) ->
+        {:closed_out, acc}
+
+      nil in cited ->
+        {:closed_out, acc}
+
+      true ->
+        {:uncovered, acc}
     end
   end
 
@@ -773,19 +845,46 @@ defmodule Treehouse.CatalogBindingGraph do
     |> Map.new(fn {binding, ids} -> {binding, Enum.sort(ids)} end)
   end
 
+  # The catalog heads a resolution must cite per open binding (authoring coverage): the current
+  # heads plus, under a union-refused node, the chain-valid catalogs refused only because that
+  # node authorizes nothing (C13: R2 cites `{R1, K1}` after R1 is refused).
+  defp citable_catalog_heads(final, closed, cat, ctx) do
+    citable =
+      for {cid, status} <- cat.status,
+          status == :current or
+            (status == :refused and cat.validity[cid] == :ok and
+               cat.refusals[cid].reason == :catalog_authority_refused),
+          do: cid
+
+    successors =
+      MapSet.new(for cid <- citable, p = ctx.catalogs[cid].catalog.previous, p != nil, do: p)
+
+    open = for {id, _} <- final, not MapSet.member?(closed, id), into: MapSet.new(), do: id
+
+    citable
+    |> Enum.reject(&MapSet.member?(successors, &1))
+    |> Enum.filter(&MapSet.member?(open, ctx.catalogs[&1].catalog.binding))
+    |> Enum.group_by(&ctx.catalogs[&1].catalog.binding)
+    |> Map.new(fn {binding, ids} -> {binding, Enum.sort(ids)} end)
+  end
+
   defp forks(final, heads, closed, cat, cat_heads, ctx) do
     heads_fork = if length(heads) > 1, do: [%{kind: :heads, binding: nil, ids: heads}], else: []
 
+    # Differing claims sharing a nonce fork, sequential reuse included (a child reusing its
+    # closed parent's nonce). A group whose members are all closed has been resolved by a later
+    # citation, so it no longer forks.
     nonce =
       final
-      |> Enum.filter(fn {id, n} -> n.kind == :replacement and not MapSet.member?(closed, id) end)
+      |> Enum.filter(fn {_id, n} -> n.kind == :replacement end)
       |> Enum.group_by(fn {id, _} -> claim_of(ctx, id).nonce end, &elem(&1, 0))
       |> Enum.flat_map(fn {_nonce, ids} ->
         ids = Enum.sort(ids)
 
-        if length(Enum.uniq(Enum.map(ids, &claim_of(ctx, &1)))) > 1,
-          do: [%{kind: :nonce, binding: nil, ids: ids}],
-          else: []
+        if length(Enum.uniq(Enum.map(ids, &claim_of(ctx, &1)))) > 1 and
+             Enum.any?(ids, &(not MapSet.member?(closed, &1))),
+           do: [%{kind: :nonce, binding: nil, ids: ids}],
+           else: []
       end)
 
     split =
@@ -845,6 +944,7 @@ defmodule Treehouse.CatalogBindingGraph do
       raw_detail: Map.take(detail, Map.keys(raw)),
       refusals: cat.refusals |> Map.merge(rotation_refusals) |> Map.merge(refused_rotations),
       catalog_heads: cat_heads,
+      citable_catalog_heads: citable_catalog_heads(final, closed, cat, ctx),
       catalog_status: cat.status,
       citations: cat.cites,
       previous: cat.previous,
@@ -885,8 +985,12 @@ defmodule Treehouse.CatalogBindingGraph do
 
   # Step 9 triggers: the accepted binding refused or closed out, or the accepted catalog
   # closed out or not covered by a citation of its closed binding. "Closed" alone is the
-  # ordinary success state and is never a trigger.
-  defp trigger?({abs, acs}), do: abs in [:refused, :closed_out] or acs in [:closed_out, :refused]
+  # ordinary success state and is never a trigger. With an accepted state, an accepted binding
+  # or catalog absent from the input fails closed as a trigger rather than promoting silently.
+  defp trigger?(nil, _statuses), do: false
+
+  defp trigger?(_accepted, {abs, acs}),
+    do: abs in [:refused, :closed_out, :missing] or acs in [:closed_out, :refused, :missing]
 
   defp sole(ctx, graph, id, statuses, base) do
     node = graph.nodes[id]
@@ -901,7 +1005,7 @@ defmodule Treehouse.CatalogBindingGraph do
       promotable? and resolves_refusal?(ctx, graph, id, statuses) ->
         promote_or_rollback(ctx, graph, base, id, ready, false)
 
-      trigger?(statuses) ->
+      trigger?(ctx.accepted, statuses) ->
         %{
           base
           | reason: :authority_changed,
@@ -1009,7 +1113,8 @@ defmodule Treehouse.CatalogBindingGraph do
   cited parent that is raw evidence, refused or closed out, wrong generation, service rule),
   then an omitted head (citing a non-head ancestor instead is a sibling of that head) or an
   omitted catalog head (`catalog_fork`), then a prior entry that is not a retained catalog head
-  of its parent and first-catalog extension of every cited prior against `entries`.
+  of its parent and first-catalog extension of every cited prior against `entries`. The catalog
+  heads are the citable ones: under a union-refused parent its chain-valid catalogs count.
   """
   @spec cover_claim(graph(), map(), [map()]) :: :ok | {:error, atom()}
   def cover_claim(graph, claim, entries) do
@@ -1067,7 +1172,7 @@ defmodule Treehouse.CatalogBindingGraph do
 
   defp expected_priors(graph, parents) do
     Enum.flat_map(parents, fn parent ->
-      case Map.get(graph.catalog_heads, parent, []) do
+      case Map.get(graph.citable_catalog_heads, parent, []) do
         [] -> [%{binding: parent, catalog: nil}]
         heads -> for catalog <- heads, do: %{binding: parent, catalog: catalog}
       end

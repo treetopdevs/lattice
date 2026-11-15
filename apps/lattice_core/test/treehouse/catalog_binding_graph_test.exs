@@ -105,6 +105,62 @@ defmodule Treehouse.CatalogBindingGraphTest do
     end
   end
 
+  # Review round 2, finding 4: after accepted R1/K1 is union-refused by a concurrent holder
+  # change, the public preflight must prepare the C13 recovery claim citing `{R1, K1}` (the
+  # resolver accepts it and it clears the refusal); citing `{R1, nil}` closes K1 out instead.
+  test "authoring prepares the C13 recovery claim that cites the refused accepted catalog" do
+    c0 = F.c0(@base)
+
+    r1 =
+      F.replacement(@base, @base.log, "r1",
+        prior_catalogs: [%{binding: @base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    k1 = F.first(@base, r1)
+
+    t2 =
+      F.transfer(@base, Log.frontier(@base.log), @base.nominee.pub,
+        issuer: @base.admin,
+        parent_id: @base.delegation.id
+      )
+
+    log = F.append(@base.log, [r1.op, t2.op])
+
+    service = F.identity("service-c13-prep")
+    service_id = F.id("service-id-c13-prep")
+
+    request = fn prior ->
+      %{
+        author: @base.nominee.pub,
+        nonce: F.id("nonce-c13-prep"),
+        parents: [r1.id],
+        prior_catalogs: [%{binding: r1.id, catalog: prior}],
+        generation: 2,
+        new_catalog_key: F.identity("catalog-c13-prep").pub,
+        new_service_id: service_id,
+        new_service_key: service.pub,
+        new_origin: "wss://c13-prep-relay.invalid",
+        entries: F.entries(@base, "c13-prep", service_id, service.pub),
+        replica_logs: %{},
+        rotations: [],
+        catalogs: [c0, k1]
+      }
+    end
+
+    assert {:ok, attempt} =
+             Treehouse.CatalogReplacementAuthoring.prepare(log, request.(F.cid(k1)), %{})
+
+    assert attempt.claim.prior_catalogs == [%{binding: r1.id, catalog: F.cid(k1)}]
+
+    assert Treehouse.CatalogReplacementAuthoring.prepare(log, request.(nil), %{}) ==
+             {:error, :catalog_fork}
+
+    # `catalog_heads` (promotion, split forks) is unchanged; only coverage reads citable heads.
+    {:ok, g} = resolve(%{space: log, catalogs: %{F.cid(c0) => c0, F.cid(k1) => k1}})
+    assert G.node(g, r1.id).refused? and g.citable_catalog_heads[r1.id] == [F.cid(k1)]
+    assert g.catalog_heads[r1.id] == nil
+  end
+
   test "cover_claim: unheld prior, then transition failure, then omitted head fork" do
     c0 = F.c0(@base)
 
