@@ -119,7 +119,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &ordinary_success/1,
       &refused_beside_sibling/1,
       &c13/1,
-      &idempotent_and_rollback/1
+      &idempotent_and_rollback/1,
+      &revoked_in_prefix/1,
+      &late_first_catalog/1,
+      &route_reservation/1,
+      &pending_parent/1,
+      &possession_each/1
     ]
   end
 
@@ -1157,6 +1162,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       blocked: nil
     }
 
+    revised = %{
+      accepted: %{binding: r1.id, generation: 1, catalog: F.cid(k1), revision: 3},
+      blocked: nil
+    }
+
     [
       one("same bytes are idempotent", labels, [
         step(ev(l1, catalogs: [c0, k1]), done),
@@ -1167,6 +1177,13 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           ev(l1, catalogs: [c0, k1]),
           ok(["R1"], closed: ["B"], decision: [head: "R1", reason: "catalog_rollback"]),
           high
+        )
+      ]),
+      one("lower catalog revision than the watermark is catalog_rollback", labels, [
+        step(
+          ev(l1, catalogs: [c0, k1]),
+          ok(["R1"], closed: ["B"], decision: [head: "R1", reason: "catalog_rollback"]),
+          revised
         )
       ])
     ]
@@ -1317,4 +1334,230 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
 
   @doc false
   def inventory_id(entries), do: TransportCatalog.inventory_id(entries)
+
+  # --- review round: intrinsic Core refusal, block carry-forward, route reservation ----------
+
+  defp revoked_in_prefix(base) do
+    c0 = F.c0(base)
+    rv = F.revoke(base, Log.frontier(base.log), base.delegation.id)
+    lrv = add(base.log, [rv])
+    rr = cite_c0(base, c0, "rr", log: lrv)
+    r1 = cite_c0(base, c0, "r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    later = F.revoke(base, Log.frontier(l1), base.delegation.id)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "Rv" => rv.id,
+        "Rr" => rr.id,
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "Later" => later.id
+      })
+
+    [
+      one("authority revoked inside the candidate's own prefix adds no head or closure", labels, [
+        step(
+          ev(add(lrv, [rr]), catalogs: [c0]),
+          ok(["B"], raw: %{"Rr" => "catalog_authority_refused"}, decision: accept("B", "C0"))
+        )
+      ]),
+      one("a causally later revoke keeps the history", labels, [
+        step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
+        step(
+          ev(add(l1, [later]), catalogs: [c0, k1]),
+          ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
+        )
+      ])
+    ]
+  end
+
+  defp late_first_catalog(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    {tn, t2, l2} = regrant(base, l1, Log.frontier(base.log))
+
+    r2 =
+      F.replacement(base, l2, "r2",
+        parents: [r1.id],
+        prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}],
+        generation: 2,
+        author: base.nominee,
+        claim: %{author: base.nominee.pub},
+        cap: t2.delegation.id,
+        holder_epoch: t2.op.id
+      )
+
+    k2 = F.first(base, r2)
+    l3 = add(l2, [r2])
+
+    r = F.replacement(base, base.log, "r")
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    rp =
+      F.replacement(base, lr, "rp",
+        parents: [r.id],
+        prior_catalogs: [%{binding: r.id, catalog: F.cid(kr)}],
+        generation: 2
+      )
+
+    kp = F.first(base, rp)
+    lp = add(lr, [rp])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "T2" => tn.id,
+        "R2" => r2.id,
+        "K2" => F.cid(k2),
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "Rp" => rp.id,
+        "KP" => F.cid(kp)
+      })
+
+    changed = fn head, opts ->
+      ok(
+        [head],
+        opts ++ [decision: [head: head, reason: "authority_changed", block: "authority_changed"]]
+      )
+    end
+
+    refused_k1 = %{"K1" => "catalog_authority_refused"}
+
+    [
+      one("C13: a resolution delivered before its first catalog still clears", labels, [
+        step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
+        step(
+          ev(add(l1, [tn]), catalogs: [c0, k1]),
+          changed.("R1", closed: ["B"], refused: ["R1"], refusals: refused_k1)
+        ),
+        step(
+          ev(l3, catalogs: [c0, k1]),
+          changed.("R2", closed: ["B", "R1"], refused: ["R1"], refusals: refused_k1)
+        ),
+        step(
+          ev(l3, catalogs: [c0, k1, k2]),
+          ok(["R2"],
+            closed: ["B", "R1"],
+            refused: ["R1"],
+            refusals: refused_k1,
+            decision: accept("R2", "K2", clears: true)
+          )
+        )
+      ]),
+      one(
+        "closing rule: a later resolution delivered before its first catalog still clears",
+        labels,
+        [
+          step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+          step(ev(lr, catalogs: [c0, kr]), changed.("R", closed: ["B"], closed_out: ["C0"])),
+          step(
+            ev(lp, catalogs: [c0, kr]),
+            changed.("Rp", closed: ["B", "R"], closed_out: ["C0"])
+          ),
+          step(
+            ev(lp, catalogs: [c0, kr, kp]),
+            ok(["Rp"],
+              closed: ["B", "R"],
+              closed_out: ["C0"],
+              decision: accept("Rp", "KP", clears: true)
+            )
+          )
+        ]
+      )
+    ]
+  end
+
+  # An old-key catalog under a closed binding reuses the head's route for another replica.
+  defp route_reservation(base) do
+    c0 = F.c0(base)
+    r = F.replacement(base, base.log, "r")
+    kr = F.first(base, r)
+    [space] = F.base_entries(base)
+    [route] = Enum.map(r.entries, & &1.route)
+
+    squat =
+      F.catalog(base, base.boot.id, 0, nil, base.catalog, [
+        space,
+        %{
+          space
+          | replica: base.replica <> "-squat",
+            kind: :thread,
+            schema: :treehouse_thread_v1,
+            route: route
+        }
+      ])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{"R" => r.id, "KR" => F.cid(kr), "Squat" => F.cid(squat)})
+
+    one("closed-out old-key catalogs reserve no route", labels, [
+      step(
+        ev(add(base.log, [r]), catalogs: [squat, kr]),
+        ok(["R"], closed: ["B"], closed_out: ["Squat"], decision: accept("R", "KR"))
+      )
+    ])
+  end
+
+  defp pending_parent(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "r1")
+    l1 = add(base.log, [r1])
+
+    r2 =
+      F.replacement(base, l1, "r2",
+        parents: [r1.id],
+        prior_catalogs: [%{binding: r1.id, catalog: nil}],
+        generation: 2
+      )
+
+    k1 = F.first(base, r1)
+    k2 = F.first(base, r2)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "R2" => r2.id,
+        "K1" => F.cid(k1),
+        "K2" => F.cid(k2)
+      })
+
+    one("held-but-pending parent makes the child pending", labels, [
+      step(ev(add(l1, [r2]), catalogs: [k2]), err("trust_pending")),
+      step(
+        ev(add(l1, [r2]), catalogs: [c0, k1, k2]),
+        ok(["R2"], closed: ["B", "R1"], closed_out: ["K1"], decision: accept("R2", "K2"))
+      )
+    ])
+  end
+
+  defp possession_each(base) do
+    c0 = F.c0(base)
+    pc = F.replacement(base, base.log, "pc", bad_possession: :catalog)
+    ps = F.replacement(base, base.log, "ps", bad_possession: :service)
+    deps = F.replacement(base, base.log, "deps", claim: %{deps: [base.boot.id]})
+
+    labels =
+      Map.merge(base_labels(base, c0), %{"Pc" => pc.id, "Ps" => ps.id, "Deps" => deps.id})
+
+    one("each possession signature and the literal deps binding are re-checked", labels, [
+      step(
+        ev(add(base.log, [pc, ps, deps]), catalogs: [c0]),
+        ok(["B"],
+          raw: %{
+            "Pc" => "invalid_possession",
+            "Ps" => "invalid_possession",
+            "Deps" => "invalid_catalog_transition"
+          },
+          decision: accept("B", "C0")
+        )
+      )
+    ])
+  end
 end

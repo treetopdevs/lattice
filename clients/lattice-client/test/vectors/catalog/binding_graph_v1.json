@@ -1,7 +1,9 @@
 {
   "artifacts": {
+    "1puyaa9Huw36ECOetduCiFUkaFRA5ZOPPaHZsxVIb6M": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"c0QxdkxGQ0EtTGJESU9LQS1hdTdhR3pHaXhNZjVmY1JaUkJkWGo3TVVaUQ==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IveVhoLWZkSmNhbUswWGNva0xiM3hRaVd2QXlNMUhReEpDQ001Z1dJbXhjaw==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"T1hpTmJSa2VNQ193OFBwOUhNU1R6RlgtbDZhNjJfeVZQcVA5TzhUTWxVNA==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"LWLBDr0TlutNtvu0Mvo0T85YEzQLfcs3WrSLZRKzdJQ=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"xKn5BHCP2b2GDe6eQVN84A/korAfocP0fsaOr5cQr500oJ+e5BRQ/bHfzYmXU7JR8XjpFudImCE2jDCyOazqCw==\"]]]]",
     "3UQczbOGXv0YEzOXjXEo5HjkABlcorhg9HjQrYktRDI": "[\"map\",[[[\"atom\",\"rotation\"],[\"map\",[[[\"atom\",\"nonce\"],[\"bin\",\"QTBrZlU4T1l2M3Q3cU5xRE5IeFFjYXhqdU5Cc0RqcnlBOXZKUkxQNWMzNA==\"]],[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"parent\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"cutoffs\"],[\"list\",[[\"map\",[[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"frontier\"],[\"list\",[[\"bin\",\"NDZTSlZVcEZhdGFRNU9LRG54RkRNWGxIRm9adk5KNXFENlhVdU9haWpnQQ==\"]]]],[[\"atom\",\"log_digest\"],[\"bin\",\"eFFaWTN3TFZRM2RwMEhpU1RzTUR4T2ZlQk1qbWFZeDZaZ201OWJZZnpnZw==\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"generation\"],[\"int\",1]],[[\"atom\",\"prior_catalog\"],[\"bin\",\"QWl5VC11M3lYVVh6TXI0eUlIMU9wYzVfUWdhUXQwS0U4UUVZSHg2eUp1Yw==\"]],[[\"atom\",\"new_catalog_key\"],[\"bin\",\"bDP/1Sr26Ut1GunbJvlKWlSRKb/WxvHtG7M+hU0nh+E=\"]],[[\"atom\",\"inventory_digest\"],[\"bin\",\"VnNzdW02UGZqLV9DQ2c4LWoxaXMxUVRMZkJSbnZ6TjQ3TnViN2NUYlpHSQ==\"]]]]],[[\"atom\",\"new_signature\"],[\"bin\",\"orfAJrCzGBybi2JWV09Hdj3AQz8xZkfkdwVxVvCeRm5oXn1eZs9jILBXVKkLd1T/9T47uemhVDckEXI7EviWCg==\"]],[[\"atom\",\"old_signature\"],[\"bin\",\"oWNtMrsfQ64K5zp2obLeT1y4prKbB/VDOQjcJnW1tI6J76tQdcyzaNbkZHA+QnnJMiRJd9DWDoltVz0hLSliAQ==\"]]]]",
     "4NG7lDt4Zw7MwoS_zdM3NyXrL87SuDuGDv1MfTohSPI": "[\"map\",[[[\"atom\",\"rotation\"],[\"map\",[[[\"atom\",\"nonce\"],[\"bin\",\"dG9tX0pRaERMQ25leVpRYWI4bnh0d2lINDAwVE43MFpFa3FqVUtGNjVlSQ==\"]],[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"parent\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"cutoffs\"],[\"list\",[[\"map\",[[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"frontier\"],[\"list\",[[\"bin\",\"RktQNllxc1BpMWo1NTN4ZUs5VmRrUU1CcHpKVnkxWnE4bENhck1DRXJIOA==\"]]]],[[\"atom\",\"log_digest\"],[\"bin\",\"b3NpRFZFM3pFaVRVZ0oxWXhkMXI0UUN0LVAzTjFSNFRYNDgyUDYybUZjNA==\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"generation\"],[\"int\",1]],[[\"atom\",\"prior_catalog\"],[\"bin\",\"QWl5VC11M3lYVVh6TXI0eUlIMU9wYzVfUWdhUXQwS0U4UUVZSHg2eUp1Yw==\"]],[[\"atom\",\"new_catalog_key\"],[\"bin\",\"i7qmRoni3AQILXnSPzfrN8cpGA95iqF4ISxNH7gez1g=\"]],[[\"atom\",\"inventory_digest\"],[\"bin\",\"VnNzdW02UGZqLV9DQ2c4LWoxaXMxUVRMZkJSbnZ6TjQ3TnViN2NUYlpHSQ==\"]]]]],[[\"atom\",\"new_signature\"],[\"bin\",\"ih36fvmx3hu9YfJlvZUQjypjsSDOJyqSb5fqc6GQIZKJDqe0j+1U00gegQfeZTvciIHQCfvLVAtcuVN3mu3VBw==\"]],[[\"atom\",\"old_signature\"],[\"bin\",\"nchR/FiTHLu/HWqy4Qk2dFYOcr+5WO4B+AUeSl6e3cmXIXiSPpM57Ny6+YmeeUYP03rYSNiALtIGWbMUvwjUDQ==\"]]]]",
+    "5yGlMDqowhi4vS3ignX9GN6fCkTh4WqqPXgNWheJ90Q": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"dFFXZVNEbGdlenpKaEM4M05qYVBWcGhFWFZWNDg2NjFwRVpWLVFsV09nRQ==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IveGk3cExNeFF4dV9EVXRvdURjaHMwTENhcE5nU2lCX1VtVDNiSVVNQld5WQ==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"SVdRcnpCMVdSVW9IQUc2d2JnUGdFVm9CRklJQnFaVkZIOVhsQVRsdDdmQQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"YqEb3sYm6/wq4kpqIOpi5Lv/SPdP83DJsqbK+uFiAUs=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"Dm4f2coFcZ0eUZlZSCSRH5xZS8lI8t2Ii7BBkQseFeTz1uTkLIji9Fk0Sr55XyqFt0o00oLb+qXImzGLKhP8BA==\"]]]]",
     "6SmzpiiyDQadaCQIlqi-yVZdZ3dYK2LzcYqo9AChoL4": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"M3VqZHdjZkd4anBwUWxaejFzWHdIV0t3N19MeVJJcXpWYzVJbTNLYkc2MA==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IveVhoLWZkSmNhbUswWGNva0xiM3hRaVd2QXlNMUhReEpDQ001Z1dJbXhjaw==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"T1hpTmJSa2VNQ193OFBwOUhNU1R6RlgtbDZhNjJfeVZQcVA5TzhUTWxVNA==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"LWLBDr0TlutNtvu0Mvo0T85YEzQLfcs3WrSLZRKzdJQ=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"pOwraI8bPu6SHIfz9yrvK6Z+7vQPlXZ1jNX9mHJyXvBqXJFEQDbRH+vTr/EZnQcl7jvEi4chp1pKOderNaLqBg==\"]]]]",
     "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvOFpwNHJHajBULVpqVUdrLXlOQlNvTjRMZGlxOUhWWDNLbG1mQTNyaVFJdw==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"U0tCYmE4REMwajVaNjVHa0N2S3c5ZlZhc2tQSXhPYmIxWlp6TjRYbTVHQQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"aVy26HxUjNC3Cf3l8hCnu5gvbBvQsnilQCu+HNiDxiY=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"gFbOVWeoxmv/XgR3sPKClb6NPKGOVLtgy0hDrZw/+/ANAk2j6QRrwmaHFXCmOUJ2SaVA/wmXVNkEAs7xDKTlCQ==\"]]]]",
     "ByiejV8FmlbBkMEHQkn4Thrsm5cu9J3XZfMGkdFnbmo": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"X2NzN0R0U3UybU5ZWkc1Ny1COGRrSGxidHc4TXBOYTZSc1g0dm5VUE05dw==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvaWFKS0RJOTJUY3RvTWJVbVlSYV8zaVBJZ1Q4VmxSVUFtenJGaXVSNDJESQ==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"YmM4TUpuaHpVeFZsYWxReWxCWXpWUzRSNFFPZjFBbGxJYUhSUmprc2dQcw==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"2Mub/KcFSonWgu5nVxqWdBRFgnq3xoNfKNHgKl5w0ZU=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"dXaXbC7yJ2FM/BaElKyVSKSxj7JR2Nl1lHng1lewx1hw/o005hnKr5ThXAp+o9aGZcxRVoI15Xd65N2Y3Pz9DQ==\"]]]]",
@@ -23,6 +25,7 @@
     "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"ZkdWMGh4YXFnamdEbi1jOHFrYXhlYlZDSUVDNDQtNmdwUlNQcDRyTktMaw==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvVktSbDk5MS1ybGZPRXFrcUJGbUxQWDhUUTlnZk1pT3dpX1dfbTFGOG84TQ==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"N0hwc25wWVVwam5ELW5uNUlXcy14am4wZnZTN194RDhLS1Z2MnhsdlVRSQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"TL4uuajlzJY5GvQfbAI8E8M2IpqavhXOw9BvI35pVRo=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"hj+RxKyIgucTkWZc3nK9vN7a3MnoF1FyXWVlg6CU3Fv3g31q7HnZ9UEvdM00NJZ6hYzzJa506JZGksxB3OXTDQ==\"]]]]",
     "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"UndkTFc2QmxxTVBNc0RiTV84XzBJMVhBNDg4ZWNmUkRjNU5KbzV0dEFacw==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvX016ZnBETWtadG1kN2s0bzM4VlNaS1VUSVVkeXI3bXV5b0lhWHhIV0dUVQ==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"cDJxVnBOWTBvR3ZlYnBMNDc3c1F3MWZrWk5wX18tTDFuU2pMelFUTEs1WQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"gLV7aKg3srBpAQZphm/hVtpQWPfhdlEYcJ1skoIkM30=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"qlhYGoc+WOTV4QS7Pvd9GOxdCZiiUFrHOCk/eRFZG88U9FWsEX53V+EeCahfwhim1f51HbADFwUXQy6NAfB4Cg==\"]]]]",
     "ray92MXzDur0sJsKqr9QYUEOJblBSdCuEUkSaNI_dvY": "[\"map\",[[[\"atom\",\"rotation\"],[\"map\",[[[\"atom\",\"nonce\"],[\"bin\",\"dmJaUGNoZlRZcWZ3bDJwN0Z5V045NGVXRDV3bF92bUJPS2tPWFBCYVpUNA==\"]],[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"parent\"],[\"bin\",\"ZkdWMGh4YXFnamdEbi1jOHFrYXhlYlZDSUVDNDQtNmdwUlNQcDRyTktMaw==\"]],[[\"atom\",\"cutoffs\"],[\"list\",[[\"map\",[[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"frontier\"],[\"list\",[[\"bin\",\"S0YxUGNPN0ZiZnF5aS1BeF95QUpvUWpmeHdIcFdDWnlwd3J1VDJNVUpSSQ==\"]]]],[[\"atom\",\"log_digest\"],[\"bin\",\"b08xUVVpa184djU2RmtIblVvSG5nWjdfVEhtTWc4VDVDNVpuSDZGWklyWQ==\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"generation\"],[\"int\",2]],[[\"atom\",\"prior_catalog\"],[\"bin\",\"cTVWc0Z5S2lKR29mUXVtTlJOTE03VEEzdUY0ZUM2ZHExZXBNX2xkamJiNA==\"]],[[\"atom\",\"new_catalog_key\"],[\"bin\",\"HS2vd85+rU3vlrUGs1x5LzBbr7FsEaR6b2MBPmEAJh4=\"]],[[\"atom\",\"inventory_digest\"],[\"bin\",\"bVkwakllZ2NYR0hoQUtpWW40ZFVqdWtQcmF1Ti1ST3hrY1BqdTRfa0hudw==\"]]]]],[[\"atom\",\"new_signature\"],[\"bin\",\"3YQ1qyo9204KDWECRZUpjkqS9TIidt+Efk3n9CmKx4t2fR3C7GiQJqpJ4Wsxih0n3Te96cEHuFqDKD1OoUKMAg==\"]],[[\"atom\",\"old_signature\"],[\"bin\",\"UeZKEWrNwrzzJtajMcksOiA/CXWhGwY3iLcEISwcbtVNJzLA+r9W4E9y4wJcIY+zgd51Rjy5xOzkHIP6vk3wCw==\"]]]]",
+    "xOQtIovsOxIm4EMAFxqv_THpc4Dc0GQY-sTJBnTVUmQ": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvOFpwNHJHajBULVpqVUdrLXlOQlNvTjRMZGlxOUhWWDNLbG1mQTNyaVFJdw==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"U0tCYmE4REMwajVaNjVHa0N2S3c5ZlZhc2tQSXhPYmIxWlp6TjRYbTVHQQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"aVy26HxUjNC3Cf3l8hCnu5gvbBvQsnilQCu+HNiDxiY=\"]]]],[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"thread\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvX016ZnBETWtadG1kN2s0bzM4VlNaS1VUSVVkeXI3bXV5b0lhWHhIV0dUVQ==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_thread_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVjLXNxdWF0\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"U0tCYmE4REMwajVaNjVHa0N2S3c5ZlZhc2tQSXhPYmIxWlp6TjRYbTVHQQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"aVy26HxUjNC3Cf3l8hCnu5gvbBvQsnilQCu+HNiDxiY=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"9L1+WOFSH8M2ubF5VHxQSJeav5phHfS5c2ueMO05enCs84TxKj7uIpzI1U+6gQj3T67UptejdbLTY6XHSy41Dg==\"]]]]",
     "zVsj_breEADuqMW4_H8r-q1QLzZyxw2lHFBFux-6DBE": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"NE5HN2xEdDRadzdNd29TX3pkTTNOeVhyTDg3U3VEdUdEdjFNZlRvaFNQSQ==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvOFpwNHJHajBULVpqVUdrLXlOQlNvTjRMZGlxOUhWWDNLbG1mQTNyaVFJdw==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"U0tCYmE4REMwajVaNjVHa0N2S3c5ZlZhc2tQSXhPYmIxWlp6TjRYbTVHQQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"aVy26HxUjNC3Cf3l8hCnu5gvbBvQsnilQCu+HNiDxiY=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"KDrnhgd9llazem11IlZ7vgqLY/+PxY4y8J/nmMQGkFhoFSK+hTC8ugi2b5B6U+2dxToFuQtL4Fv8g+FZsI/cDg==\"]]]]",
     "zuyNTA3Iz1fASwZ1J9Nn5Nwqklr-rpFkAjHBCnDBjeA": "[\"map\",[[[\"atom\",\"catalog\"],[\"map\",[[[\"atom\",\"space\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"binding\"],[\"bin\",\"aDVIMEd6V0JLRVBZb0lfSEVPZFZKZWZEUlhURlZPUzNrcXpWdzc0WUs5OA==\"]],[[\"atom\",\"entries\"],[\"list\",[[\"map\",[[[\"atom\",\"kind\"],[\"atom\",\"space\"]],[[\"atom\",\"root\"],[\"bin\",\"+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=\"]],[[\"atom\",\"route\"],[\"bin\",\"L3IvX016ZnBETWtadG1kN2s0bzM4VlNaS1VUSVVkeXI3bXV5b0lhWHhIV0dUVQ==\"]],[[\"atom\",\"schema\"],[\"atom\",\"treehouse_space_v1\"]],[[\"atom\",\"genesis\"],[\"bin\",\"TnU1U1FDOWx0ZlNSWVhjS1BpLUlha3FCcWx4cWtGT1NjaTR5LWR0Z29UMA==\"]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"replica\"],[\"bin\",\"cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj\"]],[[\"atom\",\"creation\"],[\"bin\",\"SlQ4aWdWLTN6ZzVIRm80d2laa1JxeE9RT0JzWXR3V1RseWQ5U3BZZUJmbw==\"]],[[\"atom\",\"reference\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]],[[\"atom\",\"service_id\"],[\"bin\",\"cDJxVnBOWTBvR3ZlYnBMNDc3c1F3MWZrWk5wX18tTDFuU2pMelFUTEs1WQ==\"]],[[\"atom\",\"service_key\"],[\"bin\",\"gLV7aKg3srBpAQZphm/hVtpQWPfhdlEYcJ1skoIkM30=\"]]]]]]],[[\"atom\",\"product\"],[\"atom\",\"treehouse\"]],[[\"atom\",\"version\"],[\"int\",1]],[[\"atom\",\"previous\"],[\"nil\"]],[[\"atom\",\"revision\"],[\"int\",0]],[[\"atom\",\"bootstrap\"],[\"bin\",\"N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw==\"]]]]],[[\"atom\",\"signature\"],[\"bin\",\"tauMr/XuBwgCcQNSmkZ5BwAbqMWX4uzBNbwQX1tKccVyT/CiLBxJJ/wBmgX7qPozQVtuoW6B8PYk0LbTTjQJDQ==\"]]]]"
   },
@@ -155,6 +158,350 @@
     ]
   },
   "frames": {
+    "rWRzQHstZcluR6iQ4bAzKVjNNSKGtfQPKmKPKRwFCB0": {
+      "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "replace_catalog_v1"
+          ],
+          [
+            "list",
+            [
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "cap"
+                    ],
+                    [
+                      "bin",
+                      "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "deps"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "cERwU242bGcwcl9ZckJuOGQtTkZBcV9sQmlQRHZQaTd1QjRfbVIzTm15QQ=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "nonce"
+                    ],
+                    [
+                      "bin",
+                      "X1I3U0hfUWt6dFhIX3Vmb3hBdlFiRF9BNFhFTjdiR25FQzlFQVJ1bExnYw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "space"
+                    ],
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "author"
+                    ],
+                    [
+                      "bin",
+                      "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "cutoffs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "frontier"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "cERwU242bGcwcl9ZckJuOGQtTkZBcV9sQmlQRHZQaTd1QjRfbVIzTm15QQ=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "log_digest"
+                              ],
+                              [
+                                "bin",
+                                "djFUc0ViY01mbzg5Tm9vZW5UZmxtY2tHdU1wZ01TMzVXZVNTSjc0V0dNVQ=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "parents"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "product"
+                    ],
+                    [
+                      "atom",
+                      "treehouse"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "version"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "bootstrap"
+                    ],
+                    [
+                      "bin",
+                      "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "generation"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_origin"
+                    ],
+                    [
+                      "bin",
+                      "d3NzOi8vcnItcmVsYXkuaW52YWxpZA=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_id"
+                    ],
+                    [
+                      "bin",
+                      "NjFXVjR1MWtKeXN5N1MtR1VUTGxBNWttT2ZWNTk5Ukk2bU5LQWFDQmcybw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch_basis"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "holder_epoch"
+                    ],
+                    [
+                      "bin",
+                      "YTVPMmsyeE5OaXNGaVptVEZseU1KdGN3dmJRV1hVamZRN3R5Yml0WDBRYw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_id"
+                    ],
+                    [
+                      "bin",
+                      "blJjODA1RFVPWGlfSkZsLU1KSTBKMC1WTDdhd2xmeFpXMWhvaWpwUXE5aw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "prior_catalogs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "binding"
+                              ],
+                              [
+                                "bin",
+                                "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "catalog"
+                              ],
+                              [
+                                "bin",
+                                "QWl5VC11M3lYVVh6TXI0eUlIMU9wYzVfUWdhUXQwS0U4UUVZSHg2eUp1Yw=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_catalog_key"
+                    ],
+                    [
+                      "bin",
+                      "0f6YcSPgIUo6daMYJZjpYFXMeTi0E0OxkVay/2anvlM="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_key"
+                    ],
+                    [
+                      "bin",
+                      "6la5wVosTiwmxr4Jq5iZTeIoirReabgH5zgIem8Cq5g="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_genesis"
+                    ],
+                    [
+                      "bin",
+                      "ZnhzZTR0ZDlVUDhCNFIyVURlWGNvTnBfeC1tRXVkZFVxc3RFRURDb3BKWQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "inventory_digest"
+                    ],
+                    [
+                      "bin",
+                      "NFBjb2s2bGVYS3c2cUhQZ0tCdDNZZHJDa3RVM0xpZjdHZkpZUWVoY005NA=="
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "bin",
+                "Rh2aAOJr6ClzzbZzUPK4hC4WevDGGFOEEC5YeSxTd8rCG70hWHlgchKDXL4M/+bwsGW/at4qBhgA5ZpgCNz4Bw=="
+              ],
+              [
+                "bin",
+                "Qj7SqFiL7UjhSH73UN+F9tVvKBydFDAx85FAMQhDINjbO/YLa18tnkyFKN6kLDiaKi6hCldoz+YeYcXBTCyIDQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+      ],
+      "deps": [
+        "pDpSn6lg0r_YrBn8d-NFAq_lBiPDvPi7uB4_mR3NmyA"
+      ],
+      "id": "rWRzQHstZcluR6iQ4bAzKVjNNSKGtfQPKmKPKRwFCB0",
+      "kind": "command",
+      "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+      "sig": "rIfRifViIlAT6G72V+YrpJ7pdBxKfR51rXWsYLY5PSkdVUXdiDiW3FYe8qtOsY98OE7vThUd6SEzL/+ZTOcrAQ==",
+      "v": 1
+    },
     "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo": {
       "author": "+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=",
       "body": [
@@ -1290,6 +1637,33 @@
       "sig": "b7RALZTsYUsOwexpJoya7yXs9h51/GrslC/MTV9W4l+Q4E42xp8SHvdHGA+z4LVrL3KsiWLBMSuPXSM3S9xyCg==",
       "v": 1
     },
+    "IWp-vgZAhZxIGJBfuI920Ak7JhypXNqcWc8VQng4EXY": {
+      "author": "+dCUOsa6j6vgWh4hjZGXjH5F/3hTNAALCM4n44Bvli0=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "revoke"
+          ],
+          [
+            "bin",
+            "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+          ]
+        ]
+      ],
+      "cap": [
+        "nil"
+      ],
+      "deps": [
+        "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+      ],
+      "id": "IWp-vgZAhZxIGJBfuI920Ak7JhypXNqcWc8VQng4EXY",
+      "kind": "authority",
+      "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+      "sig": "7G+y1C5R8G5ajmK0xl3g66sgBPZ5X1qdWEJkavQNvzpXfyeCs057M0ITImZkm6gVwtrVxi/PrYDQ4v5OXSU7DQ==",
+      "v": 1
+    },
     "crIm1YXG_W11pyyIaApTZihPnokZN7bQBSOBjcFv3Zk": {
       "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
       "body": [
@@ -1975,6 +2349,349 @@
       "kind": "command",
       "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
       "sig": "bgCK22nvzmCk7ziHJROYT5seEZgl4bmbIhYpq9fXdErhIzZEayxojidoHcrIIc7IdPwlu7sjPodgi9cH+3qABg==",
+      "v": 1
+    },
+    "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ": {
+      "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "replace_catalog_v1"
+          ],
+          [
+            "list",
+            [
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "cap"
+                    ],
+                    [
+                      "bin",
+                      "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "deps"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZkdWMGh4YXFnamdEbi1jOHFrYXhlYlZDSUVDNDQtNmdwUlNQcDRyTktMaw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "nonce"
+                    ],
+                    [
+                      "bin",
+                      "akNURjMwenB6ZzZrU2d0dms5aXd2XzVqR25GQkgybjhERWFscEZGQVplZw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "space"
+                    ],
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "author"
+                    ],
+                    [
+                      "bin",
+                      "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "cutoffs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "frontier"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "ZkdWMGh4YXFnamdEbi1jOHFrYXhlYlZDSUVDNDQtNmdwUlNQcDRyTktMaw=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "log_digest"
+                              ],
+                              [
+                                "bin",
+                                "XzlWRXctMFZxaUxRcDZ4bl9kZWwxT0FuSW5ENjNENE0tRVJtTTRpRTJxZw=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "parents"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZkdWMGh4YXFnamdEbi1jOHFrYXhlYlZDSUVDNDQtNmdwUlNQcDRyTktMaw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "product"
+                    ],
+                    [
+                      "atom",
+                      "treehouse"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "version"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "bootstrap"
+                    ],
+                    [
+                      "bin",
+                      "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "generation"
+                    ],
+                    [
+                      "int",
+                      2
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_origin"
+                    ],
+                    [
+                      "bin",
+                      "d3NzOi8vcjItcmVsYXkuaW52YWxpZA=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_id"
+                    ],
+                    [
+                      "bin",
+                      "NjFXVjR1MWtKeXN5N1MtR1VUTGxBNWttT2ZWNTk5Ukk2bU5LQWFDQmcybw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch_basis"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "holder_epoch"
+                    ],
+                    [
+                      "bin",
+                      "YTVPMmsyeE5OaXNGaVptVEZseU1KdGN3dmJRV1hVamZRN3R5Yml0WDBRYw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_id"
+                    ],
+                    [
+                      "bin",
+                      "T1hpTmJSa2VNQ193OFBwOUhNU1R6RlgtbDZhNjJfeVZQcVA5TzhUTWxVNA=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "prior_catalogs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "binding"
+                              ],
+                              [
+                                "bin",
+                                "ZkdWMGh4YXFnamdEbi1jOHFrYXhlYlZDSUVDNDQtNmdwUlNQcDRyTktMaw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "catalog"
+                              ],
+                              [
+                                "nil"
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_catalog_key"
+                    ],
+                    [
+                      "bin",
+                      "3aewzv6kPJyW/7GJxUWm1A/7xTTJbJjJ1+F3uZKrLtw="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_key"
+                    ],
+                    [
+                      "bin",
+                      "LWLBDr0TlutNtvu0Mvo0T85YEzQLfcs3WrSLZRKzdJQ="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_genesis"
+                    ],
+                    [
+                      "bin",
+                      "ZnhzZTR0ZDlVUDhCNFIyVURlWGNvTnBfeC1tRXVkZFVxc3RFRURDb3BKWQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "inventory_digest"
+                    ],
+                    [
+                      "bin",
+                      "bzBOSy1NdXZrMXktOG5FenN4TDE5MHFlUXZobmJ5UzlzUTVUOXBRLUN4VQ=="
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "bin",
+                "LIldj2Wc/AbiQCV3mzm0iCtNTR0tjNaRBTM6aPuiFDUH3InfjXagUs7po0j1NDs6R1prxvhhGz+03/g0iP5cBw=="
+              ],
+              [
+                "bin",
+                "o5mRXSvjVrPlXB9400jBGCKbrsCUdZCPdmmHu/fwVY84MKtXFosbMdMgOMA1JGN4cPIkdTVWHZ1bnu3r0Wc9Cg=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+      ],
+      "deps": [
+        "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+      ],
+      "id": "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ",
+      "kind": "command",
+      "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+      "sig": "vtUGlpJINeLBVh25zQ+fulWI5NAJG6EWkXX93ROP6z9Z9wXMMKya+1WJABG+vk63i5gUCzKo6+sqbz7caIgPDA==",
       "v": 1
     },
     "dv5LbQH9p-7163f84pIS0lRpk7Q56oh3hnWkDLZi1M4": {
@@ -5240,6 +5957,349 @@
       "kind": "command",
       "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
       "sig": "t0G5ScRWPj7HIj51H0AD130mXApfY4mALU6Q9Dw2d/uOfrW9xIL22MPhGRSjtkodK/QmSPfL9qrthjn/9sNkDA==",
+      "v": 1
+    },
+    "8Imr0WwCsp96DODMGkRIWLO_1lInrnPDOb8QIXdZDBQ": {
+      "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "replace_catalog_v1"
+          ],
+          [
+            "list",
+            [
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "cap"
+                    ],
+                    [
+                      "bin",
+                      "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "deps"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "nonce"
+                    ],
+                    [
+                      "bin",
+                      "QlNuTWlQRmtOenh0eHQ1OENvMk45TEE3dklzdjVXdmpBUHVlZlRpR0R3SQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "space"
+                    ],
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "author"
+                    ],
+                    [
+                      "bin",
+                      "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "cutoffs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "frontier"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "log_digest"
+                              ],
+                              [
+                                "bin",
+                                "RFBTdmd6QThtbW5OU0dMTVUxc2U2bEdJelhDcVZsOWxIWEFFSEZENDRmQQ=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "parents"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "product"
+                    ],
+                    [
+                      "atom",
+                      "treehouse"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "version"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "bootstrap"
+                    ],
+                    [
+                      "bin",
+                      "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "generation"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_origin"
+                    ],
+                    [
+                      "bin",
+                      "d3NzOi8vcGMtcmVsYXkuaW52YWxpZA=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_id"
+                    ],
+                    [
+                      "bin",
+                      "NjFXVjR1MWtKeXN5N1MtR1VUTGxBNWttT2ZWNTk5Ukk2bU5LQWFDQmcybw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch_basis"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "holder_epoch"
+                    ],
+                    [
+                      "bin",
+                      "YTVPMmsyeE5OaXNGaVptVEZseU1KdGN3dmJRV1hVamZRN3R5Yml0WDBRYw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_id"
+                    ],
+                    [
+                      "bin",
+                      "LVpvNEYyeDNCekVFYndLT0doUTNxYkxDUng4dTl6RTIxc2c1LUNWWDZ1VQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "prior_catalogs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "binding"
+                              ],
+                              [
+                                "bin",
+                                "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "catalog"
+                              ],
+                              [
+                                "nil"
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_catalog_key"
+                    ],
+                    [
+                      "bin",
+                      "XS/GeLYjdU5dhtRPMOpGDGQuoNgvHmO7NgLon4igLoE="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_key"
+                    ],
+                    [
+                      "bin",
+                      "QsXziTjE+GKDD3GSxCVT9PvEqBMgHe54hjh+o3RsKhw="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_genesis"
+                    ],
+                    [
+                      "bin",
+                      "ZnhzZTR0ZDlVUDhCNFIyVURlWGNvTnBfeC1tRXVkZFVxc3RFRURDb3BKWQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "inventory_digest"
+                    ],
+                    [
+                      "bin",
+                      "RUVQZ0RGbHB2Tk9jbU9pbkEzRXV6eFlhakNxY0FrSEMxY3pxbVl3NndiSQ=="
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "bin",
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQ=="
+              ],
+              [
+                "bin",
+                "2d0w+s7PHPt8tyZ3vtTLGdcJ9RWyKnklhn59Q5Q3x2CiNL6QCDA1vTUvV0tnb53H443TEPf8rZyxEat4Q5rwBQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+      ],
+      "deps": [
+        "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo"
+      ],
+      "id": "8Imr0WwCsp96DODMGkRIWLO_1lInrnPDOb8QIXdZDBQ",
+      "kind": "command",
+      "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+      "sig": "i/M31YivS6XxzBEZJ716YMfIY63RRNPQcWc2blfGAy+dMQOp5ZGa+6I9IINftP6VP6ZXhjagpOQlFgsmH/IFAQ==",
       "v": 1
     },
     "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
@@ -8541,6 +9601,350 @@
       "sig": "LxfMuJmH5luXv71ketibwG4LxDIDRWrth6H+1aLNgMR+R8vOcKadsJJbiPJ0to52EnYvP93r6SrJxm7wSigBBA==",
       "v": 1
     },
+    "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE": {
+      "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "replace_catalog_v1"
+          ],
+          [
+            "list",
+            [
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "cap"
+                    ],
+                    [
+                      "bin",
+                      "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "deps"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "VmtlSk9nZmVHZHJmaFNMWW0wRVlXVTJ0aFJiZkxsNGR1NE5wUWNoZFBDcw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "nonce"
+                    ],
+                    [
+                      "bin",
+                      "ZjlwVjAzUi1HRU5sZ01NbnZadGh2XzRfM0E3NTNjcm1lZGZKTlR3UTFFbw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "space"
+                    ],
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "author"
+                    ],
+                    [
+                      "bin",
+                      "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "cutoffs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "frontier"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "VmtlSk9nZmVHZHJmaFNMWW0wRVlXVTJ0aFJiZkxsNGR1NE5wUWNoZFBDcw=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "log_digest"
+                              ],
+                              [
+                                "bin",
+                                "bEVkbmVGUGs5VXlFdFdjTlZfcUQ4d1RvVUQ3WmQySXg0cnhpek4tWXFhYw=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "parents"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "VmtlSk9nZmVHZHJmaFNMWW0wRVlXVTJ0aFJiZkxsNGR1NE5wUWNoZFBDcw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "product"
+                    ],
+                    [
+                      "atom",
+                      "treehouse"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "version"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "bootstrap"
+                    ],
+                    [
+                      "bin",
+                      "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "generation"
+                    ],
+                    [
+                      "int",
+                      2
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_origin"
+                    ],
+                    [
+                      "bin",
+                      "d3NzOi8vcnAtcmVsYXkuaW52YWxpZA=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_id"
+                    ],
+                    [
+                      "bin",
+                      "NjFXVjR1MWtKeXN5N1MtR1VUTGxBNWttT2ZWNTk5Ukk2bU5LQWFDQmcybw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch_basis"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "holder_epoch"
+                    ],
+                    [
+                      "bin",
+                      "YTVPMmsyeE5OaXNGaVptVEZseU1KdGN3dmJRV1hVamZRN3R5Yml0WDBRYw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_id"
+                    ],
+                    [
+                      "bin",
+                      "SVdRcnpCMVdSVW9IQUc2d2JnUGdFVm9CRklJQnFaVkZIOVhsQVRsdDdmQQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "prior_catalogs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "binding"
+                              ],
+                              [
+                                "bin",
+                                "VmtlSk9nZmVHZHJmaFNMWW0wRVlXVTJ0aFJiZkxsNGR1NE5wUWNoZFBDcw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "catalog"
+                              ],
+                              [
+                                "bin",
+                                "WGxyT1lEQmlUYU9MMjJHZjNfWkJKWS1RRTJieDdOd2JtakY0alpKZ21EVQ=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_catalog_key"
+                    ],
+                    [
+                      "bin",
+                      "LwcQpG7PtBPNo1OMapt5I7M3hlzn+G3D86sGjIk1xgA="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_key"
+                    ],
+                    [
+                      "bin",
+                      "YqEb3sYm6/wq4kpqIOpi5Lv/SPdP83DJsqbK+uFiAUs="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_genesis"
+                    ],
+                    [
+                      "bin",
+                      "ZnhzZTR0ZDlVUDhCNFIyVURlWGNvTnBfeC1tRXVkZFVxc3RFRURDb3BKWQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "inventory_digest"
+                    ],
+                    [
+                      "bin",
+                      "UmllczNVM3YwNkNka1A0eXZ1MTdxeGRlbVhBcXE1bnRQYzY4TDZJMnZzcw=="
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "bin",
+                "5rELFzHZzRrABHVBQcG4Htl8WGBIDFiuh28ODsKOO0TeL8bVri91TfWPRXk7m/j0tXRDmC+xVY4mAygmg3xGAA=="
+              ],
+              [
+                "bin",
+                "7I95njWuPms/sWdS1G3b25SO7mfHso4Svq2B5nM5ppFqB/VkPJLiPBca1YgUhH+ecZJu2VSd4HkvMEHCPl7aAw=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+      ],
+      "deps": [
+        "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+      ],
+      "id": "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE",
+      "kind": "command",
+      "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+      "sig": "QweqzLxAD9zkGGv3nOUTIO2zKHZd6IWqS2WqdRgDoFqgHLpLOrGIN2b560JoJDjF0opbdIg3qax8dgWkz4eHCA==",
+      "v": 1
+    },
     "cYtDLgeggnTxlb6mq5q-NrNCwJNINKtmiHWA8aCLGYI": {
       "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
       "body": [
@@ -11321,6 +12725,349 @@
       "sig": "qLtpiwowHRopPhdEDHu32xnXL3720m1MSLxOXbn9f1sIK5yY7hb/qD4TvUPIGMFQy5MW4HNj0JWJiTu3UaajCQ==",
       "v": 1
     },
+    "lrFoy7sSenrmWxHozo4cYLugyTnr61CoZvWjDSYEpW8": {
+      "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "replace_catalog_v1"
+          ],
+          [
+            "list",
+            [
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "cap"
+                    ],
+                    [
+                      "bin",
+                      "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "deps"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "nonce"
+                    ],
+                    [
+                      "bin",
+                      "eXhlU3cycWFDcTNYLUR2ZU5vTzFnWW1vZnN4ekZsYkRhUWU4ZXo2QnVrVQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "space"
+                    ],
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "author"
+                    ],
+                    [
+                      "bin",
+                      "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "cutoffs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "frontier"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "log_digest"
+                              ],
+                              [
+                                "bin",
+                                "RFBTdmd6QThtbW5OU0dMTVUxc2U2bEdJelhDcVZsOWxIWEFFSEZENDRmQQ=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "parents"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "product"
+                    ],
+                    [
+                      "atom",
+                      "treehouse"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "version"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "bootstrap"
+                    ],
+                    [
+                      "bin",
+                      "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "generation"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_origin"
+                    ],
+                    [
+                      "bin",
+                      "d3NzOi8vZGVwcy1yZWxheS5pbnZhbGlk"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_id"
+                    ],
+                    [
+                      "bin",
+                      "NjFXVjR1MWtKeXN5N1MtR1VUTGxBNWttT2ZWNTk5Ukk2bU5LQWFDQmcybw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch_basis"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "holder_epoch"
+                    ],
+                    [
+                      "bin",
+                      "YTVPMmsyeE5OaXNGaVptVEZseU1KdGN3dmJRV1hVamZRN3R5Yml0WDBRYw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_id"
+                    ],
+                    [
+                      "bin",
+                      "RjcwbFJGSVVIdVJ3Ykx1ZXlqZ3AxNDlMZjJ0NUZYZkZrV2t1V3hMM3VnQQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "prior_catalogs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "binding"
+                              ],
+                              [
+                                "bin",
+                                "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "catalog"
+                              ],
+                              [
+                                "nil"
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_catalog_key"
+                    ],
+                    [
+                      "bin",
+                      "wkOm4UsK4un/x+3Mwd47xQAmnLWhOnfEpkY1f0nJN3I="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_key"
+                    ],
+                    [
+                      "bin",
+                      "2LAlScJP8yaObvDm+zT2OYV/gLFfdW11z8oGijq45c8="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_genesis"
+                    ],
+                    [
+                      "bin",
+                      "ZnhzZTR0ZDlVUDhCNFIyVURlWGNvTnBfeC1tRXVkZFVxc3RFRURDb3BKWQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "inventory_digest"
+                    ],
+                    [
+                      "bin",
+                      "NlBSRHprTDZlTUpxUTVhQjJ0UDBrNmFYV1d6UW5XNUZsb1lhd195MnI1aw=="
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "bin",
+                "46nWbt6lY8sYK+d7Uhr5eRVzzdM3mh5lGZ69pBUGM5mKU+HtUnhRX/RYs7lcB7Kh0WfTrp2NWMuvHgoDQZ09DQ=="
+              ],
+              [
+                "bin",
+                "jEVD1chHDE26MC6z08M/fjzZeFtubTZ7lqLJJUfBXGRpnk2NZlr/9Y3Qa29XJ9XSl8xMALOlBcziOcQr7xtRDQ=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+      ],
+      "deps": [
+        "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo"
+      ],
+      "id": "lrFoy7sSenrmWxHozo4cYLugyTnr61CoZvWjDSYEpW8",
+      "kind": "command",
+      "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+      "sig": "TgOmA+OjY3YS4PFUrkFPK1XdmCiZFfnnF1Cj6MpFO6n6gDsHMJy2VHiWDq4EuhvARSkvmy9BDzVqDFzWKxT+AQ==",
+      "v": 1
+    },
     "Hr47px-gmdsqj7ky4BaeOjK5cUTmxQekiG08qEn5nKM": {
       "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
       "body": [
@@ -12752,6 +14499,349 @@
       "kind": "command",
       "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
       "sig": "hBGEz++q20rMXIwoGpHJS/SbVM0VQHNo4dPZn8ftoyJpk/mK4ta3NUtrry54u97/p9205pMCrk8Kr08xkS/NDA==",
+      "v": 1
+    },
+    "oNvl05xiL67RXmNJR4nmEiDHHt53RHEPvvMDiMgMvL8": {
+      "author": "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE=",
+      "body": [
+        "tuple",
+        [
+          [
+            "atom",
+            "replace_catalog_v1"
+          ],
+          [
+            "list",
+            [
+              [
+                "map",
+                [
+                  [
+                    [
+                      "atom",
+                      "cap"
+                    ],
+                    [
+                      "bin",
+                      "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "deps"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "nonce"
+                    ],
+                    [
+                      "bin",
+                      "Zm9fMVdMbWpnb1RTdEJZZ1NxWnQ0akRJWlpMczQyTHZFMlMyeTlvTHN4bw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "space"
+                    ],
+                    [
+                      "bin",
+                      "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "author"
+                    ],
+                    [
+                      "bin",
+                      "TqxzkJ+CRz5e6WpFrtgNgyx4MICE9JXbZePcghs2qmE="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "cutoffs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "replica"
+                              ],
+                              [
+                                "bin",
+                                "cmVwbGljYTp0cmVlaG91c2U6c3BhY2U6NWxQTWQzclZ4dzV3MFVPdWpJUUxzSnlNV29rdlR4TjFHeHByMGtraW9nNCNhdXRob3JpdHk6Ym91bmRlZC1jb250aW51YXRpb24tdjEjcm9vdDpyM0lhRktMNDVxQklrczdxNmxKZ2FueGhqVkJ6OThqZFVyMHRJX1NMMXVj"
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "frontier"
+                              ],
+                              [
+                                "list",
+                                [
+                                  [
+                                    "bin",
+                                    "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                                  ]
+                                ]
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "log_digest"
+                              ],
+                              [
+                                "bin",
+                                "RFBTdmd6QThtbW5OU0dMTVUxc2U2bEdJelhDcVZsOWxIWEFFSEZENDRmQQ=="
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "parents"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "product"
+                    ],
+                    [
+                      "atom",
+                      "treehouse"
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "version"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "bootstrap"
+                    ],
+                    [
+                      "bin",
+                      "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "generation"
+                    ],
+                    [
+                      "int",
+                      1
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_origin"
+                    ],
+                    [
+                      "bin",
+                      "d3NzOi8vcHMtcmVsYXkuaW52YWxpZA=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_id"
+                    ],
+                    [
+                      "bin",
+                      "NjFXVjR1MWtKeXN5N1MtR1VUTGxBNWttT2ZWNTk5Ukk2bU5LQWFDQmcybw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "epoch_basis"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "bin",
+                          "ZDdPZnpIU0tCV3hUejVoZEd2LWdqMUNDZjljRnUyX3psekpiYTVHY0Vabw=="
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "holder_epoch"
+                    ],
+                    [
+                      "bin",
+                      "YTVPMmsyeE5OaXNGaVptVEZseU1KdGN3dmJRV1hVamZRN3R5Yml0WDBRYw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_id"
+                    ],
+                    [
+                      "bin",
+                      "eFRReGF6VDFLaVZRaUZxdEo1QWliZzFwQzA1UmE3U0xBcXhBWGYyZTRUcw=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "prior_catalogs"
+                    ],
+                    [
+                      "list",
+                      [
+                        [
+                          "map",
+                          [
+                            [
+                              [
+                                "atom",
+                                "binding"
+                              ],
+                              [
+                                "bin",
+                                "N2hJdW5uRURHNlpoanhLQURsdEg3SHQ4OElUUDE5djBxb2JqV0pfZEhlaw=="
+                              ]
+                            ],
+                            [
+                              [
+                                "atom",
+                                "catalog"
+                              ],
+                              [
+                                "nil"
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_catalog_key"
+                    ],
+                    [
+                      "bin",
+                      "LCazgfJBJQ0x+XV7nkTHtHNAChn6C4GUdcpwqbwEV9c="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "new_service_key"
+                    ],
+                    [
+                      "bin",
+                      "hegboUrOsZ5RBp95nFc68IRcC8GhPqpES7XHUutZhgo="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "profile_genesis"
+                    ],
+                    [
+                      "bin",
+                      "ZnhzZTR0ZDlVUDhCNFIyVURlWGNvTnBfeC1tRXVkZFVxc3RFRURDb3BKWQ=="
+                    ]
+                  ],
+                  [
+                    [
+                      "atom",
+                      "inventory_digest"
+                    ],
+                    [
+                      "bin",
+                      "YjhqblppaE90T2lPZVBVX1doLWQ1MzJHRHVtNG53andQNDNNVlQ2cDNqVQ=="
+                    ]
+                  ]
+                ]
+              ],
+              [
+                "bin",
+                "ogTfxpK36Hd20BRQu30HEY3nYdVW0qNcfaXtEymBwRNUujlXJHzIJqF+jnsRd89UnKae9572UzD0U9zepyoVBw=="
+              ],
+              [
+                "bin",
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg=="
+              ]
+            ]
+          ]
+        ]
+      ],
+      "cap": [
+        "bin",
+        "NXVfUk51SW1mdmtRdmoxbDVlaEJJY1BTTlFuX1FMTDdSdk84eHNwQks4QQ=="
+      ],
+      "deps": [
+        "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo"
+      ],
+      "id": "oNvl05xiL67RXmNJR4nmEiDHHt53RHEPvvMDiMgMvL8",
+      "kind": "command",
+      "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+      "sig": "kfMtz4OtM4+Np6kCzvZce59hp2b8yN1LygeCIhKt3aCzO8V6/ZW09YZJwKOrmwVWT3cePuznUOuVgqzySp6TAg==",
       "v": 1
     },
     "TNXEk6NLEY8o5CyAFhHG1iQH4x-fii6ksb8lIYX4xKk": {
@@ -22696,6 +24786,1758 @@
               "generation": 5,
               "revision": 0
             },
+            "blocked": null
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "K1": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+        "R1": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+      },
+      "name": "lower catalog revision than the watermark is catalog_rollback",
+      "steps": [
+        {
+          "beam": {
+            "catalog_heads": {
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+                "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {},
+            "decision": {
+              "accepted": false,
+              "binding_status": "current",
+              "block": null,
+              "catalog": null,
+              "catalog_status": "current",
+              "clears": false,
+              "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "reason": "catalog_rollback"
+            },
+            "forks": [],
+            "heads": [
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [],
+            "decision": {
+              "accepted": false,
+              "block": null,
+              "catalog": null,
+              "clears": false,
+              "head": "R1",
+              "reason": "catalog_rollback"
+            },
+            "forks": [],
+            "heads": [
+              "R1"
+            ],
+            "nodes": [
+              "B",
+              "R1"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "generation": 1,
+              "revision": 3
+            },
+            "blocked": null
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "K1": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+        "Later": "IWp-vgZAhZxIGJBfuI920Ak7JhypXNqcWc8VQng4EXY",
+        "R1": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+        "Rr": "rWRzQHstZcluR6iQ4bAzKVjNNSKGtfQPKmKPKRwFCB0",
+        "Rv": "pDpSn6lg0r_YrBn8d-NFAq_lBiPDvPi7uB4_mR3NmyA"
+      },
+      "name": "authority revoked inside the candidate's own prefix adds no head or closure",
+      "steps": [
+        {
+          "beam": {
+            "catalog_heads": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+                "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+              ]
+            },
+            "closed": [],
+            "closed_out": {},
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {
+              "rWRzQHstZcluR6iQ4bAzKVjNNSKGtfQPKmKPKRwFCB0": "catalog_authority_refused"
+            },
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ],
+          "expect": {
+            "closed": [],
+            "closed_out": [],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "C0",
+              "clears": false,
+              "head": "B",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "B"
+            ],
+            "nodes": [
+              "B"
+            ],
+            "pending": [],
+            "raw": {
+              "Rr": "catalog_authority_refused"
+            },
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "pDpSn6lg0r_YrBn8d-NFAq_lBiPDvPi7uB4_mR3NmyA",
+            "rWRzQHstZcluR6iQ4bAzKVjNNSKGtfQPKmKPKRwFCB0"
+          ],
+          "proven": [
+            {
+              "logDigest": "v1TsEbcMfo89NooenTflmckGuMpgMS35WeSSJ74WGMU",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "K1": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+        "Later": "IWp-vgZAhZxIGJBfuI920Ak7JhypXNqcWc8VQng4EXY",
+        "R1": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+        "Rr": "rWRzQHstZcluR6iQ4bAzKVjNNSKGtfQPKmKPKRwFCB0",
+        "Rv": "pDpSn6lg0r_YrBn8d-NFAq_lBiPDvPi7uB4_mR3NmyA"
+      },
+      "name": "a causally later revoke keeps the history",
+      "steps": [
+        {
+          "beam": {
+            "catalog_heads": {
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+                "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {},
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "K1",
+              "clears": false,
+              "head": "R1",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R1"
+            ],
+            "nodes": [
+              "B",
+              "R1"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+                "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {},
+            "decision": {
+              "accepted": true,
+              "binding_status": "current",
+              "block": null,
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "catalog_status": "current",
+              "clears": false,
+              "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "K1",
+              "clears": false,
+              "head": "R1",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R1"
+            ],
+            "nodes": [
+              "B",
+              "R1"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "IWp-vgZAhZxIGJBfuI920Ak7JhypXNqcWc8VQng4EXY",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "generation": 1,
+              "revision": 0
+            },
+            "blocked": null
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "K1": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+        "K2": "kPsz_CJoLuY6uIXpGu_i34MyoLYzHUoHnMEXKT33kRw",
+        "KP": "5yGlMDqowhi4vS3ignX9GN6fCkTh4WqqPXgNWheJ90Q",
+        "KR": "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU",
+        "R": "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+        "R1": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+        "R2": "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU",
+        "Rp": "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE",
+        "T2": "jt91OE6Ce05GZsj4plc5uJf8wXhVCcK9EFMrExaz-RY"
+      },
+      "name": "C13: a resolution delivered before its first catalog still clears",
+      "steps": [
+        {
+          "beam": {
+            "catalog_heads": {
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+                "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {},
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "K1",
+              "clears": false,
+              "head": "R1",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R1"
+            ],
+            "nodes": [
+              "B",
+              "R1"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {},
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {},
+            "decision": {
+              "accepted": false,
+              "binding_status": "refused",
+              "block": {
+                "reason": "authority_changed",
+                "triggers": [
+                  "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+                ]
+              },
+              "catalog": null,
+              "catalog_status": "refused",
+              "clears": false,
+              "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": "stale_holder",
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": true
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {
+              "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4": "catalog_authority_refused"
+            }
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [],
+            "decision": {
+              "accepted": false,
+              "block": "authority_changed",
+              "catalog": null,
+              "clears": false,
+              "head": "R1",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "R1"
+            ],
+            "nodes": [
+              "B",
+              "R1"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {
+              "K1": "catalog_authority_refused"
+            },
+            "refused": [
+              "R1"
+            ]
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "jt91OE6Ce05GZsj4plc5uJf8wXhVCcK9EFMrExaz-RY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "generation": 1,
+              "revision": 0
+            },
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {},
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "closed_out": {},
+            "decision": {
+              "accepted": false,
+              "binding_status": "refused",
+              "block": {
+                "reason": "authority_changed",
+                "triggers": [
+                  "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+                ]
+              },
+              "catalog": null,
+              "catalog_status": "refused",
+              "clears": false,
+              "head": "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU"
+            ],
+            "nodes": {
+              "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU": {
+                "core_reason": null,
+                "generation": 2,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              },
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": "stale_holder",
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": true
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {
+              "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4": "catalog_authority_refused"
+            }
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B",
+              "R1"
+            ],
+            "closed_out": [],
+            "decision": {
+              "accepted": false,
+              "block": "authority_changed",
+              "catalog": null,
+              "clears": false,
+              "head": "R2",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "R2"
+            ],
+            "nodes": [
+              "B",
+              "R1",
+              "R2"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {
+              "K1": "catalog_authority_refused"
+            },
+            "refused": [
+              "R1"
+            ]
+          },
+          "frames": [
+            "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU",
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "jt91OE6Ce05GZsj4plc5uJf8wXhVCcK9EFMrExaz-RY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "mkrUILdsLuy9Jd7-w9d9rWR9_Wt8yZCR2COH-70Qw2M",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "generation": 1,
+              "revision": 0
+            },
+            "blocked": {
+              "reason": "authority_changed",
+              "triggers": [
+                "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+              ]
+            }
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {
+              "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU": [
+                "kPsz_CJoLuY6uIXpGu_i34MyoLYzHUoHnMEXKT33kRw"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "closed_out": {},
+            "decision": {
+              "accepted": true,
+              "binding_status": "refused",
+              "block": null,
+              "catalog": "kPsz_CJoLuY6uIXpGu_i34MyoLYzHUoHnMEXKT33kRw",
+              "catalog_status": "refused",
+              "clears": true,
+              "head": "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU"
+            ],
+            "nodes": {
+              "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU": {
+                "core_reason": null,
+                "generation": 2,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              },
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": "stale_holder",
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": true
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {
+              "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4": "catalog_authority_refused"
+            }
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "kPsz_CJoLuY6uIXpGu_i34MyoLYzHUoHnMEXKT33kRw",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B",
+              "R1"
+            ],
+            "closed_out": [],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "K2",
+              "clears": true,
+              "head": "R2",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R2"
+            ],
+            "nodes": [
+              "B",
+              "R1",
+              "R2"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {
+              "K1": "catalog_authority_refused"
+            },
+            "refused": [
+              "R1"
+            ]
+          },
+          "frames": [
+            "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU",
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "jt91OE6Ce05GZsj4plc5uJf8wXhVCcK9EFMrExaz-RY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "mkrUILdsLuy9Jd7-w9d9rWR9_Wt8yZCR2COH-70Qw2M",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+              "generation": 1,
+              "revision": 0
+            },
+            "blocked": {
+              "reason": "authority_changed",
+              "triggers": [
+                "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "K1": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+        "K2": "kPsz_CJoLuY6uIXpGu_i34MyoLYzHUoHnMEXKT33kRw",
+        "KP": "5yGlMDqowhi4vS3ignX9GN6fCkTh4WqqPXgNWheJ90Q",
+        "KR": "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU",
+        "R": "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+        "R1": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+        "R2": "2guG_nhqU8mDG8-tAi72eKDS_QQIlKRbb3-F7rS4orU",
+        "Rp": "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE",
+        "T2": "jt91OE6Ce05GZsj4plc5uJf8wXhVCcK9EFMrExaz-RY"
+      },
+      "name": "closing rule: a later resolution delivered before its first catalog still clears",
+      "steps": [
+        {
+          "beam": {
+            "catalog_heads": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+                "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+              ]
+            },
+            "closed": [],
+            "closed_out": {},
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ],
+          "expect": {
+            "closed": [],
+            "closed_out": [],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "C0",
+              "clears": false,
+              "head": "B",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "B"
+            ],
+            "nodes": [
+              "B"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [],
+          "rotations": [],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs": [
+                "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {
+              "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc": "catalog_rollback"
+            },
+            "decision": {
+              "accepted": false,
+              "binding_status": "closed",
+              "block": {
+                "reason": "authority_changed",
+                "triggers": [
+                  "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+                ]
+              },
+              "catalog": null,
+              "catalog_status": "closed_out",
+              "clears": false,
+              "head": "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [
+              "C0"
+            ],
+            "decision": {
+              "accepted": false,
+              "block": "authority_changed",
+              "catalog": null,
+              "clears": false,
+              "head": "R",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "R"
+            ],
+            "nodes": [
+              "B",
+              "R"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+              "generation": 0,
+              "revision": 0
+            },
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {},
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+            ],
+            "closed_out": {
+              "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc": "catalog_rollback"
+            },
+            "decision": {
+              "accepted": false,
+              "binding_status": "closed",
+              "block": {
+                "reason": "authority_changed",
+                "triggers": [
+                  "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+                ]
+              },
+              "catalog": null,
+              "catalog_status": "closed_out",
+              "clears": false,
+              "head": "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              },
+              "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE": {
+                "core_reason": null,
+                "generation": 2,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU"
+          ],
+          "expect": {
+            "closed": [
+              "B",
+              "R"
+            ],
+            "closed_out": [
+              "C0"
+            ],
+            "decision": {
+              "accepted": false,
+              "block": "authority_changed",
+              "catalog": null,
+              "clears": false,
+              "head": "Rp",
+              "reason": "authority_changed"
+            },
+            "forks": [],
+            "heads": [
+              "Rp"
+            ],
+            "nodes": [
+              "B",
+              "R",
+              "Rp"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "lEdneFPk9UyEtWcNV_qD8wToUD7Zd2Ix4rxizN-Yqac",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+              "generation": 0,
+              "revision": 0
+            },
+            "blocked": {
+              "reason": "authority_changed",
+              "triggers": [
+                "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+              ]
+            }
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {
+              "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE": [
+                "5yGlMDqowhi4vS3ignX9GN6fCkTh4WqqPXgNWheJ90Q"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+            ],
+            "closed_out": {
+              "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc": "catalog_rollback"
+            },
+            "decision": {
+              "accepted": true,
+              "binding_status": "closed",
+              "block": null,
+              "catalog": "5yGlMDqowhi4vS3ignX9GN6fCkTh4WqqPXgNWheJ90Q",
+              "catalog_status": "closed_out",
+              "clears": true,
+              "head": "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              },
+              "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE": {
+                "core_reason": null,
+                "generation": 2,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "5yGlMDqowhi4vS3ignX9GN6fCkTh4WqqPXgNWheJ90Q",
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU"
+          ],
+          "expect": {
+            "closed": [
+              "B",
+              "R"
+            ],
+            "closed_out": [
+              "C0"
+            ],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "KP",
+              "clears": true,
+              "head": "Rp",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "Rp"
+            ],
+            "nodes": [
+              "B",
+              "R",
+              "Rp"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "tQWeSDlgezzJhC83NjaPVphEXVV48661pEZV-QlWOgE"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "lEdneFPk9UyEtWcNV_qD8wToUD7Zd2Ix4rxizN-Yqac",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": {
+              "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+              "generation": 0,
+              "revision": 0
+            },
+            "blocked": {
+              "reason": "authority_changed",
+              "triggers": [
+                "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "KR": "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU",
+        "R": "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+        "Squat": "xOQtIovsOxIm4EMAFxqv_THpc4Dc0GQY-sTJBnTVUmQ"
+      },
+      "name": "closed-out old-key catalogs reserve no route",
+      "steps": [
+        {
+          "beam": {
+            "catalog_heads": {
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs": [
+                "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "closed_out": {
+              "xOQtIovsOxIm4EMAFxqv_THpc4Dc0GQY-sTJBnTVUmQ": "catalog_rollback"
+            },
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "XlrOYDBiTaOL22Gf3_ZBJY-QE2bx7NwbmjF4jZJgmDU",
+            "xOQtIovsOxIm4EMAFxqv_THpc4Dc0GQY-sTJBnTVUmQ"
+          ],
+          "expect": {
+            "closed": [
+              "B"
+            ],
+            "closed_out": [
+              "Squat"
+            ],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "KR",
+              "clears": false,
+              "head": "R",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R"
+            ],
+            "nodes": [
+              "B",
+              "R"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "VkeJOgfeGdrfhSLYm0EYWU2thRbfLl4du4NpQchdPCs",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "K1": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+        "K2": "1puyaa9Huw36ECOetduCiFUkaFRA5ZOPPaHZsxVIb6M",
+        "R1": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+        "R2": "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ"
+      },
+      "name": "held-but-pending parent makes the child pending",
+      "steps": [
+        {
+          "beam": {
+            "error": "trust_pending",
+            "ids": [
+              "1puyaa9Huw36ECOetduCiFUkaFRA5ZOPPaHZsxVIb6M",
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+              "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ"
+            ]
+          },
+          "catalogs": [
+            "1puyaa9Huw36ECOetduCiFUkaFRA5ZOPPaHZsxVIb6M"
+          ],
+          "expect": {
+            "error": "trust_pending"
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "_9VEw-0VqiLQp6xn_del1OAnInD63D4M-ERmM4iE2qg",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        },
+        {
+          "beam": {
+            "catalog_heads": {
+              "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ": [
+                "1puyaa9Huw36ECOetduCiFUkaFRA5ZOPPaHZsxVIb6M"
+              ]
+            },
+            "closed": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+            ],
+            "closed_out": {
+              "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4": "catalog_rollback"
+            },
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "1puyaa9Huw36ECOetduCiFUkaFRA5ZOPPaHZsxVIb6M",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              },
+              "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+                "core_reason": null,
+                "generation": 1,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              },
+              "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ": {
+                "core_reason": null,
+                "generation": 2,
+                "kind": "replacement",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {},
+            "refusals": {}
+          },
+          "catalogs": [
+            "1puyaa9Huw36ECOetduCiFUkaFRA5ZOPPaHZsxVIb6M",
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ],
+          "expect": {
+            "closed": [
+              "B",
+              "R1"
+            ],
+            "closed_out": [
+              "K1"
+            ],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "K2",
+              "clears": false,
+              "head": "R2",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "R2"
+            ],
+            "nodes": [
+              "B",
+              "R1",
+              "R2"
+            ],
+            "pending": [],
+            "raw": {},
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            },
+            {
+              "logDigest": "_9VEw-0VqiLQp6xn_del1OAnInD63D4M-ERmM4iE2qg",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": null,
+            "blocked": null
+          }
+        }
+      ]
+    },
+    {
+      "labels": {
+        "B": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+        "C0": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+        "Deps": "lrFoy7sSenrmWxHozo4cYLugyTnr61CoZvWjDSYEpW8",
+        "Pc": "8Imr0WwCsp96DODMGkRIWLO_1lInrnPDOb8QIXdZDBQ",
+        "Ps": "oNvl05xiL67RXmNJR4nmEiDHHt53RHEPvvMDiMgMvL8"
+      },
+      "name": "each possession signature and the literal deps binding are re-checked",
+      "steps": [
+        {
+          "beam": {
+            "catalog_heads": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+                "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+              ]
+            },
+            "closed": [],
+            "closed_out": {},
+            "decision": {
+              "accepted": true,
+              "binding_status": "missing",
+              "block": null,
+              "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+              "catalog_status": "missing",
+              "clears": false,
+              "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+            ],
+            "nodes": {
+              "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+                "core_reason": null,
+                "generation": 0,
+                "kind": "bootstrap",
+                "pending": 0,
+                "refused": false
+              }
+            },
+            "raw_evidence": {
+              "8Imr0WwCsp96DODMGkRIWLO_1lInrnPDOb8QIXdZDBQ": "invalid_possession",
+              "lrFoy7sSenrmWxHozo4cYLugyTnr61CoZvWjDSYEpW8": "invalid_catalog_transition",
+              "oNvl05xiL67RXmNJR4nmEiDHHt53RHEPvvMDiMgMvL8": "invalid_possession"
+            },
+            "refusals": {}
+          },
+          "catalogs": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ],
+          "expect": {
+            "closed": [],
+            "closed_out": [],
+            "decision": {
+              "accepted": true,
+              "block": null,
+              "catalog": "C0",
+              "clears": false,
+              "head": "B",
+              "reason": null
+            },
+            "forks": [],
+            "heads": [
+              "B"
+            ],
+            "nodes": [
+              "B"
+            ],
+            "pending": [],
+            "raw": {
+              "Deps": "invalid_catalog_transition",
+              "Pc": "invalid_possession",
+              "Ps": "invalid_possession"
+            },
+            "refusals": {},
+            "refused": []
+          },
+          "frames": [
+            "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "8Imr0WwCsp96DODMGkRIWLO_1lInrnPDOb8QIXdZDBQ",
+            "ATxGAlHsYJz4cDbL_2Zcc0M8fvp8M1kuV1rC6qXY0ys",
+            "JT8igV-3zg5HFo4wiZkRqxOQOBsYtwWTlyd9SpYeBfo",
+            "Nu5SQC9ltfSRYXcKPi-IakqBqlxqkFOSci4y-dtgoT0",
+            "a5O2k2xNNisFiZmTFlyMJtcwvbQWXUjfQ7tybitX0Qc",
+            "d7OfzHSKBWxTz5hdGv-gj1CCf9cFu2_zlzJba5GcEZo",
+            "fxse4td9UP8B4R2UDeXcoNp_x-mEuddUqstEEDCopJY",
+            "lrFoy7sSenrmWxHozo4cYLugyTnr61CoZvWjDSYEpW8",
+            "oNvl05xiL67RXmNJR4nmEiDHHt53RHEPvvMDiMgMvL8"
+          ],
+          "proven": [
+            {
+              "logDigest": "DPSvgzA8mmnNSGLMU1se6lGIzXCqVl9lHXAEHFD44fA",
+              "replica": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          ],
+          "rotations": [],
+          "state": {
+            "accepted": null,
             "blocked": null
           }
         }

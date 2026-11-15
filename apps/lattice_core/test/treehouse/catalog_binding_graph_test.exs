@@ -93,7 +93,9 @@ defmodule Treehouse.CatalogBindingGraphTest do
     bad = F.replacement(@base, @base.log, "pos", bad_possession: true)
     {:ok, g} = resolve(%{space: F.append(@base.log, [r.op, bad.op])})
     assert g.raw_evidence[bad.id] == :invalid_possession
-    assert g.raw_evidence[r.id] in [:catalog_authority_refused, :invalid_catalog_transition]
+    # An op cap that is not the acquisition delegation fails step 4 first (rank 5 over the
+    # literal binding's rank 6); the literal deps binding alone is pinned in the scenario table.
+    assert g.raw_evidence[r.id] == :catalog_authority_refused
     assert G.heads(g) == [@base.boot.id]
   end
 

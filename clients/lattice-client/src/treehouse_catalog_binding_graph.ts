@@ -298,6 +298,13 @@ async function evalCandidate(id: string, ctx: Ctx): Promise<Verdict> {
   const auth = await checkCatalogReplacementAuthority({replica: ctx.replica, frames: prefixFrames, ops: prefixOps},
     {author: c.op.authorPubkey ?? "", cap: typeof c.op.cap === "string" ? c.op.cap : ""}, s.claim, ctx.record.spaceRoot);
   if (auth !== null) failures.push([auth.reason, auth.predicate]);
+  else {
+    // Core refusing the op on its own causal closure (a revoke or lapse already in the prefix) is intrinsic; Stage A's own
+    // refusal is excluded because its literal and possession checks are re-run below with their own reasons.
+    const own = reachable(ctx, [id]);
+    const core = materialize(treehouseSpaceSchema, own, new Set(own.map((o) => o.id)), null, ctx.replica).quarantineReasons.get(id);
+    if (core !== undefined && core !== "application_invalid_catalog") failures.push(["catalog_authority_refused", "core_refused_at_prefix"]);
+  }
   if (!literal) failures.push(["invalid_catalog_transition", "literal_binding"]);
   if (!possession) failures.push(["invalid_possession", "possession"]);
   const declared = await declaredGraph(s.claim, anc, ctx);
@@ -432,11 +439,12 @@ function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, c
     return "current";
   };
   for (const id of [...ctx.input.catalogs.keys()].sort(compareUtf8)) status(id);
-  // Across every usable catalog a route names one replica; a later conflicting catalog (id order) is refused.
+  // Across every current or covered catalog a route names one replica; a later conflicting one (id order) is refused.
+  // Closed-out and uncovered old-key catalogs reserve no route, so they cannot refuse an honest head.
   const used = new Map<string, string>();
   for (const id of [...ctx.input.catalogs.keys()].sort(compareUtf8)) {
     const s = acc.status.get(id);
-    if (s === "refused" || s === "pending") continue;
+    if (s !== "current" && s !== "covered") continue;
     const entries = ctx.input.catalogs.get(id)!.catalog.entries;
     if (entries.some((entry) => (used.get(entry.route) ?? entry.replica) !== entry.replica)) {
       refuse(id, "invalid_catalog_transition", null); acc.status.set(id, "refused");
@@ -583,7 +591,9 @@ function decide(ctx: Ctx, graph: CatalogBindingGraph, nodesAll: Map<string, Cata
   if (promotable && row320(ctx, graph, id)) return promote(true);
   if (promotable && abs === "refused" && node.kind === "replacement" && a !== null && graph.closed.includes(a.binding) &&
     (graph.citations.get(a.binding) ?? []).some((c) => c !== null && onChain(a.catalog, c, graph.previous))) return promote(false);
-  if (trigger) return {...held, reason: "authority_changed", block: {reason: "authority_changed", triggers: [id]}};
+  // A standing authority_changed block keeps its triggers, so a resolution delivered before its first catalog stays fresh.
+  const standing = ctx.input.blocked?.reason === "authority_changed" ? [...ctx.input.blocked.triggers] : [id];
+  if (trigger) return {...held, reason: "authority_changed", block: {reason: "authority_changed", triggers: standing}};
   if (node.refused) return {...held, reason: "catalog_authority_refused"};
   if (node.pending.length > 0) return {...held, reason: "recovery_incomplete"};
   if (ready === null) return held;

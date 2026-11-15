@@ -391,7 +391,7 @@ defmodule Treehouse.CatalogBindingGraph do
              claim,
              ctx.bootstrap.record.space_root
            ) do
-        :ok -> []
+        :ok -> own_closure(op, ctx)
         {:error, reason, %{predicate: predicate}} -> [{reason, predicate}]
       end
 
@@ -407,6 +407,19 @@ defmodule Treehouse.CatalogBindingGraph do
       {reason, why} -> {{:bad, reason}, %{st | detail: Map.put(st.detail, op.id, why)}}
       nil when pending? -> {:pending, st}
       nil -> {{:node, replacement_node(op, claim, ctx)}, st}
+    end
+  end
+
+  # Step 4, intrinsic Core judgment: Core refusing the op on its own causal closure (its strict
+  # prefix plus itself; a revoke or lapse already in the prefix, which `holder_epochs` does not
+  # show) is `catalog_authority_refused`. Stage A's own refusal is excluded: its literal and
+  # possession checks are re-run above with their own reasons. A refusal that appears only on the
+  # wider union is step 3 (`refused?`).
+  defp own_closure(op, ctx) do
+    case Authority.analyze(Space, prefix_log(ctx.cops, ctx.replica, [op.id])).reasons[op.id] do
+      nil -> []
+      :application_invalid_catalog -> []
+      _core -> [{:catalog_authority_refused, :core_refused_at_prefix}]
     end
   end
 
@@ -710,13 +723,14 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
-  # Across every usable catalog a route names one replica (CatalogTrust route history); a
-  # later conflicting catalog (id order) is refused, never a resolve error.
+  # Across every current or covered catalog a route names one replica (CatalogTrust route
+  # history); a later conflicting one (id order) is refused, never a resolve error. Closed-out
+  # and uncovered old-key catalogs reserve no route, so they cannot refuse an honest head.
   defp route_history(ctx, acc) do
     ctx.catalogs
     |> Enum.sort_by(&elem(&1, 0))
     |> Enum.reduce({%{}, acc}, fn {id, %{catalog: c}}, {used, acc} ->
-      if acc.status[id] in [:refused, :pending] do
+      if acc.status[id] not in [:current, :covered] do
         {used, acc}
       else
         conflict? =
@@ -888,7 +902,11 @@ defmodule Treehouse.CatalogBindingGraph do
         promote_or_rollback(ctx, graph, base, id, ready, false)
 
       trigger?(statuses) ->
-        %{base | reason: :authority_changed, block: %{reason: :authority_changed, triggers: [id]}}
+        %{
+          base
+          | reason: :authority_changed,
+            block: %{reason: :authority_changed, triggers: triggers(ctx, id)}
+        }
 
       node.refused? ->
         %{base | reason: :catalog_authority_refused}
@@ -903,6 +921,11 @@ defmodule Treehouse.CatalogBindingGraph do
         promote_or_rollback(ctx, graph, base, id, ready, false)
     end
   end
+
+  # A standing `authority_changed` block keeps its triggers (the heads at first block time), so a
+  # resolution delivered before its first catalog is still fresh on the next delivery.
+  defp triggers(%{blocked: %{reason: :authority_changed, triggers: triggers}}, _id), do: triggers
+  defp triggers(_ctx, id), do: [id]
 
   # Row 320: after an `authority_changed` block, a fresh honored admin resolution (not a block
   # trigger) that closes every trigger, as the sole head, clears it.

@@ -242,19 +242,25 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
       }
       |> Map.merge(Keyword.get(opts, :claim, %{}))
 
-    {cp, sp} =
-      if Keyword.get(opts, :bad_possession, false) do
-        {<<1::512>>, <<2::512>>}
-      else
-        {Identity.sign(
-           catalog_key,
-           TransportCatalog.replacement_possession_bytes(:catalog, claim)
-         ),
-         Identity.sign(
-           service_key,
-           TransportCatalog.replacement_possession_bytes(:service, claim)
-         )}
-      end
+    bad = Keyword.get(opts, :bad_possession, false)
+
+    cp =
+      if bad in [true, :catalog],
+        do: <<1::512>>,
+        else:
+          Identity.sign(
+            catalog_key,
+            TransportCatalog.replacement_possession_bytes(:catalog, claim)
+          )
+
+    sp =
+      if bad in [true, :service],
+        do: <<2::512>>,
+        else:
+          Identity.sign(
+            service_key,
+            TransportCatalog.replacement_possession_bytes(:service, claim)
+          )
 
     op =
       Op.new(author, base.replica, deps, :command, {:replace_catalog_v1, [claim, cp, sp]},
