@@ -114,7 +114,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseListing do
 
   defp final_binding(space, binding) do
     with :ok <- Binding.profile_unchanged(space, binding.record),
-         # TODO(row 361 remainder, PR 4): bootstrap-only comparison; fails closed for a replacement binding.
+         # Row 361 remainder (after PR 4): bootstrap-only comparison; fails closed for a replacement binding.
          # "This replacement is accepted" is the PR 4 resolver's judgement, not built here.
          {:ok, id} <- Binding.honored_bootstrap(space, binding.record),
          true <- id == binding.bootstrap_id do
@@ -158,7 +158,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseListing do
              artifact["op_id"] == store.head,
          true <-
            catalog.space == artifact["replica"] and catalog.space == review.binding.record.space,
-         # TODO(row 361 remainder, PR 4): bootstrap-only comparison; fails closed for a replacement binding.
+         # Row 361 remainder (after PR 4): bootstrap-only comparison; fails closed for a replacement binding.
          # "This replacement is accepted" is the PR 4 resolver's judgement, not built here.
          true <-
            catalog.bootstrap == review.binding.bootstrap_id and

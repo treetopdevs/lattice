@@ -171,7 +171,7 @@ defmodule LatticeCarrierServer.Operator.CatalogEvidence do
     by_path = Map.new(captures, &{&1.path, &1.replica})
     actual = Map.new(instances, &{Map.fetch!(by_path, &1.log_file), &1})
 
-    # TODO(row 361 remainder, PR 4): bootstrap-only comparison; fails closed for a replacement binding.
+    # Row 361 remainder (after PR 4): bootstrap-only comparison; fails closed for a replacement binding.
     # "This replacement is accepted" is the PR 4 resolver's judgement, not built here.
     valid =
       catalog.bootstrap == binding.bootstrap_id and catalog.binding == binding.bootstrap_id and
