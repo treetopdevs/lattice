@@ -128,7 +128,9 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &rotation_recovery/1,
       &refused_catalog_citation/1,
       &sequential_nonce/1,
-      &missing_accepted/1
+      &missing_accepted/1,
+      &rotation_refused_prior/1,
+      &uncited_pending/1
     ]
   end
 
@@ -1692,6 +1694,71 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         step(ev(lr, catalogs: [c0, c1, kr]), refused)
       ]
     )
+  end
+
+  # The same Thread removal through an old-key rotation: T from B names refused C1 as its
+  # prior, and CT (Space-only) matches T's inventory. CT extends an invalid prior, so it is
+  # refused and the accepted (B, C0) stays.
+  defp rotation_refused_prior(base) do
+    [space] = F.base_entries(base)
+
+    thread = %{
+      space
+      | replica: base.replica <> "-thread",
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        route: "/r/" <> F.id("route-thread")
+    }
+
+    c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space])
+    t = rotation(base, node(base.boot.id, 0), c1, base.catalog, "tc")
+    ct = F.catalog(base, t.id, 0, nil, F.identity("rot-tc"), [space])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{"C1" => F.cid(c1), "T" => t.id, "CT" => F.cid(ct)})
+
+    one("a rotation naming a refused prior catalog cannot drop a Thread", labels, [
+      step(
+        ev(base.log, catalogs: [c0, c1]),
+        ok(["B"], refusals: %{"C1" => "invalid_catalog_transition"}, decision: accept("B", "C0"))
+      ),
+      step(
+        ev(base.log, rotations: [t], catalogs: [c0, c1, ct]),
+        ok(["T"],
+          nodes: ["B", "T"],
+          refusals: %{"C1" => "invalid_catalog_transition", "CT" => "invalid_catalog_transition"},
+          decision: [head: "T"]
+        )
+      )
+    ])
+  end
+
+  # An uncited old-key catalog under a closed binding whose `previous` is not held is closed
+  # out, never trust_pending (it cannot stall the resolution).
+  defp uncited_pending(base) do
+    c0 = F.c0(base)
+    r = F.replacement(base, base.log, "r")
+    kr = F.first(base, r)
+
+    x =
+      F.catalog(
+        base,
+        base.boot.id,
+        1,
+        F.id("unheld-previous"),
+        base.catalog,
+        F.base_entries(base)
+      )
+
+    labels = Map.merge(base_labels(base, c0), %{"R" => r.id, "KR" => F.cid(kr), "X" => F.cid(x)})
+
+    one("an uncited old-key catalog with an unheld previous does not stall", labels, [
+      step(
+        ev(add(base.log, [r]), catalogs: [kr, x]),
+        ok(["R"], closed: ["B"], closed_out: ["X"], decision: accept("R", "KR"))
+      )
+    ])
   end
 
   # R2 reuses its closed parent R1's nonce with a different claim (lifecycle section 3): a

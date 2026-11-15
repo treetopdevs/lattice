@@ -678,12 +678,12 @@ defmodule Treehouse.CatalogBindingGraph do
     {v, memo}
   end
 
-  # Replacement-dependent first-catalog checks (plan 316 section 1 (b)): revision 0, the
-  # declared inventory, and extension of every cited prior, which must itself be valid. A
-  # bootstrap or rotation first catalog takes any revision, as in `CatalogTrust`.
+  # First-catalog checks (plan 316 section 1 (b)): revision 0 for a replacement (the codec
+  # already ties revision 0 to `previous: nil`), the declared inventory, and extension of every
+  # cited prior, which must itself be valid. A rotation's `prior_catalog` is a cited prior too,
+  # so an old-key rotation naming a refused catalog cannot drop a replica either.
   defp first_validity(c, n, env, memo) do
-    priors =
-      if n.kind == :replacement, do: for(%{catalog: k} <- n.prior, k != nil, do: k), else: []
+    priors = for %{catalog: k} <- n.prior, k != nil, do: k
 
     {prior_vs, memo} =
       Enum.map_reduce(priors, memo, fn k, memo ->

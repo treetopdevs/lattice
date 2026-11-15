@@ -398,9 +398,10 @@ function classifyCatalogs(ctx, nodesAll, closed, outRot) {
             return { t: "refused", reason: "wrong_catalog_scope" };
         }
         if (c.previous === null) {
-            // Replacement-dependent first-catalog checks: revision 0, the declared inventory, and extension of every cited prior,
-            // which must itself be valid. A bootstrap or rotation first catalog takes any revision, as in CatalogTrust.
-            const priors = n.kind === "replacement" ? n.prior.flatMap((p) => p.catalog === null ? [] : [p.catalog]) : [];
+            // First-catalog checks: revision 0 for a replacement (the codec already ties revision 0 to previous: null), the declared
+            // inventory, and extension of every cited prior, which must itself be valid. A rotation's priorCatalog is a cited prior
+            // too, so an old-key rotation naming a refused catalog cannot drop a replica either.
+            const priors = n.prior.flatMap((p) => p.catalog === null ? [] : [p.catalog]);
             const priorVs = priors.map((k) => ctx.input.catalogs.has(k) ? valid(k) : { t: "pending" });
             const extendsAll = priors.every((k) => {
                 const prior = ctx.input.catalogs.get(k);

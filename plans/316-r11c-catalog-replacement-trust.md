@@ -427,13 +427,14 @@ PR 4a decisions:
   D-276 refused node. Read from the public `Authority.analyze/2`; no `authority.ex` change.
 - **D-A10 (route reservation).** Only current and covered catalogs reserve routes, so a
   closed-out old-key catalog cannot refuse the honest head's first catalog.
-- **D-A11 (incomplete history, review round 2).** Any held Space op whose closure is
+- **D-A11 (incomplete history; review round 2 of 4a, the first after D-A9/D-A10).** Any held Space op whose closure is
   incomplete makes the resolve `trust_pending` (row m), not only replacement candidates; a
   candidate already refuted from its own bytes (D-A1) is exempt. A missing dependency of a
   concurrent revoke can no longer yield a judgment on a smaller history that later flips.
 - **D-A12 (catalog validity before classification).** Catalog evaluation is two passes:
   intrinsic validity (scope, signature, entries, `previous` chain, and for a replacement's
-  first catalog every cited prior, which must itself be valid), then classification. A
+  first catalog of any node every cited prior, a rotation's `prior_catalog` included, which
+  must itself be valid), then classification. A
   citation never rehabilitates an invalid catalog: an invalid cited catalog covers nothing
   (its valid ancestors stay omitted catalog heads, `catalog_fork`) and a first catalog that
   extends it is refused. Only a catalog on a cited chain can pend, so an uncited old-key
@@ -446,7 +447,8 @@ PR 4a decisions:
   and `{R1, nil}` is `catalog_fork`; `catalog_heads` (promotion, split forks) is unchanged.
 - **D-A14 (absent accepted artifacts).** With an accepted state, an accepted binding or
   catalog absent from the input is an `authority_changed` trigger on the sole-head path, so a
-  caller that omits it fails closed instead of promoting.
+  caller that omits it fails closed instead of promoting. The block persists until a fresh
+  admin resolution lifts it, so its clearing belongs to the design row below.
 - **Proposed design row (rule 3; finding 6 of review round 2; number not yet assigned).** `authority_changed` clearing is
   a third patch on the same trigger class (D-A5's standing triggers caused this freeze: a
   trigger recorded as an old-key rotation head that a later resolution closes out rather than
