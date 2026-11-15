@@ -208,6 +208,80 @@
         "refused": [],
         "raw": {},
         "refusals": {},
+        "pending": [
+          "T"
+        ],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "recovery_incomplete",
+          "block": null,
+          "head": "T",
+          "catalog": null,
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "4NG7lDt4Zw7MwoS_zdM3NyXrL87SuDuGDv1MfTohSPI"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "4NG7lDt4Zw7MwoS_zdM3NyXrL87SuDuGDv1MfTohSPI": {
+            "kind": "rotation",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 1
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "4NG7lDt4Zw7MwoS_zdM3NyXrL87SuDuGDv1MfTohSPI": [
+            "zVsj_breEADuqMW4_H8r-q1QLzZyxw2lHFBFux-6DBE"
+          ],
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "recovery_incomplete",
+          "block": null,
+          "head": "4NG7lDt4Zw7MwoS_zdM3NyXrL87SuDuGDv1MfTohSPI",
+          "catalog": null,
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "rotation inherits service and origin from its parent",
+      "step": 2,
+      "label": {
+        "heads": [
+          "T"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "T"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
         "pending": [],
         "forks": [],
         "decision": {
@@ -8687,6 +8761,628 @@
           "clears": false,
           "binding_status": "missing",
           "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "step": 1,
+      "label": {
+        "heads": [
+          "R1"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R1"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R1",
+          "catalog": "K1",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+          "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R1"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [
+          "T"
+        ],
+        "nodes": [
+          "B",
+          "R1"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R1",
+          "catalog": "K1",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {
+          "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+          "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+          "clears": false,
+          "binding_status": "current",
+          "catalog_status": "current"
+        }
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "step": 3,
+      "label": {
+        "heads": [
+          "R1"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [
+          "CT",
+          "T",
+          "T2"
+        ],
+        "nodes": [
+          "B",
+          "R1"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R1",
+          "catalog": "K1",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {
+          "7Xr8tP-VLfUzdpMaUVt_2q83QTH9OtBAXyMIGnpPjZQ": "catalog_rollback",
+          "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback",
+          "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": [
+            "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
+          "catalog": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
+          "clears": false,
+          "binding_status": "current",
+          "catalog_status": "current"
+        }
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "step": 4,
+      "label": {
+        "heads": [
+          "R2"
+        ],
+        "closed": [
+          "B",
+          "R1"
+        ],
+        "closed_out": [
+          "CT",
+          "T",
+          "T2"
+        ],
+        "nodes": [
+          "B",
+          "R1",
+          "R2"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R2",
+          "catalog": "K2",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed_out": {
+          "7Xr8tP-VLfUzdpMaUVt_2q83QTH9OtBAXyMIGnpPjZQ": "catalog_rollback",
+          "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback",
+          "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k": "catalog_rollback"
+        },
+        "nodes": {
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": [
+            "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE",
+          "catalog": "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64",
+          "clears": false,
+          "binding_status": "closed",
+          "catalog_status": "ancestor_of_cited"
+        }
+      }
+    },
+    {
+      "scenario": "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      "step": 5,
+      "label": {
+        "heads": [
+          "R2"
+        ],
+        "closed": [
+          "B",
+          "R1"
+        ],
+        "closed_out": [
+          "C1",
+          "CT",
+          "T",
+          "T2"
+        ],
+        "nodes": [
+          "B",
+          "R1",
+          "R2"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "R2",
+          "catalog": "K2",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk"
+        ],
+        "closed_out": {
+          "7Xr8tP-VLfUzdpMaUVt_2q83QTH9OtBAXyMIGnpPjZQ": "catalog_rollback",
+          "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ": "catalog_rollback",
+          "RWF3lERv84tKq0iwg3EiQwVGux23Bw-h6MDh28nLjck": "catalog_rollback",
+          "gGY5ZwK9YEWRAwVQiXxJoWUEk8JVgrVONu7P76pDI-k": "catalog_rollback"
+        },
+        "nodes": {
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE": [
+            "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "3nu4QzvQgU87LGujt0gMH8ml3VoBq1aupafGD2Yb4CE",
+          "catalog": "xsIDzDLhFoJJrgzK2jNw-aPgpNaKRquD5HydRGb3i64",
+          "clears": false,
+          "binding_status": "current",
+          "catalog_status": "current"
+        }
+      }
+    },
+    {
+      "scenario": "a replacement's cutoffs must cover every entry of its first catalog",
+      "step": 1,
+      "label": {
+        "heads": [
+          "B"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "B",
+          "catalog": "C0",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "0dJVkfSQcYS2Do3vmsHomTf5Erjge6MCfTHLoQQh8YY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "catalog": "0dJVkfSQcYS2Do3vmsHomTf5Erjge6MCfTHLoQQh8YY",
+          "clears": false,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        }
+      }
+    },
+    {
+      "scenario": "a replacement's cutoffs must cover every entry of its first catalog",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {
+          "KR": "invalid_catalog_transition"
+        },
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": null,
+          "block": null,
+          "head": "R",
+          "catalog": null,
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "D5-3-Hg96uE9w2AIevA34-p6kA0WPMh-lohPvxok3IY"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "D5-3-Hg96uE9w2AIevA34-p6kA0WPMh-lohPvxok3IY": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {
+          "Z46h1kMXlhY3_cSCf-S9sQ4uAz0--eOfG6dW4aG4hTg": "invalid_catalog_transition"
+        },
+        "catalog_heads": {},
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": null,
+          "block": null,
+          "head": "D5-3-Hg96uE9w2AIevA34-p6kA0WPMh-lohPvxok3IY",
+          "catalog": null,
+          "clears": false,
+          "binding_status": "closed",
+          "catalog_status": "ancestor_of_cited"
+        }
+      }
+    },
+    {
+      "scenario": "a replacement's cutoffs must cover every entry of its first catalog",
+      "step": 3,
+      "label": {
+        "heads": [
+          "Rf"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "Rf"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "Rf",
+          "catalog": "KF",
+          "clears": false
+        }
+      },
+      "ts": {
+        "heads": [
+          "wp0DUqX3X2gz_EUZBvUO-6ceFiHgA93XWrkOBHK_Ve0"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "wp0DUqX3X2gz_EUZBvUO-6ceFiHgA93XWrkOBHK_Ve0": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "wp0DUqX3X2gz_EUZBvUO-6ceFiHgA93XWrkOBHK_Ve0": [
+            "AiWQTy8FOSvKSB4QDbbUYyqJIOnFLzNWy9agOfGzdxQ"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "wp0DUqX3X2gz_EUZBvUO-6ceFiHgA93XWrkOBHK_Ve0",
+          "catalog": "AiWQTy8FOSvKSB4QDbbUYyqJIOnFLzNWy9agOfGzdxQ",
+          "clears": false,
+          "binding_status": "closed",
+          "catalog_status": "ancestor_of_cited"
         }
       }
     }

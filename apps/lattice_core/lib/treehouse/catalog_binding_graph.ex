@@ -20,8 +20,9 @@ defmodule Treehouse.CatalogBindingGraph do
   change (`CatalogReplacementAuthority.refute_without_closure/3`, its own literal bindings and
   possession signatures); otherwise it stays pending. Rotations are nodes when their chain
   checks pass under their parent node and inherit its service, origin, `refused?` and unproven
-  recovery cutoffs; a failing rotation is a retained refusal. A verdict only ever moves out of
-  pending.
+  recovery cutoffs, plus their own unproven cutoffs (D-A15); a failing rotation is a retained
+  refusal, and a pending rotation under a closed binding is closed out (D-A16). A verdict only
+  ever moves out of pending.
 
   Union classification (steps 7-8) only reclassifies: the closed set (D-275), closed-out
   rotation and catalog children of closed bindings, heads, forks, catalog heads and per-node
@@ -172,10 +173,18 @@ defmodule Treehouse.CatalogBindingGraph do
 
     closed = closed_set(nodes_all)
     out_rot = closed_out_rotations(nodes_all, closed)
+    out_pending = closed_out_pending(ctx, memo, closed, out_rot)
     final = Map.drop(nodes_all, MapSet.to_list(out_rot))
     heads = heads_of(final)
 
-    cat = classify_catalogs(Map.put(ctx, :memo, memo), nodes_all, final, closed, out_rot)
+    cat =
+      classify_catalogs(
+        Map.put(ctx, :memo, memo),
+        nodes_all,
+        final,
+        closed,
+        {out_rot, out_pending}
+      )
 
     # Any held op whose closure is incomplete is a missing history page (row m): the authority
     # fold over the complete ops would judge a smaller history. Only a candidate already refuted
@@ -187,7 +196,8 @@ defmodule Treehouse.CatalogBindingGraph do
           do: id
 
     pending =
-      (for({id, :pending} <- memo, do: id) ++ cat.pending ++ incomplete)
+      (for({id, :pending} <- memo, not MapSet.member?(out_pending, id), do: id) ++
+         cat.pending ++ incomplete)
       |> Enum.uniq()
       |> Enum.sort()
 
@@ -290,12 +300,12 @@ defmodule Treehouse.CatalogBindingGraph do
       true ->
         case ctx.catalogs[r.prior_catalog] do
           nil -> :pending
-          %{catalog: prior} -> rotation_prior(id, r, p, prior)
+          %{catalog: prior} -> rotation_prior(id, r, p, prior, ctx)
         end
     end
   end
 
-  defp rotation_prior(id, r, p, prior) do
+  defp rotation_prior(id, r, p, prior, ctx) do
     if prior.binding != r.parent or
          TransportCatalog.inventory_id(prior.entries) != r.inventory_digest or
          Enum.map(r.cutoffs, & &1.replica) != Enum.map(prior.entries, & &1.replica) do
@@ -315,8 +325,9 @@ defmodule Treehouse.CatalogBindingGraph do
          inventory: r.inventory_digest,
          refused?: p.refused?,
          core_reason: p.core_reason,
-         # A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs.
-         pending: p.pending
+         # A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs,
+         # and it owes its own declared cutoffs too (CatalogTrust parity).
+         pending: Enum.uniq(p.pending ++ unproven(r.cutoffs, ctx))
        }}
     end
   end
@@ -453,10 +464,12 @@ defmodule Treehouse.CatalogBindingGraph do
       inventory: claim.inventory_digest,
       refused?: core != nil,
       core_reason: core,
-      pending:
-        Enum.reject(claim.cutoffs, &MapSet.member?(ctx.proven, {&1.replica, &1.log_digest}))
+      pending: unproven(claim.cutoffs, ctx)
     }
   end
+
+  defp unproven(cutoffs, ctx),
+    do: Enum.reject(cutoffs, &MapSet.member?(ctx.proven, {&1.replica, &1.log_digest}))
 
   # Steps 5 and 6, intrinsic part. Returns `{failures, pending?, st}`. A cited replacement op
   # outside the deps closure fails before it is evaluated, so recursion follows causality.
@@ -555,6 +568,36 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
+  # D-275 non-stall: a pending rotation whose rotation-parent chain reaches a closed or
+  # closed-out binding is closed-out evidence whatever its missing prior catalog says, so an
+  # old-key signer cannot withhold it to freeze recovery. A pending rotation under an open,
+  # unknown or pending replacement parent still pends.
+  defp closed_out_pending(ctx, memo, closed, out_rot) do
+    for {id, :pending} <- memo,
+        Map.has_key?(ctx.rotations, id),
+        pending_out?(id, ctx, memo, MapSet.union(closed, out_rot), MapSet.new()),
+        into: MapSet.new(),
+        do: id
+  end
+
+  defp pending_out?(id, ctx, memo, dead, seen) do
+    parent = ctx.rotations[id].rotation.parent
+
+    cond do
+      MapSet.member?(seen, id) ->
+        false
+
+      MapSet.member?(dead, parent) ->
+        true
+
+      Map.has_key?(ctx.rotations, parent) and Map.get(memo, parent) == :pending ->
+        pending_out?(parent, ctx, memo, dead, MapSet.put(seen, id))
+
+      true ->
+        false
+    end
+  end
+
   defp heads_of(final) do
     cited = closure(for({_id, n} <- final, p <- n.parents, do: p), final, MapSet.new())
     final |> Map.keys() |> Enum.reject(&MapSet.member?(cited, &1)) |> Enum.sort()
@@ -568,7 +611,7 @@ defmodule Treehouse.CatalogBindingGraph do
   # valid catalog: :current (open binding), :covered / :closed_out / :uncovered (closed binding),
   # :refused (with a reason) or :pending. A citation never makes an invalid catalog valid: an
   # invalid cited catalog covers nothing, and a first catalog extending it is itself invalid.
-  defp classify_catalogs(ctx, nodes_all, final, closed, out_rot) do
+  defp classify_catalogs(ctx, nodes_all, final, closed, {out_rot, out_pending}) do
     cites = citations(nodes_all, closed)
     previous = Map.new(ctx.catalogs, fn {id, e} -> {id, e.catalog.previous} end)
 
@@ -578,6 +621,7 @@ defmodule Treehouse.CatalogBindingGraph do
       final: final,
       closed: closed,
       out_rot: out_rot,
+      out_pending: out_pending,
       cites: cites,
       previous: previous
     }
@@ -595,7 +639,14 @@ defmodule Treehouse.CatalogBindingGraph do
     acc = route_history(ctx, acc)
 
     pending = for {id, :pending} <- acc.status, do: id
-    Map.merge(acc, %{pending: pending, cites: cites, previous: previous, validity: validity})
+
+    Map.merge(acc, %{
+      pending: pending,
+      cites: cites,
+      previous: previous,
+      validity: validity,
+      out_pending: out_pending
+    })
   end
 
   defp refuse(acc, id, reason, core),
@@ -706,6 +757,13 @@ defmodule Treehouse.CatalogBindingGraph do
         n.inventory != nil and TransportCatalog.inventory_id(c.entries) != n.inventory ->
           :bad_chain
 
+        # A replacement's cutoffs cover every entry of its first catalog, as a rotation's
+        # cover its prior catalog's (D-A15); otherwise a replica carries no recovery proof.
+        n.kind == :replacement and
+            Enum.map(claim_of(env.ctx, n.id).cutoffs, & &1.replica) !=
+              Enum.sort(Enum.map(c.entries, & &1.replica)) ->
+          :bad_chain
+
         not extends_all? ->
           :bad_chain
 
@@ -733,7 +791,7 @@ defmodule Treehouse.CatalogBindingGraph do
         refuse(acc, id, reason, nil)
 
       :binding_pending ->
-        {:pending, acc}
+        {if(MapSet.member?(env.out_pending, c.binding), do: :closed_out, else: :pending), acc}
 
       v ->
         cond do
@@ -912,7 +970,7 @@ defmodule Treehouse.CatalogBindingGraph do
 
   defp assemble(ctx, memo, detail, nodes_all, final, heads, closed, out_rot, cat) do
     closed_out =
-      Map.new(out_rot, &{&1, :catalog_rollback})
+      Map.new(MapSet.union(out_rot, cat.out_pending), &{&1, :catalog_rollback})
       |> Map.merge(for({cid, :closed_out} <- cat.status, into: %{}, do: {cid, :catalog_rollback}))
 
     cat_heads = catalog_heads(final, closed, cat, ctx)

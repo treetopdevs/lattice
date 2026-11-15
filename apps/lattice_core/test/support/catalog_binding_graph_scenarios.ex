@@ -64,6 +64,16 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           uniq: true,
           do: %{replica: cutoff.replica, log_digest: cutoff.log_digest}
 
+    # A rotation owes its own declared cutoffs too (review round 3, finding 3); `unproven`
+    # takes rotation ids as well.
+    rotation_proven =
+      for rot <- rotations,
+          rot.id not in unproven,
+          cutoff <- rot.envelope.rotation.cutoffs,
+          do: %{replica: cutoff.replica, log_digest: cutoff.log_digest}
+
+    proven = Enum.uniq(proven ++ rotation_proven)
+
     %{
       space: log,
       rotations: Map.new(rotations, &{&1.id, &1.envelope}),
@@ -130,7 +140,9 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &sequential_nonce/1,
       &missing_accepted/1,
       &rotation_refused_prior/1,
-      &uncited_pending/1
+      &uncited_pending/1,
+      &closed_rotation_withheld_prior/1,
+      &replacement_cutoff_coverage/1
     ]
   end
 
@@ -179,6 +191,15 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     labels = Map.merge(base_labels(base, c0), %{"T" => t.id, "CT" => F.cid(ct)})
 
     one("rotation inherits service and origin from its parent", labels, [
+      # Without proofs of T's own cutoffs, T/CT is recovery_incomplete (finding 3).
+      step(
+        ev(base.log, rotations: [t], catalogs: [c0, ct], unproven: [t.id]),
+        ok(["T"],
+          nodes: ["B", "T"],
+          pending: ["T"],
+          decision: [head: "T", reason: "recovery_incomplete"]
+        )
+      ),
       step(
         ev(base.log, rotations: [t], catalogs: [c0, ct]),
         ok(["T"], nodes: ["B", "T"], decision: accept("T", "CT"))
@@ -1836,6 +1857,134 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           decision: [head: "R", reason: "authority_changed", block: "authority_changed"]
         ),
         state
+      )
+    ])
+  end
+
+  # Review round 3, finding 1 (D-275 non-stall): accepted R1/K1 closes B. An old-key rotation T
+  # from B names a withheld C1, T2 rotates the pending T, and CT sits under T. None of them can
+  # pend: each is closed-out evidence, so R2/K2 still promotes, and C1 arriving later only adds
+  # C1 to the closed-out evidence.
+  defp closed_rotation_withheld_prior(base) do
+    c0 = F.c0(base)
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, F.base_entries(base))
+    r1 = cite_c0(base, c0, "r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    tkey = F.identity("rot-tw")
+    t = rotation(base, node(base.boot.id, 0), c1, base.catalog, "tw")
+    ct = F.catalog(base, t.id, 0, nil, tkey, F.base_entries(base))
+    t2 = rotation(base, node(t.id, 1), ct, tkey, "tw2")
+
+    r2 =
+      F.replacement(base, l1, "r2",
+        parents: [r1.id],
+        prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}],
+        generation: 2
+      )
+
+    k2 = F.first(base, r2)
+    l2 = add(l1, [r2])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "C1" => F.cid(c1),
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "T" => t.id,
+        "CT" => F.cid(ct),
+        "T2" => t2.id,
+        "R2" => r2.id,
+        "K2" => F.cid(k2)
+      })
+
+    held = fn closed_out ->
+      ok(["R1"], closed: ["B"], closed_out: closed_out, decision: accept("R1", "K1"))
+    end
+
+    out = ["CT", "T", "T2"]
+
+    one(
+      "a closed old-key rotation with a withheld prior catalog cannot freeze recovery",
+      labels,
+      [
+        step(ev(l1, catalogs: [c0, k1]), held.([])),
+        step(ev(l1, rotations: [t], catalogs: [c0, k1]), held.(["T"])),
+        step(ev(l1, rotations: [t, t2], catalogs: [c0, k1, ct]), held.(out)),
+        step(
+          ev(l2, rotations: [t, t2], catalogs: [c0, k1, ct, k2]),
+          ok(["R2"], closed: ["B", "R1"], closed_out: out, decision: accept("R2", "K2"))
+        ),
+        step(
+          ev(l2, rotations: [t, t2], catalogs: [c0, c1, k1, ct, k2]),
+          ok(["R2"], closed: ["B", "R1"], closed_out: ["C1" | out], decision: accept("R2", "K2"))
+        )
+      ]
+    )
+  end
+
+  # Review round 3, finding 2: C0 lists Space + Thread and R commits the same inventory under
+  # its new service, but R's cutoffs cover only the Space. Its first catalog KR is refused (the
+  # cutoffs must cover every entry, as for a rotation); the full-cutoff Rf promotes.
+  defp replacement_cutoff_coverage(base) do
+    [space] = F.base_entries(base)
+
+    thread = %{
+      space
+      | replica: base.replica <> "-thread",
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        route: "/r/" <> F.id("route-thread")
+    }
+
+    c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
+    prior = [%{binding: base.boot.id, catalog: F.cid(c0)}]
+
+    moved = fn name ->
+      key = F.identity("service-" <> name).pub
+      sid = F.id("service-id-" <> name)
+      for e <- [space, thread], do: %{e | service_id: sid, service_key: key}
+    end
+
+    r = F.replacement(base, base.log, "rcut", prior_catalogs: prior, entries: moved.("rcut"))
+    kr = F.first(base, r)
+
+    thread_cut = %{
+      replica: thread.replica,
+      frontier: [F.id("f-thread")],
+      log_digest: F.id("d-thread")
+    }
+
+    full =
+      F.replacement(base, base.log, "rfull",
+        prior_catalogs: prior,
+        entries: moved.("rfull"),
+        claim: %{cutoffs: Enum.sort_by(r.claim.cutoffs ++ [thread_cut], & &1.replica)}
+      )
+
+    kf = F.first(base, full)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "Rf" => full.id,
+        "KF" => F.cid(kf)
+      })
+
+    one("a replacement's cutoffs must cover every entry of its first catalog", labels, [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(
+        ev(add(base.log, [r]), catalogs: [c0, kr]),
+        ok(["R"],
+          closed: ["B"],
+          refusals: %{"KR" => "invalid_catalog_transition"},
+          decision: [head: "R"]
+        )
+      ),
+      step(
+        ev(add(base.log, [full]), catalogs: [c0, kf]),
+        ok(["Rf"], closed: ["B"], decision: accept("Rf", "KF"))
       )
     ])
   end

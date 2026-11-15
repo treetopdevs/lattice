@@ -457,6 +457,29 @@ PR 4a decisions:
   (the accepted binding refused or closed and its catalog covered or closed out by a sole
   promotable admin resolution), not from persisted head ids. Acceptance: the R1/T2/TR/R2
   interleaving clears in both delivery orders, and a later R3 clears a client that froze.
+- **D-A15 (cutoff obligations; review round 3, findings 2 and 3).** A node owes its own
+  declared cutoffs plus those it inherits from a same-service parent: a rotation's pending set
+  is its parent's plus its own unproven cutoffs (CatalogTrust parity, `catalog_trust.ex:505`).
+  A replacement's cutoff replicas must equal its first catalog's entry replicas, as a
+  rotation's equal its prior catalog's; a mismatch refuses that first catalog
+  `invalid_catalog_transition` (the inventory is fixed by the claim, so the failure is
+  permanent, unlike row l's unproven-proof `recovery_incomplete`), and the replacement never
+  becomes ready.
+- **D-A16 (D-275 non-stall; review round 3, finding 1).** One rule generalizing D-A12's
+  uncited-catalog case: a pending rotation whose rotation-parent chain reaches a closed or
+  closed-out binding, and every catalog bound to it, is closed-out evidence and never
+  `trust_pending`, so an old-key signer cannot freeze recovery by withholding a prior catalog.
+  A pending rotation under an open, unknown or pending replacement parent still pends (D-5).
+- **Proposed design row (rule 3; review round 3, finding 4; number not yet assigned).** Route
+  reuse is the second catalog-validity-versus-classification gap after D-A12. Route reservation
+  runs after validity, in union id order, so a route-refused catalog keeps `validity: ok`: a
+  replacement first catalog citing it, and a `previous` successor of it (`extends?` ignores
+  `route`), stay valid. Un-reserving dependents makes a fixpoint over the union non-monotone.
+  Redesign before 4c wires the resolver: judge route uniqueness intrinsically against a
+  catalog's own ancestry (its `previous` chain and cited priors), so it feeds validity, and
+  keep only cross-branch reuse as union classification. Acceptance: C0 `{Space->A, Thread->B}`,
+  C1 extending it with `{Space->B, Thread->C}`, R citing C1 with fresh routes is refused in both
+  runtimes and C0 stays an omitted catalog head.
 - **D-A8 (fixtures).** The 4a fixtures build their own Sim bounded Space (pin, root beacons,
   leased admin) instead of `CatalogVectors.bootstrap_history`, because the step-4 and R04 cases
   need the witnessed-beacon pin and continuation.

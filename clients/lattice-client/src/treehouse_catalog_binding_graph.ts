@@ -182,13 +182,15 @@ async function run(ctx: Ctx): Promise<CatalogBindingGraphResult> {
   nodesAll.set(ctx.bootstrapId, bootstrapNode(ctx));
   const closed = closedSet(nodesAll);
   const outRot = closedOutRotations(nodesAll, closed);
+  const outPending = closedOutPending(ctx, closed, outRot);
   const final = new Map([...nodesAll].filter(([id]) => !outRot.has(id)));
   const heads = headsOf(final);
-  const cat = classifyCatalogs(ctx, nodesAll, closed, outRot);
+  const cat = classifyCatalogs(ctx, nodesAll, closed, outRot, outPending);
   // Any held op whose closure is incomplete is a missing history page: the authority fold over the complete ops would judge
   // a smaller history. Only a candidate already refuted from its own bytes is exempt.
   const incomplete = [...ctx.byId.keys()].filter((id) => !ctx.complete.has(id) && ctx.memo.get(id)?.t !== "bad");
-  const pending = [...new Set([...[...ctx.memo].filter(([, v]) => v.t === "pending").map(([id]) => id), ...cat.pending,
+  const pending = [...new Set([...[...ctx.memo].filter(([id, v]) => v.t === "pending" && !outPending.has(id)).map(([id]) => id),
+    ...cat.pending,
     ...incomplete])].sort(compareUtf8);
   if (heads.length > 2) return {ok: false, reason: "control_history_limit", detail: {ids: heads}};
   if (pending.length > 0) return {ok: false, reason: "trust_pending", detail: {ids: pending}};
@@ -241,8 +243,10 @@ async function evalRotation(id: string, ctx: Ctx): Promise<Verdict> {
   }
   return {t: "node", node: {id, kind: "rotation", generation: r.generation, key: r.newCatalogKey, serviceId: p.serviceId,
     serviceKey: p.serviceKey, origin: p.origin, parents: [r.parent], prior: [{binding: r.parent, catalog: r.priorCatalog}],
-    // A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs.
-    inventory: r.inventoryDigest, refused: p.refused, coreReason: p.coreReason, pending: p.pending}};
+    // A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs, and it owes its own declared cutoffs
+    // too (CatalogTrust parity).
+    inventory: r.inventoryDigest, refused: p.refused, coreReason: p.coreReason, pending: uniqCutoffs([...p.pending,
+      ...unproven(r.cutoffs, ctx)])}};
 }
 
 function verifyKey(key: string, bytes: Uint8Array, signature: string): boolean {
@@ -322,8 +326,22 @@ async function evalCandidate(id: string, ctx: Ctx): Promise<Verdict> {
   return {t: "node", node: {id, kind: "replacement", generation: s.claim.generation, key: s.claim.newCatalogKey,
     serviceId: s.claim.newServiceId, serviceKey: s.claim.newServiceKey, origin: s.claim.newOrigin, parents: s.claim.parents,
     prior: s.claim.priorCatalogs, inventory: s.claim.inventoryDigest, refused: core !== null, coreReason: core,
-    pending: s.claim.cutoffs.filter((cut) => !ctx.proven.has(`${cut.replica}\u0000${cut.logDigest}`))
-      .map((cut) => ({replica: cut.replica, logDigest: cut.logDigest}))}};
+    pending: unproven(s.claim.cutoffs, ctx)}};
+}
+
+function unproven(cutoffs: readonly {replica: string; logDigest: string}[], ctx: Ctx): {replica: string; logDigest: string}[] {
+  return cutoffs.filter((cut) => !ctx.proven.has(`${cut.replica}\u0000${cut.logDigest}`))
+    .map((cut) => ({replica: cut.replica, logDigest: cut.logDigest}));
+}
+
+function uniqCutoffs(cutoffs: readonly {replica: string; logDigest: string}[]): {replica: string; logDigest: string}[] {
+  const seen = new Set<string>();
+  return cutoffs.filter((cut) => {
+    const key = `${cut.replica}\u0000${cut.logDigest}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // Steps 5 and 6, intrinsic part. A cited replacement op outside the deps closure fails before it is evaluated.
@@ -382,6 +400,20 @@ function closedOutRotations(nodes: ReadonlyMap<string, CatalogBindingNode>, clos
   return new Set([...nodes.values()].filter((n) => n.kind === "rotation" && out(n.id)).map((n) => n.id));
 }
 
+// D-275 non-stall: a pending rotation whose rotation-parent chain reaches a closed or closed-out binding is closed-out evidence
+// whatever its missing prior catalog says, so an old-key signer cannot withhold it to freeze recovery. A pending rotation under
+// an open, unknown or pending replacement parent still pends.
+function closedOutPending(ctx: Ctx, closed: Set<string>, outRot: Set<string>): Set<string> {
+  const out = (id: string, seen: Set<string>): boolean => {
+    const parent = ctx.input.rotations.get(id)!.rotation.parent;
+    if (seen.has(id)) return false;
+    if (closed.has(parent) || outRot.has(parent)) return true;
+    return ctx.input.rotations.has(parent) && ctx.memo.get(parent)?.t === "pending" && out(parent, new Set([...seen, id]));
+  };
+  return new Set([...ctx.memo].filter(([id, v]) => v.t === "pending" && ctx.input.rotations.has(id) && out(id, new Set()))
+    .map(([id]) => id));
+}
+
 function headsOf(final: ReadonlyMap<string, CatalogBindingNode>): string[] {
   const cited = closure([...final.values()].flatMap((n) => [...n.parents]), final);
   return [...final.keys()].filter((id) => !cited.has(id)).sort(compareUtf8);
@@ -392,6 +424,7 @@ function headsOf(final: ReadonlyMap<string, CatalogBindingNode>): string[] {
 interface Classified {
   status: Map<string, CatalogStatus>; refusals: Map<string, {reason: string; coreReason: string | null}>; pending: string[];
   cites: Map<string, (string | null)[]>; previous: Map<string, string | null>; validity: Map<string, Validity>;
+  outPending: Set<string>;
 }
 
 // Intrinsic to the catalog bytes, its binding node and its chain (previous links and, for a replacement's first catalog,
@@ -400,11 +433,12 @@ type Validity = {t: "refused"; reason: string} | {t: "binding_pending"} | {t: "p
 
 // Two passes: validity, then status (current under an open binding; covered / closed_out / uncovered under a closed one;
 // refused with a reason; pending).
-function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, closed: Set<string>, outRot: Set<string>): Classified {
+function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, closed: Set<string>, outRot: Set<string>,
+  outPending: Set<string>): Classified {
   const cites = citations(nodesAll, closed);
   const previous = new Map([...ctx.input.catalogs].map(([id, e]) => [id, e.catalog.previous] as [string, string | null]));
   const validity = new Map<string, Validity>();
-  const acc: Classified = {status: new Map(), refusals: new Map(), pending: [], cites, previous, validity};
+  const acc: Classified = {status: new Map(), refusals: new Map(), pending: [], cites, previous, validity, outPending};
   const refuse = (id: string, reason: string, core: string | null): CatalogStatus => {
     acc.refusals.set(id, {reason, coreReason: core}); return "refused";
   };
@@ -440,8 +474,11 @@ function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, c
         const prior = ctx.input.catalogs.get(k);
         return prior === undefined || extendsEntries(prior.catalog.entries, c.entries);
       });
+      // A replacement's cutoffs cover every entry of its first catalog, as a rotation's cover its prior catalog's (D-A15).
+      const uncovered = n.kind === "replacement" && !same(claimOf(ctx, n.id).cutoffs.map((cut) => cut.replica),
+        c.entries.map((entry) => entry.replica).sort(compareUtf8));
       if ((n.kind === "replacement" && c.revision !== 0) ||
-        (n.inventory !== null && catalogInventoryId(c.entries) !== n.inventory) || !extendsAll ||
+        (n.inventory !== null && catalogInventoryId(c.entries) !== n.inventory) || uncovered || !extendsAll ||
         priorVs.some((v) => v.t !== "ok" && !isPending(v))) return {t: "bad_chain"};
       if (priorVs.some((v) => v.t !== "ok")) return {t: "pending"};
       return {t: "ok"};
@@ -457,7 +494,7 @@ function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, c
   const statusOf = (id: string): CatalogStatus => {
     const c = ctx.input.catalogs.get(id)!.catalog, n = nodesAll.get(c.binding), v = validity.get(id)!;
     if (v.t === "refused") return refuse(id, v.reason, null);
-    if (v.t === "binding_pending") return "pending";
+    if (v.t === "binding_pending") return outPending.has(c.binding) ? "closed_out" : "pending";
     if (n!.refused) return refuse(id, "catalog_authority_refused", n!.coreReason);
     if (outRot.has(c.binding)) return "closed_out";
     if (closed.has(c.binding)) return closedStatus(id, c.binding, v);
@@ -586,7 +623,7 @@ function forksOf(ctx: Ctx, final: Map<string, CatalogBindingNode>, heads: string
 function assemble(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, final: Map<string, CatalogBindingNode>, heads: string[],
   closed: Set<string>, outRot: Set<string>, cat: Classified): CatalogBindingGraph {
   const closedOut = new Map<string, string>();
-  for (const id of outRot) closedOut.set(id, "catalog_rollback");
+  for (const id of [...outRot, ...cat.outPending]) closedOut.set(id, "catalog_rollback");
   for (const [id, s] of cat.status) if (s === "closed_out") closedOut.set(id, "catalog_rollback");
   const catHeads = catalogHeadsOf(ctx, final, closed, cat);
   const raw = new Map<string, string>();
