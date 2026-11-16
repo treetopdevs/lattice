@@ -177,6 +177,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &refused_parent_sibling/1,
       &invalid_old_key_catalog/1,
       &cutoff_frontier/1,
+      &same_service_inherits/1,
+      &scope_before_signature/1,
       &s1_rotation_trigger/1,
       &s2_withheld_first/1,
       &s3_nil_floor/1,
@@ -2358,6 +2360,71 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       step(
         ev(add(base.log, [full]), catalogs: [c0, kf]),
         ok(["Rf"], closed: ["B"], decision: accept("Rf", "KF", clears: true))
+      )
+    ])
+  end
+
+  # PR #221 round 5, finding 3 (D-A15): a replacement keeping its parent's service inherits the
+  # parent's unproven cutoffs, as a rotation does. R2 keeps R1's service and cites {R1, K1};
+  # only R2's own cutoffs are proven, so R2 owes R1's and is recovery_incomplete until R1's are
+  # proven too.
+  defp same_service_inherits(base) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, "dsi-r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+
+    r2 =
+      F.replacement(base, l1, "dsi-r2",
+        parents: [r1.id],
+        prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}],
+        generation: 2,
+        service_id: r1.service_id,
+        service_key: r1.service_key,
+        entries: r1.entries
+      )
+
+    k2 = F.first(base, r2)
+    l2 = add(l1, [r2])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "R2" => r2.id,
+        "K2" => F.cid(k2)
+      })
+
+    one("a same-service replacement inherits its parent's unproven cutoffs (D-A15)", labels, [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(
+        ev(l2, catalogs: [c0, k1, k2], unproven: [r1.id]),
+        ok(["R2"],
+          closed: ["B", "R1"],
+          pending: ["R1", "R2"],
+          decision: [head: "R2", reason: "recovery_incomplete", block: "recovery_incomplete"]
+        )
+      ),
+      step(
+        ev(l2, catalogs: [c0, k1, k2]),
+        ok(["R2"], closed: ["B", "R1"], decision: accept("R2", "K2", clears: true))
+      )
+    ])
+  end
+
+  # PR #221 round 5, finding 5 (plan 316 section 4): a catalog whose entry service pair differs
+  # from its binding's is wrong_catalog_scope (rank 2) even though its signature, made over the
+  # original bytes, no longer verifies (invalid_catalog_signature, rank 4).
+  defp scope_before_signature(base) do
+    c0 = F.c0(base)
+    entries = Enum.map(c0.catalog.entries, &%{&1 | service_id: F.id("ssig-other")})
+    bad = put_in(c0, [:catalog, :entries], entries)
+    labels = Map.merge(base_labels(base, c0), %{"Cs" => F.cid(bad)})
+
+    one("a catalog's wrong service scope outranks its signature failure", labels, [
+      step(
+        ev(base.log, catalogs: [bad]),
+        ok(["B"], refusals: %{"Cs" => "wrong_catalog_scope"}, decision: [head: "B"])
       )
     ])
   end

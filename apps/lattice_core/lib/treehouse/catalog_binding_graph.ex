@@ -621,7 +621,7 @@ defmodule Treehouse.CatalogBindingGraph do
     case lowest(failures) do
       {reason, why} -> {{:bad, reason}, %{st | detail: Map.put(st.detail, op.id, why)}}
       nil when pending? -> {:pending, st}
-      nil -> {{:node, replacement_node(op, claim, ctx)}, st}
+      nil -> {{:node, replacement_node(op, claim, ctx, st)}, st}
     end
   end
 
@@ -638,8 +638,17 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
-  defp replacement_node(op, claim, ctx) do
+  defp replacement_node(op, claim, ctx, st) do
     core = ctx.analysis.reasons[op.id]
+
+    # D-A15: a node owes its own declared cutoffs plus those it inherits from a same-service
+    # parent (every parent is an eligible node here; declared_graph judged it).
+    inherited =
+      for p <- claim.parents,
+          pn <- [parent_node(p, ctx, st)],
+          {pn.service_id, pn.service_key} == {claim.new_service_id, claim.new_service_key},
+          cut <- pn.pending,
+          do: cut
 
     %{
       id: op.id,
@@ -654,8 +663,17 @@ defmodule Treehouse.CatalogBindingGraph do
       inventory: claim.inventory_digest,
       refused?: core != nil,
       core_reason: core,
-      pending: unproven(claim.cutoffs, ctx)
+      pending: Enum.uniq(inherited ++ unproven(claim.cutoffs, ctx))
     }
+  end
+
+  defp parent_node(id, ctx, st) do
+    if id == ctx.bootstrap.id do
+      bootstrap_node(ctx)
+    else
+      {:node, n} = Map.fetch!(st.memo, id)
+      n
+    end
   end
 
   defp unproven(cutoffs, ctx),
@@ -769,13 +787,15 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
+  # Scope outranks signature (plan 316 section 4: `wrong_catalog_scope` rank 2 before
+  # `invalid_catalog_signature` rank 4), so the entry service pair is checked first.
   defp catalog_under(c, e, n, ctx, st) do
     cond do
-      not Identity.verify(n.key, TransportCatalog.catalog_bytes(c), e.signature) ->
-        {{:refused, :invalid_catalog_signature}, nil, st}
-
       Enum.any?(c.entries, &({&1.service_id, &1.service_key} != {n.service_id, n.service_key})) ->
         {{:refused, :wrong_catalog_scope}, nil, st}
+
+      not Identity.verify(n.key, TransportCatalog.catalog_bytes(c), e.signature) ->
+        {{:refused, :invalid_catalog_signature}, nil, st}
 
       c.previous == nil ->
         first_catalog(c, n, ctx, st)
@@ -1589,7 +1609,7 @@ defmodule Treehouse.CatalogBindingGraph do
       not carries?(graph, claim, entries) ->
         {:error, :invalid_catalog_transition}
 
-      held_conflict?(graph, entries) ->
+      held_conflict?(graph, claim, entries) ->
         {:error, :invalid_catalog_transition}
 
       true ->
@@ -1625,9 +1645,21 @@ defmodule Treehouse.CatalogBindingGraph do
   end
 
   # The author cannot see a client's served routes, but every served route was in some held
-  # catalog, so no entry may map a held catalog's route to another replica.
-  defp held_conflict?(graph, entries) do
-    Enum.any?(entries, fn e ->
+  # catalog, so no new entry may map a held catalog's route to another replica. An entry that a
+  # cited prior catalog already maps the same way is carried, not new: the claim re-points no
+  # route that prior did not already point, so a closed-out old-key catalog (D-A10) cannot veto
+  # carrying it. A fresh or moved route is still checked against every held catalog (C5).
+  defp held_conflict?(graph, claim, entries) do
+    carried =
+      for %{catalog: k} <- claim.prior_catalogs,
+          k != nil,
+          e <- graph.catalogs[k].entries,
+          into: MapSet.new(),
+          do: {e.route, e.replica}
+
+    entries
+    |> Enum.reject(&MapSet.member?(carried, {&1.route, &1.replica}))
+    |> Enum.any?(fn e ->
       Enum.any?(graph.catalogs, fn {_id, c} ->
         Enum.any?(c.entries, &(&1.route == e.route and &1.replica != e.replica))
       end)

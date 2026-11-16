@@ -7,7 +7,7 @@ import test from "node:test";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "../src/carrier";
 import { prepareTreehouseCatalogReplacementFromFrames } from "../src/index";
 import { treehouseCommandDecoders } from "../src/treehouse";
-import { advanceCatalogBindingState, nextCatalogGeneration, resolveCatalogBindingGraph } from "../src/treehouse_catalog_binding_graph";
+import { advanceCatalogBindingState, coverCatalogReplacementClaim, nextCatalogGeneration, resolveCatalogBindingGraph, } from "../src/treehouse_catalog_binding_graph";
 import { catalogBootstrapFromCarrierTerm, catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, } from "../src/treehouse_catalog_codec";
 import { loadVector, runVector, tsVectorUrl } from "./support/export_treehouse_catalog_binding_graph";
 const vector = loadVector();
@@ -90,6 +90,39 @@ test("authoring prepares a resolution past three rotation heads (head-limit esca
     assert.ok(ok.ok, ok.ok ? "" : ok.reason);
     assert.deepEqual(ok.attempt.claim.priorCatalogs, [{ binding: labels.R1, catalog: labels.K1 }]);
     assert.deepEqual(await prepare(request([labels.B], [{ binding: labels.B, catalog: labels.C0 }])), { ok: false, reason: "control_history_limit" });
+});
+// PR #221 round 5, finding 4 (D-A10): the closed-out old-key Squat maps KR's route to another replica, but it cannot veto a
+// generation-2 resolution that carries KR's entries unchanged; a new entry re-pointing that route is still refused.
+test("authoring carries entries past a closed-out squat catalog", async () => {
+    const scenario = vector.scenarios.find((s) => s.name === "closed-out old-key catalogs reserve no route");
+    const labels = scenario.labels;
+    const frames = scenario.steps[0].frames.map((id) => vector.frames[id]);
+    const catalog = (label) => catalogEnvelopeFromCarrierTerm(JSON.parse(vector.artifacts[labels[label]]));
+    const [r] = carrierOpsToSemanticOps([decodeCarrierOpFrame(vector.frames[labels.R])], {}, treehouseCommandDecoders("Treehouse.Space"));
+    const claim = r.commandArgs[0];
+    const kr = catalog("KR").catalog.entries;
+    const request = (entries) => ({
+        author: claim.author, nonce: createHash("sha256").update("r316-4a-ts-nonce-squat-carry").digest("base64url"),
+        parents: [labels.R], priorCatalogs: [{ binding: labels.R, catalog: labels.KR }], generation: 2,
+        newCatalogKey: catalogBootstrapFromCarrierTerm(vector.bootstrap.record).catalogKey, newServiceId: claim.newServiceId,
+        newServiceKey: claim.newServiceKey, newOrigin: claim.newOrigin, entries: [...entries], replicaHistories: {}, rotations: [],
+        catalogs: [catalog("Squat"), catalog("KR")]
+    });
+    const prepare = (entries) => prepareTreehouseCatalogReplacementFromFrames({ replica: vector.space, frames,
+        request: request(entries), journal: {} });
+    const ok = await prepare(kr);
+    assert.ok(ok.ok, ok.ok ? "" : ok.reason);
+    const fresh = { ...kr[0], route: "/r/" + createHash("sha256").update("r316-4a-ts-squat-fresh").digest("base64url") };
+    const moved = { ...kr[0], replica: kr[0].replica + "-new" };
+    const step = scenario.steps[0];
+    const resolved = await resolveCatalogBindingGraph({ bootstrap: { id: vector.bootstrap.id,
+            record: catalogBootstrapFromCarrierTerm(vector.bootstrap.record) }, frames, rotations: new Map(),
+        catalogs: new Map(step.catalogs.map((id) => [id, catalogEnvelopeFromCarrierTerm(JSON.parse(vector.artifacts[id]))])),
+        provenCutoffs: step.proven, accepted: null });
+    assert.ok(resolved.ok);
+    const next = { ...claim, parents: [labels.R], priorCatalogs: [{ binding: labels.R, catalog: labels.KR }], generation: 2 };
+    assert.equal(coverCatalogReplacementClaim(resolved.graph, next, kr), null);
+    assert.equal(coverCatalogReplacementClaim(resolved.graph, next, [fresh, moved]), "invalid_catalog_transition");
 });
 // Design section 1.5: only an accepting decision that clears lifts frozen; a freezing block sets it.
 test("advanceCatalogBindingState lifts frozen only on an accepting decision that clears", () => {

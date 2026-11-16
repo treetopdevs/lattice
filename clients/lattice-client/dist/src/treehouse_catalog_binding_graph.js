@@ -318,10 +318,13 @@ async function evalCandidate(id, ctx) {
     if (declared.pending)
         return { t: "pending" };
     const core = ctx.reasons.get(id) ?? null;
+    // D-A15: a node owes its own declared cutoffs plus those it inherits from a same-service parent.
+    const inherited = declared.known.filter((n) => n.serviceId === s.claim.newServiceId && n.serviceKey === s.claim.newServiceKey)
+        .flatMap((n) => [...n.pending]);
     return { t: "node", node: { id, kind: "replacement", generation: s.claim.generation, key: s.claim.newCatalogKey,
             serviceId: s.claim.newServiceId, serviceKey: s.claim.newServiceKey, origin: s.claim.newOrigin, parents: s.claim.parents,
             prior: s.claim.priorCatalogs, inventory: s.claim.inventoryDigest, refused: core !== null, coreReason: core,
-            pending: unproven(s.claim.cutoffs, ctx) } };
+            pending: uniqCutoffs([...inherited, ...unproven(s.claim.cutoffs, ctx)]) } };
 }
 // A proof matches a cutoff only on the whole `{replica, frontier, logDigest}` (CatalogTrust compares the complete cutoff).
 function provenShape(c) {
@@ -391,7 +394,7 @@ async function declaredGraph(claim, anc, ctx) {
                 failures.push(["invalid_catalog_transition", "prior"]);
         }
     }
-    return { failures, pending };
+    return { failures, pending, known };
 }
 // --- closure and heads -------------------------------------------------------------------------------------------------
 // D-275: ancestor-or-self of every parent cited by an eligible replacement node.
@@ -454,11 +457,12 @@ async function judgeCatalogNew(id, ctx) {
     if (b.t !== "node")
         return [{ t: "binding_pending" }, null];
     const n = b.node;
-    if (!verifyCatalogEnvelope(e, n.key))
-        return [{ t: "refused", reason: "invalid_catalog_signature" }, null];
+    // Scope outranks signature (plan 316 section 4: wrong_catalog_scope rank 2 before invalid_catalog_signature rank 4).
     if (c.entries.some((entry) => entry.serviceId !== n.serviceId || entry.serviceKey !== n.serviceKey)) {
         return [{ t: "refused", reason: "wrong_catalog_scope" }, null];
     }
+    if (!verifyCatalogEnvelope(e, n.key))
+        return [{ t: "refused", reason: "invalid_catalog_signature" }, null];
     if (c.previous === null) {
         // First-catalog checks: revision 0 for a replacement, the declared inventory, the replacement's cutoffs covering every
         // entry (D-A15), extension of the binding's floor, and the route rule.
@@ -957,8 +961,11 @@ export function coverCatalogReplacementClaim(graph, claim, entries) {
     if (!claim.priorCatalogs.every((p) => extendsEntries(p.catalog === null ? graph.floors.get(p.binding) ?? []
         : graph.catalogs.get(p.catalog).entries, entries)))
         return "invalid_catalog_transition";
-    // The author cannot see a client's served routes, but every served route was in some held catalog.
-    if (entries.some((e) => [...graph.catalogs.values()].some((c) => c.entries.some((x) => x.route === e.route && x.replica !== e.replica)))) {
+    // The author cannot see a client's served routes, but every served route was in some held catalog. An entry a cited prior
+    // already maps the same way is carried, not new, so a closed-out old-key catalog (D-A10) cannot veto carrying it.
+    const carried = new Set(claim.priorCatalogs.flatMap((p) => p.catalog === null ? []
+        : graph.catalogs.get(p.catalog).entries.map((x) => JSON.stringify([x.route, x.replica]))));
+    if (entries.some((e) => !carried.has(JSON.stringify([e.route, e.replica])) && [...graph.catalogs.values()].some((c) => c.entries.some((x) => x.route === e.route && x.replica !== e.replica)))) {
         return "invalid_catalog_transition";
     }
     return null;

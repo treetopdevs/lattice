@@ -383,6 +383,46 @@ defmodule Treehouse.CatalogBindingGraphTest do
     assert G.cover_claim(g, claim, [e, squat]) == {:error, :invalid_catalog_transition}
   end
 
+  # PR #221 round 5, finding 4 (D-A10): a closed-out old-key catalog squatting the honest
+  # head's route cannot veto a later resolution that carries the honest catalog's entries
+  # unchanged; a new entry re-pointing that route is still refused.
+  test "cover_claim lets a closed-out squat not veto carried entries" do
+    r = F.replacement(@base, @base.log, "carry-r")
+    kr = F.first(@base, r)
+    [space] = F.base_entries(@base)
+    [route] = Enum.map(r.entries, & &1.route)
+
+    thread = %{
+      space
+      | replica: @base.replica <> "-squat",
+        kind: :thread,
+        schema: :treehouse_thread_v1
+    }
+
+    squat =
+      F.catalog(@base, @base.boot.id, 0, nil, @base.catalog, [space, %{thread | route: route}])
+
+    log = F.append(@base.log, [r.op])
+    {:ok, g} = resolve(%{space: log, catalogs: catalogs([squat, kr]), proven: proven(r)})
+    assert g.closed_out[F.cid(squat)] == :catalog_rollback
+    assert g.decision.accepted
+
+    claim = %{
+      r.claim
+      | parents: [r.id],
+        prior_catalogs: [%{binding: r.id, catalog: F.cid(kr)}],
+        generation: 2,
+        nonce: F.id("carry-r2-nonce")
+    }
+
+    assert G.cover_claim(g, claim, r.entries) == :ok
+
+    moved = %{hd(r.entries) | replica: @base.replica <> "-new", kind: :thread}
+    fresh = %{hd(r.entries) | route: "/r/" <> F.id("carry-fresh")}
+
+    assert G.cover_claim(g, claim, [fresh, moved]) == {:error, :invalid_catalog_transition}
+  end
+
   test "advance/2 keeps state on errors and serves unchanged only for trust_pending" do
     state = %{
       accepted: %{binding: "b", generation: 0, catalog: "c", revision: 0, routes: %{}},
