@@ -33,9 +33,9 @@ export interface CatalogBindingState {
     accepted: CatalogBindingAccepted | null;
     frozen: boolean;
 }
-/** advanceCatalogBindingState's result: the next persisted state and the catalog to serve ("unchanged" keeps the last). */
+/** advanceCatalogBindingState's result: the next persisted state and the catalog to serve. */
 export interface CatalogBindingAdvance extends CatalogBindingState {
-    serving: string | null | "unchanged";
+    serving: string | null;
 }
 export type CatalogBindingStatus = "current" | "closed" | "closed_out" | "refused" | "missing";
 export type CatalogBindingCatalogStatus = "current" | "ancestor_of_cited" | "closed_out" | "refused" | "missing";
@@ -83,12 +83,21 @@ export interface CatalogBindingGraph {
     forks: readonly CatalogBindingFork[];
     rotationForks: readonly CatalogRotationFork[];
     forkBindings: readonly string[];
-    /** Floor(N) per final node: the entries every valid catalog under N must extend. */
-    floors: ReadonlyMap<string, readonly CatalogEntry[]>;
+    /** Floor(N) per final node: the entries every valid catalog under N must extend and its route map (RESERVED marks a
+     * route reserved-to-none, row 387). */
+    floors: ReadonlyMap<string, CatalogFloor>;
+    /** The cumulative route map of every intrinsically valid catalog (its own ancestry plus its entries). */
+    catalogRoutes: ReadonlyMap<string, ReadonlyMap<string, string>>;
     /** CatLineage parent per catalog: `previous`, or for a first catalog under a rotation that rotation's prior catalog. */
     catParent: ReadonlyMap<string, string | null>;
     catalogs: ReadonlyMap<string, TransportCatalog>;
     decision: CatalogBindingDecision;
+}
+/** A trust_pending detail carries the complete part's freeze bit and the watermark's own serving (row 386, repair (a)). */
+export interface CatalogBindingErrorDetail {
+    ids: string[];
+    freeze?: boolean;
+    serving?: string | null;
 }
 export type CatalogBindingGraphResult = {
     ok: true;
@@ -96,10 +105,22 @@ export type CatalogBindingGraphResult = {
 } | {
     ok: false;
     reason: string;
-    detail: {
-        ids: string[];
-    };
+    detail: CatalogBindingErrorDetail;
 };
+/** A floor: the entries every first catalog under the node must extend, and the route map it must not conflict with. */
+export interface CatalogFloor {
+    entries: readonly CatalogEntry[];
+    routes: ReadonlyMap<string, string>;
+}
+/**
+ * The reserved-to-none route value (row 387): a non-nullish sentinel that can never equal a replica id (replica ids are
+ * hex digests). Every lookup is `has`-based, never `??`. At a JSON boundary it is `null` (BEAM `:none`).
+ */
+export declare const RESERVED = "\0none";
+/** Encode a route map for JSON: RESERVED becomes null. */
+export declare function encodeCatalogRoutes(routes: ReadonlyMap<string, string>): Record<string, string | null>;
+/** Decode a JSON route map: null becomes RESERVED. */
+export declare function decodeCatalogRoutes(json: Readonly<Record<string, string | null>>): Map<string, string>;
 export interface ProvenCutoff {
     replica: string;
     frontier: readonly string[];
@@ -126,8 +147,9 @@ export declare function resolveCatalogBindingGraph(input: CatalogBindingGraphInp
 /**
  * The merge rule over the persisted {accepted, frozen} (row 383; BEAM CatalogBindingGraph.advance/2). Only an accepting decision
  * that clears (or any accepting decision while not frozen) moves the watermark, adds its catalog's routes to the cumulative
- * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On an error the state is kept:
- * trust_pending serves "unchanged" (an incomplete page), any other error serves nothing.
+ * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
+ * (derived only from the complete authenticated part) is ORed into frozen and its serving is served unless frozen; any other
+ * error, or a trust_pending without those fields, keeps the state and serves nothing.
  */
 export declare function advanceCatalogBindingState(state: CatalogBindingState, result: CatalogBindingGraphResult): CatalogBindingAdvance;
 /**
