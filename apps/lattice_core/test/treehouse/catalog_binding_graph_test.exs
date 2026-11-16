@@ -8,8 +8,7 @@ defmodule Treehouse.CatalogBindingGraphTest do
   """
   use ExUnit.Case, async: true
 
-  alias Lattice.{Authority, Log, Op}
-  alias Lattice.Authority.Delegation
+  alias Lattice.{Log, Op}
   alias Treehouse.CatalogBindingGraph, as: G
   alias Treehouse.CatalogBindingGraphFixtures, as: F
   alias Treehouse.CatalogBindingGraphScenarios, as: S
@@ -226,14 +225,9 @@ defmodule Treehouse.CatalogBindingGraphTest do
     assert Log.has?(log, a.id) and match?(%Op{}, a.op)
   end
 
+  # Row 390: a real pool Thread (entry facts are judged against its history).
   defp thread(space, suffix),
-    do: %{
-      space
-      | replica: space.replica <> "-" <> suffix,
-        kind: :thread,
-        schema: :treehouse_thread_v1,
-        route: "/r/" <> F.id("route-" <> suffix)
-    }
+    do: F.pool_thread(@base, %{space | route: "/r/" <> F.id("route-" <> suffix)}, "thread")
 
   # S11 (C4): three old-key rotations under the accepted R1 make the verifier return
   # control_history_limit, but the preflight prepares the R2 {R1, K1} resolution through the
@@ -380,8 +374,7 @@ defmodule Treehouse.CatalogBindingGraphTest do
     assert G.cover_claim(g, claim, entries) == :ok
     # An entry re-pointing a held catalog's route at another replica is refused.
     [e] = entries
-    squat = %{e | replica: e.replica <> "-squat", kind: :thread, schema: :treehouse_thread_v1}
-    squat = %{squat | route: hd(c0.catalog.entries).route}
+    squat = %{F.pool_thread(@base, e, "squat") | route: hd(c0.catalog.entries).route}
     assert G.cover_claim(g, claim, [e, squat]) == {:error, :invalid_catalog_transition}
   end
 
@@ -394,12 +387,7 @@ defmodule Treehouse.CatalogBindingGraphTest do
     [space] = F.base_entries(@base)
     [route] = Enum.map(r.entries, & &1.route)
 
-    thread = %{
-      space
-      | replica: @base.replica <> "-squat",
-        kind: :thread,
-        schema: :treehouse_thread_v1
-    }
+    thread = F.pool_thread(@base, space, "squat")
 
     squat =
       F.catalog(@base, @base.boot.id, 0, nil, @base.catalog, [space, %{thread | route: route}])
@@ -419,7 +407,7 @@ defmodule Treehouse.CatalogBindingGraphTest do
 
     assert G.cover_claim(g, claim, r.entries) == :ok
 
-    moved = %{hd(r.entries) | replica: @base.replica <> "-new", kind: :thread}
+    moved = F.pool_thread(@base, hd(r.entries), "new")
     fresh = %{hd(r.entries) | route: "/r/" <> F.id("carry-fresh")}
 
     assert G.cover_claim(g, claim, [fresh, moved]) == {:error, :invalid_catalog_transition}
@@ -762,9 +750,8 @@ defmodule Treehouse.CatalogBindingGraphTest do
     {c0, r1, k1, l2, t2} = c13_recovery("s17d")
     [space] = k1.catalog.entries
     p = "/r/" <> F.id("route-s17d-p")
-    {th_replica, th_log} = thread_log("s17d")
-    th = %{thread(space, "s17d-t") | route: p, replica: th_replica}
-    logs = %{th_replica => th_log}
+    th = %{thread(space, "s17d-t") | route: p}
+    logs = %{th.replica => @base.threads["thread"].log}
     k1a = F.catalog(@base, r1.id, 1, F.cid(k1), r1.catalog_key, [space, th])
     k1b = F.catalog(@base, r1.id, 1, F.cid(k1), r1.catalog_key, [%{space | route: p}])
     cats = [c0, k1, k1a, k1b]
@@ -792,8 +779,11 @@ defmodule Treehouse.CatalogBindingGraphTest do
     l3 = F.append(l2, [r2.op])
     nil_claim = {[r2.id], [%{binding: r2.id, catalog: nil}], 3}
 
+    # A Space-only request supplies no Thread history, so retained K1a's Thread facts pend (row
+    # 390, repair (c)) before the floor is judged; the floor obligation itself is pinned by
+    # "cover_claim carries a nil-cited parent's floor".
     assert prep(l3, "s17d-space", @base.nominee, nil_claim, [space], {[], cats}) ==
-             {:error, :invalid_catalog_transition}
+             {:error, :trust_pending}
 
     assert {:ok, _} = prep(l3, "s17d-both", @base.nominee, nil_claim, fresh, {[], cats}, logs)
   end
@@ -817,15 +807,6 @@ defmodule Treehouse.CatalogBindingGraphTest do
   end
 
   # A Thread replica bound to the Space root, with its genesis, for cutoff derivation.
-  defp thread_log(name) do
-    replica =
-      Authority.bind_replica("replica:treehouse:thread:" <> F.id(name), @base.root.pub)
-
-    d = Delegation.genesis(@base.root, replica, ops: [:post], roles: [])
-    genesis = Op.new(@base.root, replica, [], :authority, {:genesis, d, %{}})
-    {replica, Log.append!(Log.new(replica), genesis)}
-  end
-
   # R1 cites {B, C0}; a concurrent holder change T2 to the nominee refuses it (C13).
   defp c13_recovery(name) do
     c0 = F.c0(@base)

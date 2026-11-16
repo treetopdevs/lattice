@@ -427,29 +427,18 @@ defmodule Treehouse.CatalogResolutionWorld do
     )
   end
 
+  # A real pool Thread (row 390: entry facts are judged against its history). Variant 0 and 1
+  # are its two history-valid creations (siblings that both agree with history yet disagree);
+  # variant 2 names a creation no history holds (pending forever).
   defp mutate(entries, w, {:thread, t, v}, n) do
-    replica = w.base.replica <> "-thread-#{t}"
     space = Enum.find(entries, &(&1.kind == :space)) || hd(entries)
+    route = "/r/" <> F.id("adv-thread-route-#{n}")
+    facts = F.pool_thread(w.base, %{space | route: route}, "gen#{t}", creation: min(v, 1))
+    facts = if v == 2, do: %{facts | creation: F.id("thread-#{t}-creation-v#{v}")}, else: facts
 
-    facts = %{
-      replica: replica,
-      kind: :thread,
-      schema: :treehouse_thread_v1,
-      root: w.base.root.pub,
-      genesis: F.id("thread-#{t}-genesis-v#{v}"),
-      creation: F.id("thread-#{t}-creation-v#{v}"),
-      reference: F.id("thread-#{t}-reference-v#{v}")
-    }
-
-    case Enum.find_index(entries, &(&1.replica == replica)) do
-      nil ->
-        [
-          Map.merge(space, Map.put(facts, :route, "/r/" <> F.id("adv-thread-route-#{n}")))
-          | entries
-        ]
-
-      i ->
-        List.update_at(entries, i, &Map.merge(&1, facts))
+    case Enum.find_index(entries, &(&1.replica == facts.replica)) do
+      nil -> [facts | entries]
+      i -> List.update_at(entries, i, &%{facts | route: &1.route})
     end
   end
 
@@ -580,7 +569,8 @@ defmodule Treehouse.CatalogResolutionWorld do
       rotations: ev.rotations,
       catalogs: ev.catalogs,
       proven_cutoffs: ev.proven,
-      accepted: accepted
+      accepted: accepted,
+      histories: F.histories(w.base)
     }
   end
 

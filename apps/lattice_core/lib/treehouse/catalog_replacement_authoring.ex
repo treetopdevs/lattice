@@ -26,8 +26,9 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   `Treehouse.CatalogReplacementAuthority.check/4` on the frozen log. A retained rotation or
   catalog the resolver refuses on its own bytes still refuses the preflight, so nothing is
   signed over evidence Stage B rejects structurally. This is an authoring-only change: it does
-  not touch retained-client trust, which waits on 4c. Non-claim: catalog entry facts are not
-  observed against retained histories here (row 354, 4c).
+  not touch retained-client trust, which waits on 4c. Catalog entry facts are judged by the
+  resolver against the frozen Space log and the request's `replica_logs` (row 390, repair (c));
+  CatalogTrust's own entry-proof refusals and frozen diagnostics stay with 4c (row 354).
   """
 
   alias Lattice.{Authority, Dag, Identity, Log, Op}
@@ -292,7 +293,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     with :ok <- artifact_budget(request),
          {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
          {:ok, catalogs} <- catalog_envelopes(log, request.catalogs, bootstrap),
-         {:ok, graph} <- graph(log, bootstrap, {rotations, catalogs}, claim),
+         {:ok, graph} <- graph(log, bootstrap, {rotations, catalogs, request.replica_logs}, claim),
          :ok <- retained_refusals(graph) do
       CatalogBindingGraph.cover_claim(graph, claim, request.entries)
     end
@@ -301,21 +302,24 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   # `resolve_for_claim/2` keeps the verifier's head limit but lets a claim citing every head
   # root through it (design section 2.7): three old-key rotations under the accepted binding
   # cannot block the one resolution that closes them out.
-  defp graph(log, bootstrap, {rotations, catalogs}, claim) do
-    case CatalogBindingGraph.resolve_for_claim(input(log, bootstrap, rotations, catalogs), claim) do
+  defp graph(log, bootstrap, artifacts, claim) do
+    case CatalogBindingGraph.resolve_for_claim(input(log, bootstrap, artifacts), claim) do
       {:ok, graph} -> {:ok, graph}
       {:error, reason, _detail} -> {:error, reason}
     end
   end
 
-  defp input(log, bootstrap, rotations, catalogs),
+  # The request's `replica_logs` are the Thread histories the resolver judges entry facts
+  # against (row 390, repair (c)).
+  defp input(log, bootstrap, {rotations, catalogs, histories}),
     do: %{
       bootstrap: %{id: bootstrap.id, record: bootstrap.record},
       space: log,
       rotations: rotations,
       catalogs: catalogs,
       proven_cutoffs: [],
-      accepted: nil
+      accepted: nil,
+      histories: histories
     }
 
   # After signing: the full retained evidence with the signed op appended must resolve with it
@@ -328,7 +332,11 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
          {:ok, catalogs} <- catalog_envelopes(log, request.catalogs, bootstrap) do
       case CatalogBindingGraph.resolve(
-             input(Log.append!(log, signed), bootstrap, rotations, catalogs)
+             input(
+               Log.append!(log, signed),
+               bootstrap,
+               {rotations, catalogs, request.replica_logs}
+             )
            ) do
         {:ok, %{heads: [head], forks: []}} when head == signed.id -> :ok
         {:ok, _graph} -> {:error, :catalog_fork}

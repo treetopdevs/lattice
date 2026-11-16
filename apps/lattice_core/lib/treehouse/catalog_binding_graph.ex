@@ -11,8 +11,10 @@ defmodule Treehouse.CatalogBindingGraph do
   `proven_cutoffs` the caller already verified page-level (whole `{replica, frontier,
   log_digest}` cutoffs, D-A19), and the persisted `accepted` watermark (`%{binding,
   generation, catalog, revision, routes}`, where `routes` is the cumulative `route => replica`
-  map of every route ever served). This module persists nothing: `advance/2` is the pure merge
-  rule the caller applies to `%{accepted, frozen}` (row 383).
+  map of every route ever served), and optionally the Thread `histories` (`replica => %Log{}`,
+  the shape `Treehouse.CatalogTrust` holds) that entry facts are judged against (row 390). This
+  module persists nothing: `advance/2` is the pure merge rule the caller applies to
+  `%{accepted, frozen}` (row 383).
 
   One causal evaluation (row 382). A single memoized judgment covers rotations, replacement
   candidates and catalogs. Every verdict reads only the artifact's bytes and its causal
@@ -20,11 +22,16 @@ defmodule Treehouse.CatalogBindingGraph do
   4, 5 and 6 (`refused?` when the full union refuses it, step 3); a cited prior catalog that is
   intrinsically invalid makes a replacement raw evidence (OD-17) and a rotation a retained
   refusal. A catalog is valid when its signature, scope and service match its binding node, its
-  chain is valid, its entries extend its floor (`Floor(bootstrap) = []`, `Floor(T) =
+  chain is valid, its entry facts agree with history (row 390, repair (c): every entry's root,
+  genesis, creation and reference judged by `Treehouse.CatalogEntries` on causal slices of the
+  complete Space part and of the supplied Thread histories; a fact op not yet held pends), its
+  entries extend its floor (`Floor(bootstrap) = []`, `Floor(T) =
   entries(T.prior_catalog)`, and for a replacement the union of its cited catalogs' entries, or
   its parent's floor for a `nil` citation) and no route in its own ancestry names two replicas.
   A route two cited priors map to different replicas is reserved to none in the floor (row
   387): no first catalog may use it, but its replicas may move onto fresh routes.
+  The floor is a per-replica obligation (row 390): every replica a cited side names must be
+  listed, with the extended facts of one of the history-valid variants the cited sides carry.
 
   Union classification (steps 7-8) only reclassifies: the closed set (D-275), closed-out
   rotation and catalog children of closed bindings, heads, forks (heads, nonce, catalog and
@@ -50,7 +57,14 @@ defmodule Treehouse.CatalogBindingGraph do
   """
 
   alias Lattice.{Authority, Dag, Identity, Log}
-  alias Treehouse.{CatalogReplacementAuthority, Space, TransportCatalog}
+
+  alias Treehouse.{
+    CatalogCutoff,
+    CatalogEntries,
+    CatalogReplacementAuthority,
+    Space,
+    TransportCatalog
+  }
 
   @max_safe 9_007_199_254_740_991
   @extended_keys ~w(root genesis creation reference kind schema)a
@@ -317,22 +331,52 @@ defmodule Treehouse.CatalogBindingGraph do
 
   # --- context ----------------------------------------------------------------
 
-  defp context(%{
-         bootstrap: %{id: id, record: record} = bootstrap,
-         space: %Log{} = space,
-         rotations: rotations,
-         catalogs: catalogs,
-         proven_cutoffs: proven,
-         accepted: accepted
-       })
+  defp context(
+         %{
+           bootstrap: %{id: id, record: record} = bootstrap,
+           space: %Log{} = space,
+           rotations: rotations,
+           catalogs: catalogs,
+           proven_cutoffs: proven,
+           accepted: accepted
+         } = input
+       )
        when is_map(rotations) and is_map(catalogs) and is_list(proven) and is_binary(id) and
               is_map(record) and (is_nil(accepted) or is_map(accepted)) do
-    if Enum.all?(proven, &proven_shape?/1) and accepted_shape?(accepted),
-      do: {:ok, build_context(bootstrap, space, rotations, catalogs, proven, accepted)},
-      else: :error
+    with true <- Enum.all?(proven, &proven_shape?/1) and accepted_shape?(accepted),
+         {:ok, threads} <- thread_histories(Map.get(input, :histories, %{}), space.replica) do
+      {:ok, build_context(bootstrap, space, {rotations, catalogs, threads}, proven, accepted)}
+    else
+      _ -> :error
+    end
   end
 
   defp context(_), do: :error
+
+  # Row 390 (repair (c)): the Thread histories that entry facts are judged against, in the
+  # `replica => %Log{}` shape `Treehouse.CatalogTrust` holds. A forged or misfiled history is
+  # malformed input; an incomplete one (its cutoff does not derive) is omitted, so only the
+  # catalogs naming that replica pend. The Space history is always the complete part of `space`.
+  defp thread_histories(histories, space) when is_map(histories) do
+    Enum.reduce_while(histories, {:ok, %{}}, fn
+      {replica, %Log{replica: replica} = log}, {:ok, acc} when replica != space ->
+        cond do
+          Log.verify_authenticity(log) != :ok ->
+            {:halt, :error}
+
+          match?({:ok, _}, CatalogCutoff.derive(log)) ->
+            {:cont, {:ok, Map.put(acc, replica, log)}}
+
+          true ->
+            {:cont, {:ok, acc}}
+        end
+
+      _, _ ->
+        {:halt, :error}
+    end)
+  end
+
+  defp thread_histories(_, _), do: :error
 
   defp accepted_shape?(nil), do: true
 
@@ -352,7 +396,7 @@ defmodule Treehouse.CatalogBindingGraph do
 
   defp cutoff_key(c), do: {c.replica, c.frontier, c.log_digest}
 
-  defp build_context(bootstrap, space, rotations, catalogs, proven, accepted) do
+  defp build_context(bootstrap, space, {rotations, catalogs, threads}, proven, accepted) do
     ops = Log.ops(space)
     complete = complete_ids(ops)
     cops = Map.take(ops, MapSet.to_list(complete))
@@ -376,7 +420,8 @@ defmodule Treehouse.CatalogBindingGraph do
       catalogs: catalogs,
       proven: MapSet.new(proven, &cutoff_key/1),
       accepted: accepted,
-      boot_honored: bootstrap_honored?(bootstrap, cops, replica)
+      boot_honored: bootstrap_honored?(bootstrap, cops, replica),
+      histories: threads
     }
   end
 
@@ -410,6 +455,7 @@ defmodule Treehouse.CatalogBindingGraph do
       cmemo: %{},
       croutes: %{},
       fmemo: %{},
+      emo: %{},
       visiting: MapSet.new(),
       cvisiting: MapSet.new(),
       detail: %{}
@@ -914,14 +960,88 @@ defmodule Treehouse.CatalogBindingGraph do
       not Identity.verify(n.key, TransportCatalog.catalog_bytes(c), e.signature) ->
         {{:refused, :invalid_catalog_signature}, nil, st}
 
-      c.previous == nil ->
-        first_catalog(c, n, ctx, st)
-
-      not Map.has_key?(ctx.catalogs, c.previous) ->
-        {:pending, nil, st}
-
       true ->
-        chain_catalog(c, ctx, st)
+        {facts, st} = entry_facts(c, ctx, st)
+
+        {chain, routes, st} =
+          cond do
+            c.previous == nil -> first_catalog(c, n, ctx, st)
+            not Map.has_key?(ctx.catalogs, c.previous) -> {:pending, nil, st}
+            true -> chain_catalog(c, ctx, st)
+          end
+
+        # Invalid outranks pending: a contradicting entry fact refutes the catalog even while its
+        # chain pends, and a chain-valid catalog with missing facts pends.
+        cond do
+          chain == :bad_chain or facts == :bad -> {:bad_chain, nil, st}
+          chain == :pending or facts == :pending -> {:pending, nil, st}
+          true -> {:ok, routes, st}
+        end
+    end
+  end
+
+  # Row 390, repair (c): a catalog's entry facts are an intrinsic validity input. Every entry's
+  # root, genesis, creation and reference are judged by `Treehouse.CatalogEntries` against the
+  # causal slices that hold them: of the complete Space part (with the bootstrap) and of each
+  # supplied Thread history (as CatalogTrust's historical entry proofs slice them), so two
+  # siblings that contradict the same history cannot both be valid priors. A slice is fixed once
+  # its ops are held, so a quarantine CatalogEntries reads on it is a prefix fact, and every
+  # verdict is D-279 safe: `:ok`, `:pending` (a fact op or history not yet held, or a slice whose
+  # cutoff does not derive) or `:bad`. The probe carries the bootstrap's service pair:
+  # `catalog_under` already bound the entries to their binding node's pair, and the history
+  # facts do not depend on it. Memoized per resolve by inventory.
+  defp entry_facts(c, ctx, st) do
+    record = ctx.bootstrap.record
+
+    probe = %{
+      c
+      | entries:
+          Enum.map(
+            c.entries,
+            &%{&1 | service_id: record.service_id, service_key: record.service_key}
+          )
+    }
+
+    key = TransportCatalog.inventory_id(probe.entries)
+
+    case st.emo do
+      %{^key => v} ->
+        {v, st}
+
+      _ ->
+        v = observe_facts(probe, slices(probe, ctx))
+        {v, %{st | emo: Map.put(st.emo, key, v)}}
+    end
+  end
+
+  # Each history cut to the causal closure of the fact ops it holds for these entries (the Space
+  # also keeps the bootstrap); a Thread history with none of them held is left out (pending).
+  defp slices(probe, ctx) do
+    space =
+      for e <- probe.entries,
+          id <-
+            if(e.kind == :space, do: [e.genesis, e.creation, e.reference], else: [e.reference]),
+          Map.has_key?(ctx.cops, id),
+          do: id
+
+    threads =
+      for %{kind: :thread} = e <- probe.entries,
+          %Log{} = log <- [ctx.histories[e.replica]],
+          ops = Log.ops(log),
+          seeds = Enum.filter([e.genesis, e.creation], &Map.has_key?(ops, &1)),
+          seeds != [],
+          into: %{},
+          do: {e.replica, prefix_log(ops, e.replica, seeds)}
+
+    Map.put(threads, ctx.replica, prefix_log(ctx.cops, ctx.replica, [ctx.bootstrap.id | space]))
+  end
+
+  defp observe_facts(probe, histories) do
+    case CatalogEntries.observe_with_detail(probe, histories) do
+      {:ok, _} -> :ok
+      {:error, :trust_pending, _} -> :pending
+      {:error, r, _} when r in [:invalid_verified_history, :unsupported_cutoff] -> :pending
+      {:error, _reason, _refused} -> :bad
     end
   end
 
@@ -985,7 +1105,21 @@ defmodule Treehouse.CatalogBindingGraph do
   # entry on a reserved `:none` route, or on a route mapped to another replica, conflicts).
   # Shared by first-catalog validity and authoring `carries?` (row 387).
   defp admit?(%{entries: floor, routes: routes}, entries),
-    do: extends?(floor, entries) and add_routes(routes, entries) != :conflict
+    do: floor_carried?(floor, entries) and add_routes(routes, entries) != :conflict
+
+  # The floor is a per-replica obligation (row 390, the general floor rule): every replica a
+  # cited side names must be listed, with the extended facts of one of the variants the cited
+  # sides carry for it. Repair (c) makes every variant history-valid (a contradicting one makes
+  # its own catalog invalid or pending, so it never reaches a floor), so a disagreement left here
+  # is between fact sets that are both consistent with history, and the first catalog may carry
+  # either. With one variant per replica this is exactly `extends?`.
+  defp floor_carried?(floor, entries) do
+    floor
+    |> Enum.group_by(& &1.replica, &Map.take(&1, @extended_keys))
+    |> Enum.all?(fn {replica, variants} ->
+      Enum.any?(entries, &(&1.replica == replica and Map.take(&1, @extended_keys) in variants))
+    end)
+  end
 
   defp add_routes(routes, entries) do
     Enum.reduce_while(entries, {:ok, routes}, fn e, {:ok, acc} ->

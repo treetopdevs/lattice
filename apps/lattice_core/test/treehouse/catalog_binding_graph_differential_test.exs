@@ -79,7 +79,8 @@ defmodule Treehouse.CatalogBindingGraphDifferentialTest do
         catalogs: Map.new(union.catalogs, &{TransportCatalog.catalog_id(&1.catalog), &1}),
         proven_cutoffs:
           Enum.map(union.proofs, &Map.take(&1.cutoff, [:replica, :frontier, :log_digest])),
-        accepted: state.accepted
+        accepted: state.accepted,
+        histories: Map.new(f.threads, &{&1.replica, &1.log})
       })
 
     {result, CatalogBindingGraph.advance(state, result)}

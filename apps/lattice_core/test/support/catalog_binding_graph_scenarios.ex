@@ -214,7 +214,9 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &f1_stale_bootstrap_prefix/1,
       &f2_pending_under_rotated_ancestor/1,
       &f3_floor_lattice/1,
-      &s17e_first_prior_reserved/1
+      &s17e_first_prior_reserved/1,
+      &r390_contradicting_sibling/1,
+      &r390_history_valid_variants/1
     ]
   end
 
@@ -1388,15 +1390,9 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     ]
   end
 
-  defp thread_of(space, name) do
-    %{
-      space
-      | replica: space.replica <> "-thread",
-        kind: :thread,
-        schema: :treehouse_thread_v1,
-        route: "/r/" <> F.id("route-thread-" <> name)
-    }
-  end
+  # Row 390: a real pool Thread (entry facts are judged against its history).
+  defp thread_of(base, space, name),
+    do: F.pool_thread(base, %{space | route: "/r/" <> F.id("route-thread-" <> name)}, "thread")
 
   # Review round 4, finding 1: accepted R1/K1 has two valid revision-1 siblings, Ka (Space) and
   # Kb (Space + Thread). A concurrent holder change refuses R1. R2 citing only {R1, Ka} with a
@@ -1410,7 +1406,10 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     l1 = add(base.log, [r1])
     [space] = r1.entries
     ka = F.catalog(base, r1.id, 1, F.cid(k1), r1.catalog_key, [space])
-    kb = F.catalog(base, r1.id, 1, F.cid(k1), r1.catalog_key, [space, thread_of(space, "r1")])
+
+    kb =
+      F.catalog(base, r1.id, 1, F.cid(k1), r1.catalog_key, [space, thread_of(base, space, "r1")])
+
     {_tn, t2, l2} = regrant(base, l1, Log.frontier(base.log))
 
     nominee = [
@@ -1438,7 +1437,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     sid = F.id("service-id-r2b")
     skey = F.identity("service-r2b")
     [space2] = F.entries(base, "r2b", sid, skey.pub)
-    thread2 = thread_of(space2, "r2b")
+    thread2 = thread_of(base, space2, "r2b")
 
     thread_cut = %{
       replica: thread2.replica,
@@ -1713,6 +1712,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       "space" => base.replica,
       "generation_cases" => generation_cases(),
       "frames" => frames,
+      # Row 390: the pool Thread histories every step's entry facts are judged against.
+      "histories" =>
+        Map.new(F.histories(base), fn {replica, log} ->
+          {replica, log |> Log.topo_ops() |> Enum.map(&Wire.encode_op/1)}
+        end),
       "artifacts" => artifacts,
       "scenarios" =>
         Enum.map(runs, fn {s, rs} ->
@@ -1925,13 +1929,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     squat =
       F.catalog(base, base.boot.id, 0, nil, base.catalog, [
         space,
-        %{
-          space
-          | replica: base.replica <> "-squat",
-            kind: :thread,
-            schema: :treehouse_thread_v1,
-            route: route
-        }
+        F.pool_thread(base, %{space | route: route}, "squat")
       ])
 
     labels =
@@ -2093,13 +2091,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   defp refused_catalog_citation(base) do
     [space] = F.base_entries(base)
 
-    thread = %{
-      space
-      | replica: base.replica <> "-thread",
-        kind: :thread,
-        schema: :treehouse_thread_v1,
-        route: "/r/" <> F.id("route-thread")
-    }
+    thread = F.pool_thread(base, %{space | route: "/r/" <> F.id("route-thread")}, "thread")
 
     c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
     c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space])
@@ -2150,13 +2142,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   defp rotation_refused_prior(base) do
     [space] = F.base_entries(base)
 
-    thread = %{
-      space
-      | replica: base.replica <> "-thread",
-        kind: :thread,
-        schema: :treehouse_thread_v1,
-        route: "/r/" <> F.id("route-thread")
-    }
+    thread = F.pool_thread(base, %{space | route: "/r/" <> F.id("route-thread")}, "thread")
 
     c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
     c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space])
@@ -2382,13 +2368,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   defp replacement_cutoff_coverage(base) do
     [space] = F.base_entries(base)
 
-    thread = %{
-      space
-      | replica: base.replica <> "-thread",
-        kind: :thread,
-        schema: :treehouse_thread_v1,
-        route: "/r/" <> F.id("route-thread")
-    }
+    thread = F.pool_thread(base, %{space | route: "/r/" <> F.id("route-thread")}, "thread")
 
     c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
     prior = [%{binding: base.boot.id, catalog: F.cid(c0)}]
@@ -2525,14 +2505,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
 
   defp route(name), do: "/r/" <> F.id("route-" <> name)
 
-  defp other(space, suffix, name),
-    do: %{
-      space
-      | replica: space.replica <> "-" <> suffix,
-        kind: :thread,
-        schema: :treehouse_thread_v1,
-        route: route(name)
-    }
+  defp other(base, space, pool, name),
+    do: F.pool_thread(base, %{space | route: route(name)}, pool)
 
   # A replacement whose first catalog carries `entries` (moved to its own service), with a
   # cutoff for every entry (D-A15).
@@ -2711,7 +2685,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   # is refused, a K2f carrying the Thread promotes.
   defp s3_nil_floor(base) do
     [space] = F.base_entries(base)
-    thread = thread_of(space, "s3")
+    thread = thread_of(base, space, "s3")
     c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
 
     r =
@@ -2772,7 +2746,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   # raw evidence (OD-17), so B/C0 is kept and served.
   defp s4_route_reuse(base) do
     [space] = F.base_entries(base)
-    thread = other(space, "thread", "s4-b")
+    thread = other(base, space, "thread", "s4-b")
 
     c0 =
       F.catalog(base, base.boot.id, 0, nil, base.catalog, [
@@ -2970,7 +2944,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   # without the Thread stays frozen, R2t carrying the Thread clears.
   defp s9_inventory_continuity(base) do
     [space] = F.base_entries(base)
-    thread = thread_of(space, "s9")
+    thread = thread_of(base, space, "s9")
     c0 = F.c0(base)
     c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, thread])
     r = cite_c0(base, c0, "s9-r")
@@ -3196,7 +3170,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   # (RouteCompat against every route ever served), while fresh routes clear.
   defp s12_cumulative_routes(base) do
     [space] = F.base_entries(base)
-    thread = other(space, "thread", "s12-b")
+    thread = other(base, space, "thread", "s12-b")
     c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
 
     c1 =
@@ -3219,7 +3193,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       [%{space | route: route(name <> "-space")}, %{thread | route: route(name <> "-thread")}]
     end
 
-    squat = %{other(space, "thread2", "unused") | route: thread.route}
+    squat = %{other(base, space, "thread2", "unused") | route: thread.route}
     r2 = carrying(base, lr, "s12-r2", fresh.("s12-r2") ++ [squat], child)
     k2 = F.first(base, r2)
     r2f = carrying(base, lr, "s12-r2f", fresh.("s12-r2f"), child)
@@ -3304,7 +3278,10 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     c0 = F.c0(base)
 
     c1 =
-      F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, thread_of(space, "s14")])
+      F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [
+        space,
+        thread_of(base, space, "s14")
+      ])
 
     r = cite_c0(base, c0, "s14-r")
     kr = F.first(base, r)
@@ -3337,7 +3314,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   defp s15_seen_only(base) do
     [space] = F.base_entries(base)
     c0 = F.c0(base)
-    thread = thread_of(space, "s15")
+    thread = thread_of(base, space, "s15")
     c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, thread])
 
     r =
@@ -3609,8 +3586,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   defp s17_reserved_routes(base) do
     c0 = F.c0(base)
     [space] = c0.catalog.entries
-    ta = %{other(space, "s17-a", "s17-x") | replica: space.replica <> "-s17a"}
-    tb = %{other(space, "s17-b", "s17-x") | replica: space.replica <> "-s17b"}
+    ta = other(base, space, "s17a", "s17-x")
+    tb = other(base, space, "s17b", "s17-x")
     ca = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, ta])
     cb = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, tb])
 
@@ -3715,7 +3692,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     x = c13_fixtures(base, "s17b")
     [space] = x.k1.catalog.entries
     p = route("s17b-p")
-    th = %{other(space, "s17b-t", "s17b-t") | route: p}
+    th = %{other(base, space, "s17b-t", "s17b-t") | route: p}
     k1a = F.catalog(base, x.r1.id, 1, F.cid(x.k1), x.r1.catalog_key, [space, th])
     k1b = F.catalog(base, x.r1.id, 1, F.cid(x.k1), x.r1.catalog_key, [%{space | route: p}])
 
@@ -3862,8 +3839,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   defp s17e_first_prior_reserved(base) do
     c0 = F.c0(base)
     [space] = c0.catalog.entries
-    ta = %{other(space, "s17-a", "s17-x") | replica: space.replica <> "-s17a"}
-    tb = %{other(space, "s17-b", "s17-x") | replica: space.replica <> "-s17b"}
+    ta = other(base, space, "s17a", "s17-x")
+    tb = other(base, space, "s17b", "s17-x")
     ca = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, ta])
     cb = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, tb])
 
@@ -3941,6 +3918,96 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         ok(["R"], closed: ["B", "T"], closed_out: ["Cx"], decision: accept("R", "KR"))
       )
     ])
+  end
+
+  # Row 390, repair (c) (the L minimal counterexample): the old bootstrap catalog key signs A1, a
+  # revision-0 sibling of C0 whose Space entry names a creation no history holds. A1's entry
+  # facts pend, so A1 is chain-pending under the open B (trust_pending, C0 still served), never a
+  # valid prior; the honest R citing {B, C0} closes it out and clears (HEAD: no resolution was
+  # authorable, citing both was invalid_catalog_transition and citing either was catalog_fork).
+  defp r390_contradicting_sibling(base) do
+    c0 = F.c0(base)
+    [space] = c0.catalog.entries
+
+    a1 =
+      F.catalog(base, base.boot.id, 0, nil, base.catalog, [%{space | creation: F.id("r390-c")}])
+
+    r = cite_c0(base, c0, "r390-r")
+    kr = F.first(base, r)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{"A1" => F.cid(a1), "R" => r.id, "KR" => F.cid(kr)})
+
+    one("R390: a sibling contradicting history is never a valid prior", labels, [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(ev(base.log, catalogs: [c0, a1]), err("trust_pending", serving: "C0")),
+      step(
+        ev(add(base.log, [r]), catalogs: [c0, a1, kr]),
+        ok(["R"],
+          closed: ["B"],
+          closed_out: ["A1"],
+          decision: accept("R", "KR", clears: true)
+        )
+      )
+    ])
+  end
+
+  # Row 390, the general floor rule (the residual after repair (c)): Ka and Kb are revision-1
+  # siblings of C0 that list the pool Thread with its two history-valid creations, so both are
+  # valid and they disagree. R cites both and carries Ka's creation, which the per-replica floor
+  # admits. A client whose watermark is Ka accepts and clears. A client whose watermark is Kb
+  # gets `catalog_rollback`: Covers' Carry keeps that client's listed Thread facts immutable, so
+  # no single resolution can clear both clients (row 388, question 9, is the operator's).
+  defp r390_history_valid_variants(base) do
+    c0 = F.c0(base)
+    [space] = c0.catalog.entries
+    th = &F.pool_thread(base, %{space | route: route("r390v-t")}, "gen0", creation: &1)
+    ka = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, th.(0)])
+    kb = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, th.(1)])
+
+    priors =
+      Enum.sort([
+        %{binding: base.boot.id, catalog: F.cid(ka)},
+        %{binding: base.boot.id, catalog: F.cid(kb)}
+      ])
+
+    fresh = [
+      %{space | route: route("r390v-rs")},
+      %{th.(0) | route: route("r390v-rt")}
+    ]
+
+    r = carrying(base, base.log, "r390v-r", fresh, prior_catalogs: priors)
+    kr = F.first(base, r)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "Ka" => F.cid(ka),
+        "Kb" => F.cid(kb),
+        "R" => r.id,
+        "KR" => F.cid(kr)
+      })
+
+    fork =
+      ok(["B"], forks: ["catalog"], decision: [reason: "catalog_fork", block: "catalog_fork"])
+
+    all = ev(add(base.log, [r]), catalogs: [c0, ka, kb, kr])
+    closed = [closed: ["B"]]
+
+    [
+      one("R390: history-valid variants, a client on Ka clears", labels, [
+        step(ev(base.log, catalogs: [c0, ka]), ok(["B"], decision: accept("B", "Ka"))),
+        step(ev(base.log, catalogs: [c0, ka, kb]), fork),
+        step(all, ok(["R"], closed ++ [decision: accept("R", "KR", clears: true)]))
+      ]),
+      one("R390: history-valid variants, a client on Kb keeps its Thread facts", labels, [
+        step(ev(base.log, catalogs: [c0, kb]), ok(["B"], decision: accept("B", "Kb"))),
+        step(ev(base.log, catalogs: [c0, ka, kb]), fork),
+        step(
+          all,
+          ok(["R"], closed ++ [decision: [head: "R", reason: "catalog_rollback"]])
+        )
+      ])
+    ]
   end
 
   @doc """

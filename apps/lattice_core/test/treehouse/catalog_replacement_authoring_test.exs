@@ -29,10 +29,48 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
         expires_epoch: 10
       )
 
-    transfer =
-      Op.new(f.root, f.replica, Log.frontier(f.log), :authority, {:transfer, :admin, leased, 0})
+    # Row 390: a real bounded Thread (entry facts are judged against its history), referenced
+    # by a root `create_thread` in the Space.
+    thread =
+      Authority.bind_replica(
+        "replica:treehouse:thread:" <> id("thread") <> "#authority:bounded-continuation-v1",
+        f.root.pub
+      )
 
-    log = Log.append!(f.log, transfer)
+    thread_d =
+      Delegation.genesis(f.root, thread, ops: [:create_thread, :post], roles: [:moderator])
+
+    thread_genesis = Op.new(f.root, thread, [], :authority, {:genesis, thread_d, %{}})
+
+    thread_creation =
+      Op.new(f.root, thread, [thread_genesis.id], :command, {:create_thread, ["Thread"]},
+        cap: thread_d.id
+      )
+
+    thread_log = Log.new(thread) |> Log.append!(thread_genesis) |> Log.append!(thread_creation)
+
+    thread_reference =
+      Op.new(
+        f.root,
+        f.replica,
+        Log.frontier(f.log),
+        :command,
+        {:create_thread, [thread, "Thread"]},
+        cap: f.delegation.id
+      )
+
+    space_log = Log.append!(f.log, thread_reference)
+
+    transfer =
+      Op.new(
+        f.root,
+        f.replica,
+        Log.frontier(space_log),
+        :authority,
+        {:transfer, :admin, leased, 0}
+      )
+
+    log = Log.append!(space_log, transfer)
 
     {log, beacon} =
       if Keyword.get(opts, :beacon, true) do
@@ -42,10 +80,6 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
         {log, nil}
       end
 
-    thread = Authority.bind_replica("replica:treehouse:thread:" <> id("thread"), f.root.pub)
-    thread_d = Delegation.genesis(f.root, thread, ops: [:post], roles: [])
-    thread_genesis = Op.new(f.root, thread, [], :authority, {:genesis, thread_d, %{}})
-    thread_log = Log.append!(Log.new(thread), thread_genesis)
     new_catalog = Identity.from_seed("catalog", "r316-pr2-new-catalog")
     new_service = Identity.from_seed("service", "r316-pr2-new-service")
 
@@ -56,6 +90,8 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
       space_log: log,
       thread: thread,
       thread_genesis: thread_genesis,
+      thread_creation: thread_creation,
+      thread_reference: thread_reference,
       thread_log: thread_log,
       new_catalog: new_catalog,
       new_service: new_service
@@ -73,9 +109,9 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
         :thread,
         :treehouse_thread_v1,
         f.thread_genesis.id,
-        f.thread_genesis.id,
+        f.thread_creation.id,
         service_key,
-        reference: id("thread-reference")
+        reference: f.thread_reference.id
       )
     ]
     |> Enum.sort_by(& &1.replica)
@@ -168,8 +204,9 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
   test "catalog_command_too_large before any signature" do
     f = fixture()
 
+    # The Thread's own `create_thread` is the 1,500th frontier op.
     wide =
-      Enum.reduce(1..1_500, f.thread_log, fn n, log ->
+      Enum.reduce(1..1_499, f.thread_log, fn n, log ->
         Log.append!(
           log,
           Op.new(f.root, f.thread, [f.thread_genesis.id], :command, {:post, ["post #{n}"]})

@@ -17,6 +17,7 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
   alias Treehouse.{CatalogBindingGraph, CatalogCutoff, Space, TransportCatalog}
 
   @realms ~w(root admin nominee w1 w2 w3 observer)
+  @thread_pool ~w(thread thread2 squat new s17a s17b s17b-t gen0 gen1)
   @admin_ops [
     :create_space,
     :create_thread,
@@ -65,6 +66,16 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
     }
 
     {sim, bootstrap} = Sim.command(sim, "root", :catalog_bootstrap_v1, [record])
+
+    # Row 390: real bounded Threads the scenarios and the generator list (entry facts are judged
+    # against their histories), each with a root `create_thread` reference in the Space.
+    {sim, threads} =
+      Enum.reduce(@thread_pool, {sim, %{}}, fn name, {sim, acc} ->
+        t = thread_log(name)
+        {sim, ref} = Sim.command(sim, "root", :create_thread, [t.replica, "Thread " <> name])
+        {sim, Map.put(acc, name, Map.put(t, :reference, ref))}
+      end)
+
     beacons? = Keyword.get(opts, :beacons, true)
     {sim, beacon0} = if beacons?, do: Sim.beacon(sim, "root", 0), else: {sim, nil}
 
@@ -101,6 +112,7 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
       record: record,
       bootstrap: bootstrap,
       boot: %{id: bootstrap.id, record: record},
+      threads: threads,
       beacon0: beacon0,
       beacon1: beacon1,
       delegation: delegation,
@@ -179,6 +191,97 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
   def base_entries(base, name \\ "base"),
     do: entries(base, name, base.record.service_id, base.service.pub)
 
+  @doc """
+  A real bounded Thread (row 390: entry facts are judged against history): its own genesis and
+  two `create_thread` creations (so two history-valid creation facts exist), and the root's
+  Space `create_thread` reference op on `deps` (not appended).
+  """
+  def thread(base, name, deps) do
+    t = thread_log(name)
+
+    reference =
+      op(base.root, base, deps, :command, {:create_thread, [t.replica, "Thread " <> name]},
+        cap: genesis_delegation(base).id
+      )
+
+    Map.put(t, :reference, reference)
+  end
+
+  defp thread_log(name) do
+    root = identity("thread-root-" <> name)
+
+    replica =
+      Authority.bind_replica(
+        "replica:treehouse:thread:" <>
+          id("thread-" <> name) <> "#authority:bounded-continuation-v1",
+        root.pub
+      )
+
+    d =
+      Delegation.genesis(root, replica,
+        ops: [:create_thread, :post, :archive_thread],
+        roles: [:moderator]
+      )
+
+    genesis = Op.new(root, replica, [], :authority, {:genesis, d, %{}})
+
+    creations =
+      for i <- 0..1 do
+        Op.new(root, replica, [genesis.id], :command, {:create_thread, ["Thread #{name} #{i}"]},
+          cap: d.id
+        )
+      end
+
+    %{
+      name: name,
+      root: root,
+      replica: replica,
+      genesis: genesis,
+      creation: hd(creations),
+      creations: creations,
+      log: append(Log.new(replica), [genesis | creations])
+    }
+  end
+
+  @doc """
+  A Thread entry with the facts of the base pool Thread `name` (its replica, root, genesis,
+  first creation and Space reference), keeping `entry`'s route and service pair.
+  """
+  def pool_thread(base, entry, name, opts \\ []) do
+    t = Map.fetch!(base.threads, name)
+
+    %{
+      entry
+      | replica: t.replica,
+        kind: :thread,
+        schema: :treehouse_thread_v1,
+        root: t.root.pub,
+        genesis: t.genesis.id,
+        creation: Enum.at(t.creations, Keyword.get(opts, :creation, 0)).id,
+        reference: t.reference.id
+    }
+  end
+
+  @doc "Every pool Thread history, in the `replica => %Log{}` shape the resolver takes."
+  def histories(base), do: Map.new(base.threads, fn {_name, t} -> {t.replica, t.log} end)
+
+  @doc "The catalog entry of a `thread/4` Thread under a service pair and route."
+  def thread_entry(thread, service_id, service_key, route, opts \\ []) do
+    %{
+      product: :treehouse,
+      replica: thread.replica,
+      kind: :thread,
+      schema: :treehouse_thread_v1,
+      root: thread.root.pub,
+      genesis: thread.genesis.id,
+      creation: Keyword.get(opts, :creation, thread.creation).id,
+      reference: Keyword.get(opts, :reference, thread.reference).id,
+      route: route,
+      service_id: service_id,
+      service_key: service_key
+    }
+  end
+
   @doc "The causal prefix log of a dep set."
   def prefix(base, log, deps) do
     ops = Log.ops(log)
@@ -199,7 +302,12 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
     catalog_key = Keyword.get(opts, :catalog_key, identity("catalog-" <> name))
     service_key = Keyword.get(opts, :service_key, identity("service-" <> name))
     service_id = Keyword.get(opts, :service_id, id("service-id-" <> name))
-    entries = Keyword.get(opts, :entries, entries(base, name, service_id, service_key.pub))
+
+    entries =
+      opts
+      |> Keyword.get(:entries, entries(base, name, service_id, service_key.pub))
+      |> Enum.sort_by(& &1.replica)
+
     parents = Keyword.get(opts, :parents, [base.boot.id])
 
     {epoch, basis} =
@@ -386,7 +494,8 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
       rotations: Map.get(evidence, :rotations, %{}),
       catalogs: Map.get(evidence, :catalogs, %{}),
       proven_cutoffs: Map.get(evidence, :proven, []),
-      accepted: state.accepted
+      accepted: state.accepted,
+      histories: Map.get(evidence, :histories, histories(base))
     }
 
     result = CatalogBindingGraph.resolve(input)

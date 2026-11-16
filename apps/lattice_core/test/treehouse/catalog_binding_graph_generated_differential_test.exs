@@ -86,7 +86,8 @@ defmodule Treehouse.CatalogBindingGraphGeneratedDifferentialTest do
         catalogs: Map.new(union.catalogs, &{TransportCatalog.catalog_id(&1.catalog), &1}),
         proven_cutoffs:
           Enum.map(union.proofs, &Map.take(&1.cutoff, [:replica, :frontier, :log_digest])),
-        accepted: state.accepted
+        accepted: state.accepted,
+        histories: Map.new(f.threads, &{&1.replica, &1.log})
       })
 
     {result, CatalogBindingGraph.advance(state, result)}
@@ -215,7 +216,12 @@ defmodule Treehouse.CatalogBindingGraphGeneratedDifferentialTest do
 
   # The same differential, but the graph keeps every delivered page in its union even when
   # CatalogTrust refuses that page whole (CatalogTrust writes nothing for it and forgets it).
-  # Fails on the PR #221 head: see the report.
+  # Kept open on purpose (contract-bound, not a resolver defect): a retained rotation whose
+  # prior is withheld is a missing control page, and lifecycle section 4 ("Missing
+  # control/history page: trust_pending; bounded fetch and no switch") and C14 forbid the graph
+  # from moving the watermark past it, while CatalogTrust forgets the refused page and switches.
+  # Agreement needs either the 4c caller to drop pages CatalogTrust refuses whole (the default F
+  # mapping row) or a contract amendment.
   @tag :pr221_open
   property "F-retained: as F, with the graph retaining pages CatalogTrust refuses whole",
            %{f: f, record: record} do
