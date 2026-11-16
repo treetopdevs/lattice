@@ -64,6 +64,7 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
     {"S12: a route served earlier is never re-pointed", nil, nil},
     {"S13: a missing watermark catalog is a derived block that does not freeze", nil, nil},
     {"S14: a catalog accepted before the closing resolution freezes", nil, nil},
+    {"S15: a resolution carrying the watermark's entries without seeing it freezes", "R2", "K2"},
     {"C13: concurrent revoke after accepting R1, then a fresh resolution clears", "R2", "K2"},
     {"C13: a revoke-first client holds R1 as a refused node", "R2", "K2"}
   ]

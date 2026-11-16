@@ -191,7 +191,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &s11_head_limit/1,
       &s12_cumulative_routes/1,
       &s13_missing_watermark/1,
-      &s14_same_page_trade/1
+      &s14_same_page_trade/1,
+      &s15_seen_only/1
     ]
   end
 
@@ -3251,5 +3252,56 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         step(ev(lr, catalogs: [c0, c1, kr]), frozen_at("R", closed: ["B"], closed_out: ["C1"]))
       ])
     ]
+  end
+
+  # S15 (PR #221 round 5, finding 8): Seen alone. A = B/C1. R cites {B, C0} and its KR carries
+  # C1's entries, so Carry and RouteCompat hold, but R has not seen C1 (it closes it out), so
+  # the client freezes. R2 citing {R, KR} strictly descends from that closer and clears.
+  defp s15_seen_only(base) do
+    [space] = F.base_entries(base)
+    c0 = F.c0(base)
+    thread = thread_of(space, "s15")
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, thread])
+
+    r =
+      carrying(base, base.log, "s15-r", [space, thread],
+        prior_catalogs: [%{binding: base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    r2 =
+      carrying(base, lr, "s15-r2", [space, thread],
+        parents: [r.id],
+        prior_catalogs: [%{binding: r.id, catalog: F.cid(kr)}],
+        generation: 2
+      )
+
+    k2 = F.first(base, r2)
+    l2 = add(lr, [r2])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "C1" => F.cid(c1),
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "R2" => r2.id,
+        "K2" => F.cid(k2)
+      })
+
+    one("S15: a resolution carrying the watermark's entries without seeing it freezes", labels, [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(ev(base.log, catalogs: [c0, c1]), ok(["B"], decision: accept("B", "C1"))),
+      step(ev(lr, catalogs: [c0, c1, kr]), frozen_at("R", closed: ["B"], closed_out: ["C1"])),
+      step(
+        ev(l2, catalogs: [c0, c1, kr, k2]),
+        ok(["R2"],
+          closed: ["B", "R"],
+          closed_out: ["C1"],
+          decision: accept("R2", "K2", clears: true)
+        )
+      )
+    ])
   end
 end

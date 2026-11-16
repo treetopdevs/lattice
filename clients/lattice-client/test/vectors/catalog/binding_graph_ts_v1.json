@@ -20272,6 +20272,381 @@
           "serving": null
         }
       }
+    },
+    {
+      "scenario": "S15: a resolution carrying the watermark's entries without seeing it freezes",
+      "step": 1,
+      "label": {
+        "heads": [
+          "B"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "B",
+          "catalog": "C0",
+          "clears": false,
+          "serving": "C0"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "C0"
+        }
+      },
+      "ts": {
+        "heads": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "clears": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "revision": 0,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+        }
+      }
+    },
+    {
+      "scenario": "S15: a resolution carrying the watermark's entries without seeing it freezes",
+      "step": 2,
+      "label": {
+        "heads": [
+          "B"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "B",
+          "catalog": "C1",
+          "clears": false,
+          "serving": "C1"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "C1"
+        }
+      },
+      "ts": {
+        "heads": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "catalog": "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0",
+          "clears": false,
+          "serving": "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0",
+          "binding_status": "current",
+          "catalog_status": "current"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0",
+            "revision": 1,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+              "/r/x1y0GT6vW3laU1C7exheOukWvjl_pBo_aTPwh3NQK-0": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc-thread"
+            }
+          },
+          "frozen": false,
+          "serving": "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0"
+        }
+      }
+    },
+    {
+      "scenario": "S15: a resolution carrying the watermark's entries without seeing it freezes",
+      "step": 3,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [
+          "C1"
+        ],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "authority_changed",
+          "block": "authority_changed",
+          "freeze": true,
+          "head": "R",
+          "catalog": null,
+          "clears": false,
+          "serving": null
+        },
+        "after": {
+          "frozen": true,
+          "serving": null
+        }
+      },
+      "ts": {
+        "heads": [
+          "8ty6qFFjhT2MNfJU7w0GQid-AW0BOLag_uDw9NhggDc"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {
+          "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "8ty6qFFjhT2MNfJU7w0GQid-AW0BOLag_uDw9NhggDc": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "8ty6qFFjhT2MNfJU7w0GQid-AW0BOLag_uDw9NhggDc": [
+            "Rp5Thx-Jy2tC_33LvdM3dc5CPbXFXdskpY1V3CDy0gY"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "authority_changed",
+          "block": {
+            "reason": "authority_changed",
+            "ids": [
+              "8ty6qFFjhT2MNfJU7w0GQid-AW0BOLag_uDw9NhggDc"
+            ],
+            "freeze": true
+          },
+          "head": "8ty6qFFjhT2MNfJU7w0GQid-AW0BOLag_uDw9NhggDc",
+          "catalog": null,
+          "clears": false,
+          "serving": null,
+          "binding_status": "closed",
+          "catalog_status": "closed_out"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0",
+            "revision": 1,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+              "/r/x1y0GT6vW3laU1C7exheOukWvjl_pBo_aTPwh3NQK-0": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc-thread"
+            }
+          },
+          "frozen": true,
+          "serving": null
+        }
+      }
+    },
+    {
+      "scenario": "S15: a resolution carrying the watermark's entries without seeing it freezes",
+      "step": 4,
+      "label": {
+        "heads": [
+          "R2"
+        ],
+        "closed": [
+          "B",
+          "R"
+        ],
+        "closed_out": [
+          "C1"
+        ],
+        "nodes": [
+          "B",
+          "R",
+          "R2"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "R2",
+          "catalog": "K2",
+          "clears": true,
+          "serving": "K2"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "K2"
+        }
+      },
+      "ts": {
+        "heads": [
+          "FEuwanm5nuY_5qLj6hOlWDrl_YZXXBaZzfU4o63n0cY"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "8ty6qFFjhT2MNfJU7w0GQid-AW0BOLag_uDw9NhggDc"
+        ],
+        "closed_out": {
+          "GNPK1ffZPNqHLZxJ3WHqmPUX9E6zyUZZUj7jvow_Nn0": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "8ty6qFFjhT2MNfJU7w0GQid-AW0BOLag_uDw9NhggDc": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "FEuwanm5nuY_5qLj6hOlWDrl_YZXXBaZzfU4o63n0cY": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "FEuwanm5nuY_5qLj6hOlWDrl_YZXXBaZzfU4o63n0cY": [
+            "fv3PT9vMAc4iBQT5KVZ9CIvZFVhUZOl-j65sew2tGE4"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "FEuwanm5nuY_5qLj6hOlWDrl_YZXXBaZzfU4o63n0cY",
+          "catalog": "fv3PT9vMAc4iBQT5KVZ9CIvZFVhUZOl-j65sew2tGE4",
+          "clears": true,
+          "serving": "fv3PT9vMAc4iBQT5KVZ9CIvZFVhUZOl-j65sew2tGE4",
+          "binding_status": "closed",
+          "catalog_status": "closed_out"
+        },
+        "after": {
+          "accepted": {
+            "binding": "FEuwanm5nuY_5qLj6hOlWDrl_YZXXBaZzfU4o63n0cY",
+            "generation": 2,
+            "catalog": "fv3PT9vMAc4iBQT5KVZ9CIvZFVhUZOl-j65sew2tGE4",
+            "revision": 0,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+              "/r/x1y0GT6vW3laU1C7exheOukWvjl_pBo_aTPwh3NQK-0": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc-thread"
+            }
+          },
+          "frozen": false,
+          "serving": "fv3PT9vMAc4iBQT5KVZ9CIvZFVhUZOl-j65sew2tGE4"
+        }
+      }
     }
   ]
 }
