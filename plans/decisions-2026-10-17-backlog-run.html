@@ -3790,6 +3790,219 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Decision</dt><dd>Rows 386, 387, 389, 381 and 388 are updated, and rows 390 (V) and 391 (O) are filed. Plan length: D-640. CodeRabbit scenarios:712 split: done in 498e70c17 (the retained OnlyA sibling step). CodeRabbit cutoffs: already fixed at HEAD before revision 2.</dd>
 <dt>Reason</dt><dd>The ledger must match commit 08ddd554d onwards.</dd>
 </dl></section>
+<section id="d649"><h2><span>D-649</span> PR 4a amendment design: Row 386: trust_pending carries a derived freeze bit (repair (a))</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Row 386 P1 x2; D-633 listed options (a), (b) and (c). Flagged for operator confirmation (row 388, question 4).</dd>
+<dt>Options</dt><dd>(a) sticky derived freeze bit (chosen); (b) serve nil without freezing; (c) keep (violates lifecycle section 4)</dd>
+<dt>Decision</dt><dd>trust_pending returns freeze and serving, computed from complete authenticated evidence only. advance ORs freeze into frozen and serves nil while frozen. Only an accepting decision that clears can lift it.</dd>
+<dt>Reason</dt><dd>This is the coordinator&#39;s choice under the operator rule. Without it, an unrelated withheld page keeps routes alive under a refused binding (repros 1 and 2).</dd>
+</dl></section>
+<section id="d650"><h2><span>D-650</span> PR 4a amendment design: Complete evidence defined by the existing classification</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The lemma covers closed_out_pending, closed_status with a pending chain, and catalog candidates refuted early.</dd>
+<dt>Decision</dt><dd>The bit reads Core verdicts on complete ops, nodes and catalog verdicts out of pending, and the classification built from them. It reuses the resolver&#39;s own changed? and serving/4.</dd>
+<dt>Reason</dt><dd>Pending artifacts are never nodes or citations. The three paths that name pending artifacts classify only those artifacts, so the result equals the complete part for the watermark.</dd>
+</dl></section>
+<section id="d651"><h2><span>D-651</span> PR 4a amendment design: A watermark catalog with a pending chain is missing, not changed</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>closed_status maps an uncited pending catalog to closed_out.</dd>
+<dt>Decision</dt><dd>accepted_catalog_status returns missing when the watermark catalog&#39;s own verdict is pending or binding_pending, on both paths.</dd>
+<dt>Reason</dt><dd>Otherwise a withheld previous of the watermark catalog under a closed binding would read as closed out and freeze from pending evidence.</dd>
+</dl></section>
+<section id="d652"><h2><span>D-652</span> PR 4a amendment design: A closed watermark binding serves nil on trust_pending without freezing</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Goes beyond repair (a) as worded.</dd>
+<dt>Options</dt><dd>Freeze also on closed (rejected: it contradicts D-620&#39;s derived reading); serve unchanged (rejected: old-signer fallback)</dd>
+<dt>Decision</dt><dd>trust_pending uses the same serving rule as the ok path: nil when the watermark binding is closed, changed or forked on complete evidence, with no freeze unless it changed.</dd>
+<dt>Reason</dt><dd>Otherwise a withheld page keeps serving under a binding an honored replacement has closed. This extends D-600, which is still unconfirmed, so it is added to row 388 (question 5).</dd>
+</dl></section>
+<section id="d653"><h2><span>D-653</span> PR 4a amendment design: The unchanged serving sentinel is removed</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>S16c is red only in this encoding, and that is reported.</dd>
+<dt>Decision</dt><dd>advance returns the watermark catalog or nil on trust_pending, never unchanged.</dd>
+<dt>Reason</dt><dd>Only the watermark is ever served without promotion. HEAD also returned unchanged while frozen, which contradicted &#39;nothing is served while frozen&#39;.</dd>
+</dl></section>
+<section id="d654"><h2><span>D-654</span> PR 4a amendment design: Authoring escapes trust_pending for rotations the claim closes out</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Same set as D-A16 pending_out? once the parents are closed; mirrors the D-614 head-limit escape. Widened to the claim&#39;s D-275 set by D-644.</dd>
+<dt>Decision</dt><dd>resolve_for_claim drops pending rotations whose rotation-parent chain reaches a claim parent, their descendants and their catalogs, but only when every pending id is of that kind. The post-sign check re-resolves the full input.</dd>
+<dt>Reason</dt><dd>Without it, repro 2&#39;s sticky freeze could never lift: the lifting resolution could not be prepared while the old signer withholds the prior.</dd>
+</dl></section>
+<section id="d655"><h2><span>D-655</span> PR 4a amendment design: No liveness under a permanently withheld dependency</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Retention and bounded fetch belong to 4c.</dd>
+<dt>Decision</dt><dd>Nothing is accepted while resolve is trust_pending. A permanently withheld dependency of a held op keeps the client unpromoted, and frozen if a change is shown.</dd>
+<dt>Reason</dt><dd>This is the D-A11 trade that D-633 named. The amendment changes only what is served meanwhile, not whether partial promotion is allowed.</dd>
+</dl></section>
+<section id="d656"><h2><span>D-656</span> PR 4a amendment design: Row 387: a conflicting floor route becomes reserved to none</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Row 387 P1 x2; D-634 proposal verified against both repros.</dd>
+<dt>Options</dt><dd>Reserved to none (chosen); union-level cross-branch classification (rejected: non-monotone); keep :bad (permanent freeze)</dd>
+<dt>Decision</dt><dd>Joining floors maps a route to none when cited priors map it to different replicas. No catalog in that lineage may use it. Replicas may move to fresh routes. merge_floor no longer fails on routes.</dd>
+<dt>Reason</dt><dd>It is intrinsic, so D-279 holds. It matches lifecycle section 2 (&#39;moving A from /r/X to /r/Y never frees /r/X for B&#39;). It makes the resolution citing route-conflicting siblings promotable, including siblings signed by a revoked key.</dd>
+</dl></section>
+<section id="d657"><h2><span>D-657</span> PR 4a amendment design: One floor admission check for verifier and authoring</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>carries? runs before held_conflict?, so D-635 cannot bypass the reservation.</dd>
+<dt>Decision</dt><dd>The graph exports floors with route maps, plus catalog_routes. carries? becomes the same Admit check first_catalog uses, failing closed on a missing floor.</dd>
+<dt>Reason</dt><dd>HEAD read a :bad floor as an empty list, and the carried-pair exemption prepared entries on routes the verifier refuses.</dd>
+</dl></section>
+<section id="d658"><h2><span>D-658</span> PR 4a amendment design: Entry-variant and overflow floors stay preconditions and get rows</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Sibling classes the earlier liveness argument still misses.</dd>
+<dt>Options</dt><dd>Variant-tolerant floor (offered to the operator); keep as precondition (chosen for now)</dd>
+<dt>Decision</dt><dd>Precondition P8 is added: cited priors agree on each replica&#39;s extended keys, and the union fits the 13-entry limit with at most 12 Threads. Two P2 rows are filed (rows 390 and 391). The floor rule is not widened.</dd>
+<dt>Reason</dt><dd>Both are forgeable by the old catalog key in 4a, because the graph has no entry facts. Choosing a surviving variant or dropping a Thread touches section 2 immutability and retirement (D-616), which is an operator question under rule 3.</dd>
+</dl></section>
+<section id="d659"><h2><span>D-659</span> PR 4a amendment design: Property (b) uses an independent reference model</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Narrows D-636, which allowed union classification. Not built in this PR; row 389 (D-647).</dd>
+<dt>Decision</dt><dd>A test-side model recomputes heads, closure, catalog classes, Changed, Serving, Seen, Carry, RouteCompat and R* from artifact facts, intrinsic verdicts and Core refusals. It never reads decision fields or union classification.</dd>
+<dt>Reason</dt><dd>The existing oracle read d.accepted, d.head and d.catalog, so it could not catch errors in the decide layer.</dd>
+</dl></section>
+<section id="d660"><h2><span>D-660</span> PR 4a amendment design: Liveness checks authoring and verifier together</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Not built in this PR; row 389.</dd>
+<dt>Decision</dt><dd>Property (b) requires cover_claim ok on R* and the verifier accepting R* as the sole head with no fork, from every reachable state where its preconditions hold.</dd>
+<dt>Reason</dt><dd>Row 387 was exactly a disagreement between the two: cover_claim prepared what the verifier refused.</dd>
+</dl></section>
+<section id="d661"><h2><span>D-661</span> PR 4a amendment design: Pending soundness property (h)</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Built with the weaker re-resolve oracle (see the build decision on the trust_pending oracle); the Core-reasons self-check is not built (row 389).</dd>
+<dt>Decision</dt><dd>On each trust_pending step, the freeze and serving values must equal the model on the input with the pending artifacts removed. The test first checks that Core&#39;s other verdicts are unchanged by the removal.</dd>
+<dt>Reason</dt><dd>It tests the no-mask claim directly and kills the HEAD trust_pending behaviour.</dd>
+</dl></section>
+<section id="d662"><h2><span>D-662</span> PR 4a amendment design: Generator and run counts</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The exercise counters are not built (row 389).</dd>
+<dt>Decision</dt><dd>Add non-causal withheld-page subsets and partial proof sets. Replay each scenario&#39;s own order deterministically. Use 50 runs per pool and 200 for the route pools, with exercise counters that fail if a target state is never reached.</dd>
+<dt>Reason</dt><dd>HEAD ordered ops after their dependencies and supplied the final proofs, so it never reached the row 386 states. A sampled run could also miss the route rule silently.</dd>
+</dl></section>
+<section id="d663"><h2><span>D-663</span> PR 4a amendment design: Property (f) scope</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Built as five deterministic sequences; the StreamData generator is row 389.</dd>
+<dt>Decision</dt><dd>The CatalogTrust differential compares accepted watermark, served or not, and reason class on replacement-free histories. It excludes entry facts, cross-branch route reuse, security_block and the persisted block, and its docstring says it cannot exercise freeze.</dd>
+<dt>Reason</dt><dd>Replacement-free histories have no closed set or refused node. security_block stays in catalog_trust after 4c (D-616).</dd>
+</dl></section>
+<section id="d664"><h2><span>D-664</span> PR 4a amendment design: TS evidence is a replay, not a StreamData twin</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The replay of BEAM property runs is not built (row 389).</dd>
+<dt>Decision</dt><dd>BEAM exports the deterministic runs per step into the binding-graph vectors, and TS replays them through resolve and advance.</dd>
+<dt>Reason</dt><dd>This gives the same per-step parity for the advance changes at a fraction of the cost. The full TS property twin stays in the row 389 remainder.</dd>
+</dl></section>
+<section id="d665"><h2><span>D-665</span> PR 4a amendment design: Bot dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The plan is 466 lines after the D-682 truth-up added the block and validity design in force to the pointer; the excess predates PR #221 (D-640).</dd>
+<dt>Decision</dt><dd>Fix the four Codex P2s (refused-node intrinsic reason, early profile check, rotation precedence, TS malformed frame), the shared.mjs sources and the scenario split. Answer the cutoff-inheritance comment as already fixed. Meet the 400-line rule by shrinking the PR 4a section to a pointer.</dd>
+<dt>Reason</dt><dd>Each was checked against HEAD in both runtimes. The browser-proof job confirms shared.mjs. The inheritance fix landed with D-638.</dd>
+</dl></section>
+<section id="d666"><h2><span>D-666</span> PR 4a amendment design: C1: trust_pending freeze comes from the complete-part decision; unanchored pending is a 4c eviction obligation</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Critique P1. Verified at HEAD: advance lowers frozen only on ok, and run/1 pends on cat.pending (including :binding_pending catalogs) and on incomplete ops. With revision 1&#39;s freeze=Changed_c(A), delivering T2+R2+K2 plus an unresolvable O freezes, while the same delivery without O accepts R2. That makes the claim in 1.5 false.</dd>
+<dt>Options</dt><dd>(a) freeze=Changed_c(A) (revision 1); (b) freeze = the complete-part decision&#39;s block.freeze when it is not accepting; (c) (b) plus 4c eviction of unanchored pending artifacts</dd>
+<dt>Decision</dt><dd>Accept (c). detail.freeze = not D_c.accepted and D_c.block.freeze. Serving stays Serving_c, so it is nil whenever A is changed. The pending arm still only ORs into frozen. 4c (rows 381/388) evicts unanchored pending artifacts after bounded fetch. The keyless unknown-binding catalog is named explicitly in 1.7.</dd>
+<dt>Reason</dt><dd>This makes the freeze equal to what a complete delivery of E(U) would set, so the statement in 1.5 becomes true. It keeps no-unfreeze-from-pending and no-serve-under-change. A pending id that cannot be removed is a stall regardless of the freeze bit, and the resolver cannot drop it without trusting an absence, so the fix belongs in intake. Pinned by S16h, (b4) and M12.</dd>
+</dl></section>
+<section id="d667"><h2><span>D-667</span> PR 4a amendment design: C2: repair (a) is unreachable through catalog_trust until a 4c obligation lands</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Verified: catalog_trust.ex:162 calls histories!(union, :incoming) outside the try at :172, and authenticate_incoming! (:1460) throws trust_pending on missing dependencies. catalog_trust.ex is a hard-excluded file.</dd>
+<dt>Decision</dt><dd>Accept as ledger plus design text (1.8). Add a row 381 obligation to pass incomplete Space histories to resolve and thread detail through advance. Any remaining page-level trust_pending maps to the fail-closed arm (keep frozen, serve nil). Row 386 status names the production gap.</dd>
+<dt>Reason</dt><dd>The finding is correct, and 4a cannot edit catalog_trust, so the honest fix is to scope the claim and assign the wiring obligation.</dd>
+</dl></section>
+<section id="d668"><h2><span>D-668</span> PR 4a amendment design: C3: the TS reserved route uses a non-nullish sentinel and has-based lookups</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Verified: addRoutes (:533) and mergeFloor (:563) use `(map.get(route) ?? replica) !== replica`, so a null reservation reads as free.</dd>
+<dt>Options</dt><dd>null with has() everywhere; non-nullish sentinel</dd>
+<dt>Decision</dt><dd>Accept. Use a RESERVED sentinel string, has()-based conflict tests in every floor and route lookup, and JSON null only at the encode/decode boundary. Add the S17a KR&#39; vector row (TS must refuse) and mutant M13.</dd>
+<dt>Reason</dt><dd>Belt and braces: the sentinel also survives any lookup that was missed, and has() makes intent explicit. Hex replica ids cannot collide with the sentinel.</dd>
+</dl></section>
+<section id="d669"><h2><span>D-669</span> PR 4a amendment design: C4: the authoring escape also drops chain-pending catalogs bound to a claim parent</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Verified: catalog_status under an open, non-refused binding returns {:pending} for v == :pending, and closed_status maps an uncited chain-pending catalog to :closed_out once the binding is closed, so post-sign passes.</dd>
+<dt>Decision</dt><dd>Accept. drop_pending_under also drops intrinsic :pending catalogs whose binding is a claim parent or a dropped rotation. :binding_pending catalogs are not dropped, because post-sign would still pend them. The asymmetry (a later-arriving real previous can turn the catalog :uncovered) is stated and pinned in S16g.</dd>
+<dt>Reason</dt><dd>It is the same closed-out-after-claim class that 1.6 already relies on, and the post-sign re-resolve checks it independently. Without it, a compromised catalog key stalls its own replacement unless the operator applies the D-A18 omission.</dd>
+</dl></section>
+<section id="d670"><h2><span>D-670</span> PR 4a amendment design: C5: the reference model computes the expected pending set; (b)&#39;s precondition comes from the model</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Critique P2: revision 1&#39;s (b) precondition was the implementation&#39;s own ok/escape result, so an implementation that over-pends passes vacuously.</dd>
+<dt>Decision</dt><dd>Accept. Add model P_m and the model escape set, property (p) asserting equality on every step, a model-derived precondition for (b), and mutant M11 (closed_status pending instead of closed_out; closed_out_pending empty).</dd>
+<dt>Reason</dt><dd>Without an independent pending oracle, stall regressions are invisible to every property. Accepted in design; not built in this PR (row 389, D-647).</dd>
+</dl></section>
+<section id="d671"><h2><span>D-671</span> PR 4a amendment design: C6: a refused or closed-out accepted binding freezes even when its catalog is :missing</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Verified: decide/5 :1348 has changed? = a != nil and not missing? and ..., and the 1.1 case-2 amendment makes acs :missing for a pending A.catalog, so complete evidence of R1 refused does not freeze while K1&#39;s previous is withheld.</dd>
+<dt>Options</dt><dd>compute changed? from abs independently of acs; or reword 1.5 and S16c to name a D-605 exception</dd>
+<dt>Decision</dt><dd>Accept the code fix. changed? holds when abs is in [:refused, :closed_out] regardless of acs. acs still contributes only when abs is not :missing. This applies on the ok path too. Any binding_graph vector row whose freeze flips is reported, and the operator is asked to confirm in row 388 (question 7).</dd>
+<dt>Reason</dt><dd>The operator rule says a changed authority freezes routes. A refused accepted binding is a changed authority whatever the state of its catalog&#39;s chain. Rewording would keep a gap that conflicts with the settled rule. The binding_graph vectors are new in this PR, so no historical bytes change. Pinned by S16i and M14.</dd>
+</dl></section>
+<section id="d672"><h2><span>D-672</span> PR 4a amendment design: C7: B1 widens the D-561/D-A18 fail-closed trade to C13; keep it and pin the omission dependency</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Verified: retained_refusals (catalog_replacement_authoring.ex:325-327) exempts only catalog_authority_refused, so after B1 a bad-chain catalog under refused R1 blocks prepare.</dd>
+<dt>Options</dt><dd>keep the intrinsic reason and rely on the D-A18 omission; or exempt artifacts whose binding the claim closes</dd>
+<dt>Decision</dt><dd>Keep the intrinsic reason and add the B1c companion row (prepare refused with Kbad held, ok with Kbad omitted, post-sign passes with Kbad held). Offer the exemption alternative to the operator as a row 388 question (question 8).</dd>
+<dt>Reason</dt><dd>It is consistent with D-561 and row 385 (no new veto class). Automating the exemption changes authoring&#39;s fail-closed policy, and that is an operator choice.</dd>
+</dl></section>
+<section id="d673"><h2><span>D-673</span> PR 4a amendment build: Trust_pending oracle uses the complete-part re-resolve, not the design&#39;s direct model</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Design 3.3 (h1) replaced this revision-1 construction with a direct model.</dd>
+<dt>Options</dt><dd>Direct reference model plus (p) (the design); complete-part re-resolve (chosen, weaker).</dd>
+<dt>Decision</dt><dd>(m) and (h1) compute the expected freeze and serving by resolving the union with the reported pending ids removed. They then apply the oracle&#39;s C6 changed? and keep_serving to that graph.</dd>
+<dt>Reason</dt><dd>Without (p) and the reference model there is no model-side pending set to pin. This construction still kills M2, M7, M8 and M12, but it is not independent of the implementation&#39;s pending classification.</dd>
+</dl></section>
+<section id="d674"><h2><span>D-674</span> PR 4a amendment build: S16i is not red at HEAD</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Design 4.2 says HEAD and revision 1 give freeze=false.</dd>
+<dt>Decision</dt><dd>Kept S16i as an ok-path row. At HEAD it already freezes, because HEAD reports acs :refused; it fails only under M14, the revision-1 rule that changed? requires not missing?.</dd>
+<dt>Reason</dt><dd>HEAD&#39;s accepted_catalog_status mapped the refused-node class of a pending K1 to :refused, so HEAD froze anyway.</dd>
+</dl></section>
+<section id="d675"><h2><span>D-675</span> PR 4a amendment build: B1c post-sign status of Kbad is :closed_out</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Design 4.2 B1c wording.</dd>
+<dt>Decision</dt><dd>Pinned :closed_out, not &#39;refused under the closed R1&#39;. A bad_chain catalog under a refused node now takes the intrinsic path, the same as under a non-refused node. Under the closed R1, Kbad is a strict descendant of the cited K1, so closed_status closes it out. Pre-sign, while R1 is still open, Kbad is refused invalid_catalog_transition, and retained_refusals refuses the preflight.</dd>
+<dt>Reason</dt><dd>This applies the bot :1048 fix uniformly (&#39;bad_chain takes the intrinsic path before refused_node_status&#39;). The design text differs only in which closed-binding arm wins.</dd>
+</dl></section>
+<section id="d676"><h2><span>D-676</span> PR 4a amendment build: C4 escape drops exactly the escapable pending ids</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Design 1.6.</dd>
+<dt>Decision</dt><dd>resolve_for_claim re-resolves with exactly the escapable pending ids removed. They are classified from an internal result that carries the intrinsic catalog verdicts, so the public trust_pending detail is not widened.</dd>
+<dt>Reason</dt><dd>The escape must tell chain-pending catalogs from :binding_pending ones, and under?/4 is safe only on rotation ids.</dd>
+</dl></section>
+<section id="d677"><h2><span>D-677</span> PR 4a amendment build: S16g asymmetry needs the cited catalog to be revision 1 or higher</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Design 1.6 stated asymmetry.</dd>
+<dt>Decision</dt><dd>Pinned the asymmetry with K1 at revision 1. The withheld K1&#39; is a revision-1 sibling on K1_0 and K1x sits on K1&#39;. After signing, K1&#39; and K1x are :uncovered and fork under the closed R1. The basic S16g case, where K1x&#39;s chain descends from the revision-0 K1, stays closed out.</dd>
+<dt>Reason</dt><dd>A replacement&#39;s first catalog is pinned by its inventory digest, so a non-descending sibling exists only above revision 0.</dd>
+</dl></section>
+<section id="d678"><h2><span>D-678</span> PR 4a amendment build: Pending evidence alone keeps serving the watermark</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Existing scenario, expectation updated.</dd>
+<dt>Decision</dt><dd>incomplete_control step 2 now expects trust_pending with serving K1 and no freeze. In that step a revoke is held whose beacon dependency is withheld, and the complete part still accepts R1/K1.</dd>
+<dt>Reason</dt><dd>Design 1.5: pending evidence never freezes, and a change whose own evidence is incomplete is not yet knowable (the section 4 limit).</dd>
+</dl></section>
+<section id="d679"><h2><span>D-679</span> PR 4a amendment build: Mutant kill evidence: properties versus scenario tests</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Design 3.4. The C8 mapping row is D-642; Stage A, escape scope, floor dedupe and finding 4 are D-643 to D-646; plan length is D-640.</dd>
+<dt>Decision</dt><dd>Reported M10, M11 and M14 as surviving all 29 properties and dying only in scenario or authoring tests. M9 is recorded as dying in (e2), not in (b2)/(b3), which do not exist.</dd>
+<dt>Reason</dt><dd>Recorded as observed, rather than adding weaker assertions to force property kills.</dd>
+</dl></section>
+<section id="d680"><h2><span>D-680</span> PR 4a amendment build: Rotation precedence order on equal rank</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Bot :304.</dd>
+<dt>Decision</dt><dd>Rotation failures are collected in the order old signature, new possession, generation, key. The lowest rank wins and the first listed wins a tie, so invalid_catalog_signature is reported before invalid_possession.</dd>
+<dt>Reason</dt><dd>Both runtimes&#39; lowest() keeps the first minimum, so BEAM and TS agree.</dd>
+</dl></section>
+<section id="d681"><h2><span>D-681</span> PR 4a amendment: design critique of revision 1, 8 findings</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>An independent critique of convergence amendment revision 1 (rows 386, 387 and 389) raised 8 findings, C1 to C8, checked by the coordinator against 179fee056.</dd>
+<dt>Decision</dt><dd>All 8 accepted (D-641; entries above and D-642): C1 the trust_pending freeze comes from the complete-part decision, with 4c eviction of unanchored pending artifacts (P1); C2 the row 381 wiring obligation, since repair (a) is unreachable through catalog_trust until 4c; C3 the TS RESERVED sentinel with has-based lookups; C4 the authoring escape also drops chain-pending catalogs under a claim parent; C5 an independent reference model for the pending and escape sets (P2, not built: row 389); C6 changed? is not masked by a missing catalog; C7 keep B1&#39;s fail-closed trade and pin the omission (B1c); C8 the differential mapping row for a page-level trust_pending (D-642).</dd>
+<dt>Reason</dt><dd>Each finding was verified against the code before acceptance; revision 2 amends the convergence design only in the named clauses.</dd>
+</dl></section>
+<section id="d682"><h2><span>D-682</span> PR 4a amendment: build review round 1 and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-16, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>After the amendment build (08ddd554d to 498e70c17), one review round ran on that head. It raised 5 P1/P2 findings and 1 P3. No clean final round is claimed.</dd>
+<dt>Decision</dt><dd>Round 1: 5 P1/P2. Fixed (3): finding 1, P1, an intrinsically invalid replacement (bootstrap stale in its own prefix) closed a valid binding; Stage A on the candidate&#39;s own closure is now intrinsic (D-643, scenario F1, red without the fix in both runtimes); finding 2, P2, pending evidence under a rotated ancestor blocked authorized recovery; the escape follows the claim&#39;s D-275 set (D-644, scenario F2); finding 3, P2, exponential floor expansion over a nil-citation lattice; floor_of is memoized and whole entries are deduplicated (D-645, F3; TS memo is pinned only indirectly). Design (1): finding 4, P1, entry-variant conflicts across cited siblings leave the floor unadmittable; class (V) of revision 2 section 2.4, filed as row 390 and row 388 question 9 (D-646). Follow-up (1): finding 5, P2, row 389 evidence incomplete; S17e kills the first-wins merge_floor mutant and new pools were added, while the reference model, (p), (b), (b4), model-based (c) and the StreamData (f) generator stay in row 389 (D-647); reviewer mutants (a) to (c) are still killed only outside the property suite. Fixed (P3): finding 6, the ledger (D-648); the plan is 466 lines, not 400, because the pointer now states the block and validity design in force (D-640).</dd>
+<dt>Reason</dt><dd>Recorded so the open items (rows 388 to 391 and the row 389 remainder) are not read as closed. Clean final round: false.</dd>
+</dl></section>
 </main>
 </body>
 </html>

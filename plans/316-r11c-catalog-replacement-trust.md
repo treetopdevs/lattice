@@ -10,7 +10,7 @@ PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_c
 twin, and the row 318 bootstrap size preflight) is in review as PR #216 (D-400–D-435). Its binding-graph
 coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
 authoring result is not resolver acceptance, a route switch or catalog trust.
-PR 4a (#221, D-530–D-648) is in review: the replacement-binding resolver as new pure modules in
+PR 4a (#221, D-530–D-682) is in review: the replacement-binding resolver as new pure modules in
 both runtimes (`Treehouse.CatalogBindingGraph`, `Treehouse.CatalogReplacementAuthority` and
 their TS twins, with new `binding_graph_v1.json` / `binding_graph_ts_v1.json` vectors), and the
 PR 2 authoring preflight switched to call them (the interim mirror is deleted). It is built under
@@ -389,13 +389,24 @@ row 381). The 267/269 gate is not lifted; it now applies to 4c only.
 later"; D-530).** The full PR 4a text (scope, the D-A1 to D-A19 readings, the convergence design
 of rows 382 and 383, row dispositions, 4c tasks, the operator questions and the 4a non-claims)
 moved verbatim to D-640 in the decisions log; the convergence amendment revision 2 (rows 386,
-387 and 389) is D-641 and its build review is D-643 to D-648. Current state: rows 382, 383, 386
-and 387 are done in the resolver and the authoring preflight in both runtimes; 386 is not
-reachable in production until the row 381 obligation lands and awaits operator confirmation of
-repair (a) with the C1 freeze rule (row 388). Open: the entry-variant floor (row 390) and floor
+387 and 389) is D-641 (entries D-649 to D-672), its build is D-673 to D-680 and its review is
+D-643 to D-648 and D-682. Block design in force: the block is derived on every call and the
+caller keeps one sticky `frozen` bit plus the accepted watermark through `advance/2`;
+`trust_pending` carries `freeze` (the complete-part decision's freezing block when it does not
+accept) and `serving` (nil when the watermark binding is changed, closed or forked on complete
+evidence), never `:unchanged`, and only an accepting decision that clears lifts the freeze; a
+refused or closed-out watermark binding freezes even when its catalog is missing (C6). Validity
+in force: a replacement Core refuses at its own closure (Stage A) is intrinsically invalid raw
+evidence with no closure effect; a conflicting cited floor route is reserved to none, and
+`carries?` uses the same admission check; floors are memoized and deduplicated by whole entry;
+the authoring `trust_pending` escape drops only pending ids inside the claim's D-275 set, and
+the post-sign check re-resolves the full input. Rows 382, 383, 386 and 387 are done in the
+resolver and the authoring preflight in both runtimes; 386 is not reachable in production until
+the row 381 obligation lands and awaits operator confirmation of repair (a) (row 388). Open: the entry-variant floor (row 390) and floor
 overflow (row 391) classes, the operator questions in rows 384 and 388, and the row 389
-evidence remainder (reference model, (p), (b), (b4), the StreamData (f) generator, (e1), the TS
-property twin, a Core flip, S5 and a post-sign negative). Non-claims are unchanged: no route
+evidence remainder (reference model, (p), (b1)-(b4), exercise counters, the StreamData (f)
+generator, (e1), the TS property twin and missing TS scenario twins, a Core flip, S5 and a
+post-sign negative). Non-claims are unchanged: no route
 switch or retained-client acceptance until 4c, no native `catalog_eval`, no custodian
 closed-binding refusal, C10–C15 OPEN, no Core primitive, wire atom or quarantine reason, and
 historical vectors and wire bytes unchanged.
@@ -452,4 +463,4 @@ reason or wire atom; no production, Phase G or receipt-free W4. C10–C15 stay O
   2026-11-15; under the operator's "new modules now, wire later" decision 4a and 4b may run
   first, touching no `catalog_trust` file); C10 needs an old key, new root or injected trust.
 
-**Decisions:** D-265–D-280 (design), D-281+ (process; PR 4a is D-530–D-587): `plans/decisions-2026-10-17-backlog-run.html`.
+**Decisions:** D-265–D-280 (design), D-281+ (process; PR 4a is D-530–D-682): `plans/decisions-2026-10-17-backlog-run.html`.
