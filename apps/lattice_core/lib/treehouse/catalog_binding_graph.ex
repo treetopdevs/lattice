@@ -23,6 +23,8 @@ defmodule Treehouse.CatalogBindingGraph do
   chain is valid, its entries extend its floor (`Floor(bootstrap) = []`, `Floor(T) =
   entries(T.prior_catalog)`, and for a replacement the union of its cited catalogs' entries, or
   its parent's floor for a `nil` citation) and no route in its own ancestry names two replicas.
+  A route two cited priors map to different replicas is reserved to none in the floor (row
+  387): no first catalog may use it, but its replicas may move onto fresh routes.
 
   Union classification (steps 7-8) only reclassifies: the closed set (D-275), closed-out
   rotation and catalog children of closed bindings, heads, forks (heads, nonce, catalog and
@@ -30,7 +32,8 @@ defmodule Treehouse.CatalogBindingGraph do
 
   The decision is derived on every call from the union and the watermark (row 383): a changed
   watermark (its binding refused or closed out, or its catalog refused, closed out or uncovered)
-  sets `block.freeze`; a missing watermark artifact is a derived block that does not freeze; a
+  sets `block.freeze`, even when its catalog is not held (C6); a missing watermark artifact
+  under an unchanged binding is a derived block that does not freeze; a
   sole promotable head is accepted when it covers the watermark; `clears_authority_changed`
   holds when that head descends from an honored replacement the watermark did not have; and
   `serving` is the catalog the caller may serve.
@@ -40,7 +43,10 @@ defmodule Treehouse.CatalogBindingGraph do
   incomplete closure except a candidate already refuted from its own bytes, a pending
   candidate, a pending rotation not under a closed binding, or a pending catalog under an open
   binding or on a cited chain), the highest precedence first; everything else is in the graph
-  and its `decision`.
+  and its `decision`. A `trust_pending` detail also carries `freeze` and `serving` (row 386,
+  repair (a)): the freeze bit and the watermark's own serving of the decision over the complete
+  authenticated part (pending artifacts are never nodes or citations), which `advance/2` merges
+  without ever accepting from a pending union.
   """
 
   alias Lattice.{Authority, Dag, Identity, Log}
