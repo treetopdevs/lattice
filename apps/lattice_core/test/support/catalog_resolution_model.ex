@@ -96,16 +96,7 @@ defmodule Treehouse.CatalogResolutionModel do
 
     # Only delivered binding artifacts evidence their own parents (a cited but unheld rotation
     # is closed itself; its ancestry is not yet evidence).
-    held =
-      MapSet.new(
-        [world.base.boot.id | Map.keys(delivered.rotations)] ++
-          for(
-            {id, b} <- world.bindings,
-            b.kind == :replacement,
-            Map.has_key?(complete, id),
-            do: id
-          )
-      )
+    held = held_bindings(world, delivered, complete)
 
     # A closing node's own evidence must be complete: its op closure, every cited parent and
     # every cited non-nil prior catalog held (a pending candidate's verdict is not yet fixed).
@@ -140,6 +131,38 @@ defmodule Treehouse.CatalogResolutionModel do
       refused: refused,
       complete?: map_size(complete) == map_size(delivered.ops)
     }
+  end
+
+  # Bindings whose own evidence is complete, to a fixpoint: the bootstrap; a delivered rotation
+  # whose parent is complete and whose prior catalog is held; a replacement whose op closure is
+  # delivered, whose parents are complete and whose cited non-nil priors are held.
+  defp held_bindings(world, delivered, complete) do
+    Stream.iterate(MapSet.new([world.base.boot.id]), fn acc ->
+      Enum.reduce(world.bindings, acc, fn {id, b}, acc ->
+        ok? =
+          case b.kind do
+            :rotation ->
+              Map.has_key?(delivered.rotations, id) and
+                Enum.all?(b.parents, &MapSet.member?(acc, &1)) and
+                Map.has_key?(delivered.catalogs, b.prior_catalog)
+
+            :replacement ->
+              Map.has_key?(complete, id) and Enum.all?(b.parents, &MapSet.member?(acc, &1)) and
+                Enum.all?(
+                  b.prior_catalogs,
+                  &(&1.catalog == nil or Map.has_key?(delivered.catalogs, &1.catalog))
+                )
+
+            _ ->
+              true
+          end
+
+        if ok?, do: MapSet.put(acc, id), else: acc
+      end)
+    end)
+    |> Stream.chunk_every(2, 1)
+    |> Enum.find(fn [x, y] -> MapSet.equal?(x, y) end)
+    |> hd()
   end
 
   @doc "Ancestor-or-self binding ids by declared parents (bytes), through `held` bindings only."

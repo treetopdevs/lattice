@@ -41,8 +41,8 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   defp action(sloppy) do
     [
       {3, map(member_of([2, 30, 30]), &{:replace, &1})},
-      {if(sloppy, do: 1, else: 0),
-       map(member_of([:first_only, :drop_last, :alter]), &{:sloppy, 30, &1})},
+      {if(sloppy, do: 2, else: 0),
+       map(member_of([:first_only, :first_only, :drop_last, :alter]), &{:sloppy, 30, &1})},
       {1, map(integer(0..2), &{:revoke, &1})},
       {2, map({integer(0..2), member_of([2, 30])}, fn {k, l} -> {:transfer, k, l} end)},
       {2, map(integer(0..2), &{:beacon, &1})},
@@ -159,8 +159,14 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   property "S1: no route is served under a refused, closed or closed-out binding (with FZ)", %{
     base: base
   } do
-    check all(actions <- script(), p <- picks(), max_runs: runs(60)) do
-      {w, steps} = history(base, actions, p)
+    check all(
+            actions <- script(),
+            p <- picks(),
+            lose <- one_of([constant(nil), integer(0..20)]),
+            max_runs: runs(60)
+          ) do
+      w = W.apply_script(base, actions)
+      steps = W.run(w, W.order(w.items, p), lose_watermark_at: lose)
       assert_none(w, steps, [:s1, :fz], "S1/FZ")
     end
   end
@@ -197,6 +203,8 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
 
   # --- liveness and order ---------------------------------------------------------------------
 
+  # Red on the PR #221 head: rediscovers the row 390 entry-variant floor (see the test below).
+  @tag :pr221_open
   property "L: an honest admin can always author and deliver an accepted, clearing resolution", %{
     base: base
   } do
@@ -306,5 +314,20 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
         end
       end
     end
+  end
+
+  # The delta-minimized L counterexample (row 390 class, found by the generic `{:ext, ...}`
+  # mutation, not hard-coded in the generator): the old bootstrap catalog key signs one
+  # revision-0 sibling of c0 under B whose Space entry has another `creation`. Citing both
+  # catalogs is `invalid_catalog_transition`; citing either one (or nil) is `catalog_fork`.
+  @tag :pr221_open
+  test "L minimal (row 390): one old-key sibling with a changed extended key leaves no resolution",
+       %{base: base} do
+    w = W.apply_script(base, [{:adv_catalog, 3, 5, {:ext, 1, 2, 0}, :zero, false}])
+    steps = W.run(w, w.items)
+    {result, w2} = liveness(w, steps)
+
+    assert match?({:ok, _}, result),
+           "L failed: #{inspect(M.relabel(w2, result), limit: 20)}\n#{trace(w2, steps)}"
   end
 end

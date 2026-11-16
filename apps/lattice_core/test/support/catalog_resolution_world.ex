@@ -875,7 +875,8 @@ defmodule Treehouse.CatalogResolutionWorld do
   Deliver `items` one at a time from the start state (base log and c0 delivered and accepted),
   persisting `%{accepted, frozen}` through `advance/2`. Returns the steps.
   """
-  def run(w, items) do
+  def run(w, items, opts \\ []) do
+    lose_at = Keyword.get(opts, :lose_watermark_at)
     ev0 = evidence(w, [], w.base_ops)
     {result0, next0} = deliver(w, %{accepted: nil, frozen: false}, ev0)
 
@@ -889,8 +890,17 @@ defmodule Treehouse.CatalogResolutionWorld do
     }
 
     {steps, _} =
-      Enum.map_reduce(items, {[], persisted(next0)}, fn item, {delivered, state} ->
+      items
+      |> Enum.with_index()
+      |> Enum.map_reduce({[], persisted(next0), nil}, fn {item, i}, {delivered, state, lost} ->
         delivered = delivered ++ [item]
+
+        # Evidence loss (C6): from step `lose_at` on, the then-accepted catalog is absent from
+        # the retained union while the persisted watermark still names it.
+        lost =
+          if lost == nil and i == lose_at and state.accepted,
+            do: state.accepted.catalog,
+            else: lost
 
         ops =
           Map.merge(
@@ -899,18 +909,14 @@ defmodule Treehouse.CatalogResolutionWorld do
           )
 
         ev = evidence(w, delivered, ops)
+        ev = if lost, do: %{ev | catalogs: Map.delete(ev.catalogs, lost)}, else: ev
         {result, next} = deliver(w, state, ev)
 
-        step = %{
-          label: item.label,
-          item: item,
-          delivered: ev,
-          result: result,
-          prev: state,
-          next: next
-        }
+        label =
+          if lost && i == lose_at, do: item.label <> " (watermark catalog lost)", else: item.label
 
-        {step, {delivered, persisted(next)}}
+        step = %{label: label, item: item, delivered: ev, result: result, prev: state, next: next}
+        {step, {delivered, persisted(next), lost}}
       end)
 
     [start | steps]
