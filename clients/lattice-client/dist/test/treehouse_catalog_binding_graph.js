@@ -91,6 +91,45 @@ test("authoring escapes a withheld rotation prior the claim closes out (C4)", as
     // A claim that does not close TR out keeps trust_pending.
     assert.deepEqual(await prepare(request([labels.B], [{ binding: labels.B, catalog: labels.C0 }], 1)), { ok: false, reason: "trust_pending" });
 });
+// F2 (PR #221 round 1, finding 2): Cx (B key, revision 2 on a withheld previous) pends under B. A resolution citing the
+// rotation T = B -> T closes B as T's ancestor (D-275), so the public preflight escapes Cx (HEAD: trust_pending).
+test("authoring escapes a withheld chain under a rotated ancestor (F2)", async () => {
+    const scenario = vector.scenarios.find((s) => s.name === "F2: a withheld chain under a rotated ancestor is closed out by a resolution");
+    const labels = scenario.labels;
+    const step = scenario.steps[0];
+    assert.equal(step.expect.error, "trust_pending");
+    const frames = step.frames.map((id) => vector.frames[id]);
+    const artifact = (label) => JSON.parse(vector.artifacts[labels[label]]);
+    const catalog = (label) => catalogEnvelopeFromCarrierTerm(artifact(label));
+    const [r] = carrierOpsToSemanticOps([decodeCarrierOpFrame(vector.frames[labels.R])], {}, treehouseCommandDecoders("Treehouse.Space"));
+    const claim = r.commandArgs[0];
+    const request = (catalogs) => ({
+        author: claim.author, nonce: createHash("sha256").update("r316-4a-ts-nonce-f2-prep").digest("base64url"),
+        parents: [labels.T], priorCatalogs: [{ binding: labels.T, catalog: labels.CT }], generation: 2,
+        newCatalogKey: claim.newCatalogKey, newServiceId: claim.newServiceId, newServiceKey: claim.newServiceKey,
+        newOrigin: claim.newOrigin, entries: [...catalog("KR").catalog.entries], replicaHistories: {},
+        rotations: [catalogRotationEnvelopeFromCarrierTerm(artifact("T"))], catalogs
+    });
+    const prepare = (catalogs) => prepareTreehouseCatalogReplacementFromFrames({ replica: vector.space, frames,
+        request: request(catalogs), journal: {} });
+    const ok = await prepare([catalog("C0"), catalog("CT"), catalog("Cx")]);
+    assert.ok(ok.ok, ok.ok ? "" : ok.reason);
+    const without = await prepare([catalog("C0"), catalog("CT")]);
+    assert.ok(without.ok, without.ok ? "" : without.reason);
+});
+// F3 (PR #221 round 1, finding 3): a lattice of null citations keeps one copy of the Space entry per floor (without the
+// deduplicating join, 2,048 copies per final head at 12 levels).
+test("null-citation lattice floors hold one entry copy (F3)", async () => {
+    const scenario = vector.scenarios.find((s) => s.name === "F3: a lattice of nil citations keeps one copy of each floor entry");
+    const step = scenario.steps[0];
+    const result = await resolveCatalogBindingGraph({ bootstrap: { id: vector.bootstrap.id,
+            record: catalogBootstrapFromCarrierTerm(vector.bootstrap.record) }, frames: step.frames.map((id) => vector.frames[id]),
+        rotations: new Map(), catalogs: new Map(step.catalogs.map((id) => [id, catalogEnvelopeFromCarrierTerm(JSON.parse(vector.artifacts[id]))])), provenCutoffs: step.proven, accepted: null });
+    assert.ok(result.ok);
+    assert.equal(result.graph.floors.size, 25);
+    for (const floor of result.graph.floors.values())
+        assert.ok(floor.entries.length <= 1);
+});
 // B4 (PR #221 bot, the old line 137): a malformed frame refuses as malformed_catalog instead of rejecting the promise.
 test("a malformed frame is malformed_catalog", async () => {
     const record = catalogBootstrapFromCarrierTerm(vector.bootstrap.record);

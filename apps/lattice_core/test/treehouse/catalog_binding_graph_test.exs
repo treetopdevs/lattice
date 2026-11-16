@@ -611,6 +611,53 @@ defmodule Treehouse.CatalogBindingGraphTest do
              {:error, :trust_pending}
   end
 
+  # F3 (PR #221 round 1, finding 3): a lattice of nil citations. The deduplicating join keeps
+  # one copy of the Space entry per floor (without it, 2,048 at 12 levels), and the per-node
+  # floor memo resolves 30 levels (60 ops) well inside the timeout (without it, 2^30 joins).
+  test "F3: nil-citation lattice floors hold one entry copy" do
+    {log, c0, _} = S.floor_lattice(@base, 12)
+    {:ok, g} = resolve(%{space: log, catalogs: catalogs([c0])})
+    assert map_size(g.floors) == 24 + 1
+    assert Enum.all?(g.floors, fn {_id, f} -> length(f.entries) <= 1 end)
+  end
+
+  @tag timeout: 120_000
+  test "F3: a 30-level nil-citation lattice resolves in bounded time" do
+    {log, c0, levels} = S.floor_lattice(@base, 30)
+    {:ok, g} = resolve(%{space: log, catalogs: catalogs([c0])})
+    assert g.heads == levels |> List.last() |> Enum.map(& &1.id) |> Enum.sort()
+    assert Enum.all?(g.floors, fn {_id, f} -> length(f.entries) <= 1 end)
+  end
+
+  # F2 (PR #221 round 1, finding 2): Cx (B key, revision 2 on a withheld previous) pends under
+  # B; a resolution citing the rotation T = B -> T closes B as T's ancestor (D-275), so the
+  # preflight escapes Cx and the post-sign view closes it out (HEAD: trust_pending).
+  test "F2: a resolution can be prepared past a withheld chain under a rotated ancestor" do
+    c0 = F.c0(@base)
+    rot_key = F.identity("rot-f2-t")
+    t = F.rotation(@base, %{id: @base.boot.id, generation: 0}, c0, @base.catalog, rot_key, "f2-t")
+    ct = F.catalog(@base, t.id, 0, nil, rot_key, F.base_entries(@base))
+
+    cx =
+      F.catalog(
+        @base,
+        @base.boot.id,
+        2,
+        F.id("f2-withheld"),
+        @base.catalog,
+        F.base_entries(@base)
+      )
+
+    held = {[t], [c0, ct, cx]}
+    claim = {[t.id], [%{binding: t.id, catalog: F.cid(ct)}], 2}
+    assert {:ok, _} = prep(@base.log, "f2-r", @base.admin, claim, ct.catalog.entries, held)
+    g = post_sign(@base.log, "f2-r", [], claim, held)
+    assert g.catalog_status[F.cid(cx)] == :closed_out
+    # Without the chain-pending Cx the same claim prepares too.
+    assert {:ok, _} =
+             prep(@base.log, "f2-r", @base.admin, claim, ct.catalog.entries, {[t], [c0, ct]})
+  end
+
   # S16g (C4): the old catalog key signs K1x under R1 naming a nonexistent `previous`; the
   # verifier is trust_pending and keeps serving K1 (R1 open, not frozen). R2 citing {R1, K1}
   # escapes it; the post-sign view closes K1x out. Here K1x's real chain descends from the cited

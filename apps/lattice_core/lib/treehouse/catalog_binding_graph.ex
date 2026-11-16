@@ -216,14 +216,18 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
-  # The pending ids the claim closes out, or nil when some pending id is not one of them.
+  # The pending ids the claim closes out, or nil when some pending id is not one of them. The
+  # claim closes the D-275 set of its parents (ancestor-or-self over the complete part's nodes),
+  # not only the parents it cites (PR #221 round 1, finding 2).
   defp escapable(input, info, parents, ids) do
     rotations = input.rotations
+    dead = closure(parents, info.nodes, MapSet.new())
 
     rot =
       for id <- ids,
           Map.has_key?(rotations, id),
-          under?(id, rotations, parents, MapSet.new()),
+          not MapSet.member?(dead, id),
+          under?(id, rotations, dead, MapSet.new()),
           into: MapSet.new(),
           do: id
 
@@ -236,7 +240,7 @@ defmodule Treehouse.CatalogBindingGraph do
           binding = input.catalogs[id].catalog.binding
 
           MapSet.member?(rot, binding) or
-            (Map.get(info.validity, id) == :pending and binding in parents)
+            (Map.get(info.validity, id) == :pending and MapSet.member?(dead, binding))
 
         true ->
           false
@@ -266,6 +270,8 @@ defmodule Treehouse.CatalogBindingGraph do
   end
 
   defp drop_under(input, rotations, parents) do
+    parents = MapSet.new(parents)
+
     dropped =
       for {id, _} <- rotations,
           under?(id, rotations, parents, MapSet.new()),
@@ -283,13 +289,14 @@ defmodule Treehouse.CatalogBindingGraph do
     %{input | rotations: Map.drop(rotations, MapSet.to_list(dropped)), catalogs: catalogs}
   end
 
-  defp under?(id, rotations, parents, seen) do
+  # Is rotation `id` under a binding of `dead` along its rotation-parent chain?
+  defp under?(id, rotations, dead, seen) do
     parent = rotations[id].rotation.parent
 
     cond do
-      id in parents or MapSet.member?(seen, id) -> false
-      parent in parents -> true
-      Map.has_key?(rotations, parent) -> under?(parent, rotations, parents, MapSet.put(seen, id))
+      MapSet.member?(dead, id) or MapSet.member?(seen, id) -> false
+      MapSet.member?(dead, parent) -> true
+      Map.has_key?(rotations, parent) -> under?(parent, rotations, dead, MapSet.put(seen, id))
       true -> false
     end
   end
@@ -402,6 +409,7 @@ defmodule Treehouse.CatalogBindingGraph do
       memo: %{},
       cmemo: %{},
       croutes: %{},
+      fmemo: %{},
       visiting: MapSet.new(),
       cvisiting: MapSet.new(),
       detail: %{}
@@ -464,7 +472,7 @@ defmodule Treehouse.CatalogBindingGraph do
       |> Enum.uniq()
       |> Enum.sort()
 
-    info = %{validity: st.cmemo}
+    info = %{validity: st.cmemo, nodes: nodes_all}
 
     if length(heads) > 2 do
       {{:error, :control_history_limit, %{ids: heads, core_reason: nil}}, info}
@@ -733,13 +741,16 @@ defmodule Treehouse.CatalogBindingGraph do
 
   # Step 4, intrinsic Core judgment: Core refusing the op on its own causal closure (its strict
   # prefix plus itself; a revoke or lapse already in the prefix, which `holder_epochs` does not
-  # show) is `catalog_authority_refused`. Stage A's own refusal is excluded: its literal and
-  # possession checks are re-run above with their own reasons. A refusal that appears only on the
-  # wider union is step 3 (`refused?`).
+  # show) is `catalog_authority_refused`. Stage A's own refusal reads only the op and its strict
+  # prefix, so it is intrinsic too: it is an `invalid_catalog_transition` (`:stage_a`), and the
+  # literal and possession checks re-run above report their own higher-ranked reasons first. A
+  # Stage A clause the re-run does not mirror (the bootstrap honored in the candidate's prefix,
+  # not only on its own closure) therefore still makes the candidate raw evidence (OD-17; PR #221
+  # round 1, finding 1). A refusal that appears only on the wider union is step 3 (`refused?`).
   defp own_closure(op, ctx) do
     case Authority.analyze(Space, prefix_log(ctx.cops, ctx.replica, [op.id])).reasons[op.id] do
       nil -> []
-      :application_invalid_catalog -> []
+      :application_invalid_catalog -> [{:invalid_catalog_transition, :stage_a}]
       _core -> [{:catalog_authority_refused, :core_refused_at_prefix}]
     end
   end
@@ -988,9 +999,23 @@ defmodule Treehouse.CatalogBindingGraph do
   # `Floor(bootstrap) = []`, `Floor(T) = entries(T.prior_catalog)`, and for a replacement the
   # union over its cited `{P, K}` of `entries(K)`, or `Floor(P)` when `K` is nil, so a nil
   # citation of a node without a valid catalog still carries that node's inventory forward.
+  # Memoized per node, and the join keeps one copy of each entry, so a DAG of nil citations
+  # costs one join per node and a floor never exceeds the distinct entries it was built from
+  # (PR #221 round 1, finding 3).
   defp floor_of(%{kind: :bootstrap}, _ctx, st), do: {{:ok, [], %{}}, st}
 
-  defp floor_of(%{prior: priors}, ctx, st) do
+  defp floor_of(%{id: id} = n, ctx, st) do
+    case st.fmemo do
+      %{^id => floor} ->
+        {floor, st}
+
+      _ ->
+        {floor, st} = floor_join(n, ctx, st)
+        {floor, %{st | fmemo: Map.put(st.fmemo, id, floor)}}
+    end
+  end
+
+  defp floor_join(%{prior: priors}, ctx, st) do
     Enum.reduce(priors, {{:ok, [], %{}}, st}, fn
       _prior, {:bad, st} ->
         {:bad, st}
@@ -1026,7 +1051,7 @@ defmodule Treehouse.CatalogBindingGraph do
   # under the node may use it, but its replicas may move onto fresh routes. The reservation is
   # part of the route map, so it propagates down every chain and into later floors.
   defp merge_floor({:ok, e1, r1}, {:ok, e2, r2}) do
-    {:ok, e1 ++ e2,
+    {:ok, Enum.uniq(e1 ++ e2),
      Map.merge(r1, r2, fn _route, x, y -> if x == y and x != :none, do: x, else: :none end)}
   end
 

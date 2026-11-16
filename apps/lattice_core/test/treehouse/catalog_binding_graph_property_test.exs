@@ -82,12 +82,16 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
     {"S17a: route-conflicting siblings reserve the route and a fresh-route resolution promotes",
      "R", "KR"},
     {"S17c: a reservation survives a nil citation", nil, nil},
+    {"S17a: a resolution keeping a reserved route is refused", nil, nil},
+    {"S17e: a resolution keeping the other sibling on a reserved route is refused", nil, nil},
+    {"F1: a replacement whose bootstrap is stale in its own prefix is raw evidence", "B", "C0"},
+    {"F2: a withheld chain under a rotated ancestor is closed out by a resolution", "R", "KR"},
     {"S17b: a revoked key's route-conflicting catalogs cannot block recovery", "R2", "K2"},
     {"B1: a chain-invalid catalog under a refused node keeps its own reason", nil, nil}
   ]
 
   # Row 389: enough runs that the route rule and the withheld-page action are exercised.
-  @heavy ~w(S4 S12 S17a S17b S17c)
+  @heavy ~w(S4 S12 S17a S17b S17c S17e)
   defp max_runs(name),
     do: if(Enum.any?(@heavy, &String.starts_with?(name, &1 <> ":")), do: 200, else: 50)
 

@@ -135,7 +135,7 @@ interface Ctx {
   byId: Map<string, Op>; frames: Map<string, CarrierOpFrame>; complete: Set<string>; completeById: Map<string, Op>;
   ancestorCache: Map<string, Set<string>>; reasons: ReadonlyMap<string, string>; candidates: Map<string, Candidate>;
   proven: Set<string>; bootHonored: boolean; memo: Map<string, Verdict>; visiting: Set<string>;
-  cmemo: Map<string, Validity>; croutes: Map<string, Map<string, string>>; cvisiting: Set<string>;
+  cmemo: Map<string, Validity>; croutes: Map<string, Map<string, string>>; cvisiting: Set<string>; fmemo: Map<string, Floor>;
 }
 
 export async function resolveCatalogBindingGraph(input: CatalogBindingGraphInput): Promise<CatalogBindingGraphResult> {
@@ -190,7 +190,7 @@ async function contextOf(input: CatalogBindingGraphInput): Promise<Ctx | null> {
   const ctx: Ctx = {input, replica, bootstrapId: input.bootstrap.id, record: input.bootstrap.record, byId, frames, complete,
     completeById, ancestorCache: new Map(), reasons, candidates,
     proven: new Set(input.provenCutoffs.map(cutoffKey)), bootHonored: false,
-    memo: new Map(), visiting: new Set(), cmemo: new Map(), croutes: new Map(), cvisiting: new Set()};
+    memo: new Map(), visiting: new Set(), cmemo: new Map(), croutes: new Map(), cvisiting: new Set(), fmemo: new Map()};
   ctx.bootHonored = bootstrapHonored(ctx);
   return ctx;
 }
@@ -388,11 +388,14 @@ async function evalCandidate(id: string, ctx: Ctx): Promise<Verdict> {
     {author: c.op.authorPubkey ?? "", cap: typeof c.op.cap === "string" ? c.op.cap : ""}, s.claim, ctx.record.spaceRoot);
   if (auth !== null) failures.push([auth.reason, auth.predicate]);
   else {
-    // Core refusing the op on its own causal closure (a revoke or lapse already in the prefix) is intrinsic; Stage A's own
-    // refusal is excluded because its literal and possession checks are re-run below with their own reasons.
+    // Core refusing the op on its own causal closure (a revoke or lapse already in the prefix) is intrinsic. Stage A's own
+    // refusal reads only the op and its strict prefix, so it is intrinsic too (invalid_catalog_transition): the literal and
+    // possession checks re-run below report their own higher-ranked reasons first, and a clause they do not mirror (the
+    // bootstrap honored in the candidate's prefix) still makes the candidate raw evidence (PR #221 round 1, finding 1).
     const own = reachable(ctx, [id]);
     const core = materialize(treehouseSpaceSchema, own, new Set(own.map((o) => o.id)), null, ctx.replica).quarantineReasons.get(id);
-    if (core !== undefined && core !== "application_invalid_catalog") failures.push(["catalog_authority_refused", "core_refused_at_prefix"]);
+    if (core === "application_invalid_catalog") failures.push(["invalid_catalog_transition", "stage_a"]);
+    else if (core !== undefined) failures.push(["catalog_authority_refused", "core_refused_at_prefix"]);
   }
   if (!literal) failures.push(["invalid_catalog_transition", "literal_binding"]);
   if (!possession) failures.push(["invalid_possession", "possession"]);
@@ -591,8 +594,18 @@ function admit(floor: CatalogFloor, entries: readonly CatalogEntry[]): boolean {
 
 // Floor(N): Floor(bootstrap) = [], Floor(T) = entries(T.priorCatalog), and for a replacement the union over its cited {P, K}
 // of entries(K), or Floor(P) when K is null, so a null citation of a node without a valid catalog still carries P's floor.
+// Memoized per node, and the join keeps one copy of each entry, so a DAG of null citations costs one join per node and a
+// floor never exceeds the distinct entries it was built from (PR #221 round 1, finding 3).
 async function floorOf(n: CatalogBindingNode, ctx: Ctx): Promise<Floor> {
   if (n.kind === "bootstrap") return {t: "ok", entries: [], routes: new Map()};
+  const known = ctx.fmemo.get(n.id);
+  if (known !== undefined) return known;
+  const floor = await floorJoin(n, ctx);
+  ctx.fmemo.set(n.id, floor);
+  return floor;
+}
+
+async function floorJoin(n: CatalogBindingNode, ctx: Ctx): Promise<Floor> {
   let acc: Floor = {t: "ok", entries: [], routes: new Map()};
   for (const {binding, catalog} of n.prior) {
     if (acc.t === "bad") return acc;
@@ -619,7 +632,18 @@ function mergeFloor(a: Floor, b: Floor): Floor {
   for (const [route, replica] of b.routes) {
     routes.set(route, routes.has(route) && (routes.get(route) !== replica || replica === RESERVED) ? RESERVED : replica);
   }
-  return {t: "ok", entries: [...a.entries, ...b.entries], routes};
+  const seen = new Set<string>(), entries: CatalogEntry[] = [];
+  for (const e of [...a.entries, ...b.entries]) {
+    const key = entryKey(e);
+    if (!seen.has(key)) { seen.add(key); entries.push(e); }
+  }
+  return {t: "ok", entries, routes};
+}
+
+// Whole-entry identity over the explicit CatalogEntry fields (BEAM compares the whole entry map).
+function entryKey(e: CatalogEntry): string {
+  return JSON.stringify([e.product, e.replica, e.kind, e.schema, e.root, e.genesis, e.creation, e.reference, e.route,
+    e.serviceId, e.serviceKey]);
 }
 
 // --- catalogs (union classification) -----------------------------------------------------------------------------------
@@ -997,7 +1021,8 @@ export async function resolveCatalogBindingGraphForClaim(input: CatalogBindingGr
     return cursor;
   };
   if (!first.detail.ids.every((h) => claim.parents.includes(root(h)))) return first;
-  const dropped = new Set([...rotations.keys()].filter((id) => underClaim(id, rotations, claim.parents)));
+  const parents = new Set(claim.parents);
+  const dropped = new Set([...rotations.keys()].filter((id) => underClaim(id, rotations, parents)));
   for (let grew = true; grew;) {
     grew = false;
     for (const [id, e] of rotations) if (!dropped.has(id) && dropped.has(e.rotation.parent)) { dropped.add(id); grew = true; }
@@ -1006,15 +1031,15 @@ export async function resolveCatalogBindingGraphForClaim(input: CatalogBindingGr
     catalogs: new Map([...input.catalogs].filter(([, e]) => !dropped.has(e.catalog.binding)))}, claim);
 }
 
-// Is rotation `id` under a claim parent along its rotation-parent chain?
-function underClaim(id: string, rotations: ReadonlyMap<string, CatalogRotationEnvelope>, parents: readonly string[]): boolean {
+// Is rotation `id` under a binding of `dead` along its rotation-parent chain?
+function underClaim(id: string, rotations: ReadonlyMap<string, CatalogRotationEnvelope>, dead: ReadonlySet<string>): boolean {
   const seen = new Set<string>();
   let cursor = id;
   while (!seen.has(cursor)) {
-    if (parents.includes(cursor)) return false;
+    if (dead.has(cursor)) return false;
     seen.add(cursor);
     const parent = rotations.get(cursor)!.rotation.parent;
-    if (parents.includes(parent)) return true;
+    if (dead.has(parent)) return true;
     if (!rotations.has(parent)) return false;
     cursor = parent;
   }
@@ -1028,12 +1053,27 @@ async function escapePending(input: CatalogBindingGraphInput, claim: CatalogRepl
   const {result, ctx} = await resolveInfo(input);
   if (result.ok || result.reason !== "trust_pending" || ctx === null) return result;
   const ids = result.detail.ids;
-  const rot = new Set(ids.filter((id) => input.rotations.has(id) && underClaim(id, input.rotations, claim.parents)));
+  // The claim closes the D-275 set of its parents (ancestor-or-self over the complete part's nodes), not only the parents it
+  // cites (PR #221 round 1, finding 2).
+  const dead = new Set<string>();
+  const nodeParents = (id: string): readonly string[] | null => {
+    if (id === ctx.bootstrapId) return [];
+    const v = ctx.memo.get(id);
+    return v !== undefined && v.t === "node" ? v.node.parents : null;
+  };
+  for (const stack = [...claim.parents]; stack.length > 0;) {
+    const id = stack.pop()!;
+    const ps = nodeParents(id);
+    if (dead.has(id) || ps === null) continue;
+    dead.add(id);
+    stack.push(...ps);
+  }
+  const rot = new Set(ids.filter((id) => input.rotations.has(id) && underClaim(id, input.rotations, dead)));
   const escapable = (id: string): boolean => {
     if (rot.has(id)) return true;
     const e = input.catalogs.get(id);
     if (e === undefined) return false;
-    return rot.has(e.catalog.binding) || (ctx.cmemo.get(id)?.t === "pending" && claim.parents.includes(e.catalog.binding));
+    return rot.has(e.catalog.binding) || (ctx.cmemo.get(id)?.t === "pending" && dead.has(e.catalog.binding));
   };
   if (ids.length === 0 || !ids.every(escapable)) return result;
   const drop = new Set(ids);

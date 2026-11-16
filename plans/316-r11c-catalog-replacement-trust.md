@@ -10,7 +10,7 @@ PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_c
 twin, and the row 318 bootstrap size preflight) is in review as PR #216 (D-400–D-435). Its binding-graph
 coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
 authoring result is not resolver acceptance, a route switch or catalog trust.
-PR 4a (#221, D-530–D-639) is in review: the replacement-binding resolver as new pure modules in
+PR 4a (#221, D-530–D-648) is in review: the replacement-binding resolver as new pure modules in
 both runtimes (`Treehouse.CatalogBindingGraph`, `Treehouse.CatalogReplacementAuthority` and
 their TS twins, with new `binding_graph_v1.json` / `binding_graph_ts_v1.json` vectors), and the
 PR 2 authoring preflight switched to call them (the interim mirror is deleted). It is built under
@@ -19,8 +19,9 @@ the operator's 2026-11-15 "new modules now, wire later" decision and does not ed
 claimed: the retained-client resolver does not call it yet, so no client accepts a replacement;
 no route switch, native, custodian refusal, real Space or ceremony. PR 4b (row 380) adds test
 breadth; PR 4c (row 381) wires catalog_trust after plans 267/269. Design rows 382 and 383 are
-done in the resolver (convergence design, D-588–D-639); 4c is now gated on design rows 386
-(`trust_pending` freeze bypass) and 387 (floor conflict). C10–C15 stay OPEN until 4c.
+done in the resolver (convergence design, D-588–D-639), and rows 386 and 387 in the resolver and
+authoring (amendment revision 2, D-641); 4c also carries the row 381 obligations, and rows 390
+and 391 await the operator. C10–C15 stay OPEN until 4c.
 PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
 the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
 bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
@@ -385,241 +386,19 @@ files, row 380) and **4c** (the hook into `catalog_trust.ex` / `.ts`, after plan
 row 381). The 267/269 gate is not lifted; it now applies to 4c only.
 
 **PR 4a — resolver as new pure modules (operator decision 2026-11-15, "new modules now, wire
-later").** Not a STOP-list violation: 4a touches only new files plus the PR 2 authoring
-preflight, adds no route switch, and calls `CatalogTrust` only from tests. OD-16 (D-275, D-278
-reading), OD-17 (a union-refused replacement is a citable D-276 node only if steps 1, 2 incl.
-causal honored bootstrap, and 4–6 pass) and row 320 are settled (operator sign-offs
-2026-11-15). Split into two sequential slices, each landing BEAM and TS together:
-
-- **4a-1:** `Treehouse.CatalogBindingGraph` / `treehouse_catalog_binding_graph.ts` (steps 1–3,
-  5–9, closure, coverage, decision) and `Treehouse.CatalogReplacementAuthority` /
-  `treehouse_catalog_replacement_authority.ts` (step 4). Scenario table
-  `test/support/catalog_binding_graph_scenarios.ex` drives the ExUnit tests and
-  `binding_graph_v1.json` (hand-written label-space expectations per delivery, persisted
-  accepted/blocked state, both delivery orders); the TS twin reproduces every expectation and
-  BEAM outcome and writes `binding_graph_ts_v1.json`, which BEAM reproduces.
-- **4a-2:** the authoring preflight (`catalog_replacement_authoring.ex` / `.ts`) calls
-  `resolve` + `cover_claim` and `CatalogReplacementAuthority.check`; the interim mirror is
-  deleted. Authoring-only change to merged PR 2; it does not affect retained-client trust.
-
-PR 4a decisions:
-
-- **D-A1 (early refutation, finding 6).** A candidate with an incomplete closure is refuted only
-  from facts no missing ancestor can change: its shape, scope, own literal bindings
-  (author/cap/deps), possession signatures, and the held `holder_epoch` op's own delegation
-  under `claim.cap` (audience, `replace_catalog_v1`, `live: false`, finite lease). Otherwise it
-  stays pending and the resolve is `trust_pending`. Running step 4 on a partial prefix was
-  rejected: the prefix profile is unresolvable there, so an authorized candidate would be
-  misread as `wrong_catalog_scope` and flip later (D-279).
-- **D-A2 (rotation chain checks kept).** The graph re-verifies rotation step, key separation,
-  both signatures and prior-catalog agreement under the parent node, because a rotation under a
-  replacement node has no page-level key and 4a-2 deletes the authoring mirror. The duplicated
-  chain-logic equivalence test against `CatalogTrust.evaluate` moves to 4c (D-A3).
-- **D-A4 (catalog and rotation failures are retained refusals).** They never abort a resolve;
-  only malformed input, `control_history_limit` (more than two heads) and `trust_pending` do.
-  The preflight stays fail-closed: any retained artifact refused on its own bytes (anything but
-  `catalog_authority_refused` inherited from a refused node) refuses the preflight first.
-- **D-A5 (block triggers and row 320).** An `authority_changed` block names the head at first
-  block time and a standing block keeps its triggers, so a resolution delivered before its first
-  catalog still clears on the next delivery. A later sole honored replacement head that is not a trigger and closes every trigger
-  clears it (`clears_authority_changed`). A refused accepted binding is also resolved in the
-  same delivery by an honored replacement head that closes it and cites a descendant of the
-  accepted catalog (no freeze when the revoke and the resolution arrive together). A
-  resolution that itself closes out the accepted catalog (R citing `{P, nil}` after C0) still
-  blocks; only a later resolution clears it.
-- **D-A6 (holder from the analysis).** Step 4's holder predicate requires both the analysis
-  `holder_epochs[:admin]` and the last honored record. Observed: a revoke does not move
-  `holder_epochs`, and a root re-transfer after revoking the admin is `revoked_capability`, so
-  C13 fixtures use a concurrent holder change (admin to nominee, Core `stale_holder`).
-- **D-A7 (cover_claim order).** Unheld parent or prior (`trust_pending`), then raw/refused/
-  closed-out parent, generation and service (`invalid_catalog_transition`), then an omitted head
-  or catalog head (`catalog_fork`; citing a non-head ancestor is a sibling of that head), then a
-  prior that is not a catalog head and first-catalog extension.
-- **D-A9 (Core refusal on the candidate's own closure).** Step 4 also refuses
-  (`catalog_authority_refused`, predicate `core_refused_at_prefix`) when Core refuses the op on
-  its strict prefix plus itself, excluding Stage A's own `application_invalid_catalog` (its
-  literal and possession checks are re-run with their own reasons). A revoke or lapse already
-  in the prefix therefore adds no head or closure (C11/C14); only a union-only refusal (C13) is a
-  D-276 refused node. Read from the public `Authority.analyze/2`; no `authority.ex` change.
-- **D-A10 (route reservation).** Only current and covered catalogs reserve routes, so a
-  closed-out old-key catalog cannot refuse the honest head's first catalog.
-- **D-A11 (incomplete history; review round 2 of 4a, the first after D-A9/D-A10).** Any held Space op whose closure is
-  incomplete makes the resolve `trust_pending` (row m), not only replacement candidates; a
-  candidate already refuted from its own bytes (D-A1) is exempt. A missing dependency of a
-  concurrent revoke can no longer yield a judgment on a smaller history that later flips.
-- **D-A12 (catalog validity before classification).** Catalog evaluation is two passes:
-  intrinsic validity (scope, signature, entries, `previous` chain, and for a replacement's
-  first catalog of any node every cited prior, a rotation's `prior_catalog` included, which
-  must itself be valid), then classification. A
-  citation never rehabilitates an invalid catalog: an invalid cited catalog covers nothing
-  (its valid ancestors stay omitted catalog heads, `catalog_fork`) and a first catalog that
-  extends it is refused. Only a catalog on a cited chain can pend, so an uncited old-key
-  catalog cannot stall a closed binding.
-- **D-A13 (rotation recovery, nonce reuse, citable heads).** A rotation inherits its parent's
-  unproven cutoffs. Differing claims sharing a nonce fork across closed nodes too (sequential
-  reuse) while the group has an open member; a later citation that closes every member
-  resolves it. Authoring coverage reads `citable_catalog_heads` (current heads plus chain-valid
-  catalogs under a union-refused node), so the C13 recovery claim citing `{R1, K1}` prepares
-  and `{R1, nil}` is `catalog_fork`; `catalog_heads` (promotion, split forks) is unchanged.
-- **D-A14 (absent accepted artifacts).** With an accepted state, an accepted binding or
-  catalog absent from the input is an `authority_changed` trigger on the sole-head path, so a
-  caller that omits it fails closed instead of promoting. The block persists until a fresh
-  admin resolution lifts it, so its clearing belongs to the design row below.
-- **Design row 383 (rule 3; finding 6 of review round 2; superseded by the convergence design below).** `authority_changed` clearing is
-  a third patch on the same trigger class (D-A5's standing triggers caused this freeze: a
-  trigger recorded as an old-key rotation head that a later resolution closes out rather than
-  closes never clears, and the outcome depends on delivery order). Redesign before 4c wires
-  `merge_security_block`: derive clearing from the accepted watermark plus the current graph
-  (the accepted binding refused or closed and its catalog covered or closed out by a sole
-  promotable admin resolution), not from persisted head ids. Acceptance: the R1/T2/TR/R2
-  interleaving clears in both delivery orders, and a later R3 clears a client that froze.
-  Review round 4 (finding 4) reproduced the freeze with the committed TS C13 fixtures: the block
-  records TR, R2 closes TR out rather than closing it, and no later ordinary resolution can
-  satisfy the trigger. Under adopted row 320 a fresh admin resolution citing the current heads
-  must clear, so this row gates 4c.
-- **D-A15 (cutoff obligations; review round 3, findings 2 and 3).** A node owes its own
-  declared cutoffs plus those it inherits from a same-service parent: a rotation's pending set
-  is its parent's plus its own unproven cutoffs (CatalogTrust parity, `catalog_trust.ex:505`).
-  A replacement's cutoff replicas must equal its first catalog's entry replicas, as a
-  rotation's equal its prior catalog's; a mismatch refuses that first catalog
-  `invalid_catalog_transition` (the inventory is fixed by the claim, so the failure is
-  permanent, unlike row l's unproven-proof `recovery_incomplete`), and the replacement never
-  becomes ready.
-- **D-A16 (D-275 non-stall; review round 3, finding 1).** One rule generalizing D-A12's
-  uncited-catalog case: a pending rotation whose rotation-parent chain reaches a closed or
-  closed-out binding, and every catalog bound to it, is closed-out evidence and never
-  `trust_pending`, so an old-key signer cannot freeze recovery by withholding a prior catalog.
-  A pending rotation under an open, unknown or pending replacement parent still pends (D-5).
-- **Design row 382 (rule 3; review round 3, finding 4; superseded by the convergence design below).** Route
-  reuse is the second catalog-validity-versus-classification gap after D-A12. Route reservation
-  runs after validity, in union id order, so a route-refused catalog keeps `validity: ok`: a
-  replacement first catalog citing it, and a `previous` successor of it (`extends?` ignores
-  `route`), stay valid. Un-reserving dependents makes a fixpoint over the union non-monotone.
-  Redesign before 4c wires the resolver: judge route uniqueness intrinsically against a
-  catalog's own ancestry (its `previous` chain and cited priors), so it feeds validity, and
-  keep only cross-branch reuse as union classification. Acceptance: C0 `{Space->A, Thread->B}`,
-  C1 extending it with `{Space->B, Thread->C}`, R citing C1 with fresh routes is refused in both
-  runtimes and C0 stays an omitted catalog head. The same row owns the D-A15 residual (probe,
-  not patched): once R's first catalog KR is refused, R2 citing `{R, nil}` with a Space-only
-  first catalog promotes and drops C0's Thread, because a node with no valid catalog is cited
-  with `nil` and nothing carries its covered prior's entries forward. Acceptance there: R2 is
-  refused or forks until it extends C0's entries. Review round 4 reopened all three (findings 3
-  and 7) and added a fourth case of the same class (finding 6): a rotation whose prior catalog is
-  intrinsically invalid (Cbad: revision 2, `previous` a revision-0 C0) still counts as a binding
-  head, because rotation eligibility is judged before catalog validity; three such rotations
-  give `control_history_limit`. The pinned "rotation naming a refused prior" scenario expects T
-  as a head and changes under this row. The redesign is one causal evaluation in which node
-  eligibility and catalog validity (chain, cited priors, route ancestry, nil-cited inventory
-  carry-forward) read each other in causal order; acceptance adds: three rotations naming
-  intrinsically invalid priors are refusals, not heads.
-- **D-A17 (refused-parent coverage; review round 4, finding 1).** A chain-valid catalog under a
-  union-refused node whose binding is closed is classified for coverage like any other: if the
-  closing citations omit it, it is an uncovered catalog head (`catalog_fork`) and keeps its
-  `catalog_authority_refused` refusal. The verifier now agrees with authoring's
-  `citable_catalog_heads` (D-A13): R2 citing only `{R1, Ka}` beside sibling Kb forks; R2b citing
-  both is accepted.
-- **D-A18 (only a chain-valid catalog is an omitted head; finding 2).** Under a closed binding an
-  uncited catalog that fails its own chain is refused `invalid_catalog_transition`, and one
-  whose chain is not held is closed-out evidence (D-A16 applied to catalogs); neither forks. The
-  author omits such an artifact from the preflight's retained set (D-A4 still refuses on it).
-  Residual, not changed: a valid old-key catalog under a closed binding that the closing
-  citations omit (for example a second revision-0 catalog) is still an omitted head and forks;
-  that is D-275's coverage rule, not an invalid-artifact gap (design question row 384).
-- **D-A19 (whole-cutoff proofs; finding 5).** `proven_cutoffs` entries are the complete
-  `{replica, frontier, log_digest}` cutoff and match a node's cutoff only whole (CatalogTrust
-  parity); an entry without `frontier` is `malformed_catalog` input. The binding-graph vectors
-  carry `frontier` in each proof.
-- **D-A8 (fixtures).** The 4a fixtures build their own Sim bounded Space (pin, root beacons,
-  leased admin) instead of `CatalogVectors.bootstrap_history`, because the step-4 and R04 cases
-  need the witnessed-beacon pin and continuation.
-
-**PR 4a convergence design (rows 382 and 383; D-588–D-639).** This replaces D-A5's stored
-triggers, D-A10's union route reservation, D-A12's "an invalid cited prior covers nothing"
-reading and D-A14's sticky missing-artifact trigger. In force in both runtimes:
-
-- *Block and clearing.* `resolve/1` takes no `blocked` input and persists nothing. The block,
-  `clears_authority_changed` and the new `serving` field are recomputed on every call from the
-  union and the accepted watermark (D-588). The caller keeps only the watermark (now with a
-  grow-only cumulative `routes` map, D-615) and one sticky `frozen` bit, merged by the pure
-  `advance/2` / `advanceCatalogBindingState`, which 4c adopts as `merge_security_block` (D-589).
-  The block is `{reason, ids, freeze}`; `freeze` is set only by Changed(A), so a missing accepted
-  artifact is a non-freezing derived block (D-605, D-619). `frozen` lifts only when the decision
-  accepts a sole promotable head H, an honored replacement in H's lineage lies outside the
-  watermark binding's ancestry, H's catalog carries the watermark's entries and routes (Seen over
-  CatLineage, Carry, RouteCompat), and the watermark catalog was cited in H's lineage or closed
-  out by a node a later replacement descends from (D-590, D-613). Freshness is not stored (D-591);
-  rollback is a lower revision under the same binding (D-592); watermark-relative Covers failures
-  are `catalog_rollback` (D-625).
-- *Serving.* A union-refused sole head that closed the accepted binding is a derived
-  `catalog_authority_refused` block with `serving` nil (D-599); an honored but not yet promotable
-  replacement head also serves nil (D-600, operator confirmation pending, row 388); a planned
-  rotation keeps serving the accepted catalog (D-601); `control_history_limit` keeps state and
-  serves nil (D-614).
-- *Validity.* Validity is intrinsic and never reads the union `refused?` flag (D-595). A
-  replacement citing an invalid prior is raw evidence, `invalid_catalog_transition` (D-594,
-  D-630). A rotation is a node only when its prior catalog is held and valid (D-596). Floor(N) is
-  the union of the cited catalogs' entries, or the parent's floor for a nil citation, and every
-  first catalog must extend it (D-597, D-631). Route uniqueness is judged against a catalog's own
-  `previous` chain and cited priors' route maps; `route_history` and the union id-order
-  reservation are deleted (D-598). Rotation forks are a derived union-level fork (D-611). A
-  same-service replacement inherits its parents' unproven cutoffs (D-A15, fixed in review, D-638).
-- *Authoring.* `cover_claim` requires closed fork bindings as extra parents (D-602), refuses an
-  entry only when a held catalog maps its route to a different replica, exempting pairs a cited
-  prior already maps (D-626, D-635), escapes `control_history_limit` only for claims citing every
-  head root (D-614, D-627, D-628; this escape supersedes the head-limit row D-604 proposed, so
-  none was filed), and checks after signing that the signed op is the sole head
-  with no fork (D-629).
-- *Evidence.* Scenarios S1–S15 (S5 has no scenario of its own; the C13 revoke-first pin carries it) in `catalog_binding_graph_scenarios.ex` drive both runtimes and
-  the regenerated `binding_graph_v1.json` / `binding_graph_ts_v1.json`; the StreamData property
-  file uses a pre-signed pool and a test-side oracle that recomputes freeze, clears, serving, Seen,
-  Carry and RouteCompat from union classification without reading decision flags (D-608, D-636).
-
-Still open after the convergence review (round 1, which the commits call round 5: 7 P1/P2 and 1 P3; 3 P1/P2 and the P3 fixed;
-D-638): `trust_pending` lifts the freeze and keeps serving the refused binding (design 1.3 with
-D-A11; P1 `advance/2` at `catalog_binding_graph.ex:139` and `pending_out?` at `:963`; row 386); conflicting cited route maps make
-recovery permanently unpromotable, reachable with only the revoked old key (P1 `merge_floor` at `:912`; row 387).
-Operator questions: row 388 (D-600, D-602, D-616) and the remainder of row 384 (D-603). Not
-built: property (b) with an independent R* oracle, (e1), the (f) CatalogTrust differential, the
-TS property twin, a Core refused-to-honored flip, S5's later-honor pin, and a post-sign negative
-test (row 389). 4c obligations (D-612): serve from `serving`, rewrite `validate_saved_block!`,
-replace `validate_route_history!` with the ancestry check.
-
-Row dispositions: 352 closed in resolver and authoring (both runtimes). 356 closed in resolver
-(D-9 reading). 350 closed in resolver for intrinsic failures (raw evidence); an unheld parent
-stays pending by design (D-5); open in trust until 4c. 335 closed by the restored-permission
-test (broad, narrowed, restored: Core honors, resolver refuses `inherited_provenance`); the
-variant whose latest root-issued record is itself narrowed is not written (no Core-honored
-construction found with the current fixtures; root cannot re-transfer while the admin holds). 354
-partly closed: mirror deleted, resolver called; entry-fact refusal
-(`CatalogEntries.observe_with_detail`) moves to 4c. 355 open (byte budgets). 360 open. Row 320:
-implemented and tested in the graph; open in trust until 4c.
-
-4c tasks: wire `catalog_trust.ex` / `.ts` to the graph (inputs per the 4a hand-off: bootstrap,
-Space history, parsed rotation/catalog envelopes, `merge_proofs!` cutoffs, `state.accepted`,
-`state.blocked`); change `merge_security_block` to lift `authority_changed` exactly when
-`decision.clears_authority_changed`; move the chain-logic equivalence test; entry facts (354);
-routes from the current binding's origin; pre-upgrade store restore. After the convergence
-design, `merge_security_block` adopts `advance/2` instead of reading `clears_authority_changed`
-alone (D-589), with the D-612 obligations above.
-
-Open questions to the operator (not decided in 4a; question 1 is answered by D-599 and its
-extension D-600 awaits confirmation in row 388, question 2 is partly answered by D-603): (1)
-routes-freeze policy for a sole refused head: the graph holds the watermark and closes out every old-key child of the closed accepted
-binding, but whether 4c keeps serving that binding's accepted catalog is a 4c decision. (2)
-Residual in the step-7 "omitted head" rule: under a closed binding, a catalog that is neither an
-ancestor nor a descendant of a cited catalog stays `catalog_fork`; an old-key signer can create
-such a same-revision sibling after the resolution (indistinguishable from a pre-existing
-uncited fork), which the closing rule does not end. The pinned test (one-sided citation stays a
-fork) is kept as specified.
-
-Non-claims (4a): no route switch or route output; no retained-client acceptance until 4c; no
-native `catalog_eval`; no custodian closed-binding refusal; C10–C15 stay OPEN (4a asserts C10
-authority acceptance and node fields only); no Core primitive, wire atom or quarantine reason;
-historical vectors (`replacement_v1.json`, `ts_trust.json`) and wire bytes unchanged; disposable
-keys only. The convergence property file checks D-279 verdict monotonicity (property (a)) over
-its scenario pools only, on BEAM; not written in 4a: the D-279 StreamData property over
-interleavings of revokes, transfers, beacons, rotations and replacements, and the C13
-redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidence.
+later"; D-530).** The full PR 4a text (scope, the D-A1 to D-A19 readings, the convergence design
+of rows 382 and 383, row dispositions, 4c tasks, the operator questions and the 4a non-claims)
+moved verbatim to D-640 in the decisions log; the convergence amendment revision 2 (rows 386,
+387 and 389) is D-641 and its build review is D-643 to D-648. Current state: rows 382, 383, 386
+and 387 are done in the resolver and the authoring preflight in both runtimes; 386 is not
+reachable in production until the row 381 obligation lands and awaits operator confirmation of
+repair (a) with the C1 freeze rule (row 388). Open: the entry-variant floor (row 390) and floor
+overflow (row 391) classes, the operator questions in rows 384 and 388, and the row 389
+evidence remainder (reference model, (p), (b), (b4), the StreamData (f) generator, (e1), the TS
+property twin, a Core flip, S5 and a post-sign negative). Non-claims are unchanged: no route
+switch or retained-client acceptance until 4c, no native `catalog_eval`, no custodian
+closed-binding refusal, C10–C15 OPEN, no Core primitive, wire atom or quarantine reason, and
+historical vectors and wire bytes unchanged.
 
 **PR 5** — native parity (`catalog_eval` replacement node, D-270 nodes in `chains.rs`, row 319).
 **PR 6** — a plan 266 exporter test now; after PR 4, the C15 two-cycle BEAM/TS reconstruction

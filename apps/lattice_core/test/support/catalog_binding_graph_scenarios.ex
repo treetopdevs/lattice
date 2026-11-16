@@ -210,7 +210,11 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &s17_reserved_routes/1,
       &s17b_revoked_conflict/1,
       &b1_bad_chain_under_refused/1,
-      &b3_rotation_precedence/1
+      &b3_rotation_precedence/1,
+      &f1_stale_bootstrap_prefix/1,
+      &f2_pending_under_rotated_ancestor/1,
+      &f3_floor_lattice/1,
+      &s17e_first_prior_reserved/1
     ]
   end
 
@@ -3814,6 +3818,179 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       step(
         ev(base.log, rotations: [t], catalogs: [c0]),
         ok(["B"], refusals: %{"T" => "invalid_catalog_signature"}, decision: accept("B", "C0"))
+      )
+    ])
+  end
+
+  # F1 (PR #221 round 1, finding 1; OD-17): Stage A judges the bootstrap in R's own prefix. E0
+  # (a beacon on B's deps) and T1 (admin, lease 40, after E0) are concurrent with B, so B is
+  # `stale_holder` at R's prefix and Core refuses R `application_invalid_catalog` there. The
+  # concurrent T0 (nominee, lease 41, after B) wins the union, where B is honored and R is
+  # `not_holder`. R is intrinsically invalid: raw evidence that closes nothing (HEAD: a refused
+  # node that closed B and served nothing).
+  defp f1_stale_bootstrap_prefix(base) do
+    alt = F.base(transfer: false, beacons: false)
+    {alt.boot.id, alt.record} == {base.boot.id, base.record} or raise "F1 base drifted"
+    c0 = F.c0(alt)
+    e0 = F.beacon(alt, alt.bootstrap.deps, 0)
+    t1 = F.transfer(alt, [e0.id], alt.admin.pub, expires: 40)
+    l1 = F.append(alt.log, [e0, t1.op])
+
+    r =
+      F.replacement(alt, l1, "f1-r",
+        prior_catalogs: [%{binding: alt.boot.id, catalog: F.cid(c0)}],
+        cap: t1.delegation.id,
+        holder_epoch: t1.op.id
+      )
+
+    t0 = F.transfer(alt, [alt.bootstrap.id], alt.nominee.pub, expires: 41)
+    l2 = F.append(l1, [r.op, t0.op])
+    labels = Map.merge(base_labels(alt, c0), %{"R" => r.id})
+
+    one("F1: a replacement whose bootstrap is stale in its own prefix is raw evidence", labels, [
+      step(ev(alt.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(
+        ev(l2, catalogs: [c0]),
+        ok(["B"], raw: %{"R" => "invalid_catalog_transition"}, decision: accept("B", "C0"))
+      )
+    ])
+  end
+
+  # S17e (PR #221 round 1, finding 5): the mirror of "a resolution keeping a reserved route is
+  # refused", keeping the other sibling's replica on X. Between them a first-cited-wins and a
+  # last-cited-wins floor join each accept one of the two, whatever the cited priors' sort order.
+  defp s17e_first_prior_reserved(base) do
+    c0 = F.c0(base)
+    [space] = c0.catalog.entries
+    ta = %{other(space, "s17-a", "s17-x") | replica: space.replica <> "-s17a"}
+    tb = %{other(space, "s17-b", "s17-x") | replica: space.replica <> "-s17b"}
+    ca = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, ta])
+    cb = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, tb])
+
+    priors =
+      Enum.sort([
+        %{binding: base.boot.id, catalog: F.cid(ca)},
+        %{binding: base.boot.id, catalog: F.cid(cb)}
+      ])
+
+    rkb =
+      carrying(
+        base,
+        base.log,
+        "s17-rkb",
+        Enum.sort_by(fresh([space, ta], "s17-rkb") ++ [tb], & &1.replica),
+        prior_catalogs: priors
+      )
+
+    krkb = F.first(base, rkb)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "Ca" => F.cid(ca),
+        "Cb" => F.cid(cb),
+        "RkB" => rkb.id,
+        "KRkB" => F.cid(krkb)
+      })
+
+    one("S17e: a resolution keeping the other sibling on a reserved route is refused", labels, [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(
+        ev(add(base.log, [rkb]), catalogs: [c0, ca, cb, krkb]),
+        ok(["RkB"],
+          closed: ["B"],
+          refusals: %{"KRkB" => "invalid_catalog_transition"},
+          decision: [head: "RkB"]
+        )
+      )
+    ])
+  end
+
+  # F2 (PR #221 round 1, finding 2): a valid rotation T of B, C0 under B, CT under T, and a
+  # B-key-signed Cx (revision 2) on a withheld `previous`. Cx pends under the open B. R citing
+  # {T, CT} closes B too (D-275, ancestor-or-self of its parents), so its post-sign view closes
+  # Cx out; the authoring preflight escapes Cx through that closed set (HEAD: only direct
+  # parents, so trust_pending).
+  defp f2_pending_under_rotated_ancestor(base) do
+    c0 = F.c0(base)
+    t = rotation(base, node(base.boot.id, 0), c0, base.catalog, "f2-t")
+    ct = F.catalog(base, t.id, 0, nil, F.identity("rot-f2-t"), F.base_entries(base))
+    cx = F.catalog(base, base.boot.id, 2, F.id("f2-withheld"), base.catalog, F.base_entries(base))
+
+    r =
+      F.replacement(base, base.log, "f2-r",
+        parents: [t.id],
+        prior_catalogs: [%{binding: t.id, catalog: F.cid(ct)}],
+        generation: 2
+      )
+
+    kr = F.first(base, r)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "T" => t.id,
+        "CT" => F.cid(ct),
+        "Cx" => F.cid(cx),
+        "R" => r.id,
+        "KR" => F.cid(kr)
+      })
+
+    one("F2: a withheld chain under a rotated ancestor is closed out by a resolution", labels, [
+      step(ev(base.log, rotations: [t], catalogs: [c0, ct, cx]), err("trust_pending")),
+      step(
+        ev(add(base.log, [r]), rotations: [t], catalogs: [c0, ct, cx, kr]),
+        ok(["R"], closed: ["B", "T"], closed_out: ["Cx"], decision: accept("R", "KR"))
+      )
+    ])
+  end
+
+  @doc """
+  F3 (PR #221 round 1, finding 3): `levels` levels of two sibling replacements, the first
+  citing {B, C0} and every later one citing both previous siblings with nil catalogs. Returns
+  `{log, c0, ops_by_level}`; the ExUnit test runs it deeper than the vector does.
+  """
+  def floor_lattice(base, levels) do
+    c0 = F.c0(base)
+    prior = [%{binding: base.boot.id, catalog: F.cid(c0)}]
+
+    first =
+      for x <- ~w(a b), do: F.replacement(base, base.log, "f3-1" <> x, prior_catalogs: prior)
+
+    {log, _prev, acc} =
+      Enum.reduce(2..levels//1, {add(base.log, first), first, [first]}, fn k, {log, prev, acc} ->
+        parents = prev |> Enum.map(& &1.id) |> Enum.sort()
+
+        cur =
+          for x <- ~w(a b),
+              do: F.replacement(base, log, "f3-#{k}" <> x, parents: parents, generation: k)
+
+        {add(log, cur), cur, [cur | acc]}
+      end)
+
+    {log, c0, Enum.reverse(acc)}
+  end
+
+  # F3 in the vectors: 12 levels (24 ops). Without the deduplicating join each final head's
+  # floor holds 2,048 copies of the one Space entry; the TS test asserts the floors directly.
+  defp f3_floor_lattice(base) do
+    {log, c0, levels} = floor_lattice(base, 12)
+
+    labels =
+      for {ops, k} <- Enum.with_index(levels, 1), {r, x} <- Enum.zip(ops, ~w(a b)), into: %{} do
+        {"L#{k}#{x}", r.id}
+      end
+
+    labels = Map.merge(base_labels(base, c0), labels)
+    heads = ["L12a", "L12b"]
+    closed = ["B" | for(k <- 1..11, x <- ~w(a b), do: "L#{k}#{x}")]
+
+    one("F3: a lattice of nil citations keeps one copy of each floor entry", labels, [
+      step(
+        ev(log, catalogs: [c0]),
+        ok(heads,
+          closed: closed,
+          forks: ["heads"],
+          decision: [reason: "catalog_fork", block: "catalog_fork"]
+        )
       )
     ])
   end

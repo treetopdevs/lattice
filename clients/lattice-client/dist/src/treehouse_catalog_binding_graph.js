@@ -114,7 +114,7 @@ async function contextOf(input) {
     const ctx = { input, replica, bootstrapId: input.bootstrap.id, record: input.bootstrap.record, byId, frames, complete,
         completeById, ancestorCache: new Map(), reasons, candidates,
         proven: new Set(input.provenCutoffs.map(cutoffKey)), bootHonored: false,
-        memo: new Map(), visiting: new Set(), cmemo: new Map(), croutes: new Map(), cvisiting: new Set() };
+        memo: new Map(), visiting: new Set(), cmemo: new Map(), croutes: new Map(), cvisiting: new Set(), fmemo: new Map() };
     ctx.bootHonored = bootstrapHonored(ctx);
     return ctx;
 }
@@ -337,11 +337,15 @@ async function evalCandidate(id, ctx) {
     if (auth !== null)
         failures.push([auth.reason, auth.predicate]);
     else {
-        // Core refusing the op on its own causal closure (a revoke or lapse already in the prefix) is intrinsic; Stage A's own
-        // refusal is excluded because its literal and possession checks are re-run below with their own reasons.
+        // Core refusing the op on its own causal closure (a revoke or lapse already in the prefix) is intrinsic. Stage A's own
+        // refusal reads only the op and its strict prefix, so it is intrinsic too (invalid_catalog_transition): the literal and
+        // possession checks re-run below report their own higher-ranked reasons first, and a clause they do not mirror (the
+        // bootstrap honored in the candidate's prefix) still makes the candidate raw evidence (PR #221 round 1, finding 1).
         const own = reachable(ctx, [id]);
         const core = materialize(treehouseSpaceSchema, own, new Set(own.map((o) => o.id)), null, ctx.replica).quarantineReasons.get(id);
-        if (core !== undefined && core !== "application_invalid_catalog")
+        if (core === "application_invalid_catalog")
+            failures.push(["invalid_catalog_transition", "stage_a"]);
+        else if (core !== undefined)
             failures.push(["catalog_authority_refused", "core_refused_at_prefix"]);
     }
     if (!literal)
@@ -554,9 +558,19 @@ function admit(floor, entries) {
 }
 // Floor(N): Floor(bootstrap) = [], Floor(T) = entries(T.priorCatalog), and for a replacement the union over its cited {P, K}
 // of entries(K), or Floor(P) when K is null, so a null citation of a node without a valid catalog still carries P's floor.
+// Memoized per node, and the join keeps one copy of each entry, so a DAG of null citations costs one join per node and a
+// floor never exceeds the distinct entries it was built from (PR #221 round 1, finding 3).
 async function floorOf(n, ctx) {
     if (n.kind === "bootstrap")
         return { t: "ok", entries: [], routes: new Map() };
+    const known = ctx.fmemo.get(n.id);
+    if (known !== undefined)
+        return known;
+    const floor = await floorJoin(n, ctx);
+    ctx.fmemo.set(n.id, floor);
+    return floor;
+}
+async function floorJoin(n, ctx) {
     let acc = { t: "ok", entries: [], routes: new Map() };
     for (const { binding, catalog } of n.prior) {
         if (acc.t === "bad")
@@ -586,7 +600,20 @@ function mergeFloor(a, b) {
     for (const [route, replica] of b.routes) {
         routes.set(route, routes.has(route) && (routes.get(route) !== replica || replica === RESERVED) ? RESERVED : replica);
     }
-    return { t: "ok", entries: [...a.entries, ...b.entries], routes };
+    const seen = new Set(), entries = [];
+    for (const e of [...a.entries, ...b.entries]) {
+        const key = entryKey(e);
+        if (!seen.has(key)) {
+            seen.add(key);
+            entries.push(e);
+        }
+    }
+    return { t: "ok", entries, routes };
+}
+// Whole-entry identity over the explicit CatalogEntry fields (BEAM compares the whole entry map).
+function entryKey(e) {
+    return JSON.stringify([e.product, e.replica, e.kind, e.schema, e.root, e.genesis, e.creation, e.reference, e.route,
+        e.serviceId, e.serviceKey]);
 }
 // Status classifies an intrinsic verdict: current under an open binding; covered / closed_out / uncovered under a closed one;
 // refused with a reason; pending. A citation never makes an invalid catalog valid.
@@ -972,7 +999,8 @@ export async function resolveCatalogBindingGraphForClaim(input, claim) {
     };
     if (!first.detail.ids.every((h) => claim.parents.includes(root(h))))
         return first;
-    const dropped = new Set([...rotations.keys()].filter((id) => underClaim(id, rotations, claim.parents)));
+    const parents = new Set(claim.parents);
+    const dropped = new Set([...rotations.keys()].filter((id) => underClaim(id, rotations, parents)));
     for (let grew = true; grew;) {
         grew = false;
         for (const [id, e] of rotations)
@@ -984,16 +1012,16 @@ export async function resolveCatalogBindingGraphForClaim(input, claim) {
     return escapePending({ ...input, rotations: new Map([...rotations].filter(([id]) => !dropped.has(id))),
         catalogs: new Map([...input.catalogs].filter(([, e]) => !dropped.has(e.catalog.binding))) }, claim);
 }
-// Is rotation `id` under a claim parent along its rotation-parent chain?
-function underClaim(id, rotations, parents) {
+// Is rotation `id` under a binding of `dead` along its rotation-parent chain?
+function underClaim(id, rotations, dead) {
     const seen = new Set();
     let cursor = id;
     while (!seen.has(cursor)) {
-        if (parents.includes(cursor))
+        if (dead.has(cursor))
             return false;
         seen.add(cursor);
         const parent = rotations.get(cursor).rotation.parent;
-        if (parents.includes(parent))
+        if (dead.has(parent))
             return true;
         if (!rotations.has(parent))
             return false;
@@ -1009,14 +1037,31 @@ async function escapePending(input, claim) {
     if (result.ok || result.reason !== "trust_pending" || ctx === null)
         return result;
     const ids = result.detail.ids;
-    const rot = new Set(ids.filter((id) => input.rotations.has(id) && underClaim(id, input.rotations, claim.parents)));
+    // The claim closes the D-275 set of its parents (ancestor-or-self over the complete part's nodes), not only the parents it
+    // cites (PR #221 round 1, finding 2).
+    const dead = new Set();
+    const nodeParents = (id) => {
+        if (id === ctx.bootstrapId)
+            return [];
+        const v = ctx.memo.get(id);
+        return v !== undefined && v.t === "node" ? v.node.parents : null;
+    };
+    for (const stack = [...claim.parents]; stack.length > 0;) {
+        const id = stack.pop();
+        const ps = nodeParents(id);
+        if (dead.has(id) || ps === null)
+            continue;
+        dead.add(id);
+        stack.push(...ps);
+    }
+    const rot = new Set(ids.filter((id) => input.rotations.has(id) && underClaim(id, input.rotations, dead)));
     const escapable = (id) => {
         if (rot.has(id))
             return true;
         const e = input.catalogs.get(id);
         if (e === undefined)
             return false;
-        return rot.has(e.catalog.binding) || (ctx.cmemo.get(id)?.t === "pending" && claim.parents.includes(e.catalog.binding));
+        return rot.has(e.catalog.binding) || (ctx.cmemo.get(id)?.t === "pending" && dead.has(e.catalog.binding));
     };
     if (ids.length === 0 || !ids.every(escapable))
         return result;

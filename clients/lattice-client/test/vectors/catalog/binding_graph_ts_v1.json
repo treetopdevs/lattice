@@ -24310,6 +24310,808 @@
           "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
         }
       }
+    },
+    {
+      "scenario": "F1: a replacement whose bootstrap is stale in its own prefix is raw evidence",
+      "step": 1,
+      "label": {
+        "heads": [
+          "B"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "B",
+          "catalog": "C0",
+          "clears": false,
+          "serving": "C0"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "C0"
+        }
+      },
+      "ts": {
+        "heads": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "clears": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "revision": 0,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+        }
+      }
+    },
+    {
+      "scenario": "F1: a replacement whose bootstrap is stale in its own prefix is raw evidence",
+      "step": 2,
+      "label": {
+        "heads": [
+          "B"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B"
+        ],
+        "refused": [],
+        "raw": {
+          "R": "invalid_catalog_transition"
+        },
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "B",
+          "catalog": "C0",
+          "clears": false,
+          "serving": "C0"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "C0"
+        }
+      },
+      "ts": {
+        "heads": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {
+          "qzOrxKod1fgAa9Ot6BLgnVJNpty0Tz3bEG2bDQ_OG50": "invalid_catalog_transition"
+        },
+        "refusals": {},
+        "catalog_heads": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "clears": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "binding_status": "current",
+          "catalog_status": "current"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "revision": 0,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+        }
+      }
+    },
+    {
+      "scenario": "F2: a withheld chain under a rotated ancestor is closed out by a resolution",
+      "step": 1,
+      "label": {
+        "error": "trust_pending",
+        "freeze": false,
+        "serving": null,
+        "after": {
+          "frozen": false,
+          "serving": null
+        }
+      },
+      "ts": {
+        "error": "trust_pending",
+        "ids": [
+          "LONWnPWZ1VhMUbr4XeTt76Y6I53j8LTT4e12soNf_eI"
+        ],
+        "freeze": false,
+        "serving": null,
+        "after": {
+          "accepted": null,
+          "frozen": false,
+          "serving": null
+        }
+      }
+    },
+    {
+      "scenario": "F2: a withheld chain under a rotated ancestor is closed out by a resolution",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B",
+          "T"
+        ],
+        "closed_out": [
+          "Cx"
+        ],
+        "nodes": [
+          "B",
+          "R",
+          "T"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "R",
+          "catalog": "KR",
+          "clears": false,
+          "serving": "KR"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "KR"
+        }
+      },
+      "ts": {
+        "heads": [
+          "8eLLditrYfjQZ_PIYwwheZt8uNNO3wUkbO2hpo-teSE"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "YKWefsUCTthEvSCBCn3p2xMGu71u8hWBla00IhWiQJw"
+        ],
+        "closed_out": {
+          "LONWnPWZ1VhMUbr4XeTt76Y6I53j8LTT4e12soNf_eI": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "8eLLditrYfjQZ_PIYwwheZt8uNNO3wUkbO2hpo-teSE": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "YKWefsUCTthEvSCBCn3p2xMGu71u8hWBla00IhWiQJw": {
+            "kind": "rotation",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "8eLLditrYfjQZ_PIYwwheZt8uNNO3wUkbO2hpo-teSE": [
+            "arDq81KUJabBl04iWeCSkSnaVkN533W9CRUeop3d4Lk"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "8eLLditrYfjQZ_PIYwwheZt8uNNO3wUkbO2hpo-teSE",
+          "catalog": "arDq81KUJabBl04iWeCSkSnaVkN533W9CRUeop3d4Lk",
+          "clears": false,
+          "serving": "arDq81KUJabBl04iWeCSkSnaVkN533W9CRUeop3d4Lk",
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": {
+            "binding": "8eLLditrYfjQZ_PIYwwheZt8uNNO3wUkbO2hpo-teSE",
+            "generation": 2,
+            "catalog": "arDq81KUJabBl04iWeCSkSnaVkN533W9CRUeop3d4Lk",
+            "revision": 0,
+            "routes": {
+              "/r/BZV22moBKN9awkXET566WKdmy6k9THz-vKv_w3-MiWU": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "arDq81KUJabBl04iWeCSkSnaVkN533W9CRUeop3d4Lk"
+        }
+      }
+    },
+    {
+      "scenario": "F3: a lattice of nil citations keeps one copy of each floor entry",
+      "step": 1,
+      "label": {
+        "heads": [
+          "L12a",
+          "L12b"
+        ],
+        "closed": [
+          "B",
+          "L10a",
+          "L10b",
+          "L11a",
+          "L11b",
+          "L1a",
+          "L1b",
+          "L2a",
+          "L2b",
+          "L3a",
+          "L3b",
+          "L4a",
+          "L4b",
+          "L5a",
+          "L5b",
+          "L6a",
+          "L6b",
+          "L7a",
+          "L7b",
+          "L8a",
+          "L8b",
+          "L9a",
+          "L9b"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "L10a",
+          "L10b",
+          "L11a",
+          "L11b",
+          "L12a",
+          "L12b",
+          "L1a",
+          "L1b",
+          "L2a",
+          "L2b",
+          "L3a",
+          "L3b",
+          "L4a",
+          "L4b",
+          "L5a",
+          "L5b",
+          "L6a",
+          "L6b",
+          "L7a",
+          "L7b",
+          "L8a",
+          "L8b",
+          "L9a",
+          "L9b"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [
+          "heads"
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": "catalog_fork",
+          "freeze": false,
+          "head": null,
+          "catalog": null,
+          "clears": false,
+          "serving": null
+        },
+        "after": {
+          "frozen": false,
+          "serving": null
+        }
+      },
+      "ts": {
+        "heads": [
+          "1Lsa2yndLIIJaWDmWsEr4y27vOEFXKymMI6jJ-hxtaw",
+          "ig269vxa5FDimYHmqwZOMWZYK6o17NiOwNvouvgypqo"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "99uCfQsFozotqk_nweFccwAHNFAFDmapHUzCSxV1MQI",
+          "9_EHpN9QWhL55awQjQ-w0ed6SQmxLmOapKtdsgcEYPY",
+          "CF8Swpj3oFYCvcmwHWfqaFjPWgABaKlHnO_Hs1a-ZNI",
+          "F-xu9wP7sYFqt_tysdszj2_96u3tXt2RAkJuHshljtQ",
+          "Hng1EtwiZBFs_emlTLEO8iLeJDWP5rkzWDBCplIo5ks",
+          "KfaMiSdxIIqBc_BxxnDhX2EINnDHZ4HrgRnBDQ9wtyA",
+          "NqjiM4Ic1dUUVuoyXjQuloP70qh76Y7jFLzEd9W8gas",
+          "Ogbou0OfCb3xWo_iPcesvm0Z4IXSu3yT87vDnMxFjik",
+          "QGg0GTdXOgRGzAYRsohkOMJdab01pLuVIYCXOwIW-SY",
+          "T3XkY7-zybWLG_F5zMfDNbaIkWMl1Eun-tqR_J309Ak",
+          "Tsg5udw5v7PYOunWTkxwEqQZHfRtDTWM5xXIUYH0ed8",
+          "bLQwB6_J34b4qqnocoK4Yk8wuoPZ9LcxAXLEh-3FJqw",
+          "bksa3XDqDWBu5nZOM1wkJVcGtUa3BH8WVCWvWBW7Pn8",
+          "j_qi9o07tOyZUpQF3NtG6G6dkh7CjxfgFBgi7J-fjlg",
+          "jansExpe3e23og3IIHkwNgI5gsoDQR3ybfyt50JBDlQ",
+          "p9qkzlikSjAaaHJ2mEVHVO11_DIqZE1WSD0KIVKN4pE",
+          "sEpLTPaVNRtDCn7hebgv4UffR3xYRdeRIDlTu3Hrwsw",
+          "skNrmm4KiOssZqAP-OJBEjR5nE3IIRaBPs7M2fjIT3Q",
+          "slKOhRlqB0R2hf_xotEqn43S4Zb4uCLfSl1F0R5TDbA",
+          "tD1O4WzCWkBJ34GaWiaDNKb1OkaaAIWGWnfpdE29XeA",
+          "xd4fPJmqw-5Ne0Ku79YjkE77hT6njEBwoJ27lA98O2I",
+          "yurugCgf_XqCVyCZtv_TH3bj762HgV_IRS4kmIC19T0"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "1Lsa2yndLIIJaWDmWsEr4y27vOEFXKymMI6jJ-hxtaw": {
+            "kind": "replacement",
+            "generation": 12,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "99uCfQsFozotqk_nweFccwAHNFAFDmapHUzCSxV1MQI": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "9_EHpN9QWhL55awQjQ-w0ed6SQmxLmOapKtdsgcEYPY": {
+            "kind": "replacement",
+            "generation": 3,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "CF8Swpj3oFYCvcmwHWfqaFjPWgABaKlHnO_Hs1a-ZNI": {
+            "kind": "replacement",
+            "generation": 4,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "F-xu9wP7sYFqt_tysdszj2_96u3tXt2RAkJuHshljtQ": {
+            "kind": "replacement",
+            "generation": 6,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "Hng1EtwiZBFs_emlTLEO8iLeJDWP5rkzWDBCplIo5ks": {
+            "kind": "replacement",
+            "generation": 9,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "KfaMiSdxIIqBc_BxxnDhX2EINnDHZ4HrgRnBDQ9wtyA": {
+            "kind": "replacement",
+            "generation": 3,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "NqjiM4Ic1dUUVuoyXjQuloP70qh76Y7jFLzEd9W8gas": {
+            "kind": "replacement",
+            "generation": 6,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "Ogbou0OfCb3xWo_iPcesvm0Z4IXSu3yT87vDnMxFjik": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "QGg0GTdXOgRGzAYRsohkOMJdab01pLuVIYCXOwIW-SY": {
+            "kind": "replacement",
+            "generation": 9,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "T3XkY7-zybWLG_F5zMfDNbaIkWMl1Eun-tqR_J309Ak": {
+            "kind": "replacement",
+            "generation": 5,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "Tsg5udw5v7PYOunWTkxwEqQZHfRtDTWM5xXIUYH0ed8": {
+            "kind": "replacement",
+            "generation": 8,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "bLQwB6_J34b4qqnocoK4Yk8wuoPZ9LcxAXLEh-3FJqw": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "bksa3XDqDWBu5nZOM1wkJVcGtUa3BH8WVCWvWBW7Pn8": {
+            "kind": "replacement",
+            "generation": 7,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "ig269vxa5FDimYHmqwZOMWZYK6o17NiOwNvouvgypqo": {
+            "kind": "replacement",
+            "generation": 12,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "j_qi9o07tOyZUpQF3NtG6G6dkh7CjxfgFBgi7J-fjlg": {
+            "kind": "replacement",
+            "generation": 7,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "jansExpe3e23og3IIHkwNgI5gsoDQR3ybfyt50JBDlQ": {
+            "kind": "replacement",
+            "generation": 5,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "p9qkzlikSjAaaHJ2mEVHVO11_DIqZE1WSD0KIVKN4pE": {
+            "kind": "replacement",
+            "generation": 8,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "sEpLTPaVNRtDCn7hebgv4UffR3xYRdeRIDlTu3Hrwsw": {
+            "kind": "replacement",
+            "generation": 11,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "skNrmm4KiOssZqAP-OJBEjR5nE3IIRaBPs7M2fjIT3Q": {
+            "kind": "replacement",
+            "generation": 10,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "slKOhRlqB0R2hf_xotEqn43S4Zb4uCLfSl1F0R5TDbA": {
+            "kind": "replacement",
+            "generation": 11,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "tD1O4WzCWkBJ34GaWiaDNKb1OkaaAIWGWnfpdE29XeA": {
+            "kind": "replacement",
+            "generation": 10,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "xd4fPJmqw-5Ne0Ku79YjkE77hT6njEBwoJ27lA98O2I": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "yurugCgf_XqCVyCZtv_TH3bj762HgV_IRS4kmIC19T0": {
+            "kind": "replacement",
+            "generation": 4,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {},
+        "forks": [
+          {
+            "kind": "heads",
+            "binding": null,
+            "ids": [
+              "1Lsa2yndLIIJaWDmWsEr4y27vOEFXKymMI6jJ-hxtaw",
+              "ig269vxa5FDimYHmqwZOMWZYK6o17NiOwNvouvgypqo"
+            ]
+          }
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": {
+            "reason": "catalog_fork",
+            "ids": [
+              "1Lsa2yndLIIJaWDmWsEr4y27vOEFXKymMI6jJ-hxtaw",
+              "ig269vxa5FDimYHmqwZOMWZYK6o17NiOwNvouvgypqo"
+            ],
+            "freeze": false
+          },
+          "head": null,
+          "catalog": null,
+          "clears": false,
+          "serving": null,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": null,
+          "frozen": false,
+          "serving": null
+        }
+      }
+    },
+    {
+      "scenario": "S17e: a resolution keeping the other sibling on a reserved route is refused",
+      "step": 1,
+      "label": {
+        "heads": [
+          "B"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "B",
+          "catalog": "C0",
+          "clears": false,
+          "serving": "C0"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "C0"
+        }
+      },
+      "ts": {
+        "heads": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "clears": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "revision": 0,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+        }
+      }
+    },
+    {
+      "scenario": "S17e: a resolution keeping the other sibling on a reserved route is refused",
+      "step": 2,
+      "label": {
+        "heads": [
+          "RkB"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "RkB"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {
+          "KRkB": "invalid_catalog_transition"
+        },
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "RkB",
+          "catalog": null,
+          "clears": false,
+          "serving": null
+        },
+        "after": {
+          "frozen": false,
+          "serving": null
+        }
+      },
+      "ts": {
+        "heads": [
+          "jjN3V8I378M3DH8w6Cm2CbuwmatAD9z27FIwSpUxG_I"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "jjN3V8I378M3DH8w6Cm2CbuwmatAD9z27FIwSpUxG_I": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {
+          "B6IHqhQI5B5YV6X9PP1Q9_0V9RS3QF8Xx7cpJsxBx4o": "invalid_catalog_transition"
+        },
+        "catalog_heads": {},
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": null,
+          "block": null,
+          "head": "jjN3V8I378M3DH8w6Cm2CbuwmatAD9z27FIwSpUxG_I",
+          "catalog": null,
+          "clears": false,
+          "serving": null,
+          "binding_status": "closed",
+          "catalog_status": "ancestor_of_cited"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "revision": 0,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": null
+        }
+      }
     }
   ]
 }
