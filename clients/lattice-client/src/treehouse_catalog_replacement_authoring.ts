@@ -289,7 +289,7 @@ async function coverage(history: JudgedHistory, replica: string, bootstrap: {id:
   // resolveCatalogBindingGraphForClaim keeps the verifier's head limit but lets a claim citing every head root through it
   // (design section 2.7): three old-key rotations under the accepted binding cannot block the resolution that closes them out.
   const resolved = await resolveCatalogBindingGraphForClaim({bootstrap, frames: history.frames, rotations: held.rotations,
-    catalogs: held.catalogs, provenCutoffs: [], accepted: null}, claim);
+    catalogs: held.catalogs, provenCutoffs: [], accepted: null, histories: threadFrames(request)}, claim);
   if (!resolved.ok) return resolved.reason;
   const refused = [...resolved.graph.refusals].filter(([, r]) => r.reason !== "catalog_authority_refused")
     .sort(([a, x], [b, y]) => catalogBindingReasonRank(x.reason) - catalogBindingReasonRank(y.reason) || compareUtf8(a, b));
@@ -308,10 +308,15 @@ async function resolvesSigned(history: JudgedHistory, replica: string, request: 
   const held = retained(replica, bootstrap, request);
   if (!held.ok) return held.reason;
   const resolved = await resolveCatalogBindingGraph({bootstrap, frames: [...history.frames, frame], rotations: held.rotations,
-    catalogs: held.catalogs, provenCutoffs: [], accepted: null});
+    catalogs: held.catalogs, provenCutoffs: [], accepted: null, histories: threadFrames(request)});
   if (!resolved.ok) return resolved.reason;
   const g = resolved.graph;
   return g.heads.length === 1 && g.heads[0] === frame.id && g.forks.length === 0 ? null : "catalog_fork";
+}
+
+// The request's replica histories are the Thread histories the resolver judges entry facts against (row 390, repair (c)).
+function threadFrames(request: TreehouseCatalogReplacementRequest): Record<string, readonly unknown[]> {
+  return Object.fromEntries(Object.entries(request.replicaHistories).map(([replica, h]) => [replica, h.frames]));
 }
 
 function retained(replica: string, bootstrap: {id: string}, request: TreehouseCatalogReplacementRequest): Retained {

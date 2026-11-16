@@ -138,6 +138,10 @@ export interface CatalogBindingGraphInput {
     /** Complete `{replica, frontier, logDigest}` cutoffs; an entry without its frontier is malformed input. */
     provenCutoffs: readonly ProvenCutoff[];
     accepted: CatalogBindingAccepted | null;
+    /** Row 390 (repair (c)): Thread histories (replica -> authenticated frames) that entry facts are judged against. A forged or
+     * misfiled history is malformed input; an incomplete one (its cutoff does not derive) is left out, so only the catalogs naming
+     * that replica pend. The Space history is always the complete part of `frames`. */
+    histories?: Readonly<Record<string, readonly unknown[]>>;
 }
 type CatalogStatus = "current" | "covered" | "closed_out" | "uncovered" | "refused" | "pending";
 /** max(generations) + 1 within the safe-integer horizon, or null (finding 9). */

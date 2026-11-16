@@ -33,22 +33,31 @@ async function fixture(options: { beacon?: boolean } = {}) {
   const base = await replacementBaseFixture("r316-pr2-ts-");
   const leased = await authorCarrierDelegation({ replica: base.replica, signer: base.root, audiencePubkey: base.nominee.publicKey,
     parentId: base.delegation.id, ops: ["create_space", "create_thread", "replace_catalog_v1"], roles: ["admin"], expiresEpoch: 10 });
+  // Row 390: a real bounded Thread (entry facts are judged against its history), referenced by a root create_thread in the
+  // Space.
+  const thread = await bindTownshipReplica(`replica:treehouse:thread:${id("thread")}#authority:bounded-continuation-v1`,
+    base.root.publicKey);
+  const threadDelegation = await authorCarrierDelegation({ replica: thread, signer: base.root, audiencePubkey: base.root.publicKey,
+    ops: ["create_thread", "post"], roles: ["moderator"], live: true });
+  const threadGenesis = await authorCarrierOp({ replica: thread, signer: base.root, deps: [], kind: "authority", cap: nil,
+    body: tuple(atom("genesis"), ["delegation", threadDelegation], ["map", []]) });
+  const threadCreation = await authorCarrierOp({ replica: thread, signer: base.root, deps: [threadGenesis.id], kind: "command",
+    cap: townshipCapTerm(threadDelegation.id), body: tuple(atom("create_thread"), ["list", [text("Thread")]]) });
+  const cited = new Set(base.frames.flatMap((frame) => [...frame.deps]));
+  const threadReference = await authorCarrierOp({ replica: base.replica, signer: base.root,
+    deps: base.frames.map((frame) => frame.id).filter((frameId) => !cited.has(frameId)).sort(), kind: "command",
+    cap: townshipCapTerm(base.delegation.id), body: tuple(atom("create_thread"), ["list", [text(thread), text("Thread")]]) });
   const transfer = await authorCarrierOp({ replica: base.replica, signer: base.root, deps: [base.bootstrap.id], kind: "authority", cap: nil,
     body: tuple(atom("transfer"), atom("admin"), ["delegation", leased], ["int", 0]) });
-  const frames: CarrierOpFrame[] = [...base.frames, transfer];
+  const frames: CarrierOpFrame[] = [...base.frames, threadReference, transfer];
   let beacon: CarrierOpFrame | null = null;
   if (options.beacon !== false) {
     beacon = await authorCarrierOp({ replica: base.replica, signer: base.root, deps: [transfer.id], kind: "authority", cap: nil,
       body: tuple(atom("beacon"), ["int", 1]) });
     frames.push(beacon);
   }
-  const thread = await bindTownshipReplica(`replica:treehouse:thread:${id("thread")}`, base.root.publicKey);
-  const threadDelegation = await authorCarrierDelegation({ replica: thread, signer: base.root, audiencePubkey: base.root.publicKey,
-    ops: ["post"], roles: [], live: true });
-  const threadGenesis = await authorCarrierOp({ replica: thread, signer: base.root, deps: [], kind: "authority", cap: nil,
-    body: tuple(atom("genesis"), ["delegation", threadDelegation], ["map", []]) });
   const newCatalog = seededSigner("r316-pr2-ts-new-catalog"), newService = seededSigner("r316-pr2-ts-new-service");
-  return { ...base, leased, transfer, beacon, frames, thread, threadGenesis, newCatalog, newService };
+  return { ...base, leased, transfer, beacon, frames, thread, threadGenesis, threadCreation, threadReference, newCatalog, newService };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
@@ -60,11 +69,11 @@ function entries(f: Fixture, serviceKey: string): CatalogEntry[] {
     product: "treehouse", replica, kind, schema: kind === "space" ? "treehouse_space_v1" : "treehouse_thread_v1",
     root: b64(f.root.publicKey), genesis, creation, reference, route: `/r/${id(`route-${replica}`)}`, serviceId: id("new-service"), serviceKey });
   return [entry(f.replica, "space", f.genesis.id, f.creation.id, f.bootstrap.id),
-    entry(f.thread, "thread", f.threadGenesis.id, f.threadGenesis.id, id("thread-reference"))]
+    entry(f.thread, "thread", f.threadGenesis.id, f.threadCreation.id, f.threadReference.id)]
     .sort((a, b) => a.replica < b.replica ? -1 : a.replica > b.replica ? 1 : 0);
 }
 
-function request(f: Fixture, overrides: Partial<TreehouseCatalogReplacementRequest> = {}, threadFrames: unknown[] = [f.threadGenesis]): TreehouseCatalogReplacementRequest {
+function request(f: Fixture, overrides: Partial<TreehouseCatalogReplacementRequest> = {}, threadFrames: unknown[] = [f.threadGenesis, f.threadCreation]): TreehouseCatalogReplacementRequest {
   const serviceKey = overrides.newServiceKey ?? b64(f.newService.publicKey);
   return { author: b64(f.nominee.publicKey), nonce: id("nonce"), parents: [f.bootstrap.id],
     priorCatalogs: [{ binding: f.bootstrap.id, catalog: null }], generation: 1, newCatalogKey: b64(f.newCatalog.publicKey),
@@ -95,8 +104,9 @@ const push = (frame: unknown) => new TextEncoder().encode(JSON.stringify({ type:
 test("catalog_command_too_large before any signature", async () => {
   signed = [];
   const f = await fixture();
-  const wide: CarrierOpFrame[] = [f.threadGenesis];
-  for (let n = 1; n <= 1_500; n++) wide.push(await post(f, `post ${n}`));
+  // The Thread's own create_thread is the 1,500th frontier op.
+  const wide: CarrierOpFrame[] = [f.threadGenesis, f.threadCreation];
+  for (let n = 1; n <= 1_499; n++) wide.push(await post(f, `post ${n}`));
   const refused = await prepare(f, f.frames, request(f, {}, wide));
   assert.deepEqual(refused, { ok: false, reason: "catalog_command_too_large" });
   assert.deepEqual(signed, []);
@@ -156,7 +166,7 @@ test("a changed dep, key or cutoff requires new possession bytes", async () => {
   assert.deepEqual(key.ok ? null : [key.reason, key.journalEntry.status], ["invalid_possession", "cancelled"]);
 
   // (cutoff) An op appended to the Thread log after the freeze.
-  const later = { ...attempt, request: request(f, {}, [f.threadGenesis, await post(f, "later")]) };
+  const later = { ...attempt, request: request(f, {}, [f.threadGenesis, f.threadCreation, await post(f, "later")]) };
   const cutoff = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt: later, possession,
     signer: spy(f.nominee, "op") });
   assert.deepEqual(cutoff.ok ? null : [cutoff.reason, cutoff.journalEntry.status], ["stale_verified_state", "cancelled"]);

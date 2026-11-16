@@ -94,7 +94,7 @@ export async function runVector(vector = loadVector()) {
             const rotations = new Map(step.rotations.map((id) => [id, parseArtifact(vector.artifacts[id], catalogRotationEnvelopeFromCarrierTerm)]));
             const catalogs = new Map(step.catalogs.map((id) => [id, parseArtifact(vector.artifacts[id], catalogEnvelopeFromCarrierTerm)]));
             const result = await resolveCatalogBindingGraph({ bootstrap, frames: step.frames.map((id) => vector.frames[id]),
-                rotations, catalogs, provenCutoffs: step.proven, accepted: state.accepted });
+                rotations, catalogs, provenCutoffs: step.proven, accepted: state.accepted, histories: vector.histories });
             const next = advanceCatalogBindingState(state, result);
             outcomes.push({ scenario: scenario.name, step: i + 1, expect: step.expect, beam: step.beam,
                 label: labelView(result, scenario.labels, next), id: idView(result, next), stateIn, beamStateIn: step.state });

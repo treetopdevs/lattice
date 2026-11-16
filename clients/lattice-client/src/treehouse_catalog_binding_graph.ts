@@ -27,6 +27,8 @@ import type {
   CatalogBootstrap, CatalogEntry, CatalogEnvelope, CatalogPriorCatalog, CatalogReplacementClaim, CatalogRotationEnvelope,
   TransportCatalog,
 } from "./treehouse_catalog_codec";
+import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
+import { observeTreehouseCatalogEntries } from "./treehouse_catalog_entries";
 import { checkCatalogReplacementAuthority, refuteCatalogReplacementWithoutClosure } from "./treehouse_catalog_replacement_authority";
 
 const maxSafe = Number.MAX_SAFE_INTEGER;
@@ -110,6 +112,10 @@ export interface CatalogBindingGraphInput {
   /** Complete `{replica, frontier, logDigest}` cutoffs; an entry without its frontier is malformed input. */
   provenCutoffs: readonly ProvenCutoff[];
   accepted: CatalogBindingAccepted | null;
+  /** Row 390 (repair (c)): Thread histories (replica -> authenticated frames) that entry facts are judged against. A forged or
+   * misfiled history is malformed input; an incomplete one (its cutoff does not derive) is left out, so only the catalogs naming
+   * that replica pend. The Space history is always the complete part of `frames`. */
+  histories?: Readonly<Record<string, readonly unknown[]>>;
 }
 
 type CatalogStatus = "current" | "covered" | "closed_out" | "uncovered" | "refused" | "pending";
@@ -136,7 +142,9 @@ interface Ctx {
   ancestorCache: Map<string, Set<string>>; reasons: ReadonlyMap<string, string>; candidates: Map<string, Candidate>;
   proven: Set<string>; bootHonored: boolean; memo: Map<string, Verdict>; visiting: Set<string>;
   cmemo: Map<string, Validity>; croutes: Map<string, Map<string, string>>; cvisiting: Set<string>; fmemo: Map<string, Floor>;
+  threads: Map<string, Map<string, CarrierOpFrame>>; emo: Map<string, EntryFacts>;
 }
+type EntryFacts = "ok" | "pending" | "bad";
 
 export async function resolveCatalogBindingGraph(input: CatalogBindingGraphInput): Promise<CatalogBindingGraphResult> {
   return (await resolveInfo(input)).result;
@@ -169,6 +177,21 @@ async function contextOf(input: CatalogBindingGraphInput): Promise<Ctx | null> {
     if (!checked.valid) return null;
     frames.set(frame.id, frame);
   }
+  const threads = new Map<string, Map<string, CarrierOpFrame>>();
+  for (const [threadReplica, values] of Object.entries(input.histories ?? {})) {
+    if (threadReplica === replica || !Array.isArray(values)) return null;
+    const held = new Map<string, CarrierOpFrame>();
+    for (const value of structuredClone([...values])) {
+      const frame = decodeCarrierOpFrame(value);
+      if (frame.replica !== threadReplica || held.has(frame.id)) return null;
+      const checked = await verifyCarrierOp(frame, {verify: async (pub, bytes, sig) => verifyEd25519(sig, bytes, base64ToBytes(pub))});
+      if (!checked.valid) return null;
+      held.set(frame.id, frame);
+    }
+    if ((await deriveTreehouseCatalogCutoff({replica: threadReplica, frames: [...held.values()], rejected: []})).ok) {
+      threads.set(threadReplica, held);
+    }
+  }
   const ops = carrierOpsToSemanticOps([...frames.values()], {}, treehouseCommandDecoders("Treehouse.Space"));
   const byId = index(ops);
   // An op's closure is complete when every dep is held and itself complete.
@@ -190,7 +213,8 @@ async function contextOf(input: CatalogBindingGraphInput): Promise<Ctx | null> {
   const ctx: Ctx = {input, replica, bootstrapId: input.bootstrap.id, record: input.bootstrap.record, byId, frames, complete,
     completeById, ancestorCache: new Map(), reasons, candidates,
     proven: new Set(input.provenCutoffs.map(cutoffKey)), bootHonored: false,
-    memo: new Map(), visiting: new Set(), cmemo: new Map(), croutes: new Map(), cvisiting: new Set(), fmemo: new Map()};
+    memo: new Map(), visiting: new Set(), cmemo: new Map(), croutes: new Map(), cvisiting: new Set(), fmemo: new Map(),
+    threads, emo: new Map()};
   ctx.bootHonored = bootstrapHonored(ctx);
   return ctx;
 }
@@ -542,6 +566,16 @@ async function judgeCatalogNew(id: string, ctx: Ctx): Promise<[Validity, Map<str
     return [{t: "refused", reason: "wrong_catalog_scope"}, null];
   }
   if (!verifyCatalogEnvelope(e, n.key)) return [{t: "refused", reason: "invalid_catalog_signature"}, null];
+  const facts = await entryFacts(c, ctx);
+  const [chain, routes] = await chainVerdict(c, n, ctx);
+  // Invalid outranks pending: a contradicting entry fact refutes the catalog even while its chain pends, and a chain-valid
+  // catalog with missing facts pends.
+  if (chain.t === "bad_chain" || facts === "bad") return [{t: "bad_chain"}, null];
+  if (chain.t === "pending" || facts === "pending") return [{t: "pending"}, null];
+  return [chain, routes];
+}
+
+async function chainVerdict(c: TransportCatalog, n: CatalogBindingNode, ctx: Ctx): Promise<[Validity, Map<string, string> | null]> {
   if (c.previous === null) {
     // First-catalog checks: revision 0 for a replacement, the declared inventory, the replacement's cutoffs covering every
     // entry (D-A15), extension of the binding's floor, and the route rule.
@@ -564,6 +598,48 @@ async function judgeCatalogNew(id: string, ctx: Ctx): Promise<[Validity, Map<str
     return [{t: "bad_chain"}, null];
   }
   return withRoutes(ctx.croutes.get(c.previous)!, c.entries);
+}
+
+// Row 390, repair (c): a catalog's entry facts are an intrinsic validity input, judged by observeTreehouseCatalogEntries (the
+// twin of Treehouse.CatalogEntries) against the causal slices that hold them: of the complete Space part (with the bootstrap)
+// and of each supplied Thread history, so two siblings that contradict the same history cannot both be valid priors. A slice
+// is fixed once its ops are held, so a quarantine read on it is a prefix fact and every verdict is D-279 safe: ok, pending (a
+// fact op or history not yet held, or a slice whose cutoff does not derive) or bad. The probe carries the bootstrap's service
+// pair (the entries were already bound to their binding node's pair). Memoized per resolve by inventory.
+async function entryFacts(c: TransportCatalog, ctx: Ctx): Promise<EntryFacts> {
+  const entries = c.entries.map((e) => ({...e, serviceId: ctx.record.serviceId, serviceKey: ctx.record.serviceKey}));
+  const key = catalogInventoryId(entries);
+  const known = ctx.emo.get(key);
+  if (known !== undefined) return known;
+  const histories = new Map<string, CarrierOpFrame[]>();
+  for (const e of entries) {
+    if (e.kind !== "thread") continue;
+    const held = ctx.threads.get(e.replica);
+    if (held === undefined) continue;
+    const seeds = [e.genesis, e.creation].filter((id) => held.has(id));
+    if (seeds.length > 0) histories.set(e.replica, slice(held, seeds));
+  }
+  const space = [ctx.bootstrapId, ...entries.flatMap((e) => e.kind === "space" ? [e.genesis, e.creation, e.reference] : [e.reference])]
+    .filter((id) => ctx.completeById.has(id));
+  histories.set(ctx.replica, slice(ctx.frames, space, ctx.complete));
+  const result = await observeTreehouseCatalogEntries({...c, entries}, histories);
+  const v: EntryFacts = result.ok ? "ok"
+    : result.reason === "trust_pending" || result.reason === "invalid_verified_history" || result.reason === "unsupported_cutoff"
+      ? "pending" : "bad";
+  ctx.emo.set(key, v);
+  return v;
+}
+
+/** The frames in the causal closure of `seeds` (each seed included), within `allowed` when given. */
+function slice(frames: ReadonlyMap<string, CarrierOpFrame>, seeds: readonly string[], allowed?: ReadonlySet<string>): CarrierOpFrame[] {
+  const ids = new Set<string>(), pending = [...seeds];
+  while (pending.length > 0) {
+    const id = pending.pop()!;
+    const frame = frames.get(id);
+    if (ids.has(id) || frame === undefined || (allowed !== undefined && !allowed.has(id))) continue;
+    ids.add(id); pending.push(...frame.deps);
+  }
+  return [...ids].sort(compareUtf8).map((id) => frames.get(id)!);
 }
 
 // Route rule: within a catalog's own ancestry plus its entries, a route names one replica.
@@ -589,7 +665,16 @@ function addRoutes(routes: ReadonlyMap<string, string>, entries: readonly Catalo
 // Admit(F, entries): the entries extend the floor's entries and add no route conflict (an entry on a RESERVED route, or on a
 // route mapped to another replica, conflicts). Shared by first-catalog validity and authoring coverage (row 387).
 function admit(floor: CatalogFloor, entries: readonly CatalogEntry[]): boolean {
-  return extendsEntries(floor.entries, entries) && addRoutes(floor.routes, entries) !== null;
+  return floorCarried(floor.entries, entries) && addRoutes(floor.routes, entries) !== null;
+}
+
+// The floor is a per-replica obligation (row 390, the general floor rule): every replica a cited side names must be listed, with
+// the extended facts of one of the variants the cited sides carry for it. Repair (c) makes every variant history-valid, so a
+// disagreement left here is between fact sets both consistent with history, and the first catalog may carry either. With one
+// variant per replica this is exactly extendsEntries.
+function floorCarried(floor: readonly CatalogEntry[], entries: readonly CatalogEntry[]): boolean {
+  return floor.every((f) => entries.some((e) => e.replica === f.replica &&
+    floor.some((v) => v.replica === f.replica && extendedKeys.every((k) => v[k] === e[k]))));
 }
 
 // Floor(N): Floor(bootstrap) = [], Floor(T) = entries(T.priorCatalog), and for a replacement the union over its cited {P, K}

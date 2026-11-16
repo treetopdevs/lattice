@@ -117,7 +117,7 @@ export async function runVector(vector: Json = loadVector()): Promise<StepOutcom
       const catalogs = new Map<string, CatalogEnvelope>(step.catalogs.map((id: string) =>
         [id, parseArtifact(vector.artifacts[id], catalogEnvelopeFromCarrierTerm)]));
       const result = await resolveCatalogBindingGraph({bootstrap, frames: step.frames.map((id: string) => vector.frames[id]),
-        rotations, catalogs, provenCutoffs: step.proven, accepted: state.accepted});
+        rotations, catalogs, provenCutoffs: step.proven, accepted: state.accepted, histories: vector.histories});
       const next = advanceCatalogBindingState(state, result);
       outcomes.push({scenario: scenario.name, step: i + 1, expect: step.expect, beam: step.beam,
         label: labelView(result, scenario.labels, next), id: idView(result, next), stateIn, beamStateIn: step.state});
