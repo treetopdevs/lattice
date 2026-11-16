@@ -52,10 +52,20 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
     with {:ok, doc} <- JSON.decode(bytes),
          true <- Enum.sort(Map.keys(doc)) == ~w(binding envelopes format head key),
          true <- doc["format"] == "treehouse-custodian-status-v1",
-         true <- doc["binding"] == Binding.binding_id(binding),
-         true <- doc["key"] == Base.encode64(binding.record.catalog_key),
          true <- PublicHistory.canonical(doc) == bytes do
-      verify(Map.take(doc, ["head", "envelopes"]), binding)
+      # Row 362: a shape-valid status for another binding is a named refusal
+      # (it is indistinguishable from a legitimate other binding's status).
+      # The binding is judged before the key, as the owner helper does.
+      cond do
+        doc["binding"] != Binding.binding_id(binding) ->
+          {:error, :catalog_ledger_binding_mismatch}
+
+        doc["key"] != Base.encode64(binding.record.catalog_key) ->
+          {:error, :catalog_ledger_corrupt}
+
+        true ->
+          verify(Map.take(doc, ["head", "envelopes"]), binding)
+      end
     else
       _ -> {:error, :catalog_ledger_corrupt}
     end
@@ -125,14 +135,15 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
     with true <- length(envelopes) <= max_envelopes(binding),
          {:ok, head} <- JSON.decode(bytes),
          true <- Enum.sort(Map.keys(head)) == ~w(binding id key revision),
-         true <- head["binding"] == Binding.binding_id(binding),
-         true <- head["key"] == Base.encode64(binding.record.catalog_key),
          true <- PublicHistory.canonical(head) == bytes,
+         {:binding, true} <- {:binding, head["binding"] == Binding.binding_id(binding)},
+         true <- head["key"] == Base.encode64(binding.record.catalog_key),
          {:ok, chain} <- envelopes(envelopes, binding),
          {:ok, committed, pending} <- match_head(chain, head) do
       {:ok,
        %{head: head, head_bytes: bytes, committed: committed, pending: pending, chain: chain}}
     else
+      {:binding, false} -> {:error, :catalog_ledger_binding_mismatch}
       _ -> {:error, :catalog_ledger_corrupt}
     end
   end
@@ -173,8 +184,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
     if result == :error, do: :error, else: {:ok, entries}
   end
 
-  # The bootstrap chain rule; `SignCatalog` only ever holds a bootstrap binding
-  # (threading the replacement binding through signing is row 361).
+  # The binding-less (bootstrap) chain rule. `extends?/3` below is the binding-aware
+  # form that `SignCatalog.sign_reviewed/4` and ledger verification use, and it adds
+  # the replacement-genesis arm; keep both.
   @doc false
   @spec extends?(map(), map() | nil) :: boolean()
   def extends?(catalog, nil),
@@ -266,7 +278,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SigningLedger do
 
   defp refusal(reason) do
     known =
-      ~w(catalog_ledger_busy catalog_ledger_corrupt catalog_ledger_uninitialized catalog_ledger_fork catalog_ledger_timeout unsafe_catalog_ledger catalog_ledger_capacity catalog_ledger_protocol)a
+      ~w(catalog_ledger_busy catalog_ledger_corrupt catalog_ledger_binding_mismatch catalog_ledger_uninitialized catalog_ledger_fork catalog_ledger_timeout unsafe_catalog_ledger catalog_ledger_capacity catalog_ledger_protocol)a
 
     Enum.find(known, :catalog_ledger_failed, &(Atom.to_string(&1) == reason))
   end

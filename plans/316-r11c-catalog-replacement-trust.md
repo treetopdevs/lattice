@@ -1,7 +1,7 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 1–2, PR 3's generation keying and PR 6's
-exporter test can start on fixtures now. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3 and PR 6 are MERGED (#213, #214, #216, #217, #218); the PR 3 replacement signing path on fixtures (rows 361 part, 362) is in review in #220. Remaining: PR 4, PR 5 native, PR 6's C15 run, PR 7 rule 8.
+PR 3's generation keying and PR 6's exporter test were the fixture-startable slices. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
 implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire

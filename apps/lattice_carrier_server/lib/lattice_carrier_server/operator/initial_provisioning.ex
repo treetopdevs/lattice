@@ -24,6 +24,8 @@ defmodule LatticeCarrierServer.Operator.InitialProvisioning do
          :ok <- Journal.identity_location(paths.identity),
          {:ok, bundle} <- InitialBundle.load(paths.bundle),
          {:ok, binding} <- CatalogBinding.load_log(paths.ceremony, bundle.space),
+         # Row 361 remainder (after PR 4): initial provisioning is by definition the first
+         # install under the bootstrap binding; a replacement binding fails closed here.
          true <- binding.bootstrap_id == bundle.bootstrap.id,
          {:ok, _secret, pub} <- Manifest.read_identity_file(paths.identity, binding.realm),
          true <- pub == binding.record.service_key,
