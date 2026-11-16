@@ -49,7 +49,12 @@ const sortKeys = <T>(map: ReadonlyMap<string, T>, f: (value: T) => unknown): Rec
 
 /** The id-space view, same shape as CatalogBindingGraphFixtures.view/1. */
 export function idView(result: CatalogBindingGraphResult, next: CatalogBindingAdvance): Json {
-  if (!result.ok) return {error: result.reason, ids: sorted(result.detail.ids), after: afterJson(next)};
+  if (!result.ok) {
+    const {freeze, serving} = result.detail;
+    return result.reason === "trust_pending" && freeze !== undefined && serving !== undefined
+      ? {error: result.reason, ids: sorted(result.detail.ids), freeze, serving, after: afterJson(next)}
+      : {error: result.reason, ids: sorted(result.detail.ids), after: afterJson(next)};
+  }
   const g = result.graph, d = g.decision;
   return {
     heads: [...g.heads], closed: [...g.closed], closed_out: sortKeys(g.closedOut, (r) => r),
@@ -70,8 +75,12 @@ export function idView(result: CatalogBindingGraphResult, next: CatalogBindingAd
 export function labelView(result: CatalogBindingGraphResult, labels: Record<string, string>, next: CatalogBindingAdvance): Json {
   const reverse = new Map(Object.entries(labels).map(([k, v]) => [v, k]));
   const l = (id: string) => reverse.get(id) ?? `?${id}`;
-  const after = {frozen: next.frozen, serving: next.serving === null || next.serving === "unchanged" ? next.serving : l(next.serving)};
-  if (!result.ok) return {error: result.reason, after};
+  const after = {frozen: next.frozen, serving: next.serving === null ? null : l(next.serving)};
+  if (!result.ok) {
+    const {freeze, serving} = result.detail;
+    return result.reason === "trust_pending" && freeze !== undefined && serving !== undefined
+      ? {error: result.reason, freeze, serving: serving === null ? null : l(serving), after} : {error: result.reason, after};
+  }
   const ls = (ids: Iterable<string>) => [...ids].map(l).sort(compareUtf8);
   const g = result.graph, d = g.decision;
   return {

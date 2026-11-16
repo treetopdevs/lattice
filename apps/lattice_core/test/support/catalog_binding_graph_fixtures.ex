@@ -399,6 +399,14 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
   @doc "Plain, sorted, JSON-friendly view of a result; the shape both runtimes compare."
   def view(result, next), do: Map.put(view(result), "after", after_json(next))
 
+  def view({:error, :trust_pending, %{ids: ids, freeze: freeze, serving: serving}}),
+    do: %{
+      "error" => "trust_pending",
+      "ids" => Enum.sort(ids),
+      "freeze" => freeze,
+      "serving" => serving
+    }
+
   def view({:error, reason, %{ids: ids}}),
     do: %{"error" => to_string(reason), "ids" => Enum.sort(ids)}
 
@@ -465,7 +473,7 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
       next
       |> persisted()
       |> state_json()
-      |> Map.put("serving", if(next.serving == :unchanged, do: "unchanged", else: next.serving))
+      |> Map.put("serving", next.serving)
 
   defp jsonish(v) when is_atom(v) and not is_nil(v) and not is_boolean(v), do: to_string(v)
   defp jsonish(v), do: v

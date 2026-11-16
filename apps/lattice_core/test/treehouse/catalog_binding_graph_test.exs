@@ -323,7 +323,7 @@ defmodule Treehouse.CatalogBindingGraphTest do
     log = F.append(@base.log, [r.op])
     {:ok, g} = resolve(%{space: log, catalogs: catalogs([c0, kr])})
     assert g.refusals[F.cid(kr)].reason == :invalid_catalog_transition
-    assert g.floors[r.id] == [space, th]
+    assert g.floors[r.id].entries == [space, th]
 
     claim = %{
       r.claim
@@ -423,19 +423,30 @@ defmodule Treehouse.CatalogBindingGraphTest do
     assert G.cover_claim(g, claim, [fresh, moved]) == {:error, :invalid_catalog_transition}
   end
 
-  test "advance/2 keeps state on errors and serves unchanged only for trust_pending" do
-    state = %{
-      accepted: %{binding: "b", generation: 0, catalog: "c", revision: 0, routes: %{}},
-      frozen: true
-    }
+  # Row 386, repair (a): `trust_pending` ORs the complete part's freeze into `frozen` and serves
+  # the watermark's own `serving` only while not frozen; without those fields (a page-level
+  # refusal) it keeps `frozen` and serves nothing. Pending evidence never lifts a freeze.
+  test "advance/2 on trust_pending is sticky and freezes only on the complete part's bit" do
+    a = %{binding: "b", generation: 0, catalog: "c", revision: 0, routes: %{}}
+    frozen = %{accepted: a, frozen: true}
+    open = %{accepted: a, frozen: false}
 
-    assert G.advance(state, {:error, :trust_pending, %{ids: []}}).serving == :unchanged
+    pending = fn freeze, serving ->
+      {:error, :trust_pending, %{ids: ["x"], freeze: freeze, serving: serving}}
+    end
 
-    assert %{frozen: true, serving: nil} =
-             G.advance(state, {:error, :control_history_limit, %{ids: []}})
+    assert G.advance(frozen, pending.(false, "c")) == %{accepted: a, frozen: true, serving: nil}
+    assert G.advance(open, pending.(true, "c")) == %{accepted: a, frozen: true, serving: nil}
+    assert G.advance(open, pending.(false, "c")) == %{accepted: a, frozen: false, serving: "c"}
+    assert G.advance(open, pending.(false, nil)) == %{accepted: a, frozen: false, serving: nil}
 
-    assert %{frozen: true, serving: nil} =
-             G.advance(state, {:error, :malformed_catalog, %{ids: []}})
+    for state <- [frozen, open] do
+      assert G.advance(state, {:error, :trust_pending, %{ids: []}}) ==
+               %{accepted: a, frozen: state.frozen, serving: nil}
+
+      assert %{serving: nil} = G.advance(state, {:error, :control_history_limit, %{ids: []}})
+      assert %{serving: nil} = G.advance(state, {:error, :malformed_catalog, %{ids: []}})
+    end
   end
 
   # Design section 1.5: the only branch that lifts `frozen` needs an accepting decision that

@@ -7,7 +7,7 @@
 // bytes still refuses, so nothing is signed over evidence Stage B rejects structurally. Authoring-only: retained-client
 // trust waits on 4c. Non-claim: catalog entry facts are not observed against retained histories here (row 354, 4c).
 import { verifyEd25519 } from "./signature";
-import { analyzeAuthority } from "./authority";
+import { analyzeAuthority, resolveContinuationProfileFromFrames } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
 import type { CarrierOpFrame, CarrierTerm } from "./carrier";
 import { authorCarrierOp, canonicalBase64Bytes, verifyCarrierOp } from "./codec";
@@ -201,6 +201,13 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
   if (!observed.ok) return observed;
   if (observed.bootstraps.length !== 1) return refuse("application_invalid_catalog");
   const bootstrap = observed.bootstraps[0]!;
+  // Plan 316 §3 step 4: the claim's profile fields must be the pin selected at this frozen prefix, not the one the
+  // bootstrap was honored under. It runs directly after bootstrap selection, so it outranks the holder, epoch, inventory
+  // and cutoff refusals (PR #221 bot finding at the BEAM twin's old line 85).
+  const profile = await resolveContinuationProfileFromFrames({replica, frames: space.frames});
+  if (!profile.ok || profile.profileGenesis !== bootstrap.record.profileGenesis || profile.profileId !== bootstrap.record.profileId) {
+    return refuse("wrong_catalog_scope");
+  }
   // Holder and capability come from the judge only; the caller never supplies either.
   const acquire = history.authority.acquiresByRole.get("admin")?.at(-1);
   if (acquire === undefined || acquire.holderPubkey !== request.author) return refuse("not_holder");

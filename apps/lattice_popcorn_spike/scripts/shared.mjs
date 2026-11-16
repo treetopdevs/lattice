@@ -15,7 +15,8 @@ export const domainSources = [
   "treehouse/space.ex", "treehouse/thread.ex", "treehouse/invitation.ex", "treehouse/catalog_bootstrap.ex",
   "treehouse/transport_catalog.ex", "treehouse/catalog_json.ex", "treehouse/member_continuity.ex",
   "treehouse/member_continuity_certificate.ex", "treehouse/member_continuity_authoring.ex",
-  "treehouse/catalog_cutoff.ex", "treehouse/catalog_replacement_authoring.ex"
+  "treehouse/catalog_cutoff.ex", "treehouse/catalog_replacement_authoring.ex",
+  "treehouse/catalog_binding_graph.ex", "treehouse/catalog_replacement_authority.ex"
 ];
 
 // The DualAuthorityFixture and PolicyFixture schemas are defined at the head of the

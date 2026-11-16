@@ -50,8 +50,8 @@ export interface CatalogBindingAccepted {
 export interface CatalogBindingBlock { reason: string; ids: readonly string[]; freeze: boolean; }
 /** The persisted caller state (row 383). */
 export interface CatalogBindingState { accepted: CatalogBindingAccepted | null; frozen: boolean; }
-/** advanceCatalogBindingState's result: the next persisted state and the catalog to serve ("unchanged" keeps the last). */
-export interface CatalogBindingAdvance extends CatalogBindingState { serving: string | null | "unchanged"; }
+/** advanceCatalogBindingState's result: the next persisted state and the catalog to serve. */
+export interface CatalogBindingAdvance extends CatalogBindingState { serving: string | null; }
 export type CatalogBindingStatus = "current" | "closed" | "closed_out" | "refused" | "missing";
 export type CatalogBindingCatalogStatus = "current" | "ancestor_of_cited" | "closed_out" | "refused" | "missing";
 export interface CatalogBindingDecision {
@@ -70,15 +70,36 @@ export interface CatalogBindingGraph {
   citableCatalogHeads: ReadonlyMap<string, readonly string[]>; catalogStatus: ReadonlyMap<string, CatalogStatus>;
   citations: ReadonlyMap<string, readonly (string | null)[]>; previous: ReadonlyMap<string, string | null>;
   forks: readonly CatalogBindingFork[]; rotationForks: readonly CatalogRotationFork[]; forkBindings: readonly string[];
-  /** Floor(N) per final node: the entries every valid catalog under N must extend. */
-  floors: ReadonlyMap<string, readonly CatalogEntry[]>;
+  /** Floor(N) per final node: the entries every valid catalog under N must extend and its route map (RESERVED marks a
+   * route reserved-to-none, row 387). */
+  floors: ReadonlyMap<string, CatalogFloor>;
+  /** The cumulative route map of every intrinsically valid catalog (its own ancestry plus its entries). */
+  catalogRoutes: ReadonlyMap<string, ReadonlyMap<string, string>>;
   /** CatLineage parent per catalog: `previous`, or for a first catalog under a rotation that rotation's prior catalog. */
   catParent: ReadonlyMap<string, string | null>;
   catalogs: ReadonlyMap<string, TransportCatalog>; decision: CatalogBindingDecision;
 }
+/** A trust_pending detail carries the complete part's freeze bit and the watermark's own serving (row 386, repair (a)). */
+export interface CatalogBindingErrorDetail { ids: string[]; freeze?: boolean; serving?: string | null; }
 export type CatalogBindingGraphResult =
   | {ok: true; graph: CatalogBindingGraph}
-  | {ok: false; reason: string; detail: {ids: string[]}};
+  | {ok: false; reason: string; detail: CatalogBindingErrorDetail};
+/** A floor: the entries every first catalog under the node must extend, and the route map it must not conflict with. */
+export interface CatalogFloor { entries: readonly CatalogEntry[]; routes: ReadonlyMap<string, string>; }
+
+/**
+ * The reserved-to-none route value (row 387): a non-nullish sentinel that can never equal a replica id (replica ids are
+ * hex digests). Every lookup is `has`-based, never `??`. At a JSON boundary it is `null` (BEAM `:none`).
+ */
+export const RESERVED = "\u0000none";
+/** Encode a route map for JSON: RESERVED becomes null. */
+export function encodeCatalogRoutes(routes: ReadonlyMap<string, string>): Record<string, string | null> {
+  return Object.fromEntries([...routes].sort(([a], [b]) => compareUtf8(a, b)).map(([k, v]) => [k, v === RESERVED ? null : v]));
+}
+/** Decode a JSON route map: null becomes RESERVED. */
+export function decodeCatalogRoutes(json: Readonly<Record<string, string | null>>): Map<string, string> {
+  return new Map(Object.entries(json).map(([k, v]) => [k, v === null ? RESERVED : v]));
+}
 export interface ProvenCutoff { replica: string; frontier: readonly string[]; logDigest: string; }
 export interface CatalogBindingGraphInput {
   bootstrap: {id: string; record: CatalogBootstrap};
@@ -118,14 +139,25 @@ interface Ctx {
 }
 
 export async function resolveCatalogBindingGraph(input: CatalogBindingGraphInput): Promise<CatalogBindingGraphResult> {
+  return (await resolveInfo(input)).result;
+}
+
+// The result plus the intrinsic catalog verdicts, for the authoring escape (C4).
+async function resolveInfo(input: CatalogBindingGraphInput): Promise<{result: CatalogBindingGraphResult; ctx: Ctx | null}> {
   const ctx = await context(input);
-  if (ctx === null) return {ok: false, reason: "malformed_catalog", detail: {ids: []}};
-  return run(ctx);
+  if (ctx === null) return {result: {ok: false, reason: "malformed_catalog", detail: {ids: []}}, ctx};
+  return {result: await run(ctx), ctx};
 }
 
 // --- context ----------------------------------------------------------------------------------------------------------
 
+// A malformed frame (decoding or verification throws) refuses as malformed input rather than rejecting the promise (PR #221
+// bot finding at the old line 137).
 async function context(input: CatalogBindingGraphInput): Promise<Ctx | null> {
+  try { return await contextOf(input); } catch { return null; }
+}
+
+async function contextOf(input: CatalogBindingGraphInput): Promise<Ctx | null> {
   if (!Array.isArray(input.provenCutoffs) || !input.provenCutoffs.every(provenShape)) return null;
   if (!acceptedShape(input.accepted)) return null;
   const replica = input.bootstrap.record.space;
@@ -213,10 +245,10 @@ async function run(ctx: Ctx): Promise<CatalogBindingGraphResult> {
   const outPending = closedOutPending(ctx, closed, outRot);
   const final = new Map([...nodesAll].filter(([id]) => !outRot.has(id)));
   const heads = headsOf(final);
-  const floors = new Map<string, readonly CatalogEntry[]>();
+  const floors = new Map<string, CatalogFloor>();
   for (const [id, n] of final) {
     const f = await floorOf(n, ctx);
-    if (f.t === "ok") floors.set(id, f.entries);
+    if (f.t === "ok") floors.set(id, {entries: f.entries, routes: f.routes});
   }
   const cat = classifyCatalogs(ctx, nodesAll, closed, outRot, outPending);
   // Any held op whose closure is incomplete is a missing history page: the authority fold over the complete ops would judge
@@ -226,8 +258,13 @@ async function run(ctx: Ctx): Promise<CatalogBindingGraphResult> {
     ...cat.pending,
     ...incomplete])].sort(compareUtf8);
   if (heads.length > 2) return {ok: false, reason: "control_history_limit", detail: {ids: heads}};
-  if (pending.length > 0) return {ok: false, reason: "trust_pending", detail: {ids: pending}};
-  return {ok: true, graph: assemble(ctx, nodesAll, final, heads, closed, outRot, cat, floors)};
+  const graph = assemble(ctx, nodesAll, final, heads, closed, outRot, cat, floors);
+  if (pending.length === 0) return {ok: true, graph};
+  // Row 386, repair (a): the graph is the complete authenticated part (pending artifacts are not nodes and are never cited),
+  // so its decision derives the freeze bit. It never accepts or serves anything here: serving is only the watermark's own.
+  const d = graph.decision;
+  return {ok: false, reason: "trust_pending", detail: {ids: pending, freeze: !d.accepted && d.block !== null && d.block.freeze,
+    serving: watermarkServing(ctx.input.accepted, graph, nodesAll, closed, outRot, cat.validity)}};
 }
 
 // --- binding evaluation (intrinsic) ------------------------------------------------------------------------------------
@@ -262,12 +299,17 @@ async function evalRotation(id: string, ctx: Ctx): Promise<Verdict> {
   if (parent.t === "bad" || parent.t === "not_binding") return {t: "bad", reason: "invalid_catalog_transition"};
   if (parent.t !== "node") return {t: "pending"};
   const p = parent.node;
-  if (nextCatalogGeneration([p.generation]) !== r.generation) return {t: "bad", reason: "invalid_catalog_transition"};
-  if (r.newCatalogKey === p.key || r.newCatalogKey === p.serviceKey) return {t: "bad", reason: "invalid_catalog_transition"};
-  if (!verifyKey(p.key, canonicalBytesForCatalogRotation(r), e.oldSignature)) return {t: "bad", reason: "invalid_catalog_signature"};
+  // Every own-bytes failure is collected and the highest-precedence one reported (plan 316 section 4: a signature or
+  // possession failure, rank 4, outranks a transition, rank 6).
+  const failures: [string, string][] = [];
+  if (!verifyKey(p.key, canonicalBytesForCatalogRotation(r), e.oldSignature)) failures.push(["invalid_catalog_signature", "old"]);
   if (!verifyKey(r.newCatalogKey, canonicalBytesForCatalogRotationPossession(r), e.newSignature)) {
-    return {t: "bad", reason: "invalid_possession"};
+    failures.push(["invalid_possession", "new"]);
   }
+  if (nextCatalogGeneration([p.generation]) !== r.generation) failures.push(["invalid_catalog_transition", "generation"]);
+  if (r.newCatalogKey === p.key || r.newCatalogKey === p.serviceKey) failures.push(["invalid_catalog_transition", "key"]);
+  const worst = lowest(failures);
+  if (worst !== null) return {t: "bad", reason: worst[0]};
   const prior = ctx.input.catalogs.get(r.priorCatalog)?.catalog;
   if (prior === undefined) return {t: "pending"};
   if (prior.binding !== r.parent || catalogInventoryId(prior.entries) !== r.inventoryDigest ||
@@ -507,7 +549,7 @@ async function judgeCatalogNew(id: string, ctx: Ctx): Promise<[Validity, Map<str
       c.entries.map((entry) => entry.replica).sort(compareUtf8));
     if ((n.kind === "replacement" && c.revision !== 0) ||
       (n.inventory !== null && catalogInventoryId(c.entries) !== n.inventory) || uncovered ||
-      !extendsEntries(floor.entries, c.entries)) return [{t: "bad_chain"}, null];
+      !admit(floor, c.entries)) return [{t: "bad_chain"}, null];
     return withRoutes(floor.routes, c.entries);
   }
   if (!ctx.input.catalogs.has(c.previous)) return [{t: "pending"}, null];
@@ -527,13 +569,24 @@ function withRoutes(routes: ReadonlyMap<string, string>, entries: readonly Catal
   return out === null ? [{t: "bad_chain"}, null] : [{t: "ok"}, out];
 }
 
+// A route conflicts when it is held and maps to anything but this replica (RESERVED included). `has`-based: never `??`.
+function routeConflict(routes: ReadonlyMap<string, string>, e: CatalogEntry): boolean {
+  return routes.has(e.route) ? routes.get(e.route) !== e.replica : false;
+}
+
 function addRoutes(routes: ReadonlyMap<string, string>, entries: readonly CatalogEntry[]): Map<string, string> | null {
   const out = new Map(routes);
   for (const e of entries) {
-    if ((out.get(e.route) ?? e.replica) !== e.replica) return null;
+    if (routeConflict(out, e)) return null;
     out.set(e.route, e.replica);
   }
   return out;
+}
+
+// Admit(F, entries): the entries extend the floor's entries and add no route conflict (an entry on a RESERVED route, or on a
+// route mapped to another replica, conflicts). Shared by first-catalog validity and authoring coverage (row 387).
+function admit(floor: CatalogFloor, entries: readonly CatalogEntry[]): boolean {
+  return extendsEntries(floor.entries, entries) && addRoutes(floor.routes, entries) !== null;
 }
 
 // Floor(N): Floor(bootstrap) = [], Floor(T) = entries(T.priorCatalog), and for a replacement the union over its cited {P, K}
@@ -557,11 +610,16 @@ async function floorOf(n: CatalogBindingNode, ctx: Ctx): Promise<Floor> {
   return acc;
 }
 
+// Row 387: the join never fails on routes. A route the sides map to different replicas (or that either side reserves) becomes
+// RESERVED: no first catalog under the node may use it, but its replicas may move onto fresh routes.
 function mergeFloor(a: Floor, b: Floor): Floor {
   if (a.t === "bad" || b.t === "bad") return {t: "bad"};
   if (a.t === "pending" || b.t === "pending") return {t: "pending"};
-  for (const [route, replica] of b.routes) if ((a.routes.get(route) ?? replica) !== replica) return {t: "bad"};
-  return {t: "ok", entries: [...a.entries, ...b.entries], routes: new Map([...a.routes, ...b.routes])};
+  const routes = new Map(a.routes);
+  for (const [route, replica] of b.routes) {
+    routes.set(route, routes.has(route) && (routes.get(route) !== replica || replica === RESERVED) ? RESERVED : replica);
+  }
+  return {t: "ok", entries: [...a.entries, ...b.entries], routes};
 }
 
 // --- catalogs (union classification) -----------------------------------------------------------------------------------
@@ -587,7 +645,9 @@ function classifyCatalogs(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, c
     const c = ctx.input.catalogs.get(id)!.catalog, n = nodesAll.get(c.binding), v = validity.get(id)!;
     if (v.t === "refused") return refuse(id, v.reason, null);
     if (v.t === "binding_pending") return outPending.has(c.binding) ? "closed_out" : "pending";
-    if (n!.refused) {
+    // A chain-invalid catalog keeps its own reason under a union-refused node (PR #221 bot finding at the BEAM twin's old
+    // line 1048): it takes the intrinsic path, not the inherited catalog_authority_refused the preflight filters out.
+    if (n!.refused && v.t !== "bad_chain") {
       // A catalog under a union-refused node authorizes nothing, but under a closed binding a chain-valid one is still a
       // citable catalog head (D-A13): omitted by the citations, it is an uncovered head (a fork). It keeps its refusal.
       refuse(id, "catalog_authority_refused", n!.coreReason);
@@ -730,7 +790,7 @@ function forksOf(ctx: Ctx, final: Map<string, CatalogBindingNode>, heads: string
 }
 
 function assemble(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, final: Map<string, CatalogBindingNode>, heads: string[],
-  closed: Set<string>, outRot: Set<string>, cat: Classified, floors: Map<string, readonly CatalogEntry[]>): CatalogBindingGraph {
+  closed: Set<string>, outRot: Set<string>, cat: Classified, floors: Map<string, CatalogFloor>): CatalogBindingGraph {
   const closedOut = new Map<string, string>();
   for (const id of [...outRot, ...cat.outPending]) closedOut.set(id, "catalog_rollback");
   for (const [id, s] of cat.status) if (s === "closed_out") closedOut.set(id, "catalog_rollback");
@@ -757,10 +817,11 @@ function assemble(ctx: Ctx, nodesAll: Map<string, CatalogBindingNode>, final: Ma
     pending: [...final.values()].filter((n) => n.pending.length > 0).map((n) => n.id).sort(compareUtf8), rawEvidence: raw,
     refusals, catalogHeads: catHeads, citableCatalogHeads: citableCatalogHeadsOf(ctx, final, closed, cat),
     catalogStatus: cat.status, citations: cat.cites, previous: cat.previous,
-    forks: forksOf(ctx, final, heads, closed, cat, catHeads, rotationForks), rotationForks, forkBindings, floors, catParent,
+    forks: forksOf(ctx, final, heads, closed, cat, catHeads, rotationForks), rotationForks, forkBindings, floors,
+    catalogRoutes: new Map(ctx.croutes), catParent,
     catalogs: new Map([...ctx.input.catalogs].map(([id, e]) => [id, e.catalog] as [string, TransportCatalog])),
     decision: undefined as unknown as CatalogBindingDecision};
-  graph.decision = decide(ctx.input.accepted, graph, nodesAll, closed, outRot);
+  graph.decision = decide(ctx.input.accepted, graph, nodesAll, closed, outRot, cat.validity);
   return graph;
 }
 
@@ -782,15 +843,38 @@ function catLineage(a: string, b: string | null, parent: ReadonlyMap<string, str
 
 function routesOf(a: CatalogBindingAccepted | null): Readonly<Record<string, string>> { return a?.routes ?? {}; }
 
-function decide(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, nodesAll: Map<string, CatalogBindingNode>,
-  closed: Set<string>, outRot: Set<string>): CatalogBindingDecision {
+interface WatermarkChange {
+  abs: CatalogBindingStatus; acs: CatalogBindingCatalogStatus; missing: boolean; changed: boolean;
+}
+
+// The watermark against the graph. Changed (C6): its binding refused or closed out, or (with the binding held) its catalog
+// refused, closed out or uncovered. A missing watermark artifact blocks acceptance but no longer masks a changed binding. A
+// watermark catalog whose own chain is pending is missing whatever union class it was given (row 386 lemma, path (2)).
+function watermarkChange(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, nodesAll: Map<string, CatalogBindingNode>,
+  closed: Set<string>, outRot: Set<string>, validity: ReadonlyMap<string, Validity>): WatermarkChange {
   const abs: CatalogBindingStatus = a === null ? "missing" : outRot.has(a.binding) ? "closed_out" :
     !nodesAll.has(a.binding) ? "missing" : nodesAll.get(a.binding)!.refused ? "refused" : closed.has(a.binding) ? "closed" : "current";
-  const s = a === null ? undefined : graph.catalogStatus.get(a.catalog);
+  const v = a === null ? undefined : validity.get(a.catalog)?.t;
+  const s = a === null || v === "pending" || v === "binding_pending" ? undefined : graph.catalogStatus.get(a.catalog);
   const acs: CatalogBindingCatalogStatus = a === null ? "missing" : s === "covered" ? "ancestor_of_cited" :
     s === "closed_out" || s === "uncovered" ? "closed_out" : s === "current" ? "current" : s === "refused" ? "refused" : "missing";
   const missing = a !== null && (abs === "missing" || acs === "missing");
-  const changed = a !== null && !missing && (abs === "refused" || abs === "closed_out" || acs === "refused" || acs === "closed_out");
+  const changed = a !== null && (abs === "refused" || abs === "closed_out" ||
+    (abs !== "missing" && (acs === "refused" || acs === "closed_out")));
+  return {abs, acs, missing, changed};
+}
+
+// Serving_c(A): the watermark catalog while present and unchanged, its binding an unclosed node, nothing forks and RouteCompat
+// holds; shared by the ok and the pending paths.
+function watermarkServing(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, nodesAll: Map<string, CatalogBindingNode>,
+  closed: Set<string>, outRot: Set<string>, validity: ReadonlyMap<string, Validity>): string | null {
+  const w = watermarkChange(a, graph, nodesAll, closed, outRot, validity);
+  return w.missing || w.changed ? null : serving(a, graph, closed);
+}
+
+function decide(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, nodesAll: Map<string, CatalogBindingNode>,
+  closed: Set<string>, outRot: Set<string>, validity: ReadonlyMap<string, Validity>): CatalogBindingDecision {
+  const {abs, acs, missing, changed} = watermarkChange(a, graph, nodesAll, closed, outRot, validity);
   const base: CatalogBindingDecision = {accepted: false, reason: null, block: null, head: null, catalog: null, generation: null,
     revision: null, clearsAuthorityChanged: false, serving: null, acceptedBindingStatus: abs, acceptedCatalogStatus: acs};
   if (graph.forks.length > 0) {
@@ -798,7 +882,7 @@ function decide(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, no
     return {...base, reason: "catalog_fork", block: {reason: "catalog_fork", ids, freeze: changed}};
   }
   const id = graph.heads[0]!;
-  if (missing) return {...base, head: id, reason: "authority_changed", block: {reason: "authority_changed", ids: [id], freeze: false}};
+  if (missing) return {...base, head: id, reason: "authority_changed", block: {reason: "authority_changed", ids: [id], freeze: changed}};
   const node = graph.nodes.get(id)!;
   const ready = graph.catalogHeads.get(id)?.[0] ?? null;
   const held = {...base, head: id, serving: changed ? null : serving(a, graph, closed)};
@@ -868,11 +952,21 @@ function serving(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, c
 /**
  * The merge rule over the persisted {accepted, frozen} (row 383; BEAM CatalogBindingGraph.advance/2). Only an accepting decision
  * that clears (or any accepting decision while not frozen) moves the watermark, adds its catalog's routes to the cumulative
- * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On an error the state is kept:
- * trust_pending serves "unchanged" (an incomplete page), any other error serves nothing.
+ * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
+ * (derived only from the complete authenticated part) is ORed into frozen and its serving is served unless frozen; any other
+ * error, or a trust_pending without those fields, keeps the state and serves nothing.
  */
 export function advanceCatalogBindingState(state: CatalogBindingState, result: CatalogBindingGraphResult): CatalogBindingAdvance {
-  if (!result.ok) return {accepted: state.accepted, frozen: state.frozen, serving: result.reason === "trust_pending" ? "unchanged" : null};
+  if (!result.ok) {
+    const {freeze, serving: watermark} = result.detail;
+    // Row 386, repair (a): the complete part's freeze is ORed in; a detail without the fields (a page-level refusal) keeps
+    // frozen and serves nothing, as does every other error. Pending evidence never lifts a freeze.
+    if (result.reason !== "trust_pending" || typeof freeze !== "boolean" || watermark === undefined) {
+      return {accepted: state.accepted, frozen: state.frozen, serving: null};
+    }
+    const frozen = state.frozen || freeze;
+    return {accepted: state.accepted, frozen, serving: frozen ? null : watermark};
+  }
   const d = result.graph.decision;
   if (d.accepted && (!state.frozen || d.clearsAuthorityChanged)) {
     const routes: Record<string, string> = {...routesOf(state.accepted)};
@@ -892,7 +986,9 @@ export function advanceCatalogBindingState(state: CatalogBindingState, result: C
 export async function resolveCatalogBindingGraphForClaim(input: CatalogBindingGraphInput, claim: CatalogReplacementClaim):
   Promise<CatalogBindingGraphResult> {
   const first = await resolveCatalogBindingGraph(input);
-  if (first.ok || first.reason !== "control_history_limit") return first;
+  if (first.ok) return first;
+  if (first.reason === "trust_pending") return escapePending(input, claim);
+  if (first.reason !== "control_history_limit") return first;
   const rotations = input.rotations;
   const root = (id: string): string => {
     const seen = new Set<string>();
@@ -901,26 +997,48 @@ export async function resolveCatalogBindingGraphForClaim(input: CatalogBindingGr
     return cursor;
   };
   if (!first.detail.ids.every((h) => claim.parents.includes(root(h)))) return first;
-  const under = (id: string): boolean => {
-    const seen = new Set<string>();
-    let cursor = id;
-    while (!seen.has(cursor)) {
-      if (claim.parents.includes(cursor)) return false;
-      seen.add(cursor);
-      const parent = rotations.get(cursor)!.rotation.parent;
-      if (claim.parents.includes(parent)) return true;
-      if (!rotations.has(parent)) return false;
-      cursor = parent;
-    }
-    return false;
-  };
-  const dropped = new Set([...rotations.keys()].filter(under));
+  const dropped = new Set([...rotations.keys()].filter((id) => underClaim(id, rotations, claim.parents)));
   for (let grew = true; grew;) {
     grew = false;
     for (const [id, e] of rotations) if (!dropped.has(id) && dropped.has(e.rotation.parent)) { dropped.add(id); grew = true; }
   }
-  return resolveCatalogBindingGraph({...input, rotations: new Map([...rotations].filter(([id]) => !dropped.has(id))),
-    catalogs: new Map([...input.catalogs].filter(([, e]) => !dropped.has(e.catalog.binding)))});
+  return escapePending({...input, rotations: new Map([...rotations].filter(([id]) => !dropped.has(id))),
+    catalogs: new Map([...input.catalogs].filter(([, e]) => !dropped.has(e.catalog.binding)))}, claim);
+}
+
+// Is rotation `id` under a claim parent along its rotation-parent chain?
+function underClaim(id: string, rotations: ReadonlyMap<string, CatalogRotationEnvelope>, parents: readonly string[]): boolean {
+  const seen = new Set<string>();
+  let cursor = id;
+  while (!seen.has(cursor)) {
+    if (parents.includes(cursor)) return false;
+    seen.add(cursor);
+    const parent = rotations.get(cursor)!.rotation.parent;
+    if (parents.includes(parent)) return true;
+    if (!rotations.has(parent)) return false;
+    cursor = parent;
+  }
+  return false;
+}
+
+// Row 386 (C4): a trust_pending whose every pending id the claim closes out once its parents are closed (a rotation under a
+// claim parent, a catalog bound to such a rotation, or a chain-pending catalog bound to a claim parent) is re-resolved with
+// exactly those ids dropped; any other pending id keeps trust_pending.
+async function escapePending(input: CatalogBindingGraphInput, claim: CatalogReplacementClaim): Promise<CatalogBindingGraphResult> {
+  const {result, ctx} = await resolveInfo(input);
+  if (result.ok || result.reason !== "trust_pending" || ctx === null) return result;
+  const ids = result.detail.ids;
+  const rot = new Set(ids.filter((id) => input.rotations.has(id) && underClaim(id, input.rotations, claim.parents)));
+  const escapable = (id: string): boolean => {
+    if (rot.has(id)) return true;
+    const e = input.catalogs.get(id);
+    if (e === undefined) return false;
+    return rot.has(e.catalog.binding) || (ctx.cmemo.get(id)?.t === "pending" && claim.parents.includes(e.catalog.binding));
+  };
+  if (ids.length === 0 || !ids.every(escapable)) return result;
+  const drop = new Set(ids);
+  return resolveCatalogBindingGraph({...input, rotations: new Map([...input.rotations].filter(([id]) => !drop.has(id))),
+    catalogs: new Map([...input.catalogs].filter(([id]) => !drop.has(id)))});
 }
 
 // --- authoring coverage ----------------------------------------------------------------------------------------------------
@@ -959,8 +1077,17 @@ export function coverCatalogReplacementClaim(graph: CatalogBindingGraph, claim: 
   }
   if (expected.some((p) => !has(claim.priorCatalogs, p))) return "catalog_fork";
   if (claim.priorCatalogs.some((p) => !has(expected, p))) return "invalid_catalog_transition";
-  if (!claim.priorCatalogs.every((p) => extendsEntries(p.catalog === null ? graph.floors.get(p.binding) ?? []
-    : graph.catalogs.get(p.catalog)!.entries, entries))) return "invalid_catalog_transition";
+  // Admit(ClaimFloor(claim), entries): the floor the claimed node would have, the same check its first catalog must pass
+  // (rows 382 item 2 and 387). A floor or route map the graph does not hold fails closed.
+  let floor: Floor = {t: "ok", entries: [], routes: new Map()};
+  for (const p of claim.priorCatalogs) {
+    const f = p.catalog === null ? graph.floors.get(p.binding) : undefined;
+    const routes = p.catalog === null ? f?.routes : graph.catalogRoutes.get(p.catalog);
+    const part: Floor = routes === undefined ? {t: "bad"} : {t: "ok", entries: p.catalog === null ? [...f!.entries]
+      : [...graph.catalogs.get(p.catalog)!.entries], routes: new Map(routes)};
+    floor = mergeFloor(floor, part);
+  }
+  if (floor.t !== "ok" || !admit(floor, entries)) return "invalid_catalog_transition";
   // The author cannot see a client's served routes, but every served route was in some held catalog. An entry a cited prior
   // already maps the same way is carried, not new, so a closed-out old-key catalog (D-A10) cannot veto carrying it.
   const carried = new Set(claim.priorCatalogs.flatMap((p) => p.catalog === null ? []

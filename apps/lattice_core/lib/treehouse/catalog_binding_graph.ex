@@ -86,12 +86,14 @@ defmodule Treehouse.CatalogBindingGraph do
 
   def next_generation(_), do: :error
 
-  @spec resolve(map()) ::
-          {:ok, graph()} | {:error, atom(), %{ids: [String.t()], core_reason: nil}}
-  def resolve(input) do
+  @spec resolve(map()) :: {:ok, graph()} | {:error, atom(), map()}
+  def resolve(input), do: input |> resolve_info() |> elem(0)
+
+  # The result plus the intrinsic verdicts, for the authoring escape (C4).
+  defp resolve_info(input) do
     case context(input) do
       {:ok, ctx} -> run(ctx)
-      :error -> {:error, :malformed_catalog, %{ids: [], core_reason: nil}}
+      :error -> {{:error, :malformed_catalog, %{ids: [], core_reason: nil}}, nil}
     end
   end
 
@@ -100,9 +102,11 @@ defmodule Treehouse.CatalogBindingGraph do
   `advanceCatalogBindingState`). Returns `%{accepted, frozen, serving}`. Only an accepting
   decision that clears (or any accepting decision while not frozen) moves the watermark and
   lifts `frozen`; it adds the accepted catalog's routes to the cumulative `routes`. A block
-  with `freeze` sets `frozen`. Nothing is served while frozen. On an error the state is kept:
-  `trust_pending` serves `:unchanged` (the caller keeps its previous routes, an incomplete
-  page), any other error serves nothing.
+  with `freeze` sets `frozen`. Nothing is served while frozen. On `trust_pending` (row 386,
+  repair (a)) the detail's `freeze`, derived only from the complete authenticated part, is
+  ORed into `frozen` and its `serving` is served unless frozen; a `trust_pending` without those
+  fields (a page-level refusal) keeps `frozen` and serves nothing, as does every other error.
+  Pending evidence therefore never lifts a freeze and never sets one by itself.
   """
   @spec advance(map(), term()) :: %{accepted: map() | nil, frozen: boolean(), serving: term()}
   def advance(state, {:ok, %{decision: d, catalogs: catalogs}}) do
@@ -136,7 +140,17 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
-  def advance(state, {:error, :trust_pending, _}), do: keep(state, :unchanged)
+  def advance(state, {:error, :trust_pending, %{freeze: freeze, serving: serving}})
+      when is_boolean(freeze) do
+    frozen = Map.get(state, :frozen, false) or freeze
+
+    %{
+      accepted: Map.get(state, :accepted),
+      frozen: frozen,
+      serving: if(frozen, do: nil, else: serving)
+    }
+  end
+
   def advance(state, _error), do: keep(state, nil)
 
   defp keep(state, serving),
@@ -155,23 +169,83 @@ defmodule Treehouse.CatalogBindingGraph do
   head's root is its nearest non-rotation ancestor) is re-resolved without the rotations under
   those roots and the catalogs bound to them: exactly the rotations the claim closes out. The
   verifier keeps its head limit; the caller re-checks the signed op against the full input.
+
+  A `trust_pending` is escaped the same way (row 386, C4) when every pending id is an artifact
+  the claim closes out once its parents are closed: a rotation whose rotation-parent chain
+  reaches a claim parent (or one below such a rotation), a catalog bound to such a rotation,
+  or a chain-pending catalog (intrinsic `:pending`, not `:binding_pending`) whose binding is a
+  claim parent or such a rotation. Exactly those ids are dropped and the input re-resolved; any
+  other pending id keeps `trust_pending`.
   """
-  @spec resolve_for_claim(map(), map()) ::
-          {:ok, graph()} | {:error, atom(), %{ids: [String.t()], core_reason: nil}}
+  @spec resolve_for_claim(map(), map()) :: {:ok, graph()} | {:error, atom(), map()}
   def resolve_for_claim(input, claim) do
-    case resolve(input) do
-      {:error, :control_history_limit, %{ids: heads}} = limit when is_map(input) ->
+    case resolve_info(input) do
+      {{:error, :control_history_limit, %{ids: heads}} = limit, _info} when is_map(input) ->
         rotations = Map.get(input, :rotations, %{})
         roots = Enum.map(heads, &head_root(&1, rotations, MapSet.new()))
 
         if Enum.all?(roots, &(&1 in claim.parents)),
-          do: resolve(drop_under(input, rotations, claim.parents)),
+          do: input |> drop_under(rotations, claim.parents) |> escape_pending(claim),
           else: limit
 
-      other ->
+      {{:error, :trust_pending, _}, _info} ->
+        escape_pending(input, claim)
+
+      {other, _info} ->
         other
     end
   end
+
+  defp escape_pending(input, claim) do
+    case resolve_info(input) do
+      {{:error, :trust_pending, %{ids: ids}} = pending, info} ->
+        drop = escapable(input, info, claim.parents, ids)
+
+        if drop != nil and drop != [],
+          do: resolve(drop_ids(input, drop)),
+          else: pending
+
+      {other, _info} ->
+        other
+    end
+  end
+
+  # The pending ids the claim closes out, or nil when some pending id is not one of them.
+  defp escapable(input, info, parents, ids) do
+    rotations = input.rotations
+
+    rot =
+      for id <- ids,
+          Map.has_key?(rotations, id),
+          under?(id, rotations, parents, MapSet.new()),
+          into: MapSet.new(),
+          do: id
+
+    ok? = fn id ->
+      cond do
+        MapSet.member?(rot, id) ->
+          true
+
+        Map.has_key?(input.catalogs, id) ->
+          binding = input.catalogs[id].catalog.binding
+
+          MapSet.member?(rot, binding) or
+            (Map.get(info.validity, id) == :pending and binding in parents)
+
+        true ->
+          false
+      end
+    end
+
+    if Enum.all?(ids, ok?), do: ids
+  end
+
+  defp drop_ids(input, ids),
+    do: %{
+      input
+      | rotations: Map.drop(input.rotations, ids),
+        catalogs: Map.drop(input.catalogs, ids)
+    }
 
   defp head_root(id, rotations, seen) do
     case rotations do
@@ -353,8 +427,11 @@ defmodule Treehouse.CatalogBindingGraph do
     {floors, st} =
       Enum.reduce(final, {%{}, st}, fn {id, n}, {acc, st} ->
         case floor_of(n, ctx, st) do
-          {{:ok, entries, _routes}, st} -> {Map.put(acc, id, entries), st}
-          {_, st} -> {acc, st}
+          {{:ok, entries, routes}, st} ->
+            {Map.put(acc, id, %{entries: entries, routes: routes}), st}
+
+          {_, st} ->
+            {acc, st}
         end
       end)
 
@@ -381,15 +458,31 @@ defmodule Treehouse.CatalogBindingGraph do
       |> Enum.uniq()
       |> Enum.sort()
 
-    cond do
-      length(heads) > 2 ->
-        {:error, :control_history_limit, %{ids: heads, core_reason: nil}}
+    info = %{validity: st.cmemo}
 
-      pending != [] ->
-        {:error, :trust_pending, %{ids: pending, core_reason: nil}}
+    if length(heads) > 2 do
+      {{:error, :control_history_limit, %{ids: heads, core_reason: nil}}, info}
+    else
+      parts = {nodes_all, final, heads, closed, out_rot}
+      {:ok, graph} = assemble(ctx, memo, st.detail, parts, cat, {floors, st.croutes})
 
-      true ->
-        assemble(ctx, memo, st.detail, {nodes_all, final, heads, closed, out_rot}, cat, floors)
+      # Row 386, repair (a): the graph above is the complete authenticated part (pending
+      # artifacts are not nodes and are never cited), so its decision derives the freeze bit.
+      # It never accepts or serves anything here: serving is only the watermark's own.
+      if pending == [] do
+        {{:ok, graph}, info}
+      else
+        d = graph.decision
+
+        detail = %{
+          ids: pending,
+          core_reason: nil,
+          freeze: not d.accepted and d.block != nil and d.block.freeze,
+          serving: watermark_serving(ctx.accepted, graph, nodes_all, closed, out_rot)
+        }
+
+        {{:error, :trust_pending, detail}, info}
+      end
     end
   end
 
@@ -457,31 +550,38 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
+  # Every own-bytes failure is collected and the highest-precedence one reported (plan 316
+  # section 4: a signature or possession failure, rank 4, outranks a transition, rank 6).
   defp rotation_node(id, e, p, ctx, st) do
     r = e.rotation
 
-    cond do
-      next_generation([p.generation]) != {:ok, r.generation} ->
-        {{:bad, :invalid_catalog_transition}, st}
+    failures =
+      if(Identity.verify(p.key, TransportCatalog.rotation_bytes(r), e.old_signature),
+        do: [],
+        else: [{:invalid_catalog_signature, :old_signature}]
+      ) ++
+        if(
+          Identity.verify(
+            r.new_catalog_key,
+            TransportCatalog.rotation_possession_bytes(r),
+            e.new_signature
+          ),
+          do: [],
+          else: [{:invalid_possession, :new_signature}]
+        ) ++
+        if(next_generation([p.generation]) == {:ok, r.generation},
+          do: [],
+          else: [{:invalid_catalog_transition, :generation}]
+        ) ++
+        if(r.new_catalog_key == p.key or r.new_catalog_key == p.service_key,
+          do: [{:invalid_catalog_transition, :key}],
+          else: []
+        )
 
-      r.new_catalog_key == p.key or r.new_catalog_key == p.service_key ->
-        {{:bad, :invalid_catalog_transition}, st}
-
-      not Identity.verify(p.key, TransportCatalog.rotation_bytes(r), e.old_signature) ->
-        {{:bad, :invalid_catalog_signature}, st}
-
-      not Identity.verify(
-        r.new_catalog_key,
-        TransportCatalog.rotation_possession_bytes(r),
-        e.new_signature
-      ) ->
-        {{:bad, :invalid_possession}, st}
-
-      true ->
-        case ctx.catalogs[r.prior_catalog] do
-          nil -> {:pending, st}
-          %{catalog: prior} -> rotation_prior(id, r, p, prior, ctx, st)
-        end
+    case {lowest(failures), ctx.catalogs[r.prior_catalog]} do
+      {{reason, _why}, _} -> {{:bad, reason}, st}
+      {nil, nil} -> {:pending, st}
+      {nil, %{catalog: prior}} -> rotation_prior(id, r, p, prior, ctx, st)
     end
   end
 
@@ -828,7 +928,7 @@ defmodule Treehouse.CatalogBindingGraph do
                 Enum.sort(Enum.map(c.entries, & &1.replica)) ->
             {:bad_chain, nil, st}
 
-          not extends?(entries, c.entries) ->
+          not admit?(%{entries: entries, routes: routes}, c.entries) ->
             {:bad_chain, nil, st}
 
           true ->
@@ -863,6 +963,12 @@ defmodule Treehouse.CatalogBindingGraph do
       :conflict -> {:bad_chain, nil, st}
     end
   end
+
+  # Admit(F, entries): the entries extend the floor's entries and add no route conflict (an
+  # entry on a reserved `:none` route, or on a route mapped to another replica, conflicts).
+  # Shared by first-catalog validity and authoring `carries?` (row 387).
+  defp admit?(%{entries: floor, routes: routes}, entries),
+    do: extends?(floor, entries) and add_routes(routes, entries) != :conflict
 
   defp add_routes(routes, entries) do
     Enum.reduce_while(entries, {:ok, routes}, fn e, {:ok, acc} ->
@@ -909,10 +1015,13 @@ defmodule Treehouse.CatalogBindingGraph do
   defp merge_floor(:pending, _), do: :pending
   defp merge_floor(_, :pending), do: :pending
 
+  # Row 387: the join never fails on routes. A route the cited sides map to different replicas
+  # (or that either side already reserves) becomes reserved-to-none (`:none`): no first catalog
+  # under the node may use it, but its replicas may move onto fresh routes. The reservation is
+  # part of the route map, so it propagates down every chain and into later floors.
   defp merge_floor({:ok, e1, r1}, {:ok, e2, r2}) do
-    if Enum.all?(r2, fn {route, replica} -> Map.get(r1, route, replica) == replica end),
-      do: {:ok, e1 ++ e2, Map.merge(r1, r2)},
-      else: :bad
+    {:ok, e1 ++ e2,
+     Map.merge(r1, r2, fn _route, x, y -> if x == y and x != :none, do: x, else: :none end)}
   end
 
   # --- closure and heads ------------------------------------------------------
@@ -1041,12 +1150,26 @@ defmodule Treehouse.CatalogBindingGraph do
 
       v ->
         cond do
-          n.refused? -> refused_node_status(id, c.binding, v, env, acc, n.core_reason)
-          MapSet.member?(env.out_rot, c.binding) -> {:closed_out, acc}
-          MapSet.member?(env.closed, c.binding) -> closed_status(id, c.binding, v, env, acc)
-          v == :pending -> {:pending, acc}
-          v == :bad_chain -> refuse(acc, id, :invalid_catalog_transition, nil)
-          true -> {:current, acc}
+          # A chain-invalid catalog keeps its own reason under a union-refused node (PR #221
+          # bot finding at the old line 1048): it takes the intrinsic path, not the inherited
+          # `catalog_authority_refused` that the authoring preflight filters out.
+          n.refused? and v != :bad_chain ->
+            refused_node_status(id, c.binding, v, env, acc, n.core_reason)
+
+          MapSet.member?(env.out_rot, c.binding) ->
+            {:closed_out, acc}
+
+          MapSet.member?(env.closed, c.binding) ->
+            closed_status(id, c.binding, v, env, acc)
+
+          v == :pending ->
+            {:pending, acc}
+
+          v == :bad_chain ->
+            refuse(acc, id, :invalid_catalog_transition, nil)
+
+          true ->
+            {:current, acc}
         end
     end
   end
@@ -1252,7 +1375,14 @@ defmodule Treehouse.CatalogBindingGraph do
 
   # --- assembly and decision --------------------------------------------------
 
-  defp assemble(ctx, memo, detail, {nodes_all, final, heads, closed, out_rot}, cat, floors) do
+  defp assemble(
+         ctx,
+         memo,
+         detail,
+         {nodes_all, final, heads, closed, out_rot},
+         cat,
+         {floors, croutes}
+       ) do
     closed_out =
       Map.new(MapSet.union(out_rot, cat.out_pending), &{&1, :catalog_rollback})
       |> Map.merge(for({cid, :closed_out} <- cat.status, into: %{}, do: {cid, :catalog_rollback}))
@@ -1313,6 +1443,7 @@ defmodule Treehouse.CatalogBindingGraph do
       rotation_forks: rot_forks,
       fork_bindings: fork_bindings,
       floors: floors,
+      catalog_routes: croutes,
       verdicts: verdicts(memo, cat.validity),
       catalogs: Map.new(ctx.catalogs, fn {id, e} -> {id, e.catalog} end),
       decision: nil
@@ -1340,14 +1471,32 @@ defmodule Treehouse.CatalogBindingGraph do
     )
   end
 
-  defp decide(a, graph, nodes_all, closed, out_rot) do
+  # The watermark against the graph. Changed (C6): its binding refused or closed out, or (with
+  # the binding held) its catalog refused, closed out or uncovered. A missing watermark artifact
+  # blocks acceptance but no longer masks a changed binding.
+  defp watermark_change(a, graph, nodes_all, closed, out_rot) do
     abs = accepted_binding_status(a, nodes_all, closed, out_rot)
     acs = accepted_catalog_status(a, graph)
     missing? = a != nil and (abs == :missing or acs == :missing)
 
     changed? =
-      a != nil and not missing? and
-        (abs in [:refused, :closed_out] or acs in [:refused, :closed_out])
+      a != nil and
+        (abs in [:refused, :closed_out] or
+           (abs != :missing and acs in [:refused, :closed_out]))
+
+    %{abs: abs, acs: acs, missing?: missing?, changed?: changed?}
+  end
+
+  # Serving_c(A): the watermark catalog while it is present and unchanged, its binding an
+  # unclosed node, nothing forks and RouteCompat holds; shared by the ok and pending paths.
+  defp watermark_serving(a, graph, nodes_all, closed, out_rot) do
+    w = watermark_change(a, graph, nodes_all, closed, out_rot)
+    if w.missing?, do: nil, else: serving(a, graph, closed, w.changed?)
+  end
+
+  defp decide(a, graph, nodes_all, closed, out_rot) do
+    %{abs: abs, acs: acs, missing?: missing?, changed?: changed?} =
+      watermark_change(a, graph, nodes_all, closed, out_rot)
 
     base = %{
       accepted: false,
@@ -1375,7 +1524,7 @@ defmodule Treehouse.CatalogBindingGraph do
           base
           | head: h,
             reason: :authority_changed,
-            block: block(:authority_changed, [h], false)
+            block: block(:authority_changed, [h], changed?)
         }
 
       true ->
@@ -1537,8 +1686,12 @@ defmodule Treehouse.CatalogBindingGraph do
 
   defp accepted_catalog_status(nil, _g), do: :missing
 
+  # A watermark catalog whose own chain is pending is `:missing` (row 386 lemma, path (2)),
+  # whatever union class a pending verdict was given.
   defp accepted_catalog_status(%{catalog: c}, graph) do
-    case Map.get(graph.catalog_status, c) do
+    status = if graph.verdicts[c] == :pending, do: :pending, else: graph.catalog_status[c]
+
+    case status do
       :covered -> :ancestor_of_cited
       status when status in [:closed_out, :uncovered] -> :closed_out
       :current -> :current
@@ -1636,12 +1789,32 @@ defmodule Treehouse.CatalogBindingGraph do
     end)
   end
 
-  # Every cited prior's entries and every nil-cited parent's floor (row 382 item 2).
+  # Admit(ClaimFloor(claim), entries): the floor the claimed node would have (the join over its
+  # cited priors of a cited catalog's entries and routes, or a nil-cited parent's floor), the
+  # same check its first catalog must pass (rows 382 item 2 and 387). A floor or route map the
+  # graph does not hold fails closed.
   defp carries?(graph, claim, entries) do
-    Enum.all?(claim.prior_catalogs, fn
-      %{binding: p, catalog: nil} -> extends?(Map.get(graph.floors, p, []), entries)
-      %{catalog: k} -> extends?(graph.catalogs[k].entries, entries)
+    claim.prior_catalogs
+    |> Enum.reduce({:ok, [], %{}}, fn
+      _prior, :bad ->
+        :bad
+
+      %{binding: p, catalog: nil}, acc ->
+        case graph.floors do
+          %{^p => f} -> merge_floor(acc, {:ok, f.entries, f.routes})
+          _ -> :bad
+        end
+
+      %{catalog: k}, acc ->
+        case graph.catalog_routes do
+          %{^k => routes} -> merge_floor(acc, {:ok, graph.catalogs[k].entries, routes})
+          _ -> :bad
+        end
     end)
+    |> case do
+      {:ok, floor, routes} -> admit?(%{entries: floor, routes: routes}, entries)
+      _ -> false
+    end
   end
 
   # The author cannot see a client's served routes, but every served route was in some held

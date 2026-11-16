@@ -524,9 +524,11 @@
       "step": 1,
       "label": {
         "error": "trust_pending",
+        "freeze": false,
+        "serving": null,
         "after": {
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       },
       "ts": {
@@ -534,10 +536,12 @@
         "ids": [
           "fAeLR46yGwsP2XEUnvSyWI2umZc7Q2FecKInY1UYIF8"
         ],
+        "freeze": false,
+        "serving": null,
         "after": {
           "accepted": null,
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       }
     },
@@ -643,9 +647,11 @@
       "step": 1,
       "label": {
         "error": "trust_pending",
+        "freeze": false,
+        "serving": null,
         "after": {
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       },
       "ts": {
@@ -654,10 +660,12 @@
           "HF_9z-StzqxcdBpL6JfJatAu0gWh_q1taiFojkQEqjo",
           "bCgj-IVI3AfxsUWIl-yFae1OSgRIeMH9VmmSxTvN0eY"
         ],
+        "freeze": false,
+        "serving": null,
         "after": {
           "accepted": null,
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       }
     },
@@ -1147,9 +1155,11 @@
       "step": 1,
       "label": {
         "error": "trust_pending",
+        "freeze": false,
+        "serving": null,
         "after": {
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       },
       "ts": {
@@ -1158,10 +1168,12 @@
           "RwdLW6BlqMPMsDbM_8_0I1XA488ecfRDc5NJo5ttAZs",
           "rMNFWW3UegoS9s-3Wp1qu1n0CVoojmbbF38msIuNfSY"
         ],
+        "freeze": false,
+        "serving": null,
         "after": {
           "accepted": null,
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       }
     },
@@ -9168,9 +9180,11 @@
       "step": 1,
       "label": {
         "error": "trust_pending",
+        "freeze": false,
+        "serving": null,
         "after": {
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       },
       "ts": {
@@ -9180,10 +9194,12 @@
           "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
           "sD1vLFCA-LbDIOKA-au7aGzGixMf5fcRZRBdXj7MUZQ"
         ],
+        "freeze": false,
+        "serving": null,
         "after": {
           "accepted": null,
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       }
     },
@@ -9481,9 +9497,11 @@
       "step": 2,
       "label": {
         "error": "trust_pending",
+        "freeze": false,
+        "serving": "K1",
         "after": {
           "frozen": false,
-          "serving": "unchanged"
+          "serving": "K1"
         }
       },
       "ts": {
@@ -9491,6 +9509,8 @@
         "ids": [
           "n3RT2bTAw5QxyFNgt10ivhN1nPuF3vyfJsBdBA35iC8"
         ],
+        "freeze": false,
+        "serving": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4",
         "after": {
           "accepted": {
             "binding": "fGV0hxaqgjgDn-c8qkaxebVCIEC44-6gpRSPp4rNKLk",
@@ -9502,7 +9522,7 @@
             }
           },
           "frozen": false,
-          "serving": "unchanged"
+          "serving": "q5VsFyKiJGofQumNRNLM7TA3uF4eC6dq1epM_ldjbb4"
         }
       }
     },
@@ -10092,9 +10112,11 @@
       "step": 1,
       "label": {
         "error": "trust_pending",
+        "freeze": false,
+        "serving": null,
         "after": {
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       },
       "ts": {
@@ -10104,10 +10126,12 @@
           "hXVOBDdio2GDDc0t5j_BpRWBW9kLy04zeIEZyw8YfDU",
           "lPlKwKuw_x5ZluqyGLLHsiHHmFgyes1IWwh1wrfkRLc"
         ],
+        "freeze": false,
+        "serving": null,
         "after": {
           "accepted": null,
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       }
     },
@@ -11425,9 +11449,11 @@
       "step": 1,
       "label": {
         "error": "trust_pending",
+        "freeze": false,
+        "serving": null,
         "after": {
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       },
       "ts": {
@@ -11435,10 +11461,12 @@
         "ids": [
           "9lFF1nwa9KhiRlkTAJttmYqDkKk0OwpvVH0oHbtjjyQ"
         ],
+        "freeze": false,
+        "serving": null,
         "after": {
           "accepted": null,
           "frozen": false,
-          "serving": "unchanged"
+          "serving": null
         }
       }
     },

@@ -160,8 +160,17 @@ test("advanceCatalogBindingState lifts frozen only on an accepting decision that
     {accepted: a, frozen: true, serving: null});
   assert.deepEqual(advanceCatalogBindingState(open,
     result(false, false, {reason: "catalog_authority_refused", ids: ["h"], freeze: false})), {accepted: a, frozen: false, serving: null});
-  assert.deepEqual(advanceCatalogBindingState(frozen, {ok: false, reason: "trust_pending", detail: {ids: []}}),
-    {accepted: a, frozen: true, serving: "unchanged"});
+  // Row 386, repair (a): trust_pending ORs the complete part's freeze into frozen and serves its watermark serving only while
+  // not frozen; a trust_pending without those fields keeps frozen and serves nothing.
+  const pending = (freeze: boolean, serving: string | null): CatalogBindingGraphResult =>
+    ({ok: false, reason: "trust_pending", detail: {ids: ["x"], freeze, serving}});
+  assert.deepEqual(advanceCatalogBindingState(frozen, pending(false, "c")), {accepted: a, frozen: true, serving: null});
+  assert.deepEqual(advanceCatalogBindingState(open, pending(true, "c")), {accepted: a, frozen: true, serving: null});
+  assert.deepEqual(advanceCatalogBindingState(open, pending(false, "c")), {accepted: a, frozen: false, serving: "c"});
+  for (const state of [frozen, open]) {
+    assert.deepEqual(advanceCatalogBindingState(state, {ok: false, reason: "trust_pending", detail: {ids: []}}),
+      {accepted: a, frozen: state.frozen, serving: null});
+  }
 });
 
 test("binding_graph_ts_v1.json equals this runtime's outcomes", () => {

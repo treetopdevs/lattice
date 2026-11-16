@@ -62,17 +62,26 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   end
 
   @doc """
-  A resolve error. `advance/2` keeps the state on every error; `trust_pending` keeps the
-  caller's previous routes (`"unchanged"`), any other error serves nothing.
+  A resolve error. `advance/2` keeps the state on every error and serves nothing, except that
+  `trust_pending` (row 386, repair (a)) carries the complete part's `freeze` (default false,
+  ORed into `frozen`) and the watermark's `serving` (a label, default nil), served unless
+  frozen. `frozen:` is the state after (default `freeze`).
   """
   def err(reason, opts \\ []) do
-    %{
+    freeze = Keyword.get(opts, :freeze, false)
+    frozen = Keyword.get(opts, :frozen, freeze)
+    serving = Keyword.get(opts, :serving)
+    pending? = reason == "trust_pending"
+
+    base = %{
       "error" => reason,
       "after" => %{
-        "frozen" => Keyword.get(opts, :frozen, false),
-        "serving" => if(reason == "trust_pending", do: "unchanged")
+        "frozen" => frozen,
+        "serving" => if(pending? and not frozen, do: serving)
       }
     }
+
+    if pending?, do: Map.merge(base, %{"freeze" => freeze, "serving" => serving}), else: base
   end
 
   defp accept(head, catalog, opts \\ []),
@@ -1565,16 +1574,16 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   def label_view(result, labels, next) do
     l = label_fun(labels)
 
-    serving =
-      case next.serving do
-        :unchanged -> "unchanged"
-        nil -> nil
-        id -> l.(id)
-      end
+    serving = next.serving && l.(next.serving)
 
     result
     |> label_view(labels)
     |> Map.put("after", %{"frozen" => next.frozen, "serving" => serving})
+  end
+
+  def label_view({:error, :trust_pending, %{freeze: freeze, serving: serving}}, labels) do
+    l = label_fun(labels)
+    %{"error" => "trust_pending", "freeze" => freeze, "serving" => serving && l.(serving)}
   end
 
   def label_view({:error, reason, _}, _labels), do: %{"error" => to_string(reason)}
@@ -1950,7 +1959,9 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
 
     one("a held control op with an incomplete closure is trust_pending", labels, [
       step(ev(l1, catalogs: [c0, k1]), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
-      step(ev(loose, catalogs: [c0, k1]), err("trust_pending")),
+      # The revoke's own closure is incomplete, so the complete part still accepts R1/K1:
+      # pending evidence alone neither freezes nor stops serving (row 386, the section 4 limit).
+      step(ev(loose, catalogs: [c0, k1]), err("trust_pending", serving: "K1")),
       step(
         ev(add(l1, [e, v]), catalogs: [c0, k1]),
         ok(["R1"],

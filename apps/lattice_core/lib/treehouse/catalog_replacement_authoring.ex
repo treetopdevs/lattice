@@ -73,6 +73,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
          :ok <- authentic(log),
          deps = Log.frontier(log),
          {:ok, bootstrap} <- bootstrap(log),
+         :ok <- current_profile(log, bootstrap),
          {:ok, author, holder_epoch, cap} <- holder(log, request.author),
          {:ok, epoch, basis} <- epoch(log),
          {:ok, inventory} <- inventory(log, request, bootstrap),
@@ -136,6 +137,22 @@ defmodule Treehouse.CatalogReplacementAuthoring do
       {:ok, %{bootstraps: [bootstrap]}} -> {:ok, bootstrap}
       {:ok, _} -> {:error, :application_invalid_catalog}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Plan 316 §3 step 4: Stage B compares the claim's profile fields with the continuation pin
+  # selected at the action's strict prefix, which is this frozen log. A bootstrap honored under
+  # an earlier pin must not lend the claim stale fields (`wrong_catalog_scope`). It runs
+  # directly after bootstrap selection, so it outranks the holder, epoch, inventory and cutoff
+  # refusals (PR #221 bot finding at the old line 85).
+  defp current_profile(log, bootstrap) do
+    case Authority.continuation_profile(log) do
+      {:ok, %{profile_genesis: genesis, profile_id: id}}
+      when genesis == bootstrap.record.profile_genesis and id == bootstrap.record.profile_id ->
+        :ok
+
+      _ ->
+        {:error, :wrong_catalog_scope}
     end
   end
 
