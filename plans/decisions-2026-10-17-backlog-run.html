@@ -3224,6 +3224,285 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Round 1, 7 findings: 6 fixed (incomplete control history is trust_pending; two-pass catalog validity; rotations inherit replacement cutoffs; citable_catalog_heads for the C13 authoring claim; sequential nonce reuse forks; a missing accepted artifact fails closed), 1 deferred by rule 3 (authority_changed trigger freeze, row 383). Round 2, 4 findings: 3 fixed (D-A16 non-stall; D-A15 replacement cutoffs cover every entry; rotations keep their own cutoffs), 1 deferred (route-refused catalogs validate priors, row 382). Round 3, 7 findings: 3 fixed (D-A17 refused-parent coverage; D-A18 invalid or unheld uncited old-key catalogs no longer fork, with a residual in row 384; D-A19 whole-cutoff proofs), 4 deferred (second-replacement inventory drop, rotations with invalid priors and route reuse to row 382; persisted authority_changed freeze to row 383). Still open: P1 catalog_binding_graph.ex:737 and :1097, P2 :308 and :859, each with its TS twin.</dd>
 <dt>Reason</dt><dd>Rule 3: each deferred finding repeats a class already patched in an earlier round, so it goes to a redesign row instead of another special case. All four open findings gate 4c, not 4a, because 4a is not wired into retained-client trust. No clean review round is claimed after the round 3 fixes (b5e19758a, 877ca8de8).</dd>
 </dl></section>
+<section id="d588"><h2><span>D-588</span> PR 4a convergence design: Block is derived; the graph persists nothing</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Keep triggers and patch closed-out (rejected, rule 3); fully stateless with no sticky bit (rejected: a Core verdict flip could unfreeze without a resolution).</dd>
+<dt>Decision</dt><dd>resolve/1 drops the blocked input. Block, clears_authority_changed and serving are computed on every call from the union and the accepted watermark. No head ids are stored.</dd>
+<dt>Reason</dt><dd>Stored head-id triggers caused the row 383 freeze and its dependence on delivery order.</dd>
+</dl></section>
+<section id="d589"><h2><span>D-589</span> PR 4a convergence design: One sticky bit plus the watermark; advance/2 is the 4c merge rule</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The caller keeps only the accepted watermark and frozen = blocked.reason authority_changed. The graph exports a pure advance/2 (TS advanceCatalogBindingState) that 4c's merge_security_block adopts. Derived blocks are recomputed each call and never kept.</dd>
+<dt>Reason</dt><dd>This gives a single place where the freeze lifts. Today's merge_security_block(previous, nil) would make every derived block sticky.</dd>
+</dl></section>
+<section id="d590"><h2><span>D-590</span> PR 4a convergence design: Clearing rule</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>frozen lifts only when the decision accepts a sole promotable head H, an honored replacement in H's lineage lies outside the watermark binding's ancestry, H's catalog carries the accepted catalog's entries and routes, and the accepted catalog was either cited in H's lineage or closed out by a node that a later replacement descends from.</dd>
+<dt>Reason</dt><dd>This is row 320 stated over the watermark and the graph. It keeps D-A5's rule that a resolution which itself closes out the accepted catalog still blocks.</dd>
+</dl></section>
+<section id="d591"><h2><span>D-591</span> PR 4a convergence design: Freshness is not stored</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>A replacement that existed before the freeze and later becomes promotable may clear it.</dd>
+<dt>Reason</dt><dd>Core's verdict on the full union decides authority. Recording the head at block time was the freeze.</dd>
+</dl></section>
+<section id="d592"><h2><span>D-592</span> PR 4a convergence design: Generation rollback replaced by ancestry</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Rollback is a lower catalog revision under the same binding. The generation comparison is removed.</dd>
+<dt>Reason</dt><dd>With a sole head and a held watermark binding, the head cannot be an ancestor of the watermark. The generation check blocked a closed-out rotation watermark at a higher generation.</dd>
+</dl></section>
+<section id="d593"><h2><span>D-593</span> PR 4a convergence design: Promotion carries the watermark inventory</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Any promotion away from the accepted binding needs the new catalog to extend the accepted catalog's entries and keep its routes.</dd>
+<dt>Reason</dt><dd>Property (d): no accepted sequence drops a retained entry, including watermarks that a resolution closed out.</dd>
+</dl></section>
+<section id="d594"><h2><span>D-594</span> PR 4a convergence design: A replacement citing an invalid prior is raw evidence</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Keep R as a node with C0 uncovered (D-A12, rejected: it forces an extra resolution for an admin mistake).</dd>
+<dt>Decision</dt><dd>Step 5 requires every non-nil cited prior to be intrinsically valid, otherwise invalid_catalog_transition (predicate prior). This replaces D-A12's 'covers nothing, fork' reading.</dd>
+<dt>Reason</dt><dd>Row 382 asks for R and KR to be refused. It is symmetric with rotations and stays intrinsic, so D-279 holds.</dd>
+</dl></section>
+<section id="d595"><h2><span>D-595</span> PR 4a convergence design: Valid means intrinsically valid</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Catalog validity never reads the union refused? flag of its binding node.</dd>
+<dt>Reason</dt><dd>The C13 citation of K1 under refused R1 must stay a valid prior, and D-279 must not depend on the union.</dd>
+</dl></section>
+<section id="d596"><h2><span>D-596</span> PR 4a convergence design: Rotation eligibility reads prior validity</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>A rotation becomes a node only when its prior catalog is held and valid. An invalid prior makes the rotation a retained refusal, not a head.</dd>
+<dt>Reason</dt><dd>Open P2 at ex:308 / TS:240. The pinned rotation_refused_prior expectation flips.</dd>
+</dl></section>
+<section id="d597"><h2><span>D-597</span> PR 4a convergence design: A nil citation carries the parent's floor</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Floor(N) is the union of the cited catalogs' entries, or the parent's floor where the citation is nil. Every first catalog must extend its binding's floor.</dd>
+<dt>Reason</dt><dd>Open P1 at ex:737 / TS:473. Inventory obligations now survive a parent whose first catalog was refused.</dd>
+</dl></section>
+<section id="d598"><h2><span>D-598</span> PR 4a convergence design: Route uniqueness is judged against a catalog's own ancestry</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>route_history and the union id-order reservation are deleted. Routes are checked against the previous chain and the cited priors' route maps, recursively. This replaces D-A10. In 4c, validate_route_history! over all catalogs is replaced by this check.</dd>
+<dt>Reason</dt><dd>Open P2 at ex:859 / TS:525. Union id-order refusal was not monotone. Only the head's catalog is served, and its ancestry is checked.</dd>
+</dl></section>
+<section id="d599"><h2><span>D-599</span> PR 4a convergence design: Union-refused sole head freezes routes</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>When an eligible replacement has closed the accepted binding and the sole head is refused, the decision carries a derived catalog_authority_refused block and serving nil.</dd>
+<dt>Reason</dt><dd>Today no block is emitted, and CatalogTrust.routes/1 would serve the closed old binding. The operator's rule forbids that fallback.</dd>
+</dl></section>
+<section id="d600"><h2><span>D-600</span> PR 4a convergence design: Honored but not ready replacement also freezes routes</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>An honored replacement head that closes the accepted binding but is not yet promotable gives serving nil with no block.</dd>
+<dt>Reason</dt><dd>This is the same old-signer fallback. It goes beyond item 3 and D-568 question 1, so it is flagged for operator confirmation.</dd>
+</dl></section>
+<section id="d601"><h2><span>D-601</span> PR 4a convergence design: Planned rotation keeps serving</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>If only rotations lie between the accepted binding and the head, the accepted catalog stays served while the rotation is not ready.</dd>
+<dt>Reason</dt><dd>CatalogTrust parity. The old key is still the current authority there, so this is not a fallback.</dd>
+</dl></section>
+<section id="d602"><h2><span>D-602</span> PR 4a convergence design: Fork bindings are cited as extra parents</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Authoring cover_claim requires, as parents, every closed binding that holds an uncovered catalog, with that catalog as a prior. The verifier is unchanged.</dd>
+<dt>Reason</dt><dd>Without this, a D-A17 fork needs two resolutions, and row 320 liveness fails for a single one. Lifecycle section 3 says parents are binding-head IDs, so this is flagged for the operator. Fallback: (b) excludes uncovered-under-closed forks.</dd>
+</dl></section>
+<section id="d603"><h2><span>D-603</span> PR 4a convergence design: Row 384 partly answered, rest stays open</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>An omitted chain-valid old-key catalog under a closed binding still forks, but one resolution that cites it and carries its entries ends the fork. Whether such post-closure siblings should be closed out stays an operator question.</dd>
+<dt>Reason</dt><dd>Closing them out would contradict the pinned C12 one-sided-citation test. The old signer can still force one resolution per sibling.</dd>
+</dl></section>
+<section id="d604"><h2><span>D-604</span> PR 4a convergence design: Preflight head limit is a filed hole</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Property (b) is scoped to histories whose resolve returns ok. A new row is proposed to report more than two heads in the decision, so a resolution can still be prepared.</dd>
+<dt>Reason</dt><dd>The verifier accepts R* because R* cites all heads, but the preflight's resolve errors with control_history_limit before cover_claim runs.</dd>
+</dl></section>
+<section id="d605"><h2><span>D-605</span> PR 4a convergence design: Missing accepted artifacts</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>An accepted binding or catalog absent from the input is a derived authority_changed, and it can clear only once the input supplies it.</dd>
+<dt>Reason</dt><dd>Clearing needs the watermark's entries. 4c's validate_watermark! guarantees they are present.</dd>
+</dl></section>
+<section id="d606"><h2><span>D-606</span> PR 4a convergence design: Decision shape changes</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The decision gains serving. The block becomes {reason, ids} with informational ids. Binding-graph vectors are regenerated; historical vectors and wire bytes are unchanged.</dd>
+<dt>Reason</dt><dd>4c needs a route-freeze signal that does not depend on stored blocks.</dd>
+</dl></section>
+<section id="d607"><h2><span>D-607</span> PR 4a convergence design: Liveness is conditional</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The row 320 proof and property (b) assume an honored admin, an author holding the verifier's union and the watermark artifacts, obtainable cutoffs, consistent per-replica extended keys, an ok resolve, and no new concurrent control.</dd>
+<dt>Reason</dt><dd>Without these preconditions the claim would be an overclaim. 4a has no entry facts.</dd>
+</dl></section>
+<section id="d608"><h2><span>D-608</span> PR 4a convergence design: Property harness</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Properties draw subsets and causal orders from a pre-signed pool, enumerate every order for six artifacts or fewer, persist state through one shim that works on today's code and on advance/2, and sign R* on demand.</dd>
+<dt>Reason</dt><dd>Signed fixtures are expensive, and the properties must run red against the current code before the change.</dd>
+</dl></section>
+<section id="d609"><h2><span>D-609</span> PR 4a convergence design: Order independence is scoped</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Property (e) requires the same decision for orders that end with the same watermark, and the same end state once a resolution that carries every possible watermark is present.</dd>
+<dt>Reason</dt><dd>A client that accepted a catalog earlier protects it (D-A5). That difference is intended.</dd>
+</dl></section>
+<section id="d610"><h2><span>D-610</span> PR 4a convergence design: Differential source and mapping</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Property (f) uses TreehouseCatalogTrustVectors histories without replacements, calls CatalogTrust.evaluate read-only, maps 'no ready catalog' to trust_pending and a CatalogTrust throw to a graph refusal, and excludes entry-fact and cross-branch route-reuse histories.</dd>
+<dt>Reason</dt><dd>CatalogTrust checks entry facts and refuses the whole page. The graph does neither, so those divergences are by design.</dd>
+</dl></section>
+<section id="d611"><h2><span>D-611</span> PR 4a convergence design: C1 rotation fork: accept as a derived union-level fork</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Intrinsic refusal of T (breaks property (a)); union-level fork (chosen); ignore (old-signer serving)</dd>
+<dt>Decision</dt><dd>Add rotation forks: for each final rotation T whose parent is not closed, a catalog under T.parent that strictly descends from T.prior_catalog. A chain-valid descendant forks and a pending one pends. Fork bindings now include open rotation-fork parents, and R* cites [T, T.parent].</dd>
+<dt>Reason</dt><dd>Verified. closed_set/1 seeds only from replacements, so B stays open and C1 current, and the graph has nothing like catalog_trust.ex:1288-1300. Making it union-level, not intrinsic, preserves D-279 monotonicity. The pending treatment mirrors CatalogTrust, which includes pending catalogs.</dd>
+</dl></section>
+<section id="d612"><h2><span>D-612</span> PR 4a convergence design: C2 serving and persisted block shape: accept as 4c obligations</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Persist serving as state; recompute serving (chosen)</dd>
+<dt>Decision</dt><dd>Routes come from a recomputed serving. next.blocked holds only the sticky authority_changed and CatalogTrust's own reasons. validate_saved_block! is rewritten so derived graph blocks are valid with blocked nil, and unknown reasons refuse.</dd>
+<dt>Reason</dt><dd>Verified. resolve_route and routes/1 read state.accepted and state.blocked, and validate_saved_block! has only three arms. catalog_trust.ex is hard-excluded from 4a, so these are recorded as 4c obligations.</dd>
+</dl></section>
+<section id="d613"><h2><span>D-613</span> PR 4a convergence design: C3 Seen over a closed-out rotation watermark: accept with a separate CatLineage</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Seen uses CatLineage: previous edges plus the rotation prior_catalog edge from a first catalog under a rotation. on_chain?/4 stays previous-only. S8 pins both the {R1, K1} and {R1, nil} variants.</dd>
+<dt>Reason</dt><dd>Verified that on_chain?/4 follows previous only, so K1 is not an ancestor of KT''. closed_status and C12 depend on previous-only semantics, so on_chain?/4 must not change.</dd>
+</dl></section>
+<section id="d614"><h2><span>D-614</span> PR 4a convergence design: C4 three rotation heads: accept with an authoring-only limit escape</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Collapse refused rotation heads (breaks C14/(f) parity); authoring escape (chosen)</dd>
+<dt>Decision</dt><dd>The verifier's head limit is unchanged (C14 and plan lines 107/376; the (f) parity holds). On control_history_limit, cover_claim accepts a claim that cites every head root and fork binding, using expected priors from a resolve with the closed-out rotations removed. A post-sign resolve(U ∪ R*) check is also required. advance on control_history_limit keeps state and serves nil.</dd>
+<dt>Reason</dt><dd>Verified. heads &gt; 2 errors at :221, and under_refused pins a rotation under a refused node as a head. D-568 has no head-limit decision, so the critique is right that P5 was unbacked. The verifier already accepts R2 citing R1 through out?/3. A collapse of rotation heads at head counting would break the CatalogTrust differential.</dd>
+</dl></section>
+<section id="d615"><h2><span>D-615</span> PR 4a convergence design: C5 two-hop route freeing: accept with a cumulative served-route map</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Reserve every held catalog under a nil-cited binding (non-monotone, squat lever); cumulative map (chosen)</dd>
+<dt>Decision</dt><dd>The watermark carries routes (route -&gt; replica, grow-only). RouteCompat checks against it. R* chooses routes not used by any held catalog.</dd>
+<dt>Reason</dt><dd>Verified: RouteFloor for a nil citation is RouteFloor(P), which is empty under bootstrap. A union-level reservation over held catalogs would be non-monotone, and it would let the old key squat K*'s routes after publication. The cumulative map protects exactly what the client served.</dd>
+</dl></section>
+<section id="d616"><h2><span>D-616</span> PR 4a convergence design: C6 refused entry target: accept as precondition P7 and an open question</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>No liveness is claimed when an accepted entry's creation or reference target is Core-refused. Retiring such a Thread is filed as an operator question.</dd>
+<dt>Reason</dt><dd>Verified: security_block yields authority_changed from authority_refusals, and Carry forces the entry forward. Defining retirement changes catalog semantics beyond the settled contract.</dd>
+</dl></section>
+<section id="d617"><h2><span>D-617</span> PR 4a convergence design: C7 same-page closed-out descendant: accept as the documented D-275 trade</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Keep closed_status (C12 settled). Document it, pin S14, and add property (g): entries of covered catalogs are carried, and only closed-out catalogs drop entries.</dd>
+<dt>Reason</dt><dd>Verified at catalog_binding_graph.ex:857: a strict descendant of a cited catalog is closed_out. The difference between orders is the intended D-A5 watermark protection.</dd>
+</dl></section>
+<section id="d618"><h2><span>D-618</span> PR 4a convergence design: C8 property weakness: partly accepted; reject 4c route-path testing in 4a</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Accept all (impossible under the file exclusion); partial (chosen)</dd>
+<dt>Decision</dt><dd>Add a test-side ReferenceModel oracle for R* and expected serving. Expand the pool with a rotation fork, three TRs, two-hop nil routes and, if reachable, a Core flip. Serving is tested against the oracle, not through CatalogTrust routes.</dd>
+<dt>Reason</dt><dd>(1) and (2) are valid. (3) cannot be done in 4a because catalog_trust.ex and its TS twin are excluded, so the 4c suite carries it. Whether the fixtures can produce a Core refused-to-honored flip is unverified, so the design records the fallback instead of promising it.</dd>
+</dl></section>
+<section id="d619"><h2><span>D-619</span> PR 4a convergence design: C9 missing artifacts: accept as a non-freezing derived block</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The block gains an explicit freeze flag, set only by Changed(A). Missing(A) gives authority_changed with freeze false and serving nil. advance and the harness read the persisted frozen bit, not block.reason.</dd>
+<dt>Reason</dt><dd>Without this, a single incomplete call freezes until an unnecessary admin replacement, because clears needs X outside Anc*(A.binding).</dd>
+</dl></section>
+<section id="d620"><h2><span>D-620</span> PR 4a convergence design: C10 C13 client reading: pin the derived reading</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Sticky freeze for closed-under-refused (needs a new Changed condition); derived (chosen)</dd>
+<dt>Decision</dt><dd>A = B/C0 with refused R1 citing {B, C0} is not frozen and serves nothing. A later Core honor of R1 is an ordinary first acceptance. The section 3 sentence 'frozen until R2' is withdrawn, and S5 and (c) pin the derived reading.</dd>
+<dt>Reason</dt><dd>This is what 1.2's definitions give: B is closed, not closed out, and C0 is covered. Routes are nil under either reading, so the operator rule holds. B is never served again, so there is no old-signer fallback.</dd>
+</dl></section>
+<section id="d621"><h2><span>D-621</span> PR 4a convergence build: S1-S7 self-derived</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The design text references S1-S7 'as before'.</dd>
+<dt>Decision</dt><dd>S1 is the row 383 rotation trigger in both orders; S2 is a withheld resolution catalog cleared by a descendant; S3 is the {R, nil} floor case; S4 is route reuse; S6 is three rotations naming an invalid prior; S7 is a missing accepted bootstrap catalog. S5 is folded into the existing C13 revoke-first pin.</dd>
+<dt>Reason</dt><dd>No earlier draft defining 'S1 through S7 as before' was found in plans/ or the workflow journal, so they were derived from section 1.6, the row 382 and 383 acceptance text and the Codex r1-r3 findings.</dd>
+</dl></section>
+<section id="d622"><h2><span>D-622</span> PR 4a convergence build: Not every new scenario was red on the old code</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>The design says every new scenario is red today.</dd>
+<dt>Decision</dt><dd>Reported as is.</dd>
+<dt>Reason</dt><dd>The red check showed S2, S14, S1/ba, the S10 positive control and the S11 verifier rows unchanged on the old code; their failures are at the authoring layer or depend on the watermark. The S11 authoring test was never run against the old code.</dd>
+</dl></section>
+<section id="d623"><h2><span>D-623</span> PR 4a convergence build: Pin flips beyond the design's list</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Bend the code to the short list (rejected).</dd>
+<dt>Decision</dt><dd>Implemented the definitions as written. clears is now true on ordinary successes with a watermark. The lower-generation rollback pin now accepts and is renamed 'a higher stored generation under the same binding is informational'. recovery_incomplete is a derived block that does not freeze. A fork with a changed watermark sets freeze: true. The lower-revision rollback pin now serves K1.</dd>
+<dt>Reason</dt><dd>These follow from the clears definition, the removed generation clause and freeze = Changed(A) on every non-accepting decision. Making freeze independent of which reason wins keeps the outcome order-consistent.</dd>
+</dl></section>
+<section id="d624"><h2><span>D-624</span> PR 4a convergence build: RouteCompat also applies under the watermark's own binding</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Covers checks RouteCompat before branch (i) as well as in (ii).</dd>
+<dt>Reason</dt><dd>Otherwise a later revision of the watermark binding could re-point a route served under an earlier binding, which breaks 'a route already served is never re-pointed'.</dd>
+</dl></section>
+<section id="d625"><h2><span>D-625</span> PR 4a convergence build: Watermark-relative Covers failures use catalog_rollback</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>invalid_catalog_transition (rejected).</dd>
+<dt>Decision</dt><dd>A promotable head that fails Seen, Carry or RouteCompat against an unchanged watermark gets reason catalog_rollback, with no block, in both runtimes.</dd>
+<dt>Reason</dt><dd>Plan section 3 (D-279) reserves invalid_catalog_transition for intrinsic verdicts. A client with no watermark would accept the same union, so the failure is a union-level reason. No pinned scenario reaches this case.</dd>
+</dl></section>
+<section id="d626"><h2><span>D-626</span> PR 4a convergence build: Authoring route rule is weaker than 'disjoint'</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Strict disjointness plus test churn (rejected).</dd>
+<dt>Decision</dt><dd>cover_claim refuses an entry only when some held catalog maps that route to a different replica. Reusing a route for the same replica is allowed.</dd>
+<dt>Reason</dt><dd>Strict disjointness breaks many existing authoring tests in both runtimes, which reuse per-replica routes. The weaker rule gives the same safety, because every route a client served was in some held catalog.</dd>
+</dl></section>
+<section id="d627"><h2><span>D-627</span> PR 4a convergence build: Head-root rule only inside the limit escape</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Normal coverage still requires citing every binding head. Roots stand in for rotation heads only in resolve_for_claim, after control_history_limit.</dd>
+<dt>Reason</dt><dd>The design also says PR 2 authoring tests that cite a non-head ancestor without a fork stay catalog_fork. Accepting a root in the normal path would also prepare claims that a client accepted on a planned rotation would then freeze on.</dd>
+</dl></section>
+<section id="d628"><h2><span>D-628</span> PR 4a convergence build: Escape drops only directly chained rotations</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The escape drops rotations whose rotation-parent chain reaches a cited parent, plus their descendants and the catalogs bound to them. Rotations hanging off strict ancestors of a cited root are kept, so the limit still applies if they push past it.</dd>
+<dt>Reason</dt><dd>The authoring side has no graph at that point. This is a conservative subset of what out?/3 closes out.</dd>
+</dl></section>
+<section id="d629"><h2><span>D-629</span> PR 4a convergence build: Post-sign check is sole head and no fork</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>After signing, the full retained evidence plus the signed op must resolve with the signed op as the sole head and no fork. It does not require an accepting decision.</dd>
+<dt>Reason</dt><dd>An accepting decision is unreachable at signing time: K* is not signed yet and no cutoff proofs are held.</dd>
+</dl></section>
+<section id="d630"><h2><span>D-630</span> PR 4a convergence build: Row 382 acceptance wording superseded</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>R citing an invalid C1 is raw evidence, and B/C0 is kept and served. C0 is not an omitted head.</dd>
+<dt>Reason</dt><dd>Design section 2.5 and its listed pin flip for refused_catalog_citation take precedence over the row text 'R/KR refused and C0 stays an omitted catalog head'.</dd>
+</dl></section>
+<section id="d631"><h2><span>D-631</span> PR 4a convergence build: Floor uses entry-list union</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Floor(N) concatenates the cited catalogs' entries, and extends? matches by replica. Two cited route maps that conflict make the first catalog invalid.</dd>
+<dt>Reason</dt><dd>This is the simplest form consistent with the existing extends? semantics.</dd>
+</dl></section>
+<section id="d632"><h2><span>D-632</span> PR 4a convergence build: BEAM-only verdicts field</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>graph.verdicts exposes the intrinsic verdicts for property (a) on BEAM only. It is not in any view, so vectors and TS parity are unaffected.</dd>
+<dt>Reason</dt><dd>The TS property twin was not built.</dd>
+</dl></section>
+<section id="d633"><h2><span>D-633</span> PR 4a convergence build: Findings 1 and 7 are a design defect in 1.3, not patched</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Operator rule: a changed authority freezes routes and never falls back to the old signer.</dd>
+<dt>Options</dt><dd>(a) freeze from a derived trust_pending bit; (b) serve nil without freezing when Changed(A) is derivable; (c) keep as is (violates lifecycle section 4)</dd>
+<dt>Decision</dt><dd>Reported both as design. advance/2 keeps trust_pending serving :unchanged.</dd>
+<dt>Reason</dt><dd>Design 1.3 explicitly says trust_pending keeps state and serves :unchanged. Patching only pending_out? for refused parents would fix 7 and leave 1 open. Both repairs (a sticky freeze from the derivable part, or serving nil without freezing) trade D-A11's no-partial-history rationale against denial of service from a withheld page.</dd>
+</dl></section>
+<section id="d634"><h2><span>D-634</span> PR 4a convergence build: Findings 2 and 6 are a design defect in the RouteFloor rule</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Options</dt><dd>Reserved-to-none conflicting floor routes (intrinsic, D-279-safe) versus union-level cross-branch classification as row 382 originally said</dd>
+<dt>Decision</dt><dd>Reported as design, with a proposed reserved-to-none floor amendment. merge_floor and carries? are unchanged.</dd>
+<dt>Reason</dt><dd>The design 1.4 liveness proof does not hold when cited priors conflict on a route, and P1-P7 do not exclude that case. The old catalog key alone can cause it.</dd>
+</dl></section>
+<section id="d635"><h2><span>D-635</span> PR 4a convergence build: Authoring route check exempts carried pairs</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>Verifier unchanged; authoring preflight only.</dd>
+<dt>Decision</dt><dd>held_conflict?/cover route check skips entries whose {route, replica} a cited non-nil prior already maps; everything else is still checked against every held catalog.</dd>
+<dt>Reason</dt><dd>Design 5 says 'routes disjoint from every held catalog's routes'. Read literally, that lets a closed-out old-key Squat veto carrying the honest catalog, which contradicts D-A10 and the rule that the old key is never an input. A carried pair re-points nothing the cited prior had not already pointed. S12 and the fresh-route R* behave the same as before. This narrows design 5's wording without changing its intent.</dd>
+</dl></section>
+<section id="d636"><h2><span>D-636</span> PR 4a convergence build: Property oracle uses union classification but not decision flags</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>The oracle takes refused?, the closed and closed-out sets, catalog status and forks from the graph, and recomputes freeze, clears, serving, Seen and RouteCompat itself.</dd>
+<dt>Reason</dt><dd>A full independent re-derivation of classification would duplicate the resolver. The surviving mutants were all in the decide and advance layer, and all six now fail. Comparing against graph classification still catches every decision-layer bug.</dd>
+</dl></section>
+<section id="d637"><h2><span>D-637</span> PR 4a convergence design critique: 10 findings</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>An independent critique of the PR 4a convergence design (rows 382 and 383; design entries D-588 to D-620) raised 10 findings, C1 to C10, before the build.</dd>
+<dt>Decision</dt><dd>C1 to C7, C9 and C10 were accepted and C8 was accepted in part (D-590 to D-620): rotation forks become a derived union-level fork (C1); serving and the persisted block shape are 4c obligations (C2); Seen reads a separate CatLineage (C3); three rotation heads get an authoring-only limit escape (C4); the watermark carries a cumulative served-route map (C5); a Core-refused entry target is precondition P7 and an operator question (C6); the same-page closed-out descendant is the documented D-275 trade (C7); a test-side oracle and a wider pool, without 4c route-path testing (C8); a missing artifact is a non-freezing derived block (C9); the derived C13 client reading is pinned (C10).</dd>
+<dt>Reason</dt><dd>Each finding was checked against the code before it was accepted; the individual entries say what was verified. C8 item 3 needs catalog_trust.ex and its TS twin, which 4a may not edit.</dd>
+</dl></section>
+<section id="d638"><h2><span>D-638</span> PR 4a convergence review: round 1 and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Context</dt><dd>After the convergence build (commits e14d27709 to c6719f3d7), Codex Sol 6.1 xhigh plus an independent review ran one round on the head.</dd>
+<dt>Decision</dt><dd>Round 1 raised 7 P1/P2 findings and 1 P3. Fixed (4): same-service replacements inherit their parents' unproven cutoffs (P2, D-A15, new scenario in both runtimes and the vectors); a closed-out old-key catalog no longer vetoes authoring, because an entry whose exact {route, replica} pair a cited prior already maps is carried (P2, authoring preflight only); catalog entry service scope now outranks the signature failure (P3, new scenario); the convergence properties were rewritten around a test-side oracle that never reads decision flags, so all six surviving mutants now fail (P2, plus the S15 Seen-only scenario). Reported as design and not patched (4 findings, 2 root causes): a trust_pending page lifts an authority_changed freeze and keeps serving the old binding, both for an unrelated withheld dependency and for a rotation whose prior catalog is withheld under a refused, not-closed binding (P1 catalog_binding_graph.ex:139 and :943, design 1.3 with D-A11, row 386); and merge_floor makes any resolution that cites route-conflicting sibling catalogs permanently unpromotable, reachable with only the revoked old key (P1 catalog_binding_graph.ex:892, cited twice, row 387). Clean final round: no. The four findings left open by D-587 (ex:737, :1097, :308, :859) were closed by the convergence design.</dd>
+<dt>Reason</dt><dd>Rule 3: both open classes are defects in the design text (sections 1.3 and 2.4), not implementation slips, and each repair trades a settled rationale (D-A11, or row 382's union-level cross-branch reading) that the operator should choose. No clean review round is claimed after the round 1 fixes (98cd1ad08, 4dae91912).</dd>
+</dl></section>
+<section id="d639"><h2><span>D-639</span> PR 4a convergence: stage models</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
+<dt>Decision</dt><dd>Stage models: the PR 4a plan, critique and revision ran on Sonnet 5.5 by a workflow default; implementation, reviews and this convergence pass ran on Opus 5.5 with Codex Sol 6.1 xhigh.</dd>
+<dt>Reason</dt><dd>Recorded so later readers can weigh the evidence from each stage.</dd>
+</dl></section>
 </main>
 </body>
 </html>

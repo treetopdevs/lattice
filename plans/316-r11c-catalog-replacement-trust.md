@@ -10,7 +10,7 @@ PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_c
 twin, and the row 318 bootstrap size preflight) is in review as PR #216 (D-400–D-435). Its binding-graph
 coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
 authoring result is not resolver acceptance, a route switch or catalog trust.
-PR 4a (#221, D-530–D-587) is in review: the replacement-binding resolver as new pure modules in
+PR 4a (#221, D-530–D-639) is in review: the replacement-binding resolver as new pure modules in
 both runtimes (`Treehouse.CatalogBindingGraph`, `Treehouse.CatalogReplacementAuthority` and
 their TS twins, with new `binding_graph_v1.json` / `binding_graph_ts_v1.json` vectors), and the
 PR 2 authoring preflight switched to call them (the interim mirror is deleted). It is built under
@@ -18,8 +18,9 @@ the operator's 2026-11-15 "new modules now, wire later" decision and does not ed
 `catalog_trust.ex`, `treehouse_catalog_trust.ts`, their dist or native `catalog_eval`. Not
 claimed: the retained-client resolver does not call it yet, so no client accepts a replacement;
 no route switch, native, custodian refusal, real Space or ceremony. PR 4b (row 380) adds test
-breadth; PR 4c (row 381) wires catalog_trust after plans 267/269 and is gated on design rows 382
-and 383. C10–C15 stay OPEN until 4c.
+breadth; PR 4c (row 381) wires catalog_trust after plans 267/269. Design rows 382 and 383 are
+done in the resolver (convergence design, D-588–D-639); 4c is now gated on design rows 386
+(`trust_pending` freeze bypass) and 387 (floor conflict). C10–C15 stay OPEN until 4c.
 PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
 the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
 bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
@@ -464,7 +465,7 @@ PR 4a decisions:
   catalog absent from the input is an `authority_changed` trigger on the sole-head path, so a
   caller that omits it fails closed instead of promoting. The block persists until a fresh
   admin resolution lifts it, so its clearing belongs to the design row below.
-- **Design row 383 (rule 3; finding 6 of review round 2).** `authority_changed` clearing is
+- **Design row 383 (rule 3; finding 6 of review round 2; superseded by the convergence design below).** `authority_changed` clearing is
   a third patch on the same trigger class (D-A5's standing triggers caused this freeze: a
   trigger recorded as an old-key rotation head that a later resolution closes out rather than
   closes never clears, and the outcome depends on delivery order). Redesign before 4c wires
@@ -489,7 +490,7 @@ PR 4a decisions:
   closed-out binding, and every catalog bound to it, is closed-out evidence and never
   `trust_pending`, so an old-key signer cannot freeze recovery by withholding a prior catalog.
   A pending rotation under an open, unknown or pending replacement parent still pends (D-5).
-- **Design row 382 (rule 3; review round 3, finding 4).** Route
+- **Design row 382 (rule 3; review round 3, finding 4; superseded by the convergence design below).** Route
   reuse is the second catalog-validity-versus-classification gap after D-A12. Route reservation
   runs after validity, in union id order, so a route-refused catalog keeps `validity: ok`: a
   replacement first catalog citing it, and a `previous` successor of it (`extends?` ignores
@@ -532,6 +533,56 @@ PR 4a decisions:
   leased admin) instead of `CatalogVectors.bootstrap_history`, because the step-4 and R04 cases
   need the witnessed-beacon pin and continuation.
 
+**PR 4a convergence design (rows 382 and 383; D-588–D-639).** This replaces D-A5's stored
+triggers, D-A10's union route reservation, D-A12's "an invalid cited prior covers nothing"
+reading and D-A14's sticky missing-artifact trigger. In force in both runtimes:
+
+- *Block and clearing.* `resolve/1` takes no `blocked` input and persists nothing. The block,
+  `clears_authority_changed` and the new `serving` field are recomputed on every call from the
+  union and the accepted watermark (D-588). The caller keeps only the watermark (now with a
+  grow-only cumulative `routes` map, D-615) and one sticky `frozen` bit, merged by the pure
+  `advance/2` / `advanceCatalogBindingState`, which 4c adopts as `merge_security_block` (D-589).
+  The block is `{reason, ids, freeze}`; `freeze` is set only by Changed(A), so a missing accepted
+  artifact is a non-freezing derived block (D-605, D-619). `frozen` lifts only when the decision
+  accepts a sole promotable head H, an honored replacement in H's lineage lies outside the
+  watermark binding's ancestry, H's catalog carries the watermark's entries and routes (Seen over
+  CatLineage, Carry, RouteCompat), and the watermark catalog was cited in H's lineage or closed
+  out by a node a later replacement descends from (D-590, D-613). Freshness is not stored (D-591);
+  rollback is a lower revision under the same binding (D-592); watermark-relative Covers failures
+  are `catalog_rollback` (D-625).
+- *Serving.* A union-refused sole head that closed the accepted binding is a derived
+  `catalog_authority_refused` block with `serving` nil (D-599); an honored but not yet promotable
+  replacement head also serves nil (D-600, operator confirmation pending, row 388); a planned
+  rotation keeps serving the accepted catalog (D-601); `control_history_limit` keeps state and
+  serves nil (D-614).
+- *Validity.* Validity is intrinsic and never reads the union `refused?` flag (D-595). A
+  replacement citing an invalid prior is raw evidence, `invalid_catalog_transition` (D-594,
+  D-630). A rotation is a node only when its prior catalog is held and valid (D-596). Floor(N) is
+  the union of the cited catalogs' entries, or the parent's floor for a nil citation, and every
+  first catalog must extend it (D-597, D-631). Route uniqueness is judged against a catalog's own
+  `previous` chain and cited priors' route maps; `route_history` and the union id-order
+  reservation are deleted (D-598). Rotation forks are a derived union-level fork (D-611). A
+  same-service replacement inherits its parents' unproven cutoffs (D-A15, fixed in review, D-638).
+- *Authoring.* `cover_claim` requires closed fork bindings as extra parents (D-602), refuses an
+  entry only when a held catalog maps its route to a different replica, exempting pairs a cited
+  prior already maps (D-626, D-635), escapes `control_history_limit` only for claims citing every
+  head root (D-614, D-627, D-628), and checks after signing that the signed op is the sole head
+  with no fork (D-629).
+- *Evidence.* Scenarios S1–S15 in `catalog_binding_graph_scenarios.ex` drive both runtimes and
+  the regenerated `binding_graph_v1.json` / `binding_graph_ts_v1.json`; the StreamData property
+  file uses a pre-signed pool and a test-side oracle that recomputes freeze, clears, serving, Seen,
+  Carry and RouteCompat from union classification without reading decision flags (D-608, D-636).
+
+Still open after the convergence review (round 1: 7 P1/P2 and 1 P3; 3 P1/P2 and the P3 fixed;
+D-638): `trust_pending` lifts the freeze and keeps serving the refused binding (design 1.3 with
+D-A11; P1 `catalog_binding_graph.ex:139` and `:943`; row 386); conflicting cited route maps make
+recovery permanently unpromotable, reachable with only the revoked old key (P1 `:892`; row 387).
+Operator questions: row 388 (D-600, D-602, D-616) and the remainder of row 384 (D-603). Not
+built: property (b) with an independent R* oracle, (e1), the (f) CatalogTrust differential, the
+TS property twin, a Core refused-to-honored flip, S5's later-honor pin, and a post-sign negative
+test (row 389). 4c obligations (D-612): serve from `serving`, rewrite `validate_saved_block!`,
+replace `validate_route_history!` with the ancestry check.
+
 Row dispositions: 352 closed in resolver and authoring (both runtimes). 356 closed in resolver
 (D-9 reading). 350 closed in resolver for intrinsic failures (raw evidence); an unheld parent
 stays pending by design (D-5); open in trust until 4c. 335 closed by the restored-permission
@@ -546,10 +597,13 @@ implemented and tested in the graph; open in trust until 4c.
 Space history, parsed rotation/catalog envelopes, `merge_proofs!` cutoffs, `state.accepted`,
 `state.blocked`); change `merge_security_block` to lift `authority_changed` exactly when
 `decision.clears_authority_changed`; move the chain-logic equivalence test; entry facts (354);
-routes from the current binding's origin; pre-upgrade store restore.
+routes from the current binding's origin; pre-upgrade store restore. After the convergence
+design, `merge_security_block` adopts `advance/2` instead of reading `clears_authority_changed`
+alone (D-589), with the D-612 obligations above.
 
-Open questions to the operator (not decided in 4a): (1) routes-freeze policy for a sole refused
-head: the graph holds the watermark and closes out every old-key child of the closed accepted
+Open questions to the operator (not decided in 4a; question 1 is answered by D-599 and its
+extension D-600 awaits confirmation in row 388, question 2 is partly answered by D-603): (1)
+routes-freeze policy for a sole refused head: the graph holds the watermark and closes out every old-key child of the closed accepted
 binding, but whether 4c keeps serving that binding's accepted catalog is a 4c decision. (2)
 Residual in the step-7 "omitted head" rule: under a closed binding, a catalog that is neither an
 ancestor nor a descendant of a cited catalog stays `catalog_fork`; an old-key signer can create
@@ -561,8 +615,10 @@ Non-claims (4a): no route switch or route output; no retained-client acceptance 
 native `catalog_eval`; no custodian closed-binding refusal; C10–C15 stay OPEN (4a asserts C10
 authority acceptance and node fields only); no Core primitive, wire atom or quarantine reason;
 historical vectors (`replacement_v1.json`, `ts_trust.json`) and wire bytes unchanged; disposable
-keys only. Not written in 4a: the D-279 StreamData monotonicity property and the C13
-redundant-late-beacon case (PR 4b, row 380, with persisted trust state).
+keys only. The convergence property file checks D-279 verdict monotonicity (property (a)) over
+its scenario pools only, on BEAM; not written in 4a: the D-279 StreamData property over
+interleavings of revokes, transfers, beacons, rotations and replacements, and the C13
+redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidence.
 
 **PR 5** — native parity (`catalog_eval` replacement node, D-270 nodes in `chains.rs`, row 319).
 **PR 6** — a plan 266 exporter test now; after PR 4, the C15 two-cycle BEAM/TS reconstruction
