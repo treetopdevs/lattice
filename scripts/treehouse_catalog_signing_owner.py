@@ -176,7 +176,8 @@ def snapshot(root):
 
 def head_shape(value, binding, key):
     require(isinstance(value, dict) and set(value) == {"binding", "key", "revision", "id"})
-    require(value["binding"] == binding and value["key"] == key)
+    require(value["binding"] == binding, "catalog_ledger_binding_mismatch")
+    require(value["key"] == key)
     require((value["revision"] is None and value["id"] is None) or
             (type(value["revision"]) is int and 0 <= value["revision"] < MAX_ENVELOPES
              and isinstance(value["id"], str)))

@@ -2778,6 +2778,115 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Two Codex Sol 6.1 rounds ran. A high review raised one P2 (the consumer test name overclaimed), fixed by narrowing the name (D-486). A final xhigh review on 0e99ba6e5 (model gpt-6.1-sol, reasoning effort xhigh) returned PASS with no P1/P2/P3 findings. Nothing was deferred. The bot rounds under D-38 run on this PR. (Corrected: this entry first said no xhigh round ran.)</dd>
 <dt>Reason</dt><dd>It makes no claim beyond the row 316 PR 6 exporter test. It does not claim the Linux operator export path with a replacement, resolver evaluation of replacements, C10–C15, the reciprocal-exporter gate, or anything about R13, custody, W4 or Phase G.</dd>
 </dl></section>
+<section id="d491"><h2><span>D-491</span> Backlog run 2026-11-15: row 316 as the line to finish</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Decision</dt><dd>Backlog run 2026-11-15: resumed from origin/main a151a4118 with row 316 as the line to finish. PR 4 stays gated (plans 267/269 unmerged, OD-16, OD-17, row 320), so the coordinator pinned the ungated custody residuals instead. Adversarial review is Codex Sol 6.1 at xhigh plus an independent rule-3 review; the request named both Sol 6.1 xhigh and Astra medium, and the standing instruction is never Astra, so Sol was used and the conflict was reported to the operator. PRs are opened and left unmerged; this run carries no merge authority. It does not adopt OD-16, OD-17 or row 320.</dd>
+</dl></section>
+<section id="d492"><h2><span>D-492</span> Take the pinned slice in part: signing path plus row 362, not a fallback</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>The coordinator pinned row 361 with row 362. Row 361 lists &#x27;316 PR 4&#x27; as its dependency. PRs 0-3 and 6 are merged; PR 4 is gated on plans 267/269, OD-16, OD-17 and row 320.</dd>
+<dt>Options</dt><dd>(a) Thread binding_id through all five named files. (b) Build the part that needs nothing from PR 4 and name the rest. (c) Fall back to row 362 + 353 + 351. (d) Ledger-only PR.</dd>
+<dt>Decision</dt><dd>(b). Build the signing path on fixtures (package mode, review_replacement, SignCatalog threading, release_catalog revision 0, named reason). Leave catalog_evidence, release_listing, staging and initial_provisioning unchanged with TODO comments.</dd>
+<dt>Reason</dt><dd>The dependency is real only for the consumers that must judge whether a replacement is accepted; for the signing path it is sequencing. The signing path can be checked end to end without a resolver. It does not claim replacement trust or that any of the other four consumers supports a replacement.</dd>
+</dl></section>
+<section id="d493"><h2><span>D-493</span> Four of the five named files are not edited</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>catalog_evidence.ex:175, release_listing.ex:118/160 and initial_provisioning.ex re-verify with Binding.honored_bootstrap(log, binding.record) and catalog.binding == catalog.bootstrap. staging.ex only calls SigningLedger.verify_status, which already uses Binding.binding_id/1. Their only binding source is CatalogBinding.load/ReleaseReadiness, which yield bootstrap bindings.</dd>
+<dt>Options</dt><dd>(a) Swap the comparison to Binding.binding_id/1 in each. (b) Leave them fail-closed with a TODO at each comparison and narrow row 361.</dd>
+<dt>Decision</dt><dd>(b).</dd>
+<dt>Reason</dt><dd>A replacement record fails honored_bootstrap by construction, and the correct post-signing check is &#x27;this replacement is accepted&#x27;, which is resolver work. An untestable one-line swap would be dead code that looks like support. initial_provisioning is the first install under the bootstrap, so a replacement is not an initial provisioning. It does not claim these paths are ready for a replacement.</dd>
+</dl></section>
+<section id="d494"><h2><span>D-494</span> Add a closed &#x27;replacement&#x27; mode to the signing package</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>CatalogSigningPackage requires a staged Thread reference op (mode pending or initial_existing). A replacement revision 0 carries the whole inventory and no new child, so it cannot satisfy either mode. The plan does not specify how a replacement reaches the custodian.</dd>
+<dt>Options</dt><dd>(a) New mode &#x27;replacement&#x27; with frame null. (b) Reuse &#x27;pending&#x27; with a fake reference. (c) Skip the package and call the ledger directly, as PR 3 tests did. (d) File a design row and build nothing here.</dd>
+<dt>Decision</dt><dd>(a), additive. pending and initial_existing bytes stay identical; a pin test proves it. If rule 3 review rejects the mode, drop to the smaller slice and file the package-mode design as its own row.</dd>
+<dt>Reason</dt><dd>(b) would assert a reference that does not exist. (c) leaves the &#x27;refuses at review&#x27; symptom untested. The mode is only reachable through review_replacement, which has no CLI caller. It does not claim the custodian flow is operator-ready or that the format is final.</dd>
+</dl></section>
+<section id="d495"><h2><span>D-495</span> review_replacement takes the claim and op id from the caller and checks presence, not acceptance</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>Binding.replacement/3 says the PR 4 resolver must supply both the op id and the claim. No resolver exists yet.</dd>
+<dt>Options</dt><dd>(a) Trust the supplied pair. (b) Also check the op is present in the package&#x27;s Space history with an equal normalized claim, and Core-honored on that snapshot. (c) Reimplement resolver steps 3-8.</dd>
+<dt>Decision</dt><dd>(b). The Core-honored check is one call to Authority.analyze and is dropped to a TODO if it needs more.</dd>
+<dt>Reason</dt><dd>It stops a fixture or caller from pairing a claim with an unrelated op id, without approximating the resolver. Core-honored on a snapshot is not acceptance and is not monotone under later revokes (C13). It does not claim the closed set, lease, epoch, ancestry or closing checks.</dd>
+</dl></section>
+<section id="d496"><h2><span>D-496</span> Does the derived record take the claim&#x27;s profile fields after a re-pin</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>Row 361 asks this. D-462 left it open. Binding.replacement/3 already refuses a claim whose profile_genesis/profile_id differ from the bootstrap record. Plan 316 section 2 requires the claim to equal the retained bootstrap profile, and C11 makes a same-profile_id re-pin with another genesis wrong_catalog_scope. Binding.profile_unchanged also fails for the bootstrap record against a re-pinned log.</dd>
+<dt>Options</dt><dd>(a) Derived record copies the claim&#x27;s profile fields. (b) Keep the bootstrap&#x27;s fields. (c) Support a re-pin by adopting the new profile.</dd>
+<dt>Decision</dt><dd>(b), which equals (a) by construction because the claim must equal the bootstrap profile. No re-pin support. review_replacement also refuses binding_profile_changed. A test pins that the derived record&#x27;s profile fields equal both the claim&#x27;s and the bootstrap&#x27;s.</dd>
+<dt>Reason</dt><dd>Adopting a new profile would let a replacement change what the retained client pinned, which is the scope check the resolver enforces. A recovery after a re-pin is a new bootstrap, not a replacement. It does not claim re-pin handling or any resolver scope result.</dd>
+</dl></section>
+<section id="d497"><h2><span>D-497</span> Row 362 reason covers the binding id only</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>Opening a directory that holds binding B with R refuses as catalog_ledger_corrupt. The Python head_shape check joins binding and key in one require; the owner helper is custody code.</dd>
+<dt>Options</dt><dd>(a) Name the reason for binding mismatch only. (b) Name it for binding or key. (c) Leave as corrupt.</dd>
+<dt>Decision</dt><dd>(a). Add catalog_ledger_binding_mismatch to the helper, the refusal/1 known list, and verify/verify_status. Key mismatches, tampered envelopes and cross-binding catalogs inside envelopes stay catalog_ledger_corrupt.</dd>
+<dt>Reason</dt><dd>A key mismatch under the same binding is a different operator problem and is not the B-versus-R case. A tampered head naming another binding is indistinguishable from a real one, so the reason is a fail-closed label, not a diagnosis; a test asserts that. It does not change which inputs are refused.</dd>
+</dl></section>
+<section id="d498"><h2><span>D-498</span> sign_reviewed is the only new signing entry; no CLI exposure</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>SignCatalog.sign/4 calls review/2, which loads the bootstrap ceremony. A replacement&#x27;s own ceremony (new signer, OD-13) is not built, so there is no ceremony loader for it.</dd>
+<dt>Options</dt><dd>(a) Add a replacement option to sign/4 and the CLI. (b) Add @doc false sign_reviewed/4 taking a reviewed package; keep sign/4 and status/2 bootstrap-only.</dd>
+<dt>Decision</dt><dd>(b).</dd>
+<dt>Reason</dt><dd>No operator can reach a replacement signature until the resolver, the closed-binding refusal (row 360) and the replacement ceremony exist. It does not claim a custodian can sign a replacement in production.</dd>
+</dl></section>
+<section id="d499"><h2><span>D-499</span> release_catalog builder takes one explicit prior catalog and verifies against the claim digest</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>The claim commits inventory_digest; the full-inventory revision 0 must equal it. Choosing the prior catalog among forked heads is prior_catalogs coverage, a resolver concern. The existing candidate/3 builder is a one-new-Thread release flow.</dd>
+<dt>Options</dt><dd>(a) Extend candidate/3. (b) New pure replacement_revision_zero/2 given one prior catalog. (c) Pick the head inside the builder.</dd>
+<dt>Decision</dt><dd>(b). It refuses catalog_inventory_mismatch if the digest differs. candidate/3 is untouched.</dd>
+<dt>Reason</dt><dd>A wrong carried set refuses instead of being trusted, and the release flow stays byte-identical. It does not claim the right prior head was chosen or that a release can publish under a replacement.</dd>
+</dl></section>
+<section id="d500"><h2><span>D-500</span> Fallbacks not taken, and ledger edits kept append-only</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>Fallback 1 (rows 362, 353, 351) and fallback 2 (ledger-only) were allowed only if the pinned slice failed. Open PR #219 and active codex/* branches edit plans/README.md and the decisions HTML.</dd>
+<dt>Options</dt><dd>Take a fallback; take the pinned slice in part.</dd>
+<dt>Decision</dt><dd>Neither fallback. README and decisions edits are appended rows and entries only; row 361 is narrowed (signing path) with its remainder and gates named, row 362 moves to IN REVIEW. Rows 353 and 351 stay open.</dd>
+<dt>Reason</dt><dd>The signing path is meaningful and independent of PR 4. Append-only edits limit conflicts. It does not claim row 361 is closed.</dd>
+</dl></section>
+<section id="d501"><h2><span>D-501</span> Package decode projects replacement entries onto the bootstrap service before observe</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>The plan said CatalogEntries.observe/2 would run unchanged for a replacement package. It does not: it requires every entry&#x27;s service id and key to equal the bootstrap record&#x27;s, so any real replacement catalog was refused by decode/1.</dd>
+<dt>Decision</dt><dd>In &#x27;replacement&#x27; mode, decode/1 rewrites entries&#x27; service_id and service_key to the bootstrap record&#x27;s, found in the Space history by CatalogBootstrap.observe. It does this only for the structural observation of history, root, genesis and creation, and does not touch catalog_entries.ex. The replacement&#x27;s own service identity is checked in review_replacement/4.</dd>
+<dt>Reason</dt><dd>This keeps the catalog_entries.ex core file unedited and fits the plan&#x27;s STOP line.</dd>
+</dl></section>
+<section id="d502"><h2><span>D-502</span> review_replacement returns catalog_inventory_mismatch, not catalog_binding_mismatch, for an inventory digest mismatch</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Decision</dt><dd>An inventory digest that differs from the claim&#x27;s returns catalog_inventory_mismatch. The plan&#x27;s refusal list did not name this atom for review_replacement, but it matches replacement_revision_zero&#x27;s atom.</dd>
+<dt>Reason</dt><dd>It is more informative than a generic binding mismatch.</dd>
+</dl></section>
+<section id="d503"><h2><span>D-503</span> Binding is judged before key in ledger refusals</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Decision</dt><dd>In verify/2 and verify_status/2, a binding mismatch is checked before the key check. This matches the Python head_shape order.</dd>
+<dt>Reason</dt><dd>The plan expects R&#x27;s status under B to give catalog_ledger_binding_mismatch, but R&#x27;s status also carries a different key. With key checked first it would have stayed corrupt.</dd>
+</dl></section>
+<section id="d504"><h2><span>D-504</span> No embedded sha256 pin for bootstrap package bytes</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Decision</dt><dd>I did not add the sha256 pin of existing pending and initial_existing package bytes. The existing catalog_signing_package_test.exs stays green unchanged. A new test pins the closed {mode, frame} shape and the nil-frame replacement shape. The existing generation test already pins the status and head strings.</dd>
+<dt>Reason</dt><dd>The catalog_signing_package_test.exs fixture generates fresh keys, so its bytes are not deterministic.</dd>
+</dl></section>
+<section id="d505"><h2><span>D-505</span> review/2 refuses replacement mode explicitly</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Decision</dt><dd>review/2 now has an explicit package.mode != &quot;replacement&quot; guard. It returns catalog_binding_mismatch before any ceremony is read.</dd>
+<dt>Reason</dt><dd>This pins that review/2 and the CLI paths remain bootstrap-only.</dd>
+</dl></section>
+<section id="d506"><h2><span>D-506</span> Fixture and test scope</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Decision</dt><dd>The test fixture is CatalogReplacementVectors.fixture/0, which carries a Space-only inventory (one Space entry, no Thread). The Thread-dropped inventory refusal is exercised at replacement_revision_zero with synthetic Thread entries.</dd>
+<dt>Reason</dt><dd>A real Thread fixture is not needed for the digest comparison.</dd>
+</dl></section>
+<section id="d507"><h2><span>D-507</span> Scope check inside sign_reviewed</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Decision</dt><dd>Recompute the digest and check the catalog&#x27;s binding, bootstrap and space against the reviewed binding inside sign_reviewed/4, before key access.</dd>
+<dt>Reason</dt><dd>sign_reviewed/4 is the shared signing step, so guarding it protects every caller. The CLI path does not expose this attack, but an in-process caller could otherwise get an envelope persisted under a ledger that later fails verification.</dd>
+</dl></section>
+<section id="d508"><h2><span>D-508</span> PR #220 review: Codex Sol rounds, independent rule-3 review and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/220">#220</a></dd>
+<dt>Context</dt><dd>Codex Sol 6.1 at xhigh plus an independent rule-3 review (D-491).</dd>
+<dt>Decision</dt><dd>Round 1: 5 findings. Round 2: 2 findings. Dispositions: (1) P2 stale confirmation can produce a corrupt ledger, fixed: sign_reviewed/4 now recomputes CatalogSigningPackage.digest(package.catalog) and checks catalog.binding, bootstrap and space against the reviewed binding before any key access; both fail with :catalog_confirmation_mismatch, and the regression test fails without the fix. (2) P3 bootstrap compatibility assertion is vacuous, fixed: removed the vacuous test; catalog_signing_package_test.exs now encodes real pending and initial_existing packages and asserts the exact reference keys, the mode, the frame equal to Wire.encode_op, and decode. Bytes were not pinned against a pre-change snapshot because existing bootstrap tests already review and sign through that fixture. (3) P3 refusal tests are vacuous (assert_no_ledger on a dir review never receives), fixed: replaced with a sign_reviewed refusal test that checks the ceremony dir afterwards, covering a wrong confirmation, a stale altered map and a rebound catalog with a recomputed digest; the wrong-op-id test keeps its harmless unused assert_no_ledger. (4) P3 stale comment on SigningLedger.extends?/2, fixed: it now describes extends?/2 as the binding-less rule and extends?/3 as the binding-aware form with the replacement-genesis arm. (5) P3 positive replacement path only tested with a Space-only catalog, follow-up: added a unit test that a Thread-bearing replacement genesis passes SigningLedger.extends?/3 and that max_envelopes is 13; the end-to-end Thread-bearing fixture needs PR 4 inventories and is filed as row 363. Final-round findings, left open: P3 apps/lattice_carrier_server/lib/lattice_carrier_server/operator/catalog_signing_package.ex:149, replacement review misclassifies malformed evidence (a corrupt history-frame signature makes decode/1 return :invalid_catalog_package, but review_replacement/4 converts it to :catalog_binding_mismatch; the refusal allowlist omits the decoder error; preserve it and add a review-level malformed-history test; signing remains refused). P3 apps/lattice_carrier_server/test/operator/catalog_replacement_signing_test.exs:369, stale-confirmation tests do not independently protect digest revalidation (both stale-map cases change catalog.binding, so the scope check rejects them independently; an in-memory mutation probe showed that removing the digest recheck leaves all three assertions passing; add a same-binding route mutation retaining the original digest and require :catalog_confirmation_mismatch before ledger access).</dd>
+<dt>Reason</dt><dd>The two final-round P3s are recorded here as open, not fixed in this PR. Nothing here claims resolver acceptance, route switch, catalog trust, closed-binding refusal, a real Space or ceremony; C10-C15 stay OPEN.</dd>
+</dl></section>
 <section id="d530"><h2><span>D-530</span> Operator sign-off: first goal, OD-16, OD-17, row 320 and the PR 4 split</h2><dl>
 <dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
 <dt>Decision</dt><dd>Operator sign-off 2026-11-15: the operator set the first goal as 'a client that has already trusted a Treehouse catalog accepts a replacement catalog signed by an authorized admin, without the old signer's key', adopted the recommended defaults for OD-16, OD-17 and row 320, and chose 'new modules now, wire later': PR 4 is split into 4a (logic in new files, this PR), 4b (remaining tests) and 4c (the hook into catalog_trust.ex/.ts after plans 267/269 merge). The 267/269 gate is not lifted; it now applies to 4c only. The goal is not met until 4c lands.</dd>
