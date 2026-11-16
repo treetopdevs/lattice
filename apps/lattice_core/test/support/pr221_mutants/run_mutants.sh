@@ -32,7 +32,7 @@ for patch in "${PATCHES[@]}"; do
   dest="$PARENT/$name"
   rm -rf "$dest"
   mkdir -p "$dest"
-  rsync -a --exclude .git --exclude clients --exclude .claude --exclude node_modules "$ROOT/" "$dest/"
+  rsync -a --exclude .git --exclude clients --exclude .claude --exclude node_modules --exclude _build/test/consolidated "$ROOT/" "$dest/"
   if ! (cd "$dest" && patch -p1 --forward --silent < "$patch"); then
     echo "PATCH FAILED TO APPLY: $name" >&2
     exit 2

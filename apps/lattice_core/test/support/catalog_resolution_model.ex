@@ -106,7 +106,7 @@ defmodule Treehouse.CatalogResolutionModel do
           Enum.all?(b.parents, &MapSet.member?(held, &1)),
           Enum.all?(
             b.prior_catalogs,
-            &(&1.catalog == nil or Map.has_key?(delivered.catalogs, &1.catalog))
+            &(&1.catalog == nil or chain_held?(world, delivered, &1.catalog))
           ),
           do: id
 
@@ -133,6 +133,15 @@ defmodule Treehouse.CatalogResolutionModel do
     }
   end
 
+  # A catalog and its whole `previous` chain are delivered.
+  defp chain_held?(world, delivered, cid) do
+    Map.has_key?(delivered.catalogs, cid) and
+      case world.catalogs[cid] do
+        %{previous: prev} when is_binary(prev) -> chain_held?(world, delivered, prev)
+        _ -> true
+      end
+  end
+
   # Bindings whose own evidence is complete, to a fixpoint: the bootstrap; a delivered rotation
   # whose parent is complete and whose prior catalog is held; a replacement whose op closure is
   # delivered, whose parents are complete and whose cited non-nil priors are held.
@@ -144,13 +153,13 @@ defmodule Treehouse.CatalogResolutionModel do
             :rotation ->
               Map.has_key?(delivered.rotations, id) and
                 Enum.all?(b.parents, &MapSet.member?(acc, &1)) and
-                Map.has_key?(delivered.catalogs, b.prior_catalog)
+                chain_held?(world, delivered, b.prior_catalog)
 
             :replacement ->
               Map.has_key?(complete, id) and Enum.all?(b.parents, &MapSet.member?(acc, &1)) and
                 Enum.all?(
                   b.prior_catalogs,
-                  &(&1.catalog == nil or Map.has_key?(delivered.catalogs, &1.catalog))
+                  &(&1.catalog == nil or chain_held?(world, delivered, &1.catalog))
                 )
 
             _ ->
@@ -292,53 +301,44 @@ defmodule Treehouse.CatalogResolutionModel do
     end
   end
 
-  defp s2(world, f, %{result: result, prev: prev, next: next}) do
-    pending =
-      case result do
-        {:error, :trust_pending, _} ->
-          cond do
-            next.accepted != prev.accepted -> [{:s2, "trust_pending moved the watermark"}]
-            prev.frozen and not next.frozen -> [{:s2, "trust_pending lifted the freeze"}]
-            true -> []
-          end
+  defp s2(world, f, step),
+    do: s2_pending(step) ++ s2_lifted(world, f, step) ++ s2_moved(world, f, step)
 
-        _ ->
-          []
-      end
-
-    lifted =
-      if prev.frozen and not next.frozen do
-        b = next.accepted && next.accepted.binding
-        rb = b && world.bindings[b]
-
-        if rb && rb.kind == :replacement && rb.honest && not MapSet.member?(f.refused, b),
-          do: [],
-          else: [{:s2, "freeze lifted onto #{label(world, b)}"}]
-      else
-        []
-      end
-
-    moved =
-      if next.accepted != nil and next.accepted != prev.accepted do
-        cid = next.accepted.catalog
-        b = next.accepted.binding
-
-        cond do
-          unservable_binding?(world, f, b) ->
-            [{:s2, "watermark moved onto #{why(world, f, b)}"}]
-
-          closed_out_catalog?(world, f, cid) ->
-            [{:s2, "watermark moved onto closed-out catalog #{label(world, cid)}"}]
-
-          true ->
-            []
-        end
-      else
-        []
-      end
-
-    pending ++ lifted ++ moved
+  defp s2_pending(%{result: {:error, :trust_pending, _}, prev: prev, next: next}) do
+    cond do
+      next.accepted != prev.accepted -> [{:s2, "trust_pending moved the watermark"}]
+      prev.frozen and not next.frozen -> [{:s2, "trust_pending lifted the freeze"}]
+      true -> []
+    end
   end
+
+  defp s2_pending(_step), do: []
+
+  defp s2_lifted(world, f, %{prev: %{frozen: true}, next: %{frozen: false} = next}) do
+    b = next.accepted && next.accepted.binding
+    rb = b && world.bindings[b]
+
+    if rb && rb.kind == :replacement && rb.honest && not MapSet.member?(f.refused, b),
+      do: [],
+      else: [{:s2, "freeze lifted onto #{label(world, b)}"}]
+  end
+
+  defp s2_lifted(_world, _f, _step), do: []
+
+  defp s2_moved(world, f, %{prev: prev, next: %{accepted: %{} = a}}) when a != prev.accepted do
+    cond do
+      unservable_binding?(world, f, a.binding) ->
+        [{:s2, "watermark moved onto #{why(world, f, a.binding)}"}]
+
+      closed_out_catalog?(world, f, a.catalog) ->
+        [{:s2, "watermark moved onto closed-out catalog #{label(world, a.catalog)}"}]
+
+      true ->
+        []
+    end
+  end
+
+  defp s2_moved(_world, _f, _step), do: []
 
   defp s3(world, %{prev: prev, next: next, delivered: d}) do
     a = prev.accepted

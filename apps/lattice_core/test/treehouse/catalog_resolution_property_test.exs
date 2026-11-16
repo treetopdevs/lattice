@@ -171,6 +171,104 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     end
   end
 
+  # Focused generators (widened reach, same model): sibling old-key catalogs under one binding
+  # followed by an admin replacement citing several of them, for the S3 floor obligation.
+  defp floor_script do
+    gen all(
+          siblings <-
+            list_of(
+              map({integer(0..5), mutation(), member_of([:next, :zero])}, fn {c, m, mode} ->
+                {:adv_catalog, 0, c, m, mode, false}
+              end),
+              min_length: 1,
+              max_length: 4
+            ),
+          tail <-
+            list_of(
+              one_of([
+                map(member_of([:first_only, :drop_last, :alter]), &{:sloppy, 30, &1}),
+                map(member_of([30]), &{:replace, &1})
+              ]),
+              min_length: 1,
+              max_length: 2
+            )
+        ) do
+      siblings ++ tail
+    end
+  end
+
+  # An accepted replacement, then authority events, with the watermark catalog lost at some
+  # step (C6), for the FZ obligation.
+  defp freeze_script do
+    gen all(
+          pre <- list_of(adv_catalog(), max_length: 2),
+          events <-
+            list_of(
+              one_of([
+                map(integer(0..3), &{:revoke, &1}),
+                map({integer(1..3), member_of([2, 30])}, fn {k, l} -> {:transfer, k, l} end),
+                map(integer(0..3), &{:beacon, &1})
+              ]),
+              min_length: 1,
+              max_length: 4
+            )
+        ) do
+      pre ++ [{:replace, 30}] ++ events
+    end
+  end
+
+  # An honest replacement, an old-key rotation of it and a catalog under that rotation, plus
+  # noise, so a rotation's inherited cutoff obligation (S3, D-A15 reading) is reachable.
+  defp cutoff_script do
+    gen all(
+          pre <- list_of(adv_catalog(), max_length: 1),
+          m <- member_of([:same, {:route, 0}]),
+          post <- list_of(one_of([adv_catalog(), adv_rotation()]), max_length: 2)
+        ) do
+      # Bindings in creation order: B, then R (index 1), then the rotation (index 2).
+      pre ++
+        [
+          {:replace, 30},
+          {:adv_rotation, 1, 0, false, true, true},
+          {:adv_catalog, 2, 0, m, :zero, false}
+        ] ++
+        post
+    end
+  end
+
+  property "S3C: a rotation's inherited cutoffs are proven before its catalog is accepted", %{
+    base: base
+  } do
+    check all(actions <- cutoff_script(), p <- picks(), max_runs: runs(60)) do
+      {w, steps} = history(base, actions, p)
+      assert_none(w, steps, [:s3], "S3")
+    end
+  end
+
+  property "S3F: the S3 floor obligation over sibling priors and multi-prior replacements", %{
+    base: base
+  } do
+    check all(actions <- floor_script(), p <- picks(), max_runs: runs(60)) do
+      {w, steps} = history(base, actions, p)
+      assert_none(w, steps, [:s3], "S3")
+    end
+  end
+
+  property "S1F: FZ holds when the watermark catalog is lost before its binding changes", %{
+    base: base
+  } do
+    check all(
+            actions <- freeze_script(),
+            p <- picks(),
+            lose <- integer(0..12),
+            max_runs: runs(60)
+          ) do
+      w = W.apply_script(base, actions)
+      steps = W.run(w, W.order(w.items, p), lose_watermark_at: lose)
+      assert_none(w, steps, [:s1, :fz], "S1/FZ")
+    end
+  end
+
   property "S2: pending or adversary evidence never unfreezes or moves onto a changed binding", %{
     base: base
   } do

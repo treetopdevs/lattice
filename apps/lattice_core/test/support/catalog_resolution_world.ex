@@ -17,8 +17,8 @@ defmodule Treehouse.CatalogResolutionWorld do
   """
 
   alias Lattice.{Dag, Log}
-  alias Treehouse.CatalogBindingGraphFixtures, as: F
   alias Treehouse.{CatalogBindingGraph, CatalogCutoff, CatalogReplacementAuthority}
+  alias Treehouse.CatalogBindingGraphFixtures, as: F
 
   @ext ~w(root genesis creation reference kind schema)a
   @max_combos 48
@@ -363,7 +363,8 @@ defmodule Treehouse.CatalogResolutionWorld do
     view = held(w)
     {heads, _} = heads(w, view)
     priors = for h <- heads, c <- tips(w, view, h, [nil]), do: %{binding: h, catalog: c}
-    floor = floor_entries(w, priors)
+    # One fact set per replica (a catalog lists each replica once).
+    floor = w |> floor_entries(priors) |> Enum.uniq_by(& &1.replica) |> Enum.sort_by(& &1.replica)
 
     entries =
       case mode do
@@ -371,6 +372,8 @@ defmodule Treehouse.CatalogResolutionWorld do
         :drop_last -> Enum.drop(floor, -1)
         :alter -> alter_last(floor, n)
       end
+      |> Enum.uniq_by(& &1.replica)
+      |> Enum.sort_by(& &1.replica)
 
     if entries == [] or entries == floor do
       note(w, "admin sloppy #{label} skipped (#{mode} changes nothing)")
@@ -387,6 +390,17 @@ defmodule Treehouse.CatalogResolutionWorld do
 
   # The adversary's entry template under binding `x`: the newest catalog of its lineage.
   defp template(w, x) do
+    case w.bindings[x] do
+      # Under a rotation, the entries its inventory commits to: its prior catalog's.
+      %{kind: :rotation, prior_catalog: p} when is_map_key(w.catalogs, p) ->
+        w.catalogs[p].env.catalog.entries
+
+      _ ->
+        lineage_template(w, x)
+    end
+  end
+
+  defp lineage_template(w, x) do
     lineage = Treehouse.CatalogResolutionModel.ancestry(w, x)
 
     w.catalogs
