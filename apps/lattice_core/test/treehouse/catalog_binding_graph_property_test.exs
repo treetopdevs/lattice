@@ -7,7 +7,12 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
   its binding and `previous`) and delivers cumulative unions in turn through `advance/2`, from the
   empty state and from a frozen B/C0 watermark. A pool of six or fewer artifacts enumerates every
   causal order, delivered one artifact at a time; larger pools sample orders with random cuts
-  (50 runs, 200 for the route-rule pools S4, S12 and S17), and some intermediate deliveries of a
+  (the default suite runs 5 sampled orders per pool and 20 for the route-rule pools S4, S12 and
+  S17, and enumerates every order only for pools of four or fewer artifacts; the deep runs are
+  tagged `:deep_property`, excluded by default, and use 50 and 200 runs and enumerate pools of six
+  or fewer; run them with
+  `MIX_ENV=test ~/.asdf/shims/mix test apps/lattice_core/test/treehouse/catalog_binding_graph_property_test.exs --include deep_property`),
+  and some intermediate deliveries of a
   sampled run also hold an unresolvable page (an op with a random-hash dependency and a keyless
   catalog with an unknown binding) that the final delivery evicts (the 4c simulation).
 
@@ -45,7 +50,7 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
   alias Treehouse.CatalogBindingGraphScenarios, as: S
 
   @extended_keys ~w(root genesis creation reference kind schema)a
-  @enumerate 6
+  @enumerate %{quick: 4, deep: 6}
 
   # {scenario whose final evidence is the pool, R* label, K* label}; a nil R* checks only the
   # safety properties.
@@ -92,8 +97,16 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
 
   # Row 389: enough runs that the route rule and the withheld-page action are exercised.
   @heavy ~w(S4 S12 S17a S17b S17c S17e)
-  defp max_runs(name),
-    do: if(Enum.any?(@heavy, &String.starts_with?(name, &1 <> ":")), do: 200, else: 50)
+  defp max_runs(name, mode) do
+    heavy? = Enum.any?(@heavy, &String.starts_with?(name, &1 <> ":"))
+
+    case {mode, heavy?} do
+      {:quick, true} -> 20
+      {:quick, false} -> 5
+      {:deep, true} -> 200
+      {:deep, false} -> 50
+    end
+  end
 
   setup_all do
     base = F.base()
@@ -110,19 +123,22 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
     %{base: base, pools: pools}
   end
 
-  for {name, _r, _k} <- @pools do
+  for {name, _r, _k} <- @pools, mode <- [:quick, :deep] do
     @name name
-    property "convergence properties over #{@name}", %{base: base, pools: pools} do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "convergence properties over #{@name} (#{@mode})", %{base: base, pools: pools} do
       {_name, pool, rstar, kstar, frozen} = Enum.find(pools, &(elem(&1, 0) == @name))
 
-      if length(pool.items) <= @enumerate do
+      if length(pool.items) <= @enumerate[@mode] do
         for order <- orders(pool.items) do
           deliveries = for i <- 1..length(order), do: {Enum.take(order, i), false}
           check_run(base, pool, deliveries, {rstar, kstar}, frozen, "order")
         end
       end
 
-      check all(seed <- integer(1..1_000_000_000), max_runs: max_runs(@name)) do
+      check all(seed <- integer(1..1_000_000_000), max_runs: max_runs(@name, @mode)) do
         check_run(base, pool, deliveries(pool, seed), {rstar, kstar}, frozen, "seed #{seed}")
       end
     end

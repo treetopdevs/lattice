@@ -37,7 +37,12 @@ defmodule Treehouse.CatalogBindingGraphGeneratedDifferentialTest do
     %{f: f, record: record}
   end
 
-  defp runs, do: String.to_integer(System.get_env("R389_RUNS") || "100")
+  # Default suite: 15 generated histories. The `:deep_property` twin of F runs 100. `R389_RUNS`
+  # overrides both. Deep run:
+  # `MIX_ENV=test ~/.asdf/shims/mix test apps/lattice_core/test/treehouse/catalog_binding_graph_generated_differential_test.exs --include deep_property`
+  defp runs(:quick), do: runs(15)
+  defp runs(:deep), do: runs(100)
+  defp runs(n) when is_integer(n), do: String.to_integer(System.get_env("R389_RUNS") || "#{n}")
 
   # --- the two runtimes (as the deterministic differential) ------------------------------
 
@@ -207,10 +212,18 @@ defmodule Treehouse.CatalogBindingGraphGeneratedDifferentialTest do
   defp page(f, w, :proofs),
     do: {w, %{catalogs: [], rotations: [], proofs: f.cutoff_proofs}, "cutoff proofs"}
 
-  property "F: the graph agrees with CatalogTrust.evaluate/1 on generated replacement-free histories",
-           %{f: f, record: record} do
-    check all(actions <- list_of(action(), min_length: 1, max_length: 8), max_runs: runs()) do
-      differential(f, record, actions, :mirror)
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "F: the graph agrees with CatalogTrust.evaluate/1 on generated replacement-free histories (#{@mode})",
+             %{f: f, record: record} do
+      check all(
+              actions <- list_of(action(), min_length: 1, max_length: 8),
+              max_runs: runs(@mode)
+            ) do
+        differential(f, record, actions, :mirror)
+      end
     end
   end
 
@@ -225,7 +238,7 @@ defmodule Treehouse.CatalogBindingGraphGeneratedDifferentialTest do
   @tag :pr221_open
   property "F-retained: as F, with the graph retaining pages CatalogTrust refuses whole",
            %{f: f, record: record} do
-    check all(actions <- list_of(action(), min_length: 1, max_length: 8), max_runs: runs()) do
+    check all(actions <- list_of(action(), min_length: 1, max_length: 8), max_runs: runs(:deep)) do
       differential(f, record, actions, :retain)
     end
   end
