@@ -11,9 +11,12 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   unfreezes or moves the watermark onto a changed binding), S3 (no accepted move drops an entry
   or skips a cutoff proof), M (D-279 monotonicity), O (order independence after the honest
   resolution) and LW (L with one permanently withheld Space frame, a contract non-claim, run
-  only to report). LW is the one property still tagged `@tag :pr221_open` and excluded from the
-  default suite (lifecycle section 4 makes no liveness claim against withheld unknown Space
-  ops); run them with
+  only to report). Tagged `@tag :pr221_open` and excluded from the default suite: LW (lifecycle
+  section 4 and C14 make no liveness claim against withheld unknown Space ops), OM and LM, and
+  the deterministic "open (i)" and "open (ii)" tests (a client that served an old-key revision
+  before its binding closed; operator decision, row 388). L and O stay in the default suite and
+  are green at seed 1, but "open (i)" is a deterministic L and O counterexample without any
+  malicious admin, so their green is not a liveness proof. Run them with
   `MIX_ENV=test ~/.asdf/shims/mix test apps/lattice_core/test/treehouse/catalog_resolution_property_test.exs --include pr221_open`.
   `R389_RUNS` overrides the run count.
   """
@@ -337,6 +340,8 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     end
   end
 
+  # Open: red at 200 runs, seed 1 (subclass (i), see "open (i), OM replay" below).
+  @tag :pr221_open
   @tag :r389_report
   property "OM (report): O after a malicious-content admin replacement as well", %{base: base} do
     check all(actions <- script(true), pa <- picks(), pb <- picks(), max_runs: runs(60)) do
@@ -366,6 +371,108 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     end
   end
 
+  # --- open: a client that served an old-key revision before its binding closed ----------------
+  #
+  # Row 316 PR 4a, the row 386/387/390 class, two subclasses that need an operator or contract
+  # decision (row 388 questions 2 and 9, D-276); the resolver's refusal is S3 (Carry, Seen)
+  # working, so nothing here is patched in the resolver.
+  #
+  # (i) Inventory. The old B key signs a revision a3 of c0 that adds a pool Thread. A client that
+  # sees a3 before the honest R2 {B, c0} accepts it, then freezes (`authority_changed`) when R2
+  # closes B. A later resolution clears that client only if its first catalog carries a3's
+  # Thread entry (Carry). The preflight admits such extra entries, but nothing makes an honest
+  # admin carry them (the world's admin carries the cited floor), and citing a closed-out a3 as
+  # a prior fails the preflight (`catalog_fork`). Red for L and O with no malicious admin.
+  #
+  # (ii) Seen through D-275. The adversary rotation t1 of B and an old-key a3 under B; the admin
+  # replacement S5 cites t1, so B closes only as t1's ancestor. A client on a3 freezes; the honest
+  # resolution citing S5 fails Seen (`closed_by_descendant?` counts only replacements that cite
+  # the watermark binding itself), so it is refused for that client in every candidate the
+  # world's search tries. Carrying more entries does not help.
+
+  defp adversary_first_and_last(base, actions) do
+    w = W.apply_script(base, actions)
+    [x] = for %{kind: :catalog, adversary: true} = i <- w.items, do: i
+    rest = Enum.reject(w.items, &(&1 == x))
+    {w, W.run(w, [x | rest]), W.run(w, rest ++ [x])}
+  end
+
+  defp assert_clears_both(w, first, last) do
+    for {steps, other} <- [{last, first}, {first, last}] do
+      case W.resolve_final(w, List.last(steps)) do
+        {{:ok, out}, w2, ev} ->
+          o = W.final_delivery(w2, ev, W.persisted(List.last(other).next), out.cand)
+
+          assert o.verdict == :ok,
+                 "O: #{W.cite_text(w2, out.cand.r.claim)} is refused in the other order: " <>
+                   inspect(M.relabel(w2, M.decision(o.result)), limit: 12)
+
+        {other_result, w2, _ev} ->
+          flunk("L: #{inspect(M.relabel(w2, other_result), limit: 20)}")
+      end
+    end
+  end
+
+  @tag :pr221_open
+  test "open (i): an old-key revision served before R2 closed its binding is never cleared",
+       %{base: base} do
+    actions = [
+      {:transfer, 0, 30},
+      {:replace, 2},
+      {:adv_catalog, 0, 5, {:thread, 0, 1}, :next, false},
+      {:replace, 30}
+    ]
+
+    {w, first, last} = adversary_first_and_last(base, actions)
+    assert_clears_both(w, first, last)
+  end
+
+  @tag :pr221_open
+  test "open (ii): an old-key revision under a binding closed only through D-275 is never cleared",
+       %{base: base} do
+    actions = [
+      {:adv_rotation, 1, 3, false, true, true},
+      {:adv_catalog, 2, 3, :same, :gap, true},
+      {:adv_catalog, 4, 5, {:route, 1}, :next, false},
+      {:transfer, 0, 30},
+      {:sloppy, 30, :alter},
+      {:adv_rotation, 0, 3, false, true, true}
+    ]
+
+    {w, first, last} = adversary_first_and_last(base, actions)
+    assert_clears_both(w, first, last)
+  end
+
+  # The OM counterexample at 200 runs, seed 1 (after 196 successful runs), subclass (i): in order
+  # B the client accepts the old-key a5 (it adds pool Thread 0) before the honest R2 {B, c0}
+  # closes B and freezes; the final honest resolution R* {R6, K6} does not carry a5's Thread.
+  @tag :pr221_open
+  test "open (i), OM replay: a client that served an old-key revision before the binding closed",
+       %{base: base} do
+    actions = [
+      {:transfer, 0, 30},
+      {:replace, 2},
+      {:sloppy, 30, :first_only},
+      {:sloppy, 30, :alter},
+      {:adv_catalog, 0, 5, {:thread, 0, 1}, :next, false},
+      {:replace, 30}
+    ]
+
+    pa =
+      [15, 60, 57, 2, 45, 15, 44, 53, 35, 17, 10, 16, 42, 19, 55, 50, 25, 50, 13, 39] ++
+        [45, 50, 40, 18, 15, 19, 37, 24, 18, 1, 38, 34, 44, 47, 56, 17, 50, 8, 30, 41]
+
+    pb =
+      [10] ++
+        List.duplicate(0, 21) ++
+        [25, 16, 9, 29, 24, 40, 18, 18, 0, 3, 0] ++
+        [33, 23, 21, 19, 46, 44, 27]
+
+    order_independent(base, actions, pa, pb)
+  end
+
+  # Open: the OM replay's order-B state has no authorable clearing resolution (subclass (i)).
+  @tag :pr221_open
   @tag :r389_report
   property "LM (report): L after a malicious-content admin replacement as well", %{base: base} do
     check all(actions <- script(true), p <- picks(), max_runs: runs(60)) do
