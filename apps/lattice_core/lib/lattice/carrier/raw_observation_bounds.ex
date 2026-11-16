@@ -35,78 +35,90 @@ defmodule Lattice.Carrier.RawObservationBounds do
   @spec within_evidence?(term()) :: boolean()
   def within_evidence?(value), do: bound(value, @max_json_depth + 6, :public)
 
+  @doc "Distinguish resource overflow from unreadable evidence without changing its limits."
+  @spec evidence_admission(term()) :: :within | :resource_limit | :unreadable
+  def evidence_admission(value),
+    do: observation_admission([{:value, value, @max_json_depth + 6}], @budget, @budget, :public)
+
   defp bound(value, depth, mode),
-    do: observation_bound?([{:value, value, depth}], @budget, @budget, mode)
+    do: observation_admission([{:value, value, depth}], @budget, @budget, mode) == :within
 
-  defp observation_bound?(_pending, nodes, bytes, _mode) when nodes < 0 or bytes < 0,
-    do: false
+  defp observation_admission(_pending, nodes, bytes, _mode) when nodes < 0 or bytes < 0,
+    do: :resource_limit
 
-  defp observation_bound?([], _nodes, _bytes, _mode), do: true
+  defp observation_admission([], _nodes, _bytes, _mode), do: :within
 
-  defp observation_bound?([{:value, value, _depth} | rest], nodes, bytes, mode)
+  defp observation_admission([{:value, value, _depth} | rest], nodes, bytes, mode)
        when is_binary(value),
        do:
-         String.valid?(value) and
-           observation_bound?(rest, nodes - 1, bytes - byte_size(value), mode)
+         if(String.valid?(value),
+           do: observation_admission(rest, nodes - 1, bytes - byte_size(value), mode),
+           else: :unreadable
+         )
 
-  defp observation_bound?([{:value, value, depth} | rest], nodes, bytes, mode)
+  defp observation_admission([{:value, value, depth} | rest], nodes, bytes, mode)
        when is_list(value) and depth > 0,
-       do: observation_bound?([{:list, value, depth - 1} | rest], nodes - 1, bytes, mode)
+       do: observation_admission([{:list, value, depth - 1} | rest], nodes - 1, bytes, mode)
 
-  defp observation_bound?([{:value, value, depth} | rest], nodes, bytes, mode)
+  defp observation_admission([{:value, value, depth} | rest], nodes, bytes, mode)
        when is_map(value) and depth > 0,
        do:
-         observation_bound?(
+         observation_admission(
            [{:map, :maps.iterator(value), depth - 1} | rest],
            nodes - 1,
            bytes,
            mode
          )
 
-  defp observation_bound?([{:value, value, _depth} | rest], nodes, bytes, mode)
+  defp observation_admission([{:value, value, _depth} | rest], nodes, bytes, mode)
        when is_number(value) or is_boolean(value) or is_nil(value),
-       do: observation_bound?(rest, nodes - 1, bytes, mode)
+       do: observation_admission(rest, nodes - 1, bytes, mode)
 
-  defp observation_bound?([{:value, value, depth} | rest], nodes, bytes, :public)
+  defp observation_admission([{:value, value, depth} | rest], nodes, bytes, :public)
        when is_atom(value),
        do:
-         observation_bound?(
+         observation_admission(
            [{:value, Atom.to_string(value), depth} | rest],
            nodes,
            bytes,
            :public
          )
 
-  defp observation_bound?([{:raw_json, value, depth} | rest], nodes, bytes, :public),
+  defp observation_admission([{:raw_json, value, depth} | rest], nodes, bytes, :public),
     do:
-      observation_bound?(
+      observation_admission(
         [{:value, value, depth}, {:resume_mode, :public} | rest],
         nodes,
         bytes,
         :json
       )
 
-  defp observation_bound?([{:resume_mode, mode} | rest], nodes, bytes, _previous),
-    do: observation_bound?(rest, nodes, bytes, mode)
+  defp observation_admission([{:resume_mode, mode} | rest], nodes, bytes, _previous),
+    do: observation_admission(rest, nodes, bytes, mode)
 
-  defp observation_bound?([{:list, [], _depth} | rest], nodes, bytes, mode),
-    do: observation_bound?(rest, nodes, bytes, mode)
+  defp observation_admission([{:list, [], _depth} | rest], nodes, bytes, mode),
+    do: observation_admission(rest, nodes, bytes, mode)
 
-  defp observation_bound?([{:list, [head | tail], depth} | rest], nodes, bytes, mode),
+  defp observation_admission([{:list, [head | tail], depth} | rest], nodes, bytes, mode),
     do:
-      observation_bound?([{:value, head, depth}, {:list, tail, depth} | rest], nodes, bytes, mode)
+      observation_admission(
+        [{:value, head, depth}, {:list, tail, depth} | rest],
+        nodes,
+        bytes,
+        mode
+      )
 
-  defp observation_bound?([{:map, iterator, depth} | rest], nodes, bytes, mode) do
+  defp observation_admission([{:map, iterator, depth} | rest], nodes, bytes, mode) do
     case :maps.next(iterator) do
       :none ->
-        observation_bound?(rest, nodes, bytes, mode)
+        observation_admission(rest, nodes, bytes, mode)
 
       {key, value, next} ->
         raw? = mode == :public and key in [:frames, :frame]
         {key, value} = public_pair(key, value, mode)
         entry = if raw?, do: {:raw_json, value, depth}, else: {:value, value, depth}
 
-        observation_bound?(
+        observation_admission(
           [{:value, key, depth}, entry, {:map, next, depth} | rest],
           nodes,
           bytes,
@@ -115,7 +127,11 @@ defmodule Lattice.Carrier.RawObservationBounds do
     end
   end
 
-  defp observation_bound?(_pending, _nodes, _bytes, _mode), do: false
+  defp observation_admission([{:value, value, depth} | _rest], _nodes, _bytes, _mode)
+       when (is_map(value) or is_list(value)) and depth <= 0,
+       do: :resource_limit
+
+  defp observation_admission(_pending, _nodes, _bytes, _mode), do: :unreadable
 
   defp public_pair(key, value, :json), do: {key, value}
 

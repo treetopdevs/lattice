@@ -3,11 +3,14 @@
 ## Status
 
 IN PROGRESS: the operator approved the exception only after the engine's
-array-key enumeration ceiling; ordinary all-own-key checks remain strict.
+array-key enumeration ceiling; admitted-input own-key checks remain strict.
 The executable fresh full-size regression preserves the original RED; the
 corrected owner passes its focused GREEN across every planned complete decision.
-The engine-ceiling component passes local source gates and independent/adversarial
-review. Its exact-tip hosted source gate still precedes native adoption.
+The engine-ceiling component passes its local and hosted source gates.
+The separately approved [early admission design](research/284-preclone-admission-design.md)
+is implemented. The operator approved the
+[stable-input rule](research/284-mutating-metadata-admission-decision.md) on
+2026-11-07. This closes the compatibility decision for source publication.
 Aggregate node/string/depth admission before every large clone in requirement4
 remains unproven. Keep this obligation open; iterator traversal and one fallback
 width check do not complete it or establish acceptable resource cost.
@@ -29,7 +32,8 @@ intermittent source history refusal.
 
 Correct the source capture mechanism, not native refusal reasons or limits.
 Scope the TypeScript catalog owner and a private capture helper if needed,
-its real public-owner regressions and generated SDK mirror, reciprocal BEAM
+its real public-owner regressions and generated SDK mirror, shared BEAM
+resource refusal priority and its unchanged boolean raw-bound APIs, reciprocal BEAM
 test support, and these plan/decision records. Keep authority, canonical bytes,
 reason enums, storage, installation and native production code unchanged.
 This is a generic input-ownership correction, not another witness/order case
@@ -44,14 +48,20 @@ complete public-source decisions.
    authority freeze remains blocked, with unchanged watermark and empty routes.
 2. Capture installed state and incoming evidence synchronously before the first
    await. Subsequent caller mutation cannot alter authentication or decisions.
+   Values and metadata responses must stay stable during synchronous capture.
+   Callbacks that mutate the input during capture may cause refusal.
    Original-only corruption retains recovery priority over candidate errors.
 3. Preserve descriptor-based no-getter-execution, symbol/index-accessor/cycle and
    nonplain-object refusals. Only an array own-key enumeration RangeError allows
    hidden non-index decorations to be ignored, never read or copied. Shared acyclic values,
    sparse arrays, enumerable/nonenumerable fields, null prototypes and unusual
-   array properties must retain their existing observable outcome and phase.
+   array properties in stable input must retain their existing observable outcome and phase.
 4. Retain the exact logical node/string/depth bounds, byte-adapter separation,
-   authentication-before-fetch and security-fallback stages. Validate bounds
+   authentication-before-fetch and security-fallback stages for admitted input.
+   The separately approved early resource refusal may outrank later candidate
+   diagnostics once overflow is proven; bounded outer checks and independent
+   saved recovery stay first. Earlier strict capture errors retain their priority.
+   Validate bounds
    before a large allocation, without requiring a fully populated per-element
    pending worklist or duplicating every container's property metadata.
 5. Do not call an index loop or for-in a complete solution unless it also
