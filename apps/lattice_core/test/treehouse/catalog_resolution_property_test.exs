@@ -11,8 +11,9 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   unfreezes or moves the watermark onto a changed binding), S3 (no accepted move drops an entry
   or skips a cutoff proof), M (D-279 monotonicity), O (order independence after the honest
   resolution) and LW (L with one permanently withheld Space frame, a contract non-claim, run
-  only to report). Properties that fail on the PR #221 head carry `@tag :pr221_open` and are
-  excluded from the default suite; run them with
+  only to report). LW is the one property still tagged `@tag :pr221_open` and excluded from the
+  default suite (lifecycle section 4 makes no liveness claim against withheld unknown Space
+  ops); run them with
   `MIX_ENV=test ~/.asdf/shims/mix test apps/lattice_core/test/treehouse/catalog_resolution_property_test.exs --include pr221_open`.
   `R389_RUNS` overrides the run count.
   """
@@ -61,8 +62,9 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     )
   end
 
-  # Route, revision, Thread facts and any immutable entry field (lifecycle section 2), drawn
-  # generically; no construction is hard-coded.
+  # Route, revision, Thread facts (a real pool Thread: its two history-valid creations or one no
+  # history holds) and any immutable entry field (lifecycle section 2), drawn generically; no
+  # construction is hard-coded.
   defp mutation do
     one_of([
       constant(:same),
@@ -301,8 +303,8 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
 
   # --- liveness and order ---------------------------------------------------------------------
 
-  # Red on the PR #221 head: rediscovers the row 390 entry-variant floor (see the test below).
-  @tag :pr221_open
+  # Red on 857fb0448 (the row 390 entry-variant floor, see the test below); green since entry
+  # facts are an intrinsic catalog validity input (row 390, repair (c)).
   property "L: an honest admin can always author and deliver an accepted, clearing resolution", %{
     base: base
   } do
@@ -335,7 +337,6 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     end
   end
 
-  @tag :pr221_open
   @tag :r389_report
   property "OM (report): O after a malicious-content admin replacement as well", %{base: base} do
     check all(actions <- script(true), pa <- picks(), pb <- picks(), max_runs: runs(60)) do
@@ -365,7 +366,6 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     end
   end
 
-  @tag :pr221_open
   @tag :r389_report
   property "LM (report): L after a malicious-content admin replacement as well", %{base: base} do
     check all(actions <- script(true), p <- picks(), max_runs: runs(60)) do
@@ -418,7 +418,7 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   # mutation, not hard-coded in the generator): the old bootstrap catalog key signs one
   # revision-0 sibling of c0 under B whose Space entry has another `creation`. Citing both
   # catalogs is `invalid_catalog_transition`; citing either one (or nil) is `catalog_fork`.
-  @tag :pr221_open
+  # Green since row 390, repair (c): the sibling's entry facts pend, so it is never a prior.
   test "L minimal (row 390): one old-key sibling with a changed extended key leaves no resolution",
        %{base: base} do
     w = W.apply_script(base, [{:adv_catalog, 3, 5, {:ext, 1, 2, 0}, :zero, false}])

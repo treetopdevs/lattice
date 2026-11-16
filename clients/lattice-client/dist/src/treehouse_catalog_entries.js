@@ -16,17 +16,13 @@ import { materialize } from "./materialize";
 import { compareUtf8 } from "./op";
 import { verifyEd25519 } from "./signature";
 import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema, treehouseThreadSchema } from "./treehouse";
+import { normalizeCatalogBootstrap } from "./treehouse_catalog_codec";
 import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 /** The catalog's entry facts against `histories` (replica -> authenticated frames), as the BEAM `observe_with_detail/2`. */
 export async function observeTreehouseCatalogEntries(catalog, histories) {
-    const observed = new Map();
-    // Authenticate the entire supplied set before portability or pending classification.
-    for (const [replica, frames] of histories) {
-        const o = await observe(replica, frames);
-        if (typeof o === "string")
-            return { ok: false, reason: o, refused: [] };
-        observed.set(replica, o);
-    }
+    const observed = await authenticate(histories);
+    if (typeof observed === "string")
+        return { ok: false, reason: observed, refused: [] };
     const space = observed.get(catalog.space);
     if (space === undefined)
         return { ok: false, reason: "trust_pending", refused: [] };
@@ -50,6 +46,34 @@ export async function observeTreehouseCatalogEntries(catalog, histories) {
     if (failure !== undefined)
         return { ok: false, reason: failure.reason, refused: failure.refused };
     return { ok: true, entries: catalog.entries.map((e) => ({ ...e })), bootstrap };
+}
+/** Structural completeness only (BEAM `structure_status/2`): no quarantine is read and the bootstrap need not be honored. */
+export async function treehouseCatalogEntriesStructureStatus(catalog, histories) {
+    const observed = await authenticate(histories);
+    if (typeof observed === "string")
+        return "invalid";
+    const space = observed.get(catalog.space);
+    if (space === undefined)
+        return "pending";
+    const op = space.byId.get(catalog.bootstrap);
+    if (op === undefined)
+        return "pending";
+    const record = op.kind === "command" && op.command === "catalog_bootstrap_v1" ? normalizeCatalogBootstrap(op.commandArgs?.[0]) : null;
+    if (record === null)
+        return "invalid";
+    const result = combine(catalog.entries.map((entry) => combine([...entryChecks(entry, observed, space, record, [])])));
+    return result === "ok" ? "complete" : result === "trust_pending" ? "pending" : "invalid";
+}
+// Authenticate the entire supplied set before portability or pending classification.
+async function authenticate(histories) {
+    const observed = new Map();
+    for (const [replica, frames] of histories) {
+        const o = await observe(replica, frames);
+        if (typeof o === "string")
+            return o;
+        observed.set(replica, o);
+    }
+    return observed;
 }
 function combine(checks) {
     return checks.find((c) => c !== "ok" && c !== "trust_pending") ?? (checks.includes("trust_pending") ? "trust_pending" : "ok");

@@ -28,7 +28,7 @@ import type {
   TransportCatalog,
 } from "./treehouse_catalog_codec";
 import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
-import { observeTreehouseCatalogEntries } from "./treehouse_catalog_entries";
+import { observeTreehouseCatalogEntries, treehouseCatalogEntriesStructureStatus } from "./treehouse_catalog_entries";
 import { checkCatalogReplacementAuthority, refuteCatalogReplacementWithoutClosure } from "./treehouse_catalog_replacement_authority";
 
 const maxSafe = Number.MAX_SAFE_INTEGER;
@@ -612,20 +612,29 @@ async function entryFacts(c: TransportCatalog, ctx: Ctx): Promise<EntryFacts> {
   const known = ctx.emo.get(key);
   if (known !== undefined) return known;
   const histories = new Map<string, CarrierOpFrame[]>();
+  // `complete` is whether every fact op is held, so no later op can join any slice.
+  let complete = true;
   for (const e of entries) {
     if (e.kind !== "thread") continue;
     const held = ctx.threads.get(e.replica);
-    if (held === undefined) continue;
-    const seeds = [e.genesis, e.creation].filter((id) => held.has(id));
-    if (seeds.length > 0) histories.set(e.replica, slice(held, seeds));
+    const seeds = held === undefined ? [] : [e.genesis, e.creation].filter((id) => held.has(id));
+    if (seeds.length < 2) complete = false;
+    if (held !== undefined && seeds.length > 0) histories.set(e.replica, slice(held, seeds));
   }
-  const space = [ctx.bootstrapId, ...entries.flatMap((e) => e.kind === "space" ? [e.genesis, e.creation, e.reference] : [e.reference])]
-    .filter((id) => ctx.completeById.has(id));
-  histories.set(ctx.replica, slice(ctx.frames, space, ctx.complete));
-  const result = await observeTreehouseCatalogEntries({...c, entries}, histories);
+  const wanted = entries.flatMap((e) => e.kind === "space" ? [e.genesis, e.creation, e.reference] : [e.reference]);
+  const space = wanted.filter((id) => ctx.completeById.has(id));
+  if (space.length < wanted.length) complete = false;
+  histories.set(ctx.replica, slice(ctx.frames, [ctx.bootstrapId, ...space], ctx.complete));
+  const probe = {...c, entries};
+  const result = await observeTreehouseCatalogEntries(probe, histories);
+  // A quarantine is a prefix fact only on a complete slice: while a fact op is missing, a slice can still grow by ops
+  // concurrent with a held target, so a refused target then pends unless the structure itself is already invalid.
   const v: EntryFacts = result.ok ? "ok"
     : result.reason === "trust_pending" || result.reason === "invalid_verified_history" || result.reason === "unsupported_cutoff"
-      ? "pending" : "bad";
+      ? "pending"
+      : result.refused.length > 0 && !complete
+        ? (await treehouseCatalogEntriesStructureStatus(probe, histories)) === "invalid" ? "bad" : "pending"
+        : "bad";
   ctx.emo.set(key, v);
   return v;
 }

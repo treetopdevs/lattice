@@ -1009,20 +1009,23 @@ defmodule Treehouse.CatalogBindingGraph do
         {v, st}
 
       _ ->
-        v = observe_facts(probe, slices(probe, ctx))
+        {histories, complete?} = slices(probe, ctx)
+        v = observe_facts(probe, histories, complete?)
         {v, %{st | emo: Map.put(st.emo, key, v)}}
     end
   end
 
   # Each history cut to the causal closure of the fact ops it holds for these entries (the Space
   # also keeps the bootstrap); a Thread history with none of them held is left out (pending).
+  # `complete?` is whether every fact op is held, so no later op can join any slice.
   defp slices(probe, ctx) do
-    space =
+    wanted =
       for e <- probe.entries,
           id <-
             if(e.kind == :space, do: [e.genesis, e.creation, e.reference], else: [e.reference]),
-          Map.has_key?(ctx.cops, id),
           do: id
+
+    space = Enum.filter(wanted, &Map.has_key?(ctx.cops, &1))
 
     threads =
       for %{kind: :thread} = e <- probe.entries,
@@ -1031,17 +1034,39 @@ defmodule Treehouse.CatalogBindingGraph do
           seeds = Enum.filter([e.genesis, e.creation], &Map.has_key?(ops, &1)),
           seeds != [],
           into: %{},
-          do: {e.replica, prefix_log(ops, e.replica, seeds)}
+          do: {e.replica, {prefix_log(ops, e.replica, seeds), length(seeds) == 2}}
 
-    Map.put(threads, ctx.replica, prefix_log(ctx.cops, ctx.replica, [ctx.bootstrap.id | space]))
+    complete? =
+      length(space) == length(wanted) and
+        Enum.all?(probe.entries, &(&1.kind == :space or match?({_, true}, threads[&1.replica])))
+
+    histories =
+      threads
+      |> Map.new(fn {replica, {log, _}} -> {replica, log} end)
+      |> Map.put(ctx.replica, prefix_log(ctx.cops, ctx.replica, [ctx.bootstrap.id | space]))
+
+    {histories, complete?}
   end
 
-  defp observe_facts(probe, histories) do
+  # A quarantine is a prefix fact only on a complete slice: while a fact op is missing, a slice
+  # can still grow by ops concurrent with a held target, so a refused target then pends unless
+  # the structure itself is already invalid.
+  defp observe_facts(probe, histories, complete?) do
     case CatalogEntries.observe_with_detail(probe, histories) do
-      {:ok, _} -> :ok
-      {:error, :trust_pending, _} -> :pending
-      {:error, r, _} when r in [:invalid_verified_history, :unsupported_cutoff] -> :pending
-      {:error, _reason, _refused} -> :bad
+      {:ok, _} ->
+        :ok
+
+      {:error, :trust_pending, _} ->
+        :pending
+
+      {:error, r, _} when r in [:invalid_verified_history, :unsupported_cutoff] ->
+        :pending
+
+      {:error, _reason, [_ | _]} when not complete? ->
+        if CatalogEntries.structure_status(probe, histories) == :invalid, do: :bad, else: :pending
+
+      {:error, _reason, _refused} ->
+        :bad
     end
   end
 

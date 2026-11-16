@@ -216,7 +216,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &f3_floor_lattice/1,
       &s17e_first_prior_reserved/1,
       &r390_contradicting_sibling/1,
-      &r390_history_valid_variants/1
+      &r390_history_valid_variants/1,
+      &r390_contradicting_facts/1
     ]
   end
 
@@ -4008,6 +4009,40 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         )
       ])
     ]
+  end
+
+  # Row 390, repair (c), the invalid branches (both runtimes): revision-1 children of C0 that list
+  # the pool Thread with one held fact contradicting history: another root, a creation naming the
+  # Thread's genesis, a reference naming the bootstrap (not a `create_thread`), and an unbounded
+  # replica. Each is intrinsically refused; C0 stays accepted and served.
+  defp r390_contradicting_facts(base) do
+    c0 = F.c0(base)
+    [space] = c0.catalog.entries
+    t = base.threads["gen1"]
+    th = F.pool_thread(base, %{space | route: route("r390f-t")}, "gen1")
+
+    bad = %{
+      "Kroot" => %{th | root: F.identity("r390f-root").pub},
+      "Kcre" => %{th | creation: t.genesis.id},
+      "Kref" => %{th | reference: base.boot.id},
+      "Kfam" => %{th | replica: base.replica <> "-r390f"}
+    }
+
+    cats =
+      Map.new(bad, fn {label, e} ->
+        {label, F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, e])}
+      end)
+
+    labels = Map.merge(base_labels(base, c0), Map.new(cats, fn {l, k} -> {l, F.cid(k)} end))
+    refusals = Map.new(cats, fn {l, _} -> {l, "invalid_catalog_transition"} end)
+
+    one("R390: entry facts contradicting history refuse the catalog", labels, [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(
+        ev(base.log, catalogs: [c0 | Map.values(cats)]),
+        ok(["B"], refusals: refusals, decision: accept("B", "C0"))
+      )
+    ])
   end
 
   @doc """

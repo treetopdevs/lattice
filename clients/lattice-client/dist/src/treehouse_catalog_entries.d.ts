@@ -15,3 +15,5 @@ export type TreehouseCatalogEntriesResult = {
 };
 /** The catalog's entry facts against `histories` (replica -> authenticated frames), as the BEAM `observe_with_detail/2`. */
 export declare function observeTreehouseCatalogEntries(catalog: TransportCatalog, histories: ReadonlyMap<string, readonly CarrierOpFrame[]>): Promise<TreehouseCatalogEntriesResult>;
+/** Structural completeness only (BEAM `structure_status/2`): no quarantine is read and the bootstrap need not be honored. */
+export declare function treehouseCatalogEntriesStructureStatus(catalog: TransportCatalog, histories: ReadonlyMap<string, readonly CarrierOpFrame[]>): Promise<"complete" | "pending" | "invalid">;
