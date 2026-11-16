@@ -1194,7 +1194,7 @@ defmodule Treehouse.CatalogBindingGraph do
     end
   end
 
-  defp merge_floor(:bad, _), do: :bad
+  # `floor_of/3` stops folding once the accumulator is `:bad`, so only the part can be `:bad` here.
   defp merge_floor(_, :bad), do: :bad
   defp merge_floor(:pending, _), do: :pending
   defp merge_floor(_, :pending), do: :pending

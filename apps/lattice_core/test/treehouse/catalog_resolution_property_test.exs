@@ -22,6 +22,11 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   them with
   `MIX_ENV=test ~/.asdf/shims/mix test apps/lattice_core/test/treehouse/catalog_resolution_property_test.exs --include pr221_open`.
   `R389_RUNS` overrides the run count.
+
+  Default-suite cost: the seven safety properties (S1, S3C, S3F, S1F, S2, S3, M) run 8 generated
+  histories each. Each has a `(deep)` twin with 60 runs, tagged `:deep_property` and excluded by
+  default; run the deep twins with
+  `MIX_ENV=test ~/.asdf/shims/mix test apps/lattice_core/test/treehouse/catalog_resolution_property_test.exs --include deep_property`.
   """
   use ExUnit.Case, async: false
   use ExUnitProperties
@@ -36,6 +41,10 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     %{base: F.base(expires: 40)}
   end
 
+  # Default suite: 8 runs per property; the `:deep_property` copies run `default` (60). `R389_RUNS`
+  # overrides both, and every `runs(60)`/`runs(30)` call outside the wrapped properties keeps its default.
+  defp runs(:quick, _default), do: runs(8)
+  defp runs(:deep, default), do: runs(default)
   defp runs(default), do: String.to_integer(System.get_env("R389_RUNS") || "#{default}")
 
   # --- generators ---------------------------------------------------------------------------
@@ -164,18 +173,24 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
 
   # --- safety -----------------------------------------------------------------------------------
 
-  property "S1: no route is served under a refused, closed or closed-out binding (with FZ)", %{
-    base: base
-  } do
-    check all(
-            actions <- script(),
-            p <- picks(),
-            lose <- one_of([constant(nil), integer(0..20)]),
-            max_runs: runs(60)
-          ) do
-      w = W.apply_script(base, actions)
-      steps = W.run(w, W.order(w.items, p), lose_watermark_at: lose)
-      assert_none(w, steps, [:s1, :fz], "S1/FZ")
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "S1: no route is served under a refused, closed or closed-out binding (with FZ) (#{@mode})",
+             %{
+               base: base
+             } do
+      check all(
+              actions <- script(),
+              p <- picks(),
+              lose <- one_of([constant(nil), integer(0..20)]),
+              max_runs: runs(@mode, 60)
+            ) do
+        w = W.apply_script(base, actions)
+        steps = W.run(w, W.order(w.items, p), lose_watermark_at: lose)
+        assert_none(w, steps, [:s1, :fz], "S1/FZ")
+      end
     end
   end
 
@@ -244,66 +259,102 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     end
   end
 
-  property "S3C: a rotation's inherited cutoffs are proven before its catalog is accepted", %{
-    base: base
-  } do
-    check all(actions <- cutoff_script(), p <- picks(), max_runs: runs(60)) do
-      {w, steps} = history(base, actions, p)
-      assert_none(w, steps, [:s3], "S3")
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "S3C: a rotation's inherited cutoffs are proven before its catalog is accepted (#{@mode})",
+             %{
+               base: base
+             } do
+      check all(actions <- cutoff_script(), p <- picks(), max_runs: runs(@mode, 60)) do
+        {w, steps} = history(base, actions, p)
+        assert_none(w, steps, [:s3], "S3")
+      end
     end
   end
 
-  property "S3F: the S3 floor obligation over sibling priors and multi-prior replacements", %{
-    base: base
-  } do
-    check all(actions <- floor_script(), p <- picks(), max_runs: runs(60)) do
-      {w, steps} = history(base, actions, p)
-      assert_none(w, steps, [:s3], "S3")
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "S3F: the S3 floor obligation over sibling priors and multi-prior replacements (#{@mode})",
+             %{
+               base: base
+             } do
+      check all(actions <- floor_script(), p <- picks(), max_runs: runs(@mode, 60)) do
+        {w, steps} = history(base, actions, p)
+        assert_none(w, steps, [:s3], "S3")
+      end
     end
   end
 
-  property "S1F: FZ holds when the watermark catalog is lost before its binding changes", %{
-    base: base
-  } do
-    check all(
-            actions <- freeze_script(),
-            p <- picks(),
-            lose <- integer(0..12),
-            max_runs: runs(60)
-          ) do
-      w = W.apply_script(base, actions)
-      steps = W.run(w, W.order(w.items, p), lose_watermark_at: lose)
-      assert_none(w, steps, [:s1, :fz], "S1/FZ")
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "S1F: FZ holds when the watermark catalog is lost before its binding changes (#{@mode})",
+             %{
+               base: base
+             } do
+      check all(
+              actions <- freeze_script(),
+              p <- picks(),
+              lose <- integer(0..12),
+              max_runs: runs(@mode, 60)
+            ) do
+        w = W.apply_script(base, actions)
+        steps = W.run(w, W.order(w.items, p), lose_watermark_at: lose)
+        assert_none(w, steps, [:s1, :fz], "S1/FZ")
+      end
     end
   end
 
-  property "S2: pending or adversary evidence never unfreezes or moves onto a changed binding", %{
-    base: base
-  } do
-    check all(actions <- script(), p <- picks(), max_runs: runs(60)) do
-      {w, steps} = history(base, actions, p)
-      assert_none(w, steps, [:s2], "S2")
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "S2: pending or adversary evidence never unfreezes or moves onto a changed binding (#{@mode})",
+             %{
+               base: base
+             } do
+      check all(actions <- script(), p <- picks(), max_runs: runs(@mode, 60)) do
+        {w, steps} = history(base, actions, p)
+        assert_none(w, steps, [:s2], "S2")
+      end
     end
   end
 
-  property "S3: no accepted move drops a retained or cited entry or skips a cutoff proof", %{
-    base: base
-  } do
-    check all(actions <- script(), p <- picks(), max_runs: runs(60)) do
-      {w, steps} = history(base, actions, p)
-      assert_none(w, steps, [:s3], "S3")
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
+
+    property "S3: no accepted move drops a retained or cited entry or skips a cutoff proof (#{@mode})",
+             %{
+               base: base
+             } do
+      check all(actions <- script(), p <- picks(), max_runs: runs(@mode, 60)) do
+        {w, steps} = history(base, actions, p)
+        assert_none(w, steps, [:s3], "S3")
+      end
     end
   end
 
-  property "M: D-279, an accepted id is never later intrinsically refused, and back", %{
-    base: base
-  } do
-    check all(actions <- script(), p <- picks(), max_runs: runs(60)) do
-      {w, steps} = history(base, actions, p)
-      v = M.check_monotone(w, steps)
+  for mode <- [:quick, :deep] do
+    @mode mode
+    if mode == :deep, do: @tag(:deep_property)
 
-      assert v == [],
-             "M violated:\n  #{Enum.map_join(v, "\n  ", &elem(&1, 1))}\n#{trace(w, steps)}"
+    property "M: D-279, an accepted id is never later intrinsically refused, and back (#{@mode})",
+             %{
+               base: base
+             } do
+      check all(actions <- script(), p <- picks(), max_runs: runs(@mode, 60)) do
+        {w, steps} = history(base, actions, p)
+        v = M.check_monotone(w, steps)
+
+        assert v == [],
+               "M violated:\n  #{Enum.map_join(v, "\n  ", &elem(&1, 1))}\n#{trace(w, steps)}"
+      end
     end
   end
 
