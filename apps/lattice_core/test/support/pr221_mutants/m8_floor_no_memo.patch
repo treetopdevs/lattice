@@ -1,0 +1,12 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
+@@ -1158,7 +1158,8 @@
+   defp floor_of(%{kind: :bootstrap}, _ctx, st), do: {{:ok, [], %{}}, st}
+ 
+   defp floor_of(%{id: id} = n, ctx, st) do
+-    case st.fmemo do
++    # MUTANT m8: floor_of is not memoized.
++    case %{} do
+       %{^id => floor} ->
+         {floor, st}
+ 
