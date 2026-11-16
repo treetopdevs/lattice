@@ -35,9 +35,22 @@ defmodule Treehouse.CatalogReplacementTrust do
   the page as `trust_pending` (no decoder for it exists here); the sidecar has no byte budget
   (row 355) and no saved-state validation (row 395); an incomplete Space closure serves
   nothing new; and the replacement-authority check is the graph's, which for a leased admin is
-  not the C10 R04-successor case, so C10 to C15 stay open. Once a replacement op exists the
-  graph, not a `CatalogTrust` block, decides what is served, so an old-key catalog fork cannot
-  stop an accepted replacement.
+  not the C10 R04-successor case, so C10 to C15 stay open.
+
+  Block rule (D-689). The mere presence of a replacement-shaped op never widens what is served.
+  Composition engages only when the resolver treats an op as a replacement node or as raw
+  refusal evidence; a malformed or unauthorized op that is neither changes nothing. While
+  `CatalogTrust` is blocked (authority change, fork, control history limit) its decision stands
+  and nothing is served, except that a replacement the graph honors, whose first catalog it
+  accepts with the serving node bound to that replacement, supersedes the block, so an old-key
+  catalog fork cannot stop an accepted replacement. Routes under the bootstrap or a rotation
+  binding are never served while blocked, and the graph's watermark on a replacement binding
+  is never overwritten by `CatalogTrust`'s own accepted catalog.
+
+  A sidecar catalog bound to a held replacement op is admitted only if its signature verifies
+  against that op's claimed catalog key, once per catalog id; an unverifiable variant is dropped
+  (the graph input is keyed by the signature-free catalog id). `wrap/1` carries `CatalogTrust`'s
+  accepted watermark and cumulative routes into the graph state.
   """
 
   alias Lattice.Carrier.Wire
@@ -62,10 +75,31 @@ defmodule Treehouse.CatalogReplacementTrust do
     end
   end
 
-  @doc "Wrap a bare `CatalogTrust` state as an installed state with nothing served yet."
+  @doc """
+  Wrap a bare `CatalogTrust` state as an installed state with nothing served yet. Its accepted
+  watermark (binding, catalog, and the cumulative route table of the accepted catalog) is
+  carried into the graph state, so a later replacement is judged against what the client
+  already accepted.
+  """
   @spec wrap(map()) :: map()
-  def wrap(trust),
-    do: %{trust: trust, binding: @empty_binding, extra: %{catalogs: []}, routes: []}
+  def wrap(trust) do
+    binding = %{@empty_binding | accepted: watermark(trust)}
+    %{trust: trust, binding: binding, extra: %{catalogs: []}, routes: []}
+  end
+
+  defp watermark(%{accepted: %{catalog: id} = accepted, catalogs: catalogs}) do
+    routes =
+      with %{json: json} <- Enum.find(catalogs, &(&1.id == id)),
+           {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(json) do
+        Map.new(catalog.entries, &{&1.route, &1.replica})
+      else
+        _ -> %{}
+      end
+
+    Map.put(accepted, :routes, routes)
+  end
+
+  defp watermark(_trust), do: nil
 
   @spec evaluate(term()) :: map()
   def evaluate(%{
@@ -99,14 +133,14 @@ defmodule Treehouse.CatalogReplacementTrust do
         _ -> malformed()
       end
     else
-      _ -> mirrored(installed, decision, trust, extra)
+      _ -> mirrored(installed, decision, trust, extra, [])
     end
   end
 
   # --- no replacement op: CatalogTrust's decision, plus the mirrored watermark --------------
 
-  defp mirrored(installed, decision, trust, extra) do
-    binding = mirror(installed.binding, trust.accepted, decision.routes)
+  defp mirrored(installed, decision, trust, extra, ops) do
+    binding = mirror(installed.binding, trust.accepted, decision.routes, ops)
     next = %{installed | trust: trust, binding: binding, extra: extra, routes: decision.routes}
     waiting? = extra.catalogs != []
 
@@ -126,33 +160,52 @@ defmodule Treehouse.CatalogReplacementTrust do
     })
   end
 
-  defp mirror(binding, nil, _routes), do: binding
+  defp mirror(binding, nil, _routes, _ops), do: binding
 
-  defp mirror(%{accepted: previous} = binding, accepted, routes) do
-    cumulative = (previous && Map.get(previous, :routes, %{})) || %{}
-    added = Map.new(routes, &{&1.path, &1.replica})
-    %{binding | accepted: Map.put(accepted, :routes, Map.merge(cumulative, added))}
+  defp mirror(%{accepted: previous} = binding, accepted, routes, ops) do
+    if previous != nil and previous.binding in ops do
+      # A watermark the graph holds on a replacement binding is the graph's; CatalogTrust's own
+      # accepted catalog never overwrites it.
+      binding
+    else
+      cumulative = (previous && Map.get(previous, :routes, %{})) || %{}
+      added = Map.new(routes, &{&1.path, &1.replica})
+      %{binding | accepted: Map.put(accepted, :routes, Map.merge(cumulative, added))}
+    end
   end
 
   # --- a replacement op exists: the graph decides --------------------------------------------
 
   defp composed(installed, decision, trust, extra, {logs, space, ops}) do
-    {ready, waiting} = ready(extra.catalogs, ops)
+    {ready, waiting, kept} = ready(extra.catalogs, ops, catalog_keys(space))
+    extra = %{extra | catalogs: kept}
 
     case graph_input(installed, trust, ready, {logs, space}) do
       {:ok, input} ->
         result = CatalogBindingGraph.resolve(input)
         advanced = CatalogBindingGraph.advance(installed.binding, result)
-        outcome(installed, decision, trust, extra, {result, advanced}, waiting)
+        routes = serve(result, advanced, installed)
+
+        cond do
+          not engaged?(result) ->
+            mirrored(installed, decision, trust, extra, ops)
+
+          blocked?(trust) and not supersedes?(result, advanced, routes) ->
+            installed
+            |> mirrored(decision, trust, extra, ops)
+            |> Map.put(:refused, refused(result))
+
+          true ->
+            outcome(installed, decision, trust, extra, {result, advanced, routes}, waiting)
+        end
 
       :error ->
         %{kind: :reject, reason: :trust_recovery_required, detail: detail()}
     end
   end
 
-  defp outcome(installed, decision, trust, extra, {result, advanced}, waiting) do
+  defp outcome(installed, decision, trust, extra, {result, advanced, routes}, waiting) do
     binding = Map.take(advanced, [:accepted, :frozen])
-    routes = serve(result, advanced, installed)
     stored = if advanced.serving == nil, do: installed.routes, else: routes
     next = %{trust: trust, binding: binding, extra: extra, routes: stored}
 
@@ -167,6 +220,32 @@ defmodule Treehouse.CatalogReplacementTrust do
       trust_decision: decision
     }
   end
+
+  # A replace-shaped op only engages composition when the resolver treats it as a replacement
+  # node or as raw refusal evidence. A malformed or unauthorized op that is neither changes
+  # nothing. An error result (a held op with an incomplete closure, too many heads) still engages.
+  defp engaged?({:ok, graph}) do
+    Enum.any?(graph.nodes, fn {_id, node} -> node.kind == :replacement end) or
+      map_size(graph.raw_evidence) > 0
+  end
+
+  defp engaged?(_error), do: true
+
+  defp blocked?(trust), do: Map.get(trust, :blocked) != nil
+
+  # A CatalogTrust block is superseded only by the serving catalog of a replacement node the graph
+  # honors (the first catalog of that replacement is accepted). A bootstrap or rotation binding,
+  # a replacement without its catalog, or any error never serves while CatalogTrust is blocked.
+  defp supersedes?({:ok, graph}, %{serving: serving}, [_ | _]) when serving != nil do
+    with %{binding: binding} <- graph.catalogs[serving],
+         %{kind: :replacement} <- graph.nodes[binding] do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  defp supersedes?(_result, _advanced, _routes), do: false
 
   defp reason({:ok, %{decision: %{block: %{reason: reason}}}}), do: reason
   defp reason({:ok, %{decision: %{reason: reason}}}), do: reason
@@ -272,11 +351,15 @@ defmodule Treehouse.CatalogReplacementTrust do
     for {id, %Op{kind: :command, body: {:replace_catalog_v1, _}}} <- Log.ops(space), do: id
   end
 
-  # Sidecar catalogs whose binding is a held replacement op reach the graph; the rest wait.
-  defp ready(jsons, ops) do
+  # Sidecar catalogs whose binding is a held replacement op reach the graph, and only after their
+  # signature verifies against that op's catalog key: an unverifiable variant is dropped from the
+  # sidecar for good, and a catalog id is admitted once. The graph input is keyed by catalog id,
+  # which excludes the signature, so a forged variant would otherwise overwrite the authentic one.
+  # A catalog bound to an op that is not held waits, unverified, until its op arrives.
+  defp ready(jsons, ops, keys) do
     held = MapSet.new(ops)
 
-    {ready, waiting} =
+    {bound, waiting} =
       Enum.split_with(jsons, fn json ->
         case TransportCatalog.decode_catalog_json(json) do
           {:ok, %{catalog: %{binding: binding}}} -> MapSet.member?(held, binding)
@@ -284,7 +367,33 @@ defmodule Treehouse.CatalogReplacementTrust do
         end
       end)
 
-    {ready, length(waiting)}
+    ready =
+      bound
+      |> Enum.filter(&verified?(&1, keys))
+      |> Enum.uniq_by(fn json ->
+        {:ok, envelope} = TransportCatalog.decode_catalog_json(json)
+        TransportCatalog.catalog_id(envelope.catalog)
+      end)
+
+    {ready, length(waiting), Enum.sort(ready ++ waiting)}
+  end
+
+  defp verified?(json, keys) do
+    with {:ok, %{catalog: %{binding: binding}} = envelope} <-
+           TransportCatalog.decode_catalog_json(json),
+         {:ok, key} <- Map.fetch(keys, binding) do
+      TransportCatalog.verify_catalog(envelope, key) == :ok
+    else
+      _ -> false
+    end
+  end
+
+  # The catalog key each replacement op claims, for ops whose claim decodes.
+  defp catalog_keys(space) do
+    for {id, %Op{kind: :command, body: {:replace_catalog_v1, [claim | _]}}} <- Log.ops(space),
+        {:ok, %{new_catalog_key: key}} <- [TransportCatalog.normalize_replacement_claim(claim)],
+        into: %{},
+        do: {id, key}
   end
 
   defp catalogs(jsons) do

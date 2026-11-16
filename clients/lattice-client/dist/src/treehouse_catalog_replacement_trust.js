@@ -18,18 +18,40 @@
 // Limits, all deliberate: a rotation under a replacement goes to the trust evaluator, which refuses the page as
 // trust_pending; the sidecar has no byte budget (row 355) and no saved-state validation (row 395); an incomplete Space
 // closure serves nothing new; and the authority check is the graph's, which for a leased admin is not the C10 R04-successor
-// case, so C10 to C15 stay open. Once a replacement op exists the graph, not a trust block, decides what is served, so an
-// old-key catalog fork cannot stop an accepted replacement.
-import { treehouseCatalogBootstrapsFromFrames } from "./treehouse";
+// case, so C10 to C15 stay open.
+//
+// Block rule (D-689): the mere presence of a replacement-shaped op never widens what is served. Composition engages only when
+// the resolver treats an op as a replacement node or as raw refusal evidence; a malformed or unauthorized op that is neither
+// changes nothing. While the trust state is blocked its decision stands and nothing is served, except that a replacement the
+// graph honors, whose first catalog it accepts with the serving node bound to that replacement, supersedes the block (so an
+// old-key catalog fork cannot stop an accepted replacement). A sidecar catalog bound to a held replacement op is admitted only
+// if its signature verifies against that op's claimed catalog key, once per catalog id. wrapReplacementTrust carries the trust
+// state's accepted watermark and cumulative routes into the graph state.
+import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
+import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders } from "./treehouse";
 import { advanceCatalogBindingState, resolveCatalogBindingGraph } from "./treehouse_catalog_binding_graph";
-import { catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, catalogRotationId, catalogServiceRealm, transportCatalogId } from "./treehouse_catalog_codec";
+import { catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, catalogRotationId, catalogServiceRealm, transportCatalogId, verifyCatalogEnvelope } from "./treehouse_catalog_codec";
 import { parseCatalogArtifactJson } from "./treehouse_catalog_json";
 import { compareUtf8 } from "./op";
 import { evaluateTreehouseCatalogTrust, prepareTreehouseCatalogInstallation } from "./treehouse_catalog_trust";
 const emptyBinding = () => ({ accepted: null, frozen: false });
 /** Wrap a bare trust state as an installed state with nothing served yet. */
 export function wrapReplacementTrust(trust) {
-    return { trust, binding: emptyBinding(), extra: { catalogs: [] }, routes: [] };
+    return { trust, binding: { ...emptyBinding(), accepted: watermark(trust) }, extra: { catalogs: [] }, routes: [] };
+}
+// The trust state's accepted watermark with the cumulative route table of its accepted catalog, so a later replacement is
+// judged against what the client already accepted.
+function watermark(trust) {
+    const accepted = trust.accepted;
+    if (accepted === null)
+        return null;
+    const record = trust.catalogs.find((c) => c.id === accepted.catalog);
+    const envelope = record === undefined ? null : decodeCatalog(record.json);
+    const routes = {};
+    if (envelope !== null)
+        for (const e of envelope.catalog.entries)
+            routes[e.route] = e.replica;
+    return { ...accepted, routes };
 }
 /** As prepareTreehouseCatalogInstallation, with the proposed state wrapped. */
 export async function prepareReplacementTrustInstallation(input) {
@@ -45,7 +67,7 @@ export async function evaluateReplacementTrust(input) {
         return decision;
     const ops = replaceIds(decision.next);
     if (ops.size === 0)
-        return mirrored(installed, decision, extra);
+        return mirrored(installed, decision, extra, ops);
     try {
         return await composed(installed, decision, extra, ops);
     }
@@ -54,17 +76,20 @@ export async function evaluateReplacementTrust(input) {
     }
 }
 // --- no replacement op: the trust decision, plus the mirrored watermark -------------------------------------------------
-function mirrored(installed, decision, extra) {
-    const binding = mirror(installed.binding, decision);
+function mirrored(installed, decision, extra, ops) {
+    const binding = mirror(installed.binding, decision, ops);
     const kind = decision.kind === "unchanged" && !same(extra, installed.extra) ? "propose" : decision.kind;
     const waiting = extra.catalogs.length > 0;
     return { kind, reason: decision.reason ?? (waiting ? "trust_pending" : null), refused: {},
         next: { ...installed, trust: decision.next, binding, extra, routes: decision.routes }, routes: decision.routes,
         servedOrigin: originOf(decision.routes), trustDecision: decision };
 }
-function mirror(binding, decision) {
+function mirror(binding, decision, ops) {
     const accepted = decision.next.accepted;
     if (accepted === null)
+        return binding;
+    // A watermark the graph holds on a replacement binding is the graph's; the trust state's accepted catalog never overwrites it.
+    if (binding.accepted !== null && ops.has(binding.accepted.binding))
         return binding;
     const routes = { ...(binding.accepted?.routes ?? {}) };
     for (const r of decision.routes)
@@ -74,19 +99,79 @@ function mirror(binding, decision) {
 // --- a replacement op exists: the graph decides -------------------------------------------------------------------------
 async function composed(installed, decision, extra, ops) {
     const trust = decision.next;
-    const ready = extra.catalogs.filter((json) => { const e = decodeCatalog(json); return e !== null && ops.has(e.catalog.binding); });
-    const waiting = extra.catalogs.length - ready.length;
+    const { ready, waiting, kept } = readyCatalogs(extra.catalogs, ops, catalogKeys(trust));
+    extra = { catalogs: kept };
     const input = await graphInput(installed, trust, ready);
     if (input === null)
         return recovery("trust_recovery_required");
     const result = await resolveCatalogBindingGraph(input);
     const advanced = advanceCatalogBindingState(installed.binding, result);
     const routes = serve(result, advanced, installed);
+    // A replace-shaped op engages composition only when the resolver treats it as a replacement node or as raw refusal
+    // evidence; a malformed or unauthorized op that is neither changes nothing.
+    if (!engaged(result))
+        return mirrored(installed, decision, extra, ops);
+    // A trust block is superseded only by the serving catalog of a replacement node the graph honors.
+    if (trust.blocked !== null && !supersedes(result, advanced, routes)) {
+        return { ...mirrored(installed, decision, extra, ops), refused: result.ok ? Object.fromEntries(result.graph.rawEvidence) : {} };
+    }
     const binding = { accepted: advanced.accepted, frozen: advanced.frozen };
     const next = { trust, binding, extra, routes: advanced.serving === null ? installed.routes : routes };
     return { kind: same(next, installed) ? "unchanged" : "propose", reason: reasonOf(result) ?? (waiting > 0 ? "trust_pending" : null),
         refused: result.ok ? Object.fromEntries(result.graph.rawEvidence) : {}, next, routes, servedOrigin: originOf(routes),
         trustDecision: decision };
+}
+function engaged(result) {
+    if (!result.ok)
+        return true;
+    return [...result.graph.nodes.values()].some((n) => n.kind === "replacement") || result.graph.rawEvidence.size > 0;
+}
+function supersedes(result, advanced, routes) {
+    if (!result.ok || advanced.serving === null || routes.length === 0)
+        return false;
+    const catalog = result.graph.catalogs.get(advanced.serving);
+    return catalog !== undefined && result.graph.nodes.get(catalog.binding)?.kind === "replacement";
+}
+// Sidecar catalogs whose binding is a held replacement op reach the graph, and only after their signature verifies against that
+// op's catalog key: an unverifiable variant is dropped for good and a catalog id is admitted once (the graph input is keyed by
+// catalog id, which excludes the signature). A catalog bound to an op that is not held waits, unverified.
+function readyCatalogs(jsons, ops, keys) {
+    const ready = [], waiting = [], seen = new Set();
+    for (const json of jsons) {
+        const envelope = decodeCatalog(json);
+        if (envelope === null || !ops.has(envelope.catalog.binding)) {
+            waiting.push(json);
+            continue;
+        }
+        const key = keys.get(envelope.catalog.binding);
+        if (key === undefined || !verifyCatalogEnvelope(envelope, key))
+            continue;
+        const id = transportCatalogId(envelope.catalog);
+        if (!seen.has(id)) {
+            seen.add(id);
+            ready.push(json);
+        }
+    }
+    return { ready, waiting: waiting.length, kept: [...ready, ...waiting].sort(compareUtf8) };
+}
+// The catalog key each replacement op claims, for ops whose claim decodes.
+function catalogKeys(trust) {
+    const keys = new Map();
+    try {
+        const space = trust.histories.find((h) => h.replica === trust.review.space);
+        if (space === undefined)
+            return keys;
+        const frames = space.frames.map((f) => decodeCarrierOpFrame(structuredClone(f)));
+        for (const op of carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"))) {
+            if (op.command !== "replace_catalog_v1" || op.commandError !== undefined || !Array.isArray(op.commandArgs))
+                continue;
+            const claim = op.commandArgs[0];
+            if (claim !== null && claim !== undefined && typeof claim.newCatalogKey === "string")
+                keys.set(op.id, claim.newCatalogKey);
+        }
+    }
+    catch { /* an undecodable history yields no keys; the graph then refuses the page as malformed input */ }
+    return keys;
 }
 function recovery(reason) {
     return { kind: "reject", reason, detail: { ids: [], coreReason: null, pendingProofIds: [] } };

@@ -5,20 +5,27 @@ import { verifyCatalogEnvelope } from "../../src/treehouse_catalog_codec";
 import { catalogEnvelopeFromCarrierTerm } from "../../src/treehouse_catalog_codec";
 import { parseCatalogArtifactJson } from "../../src/treehouse_catalog_json";
 import { compareUtf8 } from "../../src/op";
-import { evaluateReplacementTrust, prepareReplacementTrustInstallation } from "../../src/treehouse_catalog_replacement_trust";
+import { evaluateReplacementTrust, prepareReplacementTrustInstallation, wrapReplacementTrust } from "../../src/treehouse_catalog_replacement_trust";
+import { evaluateTreehouseCatalogTrust } from "../../src/treehouse_catalog_trust";
 import type { InstalledReplacementTrust, ReplacementTrustResult } from "../../src/treehouse_catalog_replacement_trust";
 import type { TreehouseCatalogEvidencePage, TreehouseCatalogRawHistory } from "../../src/treehouse_catalog_trust";
 
 // Plan 316 row 316: replay the BEAM-written replacement demo file through the TS composed evaluator and print the same
 // narrated lines. Candidate state only; this installs no app trust and dials nothing.
-interface Step { title: string; print: boolean; page: TreehouseCatalogEvidencePage }
-interface Doc { format: string; history: TreehouseCatalogRawHistory; labels: Record<string, string>; runs: {name: string; steps: Step[]}[] }
+// A step with mode "trust" goes through the trust evaluator alone and is wrapped with the public wrap (it has no view); a run
+// may carry its own history (the review findings of the Codex round).
+interface Step { title: string; print: boolean; mode?: "eval" | "trust"; page: TreehouseCatalogEvidencePage }
+interface Doc { format: string; history: TreehouseCatalogRawHistory; labels: Record<string, string>;
+  runs: {name: string; history?: TreehouseCatalogRawHistory; steps: Step[]}[] }
 
 const doc = JSON.parse(readFileSync(process.argv[2]!, "utf8")) as Doc;
 assert.equal(doc.format, "lattice-replacement-demo-v1");
-const observed = await treehouseCatalogBootstrapsFromFrames(doc.history);
-assert.ok(observed.ok && observed.bootstraps.length === 1);
-const bootstrap = observed.bootstraps[0]!;
+async function bootstrapOf(history: TreehouseCatalogRawHistory) {
+  const observed = await treehouseCatalogBootstrapsFromFrames(history);
+  assert.ok(observed.ok && observed.bootstraps.length === 1);
+  return observed.bootstraps[0]!;
+}
+let bootstrap = await bootstrapOf(doc.history);
 const expected = {trustRevision: 0, historyGeneration: 0};
 
 function signedBy(json: string, key: string): boolean {
@@ -48,15 +55,25 @@ function line(title: string, v: ReturnType<typeof view>): string {
 
 const views: Record<string, unknown[]> = {};
 for (const run of doc.runs) {
+  const history = run.history ?? doc.history;
+  bootstrap = await bootstrapOf(history);
   const prepared = await prepareReplacementTrustInstallation({
-    review: {version: 1, product: "treehouse", space: doc.history.replica, spaceRoot: bootstrap.record.spaceRoot,
+    review: {version: 1, product: "treehouse", space: history.replica, spaceRoot: bootstrap.record.spaceRoot,
       bootstrapId: bootstrap.id, observedBootstrapIds: [bootstrap.id], disposition: "pin_exact_observed_bootstrap"},
-    history: doc.history, store: {kind: "verified_fresh", expected},
+    history, store: {kind: "verified_fresh", expected},
   });
   assert.ok(prepared.next !== null);
   let state: InstalledReplacementTrust = prepared.next;
   views[run.name] = [];
   for (const step of run.steps) {
+    if (step.mode === "trust") {
+      const decision = await evaluateTreehouseCatalogTrust({installed: state.trust, expected, incoming: step.page});
+      assert.notEqual(decision.kind, "reject", `${run.name} ${step.title}`);
+      if (decision.kind === "reject") continue;
+      state = wrapReplacementTrust(decision.next);
+      views[run.name]!.push(null);
+      continue;
+    }
     const result = await evaluateReplacementTrust({installed: state, expected, incoming: step.page});
     assert.notEqual(result.kind, "reject", `${run.name} ${step.title}: ${result.kind === "reject" ? result.reason : ""}`);
     if (result.kind === "reject") continue;

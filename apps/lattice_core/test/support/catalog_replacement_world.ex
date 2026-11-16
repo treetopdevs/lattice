@@ -7,7 +7,8 @@ defmodule Treehouse.CatalogReplacementWorld do
   signed by a non-admin. Disposable seeded keys only; nothing here is installed trust.
   """
 
-  alias Lattice.{Identity, Log}
+  alias Lattice.{Authority, Identity, Log, Op}
+  alias Lattice.Authority.Delegation
   alias Treehouse.CatalogBindingGraphFixtures, as: F
   alias Treehouse.{CatalogCutoff, CatalogReplacementTrust, CatalogTrustVectors, Space}
 
@@ -118,6 +119,58 @@ defmodule Treehouse.CatalogReplacementWorld do
   def persist(installed, _reject), do: installed
 
   def with_ops(base, ops), do: Enum.reduce(ops, base.log, &Log.append!(&2, &1))
+
+  @doc """
+  The Thread log of a `CatalogTrustVectors.fixture/1` Thread with a concurrent moderator transfer
+  that reclassifies its creation: delivering it makes `CatalogTrust` block as `authority_changed`.
+  """
+  def thread_transfer_log(thread) do
+    Enum.find_value(1..200, fn index ->
+      successor = Identity.from_seed("thread-successor", "r316-wrap-successor-#{index}")
+
+      delegation =
+        Delegation.new(thread.root, thread.replica, successor.pub,
+          parent_id: thread.delegation.id,
+          ops: MapSet.to_list(thread.delegation.ops),
+          roles: [:moderator]
+        )
+
+      transfer =
+        Op.new(
+          thread.root,
+          thread.replica,
+          [thread.genesis.id],
+          :authority,
+          {:transfer, :moderator, delegation, 0}
+        )
+
+      log = Log.append!(thread.log, transfer)
+
+      if Map.has_key?(Authority.analyze(Treehouse.Thread, log).reasons, thread.creation.id),
+        do: log
+    end) || raise "no deterministic Thread transfer"
+  end
+
+  @doc """
+  The Space log with one malformed replacement command: an outsider-signed
+  `{:replace_catalog_v1, []}` with no capability. It is neither a replacement node nor refusal
+  evidence, so it must never widen what is served.
+  """
+  def with_malformed_replace(space_log, replica) do
+    outsider = Identity.from_seed("outsider", "r316-outsider")
+
+    op =
+      Op.new(
+        outsider,
+        replica,
+        Log.frontier(space_log),
+        :command,
+        {:replace_catalog_v1, []},
+        cap: nil
+      )
+
+    Log.append!(space_log, op)
+  end
 
   @doc "The page JSON shape of `TreehouseCatalogEvidencePage`."
   def page_json(page) do

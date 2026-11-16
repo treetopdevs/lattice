@@ -5,12 +5,16 @@ import { verifyCatalogEnvelope } from "../../src/treehouse_catalog_codec";
 import { catalogEnvelopeFromCarrierTerm } from "../../src/treehouse_catalog_codec";
 import { parseCatalogArtifactJson } from "../../src/treehouse_catalog_json";
 import { compareUtf8 } from "../../src/op";
-import { evaluateReplacementTrust, prepareReplacementTrustInstallation } from "../../src/treehouse_catalog_replacement_trust";
+import { evaluateReplacementTrust, prepareReplacementTrustInstallation, wrapReplacementTrust } from "../../src/treehouse_catalog_replacement_trust";
+import { evaluateTreehouseCatalogTrust } from "../../src/treehouse_catalog_trust";
 const doc = JSON.parse(readFileSync(process.argv[2], "utf8"));
 assert.equal(doc.format, "lattice-replacement-demo-v1");
-const observed = await treehouseCatalogBootstrapsFromFrames(doc.history);
-assert.ok(observed.ok && observed.bootstraps.length === 1);
-const bootstrap = observed.bootstraps[0];
+async function bootstrapOf(history) {
+    const observed = await treehouseCatalogBootstrapsFromFrames(history);
+    assert.ok(observed.ok && observed.bootstraps.length === 1);
+    return observed.bootstraps[0];
+}
+let bootstrap = await bootstrapOf(doc.history);
 const expected = { trustRevision: 0, historyGeneration: 0 };
 function signedBy(json, key) {
     const parsed = parseCatalogArtifactJson(json);
@@ -37,15 +41,26 @@ function line(title, v) {
 }
 const views = {};
 for (const run of doc.runs) {
+    const history = run.history ?? doc.history;
+    bootstrap = await bootstrapOf(history);
     const prepared = await prepareReplacementTrustInstallation({
-        review: { version: 1, product: "treehouse", space: doc.history.replica, spaceRoot: bootstrap.record.spaceRoot,
+        review: { version: 1, product: "treehouse", space: history.replica, spaceRoot: bootstrap.record.spaceRoot,
             bootstrapId: bootstrap.id, observedBootstrapIds: [bootstrap.id], disposition: "pin_exact_observed_bootstrap" },
-        history: doc.history, store: { kind: "verified_fresh", expected },
+        history, store: { kind: "verified_fresh", expected },
     });
     assert.ok(prepared.next !== null);
     let state = prepared.next;
     views[run.name] = [];
     for (const step of run.steps) {
+        if (step.mode === "trust") {
+            const decision = await evaluateTreehouseCatalogTrust({ installed: state.trust, expected, incoming: step.page });
+            assert.notEqual(decision.kind, "reject", `${run.name} ${step.title}`);
+            if (decision.kind === "reject")
+                continue;
+            state = wrapReplacementTrust(decision.next);
+            views[run.name].push(null);
+            continue;
+        }
         const result = await evaluateReplacementTrust({ installed: state, expected, incoming: step.page });
         assert.notEqual(result.kind, "reject", `${run.name} ${step.title}: ${result.kind === "reject" ? result.reason : ""}`);
         if (result.kind === "reject")

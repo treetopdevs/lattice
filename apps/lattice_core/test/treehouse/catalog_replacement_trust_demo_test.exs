@@ -10,8 +10,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
   """
   use ExUnit.Case, async: false
 
+  alias Treehouse.{CatalogReplacementTrust, CatalogTrust, CatalogTrustVectors, TransportCatalog}
   alias Treehouse.CatalogReplacementWorld, as: W
-  alias Treehouse.TransportCatalog
 
   @moduletag :replacement_demo
   @moduletag timeout: 180_000
@@ -154,6 +154,55 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
 
     assert [_, _, %{"frozen" => true, "routes" => 0, "origin" => nil}] = beam_views["freeze"]
 
+    # Review findings of the composed evaluator, replayed in both runtimes (Codex round, row 395
+    # follow-up): each run carries its own history; a `:trust` step goes through `CatalogTrust`
+    # alone and is wrapped with the public `wrap/1`, and has no view.
+    extra_runs = extra_runs(w)
+
+    extra_views =
+      for run <- extra_runs, into: %{} do
+        {_state, views} =
+          Enum.reduce(run.steps, {run.install, []}, fn {_title, page, mode}, {state, acc} ->
+            case mode do
+              :trust ->
+                %{next: trust} =
+                  CatalogTrust.evaluate(%{
+                    installed: state.trust,
+                    expected: W.expected(),
+                    incoming: page
+                  })
+
+                {CatalogReplacementTrust.wrap(trust), acc ++ [nil]}
+
+              :eval ->
+                result = W.evaluate(state, page)
+                {W.persist(state, result), acc ++ [json(W.view(result, labels, run.old_key))]}
+            end
+          end)
+
+        {run.name, views}
+      end
+
+    assert [_, _, %{"accepted" => "R1/K1", "frozen" => false}, again, %{"kind" => "unchanged"}] =
+             extra_views["forged_after"]
+
+    assert again["kind"] == "unchanged"
+
+    assert [_, _, %{"accepted" => "B/C0"}, %{"accepted" => "R1/K1", "routes" => 1}] =
+             extra_views["forged_first"]
+
+    assert [nil, nil, %{"reason" => "authority_changed", "frozen" => true, "routes" => 0}] =
+             extra_views["wrap_watermark"]
+
+    assert [
+             %{"routes" => 2},
+             %{"kind" => "retain_blocked", "reason" => "authority_changed", "routes" => 0},
+             %{"kind" => "retain_blocked", "reason" => "authority_changed", "routes" => 0} = last
+           ] = extra_views["malformed_block"]
+
+    assert last["frozen"] == false
+    beam_views = Map.merge(beam_views, extra_views)
+
     path =
       Path.join(System.tmp_dir!(), "replacement-demo-#{System.unique_integer([:positive])}.json")
 
@@ -170,7 +219,22 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
                 %{"title" => title, "print" => print?, "page" => W.page_json(page)}
               end)
           }
-        end
+        end ++
+          for run <- extra_runs do
+            %{
+              "name" => run.name,
+              "history" => run.history,
+              "steps" =>
+                Enum.map(run.steps, fn {title, page, mode} ->
+                  %{
+                    "title" => title,
+                    "print" => false,
+                    "mode" => to_string(mode),
+                    "page" => W.page_json(page)
+                  }
+                end)
+            }
+          end
     }
 
     File.write!(path, Jason.encode!(doc))
@@ -194,6 +258,104 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     for line <- ts_lines, do: IO.puts(line)
     IO.puts("BEAM == TS: #{if ts == beam_views, do: "ok", else: "MISMATCH"}")
     assert ts == beam_views
+  end
+
+  defp extra_runs(w) do
+    base = w.base
+    log_r1 = W.with_ops(base, [w.r1])
+    page_c0 = W.page(catalogs: [w.c0], logs: [base.log])
+    page_both = W.page(catalogs: [w.k1], logs: [log_r1], proofs: [w.proof])
+    forged = %{w.k1 | signature: <<207, 0::size(504)>>}
+
+    # P2: wrap carries the accepted watermark. C0, then a valid C1 adding a Thread, through
+    # CatalogTrust alone; R1 cites C0 and K1 holds only the Space.
+    thread = Map.fetch!(base.threads, "thread")
+    space_entry = hd(w.c0.catalog.entries)
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    thread_entry = F.pool_thread(base, %{space_entry | route: "/r/" <> F.id("t-route")}, "thread")
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, [space_entry, thread_entry])
+
+    # P1: a blocked CatalogTrust state and a malformed replacement command.
+    f = CatalogTrustVectors.fixture(1)
+    thread_log = W.thread_transfer_log(hd(f.threads))
+    fixture_install = fixture_install(f)
+
+    plain = fn history ->
+      %{catalogs: [], rotations: [], histories: [history], cutoff_proofs: []}
+    end
+
+    [
+      %{
+        name: "forged_after",
+        history: w.h0,
+        install: W.install(w),
+        old_key: base.record.catalog_key,
+        steps: [
+          {"install C0", page_c0, :eval},
+          {"R1 + K1", page_both, :eval},
+          {"forged K1", W.page(catalogs: [forged]), :eval},
+          {"forged K1 again", W.page(catalogs: [forged]), :eval},
+          {"authentic K1", W.page(catalogs: [w.k1]), :eval}
+        ]
+      },
+      %{
+        name: "forged_first",
+        history: w.h0,
+        install: W.install(w),
+        old_key: base.record.catalog_key,
+        steps: [
+          {"install C0", page_c0, :eval},
+          {"R1 + forged K1", W.page(catalogs: [forged], logs: [log_r1], proofs: [w.proof]),
+           :eval},
+          {"nothing new", W.page(), :eval},
+          {"K1", W.page(catalogs: [w.k1]), :eval}
+        ]
+      },
+      %{
+        name: "wrap_watermark",
+        history: w.h0,
+        install: W.install(w),
+        old_key: base.record.catalog_key,
+        steps: [
+          {"C0 via trust", page_c0, :trust},
+          {"C1 via trust", W.page(catalogs: [c1], logs: [base.log, thread.log]), :trust},
+          {"R1 + K1", page_both, :eval}
+        ]
+      },
+      %{
+        name: "malformed_block",
+        history: hd(f.histories),
+        install: fixture_install,
+        old_key: f.space.catalog.pub,
+        steps: [
+          {"accept catalog",
+           %{
+             catalogs: [f.catalog_json],
+             rotations: [],
+             histories: f.histories,
+             cutoff_proofs: []
+           }, :eval},
+          {"thread transfer", plain.(CatalogTrustVectors.raw_history(thread_log)), :eval},
+          {"malformed replace",
+           plain.(
+             CatalogTrustVectors.raw_history(
+               W.with_malformed_replace(f.space_log, f.space.replica)
+             )
+           ), :eval}
+        ]
+      }
+    ]
+  end
+
+  defp fixture_install(f) do
+    %{kind: :propose, next: installed} =
+      CatalogReplacementTrust.prepare_installation(%{
+        review: f.review,
+        history: hd(f.histories),
+        store: %{kind: :verified_fresh, expected: W.expected()}
+      })
+
+    installed
   end
 
   defp json(view), do: view |> Jason.encode!() |> Jason.decode!()

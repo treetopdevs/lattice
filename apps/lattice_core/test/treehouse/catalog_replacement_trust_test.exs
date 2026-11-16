@@ -7,7 +7,8 @@ defmodule Treehouse.CatalogReplacementTrustTest do
   """
   use ExUnit.Case, async: true
 
-  alias Lattice.Identity
+  alias Lattice.{Identity, Log, Op}
+  alias Treehouse.CatalogBindingGraphFixtures, as: F
   alias Treehouse.{CatalogReplacementTrust, CatalogTrust, CatalogTrustVectors, TransportCatalog}
   alias Treehouse.CatalogReplacementWorld, as: W
 
@@ -447,6 +448,237 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       d3 = W.evaluate(waiting.next, W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1]))
       v = W.view(d3, labels, old)
       assert {v["accepted"], v["origin"], v["routes"]} == {"R1/K1", "wss://r1-relay.invalid", 1}
+    end
+  end
+
+  # --- a blocked CatalogTrust state: only an honored replacement may supersede the block ---------
+  #
+  # Rule (D-689): composition and the graph's served routes replace a CatalogTrust block only when
+  # the graph honors a replacement node and its first catalog is accepted with the serving node
+  # bound to that replacement. A replace-shaped op that is malformed, unauthorized or lacks its
+  # catalog never widens what is served: while CatalogTrust is blocked the result is the block's.
+
+  describe "a blocked CatalogTrust state" do
+    defp blocked_state do
+      f = CatalogTrustVectors.fixture(1)
+      installed = install(f)
+      wrapped = CatalogReplacementTrust.wrap(installed)
+      thread_log = W.thread_transfer_log(hd(f.threads))
+      history = CatalogTrustVectors.raw_history(thread_log)
+      incoming = %{catalogs: [], rotations: [], histories: [history], cutoff_proofs: []}
+
+      blocked =
+        CatalogReplacementTrust.evaluate(%{
+          installed: wrapped,
+          expected: @expected,
+          incoming: incoming
+        })
+
+      assert %{kind: :retain_blocked, reason: :authority_changed, routes: []} = blocked
+      {f, wrapped, blocked}
+    end
+
+    test "a malformed replacement command does not lift an authority block" do
+      {f, _wrapped, blocked} = blocked_state()
+
+      history =
+        CatalogTrustVectors.raw_history(W.with_malformed_replace(f.space_log, f.space.replica))
+
+      result =
+        CatalogReplacementTrust.evaluate(%{
+          installed: blocked.next,
+          expected: @expected,
+          incoming: %{catalogs: [], rotations: [], histories: [history], cutoff_proofs: []}
+        })
+
+      assert result.kind == :retain_blocked
+      assert result.routes == []
+      assert result.next.routes == []
+      assert result.next.binding == blocked.next.binding
+      assert result.next.trust.blocked.reason == :authority_changed
+
+      # Replaying the Thread transfer after the malformed op changes nothing either.
+      again =
+        CatalogReplacementTrust.evaluate(%{
+          installed: result.next,
+          expected: @expected,
+          incoming: %{catalogs: [], rotations: [], histories: [history], cutoff_proofs: []}
+        })
+
+      assert again.routes == []
+    end
+
+    # The block is CatalogTrust's old-key `catalog_fork` on the World's bounded Space. Every row
+    # starts from that blocked state; only an honored replacement with its accepted first catalog
+    # may serve, and then only its own routes.
+    test "table: blocked CatalogTrust x {no op, malformed, unauthorized, honored, honored + K1}" do
+      alias Treehouse.CatalogBindingGraphFixtures, as: F
+      w = W.build()
+      base = w.base
+      d1 = W.install(w) |> W.evaluate(W.page(catalogs: [w.c0], logs: [base.log]))
+      assert length(d1.routes) == 1
+
+      moved = Enum.map(F.base_entries(base), &%{&1 | route: "/r/" <> F.id("sibling")})
+      c1 = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, F.base_entries(base))
+      c1b = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, moved)
+      blocked = W.evaluate(d1.next, W.page(catalogs: [c1, c1b]))
+      assert blocked.trust_decision.reason == :catalog_fork
+      assert blocked.routes == []
+
+      outsider = Identity.from_seed("outsider", "r316-table-outsider")
+
+      malformed =
+        Op.new(
+          outsider,
+          base.replica,
+          Log.frontier(base.log),
+          :command,
+          {:replace_catalog_v1, []},
+          cap: nil
+        )
+
+      rows = [
+        {"no op", W.page(logs: [base.log]), 0},
+        {"malformed op", W.page(logs: [W.with_ops(base, [malformed])]), 0},
+        {"unauthorized op", W.page(logs: [W.with_ops(base, [w.rn.op])], proofs: [w.proof]), 0},
+        {"honored op without its catalog",
+         W.page(logs: [W.with_ops(base, [w.r1])], proofs: [w.proof]), 0},
+        {"honored op with accepted catalog",
+         W.page(logs: [W.with_ops(base, [w.r1])], proofs: [w.proof], catalogs: [w.k1]), 1}
+      ]
+
+      for {name, page, count} <- rows do
+        result = W.evaluate(blocked.next, page)
+        assert length(result.routes) == count, name
+        assert result.next.trust.blocked != nil, name
+
+        if count == 0 do
+          assert result.next.routes == [], name
+          assert result.next.binding == blocked.next.binding, name
+        else
+          assert Enum.all?(result.routes, &String.starts_with?(&1.url, "wss://r1-relay.invalid"))
+        end
+      end
+    end
+  end
+
+  # --- a forged signature variant of an authentic catalog (P2) -------------------------------
+
+  describe "signature variants of one catalog id" do
+    setup do
+      w = W.build()
+      base = w.base
+      d1 = W.install(w) |> W.evaluate(W.page(catalogs: [w.c0], logs: [base.log]))
+      log = W.with_ops(base, [w.r1])
+      forged = %{w.k1 | signature: <<207, 0::size(504)>>}
+      %{w: w, d1: d1, log: log, forged: forged}
+    end
+
+    test "a forged variant after the authentic catalog changes nothing and cannot freeze", c do
+      %{w: w, d1: d1, log: log, forged: forged} = c
+      accepted = W.evaluate(d1.next, W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1]))
+      assert accepted.next.binding.accepted.catalog == F.cid(w.k1)
+
+      after_forged = W.evaluate(accepted.next, W.page(catalogs: [forged]))
+
+      assert {after_forged.kind, after_forged.next} == {:unchanged, accepted.next}
+      assert after_forged.routes == accepted.routes
+      refute after_forged.next.binding.frozen
+      assert length(after_forged.next.extra.catalogs) == 1
+    end
+
+    test "a forged variant before the authentic catalog is dropped and the authentic recovers",
+         c do
+      %{w: w, d1: d1, log: log, forged: forged} = c
+      page = W.page(logs: [log], proofs: [w.proof], catalogs: [forged])
+      first = W.evaluate(d1.next, page)
+      assert first.routes == d1.routes or first.routes == []
+      refute first.next.binding.frozen
+
+      authentic = W.evaluate(first.next, W.page(catalogs: [w.k1]))
+      together = W.evaluate(d1.next, W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1]))
+      assert authentic.next == together.next
+      assert authentic.routes == together.routes
+      assert length(authentic.routes) == 1
+    end
+
+    test "a forged variant parked before its op is held is dropped when the op arrives", c do
+      %{w: w, d1: d1, log: log, forged: forged} = c
+      parked = W.evaluate(d1.next, W.page(catalogs: [forged, w.k1]))
+      assert length(parked.next.extra.catalogs) == 2
+
+      done = W.evaluate(parked.next, W.page(logs: [log], proofs: [w.proof]))
+      assert length(done.next.extra.catalogs) == 1
+      assert done.next.binding.accepted.catalog == F.cid(w.k1)
+      refute done.next.binding.frozen
+    end
+  end
+
+  # --- wrap keeps the accepted watermark (P2) ----------------------------------------------
+
+  describe "wrap" do
+    test "carries CatalogTrust's accepted watermark and its cumulative routes" do
+      {w, trust, c1} = trusted_with_thread()
+      wrapped = CatalogReplacementTrust.wrap(trust)
+      assert %{binding: binding, catalog: catalog} = wrapped.binding.accepted
+      assert {binding, catalog} == {w.base.boot.id, F.cid(c1)}
+      assert map_size(Map.fetch!(wrapped.binding.accepted, :routes)) == 2
+    end
+
+    test "a replacement that drops the accepted Thread freezes instead of silently dropping it" do
+      {w, trust, _c1} = trusted_with_thread()
+      wrapped = CatalogReplacementTrust.wrap(trust)
+
+      result =
+        W.evaluate(
+          wrapped,
+          W.page(logs: [W.with_ops(w.base, [w.r1])], proofs: [w.proof], catalogs: [w.k1])
+        )
+
+      assert result.reason == :authority_changed
+      assert result.next.binding.frozen
+      assert result.routes == []
+    end
+
+    defp trusted_with_thread do
+      w = W.build()
+      base = w.base
+      thread = Map.fetch!(base.threads, "thread")
+
+      %{kind: :propose, next: prepared} =
+        CatalogTrust.prepare_installation(%{
+          review: w.review,
+          history: w.h0,
+          store: %{kind: :verified_fresh, expected: @expected}
+        })
+
+      deliver = fn state, catalogs, histories ->
+        %{kind: :propose, next: next} =
+          CatalogTrust.evaluate(%{
+            installed: state,
+            expected: @expected,
+            incoming: %{
+              catalogs: Enum.map(catalogs, &CatalogTrustVectors.artifact_json/1),
+              rotations: [],
+              histories: histories,
+              cutoff_proofs: []
+            }
+          })
+
+        next
+      end
+
+      trust = deliver.(prepared, [w.c0], [w.h0])
+      space_entry = hd(w.c0.catalog.entries)
+
+      thread_entry =
+        F.pool_thread(base, %{space_entry | route: "/r/" <> F.id("t-route")}, "thread")
+
+      c1 =
+        F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, [space_entry, thread_entry])
+
+      histories = [w.h0, CatalogTrustVectors.raw_history(thread.log)]
+      {w, deliver.(trust, [c1], histories), c1}
     end
   end
 end
