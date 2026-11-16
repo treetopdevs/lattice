@@ -27,7 +27,6 @@ import type {
   CatalogBootstrap, CatalogEntry, CatalogEnvelope, CatalogPriorCatalog, CatalogReplacementClaim, CatalogRotationEnvelope,
   TransportCatalog,
 } from "./treehouse_catalog_codec";
-import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 import { observeTreehouseCatalogEntries, treehouseCatalogEntriesStructureStatus } from "./treehouse_catalog_entries";
 import { checkCatalogReplacementAuthority, refuteCatalogReplacementWithoutClosure } from "./treehouse_catalog_replacement_authority";
 
@@ -113,8 +112,9 @@ export interface CatalogBindingGraphInput {
   provenCutoffs: readonly ProvenCutoff[];
   accepted: CatalogBindingAccepted | null;
   /** Row 390 (repair (c)): Thread histories (replica -> authenticated frames) that entry facts are judged against. A forged or
-   * misfiled history is malformed input; an incomplete one (its cutoff does not derive) is left out, so only the catalogs naming
-   * that replica pend. The Space history is always the complete part of `frames`. */
+   * misfiled history is malformed input. Completeness is judged per causal slice, never on the whole history, so a later
+   * Thread op whose dependency is withheld cannot make the catalogs naming that replica pend (rows 386, 390). The Space
+   * history is always the complete part of `frames`. */
   histories?: Readonly<Record<string, readonly unknown[]>>;
 }
 
@@ -188,9 +188,7 @@ async function contextOf(input: CatalogBindingGraphInput): Promise<Ctx | null> {
       if (!checked.valid) return null;
       held.set(frame.id, frame);
     }
-    if ((await deriveTreehouseCatalogCutoff({replica: threadReplica, frames: [...held.values()], rejected: []})).ok) {
-      threads.set(threadReplica, held);
-    }
+    threads.set(threadReplica, held);
   }
   const ops = carrierOpsToSemanticOps([...frames.values()], {}, treehouseCommandDecoders("Treehouse.Space"));
   const byId = index(ops);

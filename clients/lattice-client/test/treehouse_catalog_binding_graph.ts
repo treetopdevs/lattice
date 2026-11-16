@@ -139,6 +139,17 @@ test("authoring escapes a withheld chain under a rotated ancestor (F2)", async (
 
 // F3 (PR #221 round 1, finding 3): a lattice of null citations keeps one copy of the Space entry per floor (without the
 // deduplicating join, 2,048 copies per final head at 12 levels).
+// Rows 386 and 390: entry facts are judged per causal slice, never on a whole Thread history, so a gen1 frame whose dependency
+// is withheld (above every fact op) changes no outcome in any scenario, including the R390 gen1 refusals.
+test("a withheld Thread dependency above every fact op changes no verdict", async () => {
+  const late = vector.late_thread_frame;
+  const replica = decodeCarrierOpFrame(late).replica;
+  assert.ok(Array.isArray(vector.histories[replica]));
+  const histories = {...vector.histories, [replica]: [...vector.histories[replica], late]};
+  const torn = await runVector({...vector, histories});
+  assert.deepEqual(torn.map((o) => o.id), outcomes.map((o) => o.id));
+});
+
 test("null-citation lattice floors hold one entry copy (F3)", async () => {
   const scenario = vector.scenarios.find((s: {name: string}) =>
     s.name === "F3: a lattice of nil citations keeps one copy of each floor entry");

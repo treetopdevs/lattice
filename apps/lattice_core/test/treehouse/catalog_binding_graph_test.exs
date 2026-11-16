@@ -52,6 +52,32 @@ defmodule Treehouse.CatalogBindingGraphTest do
     assert {:ok, _} = resolve(%{space: log, proven: [cut]})
   end
 
+  # Rows 386 and 390: entry facts are judged per causal slice, never on a whole Thread history.
+  # A BEAM `%Log{}` holding an op whose dependency is withheld is not authentic, so it is
+  # malformed input here (CatalogTrust's histories are complete by construction); the TS twin
+  # can hold such a frame and pins that it changes no verdict (binding_graph `late_thread_frame`).
+  test "a Thread history with a withheld dependency is malformed; a complete one is sliced" do
+    c0 = F.c0(@base)
+    late = F.late_thread_op(@base, "gen1")
+    t = @base.threads["gen1"]
+    histories = F.histories(@base)
+
+    torn =
+      Map.put(
+        histories,
+        t.replica,
+        Log.from_ops(t.replica, Map.put(Log.ops(t.log), late.id, late))
+      )
+
+    catalogs = %{F.cid(c0) => c0}
+
+    assert {:error, :malformed_catalog, _} =
+             resolve(%{space: @base.log, catalogs: catalogs, histories: torn})
+
+    assert {:ok, %{decision: %{accepted: true}}} =
+             resolve(%{space: @base.log, catalogs: catalogs, histories: histories})
+  end
+
   test "replacement and rotation nodes carry generation, service, origin and parents (D-270)" do
     c0 = F.c0(@base)
     r = F.replacement(@base, @base.log, "fields")

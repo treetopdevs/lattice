@@ -47269,6 +47269,39 @@
       }
     ]
   },
+  "late_thread_frame": {
+    "author": "f4sfPUwnSrJkeaw5oS6r6ubzao8Mj6trx9v6T7Bk2z8=",
+    "body": [
+      "tuple",
+      [
+        [
+          "atom",
+          "create_thread"
+        ],
+        [
+          "list",
+          [
+            [
+              "bin",
+              "VGhyZWFkIGdlbjEgbGF0ZQ=="
+            ]
+          ]
+        ]
+      ]
+    ],
+    "cap": [
+      "bin",
+      "ajJrRURudTJSQmd5azkzQWJUNWJteFFQRml6MWl3cHpDZVJnaExjUlhpZw=="
+    ],
+    "deps": [
+      "DNIYgRfxmtpB-_1dTslTT5joayIFy6UhzfCnrKT5-uI"
+    ],
+    "id": "KStgAI6N4vaN7izXTaerJGjeZlIBtfUYuXH_Y-MYmUk",
+    "kind": "command",
+    "replica": "replica:treehouse:thread:ogWSEZFjewwut_sZ8g2n66VKlr8RCl-ED1B_HsOTzlw#authority:bounded-continuation-v1#root:s5d8V4wU2jrrz0V1fdTH2lNHh9jX_GLXis3Cd0poND4",
+    "sig": "oS5kzznYBTlGItNHEuzu1jKnrnCSqD5EdJW0lwVoDtAiaV0gJY432KhMTfldNvTe1zBXHvCOG1r5iwVDibSBBg==",
+    "v": 1
+  },
   "scenarios": [
     {
       "labels": {

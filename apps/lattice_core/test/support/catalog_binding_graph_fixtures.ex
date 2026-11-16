@@ -262,6 +262,19 @@ defmodule Treehouse.CatalogBindingGraphFixtures do
     }
   end
 
+  @doc """
+  A later `create_thread` op of the pool Thread `name`, signed by its root, whose one
+  dependency no history holds (a withheld op). It sits above every fact op, so no entry-fact
+  slice contains it (rows 386, 390).
+  """
+  def late_thread_op(base, name) do
+    t = Map.fetch!(base.threads, name)
+    {:genesis, d, _} = t.genesis.body
+
+    body = {:create_thread, ["Thread #{name} late"]}
+    Op.new(t.root, t.replica, [id("r390-withheld-" <> name)], :command, body, cap: d.id)
+  end
+
   @doc "Every pool Thread history, in the `replica => %Log{}` shape the resolver takes."
   def histories(base), do: Map.new(base.threads, fn {_name, t} -> {t.replica, t.log} end)
 

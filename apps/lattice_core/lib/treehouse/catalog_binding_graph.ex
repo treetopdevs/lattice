@@ -59,7 +59,6 @@ defmodule Treehouse.CatalogBindingGraph do
   alias Lattice.{Authority, Dag, Identity, Log}
 
   alias Treehouse.{
-    CatalogCutoff,
     CatalogEntries,
     CatalogReplacementAuthority,
     Space,
@@ -355,21 +354,16 @@ defmodule Treehouse.CatalogBindingGraph do
 
   # Row 390 (repair (c)): the Thread histories that entry facts are judged against, in the
   # `replica => %Log{}` shape `Treehouse.CatalogTrust` holds. A forged or misfiled history is
-  # malformed input; an incomplete one (its cutoff does not derive) is omitted, so only the
-  # catalogs naming that replica pend. The Space history is always the complete part of `space`.
+  # malformed input. Completeness is judged per causal slice (`slices/2`), never on the whole
+  # history: a later Thread op whose dependency is withheld leaves every slice below it intact,
+  # so a withholder cannot make the catalogs naming that replica pend (rows 386, 390). The Space
+  # history is always the complete part of `space`.
   defp thread_histories(histories, space) when is_map(histories) do
     Enum.reduce_while(histories, {:ok, %{}}, fn
       {replica, %Log{replica: replica} = log}, {:ok, acc} when replica != space ->
-        cond do
-          Log.verify_authenticity(log) != :ok ->
-            {:halt, :error}
-
-          match?({:ok, _}, CatalogCutoff.derive(log)) ->
-            {:cont, {:ok, Map.put(acc, replica, log)}}
-
-          true ->
-            {:cont, {:ok, acc}}
-        end
+        if Log.verify_authenticity(log) == :ok,
+          do: {:cont, {:ok, Map.put(acc, replica, log)}},
+          else: {:halt, :error}
 
       _, _ ->
         {:halt, :error}

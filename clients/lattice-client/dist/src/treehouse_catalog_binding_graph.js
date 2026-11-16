@@ -18,7 +18,6 @@ import { compareUtf8 } from "./op";
 import { verifyEd25519 } from "./signature";
 import { treehouseCommandDecoders, treehouseSpaceSchema } from "./treehouse";
 import { canonicalBytesForCatalogReplacementClaim, canonicalBytesForCatalogRotation, canonicalBytesForCatalogRotationPossession, catalogBootstrapToCarrierTerm, catalogInventoryId, verifyCatalogEnvelope, verifyCatalogReplacementPossession, } from "./treehouse_catalog_codec";
-import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 import { observeTreehouseCatalogEntries, treehouseCatalogEntriesStructureStatus } from "./treehouse_catalog_entries";
 import { checkCatalogReplacementAuthority, refuteCatalogReplacementWithoutClosure } from "./treehouse_catalog_replacement_authority";
 const maxSafe = Number.MAX_SAFE_INTEGER;
@@ -105,9 +104,7 @@ async function contextOf(input) {
                 return null;
             held.set(frame.id, frame);
         }
-        if ((await deriveTreehouseCatalogCutoff({ replica: threadReplica, frames: [...held.values()], rejected: [] })).ok) {
-            threads.set(threadReplica, held);
-        }
+        threads.set(threadReplica, held);
     }
     const ops = carrierOpsToSemanticOps([...frames.values()], {}, treehouseCommandDecoders("Treehouse.Space"));
     const byId = index(ops);

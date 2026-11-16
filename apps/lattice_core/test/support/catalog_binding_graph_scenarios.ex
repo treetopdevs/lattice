@@ -1718,6 +1718,10 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         Map.new(F.histories(base), fn {replica, log} ->
           {replica, log |> Log.topo_ops() |> Enum.map(&Wire.encode_op/1)}
         end),
+      # Rows 386 and 390: a gen1 Thread frame whose dependency is withheld. The TS twin can hold
+      # it in a history (BEAM's authentic `%Log{}` cannot); entry facts are judged per causal
+      # slice, so it changes no verdict.
+      "late_thread_frame" => Wire.encode_op(F.late_thread_op(base, "gen1")),
       "artifacts" => artifacts,
       "scenarios" =>
         Enum.map(runs, fn {s, rs} ->
