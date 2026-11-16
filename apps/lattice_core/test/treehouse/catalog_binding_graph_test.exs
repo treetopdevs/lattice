@@ -398,5 +398,56 @@ defmodule Treehouse.CatalogBindingGraphTest do
              G.advance(state, {:error, :malformed_catalog, %{ids: []}})
   end
 
+  # Design section 1.5: the only branch that lifts `frozen` needs an accepting decision that
+  # clears; an accepting decision that does not clear leaves a frozen client frozen.
+  test "advance/2 lifts frozen only on an accepting decision that clears" do
+    a = %{binding: "b", generation: 0, catalog: "c", revision: 0, routes: %{"/a" => "space"}}
+    frozen = %{accepted: a, frozen: true}
+
+    result = fn accepted?, clears?, block ->
+      {:ok,
+       %{
+         catalogs: %{"k" => %{entries: [%{route: "/k", replica: "space"}]}},
+         decision: %{
+           accepted: accepted?,
+           head: "h",
+           generation: 1,
+           catalog: if(accepted?, do: "k"),
+           revision: 0,
+           clears_authority_changed: clears?,
+           block: block,
+           serving: if(accepted?, do: "k")
+         }
+       }}
+    end
+
+    assert G.advance(frozen, result.(true, false, nil)) == %{
+             accepted: a,
+             frozen: true,
+             serving: nil
+           }
+
+    assert %{accepted: %{binding: "h", catalog: "k", routes: routes}, frozen: false, serving: "k"} =
+             G.advance(frozen, result.(true, true, nil))
+
+    assert routes == %{"/a" => "space", "/k" => "space"}
+    open = %{frozen | frozen: false}
+    freeze = %{reason: :authority_changed, ids: ["h"], freeze: true}
+
+    assert G.advance(open, result.(false, false, freeze)) == %{
+             accepted: a,
+             frozen: true,
+             serving: nil
+           }
+
+    derived = %{reason: :catalog_authority_refused, ids: ["h"], freeze: false}
+
+    assert G.advance(open, result.(false, false, derived)) == %{
+             accepted: a,
+             frozen: false,
+             serving: nil
+           }
+  end
+
   defp catalogs(list), do: Map.new(list, &{F.cid(&1), &1})
 end

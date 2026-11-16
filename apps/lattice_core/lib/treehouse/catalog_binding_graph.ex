@@ -1410,13 +1410,15 @@ defmodule Treehouse.CatalogBindingGraph do
   # Covers(H, K | A): under the watermark's own binding a previous-chain descendant at no lower
   # revision; otherwise Carry (K extends the watermark catalog's entries), Seen (H's lineage
   # cites the watermark catalog's lineage, or descends strictly from a replacement that closed
-  # it) and, in both cases, RouteCompat (no entry re-points a route ever served).
+  # it) and, in both cases, RouteCompat (no entry re-points a route ever served). Every failure is
+  # relative to this client's watermark, so it is `catalog_rollback` (a union-level reason),
+  # never the intrinsic `invalid_catalog_transition` (D-279).
   defp covers(a, h, k, graph, nodes_all) do
     kc = graph.catalogs[k]
 
     cond do
       not route_compat?(routes(a), kc.entries) ->
-        {:error, :invalid_catalog_transition}
+        {:error, :catalog_rollback}
 
       h == a.binding ->
         if on_chain?(a.catalog, k, graph.previous) and kc.revision >= a.revision,
@@ -1427,7 +1429,7 @@ defmodule Treehouse.CatalogBindingGraph do
         {:error, :catalog_rollback}
 
       not extends?(graph.catalogs[a.catalog].entries, kc.entries) ->
-        {:error, :invalid_catalog_transition}
+        {:error, :catalog_rollback}
 
       true ->
         :ok

@@ -797,17 +797,19 @@ function decide(a, graph, nodesAll, closed, outRot) {
     return held;
 }
 // Covers(H, K | A): under the watermark's own binding a previous-chain descendant at no lower revision; otherwise Seen and
-// Carry; in both cases RouteCompat (no entry re-points a route ever served). Returns null when covered, else the reason.
+// Carry; in both cases RouteCompat (no entry re-points a route ever served). Returns null when covered, else the reason:
+// every failure is relative to this client's watermark, so it is catalog_rollback, never the intrinsic
+// invalid_catalog_transition (D-279).
 function covers(a, h, k, graph, nodesAll) {
     const kc = graph.catalogs.get(k);
     if (!routeCompat(routesOf(a), kc.entries))
-        return "invalid_catalog_transition";
+        return "catalog_rollback";
     if (h === a.binding)
         return onChain(a.catalog, k, graph.previous) && kc.revision >= a.revision ? null : "catalog_rollback";
     if (!seen(a, h, graph, nodesAll))
         return "catalog_rollback";
     if (!extendsEntries(graph.catalogs.get(a.catalog).entries, kc.entries))
-        return "invalid_catalog_transition";
+        return "catalog_rollback";
     return null;
 }
 function seen(a, h, graph, nodesAll) {

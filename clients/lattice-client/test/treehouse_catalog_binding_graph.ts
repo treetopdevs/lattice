@@ -8,8 +8,10 @@ import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "../src/carrier";
 import { prepareTreehouseCatalogReplacementFromFrames } from "../src/index";
 import type { TreehouseCatalogReplacementRequest } from "../src/index";
 import { treehouseCommandDecoders } from "../src/treehouse";
-import { nextCatalogGeneration, resolveCatalogBindingGraph } from "../src/treehouse_catalog_binding_graph";
-import type { ProvenCutoff } from "../src/treehouse_catalog_binding_graph";
+import { advanceCatalogBindingState, nextCatalogGeneration, resolveCatalogBindingGraph } from "../src/treehouse_catalog_binding_graph";
+import type {
+  CatalogBindingBlock, CatalogBindingGraph, CatalogBindingGraphResult, ProvenCutoff,
+} from "../src/treehouse_catalog_binding_graph";
 import {
   catalogBootstrapFromCarrierTerm, catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm,
 } from "../src/treehouse_catalog_codec";
@@ -104,6 +106,26 @@ test("authoring prepares a resolution past three rotation heads (head-limit esca
   assert.deepEqual(ok.attempt.claim.priorCatalogs, [{binding: labels.R1, catalog: labels.K1}]);
   assert.deepEqual(await prepare(request([labels.B!], [{binding: labels.B!, catalog: labels.C0!}])),
     {ok: false, reason: "control_history_limit"});
+});
+
+// Design section 1.5: only an accepting decision that clears lifts frozen; a freezing block sets it.
+test("advanceCatalogBindingState lifts frozen only on an accepting decision that clears", () => {
+  const a = {binding: "b", generation: 0, catalog: "c", revision: 0, routes: {"/a": "space"}};
+  const result = (accepted: boolean, clears: boolean, block: CatalogBindingBlock | null): CatalogBindingGraphResult => ({ok: true,
+    graph: {catalogs: new Map([["k", {entries: [{route: "/k", replica: "space"}]}]]),
+      decision: {accepted, head: "h", generation: 1, catalog: accepted ? "k" : null, revision: 0, clearsAuthorityChanged: clears,
+        block, serving: accepted ? "k" : null}} as unknown as CatalogBindingGraph});
+  const frozen = {accepted: a, frozen: true};
+  assert.deepEqual(advanceCatalogBindingState(frozen, result(true, false, null)), {accepted: a, frozen: true, serving: null});
+  assert.deepEqual(advanceCatalogBindingState(frozen, result(true, true, null)), {accepted: {binding: "h", generation: 1,
+    catalog: "k", revision: 0, routes: {"/a": "space", "/k": "space"}}, frozen: false, serving: "k"});
+  const open = {accepted: a, frozen: false};
+  assert.deepEqual(advanceCatalogBindingState(open, result(false, false, {reason: "authority_changed", ids: ["h"], freeze: true})),
+    {accepted: a, frozen: true, serving: null});
+  assert.deepEqual(advanceCatalogBindingState(open,
+    result(false, false, {reason: "catalog_authority_refused", ids: ["h"], freeze: false})), {accepted: a, frozen: false, serving: null});
+  assert.deepEqual(advanceCatalogBindingState(frozen, {ok: false, reason: "trust_pending", detail: {ids: []}}),
+    {accepted: a, frozen: true, serving: "unchanged"});
 });
 
 test("binding_graph_ts_v1.json equals this runtime's outcomes", () => {

@@ -318,6 +318,8 @@ defmodule Treehouse.CatalogReplacementAuthoring do
         {:error, reason, _detail} -> {:error, reason}
       end
     end
+  rescue
+    _ -> {:error, :stale_verified_state}
   end
 
   defp retained_refusals(graph) do
