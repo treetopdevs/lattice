@@ -704,22 +704,29 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     end
 
     all = [c0, ka, kb]
+    l_onlya = add(lab, [onlya])
+    l_res = add(l_onlya, [res])
 
-    both(
-      "sibling replacements are two heads (catalog_fork), resolution covers both",
-      labels,
-      [
+    res2 =
+      F.replacement(base, l_res, "res2",
+        parents: Enum.sort([onlya.id, res.id]),
+        prior_catalogs:
+          Enum.sort([
+            %{binding: onlya.id, catalog: nil},
+            %{binding: res.id, catalog: F.cid(kres)}
+          ]),
+        generation: 3
+      )
+
+    kres2 = F.first(base, res2)
+    labels = Map.merge(labels, %{"Res2" => res2.id, "KRes2" => F.cid(kres2)})
+
+    # PR #221 CodeRabbit thread (scenarios :712): a retained-history variant in which OnlyA stays
+    # held beside Res. Res does not cite OnlyA, so the two fork until Res2 cites both.
+    retained =
+      one("sibling replacements with OnlyA retained beside the resolution", labels, [
         step(
-          ev(add(base.log, [a]), catalogs: [c0, ka]),
-          ok(["A"], closed: ["B"], decision: accept("A", "KA"))
-        ),
-        step(ev(lab, catalogs: all), fork.([])),
-        step(
-          ev(add(lab, [nodeps]), rotations: [tb], catalogs: all),
-          fork.(closed_out: ["TB"], raw: %{"Nodeps" => "invalid_catalog_transition"})
-        ),
-        step(
-          ev(add(lab, [onlya]), catalogs: all),
+          ev(l_onlya, catalogs: all),
           ok(["Bs", "OnlyA"],
             closed: ["A", "B"],
             forks: ["heads"],
@@ -727,22 +734,63 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           )
         ),
         step(
-          ev(add(lab, [res]), catalogs: all ++ [kres]),
-          ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes", clears: true))
-        )
-      ],
-      [
-        step(
-          ev(add(base.log, [b]), catalogs: [c0, kb]),
-          ok(["Bs"], closed: ["B"], decision: accept("Bs", "KB"))
+          ev(l_res, catalogs: all ++ [kres]),
+          ok(["OnlyA", "Res"],
+            closed: ["A", "B", "Bs"],
+            forks: ["heads"],
+            decision: [reason: "catalog_fork", block: "catalog_fork"]
+          )
         ),
-        step(ev(lab, catalogs: all), fork.([])),
         step(
-          ev(add(lab, [res]), catalogs: all ++ [kres]),
-          ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes", clears: true))
+          ev(add(l_res, [res2]), catalogs: all ++ [kres, kres2]),
+          ok(["Res2"],
+            closed: ["A", "B", "Bs", "OnlyA", "Res"],
+            decision: accept("Res2", "KRes2")
+          )
         )
-      ]
-    )
+      ])
+
+    [
+      retained
+      | both(
+          "sibling replacements are two heads (catalog_fork), resolution covers both",
+          labels,
+          [
+            step(
+              ev(add(base.log, [a]), catalogs: [c0, ka]),
+              ok(["A"], closed: ["B"], decision: accept("A", "KA"))
+            ),
+            step(ev(lab, catalogs: all), fork.([])),
+            step(
+              ev(add(lab, [nodeps]), rotations: [tb], catalogs: all),
+              fork.(closed_out: ["TB"], raw: %{"Nodeps" => "invalid_catalog_transition"})
+            ),
+            step(
+              ev(add(lab, [onlya]), catalogs: all),
+              ok(["Bs", "OnlyA"],
+                closed: ["A", "B"],
+                forks: ["heads"],
+                decision: [reason: "catalog_fork", block: "catalog_fork"]
+              )
+            ),
+            step(
+              ev(add(lab, [res]), catalogs: all ++ [kres]),
+              ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes", clears: true))
+            )
+          ],
+          [
+            step(
+              ev(add(base.log, [b]), catalogs: [c0, kb]),
+              ok(["Bs"], closed: ["B"], decision: accept("Bs", "KB"))
+            ),
+            step(ev(lab, catalogs: all), fork.([])),
+            step(
+              ev(add(lab, [res]), catalogs: all ++ [kres]),
+              ok(["Res"], closed: ["A", "B", "Bs"], decision: accept("Res", "KRes", clears: true))
+            )
+          ]
+        )
+    ]
   end
 
   defp nonce_reuse(base) do

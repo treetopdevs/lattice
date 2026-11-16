@@ -613,8 +613,8 @@ defmodule Treehouse.CatalogBindingGraphTest do
 
   # S16g (C4): the old catalog key signs K1x under R1 naming a nonexistent `previous`; the
   # verifier is trust_pending and keeps serving K1 (R1 open, not frozen). R2 citing {R1, K1}
-  # escapes it; the post-sign view closes K1x out. When K1x's real chain arrives it descends
-  # from K1 (a replacement's first catalog is pinned by its inventory), so it stays closed out.
+  # escapes it; the post-sign view closes K1x out. Here K1x's real chain descends from the cited
+  # revision-0 K1, so it stays closed out (the forking case is the next test).
   test "S16g: a compromised catalog key's chain-pending catalog cannot stall its replacement" do
     c0 = F.c0(@base)
 
@@ -659,6 +659,52 @@ defmodule Treehouse.CatalogBindingGraphTest do
 
     assert g.catalog_status[F.cid(k1x)] == :closed_out and
              g.catalog_status[F.cid(k1y)] == :closed_out
+  end
+
+  # S16g asymmetry (C4, D-A18 class): with the cited K1 at revision 1, the old key's K1' is a
+  # revision-1 sibling on K1_0 and K1x (revision 2) sits on the withheld K1'. The preflight
+  # escapes K1x; once K1' arrives, K1' and K1x descend from no cited catalog, so they are
+  # uncovered under the closed R1 and fork, needing a further resolution that cites them.
+  test "S16g: a chain-pending catalog dropped by the escape can fork once its chain arrives" do
+    c0 = F.c0(@base)
+
+    r1 =
+      F.replacement(@base, @base.log, "s16ga-r1",
+        prior_catalogs: [%{binding: @base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    k1_0 = F.first(@base, r1)
+    log = F.append(@base.log, [r1.op])
+    entries = k1_0.catalog.entries
+    k1 = F.catalog(@base, r1.id, 1, F.cid(k1_0), r1.catalog_key, entries)
+    moved = for e <- entries, do: %{e | route: "/r/" <> F.id("s16ga-moved")}
+    k1p = F.catalog(@base, r1.id, 1, F.cid(k1_0), r1.catalog_key, moved)
+    k1x = F.catalog(@base, r1.id, 2, F.cid(k1p), r1.catalog_key, moved)
+    priors = [%{binding: r1.id, catalog: F.cid(k1)}]
+    claim = {[r1.id], priors, 2}
+    held = {[], [c0, k1_0, k1, k1x]}
+
+    assert {:error, :trust_pending, %{ids: [id]}} =
+             resolve(%{space: log, catalogs: catalogs([c0, k1_0, k1, k1x])})
+
+    assert id == F.cid(k1x)
+    assert {:ok, _} = prep(log, "s16ga-r2", @base.admin, claim, entries, held)
+    g = post_sign(log, "s16ga-r2", [], claim, held)
+    assert g.catalog_status[F.cid(k1x)] == :closed_out
+
+    r2 =
+      F.replacement(@base, log, "s16ga-r2",
+        parents: [r1.id],
+        prior_catalogs: priors,
+        generation: 2
+      )
+
+    {:ok, g} =
+      resolve(%{space: F.append(log, [r2.op]), catalogs: catalogs([c0, k1_0, k1, k1p, k1x])})
+
+    assert g.catalog_status[F.cid(k1p)] == :uncovered
+    assert g.catalog_status[F.cid(k1x)] == :uncovered
+    assert Enum.any?(g.forks, &(&1.kind == :catalog)) and r1.id in g.fork_bindings
   end
 
   # S17d (row 387): R1 is refused by a holder change; its old key signs K1a (+Thread at /r/p)

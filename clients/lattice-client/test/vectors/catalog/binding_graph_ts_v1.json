@@ -2091,6 +2091,395 @@
       }
     },
     {
+      "scenario": "sibling replacements with OnlyA retained beside the resolution",
+      "step": 1,
+      "label": {
+        "heads": [
+          "Bs",
+          "OnlyA"
+        ],
+        "closed": [
+          "A",
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "A",
+          "B",
+          "Bs",
+          "OnlyA"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [
+          "heads"
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": "catalog_fork",
+          "freeze": false,
+          "head": null,
+          "catalog": null,
+          "clears": false,
+          "serving": null
+        },
+        "after": {
+          "frozen": false,
+          "serving": null
+        }
+      },
+      "ts": {
+        "heads": [
+          "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io",
+          "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "ATl7rKH6PVperWPH-ofjD3Dg_EWxf5J98euU6IQ7JqQ"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "ATl7rKH6PVperWPH-ofjD3Dg_EWxf5J98euU6IQ7JqQ": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w": [
+            "ByiejV8FmlbBkMEHQkn4Thrsm5cu9J3XZfMGkdFnbmo"
+          ]
+        },
+        "forks": [
+          {
+            "kind": "heads",
+            "binding": null,
+            "ids": [
+              "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io",
+              "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w"
+            ]
+          }
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": {
+            "reason": "catalog_fork",
+            "ids": [
+              "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io",
+              "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w"
+            ],
+            "freeze": false
+          },
+          "head": null,
+          "catalog": null,
+          "clears": false,
+          "serving": null,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": null,
+          "frozen": false,
+          "serving": null
+        }
+      }
+    },
+    {
+      "scenario": "sibling replacements with OnlyA retained beside the resolution",
+      "step": 2,
+      "label": {
+        "heads": [
+          "OnlyA",
+          "Res"
+        ],
+        "closed": [
+          "A",
+          "B",
+          "Bs"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "A",
+          "B",
+          "Bs",
+          "OnlyA",
+          "Res"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [
+          "heads"
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": "catalog_fork",
+          "freeze": false,
+          "head": null,
+          "catalog": null,
+          "clears": false,
+          "serving": null
+        },
+        "after": {
+          "frozen": false,
+          "serving": null
+        }
+      },
+      "ts": {
+        "heads": [
+          "7PY40vnSVR0hlCv0-4ZyOS38dDh9Y7n9jJIIoK9IWKM",
+          "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "ATl7rKH6PVperWPH-ofjD3Dg_EWxf5J98euU6IQ7JqQ",
+          "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7PY40vnSVR0hlCv0-4ZyOS38dDh9Y7n9jJIIoK9IWKM": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "ATl7rKH6PVperWPH-ofjD3Dg_EWxf5J98euU6IQ7JqQ": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "7PY40vnSVR0hlCv0-4ZyOS38dDh9Y7n9jJIIoK9IWKM": [
+            "KP021YBnCYK21iXIf1fJS1lzigJHAmMCpuKnvtsbxUM"
+          ]
+        },
+        "forks": [
+          {
+            "kind": "heads",
+            "binding": null,
+            "ids": [
+              "7PY40vnSVR0hlCv0-4ZyOS38dDh9Y7n9jJIIoK9IWKM",
+              "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io"
+            ]
+          }
+        ],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_fork",
+          "block": {
+            "reason": "catalog_fork",
+            "ids": [
+              "7PY40vnSVR0hlCv0-4ZyOS38dDh9Y7n9jJIIoK9IWKM",
+              "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io"
+            ],
+            "freeze": false
+          },
+          "head": null,
+          "catalog": null,
+          "clears": false,
+          "serving": null,
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": null,
+          "frozen": false,
+          "serving": null
+        }
+      }
+    },
+    {
+      "scenario": "sibling replacements with OnlyA retained beside the resolution",
+      "step": 3,
+      "label": {
+        "heads": [
+          "Res2"
+        ],
+        "closed": [
+          "A",
+          "B",
+          "Bs",
+          "OnlyA",
+          "Res"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "A",
+          "B",
+          "Bs",
+          "OnlyA",
+          "Res",
+          "Res2"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "Res2",
+          "catalog": "KRes2",
+          "clears": false,
+          "serving": "KRes2"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "KRes2"
+        }
+      },
+      "ts": {
+        "heads": [
+          "0MdrjvPIGb0Cbw9gXHPZT0mWUdPWUIA6bq_cQNm7vwo"
+        ],
+        "closed": [
+          "7PY40vnSVR0hlCv0-4ZyOS38dDh9Y7n9jJIIoK9IWKM",
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io",
+          "ATl7rKH6PVperWPH-ofjD3Dg_EWxf5J98euU6IQ7JqQ",
+          "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "0MdrjvPIGb0Cbw9gXHPZT0mWUdPWUIA6bq_cQNm7vwo": {
+            "kind": "replacement",
+            "generation": 3,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7PY40vnSVR0hlCv0-4ZyOS38dDh9Y7n9jJIIoK9IWKM": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "8Ta2p4tXq78UlaSR2h_W2SpBCR6_cmtD1erj_l2q1Io": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "ATl7rKH6PVperWPH-ofjD3Dg_EWxf5J98euU6IQ7JqQ": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "_cs7DtSu2mNYZG57-B8dkHlbtw8MpNa6RsX4vnUPM9w": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "0MdrjvPIGb0Cbw9gXHPZT0mWUdPWUIA6bq_cQNm7vwo": [
+            "xZCf7A1QwWKsWkMffLF17BvuM3Y1lNAMHssBOQSLQaw"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "0MdrjvPIGb0Cbw9gXHPZT0mWUdPWUIA6bq_cQNm7vwo",
+          "catalog": "xZCf7A1QwWKsWkMffLF17BvuM3Y1lNAMHssBOQSLQaw",
+          "clears": false,
+          "serving": "xZCf7A1QwWKsWkMffLF17BvuM3Y1lNAMHssBOQSLQaw",
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": {
+            "binding": "0MdrjvPIGb0Cbw9gXHPZT0mWUdPWUIA6bq_cQNm7vwo",
+            "generation": 3,
+            "catalog": "xZCf7A1QwWKsWkMffLF17BvuM3Y1lNAMHssBOQSLQaw",
+            "revision": 0,
+            "routes": {
+              "/r/9znT6YU6FWZ4Z7hHb96d6rMaQpoKfigr6feTjV7nXlg": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "xZCf7A1QwWKsWkMffLF17BvuM3Y1lNAMHssBOQSLQaw"
+        }
+      }
+    },
+    {
       "scenario": "sibling replacements are two heads (catalog_fork), resolution covers both/ab",
       "step": 1,
       "label": {
