@@ -500,5 +500,259 @@ defmodule Treehouse.CatalogBindingGraphTest do
            }
   end
 
+  # --- row 386 (C4) and row 387 in the authoring preflight ----------------------------------
+
+  alias Treehouse.CatalogReplacementAuthoring, as: A
+
+  defp prep(log, name, author, claim, entries, held, replica_logs \\ %{}) do
+    {parents, priors, generation} = claim
+    {rotations, cats} = held
+    service = F.identity("service-" <> name)
+    service_id = F.id("service-id-" <> name)
+
+    A.prepare(
+      log,
+      %{
+        author: author.pub,
+        nonce: F.id("nonce-" <> name),
+        parents: parents,
+        prior_catalogs: priors,
+        generation: generation,
+        new_catalog_key: F.identity("catalog-" <> name).pub,
+        new_service_id: service_id,
+        new_service_key: service.pub,
+        new_origin: "wss://" <> name <> "-relay.invalid",
+        entries: moved_to(entries, service_id, service.pub),
+        replica_logs: replica_logs,
+        rotations: Enum.map(rotations, & &1.envelope),
+        catalogs: cats
+      },
+      %{}
+    )
+  end
+
+  defp moved_to(entries, sid, key),
+    do: for(e <- entries, do: %{e | service_id: sid, service_key: key})
+
+  # The verifier's view of the signed claim (the D-629 post-sign check): the full retained input
+  # plus an op with the same parents and priors resolves with it as the sole head and no fork.
+  defp post_sign(log, name, author_opts, {parents, priors, generation}, {rotations, cats}) do
+    r =
+      F.replacement(
+        @base,
+        log,
+        name,
+        [parents: parents, prior_catalogs: priors, generation: generation] ++ author_opts
+      )
+
+    {:ok, g} =
+      resolve(%{
+        space: F.append(log, [r.op]),
+        rotations: Map.new(rotations, &{&1.id, &1.envelope}),
+        catalogs: catalogs(cats)
+      })
+
+    assert g.heads == [r.id] and g.forks == []
+    g
+  end
+
+  defp nominee_opts(t2),
+    do: [
+      author: @base.nominee,
+      claim: %{author: @base.nominee.pub},
+      cap: t2.delegation.id,
+      holder_epoch: t2.op.id
+    ]
+
+  # S16f: an old-key rotation TR under the accepted R1 names a withheld prior catalog. The
+  # verifier holds trust_pending (TR pends under the open R1), but a resolution citing {R1, K1}
+  # closes TR out, so the preflight escapes it and the post-sign view passes.
+  test "S16f: a resolution can be prepared past a withheld rotation prior under its parent" do
+    c0 = F.c0(@base)
+
+    r1 =
+      F.replacement(@base, @base.log, "s16f-r1",
+        prior_catalogs: [%{binding: @base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    k1 = F.first(@base, r1)
+    log = F.append(@base.log, [r1.op])
+    k1n = F.catalog(@base, r1.id, 1, F.cid(k1), r1.catalog_key, k1.catalog.entries)
+
+    tr =
+      F.rotation(
+        @base,
+        %{id: r1.id, generation: 1},
+        k1n,
+        r1.catalog_key,
+        F.identity("s16f-tr"),
+        "s16f-tr"
+      )
+
+    held = {[tr], [c0, k1]}
+
+    assert {:error, :trust_pending, %{ids: [id], freeze: false}} =
+             resolve(%{
+               space: log,
+               rotations: %{tr.id => tr.envelope},
+               catalogs: catalogs([c0, k1])
+             })
+
+    assert id == tr.id
+    claim = {[r1.id], [%{binding: r1.id, catalog: F.cid(k1)}], 2}
+    assert {:ok, _} = prep(log, "s16f-r2", @base.admin, claim, k1.catalog.entries, held)
+    g = post_sign(log, "s16f-r2", [], claim, held)
+    assert Map.has_key?(g.closed_out, tr.id)
+
+    # A claim that does not close TR out keeps trust_pending.
+    other = {[@base.boot.id], [%{binding: @base.boot.id, catalog: F.cid(c0)}], 1}
+
+    assert prep(log, "s16f-rb", @base.admin, other, k1.catalog.entries, held) ==
+             {:error, :trust_pending}
+  end
+
+  # S16g (C4): the old catalog key signs K1x under R1 naming a nonexistent `previous`; the
+  # verifier is trust_pending and keeps serving K1 (R1 open, not frozen). R2 citing {R1, K1}
+  # escapes it; the post-sign view closes K1x out. When K1x's real chain arrives it descends
+  # from K1 (a replacement's first catalog is pinned by its inventory), so it stays closed out.
+  test "S16g: a compromised catalog key's chain-pending catalog cannot stall its replacement" do
+    c0 = F.c0(@base)
+
+    r1 =
+      F.replacement(@base, @base.log, "s16g-r1",
+        prior_catalogs: [%{binding: @base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    k1 = F.first(@base, r1)
+    log = F.append(@base.log, [r1.op])
+    k1y = F.catalog(@base, r1.id, 1, F.cid(k1), r1.catalog_key, k1.catalog.entries)
+    k1x = F.catalog(@base, r1.id, 2, F.cid(k1y), r1.catalog_key, k1.catalog.entries)
+
+    accepted = %{
+      binding: r1.id,
+      generation: 1,
+      catalog: F.cid(k1),
+      revision: 0,
+      routes: Map.new(k1.catalog.entries, &{&1.route, &1.replica})
+    }
+
+    {result, next} =
+      F.deliver(@base, %{accepted: accepted, frozen: false}, %{
+        space: log,
+        rotations: %{},
+        catalogs: catalogs([c0, k1, k1x]),
+        proven: []
+      })
+
+    k1_id = F.cid(k1)
+    assert {:error, :trust_pending, %{freeze: false, serving: ^k1_id}} = result
+    assert next.serving == k1_id and next.frozen == false
+
+    claim = {[r1.id], [%{binding: r1.id, catalog: F.cid(k1)}], 2}
+
+    assert {:ok, _} =
+             prep(log, "s16g-r2", @base.admin, claim, k1.catalog.entries, {[], [c0, k1, k1x]})
+
+    g = post_sign(log, "s16g-r2", [], claim, {[], [c0, k1, k1x]})
+    assert g.catalog_status[F.cid(k1x)] == :closed_out
+    g = post_sign(log, "s16g-r2", [], claim, {[], [c0, k1, k1y, k1x]})
+
+    assert g.catalog_status[F.cid(k1x)] == :closed_out and
+             g.catalog_status[F.cid(k1y)] == :closed_out
+  end
+
+  # S17d (row 387): R1 is refused by a holder change; its old key signs K1a (+Thread at /r/p)
+  # and K1b (Space moved to /r/p). A claim citing both that keeps the Thread at /r/p is refused
+  # (the route is reserved to none), with fresh routes it prepares; a claim citing {R2', nil}
+  # under a resolution R2' of both must still carry the Thread.
+  test "S17d: authoring carries a reservation and a nil-cited floor" do
+    {c0, r1, k1, l2, t2} = c13_recovery("s17d")
+    [space] = k1.catalog.entries
+    p = "/r/" <> F.id("route-s17d-p")
+    {th_replica, th_log} = thread_log("s17d")
+    th = %{thread(space, "s17d-t") | route: p, replica: th_replica}
+    logs = %{th_replica => th_log}
+    k1a = F.catalog(@base, r1.id, 1, F.cid(k1), r1.catalog_key, [space, th])
+    k1b = F.catalog(@base, r1.id, 1, F.cid(k1), r1.catalog_key, [%{space | route: p}])
+    cats = [c0, k1, k1a, k1b]
+
+    priors =
+      Enum.sort([%{binding: r1.id, catalog: F.cid(k1a)}, %{binding: r1.id, catalog: F.cid(k1b)}])
+
+    claim = {[r1.id], priors, 2}
+    fresh = [%{space | route: "/r/" <> F.id("s17d-fs")}, %{th | route: "/r/" <> F.id("s17d-ft")}]
+
+    assert prep(l2, "s17d-keep", @base.nominee, claim, [space, th], {[], cats}, logs) ==
+             {:error, :invalid_catalog_transition}
+
+    assert {:ok, _} = prep(l2, "s17d-fresh", @base.nominee, claim, fresh, {[], cats}, logs)
+
+    # R2' resolves both siblings; a claim citing {R2', nil} must carry the Thread of R2''s floor.
+    r2 =
+      F.replacement(
+        @base,
+        l2,
+        "s17d-r2",
+        [parents: [r1.id], prior_catalogs: priors, generation: 2] ++ nominee_opts(t2)
+      )
+
+    l3 = F.append(l2, [r2.op])
+    nil_claim = {[r2.id], [%{binding: r2.id, catalog: nil}], 3}
+
+    assert prep(l3, "s17d-space", @base.nominee, nil_claim, [space], {[], cats}) ==
+             {:error, :invalid_catalog_transition}
+
+    assert {:ok, _} = prep(l3, "s17d-both", @base.nominee, nil_claim, fresh, {[], cats}, logs)
+  end
+
+  # B1c (C7): with the C13 freeze, the revoked key signs Kbad (revision 3 on the revision-0 K1)
+  # under the refused R1. Held, Kbad keeps its own `invalid_catalog_transition` and the
+  # preflight refuses (retained_refusals); omitted from the request (D-A18) the resolution
+  # prepares, and the post-sign view over the full input (Kbad held) passes: Kbad, a strict
+  # descendant of the cited K1 under the now-closed R1, is closed out.
+  test "B1c: recovery past a bad-chain catalog the revoked key signed needs its omission" do
+    {c0, r1, k1, l2, t2} = c13_recovery("b1c")
+    kbad = F.catalog(@base, r1.id, 3, F.cid(k1), r1.catalog_key, k1.catalog.entries)
+    claim = {[r1.id], [%{binding: r1.id, catalog: F.cid(k1)}], 2}
+
+    assert prep(l2, "b1c-r2", @base.nominee, claim, k1.catalog.entries, {[], [c0, k1, kbad]}) ==
+             {:error, :invalid_catalog_transition}
+
+    assert {:ok, _} = prep(l2, "b1c-r2", @base.nominee, claim, k1.catalog.entries, {[], [c0, k1]})
+    g = post_sign(l2, "b1c-r2", nominee_opts(t2), claim, {[], [c0, k1, kbad]})
+    assert g.catalog_status[F.cid(kbad)] == :closed_out
+  end
+
+  # A Thread replica bound to the Space root, with its genesis, for cutoff derivation.
+  defp thread_log(name) do
+    replica =
+      Lattice.Authority.bind_replica("replica:treehouse:thread:" <> F.id(name), @base.root.pub)
+
+    d = Lattice.Authority.Delegation.genesis(@base.root, replica, ops: [:post], roles: [])
+    genesis = Op.new(@base.root, replica, [], :authority, {:genesis, d, %{}})
+    {replica, Log.append!(Log.new(replica), genesis)}
+  end
+
+  # R1 cites {B, C0}; a concurrent holder change T2 to the nominee refuses it (C13).
+  defp c13_recovery(name) do
+    c0 = F.c0(@base)
+
+    r1 =
+      F.replacement(@base, @base.log, name <> "-r1",
+        prior_catalogs: [%{binding: @base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    k1 = F.first(@base, r1)
+    l1 = F.append(@base.log, [r1.op])
+
+    t2 =
+      F.transfer(@base, Log.frontier(@base.log), @base.nominee.pub,
+        issuer: @base.admin,
+        parent_id: @base.delegation.id
+      )
+
+    {c0, r1, k1, F.append(l1, [t2.op]), t2}
+  end
+
   defp catalogs(list), do: Map.new(list, &{F.cid(&1), &1})
 end

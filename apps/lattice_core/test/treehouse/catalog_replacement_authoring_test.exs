@@ -1115,6 +1115,29 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     assert {:error, :wrong_catalog_scope} = Space.prepare_replace_catalog(log, request(f), %{})
   end
 
+  # B2 (PR #221 bot, the old line 85): the profile check runs directly after bootstrap selection,
+  # so a stale profile outranks a non-holder author (and a missing beacon).
+  test "profile mismatch outranks not_holder and catalog_epoch_missing" do
+    for opts <- [[], [beacon: false]] do
+      f = fixture(opts)
+      empty = Delegation.genesis(f.root, f.replica, ops: [], roles: [], live: false)
+      profile = %{f.profile | max_lease_epochs: 6}
+
+      repin =
+        Op.new(
+          f.root,
+          f.replica,
+          Log.frontier(f.space_log),
+          :authority,
+          {:genesis, empty, %{__continuation__: profile}}
+        )
+
+      log = Log.append!(f.space_log, repin)
+      stranger = request(f, %{author: f.root.pub})
+      assert {:error, :wrong_catalog_scope} = Space.prepare_replace_catalog(log, stranger, %{})
+    end
+  end
+
   defp other_signature(<<r::binary-32, _s::binary-32>>), do: r <> :binary.copy(<<9>>, 32)
 
   defp resign_rotation(envelope, old, new) do

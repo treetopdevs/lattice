@@ -80,6 +80,45 @@ test("authoring prepares the C13 recovery claim that cites the refused accepted 
   assert.deepEqual(await prepare(null), {ok: false, reason: "catalog_fork"});
 });
 
+// S16b / C4: T2 refuses the accepted R1 and an old-key rotation TR under R1 names a withheld prior catalog, so the verifier is
+// trust_pending (with the complete part's freeze); the public preflight escapes TR, which R2 citing {R1, K1} closes out.
+test("authoring escapes a withheld rotation prior the claim closes out (C4)", async () => {
+  const scenario = vector.scenarios.find((s: {name: string}) => s.name === "S16b: a withheld prior under a refused binding freezes");
+  const labels = scenario.labels as Record<string, string>;
+  const step = scenario.steps[1];
+  assert.equal(step.expect.error, "trust_pending");
+  assert.equal(step.expect.freeze, true);
+  const frames = (step.frames as string[]).map((id) => vector.frames[id]);
+  const artifact = (label: string) => JSON.parse(vector.artifacts[labels[label]!]);
+  const catalog = (label: string): CatalogEnvelope => catalogEnvelopeFromCarrierTerm(artifact(label))!;
+  const [r2] = carrierOpsToSemanticOps([decodeCarrierOpFrame(vector.frames[labels.R2!])], {},
+    treehouseCommandDecoders("Treehouse.Space"));
+  const claim = r2!.commandArgs![0] as CatalogReplacementClaim;
+  const request = (parents: string[], priorCatalogs: {binding: string; catalog: string | null}[], generation: number):
+    TreehouseCatalogReplacementRequest => ({
+    author: claim.author, nonce: createHash("sha256").update("r316-4a-ts-nonce-s16b-prep").digest("base64url"),
+    parents, priorCatalogs, generation, newCatalogKey: claim.newCatalogKey, newServiceId: claim.newServiceId,
+    newServiceKey: claim.newServiceKey, newOrigin: claim.newOrigin, entries: [...catalog("K2").catalog.entries],
+    replicaHistories: {}, rotations: [catalogRotationEnvelopeFromCarrierTerm(artifact("TR"))!], catalogs: [catalog("C0"), catalog("K1")]});
+  const prepare = (r: TreehouseCatalogReplacementRequest) => prepareTreehouseCatalogReplacementFromFrames({replica: vector.space,
+    frames, request: r, journal: {}});
+  const ok = await prepare(request([labels.R1!], [{binding: labels.R1!, catalog: labels.K1!}], 2));
+  assert.ok(ok.ok, ok.ok ? "" : ok.reason);
+  // A claim that does not close TR out keeps trust_pending.
+  assert.deepEqual(await prepare(request([labels.B!], [{binding: labels.B!, catalog: labels.C0!}], 1)),
+    {ok: false, reason: "trust_pending"});
+});
+
+// B4 (PR #221 bot, the old line 137): a malformed frame refuses as malformed_catalog instead of rejecting the promise.
+test("a malformed frame is malformed_catalog", async () => {
+  const record = catalogBootstrapFromCarrierTerm(vector.bootstrap.record)!;
+  for (const bad of [{not: "a frame"}, null, 7, ["tuple"]]) {
+    const result = await resolveCatalogBindingGraph({bootstrap: {id: vector.bootstrap.id, record}, frames: [bad],
+      rotations: new Map(), catalogs: new Map(), provenCutoffs: [], accepted: null});
+    assert.deepEqual(result, {ok: false, reason: "malformed_catalog", detail: {ids: []}});
+  }
+});
+
 // S11 (C4): three old-key rotations under the accepted R1 make the verifier return control_history_limit, but the public
 // preflight prepares R2h {R1, K1} through the head-root escape; a claim not citing every head root keeps the limit.
 test("authoring prepares a resolution past three rotation heads (head-limit escape)", async () => {

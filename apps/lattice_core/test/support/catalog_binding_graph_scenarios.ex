@@ -201,7 +201,16 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &s12_cumulative_routes/1,
       &s13_missing_watermark/1,
       &s14_same_page_trade/1,
-      &s15_seen_only/1
+      &s15_seen_only/1,
+      &s16_pending_freeze/1,
+      &s16b_withheld_prior/1,
+      &s16c_pending_alone/1,
+      &s16d_closing_beside_pending/1,
+      &s16i_refused_pending_chain/1,
+      &s17_reserved_routes/1,
+      &s17b_revoked_conflict/1,
+      &b1_bad_chain_under_refused/1,
+      &b3_rotation_precedence/1
     ]
   end
 
@@ -1574,7 +1583,12 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
   def label_view(result, labels, next) do
     l = label_fun(labels)
 
-    serving = next.serving && l.(next.serving)
+    # A non-id serving value (none in this runtime) shows as its string, so a red run against
+    # an earlier revision reports it instead of crashing.
+    serving =
+      if is_binary(next.serving),
+        do: l.(next.serving),
+        else: next.serving && to_string(next.serving)
 
     result
     |> label_view(labels)
@@ -3312,6 +3326,446 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           closed_out: ["C1"],
           decision: accept("R2", "K2", clears: true)
         )
+      )
+    ])
+  end
+
+  # --- row 386: a trust_pending step carries the complete part's freeze bit ---------------
+
+  # An authenticated op whose dependency is never delivered (a random hash): its closure stays
+  # incomplete, so it is a missing page that never completes.
+  defp orphan(base, name), do: F.beacon(base, [F.id("orphan-dep-" <> name)], 9)
+
+  # A keyless catalog whose `binding` no held artifact names (`:binding_pending`).
+  defp unknown_binding(base, name),
+    do:
+      F.catalog(
+        base,
+        F.id("unknown-binding-" <> name),
+        0,
+        nil,
+        F.identity("unknown-signer-" <> name),
+        F.base_entries(base, name)
+      )
+
+  defp loose(log, ops),
+    do:
+      Log.from_ops(log.replica, Map.merge(Log.ops(log), Map.new(ops, &{op_of(&1).id, op_of(&1)})))
+
+  # The C13 fixtures: R1 cites {B, C0}; T2 is a concurrent holder change refusing R1; R2 is
+  # the nominee's resolution citing {R1, K1}.
+  defp c13_fixtures(base, name) do
+    c0 = F.c0(base)
+    r1 = cite_c0(base, c0, name <> "-r1")
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+    {tn, t2, l2} = regrant(base, l1, Log.frontier(base.log))
+
+    r2 =
+      F.replacement(
+        base,
+        l2,
+        name <> "-r2",
+        [parents: [r1.id], prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}], generation: 2] ++
+          nominee(base, t2)
+      )
+
+    k2 = F.first(base, r2)
+
+    %{
+      c0: c0,
+      r1: r1,
+      k1: k1,
+      l1: l1,
+      tn: tn,
+      t2: t2,
+      l2: l2,
+      r2: r2,
+      k2: k2,
+      l3: add(l2, [r2]),
+      labels:
+        Map.merge(base_labels(base, c0), %{
+          "R1" => r1.id,
+          "K1" => F.cid(k1),
+          "T2" => tn.id,
+          "R2" => r2.id,
+          "K2" => F.cid(k2)
+        })
+    }
+  end
+
+  # S16a / S16e / S16h (row 386 repro 1): a withheld page beside a holder change.
+  defp s16_pending_freeze(base) do
+    x = c13_fixtures(base, "s16")
+    o = orphan(base, "s16")
+    u = unknown_binding(base, "s16")
+    labels = Map.merge(x.labels, %{"O" => o.id, "U" => F.cid(u)})
+    cats = [x.c0, x.k1]
+    resolved_cats = [x.c0, x.k1, x.k2]
+    accepted = ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
+    refused_k1 = %{"K1" => "catalog_authority_refused"}
+
+    resolved = fn clears ->
+      ok(["R2"],
+        closed: ["B", "R1"],
+        refused: ["R1"],
+        refusals: refused_k1,
+        decision: accept("R2", "K2", clears: clears)
+      )
+    end
+
+    frozen = frozen_at("R1", closed: ["B"], refused: ["R1"], refusals: refused_k1)
+
+    [
+      one("S16a: a withheld page beside a holder change freezes and serves nothing", labels, [
+        step(ev(x.l1, catalogs: cats), accepted),
+        step(ev(loose(x.l2, [o]), catalogs: cats), err("trust_pending", freeze: true)),
+        step(ev(x.l3, catalogs: resolved_cats), resolved.(true))
+      ]),
+      one("S16a: a withheld page after a holder change keeps the freeze (sequential)", labels, [
+        step(ev(x.l1, catalogs: cats), accepted),
+        step(ev(x.l2, catalogs: cats), frozen),
+        step(ev(loose(x.l2, [o]), catalogs: cats), err("trust_pending", freeze: true)),
+        step(ev(x.l3, catalogs: resolved_cats), resolved.(true))
+      ]),
+      # S16e: the complete part holds the clearing R2/K2, so the bit is false, but a pending
+      # page never lifts a freeze; the clear applies once the pending set empties.
+      one("S16e: a pending page never lifts a freeze", labels, [
+        step(ev(x.l1, catalogs: cats), accepted),
+        step(ev(x.l2, catalogs: cats), frozen),
+        step(ev(loose(x.l3, [o]), catalogs: resolved_cats), err("trust_pending", frozen: true)),
+        step(ev(x.l3, catalogs: resolved_cats), resolved.(true))
+      ]),
+      # S16h (C1): a clearing resolution beside an unresolvable page (an orphan op and a keyless
+      # catalog with an unknown binding) does not freeze, and nothing is served under the
+      # refused R1; evicting the page (the 4c simulation) accepts R2/K2.
+      one("S16h: a clearing resolution beside an unresolvable page does not freeze", labels, [
+        step(ev(x.l1, catalogs: cats), accepted),
+        step(ev(loose(x.l3, [o]), catalogs: [u | resolved_cats]), err("trust_pending")),
+        step(ev(x.l3, catalogs: resolved_cats), resolved.(true))
+      ])
+    ]
+  end
+
+  # S16b (row 386 repro 2): T2 plus an old-key rotation TR under the refused R1 whose prior
+  # catalog is withheld (never published). The complete part refuses R1 with no clearing head,
+  # so the pending step freezes; R2 citing {R1, K1} closes TR out and clears.
+  defp s16b_withheld_prior(base) do
+    x = c13_fixtures(base, "s16b")
+    k1n = F.catalog(base, x.r1.id, 1, F.cid(x.k1), x.r1.catalog_key, x.k1.catalog.entries)
+    tr = rotation(base, node(x.r1.id, 1), k1n, x.r1.catalog_key, "s16b-tr")
+    labels = Map.merge(x.labels, %{"TR" => tr.id, "K1n" => F.cid(k1n)})
+    cats = [x.c0, x.k1]
+
+    one("S16b: a withheld prior under a refused binding freezes", labels, [
+      step(ev(x.l1, catalogs: cats), ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))),
+      step(ev(x.l2, rotations: [tr], catalogs: cats), err("trust_pending", freeze: true)),
+      step(
+        ev(x.l3, rotations: [tr], catalogs: [x.k2 | cats]),
+        ok(["R2"],
+          closed: ["B", "R1"],
+          closed_out: ["TR"],
+          refused: ["R1"],
+          refusals: %{"K1" => "catalog_authority_refused"},
+          decision: accept("R2", "K2", clears: true)
+        )
+      )
+    ])
+  end
+
+  # S16c: pending evidence alone neither freezes nor stops serving.
+  defp s16c_pending_alone(base) do
+    c0 = F.c0(base)
+    o = orphan(base, "s16c")
+    labels = Map.put(base_labels(base, c0), "O", o.id)
+
+    one("S16c: pending evidence alone neither freezes nor stops serving", labels, [
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+      step(ev(loose(base.log, [o]), catalogs: [c0]), err("trust_pending", serving: "C0")),
+      step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0")))
+    ])
+  end
+
+  # S16d: an honored replacement R citing {B, C0} closes the watermark binding B but its first
+  # catalog is not yet held (D-600: closed but not changed). Beside a withheld page nothing is served and
+  # nothing freezes.
+  defp s16d_closing_beside_pending(base) do
+    c0 = F.c0(base)
+    r = cite_c0(base, c0, "s16d-r")
+    kr = F.first(base, r)
+    o = orphan(base, "s16d")
+    lr = add(base.log, [r])
+    labels = Map.merge(base_labels(base, c0), %{"R" => r.id, "KR" => F.cid(kr), "O" => o.id})
+
+    one(
+      "S16d: a withheld page beside an honored closing replacement serves nothing without freezing",
+      labels,
+      [
+        step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+        step(ev(loose(lr, [o]), catalogs: [c0]), err("trust_pending")),
+        step(
+          ev(lr, catalogs: [c0, kr]),
+          ok(["R"], closed: ["B"], decision: accept("R", "KR", clears: true))
+        )
+      ]
+    )
+  end
+
+  # S16i (C6, row 386 repro 3): the watermark K1 is revision 1; T2 arrives while K1's revision-0
+  # previous is withheld. R1 is refused (abs) and K1's chain is pending (acs `:missing`): the
+  # refused binding freezes even though its catalog cannot be judged.
+  defp s16i_refused_pending_chain(base) do
+    x = c13_fixtures(base, "s16i")
+    k1r = F.catalog(base, x.r1.id, 1, F.cid(x.k1), x.r1.catalog_key, x.k1.catalog.entries)
+    labels = Map.merge(x.labels, %{"K1r" => F.cid(k1r)})
+
+    one("S16i: a refused binding freezes even while its catalog's chain is withheld", labels, [
+      step(
+        ev(x.l1, catalogs: [x.c0, x.k1, k1r]),
+        ok(["R1"], closed: ["B"], decision: accept("R1", "K1r"))
+      ),
+      step(
+        ev(x.l2, catalogs: [x.c0, k1r]),
+        ok(["R1"],
+          closed: ["B"],
+          refused: ["R1"],
+          refusals: %{"K1r" => "catalog_authority_refused"},
+          decision: [
+            head: "R1",
+            reason: "authority_changed",
+            block: "authority_changed",
+            freeze: true
+          ],
+          after: [frozen: true]
+        )
+      )
+    ])
+  end
+
+  # --- row 387: a route-conflicting floor reserves the route to none -----------------------
+
+  defp fresh(entries, name),
+    do:
+      entries
+      |> Enum.map(&%{&1 | route: route(name <> "-" <> &1.replica)})
+      |> Enum.sort_by(& &1.replica)
+
+  # S17a / S17c: C0 lists Space; revision-1 siblings Ca (+Thread A at X) and Cb (+Thread B at X)
+  # fork under B. R citing both with Space/A/B on fresh routes promotes (HEAD: KR refused). R'
+  # keeping A at X is refused in both runtimes (the reservation). R3 citing {R, nil} with a
+  # first catalog on X is refused: the reservation survives a nil citation.
+  defp s17_reserved_routes(base) do
+    c0 = F.c0(base)
+    [space] = c0.catalog.entries
+    ta = %{other(space, "s17-a", "s17-x") | replica: space.replica <> "-s17a"}
+    tb = %{other(space, "s17-b", "s17-x") | replica: space.replica <> "-s17b"}
+    ca = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, ta])
+    cb = F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [space, tb])
+
+    priors = [
+      %{binding: base.boot.id, catalog: F.cid(ca)},
+      %{binding: base.boot.id, catalog: F.cid(cb)}
+    ]
+
+    priors = Enum.sort(priors)
+    r = carrying(base, base.log, "s17-r", fresh([space, ta, tb], "s17-r"), prior_catalogs: priors)
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    rk =
+      carrying(
+        base,
+        base.log,
+        "s17-rk",
+        Enum.sort_by(fresh([space, tb], "s17-rk") ++ [ta], & &1.replica),
+        prior_catalogs: priors
+      )
+
+    krk = F.first(base, rk)
+
+    r3 =
+      carrying(
+        base,
+        lr,
+        "s17-r3",
+        [space, ta, tb] |> fresh("s17-r3") |> Enum.map(&reroute(&1, ta)),
+        parents: [r.id],
+        prior_catalogs: [%{binding: r.id, catalog: nil}],
+        generation: 2
+      )
+
+    k3 = F.first(base, r3)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "Ca" => F.cid(ca),
+        "Cb" => F.cid(cb),
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "Rk" => rk.id,
+        "KRk" => F.cid(krk),
+        "R3" => r3.id,
+        "K3" => F.cid(k3)
+      })
+
+    split =
+      ok(["B"], forks: ["catalog"], decision: [reason: "catalog_fork", block: "catalog_fork"])
+
+    promoted = ok(["R"], closed: ["B"], decision: accept("R", "KR", clears: true))
+
+    [
+      one(
+        "S17a: route-conflicting siblings reserve the route and a fresh-route resolution promotes",
+        labels,
+        [
+          step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+          step(ev(base.log, catalogs: [c0, ca, cb]), split),
+          step(ev(lr, catalogs: [c0, ca, cb, kr]), promoted)
+        ]
+      ),
+      one("S17a: a resolution keeping a reserved route is refused", labels, [
+        step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0"))),
+        step(
+          ev(add(base.log, [rk]), catalogs: [c0, ca, cb, krk]),
+          ok(["Rk"],
+            closed: ["B"],
+            refusals: %{"KRk" => "invalid_catalog_transition"},
+            decision: [head: "Rk"]
+          )
+        )
+      ]),
+      one("S17c: a reservation survives a nil citation", labels, [
+        step(
+          ev(lr, catalogs: [c0, ca, cb, kr]),
+          ok(["R"], closed: ["B"], decision: accept("R", "KR"))
+        ),
+        step(
+          ev(add(lr, [r3]), catalogs: [c0, ca, cb, kr, k3]),
+          # The nil citation also closes KR out, so the watermark changed and freezes.
+          frozen_at("R3",
+            closed: ["B", "R"],
+            closed_out: ["KR"],
+            refusals: %{"K3" => "invalid_catalog_transition"}
+          )
+        )
+      ])
+    ]
+  end
+
+  # Thread A of R3 back onto the reserved route X.
+  defp reroute(%{replica: replica} = e, %{replica: replica, route: x}), do: %{e | route: x}
+  defp reroute(e, _), do: e
+
+  # S17b: after accepted R1/K1 is refused by a concurrent holder change, R1's (revoked) catalog
+  # key signs K1a (+Thread at /r/p) and K1b (Space moved to /r/p) on top of K1. R2 citing both
+  # with fresh routes promotes and clears; the old key is never an input.
+  defp s17b_revoked_conflict(base) do
+    x = c13_fixtures(base, "s17b")
+    [space] = x.k1.catalog.entries
+    p = route("s17b-p")
+    th = %{other(space, "s17b-t", "s17b-t") | route: p}
+    k1a = F.catalog(base, x.r1.id, 1, F.cid(x.k1), x.r1.catalog_key, [space, th])
+    k1b = F.catalog(base, x.r1.id, 1, F.cid(x.k1), x.r1.catalog_key, [%{space | route: p}])
+
+    priors =
+      Enum.sort([
+        %{binding: x.r1.id, catalog: F.cid(k1a)},
+        %{binding: x.r1.id, catalog: F.cid(k1b)}
+      ])
+
+    r2 =
+      carrying(
+        base,
+        x.l2,
+        "s17b-r2",
+        fresh([space, th], "s17b-r2"),
+        [parents: [x.r1.id], prior_catalogs: priors, generation: 2] ++ nominee(base, x.t2)
+      )
+
+    k2 = F.first(base, r2)
+
+    labels =
+      Map.merge(x.labels, %{
+        "K1a" => F.cid(k1a),
+        "K1b" => F.cid(k1b),
+        "R2" => r2.id,
+        "K2" => F.cid(k2)
+      })
+
+    cats = [x.c0, x.k1, k1a, k1b]
+
+    refused = %{
+      "K1" => "catalog_authority_refused",
+      "K1a" => "catalog_authority_refused",
+      "K1b" => "catalog_authority_refused"
+    }
+
+    one("S17b: a revoked key's route-conflicting catalogs cannot block recovery", labels, [
+      step(
+        ev(x.l1, catalogs: [x.c0, x.k1]),
+        ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
+      ),
+      step(
+        ev(x.l2, catalogs: cats),
+        frozen_at("R1", closed: ["B"], refused: ["R1"], refusals: refused)
+      ),
+      step(
+        ev(add(x.l2, [r2]), catalogs: [k2 | cats]),
+        ok(["R2"],
+          closed: ["B", "R1"],
+          refused: ["R1"],
+          refusals: refused,
+          decision: accept("R2", "K2", clears: true)
+        )
+      )
+    ])
+  end
+
+  # B1 (PR #221 bot, the old line 1048): a chain-invalid catalog (revision 3 on a revision-0
+  # previous) under the union-refused R1 keeps its own `invalid_catalog_transition`.
+  defp b1_bad_chain_under_refused(base) do
+    x = c13_fixtures(base, "b1")
+    kbad = F.catalog(base, x.r1.id, 3, F.cid(x.k1), x.r1.catalog_key, x.k1.catalog.entries)
+    labels = Map.put(x.labels, "Kbad", F.cid(kbad))
+
+    one("B1: a chain-invalid catalog under a refused node keeps its own reason", labels, [
+      step(
+        ev(x.l1, catalogs: [x.c0, x.k1]),
+        ok(["R1"], closed: ["B"], decision: accept("R1", "K1"))
+      ),
+      step(
+        ev(x.l2, catalogs: [x.c0, x.k1, kbad]),
+        frozen_at("R1",
+          closed: ["B"],
+          refused: ["R1"],
+          refusals: %{"K1" => "catalog_authority_refused", "Kbad" => "invalid_catalog_transition"}
+        )
+      )
+    ])
+  end
+
+  # B3 (PR #221 bot, the old line 304): a rotation with both a wrong generation and a bad
+  # old-key signature reports the higher-precedence `invalid_catalog_signature`.
+  defp b3_rotation_precedence(base) do
+    c0 = F.c0(base)
+
+    t =
+      F.rotation(
+        base,
+        node(base.boot.id, 0),
+        c0,
+        F.identity("b3-not-the-catalog-key"),
+        F.identity("rot-b3"),
+        "b3",
+        generation: 5
+      )
+
+    labels = Map.put(base_labels(base, c0), "T", t.id)
+
+    one("B3: rotation failures follow section-4 precedence", labels, [
+      step(
+        ev(base.log, rotations: [t], catalogs: [c0]),
+        ok(["B"], refusals: %{"T" => "invalid_catalog_signature"}, decision: accept("B", "C0"))
       )
     ])
   end
