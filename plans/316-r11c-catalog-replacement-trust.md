@@ -566,17 +566,18 @@ reading and D-A14's sticky missing-artifact trigger. In force in both runtimes:
 - *Authoring.* `cover_claim` requires closed fork bindings as extra parents (D-602), refuses an
   entry only when a held catalog maps its route to a different replica, exempting pairs a cited
   prior already maps (D-626, D-635), escapes `control_history_limit` only for claims citing every
-  head root (D-614, D-627, D-628), and checks after signing that the signed op is the sole head
+  head root (D-614, D-627, D-628; this escape supersedes the head-limit row D-604 proposed, so
+  none was filed), and checks after signing that the signed op is the sole head
   with no fork (D-629).
-- *Evidence.* Scenarios S1–S15 in `catalog_binding_graph_scenarios.ex` drive both runtimes and
+- *Evidence.* Scenarios S1–S15 (S5 has no scenario of its own; the C13 revoke-first pin carries it) in `catalog_binding_graph_scenarios.ex` drive both runtimes and
   the regenerated `binding_graph_v1.json` / `binding_graph_ts_v1.json`; the StreamData property
   file uses a pre-signed pool and a test-side oracle that recomputes freeze, clears, serving, Seen,
   Carry and RouteCompat from union classification without reading decision flags (D-608, D-636).
 
-Still open after the convergence review (round 1: 7 P1/P2 and 1 P3; 3 P1/P2 and the P3 fixed;
+Still open after the convergence review (round 1, which the commits call round 5: 7 P1/P2 and 1 P3; 3 P1/P2 and the P3 fixed;
 D-638): `trust_pending` lifts the freeze and keeps serving the refused binding (design 1.3 with
-D-A11; P1 `catalog_binding_graph.ex:139` and `:943`; row 386); conflicting cited route maps make
-recovery permanently unpromotable, reachable with only the revoked old key (P1 `:892`; row 387).
+D-A11; P1 `advance/2` at `catalog_binding_graph.ex:139` and `pending_out?` at `:963`; row 386); conflicting cited route maps make
+recovery permanently unpromotable, reachable with only the revoked old key (P1 `merge_floor` at `:912`; row 387).
 Operator questions: row 388 (D-600, D-602, D-616) and the remainder of row 384 (D-603). Not
 built: property (b) with an independent R* oracle, (e1), the (f) CatalogTrust differential, the
 TS property twin, a Core refused-to-honored flip, S5's later-honor pin, and a post-sign negative
