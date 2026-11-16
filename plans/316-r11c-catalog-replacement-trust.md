@@ -1,16 +1,16 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3 and PR 6 are MERGED (#213, #214, #216, #217, #218); the PR 3 replacement signing path on fixtures (rows 361 part, 362) is in review in #220. Remaining: PR 4, PR 5 native, PR 6's C15 run, PR 7 rule 8.
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3 and PR 6 are MERGED (#213, #214, #216, #217, #218, #220). PR 4a is open as draft #221 (resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
 PR 3's generation keying and PR 6's exporter test were the fixture-startable slices. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
 implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
 atom and claims no route switch, catalog trust or C10–C15.
 PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_catalog/4`, the TS
-twin, and the row 318 bootstrap size preflight) is in review as PR #216 (D-400–D-435). Its binding-graph
+twin, and the row 318 bootstrap size preflight) is merged as PR #216 (D-400–D-435). Its binding-graph
 coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
 authoring result is not resolver acceptance, a route switch or catalog trust.
-PR 4a (#221, D-530–D-682) is in review: the replacement-binding resolver as new pure modules in
+PR 4a (#221, D-530–D-687) is open as a draft: the replacement-binding resolver as new pure modules in
 both runtimes (`Treehouse.CatalogBindingGraph`, `Treehouse.CatalogReplacementAuthority` and
 their TS twins, with new `binding_graph_v1.json` / `binding_graph_ts_v1.json` vectors), and the
 PR 2 authoring preflight switched to call them (the interim mirror is deleted). It is built under
@@ -20,8 +20,11 @@ claimed: the retained-client resolver does not call it yet, so no client accepts
 no route switch, native, custodian refusal, real Space or ceremony. PR 4b (row 380) adds test
 breadth; PR 4c (row 381) wires catalog_trust after plans 267/269. Design rows 382 and 383 are
 done in the resolver (convergence design, D-588–D-639), and rows 386 and 387 in the resolver and
-authoring (amendment revision 2, D-641); 4c also carries the row 381 obligations, and rows 390
-and 391 await the operator. C10–C15 stay OPEN until 4c.
+authoring (amendment revision 2, D-641); 4c also carries the row 381 obligations. Rows 386 and 388
+are answered under delegation (D-683 to D-685, assumed and reversible); row 390 is built (repair
+(c)); row 391 stays open. Convergence stops here by operator direction (D-687): safety properties
+are green; the liveness gaps are rows 392 (old-key revision served before the binding closed),
+393 (`control_history_limit`) and 394 (F-retained), run with `--only pr221_open`. C10–C15 stay OPEN until 4c.
 PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
 the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
 bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
