@@ -8,10 +8,12 @@ defmodule Treehouse.CatalogBindingGraphTest do
   """
   use ExUnit.Case, async: true
 
-  alias Lattice.{Log, Op}
+  alias Lattice.{Authority, Log, Op}
+  alias Lattice.Authority.Delegation
   alias Treehouse.CatalogBindingGraph, as: G
   alias Treehouse.CatalogBindingGraphFixtures, as: F
   alias Treehouse.CatalogBindingGraphScenarios, as: S
+  alias Treehouse.CatalogReplacementAuthoring, as: A
 
   @base F.base()
 
@@ -502,8 +504,6 @@ defmodule Treehouse.CatalogBindingGraphTest do
 
   # --- row 386 (C4) and row 387 in the authoring preflight ----------------------------------
 
-  alias Treehouse.CatalogReplacementAuthoring, as: A
-
   defp prep(log, name, author, claim, entries, held, replica_logs \\ %{}) do
     {parents, priors, generation} = claim
     {rotations, cats} = held
@@ -726,9 +726,9 @@ defmodule Treehouse.CatalogBindingGraphTest do
   # A Thread replica bound to the Space root, with its genesis, for cutoff derivation.
   defp thread_log(name) do
     replica =
-      Lattice.Authority.bind_replica("replica:treehouse:thread:" <> F.id(name), @base.root.pub)
+      Authority.bind_replica("replica:treehouse:thread:" <> F.id(name), @base.root.pub)
 
-    d = Lattice.Authority.Delegation.genesis(@base.root, replica, ops: [:post], roles: [])
+    d = Delegation.genesis(@base.root, replica, ops: [:post], roles: [])
     genesis = Op.new(@base.root, replica, [], :authority, {:genesis, d, %{}})
     {replica, Log.append!(Log.new(replica), genesis)}
   end

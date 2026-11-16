@@ -6,7 +6,10 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
   artifacts (an op after its deps, a rotation after its parent and prior catalog, a catalog after
   its binding and `previous`) and delivers cumulative unions in turn through `advance/2`, from the
   empty state and from a frozen B/C0 watermark. A pool of six or fewer artifacts enumerates every
-  causal order, delivered one artifact at a time; larger pools sample orders with random cuts.
+  causal order, delivered one artifact at a time; larger pools sample orders with random cuts
+  (50 runs, 200 for the route-rule pools S4, S12 and S17), and some intermediate deliveries of a
+  sampled run also hold an unresolvable page (an op with a random-hash dependency and a keyless
+  catalog with an unknown binding) that the final delivery evicts (the 4c simulation).
 
   The freeze, clear, serving, Seen and RouteCompat expectations come from a test-side oracle
   (PR #221 round 5, finding 8). The oracle reads the artifacts' own parents, priors and catalog
@@ -15,9 +18,13 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
   merge rule of design section 1.3 and compares the persisted state and served routes. Per run:
 
     (a) D-279: every intrinsic verdict only ever moves out of `:pending`;
-    (b) the persisted state and served routes equal the oracle's merge (design 1.3). Freezing is
-        checked on `{:ok, graph}` steps only, because an error result keeps the state by design
-        (findings 1 and 7 of the same round, reported as design);
+    (m) the persisted state and served routes equal the oracle's merge (design 1.3) on every
+        step, errors included. A `trust_pending` step (row 386, repair (a)) is merged from its
+        complete part, the same union without the pending ids, which must resolve: the freeze
+        bit is a non-accepting change of the watermark there, ORed into the sticky `frozen`;
+    (h1) a `trust_pending` detail's `freeze` and `serving` are the complete part's, and nothing
+        is served under a changed or closed watermark; (h2) a freeze survives every error;
+        (h3) nothing is served while frozen;
     (c) an accepting decision covers the watermark (Seen, Carry, RouteCompat, or a
         previous-chain descendant under the same binding), and its `clears_authority_changed` is
         the oracle's;
@@ -66,8 +73,23 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
     {"S14: a catalog accepted before the closing resolution freezes", nil, nil},
     {"S15: a resolution carrying the watermark's entries without seeing it freezes", "R2", "K2"},
     {"C13: concurrent revoke after accepting R1, then a fresh resolution clears", "R2", "K2"},
-    {"C13: a revoke-first client holds R1 as a refused node", "R2", "K2"}
+    {"C13: a revoke-first client holds R1 as a refused node", "R2", "K2"},
+    {"S16a: a withheld page beside a holder change freezes and serves nothing", "R2", "K2"},
+    {"S16b: a withheld prior under a refused binding freezes", "R2", "K2"},
+    {"S16d: a withheld page beside an honored closing replacement serves nothing without freezing",
+     "R", "KR"},
+    {"S16i: a refused binding freezes even while its catalog's chain is withheld", nil, nil},
+    {"S17a: route-conflicting siblings reserve the route and a fresh-route resolution promotes",
+     "R", "KR"},
+    {"S17c: a reservation survives a nil citation", nil, nil},
+    {"S17b: a revoked key's route-conflicting catalogs cannot block recovery", "R2", "K2"},
+    {"B1: a chain-invalid catalog under a refused node keeps its own reason", nil, nil}
   ]
+
+  # Row 389: enough runs that the route rule and the withheld-page action are exercised.
+  @heavy ~w(S4 S12 S17a S17b S17c)
+  defp max_runs(name),
+    do: if(Enum.any?(@heavy, &String.starts_with?(name, &1 <> ":")), do: 200, else: 50)
 
   setup_all do
     base = F.base()
@@ -91,12 +113,12 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
 
       if length(pool.items) <= @enumerate do
         for order <- orders(pool.items) do
-          deliveries = for i <- 1..length(order), do: Enum.take(order, i)
+          deliveries = for i <- 1..length(order), do: {Enum.take(order, i), false}
           check_run(base, pool, deliveries, {rstar, kstar}, frozen, "order")
         end
       end
 
-      check all(seed <- integer(1..1_000_000_000), max_runs: 12) do
+      check all(seed <- integer(1..1_000_000_000), max_runs: max_runs(@name)) do
         check_run(base, pool, deliveries(pool, seed), {rstar, kstar}, frozen, "seed #{seed}")
       end
     end
@@ -176,12 +198,15 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
 
   # A random causal order of the pool's items, cut into cumulative deliveries (the full union
   # last).
+  # Row 389 (C1): some intermediate deliveries also hold an unresolvable page (an op whose
+  # dependency is a random hash and a keyless catalog with an unknown binding) whose completion
+  # never arrives; the final delivery evicts it (the 4c simulation).
   defp deliveries(pool, seed) do
     :rand.seed(:exsss, {seed, seed + 7, seed + 13})
     order = topo(pool.items, MapSet.new(), [])
     n = length(order)
     cuts = for i <- 1..n, i == n or :rand.uniform(2) == 1, do: i
-    Enum.map(cuts, &Enum.take(order, &1))
+    Enum.map(cuts, &{Enum.take(order, &1), &1 != n and :rand.uniform(3) == 1})
   end
 
   defp topo([], _placed, acc), do: Enum.reverse(acc)
@@ -194,26 +219,76 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
     topo(List.delete(items, pick), MapSet.put(placed, id), [pick | acc])
   end
 
-  defp evidence(base, pool, prefix) do
+  defp evidence(base, pool, {prefix, unresolvable?}) do
     ops = for {id, :op, _} <- prefix, do: pool.ops[id]
     ids = MapSet.new(prefix, &elem(&1, 0))
+    log = F.append(base.log, ops)
+    catalogs = Map.filter(pool.evidence.catalogs, fn {id, _} -> MapSet.member?(ids, id) end)
+
+    {log, catalogs} =
+      if unresolvable? do
+        o = F.beacon(base, [F.id("property-orphan-dep")], 9)
+        u = unknown_binding(base)
+
+        {Log.from_ops(log.replica, Map.put(Log.ops(log), o.id, o)),
+         Map.put(catalogs, F.cid(u), u)}
+      else
+        {log, catalogs}
+      end
 
     %{
-      space: F.append(base.log, ops),
+      space: log,
       rotations: Map.filter(pool.evidence.rotations, fn {id, _} -> MapSet.member?(ids, id) end),
-      catalogs: Map.filter(pool.evidence.catalogs, fn {id, _} -> MapSet.member?(ids, id) end),
+      catalogs: catalogs,
       proven: pool.evidence.proven
     }
   end
 
+  defp unknown_binding(base),
+    do:
+      F.catalog(
+        base,
+        F.id("property-unknown-binding"),
+        0,
+        nil,
+        F.identity("property-unknown-signer"),
+        F.base_entries(base, "property-unknown")
+      )
+
   defp run(base, pool, deliveries, start) do
     deliveries
     |> Enum.map_reduce(start, fn prefix, state ->
-      {result, next} = F.deliver(base, state, evidence(base, pool, prefix))
+      evidence = evidence(base, pool, prefix)
+      {result, next} = F.deliver(base, state, evidence)
+      result = with_complete_part(base, state, evidence, result)
       {%{state: state, result: result, next: next}, F.persisted(next)}
     end)
     |> elem(0)
   end
+
+  # The complete part of a trust_pending union: the same evidence without the pending ids. It
+  # must resolve (every pending artifact is outside the complete part, row 386 lemma); the
+  # oracle derives the expected freeze bit and serving from it.
+  defp with_complete_part(base, state, evidence, {:error, :trust_pending, detail}) do
+    ids = detail.ids
+    ops = evidence.space |> Log.ops() |> Map.drop(ids)
+
+    dropped = %{
+      evidence
+      | space: Log.from_ops(evidence.space.replica, ops),
+        rotations: Map.drop(evidence.rotations, ids),
+        catalogs: Map.drop(evidence.catalogs, ids)
+    }
+
+    {part, _} = F.deliver(base, %{state | frozen: false}, dropped)
+
+    assert match?({:ok, _}, part) or match?({:error, :control_history_limit, _}, part),
+           "(h1) the complete part of #{inspect(ids)} is #{inspect(elem(part, 1))}"
+
+    {:error, :trust_pending, Map.put(detail, :complete_part, part)}
+  end
+
+  defp with_complete_part(_base, _state, _evidence, result), do: result
 
   # --- the oracle's facts (artifact bytes only) -----------------------------------------
 
@@ -279,10 +354,12 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
 
   # --- the oracle ---------------------------------------------------------------------
 
-  defp held?(a, g) do
-    binding? = Map.has_key?(g.nodes, a.binding) or Map.has_key?(g.closed_out, a.binding)
+  defp binding_held?(a, g),
+    do: Map.has_key?(g.nodes, a.binding) or Map.has_key?(g.closed_out, a.binding)
 
-    binding? and
+  # The watermark catalog is held when its own verdict is out of pending (row 386 lemma).
+  defp held?(a, g) do
+    binding_held?(a, g) and g.verdicts[a.catalog] not in [nil, :pending] and
       Map.get(g.catalog_status, a.catalog) in [
         :covered,
         :closed_out,
@@ -292,12 +369,12 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
       ]
   end
 
+  # C6: a refused or closed-out binding is a change even when its catalog is not held.
   defp changed?(nil, _g), do: false
 
   defp changed?(a, g) do
-    held?(a, g) and
-      (match?(%{refused?: true}, g.nodes[a.binding]) or Map.has_key?(g.closed_out, a.binding) or
-         g.catalog_status[a.catalog] in [:refused, :closed_out, :uncovered])
+    match?(%{refused?: true}, g.nodes[a.binding]) or Map.has_key?(g.closed_out, a.binding) or
+      (held?(a, g) and g.catalog_status[a.catalog] in [:refused, :closed_out, :uncovered])
   end
 
   # An honored replacement in H's lineage that the watermark binding did not descend from.
@@ -398,11 +475,27 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
     end
   end
 
-  defp model(state, {:error, :trust_pending, _}, _facts),
-    do: %{accepted: state.accepted, frozen: state.frozen, serving: :unchanged}
+  # Row 386, repair (a): the freeze bit and serving of the complete part (the graph of the union
+  # without the pending ids, which must itself resolve), ORed into the sticky `frozen`.
+  defp model(state, {:error, :trust_pending, _} = result, facts) do
+    case complete_part(result) do
+      {:ok, g} ->
+        a = state.accepted
+        freeze = not g.decision.accepted and changed?(a, g)
+        frozen = state.frozen or freeze
+        %{accepted: a, frozen: frozen, serving: if(frozen, do: nil, else: keep_serving(a, g))}
+
+      _ ->
+        _ = facts
+        %{accepted: state.accepted, frozen: state.frozen, serving: nil}
+    end
+  end
 
   defp model(state, {:error, _, _}, _facts),
     do: %{accepted: state.accepted, frozen: state.frozen, serving: nil}
+
+  defp complete_part({:error, :trust_pending, %{complete_part: g}}), do: g
+  defp complete_part(_), do: nil
 
   # --- properties -----------------------------------------------------------------
 
@@ -423,13 +516,35 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
       expected = model(state, result, pool.facts)
 
       assert next == expected,
-             "(b) #{tag}: merge of #{inspect(state, limit: 4)} gave " <>
+             "(m) #{tag}: merge of #{inspect(state, limit: 4)} gave " <>
                "#{inspect(Map.take(next, [:frozen, :serving]))}, the oracle " <>
                "#{inspect(Map.take(expected, [:frozen, :serving]))}"
 
-      if next.frozen, do: assert(next.serving in [nil, :unchanged], "(b) served while frozen")
+      # (h3) nothing is served while frozen.
+      if next.frozen, do: assert(next.serving == nil, "(h3) #{tag}: served while frozen")
+
+      # (h2) a freeze is sticky through every error.
+      if match?({:error, _, _}, result) and state.frozen,
+        do: assert(next.frozen, "(h2) #{tag}: an error lifted the freeze")
+
+      pending!(state, result, tag)
     end
   end
+
+  # (h1) the trust_pending detail is the complete part's: its freeze bit is a non-accepting
+  # change of the watermark, and its serving is the watermark's own, never served under a
+  # changed or closed binding.
+  defp pending!(state, {:error, :trust_pending, %{complete_part: {:ok, g}} = d}, tag) do
+    a = state.accepted
+    freeze = not g.decision.accepted and changed?(a, g)
+    assert d.freeze == freeze, "(h1) #{tag}: freeze #{d.freeze}, the complete part's #{freeze}"
+    assert d.serving == keep_serving(a, g), "(h1) #{tag}: serving #{inspect(d.serving)}"
+
+    if a && (changed?(a, g) or a.binding in g.closed),
+      do: assert(d.serving == nil, "(h3) #{tag}: served under a changed or closed watermark")
+  end
+
+  defp pending!(_state, _result, _tag), do: :ok
 
   defp covers!(steps, pool, tag) do
     for %{state: %{accepted: a}, result: {:ok, %{decision: %{accepted: true} = d} = g}} <- steps do
