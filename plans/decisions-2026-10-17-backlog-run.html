@@ -4316,6 +4316,46 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The bundle is what an outsider replays, and attacker-shaped terms in it were the fault row 325 fixed. The raw terms remain in <code>matter.log</code>.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
+<section id="d910"><h2><span>D-910</span> Row 360: the closure check judges the package&#x27;s observed Space</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>The brief said to read the Space from <code>package.histories</code>. <code>CatalogSigningPackage.decode/1</code> keeps the raw Space there and the <code>ReferenceMode.observe</code> output under <code>package.observed</code>. In <code>pending</code> mode the staged reference is absent from the raw Space and present in the observed one.</dd>
+<dt>Options</dt><dd>Raw Space; observed Space.</dd>
+<dt>Decision</dt><dd><code>BindingClosure</code> uses <code>package.observed[space]</code> when it is a <code>%Log{}</code> for that replica, and falls back to <code>package.histories[space]</code> (hand-built packages). Pinned by a test that gives the observed copy a closing replacement.</dd>
+<dt>Reason</dt><dd>A stored pending-mode catalog names its staged reference; over the raw Space its entry fact pends, the resolver returns <code>trust_pending</code> and a legitimate replay refuses. The observed Space is the log decode already judged the entries against, and it adds one signed, Core-honored op; it never narrows evidence.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d911"><h2><span>D-911</span> Row 360: the resolver&#x27;s bootstrap record is read from the Space log</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd><code>Binding.replacement/3</code> rewrites the binding record (keys, service, origin), but the resolver&#x27;s honored-bootstrap check needs the exact record; with a wrong record no replacement is eligible and the closed set is silently empty.</dd>
+<dt>Options</dt><dd>Use <code>binding.record</code>; read the record from the Space by bootstrap id.</dd>
+<dt>Decision</dt><dd>New <code>Binding.bootstrap_record/2</code>, factored with <code>honored_bootstrap/2</code> (whose return atoms are unchanged): root-authored, unique by op id, and the one record whose id is the binding&#x27;s bootstrap id. A fork of root-authored bootstraps is refused (the conservative choice, matching <code>honored_bootstrap/2</code>). For a bootstrap binding the record must also equal <code>binding.record</code>; any mismatch is <code>catalog_binding_unresolved</code>.</dd>
+<dt>Reason</dt><dd>Fails closed instead of silently computing an empty closed set.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d912"><h2><span>D-912</span> Row 360: the CLI-level closed-binding test is deferred</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>Brief case 10 asked for a refusal through <code>SignCatalog.sign/4</code> with <code>CeremonyFixture</code>, if one small helper suffices.</dd>
+<dt>Options</dt><dd>Extend the fixture now; defer.</dd>
+<dt>Decision</dt><dd>Deferred as row 551. <code>CeremonyFixture.space/3</code> has no witnessed-beacon pin, leased admin or beacons, so it cannot author a resolver-eligible replacement with one helper. The closure is pinned through <code>sign_reviewed/5</code>, which <code>sign/4</code> calls after review; the existing <code>sign/4</code> suites stay green.</dd>
+<dt>Reason</dt><dd>No faked eligibility.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d913"><h2><span>D-913</span> Row 360: resolver inputs and the freshness non-claim</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>The check needs one resolver call per sign over the custodian&#x27;s evidence.</dd>
+<dt>Options</dt><dd><code>resolve/1</code> or <code>resolve_for_claim/2</code>; with or without the ledger chain; with a watermark or none.</dd>
+<dt>Decision</dt><dd><code>resolve/1</code> with <code>proven_cutoffs: []</code>, <code>accepted: nil</code>, Thread histories from the package, catalogs from the ledger chain (decoded envelope bytes) plus <code>retained[:catalogs]</code>, rotations from <code>retained[:rotations]</code>. Closed means the binding id is in <code>closed/1</code> or a key of <code>closed_out/1</code>; every error is <code>catalog_binding_unresolved</code>. The check runs in the existing <code>SigningLedger.transact</code> callback before <code>choose</code>, so a refusal sends no head or envelope and reads no key. The two refusal atoms are BEAM return atoms only: no wire atom, Core primitive or quarantine reason. Non-claim: closure is judged only over the package&#x27;s Space history (row 550).</dd>
+<dt>Reason</dt><dd><code>resolve_for_claim/2</code> escapes evidence a claim would close out, which is an authoring concern; the custodian needs the plain union. The ledger chain must feed the resolver, or a replacement citing a prior only the ledger holds would pend instead of closing (pinned by a test).</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d914"><h2><span>D-914</span> Row 360: Linux-only operator suites not run locally</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd><code>release_catalog_test.exs</code> and other operator suites skip off Linux; local Docker is down, so the pending-mode multi-revision signing flow with the new check ran only in CI.</dd>
+<dt>Options</dt><dd>Block on Docker; ship and file the risk.</dd>
+<dt>Decision</dt><dd>Ship; row 552 records the CI check, the 35 s lock timing over large histories and the fail-closed pending-reference case (R1). Every local carrier suite is green.</dd>
+<dt>Reason</dt><dd>Each chain catalog&#x27;s entries are a subset of the current package&#x27;s entries, which decode already validated against the same observed logs, so a false refusal is unlikely; it would fail closed.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
