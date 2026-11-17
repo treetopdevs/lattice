@@ -137,10 +137,10 @@ defmodule Township.Divergence do
   defp state_mismatches(state_a, state_b, state_equal?) do
     found =
       Enum.flat_map(fields_to_compare(state_a, state_b), fn field ->
-        value_a = normalize(Map.get(state_a, field))
-        value_b = normalize(Map.get(state_b, field))
+        value_a = Map.get(state_a, field)
+        value_b = Map.get(state_b, field)
 
-        if value_a == value_b,
+        if value_a === value_b,
           do: [],
           else: [%{field: field, a: summarize(value_a), b: summarize(value_b)}]
       end)
@@ -178,12 +178,10 @@ defmodule Township.Divergence do
   defp state_keys(%{} = state), do: state |> Map.keys() |> Enum.reject(&(&1 == :__struct__))
   defp state_keys(_other), do: []
 
-  # A set is tagged so a MapSet never compares equal to a plain list of the same elements.
-  defp normalize(%MapSet{} = set), do: {:set, set |> MapSet.to_list() |> Enum.sort()}
-  defp normalize(value), do: value
-
-  defp summarize({:set, elements}),
-    do: %{entries: length(elements), sha256: digest({:set, elements})}
+  # Values are compared as they are (strict equality), so a MapSet, a list and a tuple that
+  # happen to share elements never compare equal. A MapSet is summarized from its own
+  # struct bytes, so its digest cannot collide with a lookalike tuple's.
+  defp summarize(%MapSet{} = set), do: %{entries: MapSet.size(set), sha256: digest(set)}
 
   defp summarize(value) when is_list(value) do
     %{entries: length(value), sha256: digest(value)}

@@ -58,7 +58,8 @@ defmodule Mix.Tasks.Lattice.Township.ExplainDivergence do
 
       {:error, errors} ->
         Mix.raise(
-          "Township audit bundle verification failed for #{dir}:\n- #{Enum.join(errors, "\n- ")}"
+          "Township audit bundle verification failed for #{safe(dir)}:\n- " <>
+            Enum.map_join(errors, "\n- ", &inspect/1)
         )
     end
   end
@@ -121,8 +122,13 @@ defmodule Mix.Tasks.Lattice.Township.ExplainDivergence do
   defp jsonable(value) when is_boolean(value) or is_nil(value), do: value
   defp jsonable(value) when is_atom(value), do: Atom.to_string(value)
 
-  defp jsonable(value) when is_binary(value),
-    do: if(String.valid?(value), do: value, else: inspect(value))
+  # Invalid UTF-8 becomes a tagged object, so it can never equal a valid string that
+  # happens to spell the same characters.
+  defp jsonable(value) when is_binary(value) do
+    if String.valid?(value),
+      do: value,
+      else: %{"bytes_base64" => Base.encode64(value)}
+  end
 
   defp jsonable(value), do: value
 

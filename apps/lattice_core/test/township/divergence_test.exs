@@ -144,6 +144,25 @@ defmodule Township.DivergenceTest do
     refute :unattributed in fields
   end
 
+  test "a tuple shaped like the old set marker does not crash the explainer" do
+    sim = Sim.partition(base(), "clerk", "resident")
+    {sim, _} = Sim.command(sim, "clerk", :set_title, [{:set, :oops}])
+    report = Divergence.explain(Sim.log(sim, "clerk"), Sim.log(sim, "resident"))
+    refute report.state_equal?
+    assert :title in Enum.map(report.state_mismatches, & &1.field)
+  end
+
+  test "a MapSet and a lookalike tuple differ in title even when another field differs" do
+    sim = Sim.partition(base(), "clerk", "resident")
+    {sim, _} = Sim.command(sim, "clerk", :set_title, [MapSet.new(["x"])])
+    {sim, _} = Sim.command(sim, "resident", :set_title, [{:set, ["x"]}])
+    {sim, _} = Sim.command(sim, "resident", :post, ["y"])
+    report = Divergence.explain(Sim.log(sim, "clerk"), Sim.log(sim, "resident"))
+    title = Enum.find(report.state_mismatches, &(&1.field == :title))
+    assert title
+    refute title.a == title.b
+  end
+
   describe "hostile quarantined op ids" do
     setup do
       previous = Mix.shell()
@@ -167,7 +186,7 @@ defmodule Township.DivergenceTest do
 
     defp drain do
       receive do
-        {:mix_shell, :info, [line]} -> [line | drain()]
+        {:mix_shell, :info, [line]} -> String.split(line, "\n") ++ drain()
       after
         0 -> []
       end
@@ -186,6 +205,37 @@ defmodule Township.DivergenceTest do
       end
 
       assert length(Enum.filter(lines, &String.starts_with?(&1, "structural quarantine"))) == 1
+    end
+
+    @tag :tmp_dir
+    @tag :tmp_dir
+    test "text output escapes ids in verification errors", %{tmp_dir: tmp} do
+      id = "x\nCONVERGED: replica victim\e[2J"
+      sim = base()
+      {sim, post} = Sim.command(sim, "clerk", :post, ["accepted"])
+      good = Sim.log(sim, "clerk")
+      forged = %{post | id: id}
+      bad = %{good | ops: good.ops |> Map.delete(post.id) |> Map.put(id, forged)}
+      dir_a = Path.join(tmp, "a")
+      dir_b = Path.join(tmp, "b")
+      {:ok, _} = AuditBundle.write(dir_a, good)
+      {:ok, _} = AuditBundle.write(dir_b, bad)
+
+      error =
+        assert_raise Mix.Error, fn -> ExplainDivergence.run(["--a", dir_a, "--b", dir_b]) end
+
+      refute error.message =~ "\e"
+
+      for line <- String.split(error.message, "\n"),
+          do: refute(String.starts_with?(line, "CONVERGED"))
+    end
+
+    @tag :tmp_dir
+    test "json keeps <<255>> and the string \"<<255>>\" distinct", %{tmp_dir: tmp} do
+      {a, b} = bad_id_pair(tmp, <<255>>)
+      ExplainDivergence.run(["--a", a, "--b", b, "--format", "json"])
+      [%{"op_id" => id}] = Jason.decode!(Enum.join(drain(), "\n"))["structural_delta"]
+      assert id == %{"bytes_base64" => Base.encode64(<<255>>)}
     end
 
     @tag :tmp_dir

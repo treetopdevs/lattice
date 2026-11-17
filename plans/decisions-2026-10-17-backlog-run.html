@@ -2899,6 +2899,12 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>(1) The mix task prints ids and replica labels verbatim only when they match a plain token pattern, otherwise as an escaped Elixir literal; JSON output escapes non-UTF-8 binaries the same way. (2) A MapSet is compared as a tagged sorted set, so it never equals a list. (3) State keys outside the declared five fields are also compared, in sorted order, after the declared ones. (4) The property now asserts the exact set of differing state keys and refutes <code>:unattributed</code>. No wire, vector or authority change. All three P2 findings reproduced with failing tests first.</dd>
 <dt>Reason</dt><dd>Smallest change that makes the diagnostic safe to print and unable to hide a difference. Row 421 is narrowed: extra keys are now attributed, only a public field list test remains.</dd>
 </dl></section>
+<section id="d732"><h2><span>D-732</span> Row 167: review round 2 fixes</h2><dl>
+<dt>When</dt><dd>2026-11-16, branch claude/167-divergence-explainer</dd>
+<dt>Context</dt><dd>Round 2 found that a state value shaped like the internal set marker (<code>{:set, :oops}</code>) crashed the summary, that normalizing sets to a tagged tuple still equated a MapSet with a lookalike tuple, that verification errors were joined raw into the Mix error (forged verdict line and escape codes), that JSON rendered distinct invalid-UTF-8 ids as the same string, and that the escaping test did not split messages into physical lines.</dd>
+<dt>Decision</dt><dd>(1) No normalization: state values are compared with strict equality and a MapSet is summarized from its own struct bytes. (2) Verification errors and the bundle path are escaped (inspect) before they reach <code>Mix.raise</code>. (3) Invalid UTF-8 binaries in JSON become <code>{"bytes_base64": ...}</code>; valid strings are unchanged. (4) The drain helper splits messages on newlines and a new test covers verification-error injection. All three P2 findings reproduced with failing tests first; both P3 findings fixed. No wire, vector or authority change.</dd>
+<dt>Reason</dt><dd>Comparing raw values removes the class of normalization collisions instead of patching one marker, and a tagged object is the smallest lossless JSON encoding.</dd>
+</dl></section>
 </main>
 </body>
 </html>
