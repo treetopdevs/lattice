@@ -4,7 +4,9 @@ defmodule Mix.Tasks.Lattice.Election.Report do
 
       mix lattice.election.report --bundle PATH --out PATH [--open-certificate ID]
 
-  The bundle bytes are untrusted: `Township.Election.OfflineBundle.verify_bytes/1`
+  The bundle bytes are untrusted: the task reads at most one byte past
+  `Township.Election.OfflineBundle.max_envelope_byte_size/0` and refuses a longer
+  file before verifying, then `Township.Election.OfflineBundle.verify_bytes/1`
   replays them in full, and an unverifiable bundle gets no report at all.
 
   With `--open-certificate`, the task also recomputes unanimous-close evidence
@@ -43,7 +45,7 @@ defmodule Mix.Tasks.Lattice.Election.Report do
   end
 
   defp report(bundle_path, out_path, certificate) do
-    bytes = File.read!(bundle_path)
+    bytes = read_bounded!(bundle_path)
 
     projection =
       case OfflineBundle.verify_bytes(bytes) do
@@ -70,6 +72,29 @@ defmodule Mix.Tasks.Lattice.Election.Report do
     end
 
     :ok
+  end
+
+  # The bundle is untrusted, so the task reads at most one byte past the
+  # verifier's envelope limit and refuses anything longer before verifying.
+  defp read_bounded!(bundle_path) do
+    limit = OfflineBundle.max_envelope_byte_size()
+
+    result =
+      File.open!(bundle_path, [:read, :binary], fn io -> :file.read(io, limit + 1) end)
+
+    case result do
+      {:ok, bytes} when byte_size(bytes) > limit ->
+        Mix.raise("offline bundle exceeds #{limit} bytes: #{bundle_path}")
+
+      {:ok, bytes} ->
+        bytes
+
+      :eof ->
+        ""
+
+      {:error, reason} ->
+        Mix.raise("could not read offline bundle #{bundle_path}: #{inspect(reason)}")
+    end
   end
 
   # The report must never replace the evidence it was rendered from, including

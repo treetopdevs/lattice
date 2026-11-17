@@ -7,6 +7,22 @@ defmodule Township.ElectionReportTest do
   alias Township.ElectionReportFixture
 
   @status_cell ~r{<td class="claim-status">([^<]*)</td>}
+  # Independent copy of the research manifest, in sorted scope order.
+  @scopes [
+    {"availability", "ability to complete setup, close, and tally"},
+    {"ballot_privacy", "choice confidentiality beyond the ideal tally leakage"},
+    {"board_integrity", "authorized immutable board publication"},
+    {"censorship_resistance", "resistance to selective ballot denial"},
+    {"closure_safety", "uniqueness and completeness of the certified ballot manifest"},
+    {"convergence", "deterministic projection from a complete artifact set"},
+    {"credential_surrender_resistance", "safety after credential surrender"},
+    {"eligibility", "encrypted credential eligibility and duplicate handling"},
+    {"forced_abstention_resistance", "safety under participation surveillance"},
+    {"forced_choice_resistance", "safety under a demanded choice"},
+    {"receipt_freeness", "inability to prove a vote to a coercer"},
+    {"universal_verifiability", "public verification of the final result transcript"}
+  ]
+  @scope_row ~r{<tr><td><code>([^<]*)</code></td><td>([^<]*)</td><td class="claim-status">}
   @exclusions [
     "no pinned cryptographic construction",
     "no completed operational composition review"
@@ -55,6 +71,13 @@ defmodule Township.ElectionReportTest do
       assert html =~ ~s(<p class="honesty">#{Report.honesty_sentence()}</p>)
       assert length(Regex.scan(~r{<td class="claim-status">not_claimed</td>}, html)) == 12
       assert count(html, "not_claimed") == 12
+
+      rows = @scope_row |> Regex.scan(html) |> Enum.map(fn [_, name, desc] -> {name, desc} end)
+      assert rows == @scopes
+
+      for {name, desc} <- @scopes do
+        assert count(html, "<td><code>#{name}</code></td><td>#{desc}</td>") == 1
+      end
     end
 
     # Maintenance: when an M4 gate flips a claim to :conditional, this test must be
@@ -287,6 +310,23 @@ defmodule Township.ElectionReportTest do
       end
 
       refute File.exists?(Path.dirname(out))
+
+      # A sparse file one byte past the envelope limit is refused before verification.
+      oversized = Path.join(ctx.tmp_dir, "oversized.etf")
+      limit = OfflineBundle.max_envelope_byte_size()
+
+      File.open!(oversized, [:write, :binary], fn io ->
+        {:ok, _} = :file.position(io, limit)
+        :ok = IO.binwrite(io, "x")
+      end)
+
+      assert File.stat!(oversized).size == limit + 1
+
+      assert_raise Mix.Error, ~r/offline bundle exceeds #{limit} bytes/, fn ->
+        ReportTask.run(["--bundle", oversized, "--out", out])
+      end
+
+      refute File.exists?(out)
 
       link = Path.join(ctx.tmp_dir, "bundle-link.etf")
       File.ln_s!(bundle, link)
