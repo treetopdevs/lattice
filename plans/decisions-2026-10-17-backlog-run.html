@@ -4454,6 +4454,109 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The cumulative map is the graph's own judged route state for the accepted catalog, it is conflict-checked, and using it touches only the persisted watermark, never the decision path. <code>CatalogReplacementTrust.mirror/4</code> is out of this slice (row 570 names the same boundary).</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
+<section id="d932"><h2><span>D-932</span> Row 524: BEAM reads <code>cat_parent</code> with a default; TS stays strict</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd><code>advance/2</code> reads <code>Map.get(graph, :cat_parent, %{})</code> instead of matching it in the clause head. TS reads <code>result.graph.catParent</code> as typed, and the TS test stub gained <code>catParent</code>.</dd>
+<dt>Reason</dt><dd>A head match would send a graph without <code>cat_parent</code> to the catch-all clause, which silently keeps the old state. With the default, such a graph gets the accepted catalog alone, the old behaviour. On every real resolver graph both runtimes match.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d933"><h2><span>D-933</span> Row 524: extra S12r fresh-route control scenario</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Added <code>S12r: a resolution with fresh routes clears/one page</code>. It shows Rz2f is accepted and clears.</dd>
+<dt>Reason</dt><dd>The first S12r draft stayed frozen for an unrelated reason: the new catalog did not carry KR1's replicas. The control shows the squat on route u is what freezes Rz2.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d934"><h2><span>D-934</span> Row 528: keep the local <code>:replacement_demo</code> exclusion</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>CI runs <code>MIX=mix scripts/treehouse_replacement_demo.sh</code> right after the full suite in the flagship unit job. test_helper still excludes <code>:replacement_demo</code>.</dd>
+<dt>Reason</dt><dd>A local <code>mix test</code> without Node keeps passing. The tagged BEAM-equals-TS test in <code>catalog_replacement_trust_test.exs</code> now runs in CI.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d935"><h2><span>D-935</span> Row 524: which routes <code>advance</code> merges</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Walk the accepted chain with the graph's own <code>cat_parent</code> / <code>catParent</code>: the previous catalog, plus a rotation first catalog's prior catalog. Stop at nil, an unheld id or a repeat. Put every catalog's entries over the stored routes, oldest first.</dd>
+<dt>Reason</dt><dd>This matches D-881's accepted chain (wrap/mirror) and the PR #223 finding (K1 then K2: the legacy mirror keeps those routes). Both runtimes already build the field, so parity is natural. It adds no reserved values and does not widen into cited floors. D-930 and D-931 refine it.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d936"><h2><span>D-936</span> Row 524: precedence against existing watermark routes</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Planned: chain routes overwrite older watermark values, as the accepted catalog's entries and <code>mirror/4</code> do. Superseded in review round 1 by D-930: a route the watermark already holds is kept.</dd>
+<dt>Reason</dt><dd>On a valid chain a route maps to one replica, so overwriting only reproduces sequential delivery. Round 1 showed an unaccepted intermediate catalog can break that, so D-930 replaced it.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d937"><h2><span>D-937</span> Row 524: cited prior catalogs on the same page</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Planned as out of scope, with a follow-up row. D-931 (review round 2) then applied the option the plan named: fill missing routes from the accepted catalog's non-reserved <code>catalog_routes</code>. The plan's named case (watermark B/C0, then one page with C1 moving a route, R citing {B, C1}, and KR) has no dedicated test, so row 575 files that test.</dd>
+<dt>Reason</dt><dd>Round 2's finding was a different case (successive replacements, S12s). D-931 plausibly covers the named case too, but nothing run in this slice shows it.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d938"><h2><span>D-938</span> Row 524: where the fix lives</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>In <code>CatalogBindingGraph.advance/2</code> and <code>advanceCatalogBindingState</code> only. <code>CatalogReplacementTrust</code> wrap/mirror is unchanged.</dd>
+<dt>Reason</dt><dd>The row asked for it there, so every caller (the composed evaluator, the fixtures, the world model) gets it. wrap/mirror already implement D-881. The mirror audit is row 570.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d939"><h2><span>D-939</span> Row 524: how both delivery orders are tested in both runtimes</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Shared scenarios in <code>CatalogBindingGraphScenarios</code>: S12 with C0 and C1 on one page, S12r (a replacement chain, separate and one page) and S12s (successive replacements, separate and one page). They run through the reciprocal vectors. Direct equality tests on the persisted routes run in BEAM and TS.</dd>
+<dt>Reason</dt><dd>The scenario table already drives both runtimes and the cross-runtime vectors. The squat step makes the bug visible as accept versus frozen.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d940"><h2><span>D-940</span> Row 524: property-test oracle</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>The oracle merge in <code>catalog_binding_graph_property_test.exs</code> walks the chain and the cited prior catalogs from the pool artifacts, not from the graph.</dd>
+<dt>Reason</dt><dd>Otherwise property (m) fails. Reading the pool keeps the oracle independent of the graph. The TS twin is row 573.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d941"><h2><span>D-941</span> Row 528: how the replacement checks run in CI</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>The script runs both tagged files with <code>--only replacement_demo</code>, and the flagship unit job runs the script. See D-934 for the local exclusion.</dd>
+<dt>Reason</dt><dd>CI already has Node 22 and npm ci in that job, and running the script also checks the script. Before this, the tagged test in <code>catalog_replacement_trust_test.exs</code> was run by nothing.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d942"><h2><span>D-942</span> Row 524: ledger and plan docs (planned; superseded)</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Planned: no edits to plans/README.md or the plan 316 header; allocate no row or D- numbers until merge; fix only the stale "Not wired" moduledoc sentence in the edited module. Superseded by D-930, D-931, row 570 and this closeout. Rows 524 and 528 and the plan 316 header are still not edited here (rows 572 and 574).</dd>
+<dt>Reason</dt><dd>Rows 524 and 528 and D-883 exist only on open PR #233, which is rewriting the same sections. New numbers in reserved ranges do not conflict.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d943"><h2><span>D-943</span> Row 524: vector regeneration policy</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Both binding_graph vectors were regenerated. No existing scenario's hand-written <code>expect</code> may change. Only per-step stored route maps may grow.</dd>
+<dt>Reason</dt><dd>This separates the intended watermark growth from any change in acceptance. The content comparison showed no decision change and no route removed or changed.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d944"><h2><span>D-944</span> Row 524: red shown in the working tree, not as a commit</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>The failures were shown in the working tree on unfixed code, in BEAM and in TS (with the vector regenerated from unfixed BEAM). Tests, fix, vectors and dist went into one commit. The implementer's notes called this D-930; that number went to the round 1 decision.</dd>
+<dt>Reason</dt><dd>The default suite must stay green at every commit. A red-only commit would also break the reciprocal and vector tests.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d945"><h2><span>D-945</span> Row 524: plans/ untouched (superseded)</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>The implementer first made no plans/ edits and kept the numbers for after #233. The implementer's notes called this D-931; that number went to the round 2 decision. Superseded: the review rounds added D-930, D-931 and row 570, and this closeout adds D-932 to D-948 and rows 571 to 575.</dd>
+<dt>Reason</dt><dd>Appending in the reserved ranges does not conflict with #233. Rows 524 and 528 themselves are still left to row 574.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d946"><h2><span>D-946</span> Row 524: row 570 extended, no new row</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Row 570 also covers the replacement-boundary case in the <code>CatalogReplacementTrust.mirror/4</code> audit: a chain walk that stops at a replacement's revision-0 catalog drops its cited prior catalogs' routes. <code>mirror/4</code> is not edited.</dd>
+<dt>Reason</dt><dd><code>mirror/4</code> is out of scope, and row 570 already audits it for the same overwrite class, so a new row would duplicate it.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d947"><h2><span>D-947</span> Row 524: deferred items</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Decision</dt><dd>Filed: row 571 (store row 387 reserved-to-none routes in the watermark), row 572 (refresh the plan 316 header after #233), row 573 (TS property twin of the oracle merge, under row 389), row 574 (set rows 524 and 528 once #233 is on main), row 575 (a dedicated test for the plan's cited-prior one-page case, D-937).</dd>
+<dt>Reason</dt><dd>Each changes the persisted shape, depends on #233, or is outside this slice.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d948"><h2><span>D-948</span> Row 524 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Context</dt><dd>Two review rounds ran on the row 524 and row 528 slice.</dd>
+<dt>Decision</dt><dd>Round 1: verdict CHANGES, one P2, no P3. An unaccepted intermediate catalog could overwrite a reserved watermark route. Fixed in D-930 and shown with a new shared S12r scenario in both runtimes. Its residual (is such a chain promotable at all, and does <code>mirror/4</code> have the same overwrite) is row 570, an unverified audit item. Round 2: verdict CHANGES, one P2, no P3. Successive replacements on one page dropped an intermediate route. Fixed in D-931 and shown with the S12s pair in both runtimes; removing the fill makes the S12s, S1, S8, S14 and S17b properties fail. No round 3 ran, so the round 2 fix is not confirmed by a later review.</dd>
+<dt>Reason</dt><dd>The last round reported a P2, so the review is not clean until a later round confirms the D-931 fix. No resolver decision, wire atom, quarantine reason or committed wire byte changed; the vectors only gained steps and stored routes.</dd>
+</dl></section>
 </main>
 </body>
 </html>
