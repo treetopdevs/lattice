@@ -247,6 +247,35 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert has_element?(view, "#trust-graph-panel [data-trust-omitted]", "1 omitted")
   end
 
+  # Row 325: admitted non-text Matter arguments reach the model as the marker.
+  test "malformed Matter text renders the marker instead of crashing the instrument", %{
+    conn: conn
+  } do
+    peer_log = malformed_text_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:malformed-text:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "[data-post]", "(malformed)")
+    assert has_element?(view, "h2", "(malformed)")
+    assert has_element?(view, ~s{[data-member="(malformed)"]})
+    assert render(view) =~ "data-replay"
+    assert Process.alive?(view.pid)
+  end
+
   test "fresh carrier state prepares one unsigned participant post without changing the model", %{
     conn: conn
   } do
@@ -1305,6 +1334,21 @@ defmodule TownshipWeb.InstrumentLiveTest do
     {sim, _genesis} = Sim.create_replica(sim, "clerk")
     {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
     {sim, _bad} = Sim.append(sim, "clerk", :authority, {:grant, %{good | roles: [:clerk]}})
+    sim |> Sim.sync_all() |> Sim.log("clerk")
+  end
+
+  defp malformed_text_log do
+    sim =
+      Sim.new(Matter, "replica:matter:malformed-text", ["clerk", "resident"],
+        seed: "malformed-text"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _grant} = Sim.grant(sim, "clerk", "resident", ops: [:post, :set_title, :admit])
+    sim = Sim.sync_all(sim)
+    {sim, _post} = Sim.command(sim, "resident", :post, [{:x, 1}])
+    {sim, _title} = Sim.command(sim, "resident", :set_title, [<<255>>])
+    {sim, _admit} = Sim.command(sim, "resident", :admit, [<<255>>])
     sim |> Sim.sync_all() |> Sim.log("clerk")
   end
 
