@@ -4,11 +4,22 @@ defmodule Lattice.Topology do
 
   The default topology is server-star only. Cross-tab delivery is rejected
   unless a bridge was explicitly created and the matching capability is used.
+
+  ## Audit outages (row 313)
+
+  Every Audit record goes through one bounded `Lattice.Audit.Backlog`, as in
+  `Lattice.CapStore`, so an Audit restart no longer exits Topology and wipes
+  the in-memory tabs. Connects, worker registration, disconnects, ejects,
+  connection-down closes and their worker and bridge cleanup always commit and
+  defer their records. `create_bridge/3` is the one authority-increasing action:
+  it flushes first and is refused with `{:error, :audit_unavailable}`, state
+  unchanged, while the backlog is full. A stalled Audit still exits Topology.
   """
 
   use GenServer
 
-  alias Lattice.{Audit, Cap, Tab}
+  alias Lattice.Audit.Backlog
+  alias Lattice.{Cap, Tab}
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -52,20 +63,31 @@ defmodule Lattice.Topology do
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def reset, do: GenServer.call(__MODULE__, :reset)
 
+  @doc """
+  Replays Audit records deferred while `Lattice.Audit` was unavailable.
+
+  Same contract as `Lattice.CapStore.flush_audit/0`:
+  `{:ok, %{flushed: n, pending: m, gap: g}}`.
+  """
+  def flush_audit, do: GenServer.call(__MODULE__, :flush_audit)
+
   @impl true
   def init(_opts) do
-    {:ok, %{tabs: %{}, bridges: %{}}}
+    {:ok, fresh_state(Backlog.new(__MODULE__))}
   end
 
   @impl true
   def handle_call({:connect_tab, attrs}, _from, state) do
     tab = Tab.new(attrs)
 
-    Audit.record(:tab_connect, %{
-      tab_id: tab.id,
-      session_id: tab.session_id,
-      identity: tab.identity
-    })
+    state =
+      state
+      |> prepare_audit()
+      |> audit(:tab_connect, %{
+        tab_id: tab.id,
+        session_id: tab.session_id,
+        identity: tab.identity
+      })
 
     {:reply, {:ok, tab}, put_in(state, [:tabs, tab.id], tab)}
   end
@@ -95,7 +117,12 @@ defmodule Lattice.Topology do
     case Map.fetch(state.tabs, tab_id) do
       {:ok, %Tab{state: :connected} = tab} ->
         Process.monitor(pid)
-        Audit.record(:worker_spawn, %{tab_id: tab_id, worker: inspect(pid)})
+
+        state =
+          state
+          |> prepare_audit()
+          |> audit(:worker_spawn, %{tab_id: tab_id, worker: inspect(pid)})
+
         {:reply, :ok, put_in(state, [:tabs, tab_id], Tab.put_worker(tab, pid))}
 
       {:ok, _tab} ->
@@ -117,26 +144,43 @@ defmodule Lattice.Topology do
   end
 
   def handle_call({:bridge, from_tab_id, to_tab_id, %Cap{} = cap}, _from, state) do
+    state = prepare_audit(state)
+
     with %Tab{state: :connected} <- Map.get(state.tabs, from_tab_id),
          %Tab{state: :connected} <- Map.get(state.tabs, to_tab_id) do
-      bridge = %{
-        cap_id: cap.id,
-        from_tab_id: from_tab_id,
-        to_tab_id: to_tab_id,
-        ops: cap.ops,
-        expires_at: cap.expires_at,
-        created_at: System.monotonic_time(:millisecond)
-      }
+      if Backlog.full?(state.audit) do
+        state =
+          audit(state, :deny, %{
+            reason: :audit_unavailable,
+            from_tab_id: from_tab_id,
+            to_tab_id: to_tab_id,
+            cap_id: cap.id
+          })
 
-      Audit.record(:bridge, %{from_tab_id: from_tab_id, to_tab_id: to_tab_id, cap_id: cap.id})
-      {:reply, {:ok, bridge}, put_in(state, [:bridges, cap.id], bridge)}
+        {:reply, {:error, :audit_unavailable}, state}
+      else
+        bridge = %{
+          cap_id: cap.id,
+          from_tab_id: from_tab_id,
+          to_tab_id: to_tab_id,
+          ops: cap.ops,
+          expires_at: cap.expires_at,
+          created_at: System.monotonic_time(:millisecond)
+        }
+
+        state =
+          audit(state, :bridge, %{from_tab_id: from_tab_id, to_tab_id: to_tab_id, cap_id: cap.id})
+
+        {:reply, {:ok, bridge}, put_in(state, [:bridges, cap.id], bridge)}
+      end
     else
       _ ->
-        Audit.record(:deny, %{
-          reason: :bridge_tab_not_connected,
-          from_tab_id: from_tab_id,
-          to_tab_id: to_tab_id
-        })
+        state =
+          audit(state, :deny, %{
+            reason: :bridge_tab_not_connected,
+            from_tab_id: from_tab_id,
+            to_tab_id: to_tab_id
+          })
 
         {:reply, {:error, :tab_not_connected}, state}
     end
@@ -166,13 +210,21 @@ defmodule Lattice.Topology do
   end
 
   def handle_call({:disconnect_tab, tab_id}, _from, state) do
-    {reply, state} = close_tab(state, tab_id, :disconnected, :tab_disconnect, :normal)
+    {reply, state} =
+      close_tab(prepare_audit(state), tab_id, :disconnected, :tab_disconnect, :normal)
+
     {:reply, reply, state}
   end
 
   def handle_call({:eject, tab_id, reason}, _from, state) do
-    {reply, state} = close_tab(state, tab_id, :ejected, :tab_eject, reason)
+    {reply, state} = close_tab(prepare_audit(state), tab_id, :ejected, :tab_eject, reason)
     {:reply, reply, state}
+  end
+
+  def handle_call(:flush_audit, _from, state) do
+    {audit, %{flushed: flushed, outcome: outcome}} = Backlog.flush(state.audit)
+    state = arm_audit_retry(%{state | audit: audit}, outcome)
+    {:reply, {:ok, Map.put(Backlog.status(state.audit), :flushed, flushed)}, state}
   end
 
   def handle_call(:snapshot, _from, state) do
@@ -188,20 +240,32 @@ defmodule Lattice.Topology do
      }, state}
   end
 
+  # Cleanup records are written (or queued) before the drain; what Audit cannot
+  # take is counted in a `:reset` gap carried into the fresh state (D-241).
   def handle_call(:reset, _from, state) do
-    state.tabs
-    |> Map.values()
-    |> Enum.each(&cleanup_workers(&1, :reset))
+    state =
+      state.tabs
+      |> Map.values()
+      |> Enum.reduce(prepare_audit(state), &cleanup_workers(&2, &1, :reset))
 
-    {:reply, :ok, %{tabs: %{}, bridges: %{}}}
+    cancel_audit_retry(state)
+    audit = state.audit |> Backlog.drain() |> Backlog.discard_into_gap(:reset)
+    {:reply, :ok, arm_audit_retry(fresh_state(audit), :unavailable)}
   end
 
   @impl true
+  def handle_info(:flush_audit, state) do
+    {audit, %{outcome: outcome}} = Backlog.flush(state.audit)
+    {:noreply, arm_audit_retry(%{state | audit: audit, audit_retry: nil}, outcome)}
+  end
+
   def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
     case Enum.find(state.tabs, fn {_id, tab} -> tab.connection_ref == ref end) do
       {tab_id, _tab} ->
         {_reply, state} =
-          close_tab(state, tab_id, :disconnected, :tab_disconnect, :connection_down)
+          state
+          |> prepare_audit()
+          |> close_tab(tab_id, :disconnected, :tab_disconnect, :connection_down)
 
         Task.start(fn -> Lattice.CapStore.revoke_tab(tab_id, :connection_down) end)
         {:noreply, state}
@@ -214,23 +278,25 @@ defmodule Lattice.Topology do
   defp close_tab(state, tab_id, lifecycle_state, audit_type, reason) do
     case Map.fetch(state.tabs, tab_id) do
       {:ok, %Tab{state: :connected} = tab} ->
-        cleanup_workers(tab, reason)
+        state = cleanup_workers(state, tab, reason)
         closed_tab = Tab.close(tab, lifecycle_state)
         {bridges, removed_bridge_ids} = remove_tab_bridges(state.bridges, tab_id)
 
-        Audit.record(audit_type, %{
-          tab_id: tab_id,
-          reason: inspect(reason),
-          session_id: tab.session_id
-        })
-
-        Enum.each(removed_bridge_ids, fn bridge_id ->
-          Audit.record(:bridge_cleanup, %{
+        state =
+          audit(state, audit_type, %{
             tab_id: tab_id,
-            bridge_id: bridge_id,
-            reason: inspect(reason)
+            reason: inspect(reason),
+            session_id: tab.session_id
           })
-        end)
+
+        state =
+          Enum.reduce(removed_bridge_ids, state, fn bridge_id, state ->
+            audit(state, :bridge_cleanup, %{
+              tab_id: tab_id,
+              bridge_id: bridge_id,
+              reason: inspect(reason)
+            })
+          end)
 
         state =
           state
@@ -247,18 +313,68 @@ defmodule Lattice.Topology do
     end
   end
 
-  defp cleanup_workers(%Tab{} = tab, reason) do
-    Enum.each(tab.owned_workers, fn pid ->
+  defp cleanup_workers(state, %Tab{} = tab, reason) do
+    Enum.reduce(tab.owned_workers, state, fn pid, state ->
       if Process.alive?(pid) do
         DynamicSupervisor.terminate_child(Lattice.TabWorkerSupervisor, pid)
       end
 
-      Audit.record(:worker_cleanup, %{
+      audit(state, :worker_cleanup, %{
         tab_id: tab.id,
         worker: inspect(pid),
         reason: inspect(reason)
       })
     end)
+  end
+
+  defp fresh_state(audit), do: %{tabs: %{}, bridges: %{}, audit: audit, audit_retry: nil}
+
+  # The audit helpers below mirror `Lattice.CapStore` (row 313).
+  defp prepare_audit(state) do
+    if Backlog.owed?(state.audit) do
+      {audit, %{outcome: outcome}} = Backlog.flush(state.audit)
+      arm_audit_retry(%{state | audit: audit}, outcome)
+    else
+      state
+    end
+  end
+
+  defp audit(state, type, metadata) do
+    case Backlog.record(state.audit, type, metadata) do
+      {:written, audit} -> %{state | audit: audit}
+      {_deferred_or_dropped, audit} -> arm_audit_retry(%{state | audit: audit}, :unavailable)
+    end
+  end
+
+  defp arm_audit_retry(state, outcome) do
+    cond do
+      not Backlog.owed?(state.audit) ->
+        state
+
+      outcome == :more ->
+        cancel_audit_retry(state)
+        %{state | audit_retry: Process.send_after(self(), :flush_audit, 0)}
+
+      state.audit_retry == nil ->
+        %{state | audit_retry: Process.send_after(self(), :flush_audit, Backlog.retry_ms())}
+
+      true ->
+        state
+    end
+  end
+
+  defp cancel_audit_retry(%{audit_retry: nil}), do: :ok
+
+  defp cancel_audit_retry(%{audit_retry: ref}) do
+    if Process.cancel_timer(ref) == false do
+      receive do
+        :flush_audit -> :ok
+      after
+        0 -> :ok
+      end
+    end
+
+    :ok
   end
 
   defp remove_tab_bridges(bridges, tab_id) do

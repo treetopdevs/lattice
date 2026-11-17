@@ -6,7 +6,7 @@ defmodule Lattice2.AuthorityBodyTest do
   alias Lattice.Canonical
   alias Lattice.Graph.{AuthorityBody, Export, ReplicaSnapshot}
   alias Lattice.Sim
-  alias Township.{Matter, ReadModel}
+  alias Township.{AuditBundle, Matter, ReadModel}
 
   @replica "replica:matter:authority-body"
   @tags [:genesis, :grant, :transfer, :succeed, :heartbeat, :revoke, :request, :beacon]
@@ -216,6 +216,52 @@ defmodule Lattice2.AuthorityBodyTest do
     end
   end
 
+  # Row 325: admission checks a Matter command's name, arity and effect shape,
+  # never its value, so an ordinary capability writes any encodable term into
+  # state. The per-run assertions keep the property from going vacuous (D-317).
+  @tag :tmp_dir
+  property "Township model text slots stay display-safe on admitted attacker-shaped command arguments",
+           %{tmp_dir: tmp_dir} do
+    sim = matter_command_sim()
+
+    commands = member_of([:set_title, :set_summary, :post, :admit, :remove_member])
+    calls = tuple({commands, encodable_gen(), boolean()})
+
+    check all(
+            {cmd, arg, authorized?} <- filter(calls, &signable?({elem(&1, 0), [elem(&1, 1)]}), 50),
+            max_runs: 50
+          ) do
+      opts = if authorized?, do: [], else: [cap: :none]
+      {sim, op} = Sim.command(sim, "resident", cmd, [arg], opts)
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+      model = ReadModel.observe(log, labels: %{}, vouches: [])
+      raw = Lattice.state(Matter, log)
+      context = inspect({cmd, arg, authorized?})
+
+      if authorized? do
+        refute Map.has_key?(model.roles.reasons, op.id), context
+        assert raw_reached?(raw, cmd, arg), context
+      else
+        assert Map.has_key?(model.roles.reasons, op.id), context
+
+        if cmd in [:admit, :remove_member],
+          do: assert(Enum.any?(model.members.denied, &(&1.op_id == op.id)), context)
+      end
+
+      for text <- model_text_slots(model), do: assert(display_text?(text), context)
+      assert is_binary(Jason.encode!(%{threads: model.threads, members: model.members}))
+      replay = ReadModel.replay(log)
+      assert is_binary(Jason.encode!(replay))
+
+      for %{"state" => state} <- replay["frames"],
+          text <- [state["title"], state["summary"] | state["posts"] ++ state["members"]],
+          do: assert(display_text?(text), context)
+
+      assert {:ok, _manifest} = AuditBundle.write(tmp_dir, log)
+      assert is_map(Jason.decode!(File.read!(Path.join(tmp_dir, "state.json"))))
+    end
+  end
+
   # D-317: the property must reach loan/3, Toolshed's only AuthorityBody
   # consumer, so it first establishes custody with the borrower and an active
   # leased borrow Cap, then lets the borrower append attacker-shaped grants.
@@ -368,6 +414,31 @@ defmodule Lattice2.AuthorityBodyTest do
     {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
     {Sim.sync_all(sim), good}
   end
+
+  defp matter_command_sim do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "authority-body-commands")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, _grant} =
+      Sim.grant(sim, "clerk", "resident",
+        ops: [:set_title, :set_summary, :post, :admit, :remove_member]
+      )
+
+    Sim.sync_all(sim)
+  end
+
+  defp raw_reached?(raw, :set_title, arg), do: raw.title == arg
+  defp raw_reached?(raw, :set_summary, arg), do: raw.summary == arg
+  defp raw_reached?(raw, :post, arg), do: List.last(raw.posts) == arg
+  defp raw_reached?(raw, :admit, arg), do: arg in raw.members
+  defp raw_reached?(raw, :remove_member, arg), do: arg not in raw.members
+
+  defp model_text_slots(model) do
+    [model.threads.title, model.threads.summary | model.threads.posts] ++
+      model.members.current ++ Enum.map(model.members.denied, & &1.member)
+  end
+
+  defp display_text?(text), do: is_binary(text) and String.valid?(text)
 
   defp append_log(sim, body) do
     {sim, _op} = Sim.append(sim, "clerk", :authority, body)

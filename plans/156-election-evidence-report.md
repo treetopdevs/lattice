@@ -124,6 +124,18 @@ PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-
 - `apps/lattice_core/lib/township/election/report.ex` (create)
 - `apps/lattice_core/lib/mix/tasks/lattice.election.report.ex` (create)
 - `apps/lattice_core/test/township/election_report_test.exs` (create)
+- `apps/lattice_core/test/support/election_report_fixture.ex` (create; test-only producer
+  compiled only in `MIX_ENV=test`, shared by the test and the research harness; D-792)
+- `scripts/research/election_evidence_report.exs` (create; labelled `MIX_ENV=test` research
+  harness, kept out of the `scripts/township_*` path filter; D-792)
+- `plans/README.md` (row 156 status), this plan, and
+  `plans/decisions-2026-10-17-backlog-run.html` (D-790 onward)
+
+Amendment (2026-11-16, row 156 implementation): the task also takes an optional
+`--open-certificate ID`. With it, close evidence is recomputed from the decoded bundle
+with `UnanimousBoxesV1.verify/4` under that operator-asserted id; only `{:ok, evidence}`
+is accepted and anything else writes nothing. The bundle format is unchanged (D-790).
+`projector.ex` no longer exists; replay is `Township.Election.replay/3` (D-791).
 
 **Out of scope** (do NOT touch):
 
@@ -249,7 +261,12 @@ Machine-checkable. ALL must hold:
 - [ ] `~/.asdf/shims/mix test apps/lattice_core/test/township/` exits 0 (no election contract disturbed)
 - [ ] `~/.asdf/shims/mix verify` exits 0 and `~/.asdf/shims/mix check` exits 0
 - [ ] `grep -rn "def render" apps/lattice_core/lib/township/election/report.ex` → present; `grep -c "<script" apps/lattice_core/lib/township/election/report.ex` → `0`
-- [ ] `git status` shows no modified files outside the in-scope list
+- [ ] `mix lattice.election.report --bundle PATH --out PATH [--open-certificate ID]` writes a
+      report only for a verified bundle (and verified close evidence when the flag is given)
+- [ ] `MIX_ENV=test mix do compile, run scripts/research/election_evidence_report.exs` prints the
+      research banner and writes `tmp/election_report/report.html`
+- [ ] `git status` shows no modified files outside the in-scope list (including the amended
+      additions above)
 - [ ] `plans/README.md` status row for 156 updated
 
 ## STOP conditions
