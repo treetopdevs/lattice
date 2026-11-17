@@ -230,6 +230,30 @@ defmodule LatticeCarrierServer.Operator.CatalogClosedBindingSigningTest do
       assert {:error, :catalog_binding_unresolved} = sign(package, ceremony, seed)
       assert {:ok, %{head: %{"revision" => 0}}} = SigningLedger.status(ceremony, binding)
     end
+
+    # D-917 (review round 2): ct is T's catalog, outside the ledger, so D-915 does not drop a
+    # forged copy; the resolver refuses it and makes the citing replacement raw evidence,
+    # which removes its closure effect. Forged retained evidence must refuse, never sign.
+    test "a forged retained ct or T is :catalog_binding_unresolved (never signs)", f do
+      forged_ct = %{f.ct | signature: :binary.copy(<<0>>, 64)}
+      forged_t = %{f.t.envelope | old_signature: :binary.copy(<<0>>, 64)}
+      assert {:ok, g} = resolve(f.base, f.log, [f.c0, forged_ct], [f.t.envelope])
+      refute f.b in CatalogBindingGraph.closed(g)
+
+      {binding, ceremony, seed} = signed_c0!(f, "rotation-forged")
+      package = package(f.base, f.log, binding, f.c1)
+
+      for retained <- [
+            [rotations: [f.t.envelope], catalogs: [forged_ct]],
+            [rotations: [forged_t], catalogs: [f.ct]],
+            [rotations: [forged_t], catalogs: [forged_ct]]
+          ] do
+        assert {:error, :catalog_binding_unresolved} =
+                 sign(package, ceremony, seed, retained: retained)
+      end
+
+      assert {:ok, %{head: %{"revision" => 0}}} = SigningLedger.status(ceremony, binding)
+    end
   end
 
   test "a union-refused but D-276-eligible R' citing B still refuses with :catalog_binding_closed",

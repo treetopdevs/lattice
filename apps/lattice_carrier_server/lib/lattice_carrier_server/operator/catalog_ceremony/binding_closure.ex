@@ -13,8 +13,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
   catalog whose id the ledger holds at any revision never reaches the resolver, and
   two conflicting retained copies of one id are unresolved. The ledger's binding id in
   `CatalogBindingGraph.closed/1` (D-275, which includes an ancestor of a cited
-  rotation) or in `closed_out/1` is `:catalog_binding_closed`; every resolver error
-  and every malformed input is `:catalog_binding_unresolved`. Both refuse.
+  rotation) or in `closed_out/1` is `:catalog_binding_closed`; every resolver error,
+  every malformed input, any raw-evidence replacement and any retained catalog or
+  rotation the resolver refuses (D-917: forged evidence could otherwise hide closure) is
+  `:catalog_binding_unresolved`. Both refuse.
 
   Non-claims: closure is judged only over the Space history the package carries
   (no freshness guarantee; the custodian keeps no Space state of its own), and this
@@ -28,14 +30,21 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
   @spec check(map(), [map()], keyword()) ::
           :ok | {:error, :catalog_binding_closed | :catalog_binding_unresolved}
   def check(package, ledger_chain, retained \\ []) do
-    with {:ok, input} <- input(package, ledger_chain, retained),
+    with {:ok, input, kept} <- input(package, ledger_chain, retained),
          {:ok, graph} <- CatalogBindingGraph.resolve(input) do
       id = Binding.binding_id(package.binding)
 
-      if id in CatalogBindingGraph.closed(graph) or
-           Map.has_key?(CatalogBindingGraph.closed_out(graph), id),
-         do: {:error, :catalog_binding_closed},
-         else: :ok
+      cond do
+        id in CatalogBindingGraph.closed(graph) or
+            Map.has_key?(CatalogBindingGraph.closed_out(graph), id) ->
+          {:error, :catalog_binding_closed}
+
+        hidden?(graph, kept) ->
+          {:error, :catalog_binding_unresolved}
+
+        true ->
+          :ok
+      end
     else
       _ -> {:error, :catalog_binding_unresolved}
     end
@@ -45,13 +54,28 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
     _, _ -> {:error, :catalog_binding_unresolved}
   end
 
+  # D-917: evidence the resolver rejects can hide closure. A replacement citing an
+  # intrinsically invalid prior is raw evidence with no closing effect (OD-17), so a forged
+  # retained copy of a catalog or rotation the ledger does not hold (ids exclude signatures)
+  # would turn a closed binding into an open one. Any retained catalog or rotation the
+  # resolver refuses, and any raw-evidence replacement refuted for its evidence rather than
+  # for its authority (an ineligible author never closes anything), refuse as unresolved.
+  defp hidden?(graph, kept) do
+    refusals = Map.fetch!(graph, :refusals)
+
+    Enum.any?(kept, &Map.has_key?(refusals, &1)) or
+      Enum.any?(Map.fetch!(graph, :raw_evidence), fn {_, why} ->
+        why != :catalog_authority_refused
+      end)
+  end
+
   defp input(package, chain, retained) do
     binding = package.binding
 
     with %Log{} = space <- space(package),
          {:ok, record} <- Binding.bootstrap_record(space, binding.bootstrap_id),
          true <- bootstrap_matches?(binding, record),
-         {:ok, catalogs} <- catalogs(package, chain, Keyword.get(retained, :catalogs, [])),
+         {:ok, catalogs, kept} <- catalogs(package, chain, Keyword.get(retained, :catalogs, [])),
          {:ok, rotations} <-
            unique(Keyword.get(retained, :rotations, []), &TransportCatalog.rotation_id/1) do
       {:ok,
@@ -63,7 +87,7 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
          catalogs: catalogs,
          proven_cutoffs: [],
          accepted: nil
-       }}
+       }, kept ++ Map.keys(rotations)}
     else
       _ -> :error
     end
@@ -106,10 +130,10 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
       Enum.filter(signed, &(&1.catalog.revision < revision or &1.catalog == package.catalog))
 
     with {:ok, kept} <- unique(retained, &TransportCatalog.catalog_id(&1.catalog)) do
-      {:ok,
-       kept
-       |> Map.reject(fn {id, _} -> MapSet.member?(ledger, id) end)
-       |> Map.merge(Map.new(evidence, &{TransportCatalog.catalog_id(&1.catalog), &1}))}
+      kept = Map.reject(kept, fn {id, _} -> MapSet.member?(ledger, id) end)
+
+      {:ok, Map.merge(kept, Map.new(evidence, &{TransportCatalog.catalog_id(&1.catalog), &1})),
+       Map.keys(kept)}
     end
   end
 

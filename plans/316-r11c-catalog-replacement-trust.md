@@ -1,6 +1,6 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3, PR 4a and PR 6 are MERGED (#213, #214, #216, #217, #218, #220, #221; 4a is `13719b0f6`: resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). PR 3's closed-binding refusal (row 360) is DONE on branch `claude/360-ledger-refuses-closed-binding` (D-910–D-916). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3, PR 4a and PR 6 are MERGED (#213, #214, #216, #217, #218, #220, #221; 4a is `13719b0f6`: resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). PR 3's closed-binding refusal (row 360) is DONE on branch `claude/360-ledger-refuses-closed-binding` (D-910–D-917). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
 PR 3's generation keying and PR 6's exporter test were the fixture-startable slices. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal needed only PR 4a's `closed/1` and `closed_out/1` and is done (row 360); PR 6's C15 run waits on PR 4c. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
@@ -31,13 +31,14 @@ bytes unchanged), `Binding.replacement/3` derives a replacement binding from a n
 (derivation only, no production caller), and a replacement revision 0 must equal the claim's
 inventory digest under the new service identity. Binding-id threading through
 signing/evidence/listing/staging is row 361.
-PR 3's closed-binding refusal (row 360, D-910–D-916) is DONE: `SignCatalog.sign_reviewed/5` (and so
+PR 3's closed-binding refusal (row 360, D-910–D-917) is DONE: `SignCatalog.sign_reviewed/5` (and so
 the CLI's `sign/4`) runs `CatalogBindingGraph.resolve/1` inside the ledger lock, before key access
 and before any ledger write, over the package's Space and Thread histories, the ledger's own signed
 envelopes below the package's revision plus its stored copy (D-916; ledger copies always win over
 retained ones, D-915) and retained rotations/catalogs (`BindingClosure.check/3`). A binding in `closed/1`
 (D-275, including ancestor B of a cited rotation T) or `closed_out/1` refuses as
-`catalog_binding_closed`; every resolver error or malformed input refuses as
+`catalog_binding_closed`; every resolver error or malformed input, any retained catalog or rotation
+the resolver refuses, and any replacement made raw evidence by its evidence (D-917) refuses as
 `catalog_binding_unresolved`. Non-claims: closure is judged only over the Space history the package
 carries (no freshness; row 550); no retained-client acceptance, route switch or 4c wiring; no
 custodian rotation or replacement ceremony (OD-13, row 361); no CLI-level closed-binding test (row

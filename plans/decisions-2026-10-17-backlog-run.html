@@ -4372,6 +4372,14 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>Persisting histories is a design change beyond this slice (row 553). Leaving a newer ledger catalog out never opens a closed binding: a replacement or rotation citing it pends and refuses; pinned by tests citing C1 directly and through a rotation, with no, valid and forged retained C1.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
+<section id="d917"><h2><span>D-917</span> Row 360 review: evidence the resolver rejects refuses as unresolved</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 review round 2 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>Review P1: D-915 drops retained copies only under ledger ids. A catalog CT of a valid rotation T (descended from B) is outside the ledger, so a retained CT with a zeroed signature made the replacement citing T and CT raw evidence (OD-17), removed its closure effect and let C1 sign under B (reproduced through <code>sign_reviewed/5</code>; valid CT gave <code>catalog_binding_closed</code>, no CT gave <code>catalog_binding_unresolved</code>). A forged retained T has the same shape.</dd>
+<dt>Options</dt><dd>Verify retained artifacts before resolving (duplicates the resolver's key and chain logic); refuse on any raw-evidence replacement; refuse when a retained artifact is refused or a replacement is raw for its evidence.</dd>
+<dt>Decision</dt><dd>The third: after a non-closed verdict, any retained catalog or rotation in the resolver's refusals, or any raw-evidence replacement whose reason is not <code>catalog_authority_refused</code>, refuses as <code>catalog_binding_unresolved</code>. Closed still wins.</dd>
+<dt>Reason</dt><dd>The resolver stays the only judge (no parallel verifier). Refusing on every raw replacement broke the legitimate replacement revision 0 signing, whose Space holds an authority-ineligible (<code>live_capability</code>) candidate; an ineligible author never closes anything, so that class stays signable. Junk retained evidence now fails closed; the operator drops it and re-runs. Pinned by forged CT, forged T and both, extending the ancestor-rotation test.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
