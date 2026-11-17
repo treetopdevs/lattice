@@ -77,9 +77,9 @@ defmodule Treehouse.CatalogReplacementTrust do
 
   @doc """
   Wrap a bare `CatalogTrust` state as an installed state with nothing served yet. Its accepted
-  watermark (binding, catalog, and the cumulative route table of the accepted catalog) is
-  carried into the graph state, so a later replacement is judged against what the client
-  already accepted.
+  watermark (binding, catalog, and the cumulative route table of every catalog on the accepted
+  chain, D-881) is carried into the graph state, so a later replacement is judged against every
+  route the client already accepted.
   """
   @spec wrap(map()) :: map()
   def wrap(trust) do
@@ -87,19 +87,61 @@ defmodule Treehouse.CatalogReplacementTrust do
     %{trust: trust, binding: binding, extra: %{catalogs: []}, routes: []}
   end
 
-  defp watermark(%{accepted: %{catalog: id} = accepted, catalogs: catalogs}) do
+  # The cumulative route table is every route of every catalog on the accepted chain, walked as
+  # `CatalogTrust`'s accepted support is: the accepted catalog's `previous` chain, then for each
+  # rotation from the accepted binding up to the bootstrap, its prior catalog's `previous` chain.
+  # If two catalogs map one route to different replicas, the newer catalog's replica is kept. A
+  # link the trust state does not hold ends that branch.
+  defp watermark(%{accepted: %{catalog: id, binding: binding} = accepted} = trust) do
+    catalogs =
+      for %{id: cid, json: json} <- trust.catalogs,
+          {:ok, %{catalog: catalog}} <- [TransportCatalog.decode_catalog_json(json)],
+          into: %{},
+          do: {cid, catalog}
+
+    rotations =
+      for %{id: rid, json: json} <- trust.rotations,
+          {:ok, %{rotation: rotation}} <- [decode_rotation(json)],
+          into: %{},
+          do: {rid, rotation}
+
+    priors = rotation_priors(binding, rotations, MapSet.new())
+
     routes =
-      with %{json: json} <- Enum.find(catalogs, &(&1.id == id)),
-           {:ok, %{catalog: catalog}} <- TransportCatalog.decode_catalog_json(json) do
-        Map.new(catalog.entries, &{&1.route, &1.replica})
-      else
-        _ -> %{}
-      end
+      Enum.reduce([id | priors], {%{}, MapSet.new()}, fn start, acc ->
+        chain_routes(start, catalogs, acc)
+      end)
+      |> elem(0)
 
     Map.put(accepted, :routes, routes)
   end
 
   defp watermark(_trust), do: nil
+
+  defp rotation_priors(binding, rotations, seen) do
+    case rotations[binding] do
+      %{prior_catalog: prior, parent: parent} ->
+        if MapSet.member?(seen, binding),
+          do: [],
+          else: [prior | rotation_priors(parent, rotations, MapSet.put(seen, binding))]
+
+      nil ->
+        []
+    end
+  end
+
+  defp chain_routes(nil, _catalogs, acc), do: acc
+
+  defp chain_routes(id, catalogs, {routes, seen} = acc) do
+    case {MapSet.member?(seen, id), catalogs[id]} do
+      {false, %{} = catalog} ->
+        routes = Enum.reduce(catalog.entries, routes, &Map.put_new(&2, &1.route, &1.replica))
+        chain_routes(catalog.previous, catalogs, {routes, MapSet.put(seen, id)})
+
+      _ ->
+        acc
+    end
+  end
 
   @spec evaluate(term()) :: map()
   def evaluate(%{
@@ -140,7 +182,7 @@ defmodule Treehouse.CatalogReplacementTrust do
   # --- no replacement op: CatalogTrust's decision, plus the mirrored watermark --------------
 
   defp mirrored(installed, decision, trust, extra, ops) do
-    binding = mirror(installed.binding, trust.accepted, decision.routes, ops)
+    binding = mirror(installed.binding, trust, decision.routes, ops)
     next = %{installed | trust: trust, binding: binding, extra: extra, routes: decision.routes}
     waiting? = extra.catalogs != []
 
@@ -160,17 +202,21 @@ defmodule Treehouse.CatalogReplacementTrust do
     })
   end
 
-  defp mirror(binding, nil, _routes, _ops), do: binding
+  defp mirror(binding, %{accepted: nil}, _routes, _ops), do: binding
 
-  defp mirror(%{accepted: previous} = binding, accepted, routes, ops) do
+  defp mirror(%{accepted: previous} = binding, trust, routes, ops) do
     if previous != nil and previous.binding in ops do
       # A watermark the graph holds on a replacement binding is the graph's; CatalogTrust's own
       # accepted catalog never overwrites it.
       binding
     else
+      # The accepted chain's routes too, so a route moved by several catalogs on one page stays
+      # reserved (D-881).
+      %{routes: chain} = accepted = watermark(trust)
       cumulative = (previous && Map.get(previous, :routes, %{})) || %{}
       added = Map.new(routes, &{&1.path, &1.replica})
-      %{binding | accepted: Map.put(accepted, :routes, Map.merge(cumulative, added))}
+      routes = cumulative |> Map.merge(chain) |> Map.merge(added)
+      %{binding | accepted: %{accepted | routes: routes}}
     end
   end
 
@@ -388,9 +434,11 @@ defmodule Treehouse.CatalogReplacementTrust do
     end
   end
 
-  # The catalog key each replacement op claims, for ops whose claim decodes.
+  # The catalog key each replacement op claims, for ops of the command's arity (claim and two
+  # possession proofs, as the TS decoder requires) whose claim decodes. A sidecar catalog bound to
+  # an op of any other arity has no key and is dropped (D-881).
   defp catalog_keys(space) do
-    for {id, %Op{kind: :command, body: {:replace_catalog_v1, [claim | _]}}} <- Log.ops(space),
+    for {id, %Op{kind: :command, body: {:replace_catalog_v1, [claim, _, _]}}} <- Log.ops(space),
         {:ok, %{new_catalog_key: key}} <- [TransportCatalog.normalize_replacement_claim(claim)],
         into: %{},
         do: {id, key}

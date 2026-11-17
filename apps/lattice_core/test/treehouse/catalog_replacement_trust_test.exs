@@ -681,4 +681,323 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       {w, deliver.(trust, [c1], histories), c1}
     end
   end
+
+  # --- D-881: review findings, replayed in BEAM and in the TS twin ------------------------------
+  #
+  # 1. `wrap/1` keeps the route table of every catalog on the accepted chain, not only the
+  #    accepted catalog's: a route the client served earlier stays reserved.
+  # 2. A `replace_catalog_v1` body that is not a 2-tuple is not a replacement op in either runtime.
+  # 3. A sidecar catalog bound to a `{:replace_catalog_v1, [claim]}` op (wrong argument count) is
+  #    dropped in both runtimes: no catalog key is read from a command of the wrong arity.
+
+  describe "D-881 review findings" do
+    test "wrap keeps the routes of every catalog on the accepted chain" do
+      s = d881_moved_route()
+      routes = CatalogReplacementTrust.wrap(s.trust).binding.accepted.routes
+      assert routes[s.route_b] == s.thread_replica
+      assert routes[s.route_b2] == s.thread_replica
+    end
+
+    test "wrap keeps the routes of catalogs before a rotation" do
+      f = CatalogTrustVectors.fixture(1)
+
+      moved =
+        Enum.map(
+          f.catalog.entries,
+          &%{&1 | route: "/r/" <> CatalogTrustVectors.id("d881" <> &1.replica)}
+        )
+
+      c1 = revision(f, f.catalog_envelope, 1, f.space.catalog, moved)
+      key = Identity.from_seed("catalog-d881", "r316-d881-rotation")
+
+      rotation = %{
+        f.rotation
+        | prior_catalog: TransportCatalog.catalog_id(c1.catalog),
+          nonce: CatalogTrustVectors.id("d881-rotation"),
+          new_catalog_key: key.pub,
+          inventory_digest: TransportCatalog.inventory_id(moved)
+      }
+
+      t = CatalogTrustVectors.sign_rotation(rotation, f.space.catalog, key)
+      ct = first_under(f, t, key, moved)
+
+      trust =
+        Enum.reduce(
+          [
+            page(catalogs: [c1]),
+            page(rotations: [t], proofs: f.cutoff_proofs),
+            page(catalogs: [ct])
+          ],
+          install(f),
+          fn page, state ->
+            %{kind: :propose, next: next} =
+              CatalogTrust.evaluate(%{installed: state, expected: @expected, incoming: page})
+
+            next
+          end
+        )
+
+      assert trust.accepted.binding == TransportCatalog.rotation_id(t)
+      routes = CatalogReplacementTrust.wrap(trust).binding.accepted.routes
+      for e <- f.catalog.entries ++ moved, do: assert(routes[e.route] == e.replica)
+    end
+
+    test "a descendant replacement reusing a route the accepted chain served stays frozen" do
+      [_, _, _, last] = d881_views(d881_moved_route().run)
+      assert {last["frozen"], last["routes"], last["origin"]} == {true, 0, nil}
+      assert last["accepted"] == "B/C2"
+    end
+
+    test "the mirrored watermark keeps a route moved within one page" do
+      [_, mid, last] = d881_views(d881_moved_route().one_page)
+      assert {mid["accepted"], mid["routes"]} == {"B/C2", 2}
+      assert {last["frozen"], last["routes"], last["origin"]} == {true, 0, nil}
+      assert last["accepted"] == "B/C2"
+    end
+
+    test "a replace_catalog_v1 body of the wrong tuple arity is not a replacement op" do
+      [_, last] = d881_views(d881_three_tuple())
+      assert last["refused"] == []
+      assert {last["accepted"], last["routes"], last["frozen"]} == {"B/C0", 1, false}
+    end
+
+    test "a catalog bound to a replace_catalog_v1 command of the wrong arity is dropped" do
+      [_, last] = d881_views(d881_one_argument())
+      assert last["sidecar"] == 0
+      assert {last["accepted"], last["routes"]} == {"B/C0", 1}
+    end
+
+    @tag :replacement_demo
+    @tag timeout: 180_000
+    test "BEAM equals TS on the D-881 runs" do
+      moved = d881_moved_route()
+      runs = [moved.run, moved.one_page, d881_three_tuple(), d881_one_argument()]
+      beam = Map.new(runs, &{&1.name, d881_views(&1)})
+
+      path =
+        Path.join(
+          System.tmp_dir!(),
+          "replacement-d881-#{System.unique_integer([:positive])}.json"
+        )
+
+      doc = %{
+        "format" => "lattice-replacement-demo-v1",
+        "history" => hd(runs).history,
+        "labels" => Enum.reduce(runs, %{}, &Map.merge(&2, &1.labels)),
+        "runs" =>
+          for run <- runs do
+            %{
+              "name" => run.name,
+              "history" => run.history,
+              "steps" =>
+                Enum.map(run.steps, fn {title, page, mode} ->
+                  %{
+                    "title" => title,
+                    "print" => false,
+                    "mode" => to_string(mode),
+                    "page" => W.page_json(page)
+                  }
+                end)
+            }
+          end
+      }
+
+      File.write!(path, Jason.encode!(doc))
+      on_exit(fn -> File.rm(path) end)
+
+      {out, status} =
+        System.cmd(
+          "node",
+          ["--import", "tsx", "test/support/consume_catalog_replacement_demo.ts", path],
+          cd: Path.expand("../../../../clients/lattice-client", __DIR__),
+          stderr_to_stdout: true
+        )
+
+      assert status == 0, out
+      [views] = for "VIEWS " <> json <- String.split(out, "\n", trim: true), do: json
+      assert Jason.decode!(views) == beam
+    end
+  end
+
+  # Each step either evaluates through the composed evaluator (`:eval`, with a view) or goes
+  # through `CatalogTrust` alone and is wrapped (`:trust`, no view), as the TS consumer does.
+  defp d881_views(run) do
+    {_state, views} =
+      Enum.reduce(run.steps, {W.install(run.world), []}, fn {_title, page, mode}, {state, acc} ->
+        case mode do
+          :trust ->
+            %{next: trust} =
+              CatalogTrust.evaluate(%{
+                installed: state.trust,
+                expected: @expected,
+                incoming: page
+              })
+
+            {CatalogReplacementTrust.wrap(trust), acc ++ [nil]}
+
+          :eval ->
+            result = W.evaluate(state, page)
+            view = W.view(result, run.labels, run.world.base.record.catalog_key)
+            {W.persist(state, result), acc ++ [view |> Jason.encode!() |> Jason.decode!()]}
+        end
+      end)
+
+    views
+  end
+
+  defp d881_run(w, name, labels, steps),
+    do: %{name: name, world: w, history: w.h0, labels: Map.merge(w.labels, labels), steps: steps}
+
+  # Finding 1: C0 (Space), C1 adds Thread T at /b, C2 moves T to /b2, all accepted through
+  # CatalogTrust and wrapped. R cites {bootstrap, nil}; its descendant R2 carries T on a fresh
+  # route and a second Thread at /b. /b was served under C1, so K2 is a rollback and the client
+  # stays frozen.
+  defp d881_moved_route do
+    w = W.build()
+    base = w.base
+    [space] = w.c0.catalog.entries
+    t = Map.fetch!(base.threads, "thread")
+    t2 = Map.fetch!(base.threads, "thread2")
+    route_b = "/r/" <> F.id("d881-b")
+    route_b2 = "/r/" <> F.id("d881-b2")
+
+    c1 =
+      F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, [
+        space,
+        at(base, space, "thread", route_b)
+      ])
+
+    c2 =
+      F.catalog(base, base.boot.id, 2, F.cid(c1), base.catalog, [
+        space,
+        at(base, space, "thread", route_b2)
+      ])
+
+    r = F.replacement(base, base.log, "d881-r")
+    lr = W.with_ops(base, [r.op])
+
+    {:ok, %{cutoff: space_cut}} = Treehouse.CatalogCutoff.derive(lr)
+    {:ok, %{cutoff: t_cut}} = Treehouse.CatalogCutoff.derive(t.log)
+    {:ok, %{cutoff: t2_cut}} = Treehouse.CatalogCutoff.derive(t2.log)
+
+    # R2's entries move onto R2's own service pair (F.replacement's default for "d881-r2").
+    {sid, skey} = {F.id("service-id-d881-r2"), F.identity("service-d881-r2").pub}
+
+    r2_entries =
+      for e <- [
+            space,
+            at(base, space, "thread", "/r/" <> F.id("d881-fresh")),
+            at(base, space, "thread2", route_b)
+          ],
+          do: %{e | service_id: sid, service_key: skey}
+
+    r2 =
+      F.replacement(base, lr, "d881-r2",
+        parents: [r.id],
+        prior_catalogs: [%{binding: r.id, catalog: nil}],
+        generation: 2,
+        entries: r2_entries,
+        claim: %{cutoffs: Enum.sort_by([space_cut, t_cut, t2_cut], & &1.replica)}
+      )
+
+    k2 = F.first(base, r2)
+    l2 = W.with_ops(base, [r.op, r2.op])
+    raw = &CatalogTrustVectors.raw_history/1
+
+    proofs = [
+      w.proof,
+      %{cutoff: space_cut, history: raw.(lr)},
+      %{cutoff: t_cut, history: raw.(t.log)},
+      %{cutoff: t2_cut, history: raw.(t2.log)}
+    ]
+
+    labels = %{
+      F.cid(c1) => "C1",
+      F.cid(c2) => "C2",
+      r.id => "R",
+      r2.id => "R2",
+      F.cid(k2) => "K2"
+    }
+
+    steps = [
+      {"C0 via trust", W.page(catalogs: [w.c0], logs: [base.log]), :trust},
+      {"C1 via trust", W.page(catalogs: [c1], logs: [base.log, t.log]), :trust},
+      {"C2 via trust", W.page(catalogs: [c2]), :trust},
+      {"R + R2 + K2", W.page(catalogs: [k2], logs: [l2, t2.log], proofs: proofs), :eval}
+    ]
+
+    trust =
+      Enum.reduce(Enum.take(steps, 3), W.install(w).trust, fn {_, page, :trust}, state ->
+        %{next: next} =
+          CatalogTrust.evaluate(%{installed: state, expected: @expected, incoming: page})
+
+        next
+      end)
+
+    # The same history through the composed evaluator alone, C1 and C2 on one page: the mirrored
+    # watermark must keep /b too, not only the routes CatalogTrust serves for C2.
+    one_page = [
+      {"C0", W.page(catalogs: [w.c0], logs: [base.log]), :eval},
+      {"C1 + C2", W.page(catalogs: [c1, c2], logs: [base.log, t.log]), :eval},
+      List.last(steps)
+    ]
+
+    %{
+      run: d881_run(w, "d881_moved_route", labels, steps),
+      one_page: d881_run(w, "d881_moved_route_one_page", labels, one_page),
+      trust: trust,
+      route_b: route_b,
+      route_b2: route_b2,
+      thread_replica: t.replica
+    }
+  end
+
+  defp at(base, space, pool, route), do: F.pool_thread(base, %{space | route: route}, pool)
+
+  # Finding 2: an admin-signed `{:replace_catalog_v1, [], "extra"}` command after C0.
+  defp d881_three_tuple do
+    w = W.build()
+    base = w.base
+
+    op =
+      Op.new(
+        base.admin,
+        base.replica,
+        Log.frontier(base.log),
+        :command,
+        {:replace_catalog_v1, [], "extra"},
+        cap: base.delegation.id
+      )
+
+    d881_run(w, "d881_three_tuple", %{}, [
+      {"install C0", W.page(catalogs: [w.c0], logs: [base.log]), :eval},
+      {"three-tuple op", W.page(logs: [W.with_ops(base, [op])], proofs: [w.proof]), :eval}
+    ])
+  end
+
+  # Finding 3: an admin-signed `{:replace_catalog_v1, [claim]}` (one argument, not three) and a
+  # catalog signed by that claim's catalog key, bound to the op's id.
+  defp d881_one_argument do
+    w = W.build()
+    base = w.base
+    r = F.replacement(base, base.log, "d881-one")
+
+    op =
+      Op.new(
+        base.admin,
+        base.replica,
+        Log.frontier(base.log),
+        :command,
+        {:replace_catalog_v1, [r.claim]},
+        cap: base.delegation.id
+      )
+
+    k = F.catalog(base, op.id, 0, nil, r.catalog_key, r.entries)
+
+    d881_run(w, "d881_one_argument", %{op.id => "R1arg", F.cid(k) => "K1arg"}, [
+      {"install C0", W.page(catalogs: [w.c0], logs: [base.log]), :eval},
+      {"one-argument op + K",
+       W.page(logs: [W.with_ops(base, [op])], proofs: [w.proof], catalogs: [k]), :eval}
+    ])
+  end
 end

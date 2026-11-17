@@ -39,18 +39,50 @@ const emptyBinding = () => ({ accepted: null, frozen: false });
 export function wrapReplacementTrust(trust) {
     return { trust, binding: { ...emptyBinding(), accepted: watermark(trust) }, extra: { catalogs: [] }, routes: [] };
 }
-// The trust state's accepted watermark with the cumulative route table of its accepted catalog, so a later replacement is
-// judged against what the client already accepted.
+// The trust state's accepted watermark with the cumulative route table of every catalog on the accepted chain (D-881), so a
+// later replacement is judged against every route the client already accepted. The chain is walked as the trust state's
+// accepted support is: the accepted catalog's previous chain, then for each rotation from the accepted binding up to the
+// bootstrap, its prior catalog's previous chain. If two catalogs map one route to different replicas, the newer catalog's
+// replica is kept. A link the trust state does not hold ends that branch.
 function watermark(trust) {
     const accepted = trust.accepted;
     if (accepted === null)
         return null;
-    const record = trust.catalogs.find((c) => c.id === accepted.catalog);
-    const envelope = record === undefined ? null : decodeCatalog(record.json);
+    const catalogs = new Map();
+    for (const record of trust.catalogs) {
+        const envelope = decodeCatalog(record.json);
+        if (envelope !== null)
+            catalogs.set(record.id, envelope.catalog);
+    }
+    const rotations = new Map();
+    for (const record of trust.rotations) {
+        const envelope = decodeRotation(record.json);
+        if (envelope !== null)
+            rotations.set(record.id, envelope.rotation);
+    }
+    const starts = [accepted.catalog];
+    for (let binding = accepted.binding, visited = new Set(); !visited.has(binding);) {
+        const rotation = rotations.get(binding);
+        if (rotation === undefined)
+            break;
+        visited.add(binding);
+        starts.push(rotation.priorCatalog);
+        binding = rotation.parent;
+    }
     const routes = {};
-    if (envelope !== null)
-        for (const e of envelope.catalog.entries)
-            routes[e.route] = e.replica;
+    const seen = new Set();
+    for (const start of starts) {
+        for (let id = start; id !== null && !seen.has(id);) {
+            const catalog = catalogs.get(id);
+            if (catalog === undefined)
+                break;
+            seen.add(id);
+            for (const e of catalog.entries)
+                if (!Object.hasOwn(routes, e.route))
+                    routes[e.route] = e.replica;
+            id = catalog.previous;
+        }
+    }
     return { ...accepted, routes };
 }
 /** As prepareTreehouseCatalogInstallation, with the proposed state wrapped. */
@@ -85,13 +117,14 @@ function mirrored(installed, decision, extra, ops) {
         servedOrigin: originOf(decision.routes), trustDecision: decision };
 }
 function mirror(binding, decision, ops) {
-    const accepted = decision.next.accepted;
+    const accepted = watermark(decision.next);
     if (accepted === null)
         return binding;
     // A watermark the graph holds on a replacement binding is the graph's; the trust state's accepted catalog never overwrites it.
     if (binding.accepted !== null && ops.has(binding.accepted.binding))
         return binding;
-    const routes = { ...(binding.accepted?.routes ?? {}) };
+    // The accepted chain's routes too, so a route moved by several catalogs on one page stays reserved (D-881).
+    const routes = { ...(binding.accepted?.routes ?? {}), ...accepted.routes };
     for (const r of decision.routes)
         routes[r.path] = r.replica;
     return { ...binding, accepted: { ...accepted, routes } };
@@ -154,7 +187,8 @@ function readyCatalogs(jsons, ops, keys) {
     }
     return { ready, waiting: waiting.length, kept: [...ready, ...waiting].sort(compareUtf8) };
 }
-// The catalog key each replacement op claims, for ops whose claim decodes.
+// The catalog key each replacement op claims, for ops whose claim decodes. The command decoder requires three arguments, so a
+// catalog bound to an op of any other arity has no key and is dropped; the Elixir twin matches `[claim, _, _]` (D-881).
 function catalogKeys(trust) {
     const keys = new Map();
     try {
@@ -257,7 +291,9 @@ function replaceIds(trust) {
 }
 function isReplaceFrame(frame) {
     const f = frame;
-    if (f.kind !== "command" || !Array.isArray(f.body) || f.body[0] !== "tuple" || !Array.isArray(f.body[1]))
+    // As the Elixir `{:replace_catalog_v1, _}` match: a 2-tuple whose first element is the atom (D-881).
+    if (f.kind !== "command" || !Array.isArray(f.body) || f.body[0] !== "tuple" || !Array.isArray(f.body[1]) ||
+        f.body[1].length !== 2)
         return false;
     const first = f.body[1][0];
     return Array.isArray(first) && first[0] === "atom" && first[1] === "replace_catalog_v1";
