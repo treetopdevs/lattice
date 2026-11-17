@@ -4502,6 +4502,69 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The resolver stays the only judge (no parallel verifier). Refusing on every raw replacement broke the legitimate replacement revision 0 signing, whose Space holds an authority-ineligible (<code>live_capability</code>) candidate; an ineligible author never closes anything, so that class stays signable. Junk retained evidence now fails closed; the operator drops it and re-runs. Pinned by forged CT, forged T and both, extending the ancestor-rotation test.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
+<section id="d918"><h2><span>D-918</span> Row 360: the PR 4 dependency is met by the merged 4a resolver</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>Row 360 depends on &#x27;316 PR 4&#x27;. PR 4a is merged at <code>13719b0f6</code> with <code>CatalogBindingGraph.resolve/1</code>, <code>closed/1</code> and <code>closed_out/1</code>. PR 4c waits on plans 267/269.</dd>
+<dt>Options</dt><dd>Wait for 4c; build on 4a now.</dd>
+<dt>Decision</dt><dd>Build on 4a now. Do not wait for 4c.</dd>
+<dt>Reason</dt><dd>The closed set is entirely the 4a resolver&#x27;s output. The 267/269 gate applies only to 4c (D-530). The custodian does not need the retained-client hook.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d919"><h2><span>D-919</span> Row 360: where the closure check runs</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>The check must run on every package the custodian signs.</dd>
+<dt>Options</dt><dd>In the CLI entry <code>sign/4</code>; in <code>sign_reviewed</code> outside the lock; inside the <code>SigningLedger.transact</code> callback.</dd>
+<dt>Decision</dt><dd>Inside the existing <code>SigningLedger.transact</code> callback, before <code>choose/4</code>. It applies to every package that <code>sign_reviewed</code> receives, including the CLI&#x27;s <code>sign/4</code>.</dd>
+<dt>Reason</dt><dd>It runs under the owner helper&#x27;s lifetime lock. It has the ledger chain the resolver needs for cited prior catalogs. An error return already leaves the ledger unwritten and reads no key.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d920"><h2><span>D-920</span> Row 360: every choose/4 arm refuses under a closed binding</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd><code>choose/4</code> has three arms: fresh signing, stored replay and pending-commit recovery.</dd>
+<dt>Options</dt><dd>Refuse fresh signing only; refuse all three arms.</dd>
+<dt>Decision</dt><dd>All three arms refuse once the binding is closed. A test pins the replay. The pending arm follows because the check runs before <code>choose/4</code>.</dd>
+<dt>Reason</dt><dd>This is the most conservative reading of &#x27;refuses to sign&#x27;. A closed binding authorizes nothing new. Returning or committing an envelope under it would advance a binding that D-275 says is closed. The narrow case of a pending catalog that is the cited prior is row 555.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d921"><h2><span>D-921</span> Row 360: two named refusal atoms</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>The plan asks for a named reason. The CLI passes atoms through.</dd>
+<dt>Options</dt><dd>Pass resolver errors through; one refusal atom; two refusal atoms.</dd>
+<dt>Decision</dt><dd>Two new atoms. <code>:catalog_binding_closed</code> means the binding id is in <code>closed/1</code> or is a key of <code>closed_out/1</code>. <code>:catalog_binding_unresolved</code> covers any resolver error, a missing or wrong bootstrap, a Space history that is not a <code>%Log{}</code>, and any exception.</dd>
+<dt>Reason</dt><dd>Folding <code>trust_pending</code>, <code>control_history_limit</code> and <code>malformed_catalog</code> into one refusal keeps the custodian fail-closed without exposing resolver internals. These are BEAM return atoms only, not wire atoms or quarantine reasons.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d922"><h2><span>D-922</span> Row 360: an unheld rotation parent refuses as unresolved</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>A replacement R may cite a rotation T that the custodian was not given.</dd>
+<dt>Options</dt><dd>Treat the closed set as empty; refuse.</dd>
+<dt>Decision</dt><dd>Signing under B refuses as <code>:catalog_binding_unresolved</code>. A test pins it.</dd>
+<dt>Reason</dt><dd>Checked in <code>catalog_binding_graph.ex</code> (545-567 and 841-877): an unheld parent evaluates to <code>:unknown</code>, the candidate is <code>:pending</code> and the result is <code>trust_pending</code>. That is a refusal, not an empty closed set.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d923"><h2><span>D-923</span> Row 360: refused or non-node replacement bindings are out of scope</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>A replacement binding can be refused by the union or not be a graph node at all.</dd>
+<dt>Options</dt><dd>Refuse signing under such a binding now; leave it to row 361 / OD-13.</dd>
+<dt>Decision</dt><dd>Row 360 does not refuse for these cases. Row 361 / OD-13 owns them.</dd>
+<dt>Reason</dt><dd>Row 360 is about closure only. Acceptance semantics would duplicate the replacement-ceremony work and could break the existing fixture-only replacement signing tests.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d924"><h2><span>D-924</span> Row 360: BEAM only, no TypeScript or native twin</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>Most plan 316 work has a TS twin.</dd>
+<dt>Options</dt><dd>Add a TS twin; BEAM only.</dd>
+<dt>Decision</dt><dd>BEAM only. No TS, dist, native <code>catalog_eval</code> or cargo work.</dd>
+<dt>Reason</dt><dd>The custodian ledger exists only in <code>lattice_carrier_server</code>. No client signs catalogs. The bootstrap record source, the resolver inputs and the runnable proof are D-911, D-913 and D-912.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d925"><h2><span>D-925</span> Row 360 review: two adversarial rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 review rounds 1 and 2 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>Two independent adversarial reviews of the row 360 diff.</dd>
+<dt>Decision</dt><dd>Round 1: CHANGES, 2 P1/P2, 0 P3. (1) P1 <code>binding_closure.ex:92</code>: retained input could erase verified closure evidence through <code>Map.new(signed ++ retained)</code>. Reproduced: c1 signed with a zeroed-signature retained c0 returned <code>{:ok, _}</code>. Fixed (D-915): ledger copies win, keyed on the unfiltered chain; conflicting retained duplicates refuse as unresolved. (2) P2 <code>binding_closure.ex:54</code>: older packages stopped replaying after a newer revision. Reproduced on macOS. Fixed (D-916) by judging a replay on the ledger revisions below its own plus its stored catalog; the reviewer&#x27;s suggestion to persist Thread histories is row 553. One behaviour change: a c0 replay under a binding closed only by a citation of c1 refuses as unresolved, not closed. Round 2: CHANGES, 1 P1/P2, 0 P3. P1 <code>binding_closure.ex:108</code>: forged retained catalogs outside the ledger still bypassed closure. Reproduced with a zeroed-signature retained CT. Fixed (D-917): after a non-closed verdict, a retained artifact in the resolver&#x27;s refusals, or a raw-evidence replacement for any reason other than <code>catalog_authority_refused</code>, refuses as unresolved. Tests cover forged CT, forged T and both.</dd>
+<dt>Reason</dt><dd>The last round found a P1. It was fixed and tested, but no later review round confirmed the fix. Treat the D-917 fix as unreviewed until the PR review confirms it. Not claimed: custodian-held Space freshness (row 550), a CLI-level closed test (row 551), the Linux-only suites (row 552, first run is CI).</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
