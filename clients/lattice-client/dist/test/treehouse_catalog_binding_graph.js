@@ -7,7 +7,7 @@ import test from "node:test";
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "../src/carrier";
 import { prepareTreehouseCatalogReplacementFromFrames } from "../src/index";
 import { treehouseCommandDecoders } from "../src/treehouse";
-import { advanceCatalogBindingState, coverCatalogReplacementClaim, nextCatalogGeneration, resolveCatalogBindingGraph, } from "../src/treehouse_catalog_binding_graph";
+import { advanceCatalogBindingState, coverCatalogReplacementClaim, nextCatalogGeneration, RESERVED, resolveCatalogBindingGraph, } from "../src/treehouse_catalog_binding_graph";
 import { catalogBootstrapFromCarrierTerm, catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm, } from "../src/treehouse_catalog_codec";
 import { loadVector, runVector, tsVectorUrl } from "./support/export_treehouse_catalog_binding_graph";
 const vector = loadVector();
@@ -254,6 +254,30 @@ test("row 524: advanceCatalogBindingState keeps a stored route over the chain", 
                 clearsAuthorityChanged: true, block: null, serving: "k" } } };
     const a = { binding: "b", generation: 0, catalog: "c", revision: 0, routes: { "/u": "u" } };
     assert.deepEqual(advanceCatalogBindingState({ accepted: a, frozen: true }, result).accepted.routes, { "/u": "u", "/k": "thread2" });
+});
+// Review round 2 (D-931): the accepted catalog's catalogRoutes fills missing routes only and never stores RESERVED.
+test("row 524: advanceCatalogBindingState fills from catalogRoutes and skips RESERVED", () => {
+    const result = { ok: true,
+        graph: { catalogs: new Map([["k", { entries: [{ route: "/k", replica: "space" }] }]]), catParent: new Map([["k", null]]),
+            catalogRoutes: new Map([["k", new Map([["/k", "other"], ["/s1", "space"], ["/u", "other"], ["/n", RESERVED]])]]),
+            decision: { accepted: true, head: "t", generation: 1, catalog: "k", revision: 0, clearsAuthorityChanged: true, block: null,
+                serving: "k" } } };
+    const a = { binding: "b", generation: 0, catalog: "c", revision: 0, routes: { "/u": "u" } };
+    assert.deepEqual(advanceCatalogBindingState({ accepted: a, frozen: true }, result).accepted.routes, { "/u": "u", "/k": "space", "/s1": "space" });
+});
+// Review round 2 (D-931): one-page delivery of R1/K1 and R2/K2 keeps K1's route as separate deliveries do.
+test("row 524: successive replacements on one page keep the intermediate route", () => {
+    const name = "S12s: successive replacements keep the intermediate route";
+    const stateIn = (mode, step) => {
+        const o = outcomes.find((x) => x.scenario === `${name}/${mode}` && x.step === step);
+        assert.ok(o, `${name}/${mode}, delivery ${step}`);
+        return o.stateIn;
+    };
+    const separate = stateIn("separate", 4);
+    const onePage = stateIn("one page", 3);
+    assert.deepEqual(onePage, separate);
+    assert.equal(Object.keys(onePage.accepted.routes).length, 3);
+    assert.equal(new Set(Object.values(onePage.accepted.routes)).size, 1);
 });
 test("row 524: an unaccepted intermediate catalog never re-points a reserved route", () => {
     const name = "S12r: an unaccepted intermediate catalog keeps a reserved route/one page";

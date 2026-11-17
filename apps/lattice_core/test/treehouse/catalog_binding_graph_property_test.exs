@@ -74,6 +74,7 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
      "K2"},
     {"S12: a resolution with fresh routes clears", "R2f", "K2f"},
     {"S12: a route served earlier is never re-pointed", nil, nil},
+    {"S12s: successive replacements keep the intermediate route/one page", "R2", "K2"},
     {"S13: a missing watermark catalog is a derived block that does not freeze", nil, nil},
     {"S14: a catalog accepted before the closing resolution freezes", nil, nil},
     {"S15: a resolution carrying the watermark's entries without seeing it freezes", "R2", "K2"},
@@ -96,7 +97,7 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
   ]
 
   # Row 389: enough runs that the route rule and the withheld-page action are exercised.
-  @heavy ~w(S4 S12 S17a S17b S17c S17e)
+  @heavy ~w(S4 S12 S12s S17a S17b S17c S17e)
   defp max_runs(name, mode) do
     heavy? = Enum.any?(@heavy, &String.starts_with?(name, &1 <> ":"))
 
@@ -469,6 +470,35 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
       else: oracle_chain(Map.get(links, id), catalogs, links, [id | acc])
   end
 
+  # The catalogs `id` descends from, itself included: its CatLineage parent, or for a first
+  # catalog under a replacement each cited prior catalog (a nil citation of P reaching P's own
+  # priors, as Floor(P) does).
+  defp oracle_ancestors(id, g, facts, seen) do
+    cond do
+      id == nil or MapSet.member?(seen, id) or not Map.has_key?(g.catalogs, id) ->
+        seen
+
+      Map.get(facts.lineage, id) != nil ->
+        oracle_ancestors(facts.lineage[id], g, facts, MapSet.put(seen, id))
+
+      true ->
+        binding = g.catalogs[id].binding
+        oracle_floor(binding, g, facts, MapSet.put(seen, id), MapSet.new())
+    end
+  end
+
+  defp oracle_floor(binding, g, facts, seen, nodes) do
+    prior = if MapSet.member?(nodes, binding), do: [], else: facts.bindings[binding][:prior] || []
+
+    Enum.reduce(prior, seen, fn
+      %{binding: p, catalog: nil}, acc ->
+        oracle_floor(p, g, facts, acc, MapSet.put(nodes, binding))
+
+      %{catalog: c}, acc ->
+        oracle_ancestors(c, g, facts, acc)
+    end)
+  end
+
   # Design section 1.3, recomputed from the oracle.
   defp model(state, {:ok, g}, facts) do
     d = g.decision
@@ -488,7 +518,24 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
           |> Enum.flat_map(&g.catalogs[&1].entries)
           |> Enum.reduce(%{}, &Map.put(&2, &1.route, &1.replica))
 
-        routes = Map.merge(fresh, base)
+        # Review round 2 (D-931): then every catalog the accepted one descends from through a
+        # replacement's cited prior catalogs (a nil citation reaching its binding's own priors),
+        # recomputed from the artifacts. A route those catalogs map to two replicas is
+        # reserved-to-none and stays unstored.
+        floor =
+          d.catalog
+          |> oracle_ancestors(g, facts, MapSet.new())
+          |> Enum.flat_map(&g.catalogs[&1].entries)
+          |> Enum.group_by(& &1.route, & &1.replica)
+          |> Enum.flat_map(fn {route, replicas} ->
+            case Enum.uniq(replicas) do
+              [replica] -> [{route, replica}]
+              _ -> []
+            end
+          end)
+          |> Map.new()
+
+        routes = floor |> Map.merge(fresh) |> Map.merge(base)
 
         accepted = %{
           binding: d.head,

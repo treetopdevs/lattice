@@ -123,10 +123,12 @@ defmodule Treehouse.CatalogBindingGraph do
   decision that clears (or any accepting decision while not frozen) moves the watermark and
   lifts `frozen`; it adds the routes of every catalog on the accepted chain (the D-881 walk,
   row 524: the accepted catalog, then each `cat_parent` link, which is `previous` or a
-  rotation's prior catalog, oldest first and newest winning) to the cumulative `routes`, so a
-  chain delivered on one page persists what separate deliveries persist. A route the stored
-  `routes` already hold is never re-pointed (D-930), so an intermediate catalog that was never
-  accepted cannot overwrite a reservation. A block
+  rotation's prior catalog, oldest first and newest winning) to the cumulative `routes`, then
+  fills any route still missing from the graph's `catalog_routes` for the accepted catalog,
+  which also reaches a replacement's cited prior catalogs (D-931; reserved-to-none routes are
+  skipped), so a chain delivered on one page persists what separate deliveries persist. A route
+  the stored `routes` already hold is never re-pointed (D-930), so an intermediate catalog that
+  was never accepted cannot overwrite a reservation. A block
   with `freeze` sets `frozen`. Nothing is served while frozen. On `trust_pending` (row 386,
   repair (a)) the detail's `freeze`, derived only from the complete authenticated part, is
   ORed into `frozen` and its `serving` is served unless frozen; a `trust_pending` without those
@@ -141,7 +143,12 @@ defmodule Treehouse.CatalogBindingGraph do
     cond do
       d.accepted and (not frozen or d.clears_authority_changed) ->
         parent = Map.get(graph, :cat_parent, %{})
-        routes = chain_routes(d.catalog, catalogs, parent, routes(accepted))
+        cumulative = graph |> Map.get(:catalog_routes, %{}) |> Map.get(d.catalog, %{})
+
+        routes =
+          d.catalog
+          |> chain_routes(catalogs, parent, routes(accepted))
+          |> fill_routes(cumulative)
 
         %{
           accepted: %{
@@ -198,6 +205,17 @@ defmodule Treehouse.CatalogBindingGraph do
       Enum.reduce(catalogs[cid].entries, acc, fn e, acc ->
         if Map.has_key?(reserved, e.route), do: acc, else: Map.put(acc, e.route, e.replica)
       end)
+    end)
+  end
+
+  # Row 524, review round 2 (D-931): the accepted catalog's cumulative `catalog_routes` (its
+  # floor through every cited prior catalog, across replacement bindings, plus its own chain)
+  # fills only routes not already held, so a replacement's cited prior catalog keeps its routes
+  # on one page. A reserved-to-none route is not a served route and is never stored.
+  defp fill_routes(routes, cumulative) do
+    Enum.reduce(cumulative, routes, fn
+      {_route, :none}, acc -> acc
+      {route, replica}, acc -> Map.put_new(acc, route, replica)
     end)
   end
 

@@ -557,6 +557,24 @@ defmodule Treehouse.CatalogBindingGraphTest do
            |> Enum.sort() == [1, 2]
   end
 
+  # Review round 2 (D-931): K1 is R2's cited prior catalog, not a `previous` link; one-page
+  # delivery of R1/K1 and R2/K2 keeps K1's route as separate deliveries do.
+  @tag :row_524
+  @tag timeout: 120_000
+  test "row 524: successive replacements on one page keep the intermediate route" do
+    separate =
+      state_after("S12s: successive replacements keep the intermediate route/separate", 4)
+
+    one_page =
+      state_after("S12s: successive replacements keep the intermediate route/one page", 3)
+
+    assert separate == one_page
+    # Space at C0's route, at s1 (K1) and at s2 (K2).
+    assert %{accepted: %{routes: routes}, frozen: false} = one_page
+    assert map_size(routes) == 3
+    assert routes |> Map.values() |> Enum.uniq() |> length() == 1
+  end
+
   # Review round 1 (D-930): promoting KZ21 walks KZ2, which this client never accepted; KZ2's
   # u -> Thread2 must not overwrite the reservation u -> U that KR served.
   @tag :row_524
@@ -601,6 +619,39 @@ defmodule Treehouse.CatalogBindingGraphTest do
              G.advance(%{accepted: a, frozen: true}, result)
 
     assert map_size(routes) == 2
+  end
+
+  # D-931: the accepted catalog's `catalog_routes` fills missing routes only, never re-points a
+  # stored or chain route, and never stores a reserved-to-none route.
+  @tag :row_524
+  test "row 524: advance/2 fills from catalog_routes and skips reserved-to-none" do
+    result =
+      {:ok,
+       %{
+         catalogs: %{"k" => %{entries: [%{route: "/k", replica: "space"}]}},
+         cat_parent: %{"k" => nil},
+         catalog_routes: %{
+           "k" => %{"/k" => "other", "/s1" => "space", "/u" => "other", "/n" => :none}
+         },
+         decision: %{
+           accepted: true,
+           head: "t",
+           generation: 1,
+           catalog: "k",
+           revision: 0,
+           clears_authority_changed: true,
+           block: nil,
+           serving: "k"
+         }
+       }}
+
+    a = %{binding: "b", generation: 0, catalog: "c", revision: 0, routes: %{"/u" => "u"}}
+
+    assert G.advance(%{accepted: a, frozen: true}, result).accepted.routes == %{
+             "/u" => "u",
+             "/k" => "space",
+             "/s1" => "space"
+           }
   end
 
   # The chain reaches a rotation's prior catalog (`cat_parent` of a rotation's first catalog).

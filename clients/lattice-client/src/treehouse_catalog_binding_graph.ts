@@ -1073,7 +1073,9 @@ function serving(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, c
  * that clears (or any accepting decision while not frozen) moves the watermark, adds the routes of every catalog on the accepted
  * chain to the cumulative routes (the D-881 walk, row 524: the accepted catalog, then each catParent link, which is previous or
  * a rotation's prior catalog, oldest first and newest winning, so a chain delivered on one page persists what separate
- * deliveries persist; a route the stored routes already hold is never re-pointed, D-930) and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
+ * deliveries persist; a route the stored routes already hold is never re-pointed, D-930; any route still missing is then filled
+ * from the graph's catalogRoutes for the accepted catalog, which also reaches a replacement's cited prior catalogs, skipping
+ * RESERVED, D-931) and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
  * (derived only from the complete authenticated part) is ORed into frozen and its serving is served unless frozen; any other
  * error, or a trust_pending without those fields, keeps the state and serves nothing.
  */
@@ -1103,6 +1105,12 @@ export function advanceCatalogBindingState(state: CatalogBindingState, result: C
       for (const e of result.graph.catalogs.get(id)!.entries) {
         if (!Object.prototype.hasOwnProperty.call(reserved, e.route)) routes[e.route] = e.replica;
       }
+    }
+    // Review round 2 (D-931): the accepted catalog's cumulative catalogRoutes (its floor through every cited prior catalog,
+    // across replacement bindings, plus its own chain) fills only routes still missing, so a replacement's cited prior catalog
+    // keeps its routes on one page. A RESERVED (reserved-to-none) route is not a served route and is never stored.
+    for (const [route, replica] of result.graph.catalogRoutes?.get(d.catalog!) ?? []) {
+      if (replica !== RESERVED && !Object.prototype.hasOwnProperty.call(routes, route)) routes[route] = replica;
     }
     return {accepted: {binding: d.head!, generation: d.generation!, catalog: d.catalog!, revision: d.revision!, routes},
       frozen: false, serving: d.serving};

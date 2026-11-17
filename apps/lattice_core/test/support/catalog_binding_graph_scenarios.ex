@@ -201,6 +201,7 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &s12_cumulative_routes/1,
       &s12_one_page/1,
       &s12r_replacement_chain/1,
+      &s12s_successive_replacements/1,
       &s13_missing_watermark/1,
       &s14_same_page_trade/1,
       &s15_seen_only/1,
@@ -3481,6 +3482,67 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
           )
         ]
       )
+    ]
+  end
+
+  # Row 524, review round 2 (D-931): the rule across successive replacements. The watermark is
+  # B/C0; R1 cites {B, C0} and its K1 moves Space to a fresh route s1; R2 cites {R1, K1} and its
+  # K2 moves Space again, to s2. K1 is R2's cited prior, not a `previous` link, so a one-page
+  # delivery must still keep s1 as separate deliveries do.
+  defp s12s_successive_replacements(base) do
+    c0 = F.c0(base)
+    [space] = c0.catalog.entries
+
+    r1 =
+      carrying(base, base.log, "s12s-r1", [%{space | route: route("s12s-s1")}],
+        prior_catalogs: [%{binding: base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    k1 = F.first(base, r1)
+    l1 = add(base.log, [r1])
+
+    r2 =
+      carrying(base, l1, "s12s-r2", [%{space | route: route("s12s-s2")}],
+        parents: [r1.id],
+        prior_catalogs: [%{binding: r1.id, catalog: F.cid(k1)}],
+        generation: 2
+      )
+
+    k2 = F.first(base, r2)
+    l2 = add(l1, [r2])
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R1" => r1.id,
+        "K1" => F.cid(k1),
+        "R2" => r2.id,
+        "K2" => F.cid(k2)
+      })
+
+    first = step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0")))
+    on_k2 = ok(["R2"], closed: ["B", "R1"], decision: accept("R2", "K2", clears: true))
+    # The same page again, so the state after K2 is the next step's `state_in`.
+    again =
+      step(
+        ev(l2, catalogs: [c0, k1, k2]),
+        ok(["R2"], closed: ["B", "R1"], decision: accept("R2", "K2"))
+      )
+
+    [
+      one("S12s: successive replacements keep the intermediate route/separate", labels, [
+        first,
+        step(
+          ev(l1, catalogs: [c0, k1]),
+          ok(["R1"], closed: ["B"], decision: accept("R1", "K1", clears: true))
+        ),
+        step(ev(l2, catalogs: [c0, k1, k2]), on_k2),
+        again
+      ]),
+      one("S12s: successive replacements keep the intermediate route/one page", labels, [
+        first,
+        step(ev(l2, catalogs: [c0, k1, k2]), on_k2),
+        again
+      ])
     ]
   end
 
