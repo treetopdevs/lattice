@@ -93,8 +93,10 @@ defmodule Township.AuditReportTest do
     assert {:ok, _} = AuditBundle.write(dir, Sim.log(sim, "clerk"))
 
     assert {:ok, html, :verified} = AuditReport.render(dir)
-    assert html =~ "hello"
-    assert html =~ "[65, 66]"
+    # Row 325 (D-880): the read model replaces non-text Matter values with the
+    # malformed marker before the bundle is written, so the report shows the marker.
+    assert html =~ "<li>(malformed)</li>"
+    refute html =~ "hello"
     refute html =~ "<li>AB</li>"
   end
 
@@ -266,19 +268,19 @@ defmodule Township.AuditReportTest do
   end
 
   @tag :tmp_dir
-  test "large structured state renders in full", %{tmp_dir: tmp} do
+  test "large text state renders in full", %{tmp_dir: tmp} do
     dir = Path.join(tmp, "bundle")
     sim = Sim.new(Matter, "replica:matter:large", ["clerk"], seed: "report-large")
     {sim, _} = Sim.create_replica(sim, "clerk")
     {sim, _} = Sim.command(sim, "clerk", :post, [Enum.to_list(1..150)])
-    long = %{"text" => String.duplicate("a", 5000) <> "TAIL_MARKER"}
+    long = String.duplicate("a", 5000) <> "TAIL_MARKER"
     {sim, _} = Sim.command(sim, "clerk", :post, [long])
     assert {:ok, _} = AuditBundle.write(dir, Sim.log(sim, "clerk"))
 
     assert {:ok, html, :verified} = AuditReport.render(dir)
-    assert html =~ "149, 150]"
+    assert html =~ "<li>(malformed)</li>"
     assert html =~ "TAIL_MARKER"
-    refute html =~ "100, ..."
+    refute html =~ "..."
   end
 
   @tag :tmp_dir
