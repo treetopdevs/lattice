@@ -2912,6 +2912,12 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Claim status cells are Atom.to_string(status) with no mapping table and no status-keyed class or colour; styling is neutral grey. inspect/2 runs with limit: :infinity and printable_limit: :infinity. Map keys are sorted by their string form. Construction nil fields render &quot;none&quot;; nil values inside evidence maps render nil. Unknown render options and a non-CloseEvidence value raise ArgumentError. A claim_set_id mismatch renders &quot;no&quot; and relabels the manifest as the module research manifest, not the one the projection names.</dd>
 <dt>Reason</dt><dd>A truncated or translated value would be an honesty defect in an evidence report, and unsorted map keys would make the byte-identical determinism test flaky.</dd>
 </dl></section>
+<section id="d795"><h2><span>D-795</span> Row 156 review: Codex Sol 6.1 high, findings and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Context</dt><dd>codex exec -m gpt-6.1-sol -c model_reasoning_effort=high, read-only, over origin/main..HEAD.</dd>
+<dt>Decision</dt><dd>2 findings, both fixed. (1) P2: --out naming the --bundle file, directly or through a symlink or hard link, verified the bundle and then overwrote it with HTML. Fixed: the task compares expanded paths and the device and inode of both files before any write and raises &quot;--out must not be the --bundle file&quot;; the test covers the same path and a symlink and checks the bundle bytes are unchanged. (2) P3: the close-section test checked fixture list lengths and skipped ballot_digests in the HTML. Fixed: it now asserts each rendered heading with its count and the full ordered list for ballot_wrapper_ids, ballot_digests, seal_digests and certificate_op_ids. The review found no overclaim, escaping, determinism or verify-before-write defect, and no strict Credo finding.</dd>
+<dt>Reason</dt><dd>An evidence report must never destroy the evidence it renders, and the count assertions must check the rendered page, not the fixture.</dd>
+</dl></section>
 </main>
 </body>
 </html>
