@@ -2890,26 +2890,37 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <section id="d700"><h2><span>D-700</span> Row 154 report default output sits beside the bundle</h2><dl>
 <dt>Decision</dt><dd>The default output is &lt;dir&gt;.report.html (artifacts/township gives artifacts/township.report.html, gitignored). An --out inside the bundle directory is refused with Mix.raise.</dd>
 <dt>Reason</dt><dd>AuditBundle.validate_file_set requires the exact seven-file set, so a report inside the bundle would break verification, and the tracked bundle is snapshot-tested.</dd>
+<dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
 </dl></section>
 <section id="d701"><h2><span>D-701</span> Row 154 report derives everything from load_verified</h2><dl>
 <dt>Decision</dt><dd>render/2 calls AuditBundle.load_verified/1 once and derives the dot and mermaid blocks, state and graph from the returned snapshot with the same Lattice.Graph.Export calls AuditBundle uses. AuditBundle is not edited. A failed verification renders only a NOT VERIFIED banner and the escaped verbatim errors, and never calls ReadModel.observe.</dd>
 <dt>Reason</dt><dd>This avoids a time-of-check to time-of-use gap from re-reading mutable files, and keeps the failed report from leaking unverified state. The banner states authenticity and projection consistency, not completeness.</dd>
+<dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
 </dl></section>
 <section id="d702"><h2><span>D-702</span> Row 154 scope cuts and follow-up rows</h2><dl>
 <dt>Decision</dt><dd>No tally panel (bundles hold no vouches, so the tally is always no_vouches). The ledger also lists every quarantined op id with its reason, since the audit list omits structural reasons such as bad_delegation_sig. Deferred as rows 400 to 406: demo hook, election evidence, lease and chronology sections, in-bundle report, SVG visual, vouch panel, print and CSP.</dd>
 <dt>Reason</dt><dd>Minimal cut that is honest about what the bundle proves; each deferral needs a plan or schema change that is not in this slice.</dd>
+<dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
 </dl></section>
 <section id="d703"><h2><span>D-703</span> Row 154 gloss table is explanatory only</h2><dl>
 <dt>Decision</dt><dd>A reason-atom gloss map sits beside the verbatim atom; atoms without a gloss (for example bad_delegation_sig) show the atom alone. No new Core primitive, wire atom or quarantine reason is added.</dd>
 <dt>Reason</dt><dd>The atom stays the authoritative evidence; the gloss is reader help and must not be mistaken for a verdict.</dd>
+<dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
 </dl></section>
 <section id="d704"><h2><span>D-704</span> Row 154 review round 1: render values as text, resolve aliases, split rejection evidence</h2><dl>
 <dt>Decision</dt><dd>Non-binary state values render through inspect (charlists as lists), never to_string; the task resolves symlinks in both --dir and --out before the containment check; structural rejections (bad_signature evidence) get their own section and count beside authority-quarantined ops; the unauthorized_beacon gloss no longer names a signer. D-700 to D-703 were already taken by the first commit, so this round starts at D-704.</dd>
 <dt>Reason</dt><dd>A verifiable structured post must not crash or silently mutate in the report, an alias must not defeat the overwrite guard, and rejection evidence preserved in the bundle must be visible to the auditor.</dd>
+<dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
 </dl></section>
 <section id="d705"><h2><span>D-705</span> Row 154 review round 2: identity-based overwrite guard, unbounded inspect, hedged glosses</h2><dl>
 <dt>Decision</dt><dd>The report task additionally refuses an --out whose existing ancestor (or itself) is the bundle directory by device and inode, or is hard-linked to a bundle file, which covers case-insensitive aliases; state values render through inspect with limit and printable_limit set to infinity; glosses state only what the reason establishes (no_capability says no matching delegation was found in the included log; lease_expired claims no chronology; not_holder, stale_holder, stale_beacon and revoked_capability are scoped to the log view that judged the operation).</dd>
 <dt>Reason</dt><dd>A textual prefix check misses filesystem aliases, default inspect limits silently truncate verified state, and a gloss is reader help that must not invent facts the atom does not carry.</dd>
+<dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
+</dl></section>
+<section id="d706"><h2><span>D-706</span> Row 154 review summary</h2><dl>
+<dt>Decision</dt><dd>Two review rounds ran. Round 1 returned CHANGES (4 P1/P2, 2 P3), all six fixed in D-704. Round 2 returned CHANGES (3 P2): the overwrite guard missed case aliases and hard links, state values were truncated by default inspect limits, and some reason glosses asserted facts the reason does not establish; all three were fixed in D-705. No round 3 ran, so the round 2 fixes are not confirmed by a later review. The case-alias bypass was not reproduced before its fix, its test runs only on a case-insensitive filesystem, and the no_capability and lease_expired gloss wording has no direct test. Row 407 files that test gap. Rows 400 to 406 hold the deferred items.</dd>
+<dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Reason</dt><dd>The record should say plainly that the last round found P2 items and no later review confirmed the fixes.</dd>
 </dl></section>
 </main>
 </body>

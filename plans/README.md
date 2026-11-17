@@ -234,7 +234,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 150 | Device-hosted carrier boundary (packaged app hosts the sidecar server) | P1 | L | 127, 128, 129, 132, 142, 143 | TODO (optional host mode after unified R23; R31 owns delivery) |
 | 151 | App-owned instrument (Phoenix leaves the demo loop) | P1 | L | 134, 138, 139, 143, 147, 148 | SUPERSEDED for Treehouse by unified R10-R15; Township remainder deferred to R34 |
 | 152 | Serverless two-device onboarding (discharges CD1) | P1 | L | 150, 151, 066-075, 094-100, 110-116 | SUPERSEDED (Plan 177 and unified R01a withdraw additional LAN/CD1 work; helpers retained) |
-| 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | IN PROGRESS (2026-11-16; `Township.AuditReport` + `mix lattice.township.report`, D-700 to D-705; follow-up rows 400 to 406) |
+| 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | IN PROGRESS (2026-11-16; `Township.AuditReport` + `mix lattice.township.report`, D-700 to D-706; follow-up rows 400 to 407) |
 | 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | DONE (PR #32; hosted run `29755770936` green across all three jobs) |
 | 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
 | 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
@@ -514,6 +514,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 404 | Row 154 follow-up: static deterministic SVG causal replay-frame or op-DAG visual | P3 | M | 154 | TODO (filed 2026-11-16, D-702) |
 | 405 | Row 154 follow-up: vouch-bearing attestation panel, only if a later bundle carries vouches | P3 | S | 154 | TODO (filed 2026-11-16, D-702) |
 | 406 | Row 154 follow-up: print stylesheet and a CSP meta tag, if auditors want them | P3 | S | 154 | TODO (filed 2026-11-16, D-702) |
+| 407 | Row 154 follow-up: direct tests for the `no_capability` and `lease_expired` gloss wording, and a case-alias overwrite-guard test that runs on case-sensitive filesystems (D-706) | P3 | S | 154 | TODO (filed 2026-11-16, D-706) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
