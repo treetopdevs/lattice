@@ -2292,6 +2292,7 @@ The bot rounds under D-38 run on this PR.</dd>
 <dt>Context</dt><dd>The slice ran one adversarial review (D-386: rule 3 does not apply).</dd>
 <dt>Decision</dt><dd>No Codex review rounds or findings were reported to the coordinator for this slice, and the final round has no findings recorded. Nothing was fixed or deferred. The bot rounds under D-38 run on this PR.</dd>
 <dt>Reason</dt><dd>It makes no claim beyond row 342. It does not claim that the flake class is gone on hosted CI, that the residual sites are stable, or anything about R13, custody, W4 or Phase G.</dd>
+</dl></section>
 <section id="d400"><h2><span>D-400</span> Two-step authoring: a prepare twin plus the named author_replace_catalog/4</h2><dl>
 <dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/216">#216</a></dd>
 <dt>Context</dt><dd>Plan §7 names only <code>Space.author_replace_catalog/4</code>. The contract order is: freeze, derive the claim, get possession signatures from the new keys, re-verify, sign last. The possession signers need the claim bytes before the op can be signed.</dd>
@@ -2706,6 +2707,7 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Finding</dt><dd>P1 (connector, <code>catalog_replacement_authoring.ex:185</code>): the round-7 check reads only the current acquisition's ceiling. A hop that narrows away <code>replace_catalog_v1</code>, followed by a transfer that attenuates the older, broader cap, restores the permission. Core honors every hop, but C11 requires Stage B to refuse it.</dd>
 <dt>Decision</dt><dd>Both runtimes now walk the honored <code>:admin</code> acquisitions (<code>Authority.acquisitions/3</code>, TS <code>acquiresByRole</code>) back to the latest record whose delegation is issued by the Space root. They require <code>replace_catalog_v1</code> in that record and in every later one, otherwise <code>catalog_authority_refused</code>; an unreadable delegation also refuses. The regression in both runtimes uses two self-transfers under the leased cap. Narrow-then-restore refuses, while the same two hops keeping the permission still prepare. It was mutation-checked. Row 356 is reworded: R04 continuations come in as <code>succeed</code> and are read, not refused. The remaining question is whether "root-attenuated" means <code>issuer == space_root</code>, for the PR 4 resolver to confirm. The merge of main (#217) only touched plan files; its PR 3 status was folded into the row 316 cell.</dd>
 <dt>Reason</dt><dd>The task requires closing in this PR any P1 that lets an invalid authority be signed over. Reading it as root-issued is stricter than or equal to the plan's reading for the histories in the PR 0 probe (T4), so the check can only refuse more.</dd>
+</dl></section>
 <section id="d480"><h2><span>D-480</span> Reading of “plan 266 4-exporter test”</h2><dl>
 <dt>When</dt><dd>2026-11-02, <a href="https://github.com/treetopdevs/lattice/pull/218">#218</a></dd>
 <dt>Context</dt><dd>The slice brief says “the plan 266 4-exporter test”. Plan 316 §7 says “a plan 266 exporter test now”. The decisions log calls plan 266 “the PR 4 exporter” of plan 245.</dd>
@@ -2921,6 +2923,218 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Two review rounds ran. Round 1 returned CHANGES (4 P1/P2, 2 P3), all six fixed in D-704. Round 2 returned CHANGES (3 P2): the overwrite guard missed case aliases and hard links, state values were truncated by default inspect limits, and some reason glosses asserted facts the reason does not establish; all three were fixed in D-705. No round 3 ran, so the round 2 fixes are not confirmed by a later review. The case-alias bypass was not reproduced before its fix, its test runs only on a case-insensitive filesystem, and the no_capability and lease_expired gloss wording has no direct test. Row 407 files that test gap. Rows 400 to 406 hold the deferred items.</dd>
 <dt>Status</dt><dd>decided under operator delegation (2026-11-16), reversible</dd>
 <dt>Reason</dt><dd>The record should say plainly that the last round found P2 items and no later review confirmed the fixes.</dd>
+</dl></section>
+<section id="d790"><h2><span>D-790</span> Row 156: the CLI recomputes close evidence with an explicit --open-certificate</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>mix lattice.election.report takes an optional --open-certificate ID. With it, the task decodes the already verified bundle, builds a BoardSnapshot from its fields and calls UnanimousBoxesV1.verify/4 under that operator-asserted id. Only {:ok, evidence} is rendered; pending, invalid, forked or any other verdict raises &quot;close evidence not verified&quot; and writes nothing. The report labels the id (operator-asserted) and carries the CloseEvidence caveat. The bundle format and offline_bundle.ex are unchanged. Assumed under delegation (2026-11-16).</dd>
+<dt>Reason</dt><dd>Plan 156 said the CLI renders projection plus manifest only, because CloseEvidence is not in the bundle&#x27;s verified output. Probing showed it recomputes exactly from a decoded bundle, so the flag adds verified evidence without smuggling anything into the bundle. Requiring an explicit id keeps the administrative-open prerequisite visible as an assertion.</dd>
+</dl></section>
+<section id="d791"><h2><span>D-791</span> Row 156: the invalid variant comes from replay/3, other variants from hand-built structs</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>The {:invalid, _} test projection comes from Township.Election.replay/3 with one ballot&#x27;s bytes replaced by bytes of a different length (artifact_size_mismatch). The forked, aborted, final and faults cases use hand-built %Projection{} structs.</dd>
+<dt>Reason</dt><dd>OfflineBundle.build/verify reject any findings or requirements (complete_view/1), so a verified bundle only ever yields pending [:profile_unselected]; plan 156&#x27;s &quot;invalid fixture from the offline-bundle malformed path&quot; cannot exist. faults is hard-coded [] and forked, aborted and final are unreachable on main. projector.ex was removed in 292bb437a; the README quarantine-dictionary note now cites election.ex.</dd>
+</dl></section>
+<section id="d792"><h2><span>D-792</span> Row 156: test-only producer and a labelled research harness</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>The scenario lives in apps/lattice_core/test/support/election_report_fixture.ex (compiled only in MIX_ENV=test) and is shared by the test and scripts/research/election_evidence_report.exs. The script refuses to run without the fixture, prints &quot;RESEARCH HARNESS: opaque fixture ballots, no security claim, legacy Attestation.Stub unchanged&quot; first, and writes under the gitignored tmp/. Fixture choices are strings, so the bundle decodes in a fresh dev VM. Nothing touches /township, Township.Matter beyond the link command, or Attestation.Stub.</dd>
+<dt>Reason</dt><dd>The README flags that Township.Election has no producer outside ExUnit and that a runnable election demo invites misreading. Keeping the producer test-only and the script under scripts/research/ (outside the scripts/township_* path filter) holds that boundary.</dd>
+</dl></section>
+<section id="d793"><h2><span>D-793</span> Row 156: the escaper leaves the apostrophe alone</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>Report escapes &amp;, &lt;, &gt; and &quot; only. All attributes are double-quoted, so &#x27; is safe, and the honesty sentence (&quot;the profile&#x27;s construction&quot;) appears verbatim. The rule is in the moduledoc.</dd>
+<dt>Reason</dt><dd>The test asserts the honesty sentence verbatim. A later pass that escapes &#x27; breaks that test loudly, which is intended.</dd>
+</dl></section>
+<section id="d794"><h2><span>D-794</span> Row 156: rendering rules that keep the report verbatim</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>Claim status cells are Atom.to_string(status) with no mapping table and no status-keyed class or colour; styling is neutral grey. inspect/2 runs with limit: :infinity and printable_limit: :infinity. Map keys are sorted by their string form. Construction nil fields render &quot;none&quot;; nil values inside evidence maps render nil. Unknown render options and a non-CloseEvidence value raise ArgumentError. A claim_set_id mismatch renders &quot;no&quot; and relabels the manifest as the module research manifest, not the one the projection names.</dd>
+<dt>Reason</dt><dd>A truncated or translated value would be an honesty defect in an evidence report, and unsorted map keys would make the byte-identical determinism test flaky.</dd>
+</dl></section>
+<section id="d795"><h2><span>D-795</span> Row 156 review: Codex Sol 6.1 high, findings and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Context</dt><dd>codex exec -m gpt-6.1-sol -c model_reasoning_effort=high, read-only, over origin/main..HEAD.</dd>
+<dt>Decision</dt><dd>2 findings, both fixed. (1) P2: --out naming the --bundle file, directly or through a symlink or hard link, verified the bundle and then overwrote it with HTML. Fixed: the task compares expanded paths and the device and inode of both files before any write and raises &quot;--out must not be the --bundle file&quot;; the test covers the same path, a symlink and a hard link and checks the bundle bytes are unchanged. (2) P3: the close-section test checked fixture list lengths and skipped ballot_digests in the HTML. Fixed: it now asserts each rendered heading with its count and the full ordered list for ballot_wrapper_ids, ballot_digests, seal_digests and certificate_op_ids. The review found no overclaim, escaping, determinism or verify-before-write defect, and no strict Credo finding. Round 2 (read-only, cb69bf70e..HEAD, no tests run): no findings.</dd>
+<dt>Reason</dt><dd>An evidence report must never destroy the evidence it renders, and the count assertions must check the rendered page, not the fixture.</dd>
+</dl></section>
+<section id="d796"><h2><span>D-796</span> Row 156 review round 1: bounded bundle read and exact scope assertions</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>2 findings, both fixed. (1) P2: the task called File.read! on the untrusted bundle before the verifier's 64 MiB envelope limit applied, so a huge sparse file could exhaust memory before rejection. Fixed: the task reads at most OfflineBundle.max_envelope_byte_size() + 1 bytes and raises &quot;offline bundle exceeds N bytes&quot; before verification and before any write; the test builds a sparse file one byte past the limit, failed on the old code with the verifier's corrupt_offline_bundle message, and passes now. The verifier and its limit are unchanged. (2) P3: the manifest tests counted statuses and exclusions but not scope names. Fixed: the test holds an independent copy of the twelve scopes and descriptions and asserts the rendered rows equal it in sorted order, with each name and description pair exactly once.</dd>
+<dt>Reason</dt><dd>The size limit is only a defence if it holds before the bytes are in memory, and a manifest test must fail when a scope goes missing.</dd>
+</dl></section>
+<section id="d797"><h2><span>D-797</span> Row 156: not_claimed appears exactly 12 times</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>The status cell is &lt;td class=&quot;claim-status&quot;&gt;not_claimed&lt;/td&gt;. The token not_claimed appears nowhere else on the page: no legend and no CSS class. So the cell count and the total substring count are both 12.</dd>
+<dt>Reason</dt><dd>This makes the plan&#x27;s &quot;exactly 12 times&quot; assertion unambiguous. Styling also never depends on status, so nothing renders green.</dd>
+</dl></section>
+<section id="d798"><h2><span>D-798</span> Row 156: no shared HTML helper yet</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>Report hand-rolls its template. It does not wait for plan 154.</dd>
+<dt>Reason</dt><dd>Row 154 is still TODO on main. Plan 156 allows building from scratch. Convergence on a shared helper is due once a third report exists (row 460).</dd>
+</dl></section>
+<section id="d799"><h2><span>D-799</span> Row 156: plan scope amended to five files</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>Plan 156&#x27;s in-scope list and done criteria now name five files: report.ex, the Mix task, the test, the test/support fixture and the scripts/research script, plus the README row.</dd>
+<dt>Reason</dt><dd>The runnable command needs a producer. Without the amendment, the plan&#x27;s &quot;git status shows nothing outside scope&quot; check would fail.</dd>
+</dl></section>
+<section id="d800"><h2><span>D-800</span> Row 156: banned-word list</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>The test bans guaranteed, proven, &quot;receipt-free: yes&quot;, &quot;secure election&quot;, supported and &quot;pending claim&quot;. It does not ban &quot;final&quot;.</dd>
+<dt>Reason</dt><dd>ideal_leakage honestly renders final_result, so banning &quot;final&quot; would fail on honest output.</dd>
+</dl></section>
+<section id="d801"><h2><span>D-801</span> Row 156: follow-up rows take the reserved 460 range</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>An earlier draft left follow-up rows unnumbered until merge. The workflow reserved rows 460 and up for this slice, so the follow-ups are filed now as rows 460 to 467.</dd>
+<dt>Reason</dt><dd>The main table tops out at 363, but in-flight branches already cite rows up to 398. A reserved range avoids collisions without waiting for merge.</dd>
+</dl></section>
+<section id="d802"><h2><span>D-802</span> Row 156 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Context</dt><dd>Codex Sol 6.1 high (codex exec -m gpt-6.1-sol -c model_reasoning_effort=high). Two review passes, recorded in D-795 and D-796.</dd>
+<dt>Decision</dt><dd>First pass (D-795): one P2 (--out could overwrite the bundle, also through a symlink or hard link) and one P3 (close tests checked the fixture, not the page). Both fixed. Its read-only second round found nothing. Second pass (D-796), round 1: verdict CHANGES, one P2 (unbounded bundle read before the size check) and one P3 (manifest tests did not pin the twelve scopes). Both fixed in 55a185e07; the new size test failed on the old code. Round 2: verdict CHANGES, no P1 or P2, one P3. That P3 was not fixed in this PR, and its text was not carried into the closeout, so it is filed as row 467. Round 2 found no P1 or P2, so it did not reopen the round 1 P2 fix.</dd>
+<dt>Reason</dt><dd>The last round still reported a P3, so the review is not clean. Nothing here is a security claim: all twelve scopes render not_claimed, and Attestation.Stub and /township are unchanged.</dd>
+</dl></section>
+<section id="d820"><h2><span>D-820</span> Township.ReadModel text slots: valid UTF-8 or the fixed marker &quot;(malformed)&quot;</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Context</dt><dd>Row 325 (row 311 residual, D-316). Matter command admission checks name, arity and effect shape, never the value, so a resident with an ordinary capability can write any Canonical-encodable term into title, summary, posts or members. Township.ReadModel copied those terms, and the denied admit/remove_member member term, verbatim into the model, the replay frames and AuditBundle state.json. The LiveView then raised in Jason.encode!(@causal_replay) or Phoenix.HTML.Safe, and AuditBundle.write raised.</dd>
+<dt>Decision</dt><dd>Follow the Lattice.Graph.AuthorityBody display-safety contract (row 311, merged on main as b8d14391f) and state it locally in the Township.ReadModel moduledoc. threads.title, threads.summary, each threads.posts entry, each members.current entry, each members.denied[].member and the matching replay-frame state slots are valid UTF-8. A binary that passes String.valid?/1 is copied verbatim; anything else becomes the fixed marker &quot;(malformed)&quot;. The raw term stays in the log under its op id. clerk_locked? stays a boolean. The helper stays private to Township, so a later row 324 Toolshed marker choice is not coupled to it. Non-claims: no length bound, no control-character or bidi filtering, and the marker is not proof of malformation because a member may post that literal text (structural flag filed as row 480). The replay/1 doc no longer says JSON-safe without qualification, and the denied_member_mutation type now says member: String.t().</dd>
+<dt>Reason</dt><dd>Replacing rather than inspecting is the most conservative choice: the contract allows either, inspect/1 output would show attacker-chosen structure in the civic panel, and the fixed marker keeps model, replay and bundle bytes unchanged on honest logs. No public API, wire atom, quarantine reason or Core primitive changes.</dd>
+</dl></section>
+<section id="d821"><h2><span>D-821</span> Sort raw members first, keep duplicate markers</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Context</dt><dd>Several malformed members map to the same marker.</dd>
+<dt>Decision</dt><dd>state_view/1 sorts the raw member terms and then maps display_text/1, so honest output keeps its exact order and bytes. Duplicate &quot;(malformed)&quot; entries are kept so length(members.current) stays the true count. A malformed member cannot be removed through the instrument roster form, which takes typed text; filed as row 481 rather than changing township_web here (D-307 precedent: township_web gets only a test).</dd>
+<dt>Reason</dt><dd>Byte-identical honest output (tracked artifacts/township unchanged) and an accurate member count matter more than a deduplicated display.</dd>
+</dl></section>
+<section id="d822"><h2><span>D-822</span> Row 325 test scope, red-on-main evidence and ledger corrections</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Context</dt><dd>Brief section 3 and D-317 (a property must not be vacuous).</dd>
+<dt>Decision</dt><dd>Added: an example test in read_model_test.exs (raw terms asserted present in Lattice.state first, then the marker in every slot, Jason on threads/members/replay, String.valid? on every frame slot, AuditBundle.write then verify == :ok); a default-suite property in authority_body_test.exs over set_title, set_summary, post, admit and remove_member with encodable_gen/0 arguments and an authorized?/unauthorized toggle (max_runs: 50, not tagged deep_property), whose every run asserts the authorized argument reached raw state or the unauthorized op id is quarantined and, for member commands, listed in members.denied; and one LiveView test in instrument_live_test.exs. Red-on-main checks run locally: with main&#x27;s read_model.ex the example test fails (title is &lt;&lt;255&gt;&gt;, not &quot;(malformed)&quot;) and the LiveView test exits with Protocol.UndefinedError for Jason.Encoder on {:x, 1} at instrument_live.html.heex:361. Mutation check: removing display_text/1 from state_view/1 only turns the new property red on seeds 1-5 after 0, 8, 1, 0 and 2 successful runs. Rows 306 and 311 flip from IN REVIEW to DONE with b8d14391f, since PR #212 merged (D-308 precedent).</dd>
+<dt>Reason</dt><dd>Each test asserts on the marker value, not on documentation text (rule 6). The per-run non-vacuity assertions keep the property from passing on states that never hold attacker terms, the class D-317 named.</dd>
+</dl></section>
+<section id="d823"><h2><span>D-823</span> Row 325 adversarial review disposition</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Context</dt><dd>Gate: one adversarial review with Codex Sol 6.1 High. No authority, canonical, carrier, client codec, src-tauri or workflow path is touched, so the rule-3 second review is not triggered.</dd>
+<dt>Decision</dt><dd>One round of codex exec -m gpt-6.1-sol -c model_reasoning_effort=high (read-only sandbox) on commit b51ad3ff1: no P1-P3 findings. The reviewer traced the slots through the model, replay, AuditBundle and LiveView, ran 210 signed command cases (the five value-writing commands by 21 sample arguments, authorized and unauthorized) asserting every slot valid UTF-8 and the model and replay Jason-encodable, and compared six honest-log model and replay encodings byte for byte against the parent commit, all passing. Nothing to dispose of. Later changes: a test alias tidy-up (Township.AuditBundle aliased in authority_body_test.exs), and the replay/1 doc narrowed to what is covered (frame state follows this contract; nodes and edges follow row 311). A local probe of link_election, the only other Matter command with an argument, with {:x, 1}, &lt;&lt;255&gt;&gt;, %{} and &quot;ok&quot;, authorized and unauthorized, encodes cleanly: it writes no field. Removing display_text/1 from denied_member_mutations/2 alone also turns the new property red on seeds 1-3 after 3, 0 and 9 successful runs.</dd>
+<dt>Reason</dt><dd>Recorded so the PR carries the review outcome next to the change.</dd>
+</dl></section>
+<section id="d824"><h2><span>D-824</span> Normalize inside Township.ReadModel, not in the consumers</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Decision</dt><dd>A private display_text/1 in Township.ReadModel, applied in state_view/1 and denied_member_mutations/2, is the one source of truth for observe/2, replay/1 frames and AuditBundle state.json. LiveView, causal_replay.js and AuditBundle source stay unchanged.</dd>
+<dt>Reason</dt><dd>One fix point covers all four consumers, and township_web is frozen under rule 10.</dd>
+</dl></section>
+<section id="d825"><h2><span>D-825</span> Integers, atoms and nil count as malformed in text slots</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Decision</dt><dd>Text slots hold text only. Every non-binary term becomes &quot;(malformed)&quot;, including values Jason could encode.</dd>
+<dt>Reason</dt><dd>This is the most conservative reading. It matches row 311 treating only binaries as text. Honest UI-authored values are always strings.</dd>
+</dl></section>
+<section id="d826"><h2><span>D-826</span> denied[].member follows the same rule and is typed String.t()</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Decision</dt><dd>The raw denied term is not kept in the model. Correlation goes through op_id.</dd>
+<dt>Reason</dt><dd>The row names members.denied explicitly, and the model travels over PubSub to the display layer.</dd>
+</dl></section>
+<section id="d827"><h2><span>D-827</span> One LiveView test, no township_web source change</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Decision</dt><dd>Reuse the LiveCarrier/CarrierProjection harness to show the marker in the post, title and member panels.</dd>
+<dt>Reason</dt><dd>It is the visible, person-runnable result and shows the crash surface is closed. D-307 is the maintenance precedent under rule 10.</dd>
+</dl></section>
+<section id="d828"><h2><span>D-828</span> Rule 10 is met under the D-217/D-300 maintenance precedent</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Decision</dt><dd>Treat the work as read-surface robustness maintenance. It adds no Township feature.</dd>
+<dt>Reason</dt><dd>D-316 filed row 325 as a residual of the same maintenance slice.</dd>
+</dl></section>
+<section id="d829"><h2><span>D-829</span> Row and decision numbers assigned at PR-open time</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a>; decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Decision</dt><dd>The brief allocated no row or D- numbers. This slice uses the reserved ranges: D-820 onward and rows 480 onward.</dd>
+<dt>Reason</dt><dd>Main showed row 363 and D-508, but in-flight branches already cite rows 395-398 and D-688-D-690, so earlier numbering would collide.</dd>
+</dl></section>
+<section id="d760"><h2><span>D-760</span> Row 313: defer authority audit writes; fail closed only when the backlog is full</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. CapStore and Topology called Audit.record/2 inside handle_call and hold caps and tabs only in memory, so an Audit restart exited them and wiped every cap and tab. LatticeCore.Supervisor is one_for_one with the default restart intensity, so repeated exits can take the core app down.</dd>
+<dt>Decision</dt><dd>Options: fail every authority call closed while Audit is down; defer every record without bound; defer into a bounded per-process backlog and refuse only authority-increasing actions when it is full (chosen). Decision: each process keeps one Lattice.Audit.Backlog (default limit 10_000, :authority_audit_backlog_limit). Revocations, revoke_tab, denials, connects, worker registration, disconnects, ejects, connection-down closes, worker cleanup and bridge cleanup always commit and defer. grant, delegate, a successful authorize (:cap_use) and Topology.create_bridge/3 flush first and reply {:error, :audit_unavailable}, state unchanged, while the backlog is still full.</dd>
+<dt>Reason</dt><dd>Revocation must never wait on Audit, and a committed authority increase always has its record written or queued, so no grant goes unrecorded. Normal restarts are absorbed. Non-claims: a stalled Audit still exits CapStore and Topology (D-238); nothing is durable; Audit&#x27;s own history still does not survive its restart; there is no global Audit order across CapStore, Topology and LiveOps.</dd>
+</dl></section>
+<section id="d761"><h2><span>D-761</span> One pure Backlog module; timers stay in each owner</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. CapStore and Topology need the same queue, gap and flush rules that LiveOps has (D-240, D-249, D-253).</dd>
+<dt>Decision</dt><dd>New Lattice.Audit.Backlog: a struct with new/1, record/3, full?/1, flush/2 (allowance 500), drain/1, discard_into_gap/2, status/1, owed?/1 and retry_ms/0 (:authority_audit_retry_ms, default 1_000, read at runtime as in D-257). It never arms timers or reads the mailbox. Each owner keeps audit_retry and arms one :flush_audit timer while records are owed: 0 ms after a full batch, the retry interval when Audit was unavailable, and a stale delivered message is cleared on cancel (D-242, D-250, D-253). LiveOps is unchanged.</dd>
+<dt>Reason</dt><dd>Keeps the process logic small and lets the rules be tested once. Credo DuplicatedCode is disabled, so the few timer lines repeated in the two owners are left in place rather than hidden in a helper process.</dd>
+</dl></section>
+<section id="d762"><h2><span>D-762</span> Deferred record markers and the :audit_gap record</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. A replayed record lands at replay time and interleaves with other writers.</dd>
+<dt>Decision</dt><dd>A queued record is replayed with its original metadata plus audit_deferred: true, audit_source: module and audit_seq: n, a per-source counter assigned at enqueue. Records written on time are byte-identical to before. Dropped records and records discarded by reset are counted per reason and written as :audit_gap %{source: module, dropped: n, reason: :backlog_full | :reset} before any queued record; queued records wait while any gap is unwritten (D-249).</dd>
+<dt>Reason</dt><dd>An evidence reader can tell a record was late, which process wrote it and its order within that process. audit_seq does not order records across processes.</dd>
+</dl></section>
+<section id="d763"><h2><span>D-763</span> Caller-side CapStore denials share the backlog</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. Five CapStore writes ran in the caller&#x27;s process (delegate with nil delegator at two sites, delegate, revoke and authorize with a malformed token), so they exited the caller during an Audit restart.</dd>
+<dt>Decision</dt><dd>They now call GenServer.call(CapStore, {:record_deny, metadata}) with unchanged type and metadata, and the caller still gets its original error.</dd>
+<dt>Reason</dt><dd>One writer per source keeps audit_seq meaningful. Cost: these denials now need CapStore to be running, which every other CapStore path already does.</dd>
+</dl></section>
+<section id="d764"><h2><span>D-764</span> Where the fail-closed check sits and how a refusal is counted</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. A refused action must not leave partial state, such as a cap id in Topology&#x27;s issued_caps.</dd>
+<dt>Decision</dt><dd>grant: after the connected and collision checks, before Topology.register_cap/2. delegate: immediately before register_cap. authorize: after check_cap succeeds, before uses and sessions are stored. create_bridge: after both tabs match. A refusal records a :deny with reason :audit_unavailable through the backlog; because the queue is full it is dropped and adds 1 to the :backlog_full gap. Gateway passes the new error through; web_socket public_error/1 maps unknown reasons to &quot;error&quot;, and no wire atom or quarantine reason is added.</dd>
+<dt>Reason</dt><dd>The refusal is counted, not silent, and it leaves caps, uses, sessions, tabs and bridges untouched.</dd>
+</dl></section>
+<section id="d765"><h2><span>D-765</span> Reset drains, then gaps the remainder and rebuilds the backlog</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. Lattice.reset!/0 calls Topology.reset/0 and CapStore.reset/0 in test setup, so reset must not be refused (D-241).</dd>
+<dt>Decision</dt><dd>reset cancels the timer, drains (bounded by the queue limit plus the gap records, which avoids the row 314 unbounded drain), discards what is left into the :reset gap, and returns a backlog built by new/1 that carries the gaps and the audit_seq counter. Topology writes its worker cleanup records before the drain. A changed limit env takes effect at that reset.</dd>
+<dt>Reason</dt><dd>The loss is visible as an :audit_gap record, and a test limit does not leak once a later setup resets.</dd>
+</dl></section>
+<section id="d766"><h2><span>D-766</span> Every recording handler flushes first when records are owed</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. The brief named the four authority-increasing actions for the flush; revocations and denials would otherwise queue behind the backlog until the timer fired.</dd>
+<dt>Decision</dt><dd>Every CapStore and Topology handler that writes a record runs one bounded flush first when anything is owed. Read handlers (get, snapshot, tab_connected?, delivery_info, bridge_allowed?) never flush.</dd>
+<dt>Reason</dt><dd>The next authority call after Audit returns replays the backlog before its own record. While Audit is down, the extra try_record finds no registered process and returns at once.</dd>
+</dl></section>
+<section id="d767"><h2><span>D-767</span> Rule 3 path list does not name cap_store.ex or topology.ex</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. Row 313 and D-244 say rule 3 applies, but rule 3&#x27;s path list covers authority.ex, authority/, canonical.ex, carrier/ and others, not the v1 capability store.</dd>
+<dt>Decision</dt><dd>Keep the row&#x27;s two independent reviews anyway, and file row 443 for the operator to decide the path list.</dd>
+<dt>Reason</dt><dd>This is the more conservative reading, and the mismatch is recorded rather than silently resolved.</dd>
+</dl></section>
+<section id="d768"><h2><span>D-768</span> Ledger numbering and row 310 status</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. Row 310 still said IN REVIEW, but PR #210 merged as 9cc3f7728 and row 315 is DONE. The brief asked for placeholder ids, but this slice&#x27;s rules reserve D-760 onward and rows 440 onward.</dd>
+<dt>Decision</dt><dd>Mark row 310 DONE. Use D-760 to D-772 and rows 440 to 452; the first filing was rows 440 to 445 (Gateway caller-side denials, LiveOps grant match on a full backlog, Lattice.bridge leaving a granted cap on refusal, rule 3 path list, authority state durability, IFC and MovableProcess Audit writes), with 446 from review round 1, 447 and 448 from round 2, and 449 to 452 for the remaining deferred items.</dd>
+<dt>Reason</dt><dd>The reserved ranges avoid collisions with other open branches (rows 395 to 398 and D-690 exist elsewhere).</dd>
+</dl></section>
+<section id="d769"><h2><span>D-769</span> Local test environment for the core suite</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. In a fresh worktree, 41 lattice_core tests failed because clients/lattice-client and clients/treehouse-tauri-shell had no node_modules (tsx not found). None of them touch CapStore or Topology.</dd>
+<dt>Decision</dt><dd>Install both with npm ci under Node 22 and rerun; all 41 then pass. No TS source was changed.</dd>
+<dt>Reason</dt><dd>The full suite is then a real gate for this slice rather than an environment report (compare D-252).</dd>
+</dl></section>
+<section id="d770"><h2><span>D-770</span> A refused Lattice.bridge revokes its cap; the id stays reserved</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 review round 1 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. Finding 2 (P2, reproduced): <code>Lattice.bridge/4</code> grants the bridge cap and then calls <code>Topology.create_bridge/3</code>. When Topology refused (<code>:audit_unavailable</code> on a full backlog, or the older <code>:tab_not_connected</code>), the cap stayed live and registered to the source tab, and a retry with the same explicit id failed with <code>:cap_id_collision</code>. Options: revoke on refusal, delete the cap record, or move the bridge into one CapStore call.</dd>
+<dt>Decision</dt><dd>On any refusal, <code>Lattice.bridge/4</code> revokes the cap with reason <code>:bridge_refused</code> and returns the refusal. The revoked id stays reserved, so a retry after Audit returns names a fresh id (default ids are random, so only explicit <code>id:</code> callers see this). Row 442 is done; an atomic grant-and-bridge call that would let a same-id retry succeed is row 446.</dd>
+<dt>Reason</dt><dd>Most conservative under delegation: revocation always commits, even on a full backlog, and keeps the audit trail coherent (the deferred <code>:grant</code> is followed by a <code>:revoke</code>). Deleting the record would leave an audited grant with no cap, and reusing a revoked id would let one audited id name two caps. A single CapStore bridge call is a new API, beyond this slice. Tests: a refused bridge on a full Topology backlog and to a disconnected tab, both through <code>Lattice.bridge/4</code>.</dd>
+</dl></section>
+<section id="d771"><h2><span>D-771</span> LiveOps handles a refused grant and rolls back a partial registration</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 review round 1 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. Finding 1 (P2, reproduced): with CapStore&#x27;s audit backlog full, <code>LiveOps.register_tab/1</code> failed its <code>{:ok, cap} = Lattice.grant(...)</code> match and LiveOps died, losing its state. The same match sat in the device and approval grants.</dd>
+<dt>Decision</dt><dd>The role, device and publish grant helpers return the refusal. <code>register_tab/1</code> stops at the first refusal, stops the devices it spawned, revokes the caps it granted, drops the actor and restores the role count, then returns <code>{:error, :audit_unavailable}</code>; a later <code>register_tab/1</code> call after Audit returns registers afresh. Row 441 is done. <code>approve_publish</code> returns the refusal and leaves the approval pending. The WebSocket transport already ignores the result of <code>register_tab/1</code>, so the tab connects without LiveOps caps (fail closed) and nothing retries the registration; its disconnect cleanup already ignores <code>{:error, :unknown_actor}</code>. No transport change; a transport retry or refusal message is row 446.</dd>
+<dt>Reason</dt><dd>A whole-or-nothing registration avoids an actor holding part of its role, and keeps LiveOps alive. Tests: a full backlog refusing an observer; a producer refused at the third role cap and at the device cap (caps revoked, device stopped, retry succeeds); a refused approval.</dd>
+</dl></section>
+<section id="d772"><h2><span>D-772</span> Row 313 review: two adversarial rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 review rounds 1 and 2 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Decided under operator delegation (2026-11-16), reversible. Two independent adversarial reviews, as row 313 and D-244 ask (see D-767).</dd>
+<dt>Decision</dt><dd>Round 1: CHANGES, 2 P2, 0 P3. (1) P2 cap_store.ex:148, a full CapStore backlog crashed LiveOps through the {:ok, cap} match in register_tab. Fixed: reproduced with a red test first; the grant helpers return the refusal, register_tab rolls back and returns {:error, :audit_unavailable}, approve_publish leaves the approval pending (D-771, row 441 done). The transport still ignores the result, so the tab connects with no LiveOps caps (fail closed); filed as row 446(b). (2) P2 topology.ex:160, a refused bridge left a live cap. Fixed: Lattice.bridge/4 revokes the cap with reason :bridge_refused (D-770, row 442 done). Only partly closed: the revoked id stays reserved, so a same-id retry returns :cap_id_collision; filed as row 446(a). Round 2: CHANGES, 0 P1 or P2, 2 P3. It verified both round 1 fixes. Its two P3s are left open, not fixed in this PR: (a) backlog.ex:133, drain/1 flushes every batch inside one reset handler, so with a large configured limit (100_000) reset and a queued call can pass their 5 s timeout, which repeats row 314 despite D-765 (row 447); (b) lattice_authority_audit_outage_test.exs:413, no test covers Topology&#x27;s idle replay, so a no-op Topology retry timer passes all tests (row 448).</dd>
+<dt>Reason</dt><dd>The last round found no P1 or P2, and it confirmed the round 1 fixes. The two final-round P3s are recorded as open rows. Nothing here claims durability, a stalled-Audit policy, a global Audit order, or a bounded reset at a non-default limit.</dd>
 </dl></section>
 </main>
 </body>
