@@ -253,6 +253,32 @@ defmodule Township.ReadModelTest do
     end
   end
 
+  test "a validly signed leased grant to a short-binary audience keeps a nil fingerprint" do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-short-lease")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    clerk = Sim.identity(sim, "clerk")
+    genesis = Enum.find(sim.caps["clerk"], &is_nil(&1.parent_id))
+
+    short =
+      Lattice.Authority.Delegation.new(clerk, sim.replica, <<1>>,
+        ops: [:post],
+        parent_id: genesis.id,
+        expires_epoch: 4
+      )
+
+    assert Lattice.Authority.Delegation.valid_sig?(short)
+    {sim, _} = Sim.append(sim, "clerk", :authority, {:grant, short})
+    model = sim |> Sim.sync_all() |> Sim.log("clerk") |> ReadModel.observe()
+
+    assert [%{delegation_id: id, audience: nil, issuer: issuer, status: status}] =
+             model.roles.leases
+
+    assert id == short.id
+    assert issuer == Identity.fingerprint(clerk.pub)
+    assert status == :active
+    assert is_binary(Jason.encode!(model.roles.leases))
+  end
+
   test "observe survives non-integer transfer, succeed and heartbeat ticks" do
     for {build, expected} <- [
           {fn good -> {:transfer, :clerk, good, %{}} end, "transfer :clerk -> "},
@@ -296,6 +322,8 @@ defmodule Township.ReadModelTest do
     {sim, active} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 9)
     {sim, revoked} = Sim.grant(sim, "clerk", "neighbor", ops: [:post], expires_epoch: 9)
     {sim, _revoke} = Sim.revoke(sim, "clerk", revoked.id)
+    {sim, revoked_lapsed} = Sim.grant(sim, "clerk", "neighbor", ops: [:post], expires_epoch: 3)
+    {sim, _revoke} = Sim.revoke(sim, "clerk", revoked_lapsed.id)
     {sim, _beacon} = Sim.beacon(sim, "clerk", 5)
     sim = Sim.sync_all(sim)
     model = ReadModel.observe(Sim.log(sim, "clerk"))
@@ -307,6 +335,8 @@ defmodule Township.ReadModelTest do
 
     assert %{status: :active, expired?: false, expires_epoch: 9} = by_id[active.id]
     assert %{status: :revoked, expired?: false} = by_id[revoked.id]
+    # Verdict's precedence puts revoked before lapsed; expired? is the live-path rule.
+    assert %{status: :revoked, expired?: true} = by_id[revoked_lapsed.id]
 
     assert by_id[active.id].audience ==
              Identity.fingerprint(Sim.identity(sim, "resident").pub)
