@@ -1,0 +1,12 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:35
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:35
+@@ -1555,7 +1555,8 @@
+           base
+           | head: h,
+             reason: :authority_changed,
+-            block: block(:authority_changed, [h], changed?)
++            # MUTANT m2: a missing watermark artifact never freezes.
++            block: block(:authority_changed, [h], false and changed?)
+         }
+ 
+       true ->

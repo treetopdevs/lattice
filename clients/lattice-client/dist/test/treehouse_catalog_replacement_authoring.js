@@ -20,22 +20,30 @@ async function fixture(options = {}) {
     const base = await replacementBaseFixture("r316-pr2-ts-");
     const leased = await authorCarrierDelegation({ replica: base.replica, signer: base.root, audiencePubkey: base.nominee.publicKey,
         parentId: base.delegation.id, ops: ["create_space", "create_thread", "replace_catalog_v1"], roles: ["admin"], expiresEpoch: 10 });
+    // Row 390: a real bounded Thread (entry facts are judged against its history), referenced by a root create_thread in the
+    // Space.
+    const thread = await bindTownshipReplica(`replica:treehouse:thread:${id("thread")}#authority:bounded-continuation-v1`, base.root.publicKey);
+    const threadDelegation = await authorCarrierDelegation({ replica: thread, signer: base.root, audiencePubkey: base.root.publicKey,
+        ops: ["create_thread", "post"], roles: ["moderator"], live: true });
+    const threadGenesis = await authorCarrierOp({ replica: thread, signer: base.root, deps: [], kind: "authority", cap: nil,
+        body: tuple(atom("genesis"), ["delegation", threadDelegation], ["map", []]) });
+    const threadCreation = await authorCarrierOp({ replica: thread, signer: base.root, deps: [threadGenesis.id], kind: "command",
+        cap: townshipCapTerm(threadDelegation.id), body: tuple(atom("create_thread"), ["list", [text("Thread")]]) });
+    const cited = new Set(base.frames.flatMap((frame) => [...frame.deps]));
+    const threadReference = await authorCarrierOp({ replica: base.replica, signer: base.root,
+        deps: base.frames.map((frame) => frame.id).filter((frameId) => !cited.has(frameId)).sort(), kind: "command",
+        cap: townshipCapTerm(base.delegation.id), body: tuple(atom("create_thread"), ["list", [text(thread), text("Thread")]]) });
     const transfer = await authorCarrierOp({ replica: base.replica, signer: base.root, deps: [base.bootstrap.id], kind: "authority", cap: nil,
         body: tuple(atom("transfer"), atom("admin"), ["delegation", leased], ["int", 0]) });
-    const frames = [...base.frames, transfer];
+    const frames = [...base.frames, threadReference, transfer];
     let beacon = null;
     if (options.beacon !== false) {
         beacon = await authorCarrierOp({ replica: base.replica, signer: base.root, deps: [transfer.id], kind: "authority", cap: nil,
             body: tuple(atom("beacon"), ["int", 1]) });
         frames.push(beacon);
     }
-    const thread = await bindTownshipReplica(`replica:treehouse:thread:${id("thread")}`, base.root.publicKey);
-    const threadDelegation = await authorCarrierDelegation({ replica: thread, signer: base.root, audiencePubkey: base.root.publicKey,
-        ops: ["post"], roles: [], live: true });
-    const threadGenesis = await authorCarrierOp({ replica: thread, signer: base.root, deps: [], kind: "authority", cap: nil,
-        body: tuple(atom("genesis"), ["delegation", threadDelegation], ["map", []]) });
     const newCatalog = seededSigner("r316-pr2-ts-new-catalog"), newService = seededSigner("r316-pr2-ts-new-service");
-    return { ...base, leased, transfer, beacon, frames, thread, threadGenesis, newCatalog, newService };
+    return { ...base, leased, transfer, beacon, frames, thread, threadGenesis, threadCreation, threadReference, newCatalog, newService };
 }
 const post = (f, body) => authorCarrierOp({ replica: f.thread, signer: f.root, deps: [f.threadGenesis.id],
     kind: "command", cap: nil, body: tuple(atom("post"), ["list", [text(body)]]) });
@@ -45,10 +53,10 @@ function entries(f, serviceKey) {
         root: b64(f.root.publicKey), genesis, creation, reference, route: `/r/${id(`route-${replica}`)}`, serviceId: id("new-service"), serviceKey
     });
     return [entry(f.replica, "space", f.genesis.id, f.creation.id, f.bootstrap.id),
-        entry(f.thread, "thread", f.threadGenesis.id, f.threadGenesis.id, id("thread-reference"))]
+        entry(f.thread, "thread", f.threadGenesis.id, f.threadCreation.id, f.threadReference.id)]
         .sort((a, b) => a.replica < b.replica ? -1 : a.replica > b.replica ? 1 : 0);
 }
-function request(f, overrides = {}, threadFrames = [f.threadGenesis]) {
+function request(f, overrides = {}, threadFrames = [f.threadGenesis, f.threadCreation]) {
     const serviceKey = overrides.newServiceKey ?? b64(f.newService.publicKey);
     return { author: b64(f.nominee.publicKey), nonce: id("nonce"), parents: [f.bootstrap.id],
         priorCatalogs: [{ binding: f.bootstrap.id, catalog: null }], generation: 1, newCatalogKey: b64(f.newCatalog.publicKey),
@@ -77,8 +85,9 @@ const push = (frame) => new TextEncoder().encode(JSON.stringify({ type: "push", 
 test("catalog_command_too_large before any signature", async () => {
     signed = [];
     const f = await fixture();
-    const wide = [f.threadGenesis];
-    for (let n = 1; n <= 1_500; n++)
+    // The Thread's own create_thread is the 1,500th frontier op.
+    const wide = [f.threadGenesis, f.threadCreation];
+    for (let n = 1; n <= 1_499; n++)
         wide.push(await post(f, `post ${n}`));
     const refused = await prepare(f, f.frames, request(f, {}, wide));
     assert.deepEqual(refused, { ok: false, reason: "catalog_command_too_large" });
@@ -135,7 +144,7 @@ test("a changed dep, key or cutoff requires new possession bytes", async () => {
         signer: spy(f.nominee, "op") });
     assert.deepEqual(key.ok ? null : [key.reason, key.journalEntry.status], ["invalid_possession", "cancelled"]);
     // (cutoff) An op appended to the Thread log after the freeze.
-    const later = { ...attempt, request: request(f, {}, [f.threadGenesis, await post(f, "later")]) };
+    const later = { ...attempt, request: request(f, {}, [f.threadGenesis, f.threadCreation, await post(f, "later")]) };
     const cutoff = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt: later, possession,
         signer: spy(f.nominee, "op") });
     assert.deepEqual(cutoff.ok ? null : [cutoff.reason, cutoff.journalEntry.status], ["stale_verified_state", "cancelled"]);
@@ -304,11 +313,12 @@ test("parents, priorCatalogs and generation are checked against the binding grap
     const f = await fixture();
     assert.equal(b64(catalogSigner(f).publicKey), f.record.catalogKey);
     const unrelated = id("unrelated-binding");
+    // An off-graph parent is not yet held: the preflight stays pending (row 350, PR 4a-2; PR 2 reported a transition failure).
     assert.equal(reason(await prepare(f, f.frames, request(f, { parents: [unrelated], priorCatalogs: [{ binding: unrelated, catalog: null }],
-        generation: 9 }))), "invalid_catalog_transition");
+        generation: 9 }))), "trust_pending");
     const both = [f.bootstrap.id, unrelated].sort();
     assert.equal(reason(await prepare(f, f.frames, request(f, { parents: both,
-        priorCatalogs: both.map((binding) => ({ binding, catalog: null })) }))), "invalid_catalog_transition");
+        priorCatalogs: both.map((binding) => ({ binding, catalog: null })) }))), "trust_pending");
     assert.equal(reason(await prepare(f, f.frames, request(f, { generation: 9 }))), "invalid_catalog_transition");
     const first = catalog(f, f.bootstrap.id, 0, null), firstId = transportCatalogId(first.catalog);
     assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: [first] }))), "catalog_fork");
@@ -566,4 +576,54 @@ test("possessions mutated while authoring awaits never reach the signer", async 
         assert.fail(result.reason);
     const args = result.frame.body[1][1][1];
     assert.deepEqual(args.slice(1), [["bin", genuine.catalog], ["bin", genuine.service]]);
+});
+// --- PR 4a-2: the preflight runs the binding-graph resolver (rows 350, 352) -----------------------------------------
+test("a Core-honored replacement failing an intrinsic check is raw evidence and not a required head", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const claim = { ...attempt.claim, generation: 2, nonce: id("ineligible") };
+    const sig = (signer, purpose) => b64(signer.sign(canonicalBytesForCatalogReplacementPossession(purpose, claim)));
+    const raw = await authorCarrierOp({ replica: f.replica, signer: f.nominee, deps: [...claim.deps], kind: "command",
+        cap: townshipCapTerm(claim.cap), body: tuple(atom("replace_catalog_v1"), ["list", [catalogReplacementClaimToCarrierTerm(claim),
+                ["bin", sig(f.newCatalog, "catalog")], ["bin", sig(f.newService, "service")]]]) });
+    const frames = [...f.frames, raw];
+    assert.equal((await judge(frames)).get(raw.id), undefined);
+    const after = await prepare(f, frames, request(f, { nonce: id("after-raw") }));
+    if (!after.ok)
+        assert.fail(after.reason);
+    assert.deepEqual(after.attempt.claim.parents, [f.bootstrap.id]);
+    assert.equal(reason(await prepare(f, frames, request(f, { nonce: id("cite-raw"), parents: [raw.id],
+        priorCatalogs: [{ binding: raw.id, catalog: null }], generation: 3 }))), "invalid_catalog_transition");
+});
+test("an old-key rotation of a closed binding is not chained", async () => {
+    const f = await fixture();
+    const attempt = await prepared(f);
+    const r1 = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt, possession: possess(f, attempt),
+        signer: f.nominee });
+    if (!r1.ok)
+        assert.fail(r1.reason);
+    const frames = [...f.frames, r1.frame];
+    const prior = catalog(f, f.bootstrap.id, 0, null);
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), seededSigner("r316-4a2-ts-old-key"), "old-key", prior);
+    const over = (parents) => request(f, { nonce: id(`over-${parents.length}`),
+        newCatalogKey: b64(seededSigner("r316-4a2-ts-second").publicKey), rotations: [t.envelope], catalogs: [prior],
+        parents: [...parents].sort(), priorCatalogs: [...parents].sort().map((binding) => ({ binding, catalog: null })), generation: 2 });
+    assert.equal(reason(await prepare(f, frames, over([r1.frame.id]))), "ok");
+    assert.equal(reason(await prepare(f, frames, over([r1.frame.id, t.id]))), "invalid_catalog_transition");
+});
+test("coverage reports unheld prior, then transition failure, then fork", async () => {
+    const f = await fixture();
+    const prior = catalog(f, f.bootstrap.id, 0, null), priorId = transportCatalogId(prior.catalog);
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), seededSigner("r316-4a2-ts-order"), "order", prior);
+    const cited = [{ binding: f.bootstrap.id, catalog: priorId }];
+    assert.equal(reason(await prepare(f, f.frames, request(f, { priorCatalogs: cited, generation: 9 }))), "trust_pending");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [t.envelope], catalogs: [prior], priorCatalogs: cited,
+        generation: 9 }))), "invalid_catalog_transition");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { rotations: [t.envelope], catalogs: [prior], priorCatalogs: cited }))), "catalog_fork");
+});
+test("an unheld parent keeps the preflight pending", async () => {
+    const f = await fixture();
+    const unknown = id("not-yet-held");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { parents: [unknown], priorCatalogs: [{ binding: unknown, catalog: null }],
+        generation: 2 }))), "trust_pending");
 });

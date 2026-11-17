@@ -1,0 +1,12 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
+@@ -1204,7 +1204,8 @@
+   # under the node may use it, but its replicas may move onto fresh routes. The reservation is
+   # part of the route map, so it propagates down every chain and into later floors.
+   defp merge_floor({:ok, e1, r1}, {:ok, e2, r2}) do
+-    {:ok, Enum.uniq(e1 ++ e2),
++    # MUTANT m7: the floor join keeps duplicate entries.
++    {:ok, e1 ++ e2,
+      Map.merge(r1, r2, fn _route, x, y -> if x == y and x != :none, do: x, else: :none end)}
+   end
+ 
