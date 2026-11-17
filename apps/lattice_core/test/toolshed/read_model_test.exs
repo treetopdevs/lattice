@@ -141,4 +141,29 @@ defmodule Toolshed.ReadModelTest do
       assert model.loan.due_epoch == 4
     end
   end
+
+  # Row 324: any realm can append an admitted `{:request, ref, payload}` :inbox
+  # op with any terms. `ref` is a text slot; `payload` stays the raw term.
+  test "a non-binary request ref shows the (malformed) marker" do
+    sim = fresh_tool()
+    {sim, op} = Sim.append(sim, "borrower", :inbox, {:request, 7, {:custody_transfer, []}})
+    model = sim |> Sim.sync_all() |> Sim.log("owner") |> ReadModel.observe()
+
+    assert [r] = Enum.filter(model.requests, &(&1.op == op.id))
+    assert r.ref == "(malformed)"
+    assert r.payload == {:custody_transfer, []}
+    refute r.resolved?
+  end
+
+  test "an invalid-UTF-8 ref shows the marker; payload stays raw" do
+    sim = fresh_tool()
+    payload = %{weird: <<255>>}
+    {sim, op} = Sim.append(sim, "borrower", :inbox, {:request, "cust" <> <<255>>, payload})
+    model = sim |> Sim.sync_all() |> Sim.log("owner") |> ReadModel.observe()
+
+    assert [r] = Enum.filter(model.requests, &(&1.op == op.id))
+    assert r.ref == "(malformed)"
+    assert r.payload === payload
+    assert String.valid?(inspect(r.payload))
+  end
 end
