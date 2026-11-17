@@ -5,8 +5,14 @@ defmodule LatticeCarrierServer.Operator.CatalogClosedBindingSigningTest do
   # retained-client acceptance, a route switch, 4c wiring or a freshness guarantee.
   use ExUnit.Case, async: false
 
-  alias Lattice.Log
-  alias LatticeCarrierServer.Operator.CatalogSigningPackage
+  alias Lattice.{Authority, Log, Sim}
+
+  alias LatticeCarrierServer.Operator.{
+    CatalogBinding,
+    CatalogSigningPackage,
+    CeremonyFixture,
+    Fixture
+  }
 
   alias LatticeCarrierServer.Operator.CatalogCeremony.{
     Binding,
@@ -307,6 +313,85 @@ defmodule LatticeCarrierServer.Operator.CatalogClosedBindingSigningTest do
 
     assert {:error, :catalog_binding_closed} =
              BindingClosure.check(Map.put(package, :observed, observed), [])
+  end
+
+  test "a binding in closed_out/1 (a rotation T of a closed B) is :catalog_binding_closed", f do
+    r =
+      F.replacement(f.base, f.base.log, "r360-closed-out",
+        prior_catalogs: [%{binding: f.b, catalog: F.cid(f.c0)}]
+      )
+
+    rv = F.revoke(f.base, Log.frontier(f.base.log), f.base.delegation.id)
+    log = F.append(f.base.log, [r.op, rv])
+    rotated = F.identity("rot-r360-closed-out")
+    t = F.rotation(f.base, %{id: f.b, generation: 0}, f.c0, f.base.catalog, rotated, "r360-co")
+
+    assert {:ok, g} = resolve(f.base, log, [f.c0], [t.envelope])
+    assert Map.has_key?(CatalogBindingGraph.closed_out(g), t.id)
+    refute t.id in CatalogBindingGraph.closed(g)
+
+    rotation = Map.put(bootstrap_binding(f.base), :binding_id, t.id)
+    package = package(f.base, log, rotation, f.c1)
+
+    assert {:error, :catalog_binding_closed} =
+             BindingClosure.check(package, [], rotations: [t.envelope], catalogs: [f.c0])
+  end
+
+  test "a real pending-mode package signs through sign/4 and replays keyless with :ok (R1)" do
+    {:ok, fixture} = Fixture.new(second_member: true)
+    space = fixture[:updated_log]
+    child = Sim.log(fixture[:child], "creator")
+    dir = fixture[:ceremony_dir]
+    {:ok, binding} = CatalogBinding.load_log(dir, space)
+    reference = fixture[:reference]
+
+    entries =
+      for {log, kind, schema, ref, route} <- [
+            {space, :space, :treehouse_space_v1, binding.bootstrap_id, fixture[:space_route]},
+            {child, :thread, :treehouse_thread_v1, reference.id, fixture[:child_route]}
+          ] do
+        command = if kind == :space, do: :create_space, else: :create_thread
+        genesis = Enum.find(Map.values(log.ops), &(&1.kind == :authority and &1.deps == []))
+        creation = Enum.find(Map.values(log.ops), &match?(%{body: {^command, [_]}}, &1))
+
+        %{
+          product: :treehouse,
+          replica: log.replica,
+          kind: kind,
+          schema: schema,
+          root: Authority.root(log),
+          genesis: genesis.id,
+          creation: creation.id,
+          reference: ref,
+          route: route,
+          service_id: binding.record.service_id,
+          service_key: binding.record.service_key
+        }
+      end
+
+    catalog = %{
+      version: 1,
+      product: :treehouse,
+      space: space.replica,
+      bootstrap: binding.bootstrap_id,
+      binding: binding.bootstrap_id,
+      revision: 0,
+      previous: nil,
+      entries: Enum.sort_by(entries, & &1.replica)
+    }
+
+    # The staged reference is absent from the carried Space (pending mode).
+    raw = Log.from_ops(space.replica, Map.delete(space.ops, reference.id))
+    histories = %{space.replica => raw, child.replica => child}
+    {:ok, bytes} = CatalogSigningPackage.encode(catalog, histories, reference, "pending")
+    {:ok, package} = CatalogSigningPackage.review(bytes, dir)
+    assert package.mode == "pending"
+    refute Map.has_key?(package.histories[space.replica].ops, reference.id)
+    assert {:ok, _} = SigningLedger.init(dir, package.binding)
+
+    signer = CeremonyFixture.signer_template().signer
+    assert {:ok, envelope} = SignCatalog.sign(bytes, dir, signer, package.digest)
+    assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
   end
 
   test "a package without an authenticated Space log is :catalog_binding_unresolved", f do

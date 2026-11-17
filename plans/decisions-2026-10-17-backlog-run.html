@@ -4320,7 +4320,7 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
 <dt>Context</dt><dd>The brief said to read the Space from <code>package.histories</code>. <code>CatalogSigningPackage.decode/1</code> keeps the raw Space there and the <code>ReferenceMode.observe</code> output under <code>package.observed</code>. In <code>pending</code> mode the staged reference is absent from the raw Space and present in the observed one.</dd>
 <dt>Options</dt><dd>Raw Space; observed Space.</dd>
-<dt>Decision</dt><dd><code>BindingClosure</code> uses <code>package.observed[space]</code> when it is a <code>%Log{}</code> for that replica, and falls back to <code>package.histories[space]</code> (hand-built packages). Pinned by a test that gives the observed copy a closing replacement.</dd>
+<dt>Decision</dt><dd><code>BindingClosure</code> uses <code>package.observed[space]</code> when it is a <code>%Log{}</code> for that replica, and falls back to <code>package.histories[space]</code> (hand-built packages). Pinned by a test that gives the observed copy a closing replacement, and by a real <code>pending</code> package (the <code>Fixture.new/1</code> ceremony) signed through <code>sign/4</code> and replayed keyless: with the raw Space only, that replay refuses as <code>catalog_binding_unresolved</code> (verified by mutation).</dd>
 <dt>Reason</dt><dd>A stored pending-mode catalog names its staged reference; over the raw Space its entry fact pends, the resolver returns <code>trust_pending</code> and a legitimate replay refuses. The observed Space is the log decode already judged the entries against, and it adds one signed, Core-honored op; it never narrows evidence.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
@@ -4350,9 +4350,9 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 </dl></section>
 <section id="d914"><h2><span>D-914</span> Row 360: Linux-only operator suites not run locally</h2><dl>
 <dt>When</dt><dd>2026-11-17, row 360 (branch claude/360-ledger-refuses-closed-binding)</dd>
-<dt>Context</dt><dd><code>release_catalog_test.exs</code> and other operator suites skip off Linux; local Docker is down, so the pending-mode multi-revision signing flow with the new check ran only in CI.</dd>
+<dt>Context</dt><dd><code>release_catalog_test.exs</code> and other operator suites skip off Linux; local Docker is down, so the multi-revision release signing flow has not run with the new check anywhere; its first run is CI after push. One real pending-mode package does run on macOS (D-910).</dd>
 <dt>Options</dt><dd>Block on Docker; ship and file the risk.</dd>
-<dt>Decision</dt><dd>Ship; row 552 records the CI check, the 35 s lock timing over large histories and the fail-closed pending-reference case (R1). Every local carrier suite is green.</dd>
+<dt>Decision</dt><dd>Ship; row 552 records that run (skipped on macOS, unverified), the 35 s lock timing over large histories and the fail-closed pending-reference case (R1). Every local carrier suite is green.</dd>
 <dt>Reason</dt><dd>Each chain catalog&#x27;s entries are a subset of the current package&#x27;s entries, which decode already validated against the same observed logs, so a false refusal is unlikely; it would fail closed.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
