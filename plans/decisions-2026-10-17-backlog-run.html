@@ -4553,7 +4553,7 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <section id="d948"><h2><span>D-948</span> Row 524 review summary</h2><dl>
 <dt>When</dt><dd>2026-11-17, row 524 watermark slice (branch claude/524-watermark-cumulative-routes)</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
-<dt>Context</dt><dd>Two review rounds ran on the row 524 and row 528 slice.</dd>
+<dt>Context</dt><dd>Two review rounds ran on the row 524 and row 528 slice, PR <a href="https://github.com/treetopdevs/lattice/pull/235">#235</a>.</dd>
 <dt>Decision</dt><dd>Round 1: verdict CHANGES, one P2, no P3. An unaccepted intermediate catalog could overwrite a reserved watermark route. Fixed in D-930 and shown with a new shared S12r scenario in both runtimes. Its residual (is such a chain promotable at all, and does <code>mirror/4</code> have the same overwrite) is row 570, an unverified audit item. Round 2: verdict CHANGES, one P2, no P3. Successive replacements on one page dropped an intermediate route. Fixed in D-931 and shown with the S12s pair in both runtimes; removing the fill makes the S12s, S1, S8, S14 and S17b properties fail. No round 3 ran, so the round 2 fix is not confirmed by a later review.</dd>
 <dt>Reason</dt><dd>The last round reported a P2, so the review is not clean until a later round confirms the D-931 fix. No resolver decision, wire atom, quarantine reason or committed wire byte changed; the vectors only gained steps and stored routes.</dd>
 </dl></section>
