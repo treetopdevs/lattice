@@ -585,6 +585,84 @@ defmodule Lattice.Authority do
           {analysis(), beacon_evidence(), acquisition_records()}
   def analyze_with_records(module, %Log{} = log), do: do_analyze(module, log)
 
+  @typedoc "One leased delegation as of the whole log (live-path view, like `expired?/2`)."
+  @type lease :: %{
+          delegation_id: String.t(),
+          issuer: Identity.pubkey(),
+          audience: Identity.pubkey(),
+          expires_epoch: non_neg_integer(),
+          expired?: boolean()
+        }
+
+  @typedoc "Read-only observation of a log's role chronology, beacons and leases (row 157)."
+  @type observation :: %{
+          chronology: acquisition_records(),
+          beacons: %{valid: beacon_evidence(), max_epoch: non_neg_integer() | nil},
+          leases: [lease()]
+        }
+
+  @doc """
+  Read-only observation of the authority timeline in `log` (row 157).
+
+  Returns, from one ordinary analysis pass of the judge:
+
+    * `chronology` - the honored role acquisitions per role, oldest first, the
+      same records `analyze_with_records/2` returns. Author-asserted ticks are
+      omitted: they are untrusted and are not shown.
+    * `beacons` - the beacons that pass accepted (`valid`, sorted by op id) and
+      `max_epoch`, the highest accepted epoch anywhere on the log. It is global
+      to the log, not per causal branch, and is not the epoch any one operation
+      observed.
+    * `leases` - every signature-valid delegation whose chain carries a lease,
+      sorted by delegation id, with the tightest `expires_epoch` on its chain and
+      `expired?`, exactly `expired?/2` (the live-path check).
+
+  The view is global to the log and live-path. It changes no verdict, confers no
+  capability or authority, and is not proof that a later operation saw any of it.
+  """
+  @spec observe(module(), Log.t()) :: observation()
+  def observe(module, %Log{} = log) do
+    {_analysis, beacons, records} = do_analyze(module, log)
+    max_epoch = beacons |> Enum.map(& &1.epoch) |> Enum.max(fn -> nil end)
+
+    %{
+      chronology: records,
+      beacons: %{valid: beacons, max_epoch: max_epoch},
+      leases: observe_leases(log)
+    }
+  end
+
+  defp observe_leases(log) do
+    delegations = collect_delegations(Log.topo_ops(log))
+
+    delegations
+    |> Enum.flat_map(fn
+      {id, %{deleg: %Delegation{} = d}} ->
+        expires =
+          d
+          |> delegation_chain_links(delegations)
+          |> Enum.map(& &1.expires_epoch)
+          |> Enum.filter(&is_integer/1)
+          |> Enum.min(fn -> nil end)
+
+        if expires == nil,
+          do: [],
+          else: [
+            %{
+              delegation_id: id,
+              issuer: d.issuer,
+              audience: d.audience,
+              expires_epoch: expires,
+              expired?: expired?(log, id)
+            }
+          ]
+
+      _invalid_only ->
+        []
+    end)
+    |> Enum.sort_by(& &1.delegation_id)
+  end
+
   defp do_analyze(module, log) do
     ops = Log.ops(log)
     ordered = Dag.topo_sort(ops)
