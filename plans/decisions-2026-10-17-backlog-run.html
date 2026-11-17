@@ -2968,7 +2968,7 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Reason</dt><dd>This keeps the index truthful without a separate docs PR.</dd>
 </dl></section>
 <section id="d866"><h2><span>D-866</span> Row 157 review: two Codex Sol rounds and dispositions</h2><dl>
-<dt>When</dt><dd>2026-11-17, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-17, row 157, <a href="https://github.com/treetopdevs/lattice/pull/231">#231</a> (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Decision</dt><dd>Round 1: CHANGES, one P2. The P2 was that a separate Verdict pass and expired?/2 call per lease stalled instrument refreshes (120 leases took 20.8 s, past the 15 s refresh deadline). It was fixed by D-857 and D-858: the 120-lease log now observes in about 0.42 s, a failing-first read-model test bounds it at 25 times one analyze/2 pass, and equivalence tests pin the batch to delegation_status/3, delegation_active?/2 and expired?/2. Round 2: CHANGES, no P1 or P2, one P3. Round 2 checked the P2 and confirmed it fixed (1.57 s against 0.60 s for one analysis pass). The P3 was left open and filed as row 508: in instrument_live_test.exs:88 the chronology assertion checks only the container, so deleting every acquisition row still passes.</dd>
 <dt>Reason</dt><dd>No P1 or P2 is open. The one P3 is a test-strength gap, not a behaviour defect, so it is filed rather than fixed in this closeout.</dd>
 </dl></section>
