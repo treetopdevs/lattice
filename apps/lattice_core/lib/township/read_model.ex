@@ -112,8 +112,9 @@ defmodule Township.ReadModel do
   @doc """
   Build the causal replay payload for the Township instrument.
 
-  Each frame's `"state"` follows the moduledoc display-safety contract, so the
-  payload is JSON-encodable for any admitted Matter command arguments.
+  Each frame's `"state"` follows the moduledoc display-safety contract. Nodes
+  and edges come from `Lattice.Graph.ReplicaSnapshot`, which follows the row 311
+  `Lattice.Graph.AuthorityBody` contract.
   """
   @spec replay(Log.t()) :: map()
   def replay(%Log{} = log) do
