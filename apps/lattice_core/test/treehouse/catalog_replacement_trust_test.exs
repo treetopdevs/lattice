@@ -769,9 +769,18 @@ defmodule Treehouse.CatalogReplacementTrustTest do
 
     @tag :replacement_demo
     @tag timeout: 180_000
-    test "BEAM equals TS on the D-881 runs" do
+    test "BEAM equals TS on the D-881 and D-882 runs" do
       moved = d881_moved_route()
-      runs = [moved.run, moved.one_page, d881_three_tuple(), d881_one_argument()]
+
+      runs = [
+        moved.run,
+        moved.one_page,
+        d881_three_tuple(),
+        d881_one_argument(),
+        d882_unseen_bootstrap(),
+        d882_control_history_limit()
+      ]
+
       beam = Map.new(runs, &{&1.name, d881_views(&1)})
 
       path =
@@ -817,6 +826,106 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       [views] = for "VIEWS " <> json <- String.split(out, "\n", trim: true), do: json
       assert Jason.decode!(views) == beam
     end
+  end
+
+  # --- D-882: only the block classes the replacement graph resolves are superseded -------------
+  #
+  # The old-key catalog fork case (still superseded) is "an old-key catalog fork cannot stop an
+  # accepted replacement, in either order" and the "honored op with accepted catalog" row of the
+  # blocked-state table above.
+
+  describe "D-882 supersession" do
+    test "an unreviewed bootstrap beside an honored replacement stays blocked and serves nothing" do
+      [_, last] = d881_views(d882_unseen_bootstrap())
+      assert {last["kind"], last["reason"]} == {"retain_blocked", "catalog_fork"}
+      assert {last["routes"], last["origin"], last["urls"]} == {0, nil, []}
+      assert last["accepted"] == "B/C0"
+    end
+
+    test "a control_history_limit block is not superseded by an honored replacement" do
+      [_, last] = d881_views(d882_control_history_limit())
+      assert {last["kind"], last["reason"]} == {"retain_blocked", "control_history_limit"}
+      assert {last["routes"], last["origin"]} == {0, nil}
+    end
+  end
+
+  # D-882 (a): the client reviewed and installed a history with one bootstrap. A later page
+  # holds a second root-authored bootstrap (before the admin transfer, so it is valid), the
+  # leased admin's replacement R citing C0, and K. CatalogTrust blocks as `catalog_fork` naming
+  # the unseen bootstrap; the graph judges only the reviewed one and would honor R.
+  defp d882_unseen_bootstrap do
+    w = W.build()
+    base = w.base
+    pre_ops = base.log |> Log.ops() |> Map.drop([base.transfer.id, base.beacon1.id])
+    pre = Log.from_ops(base.replica, pre_ops)
+    record = %{base.record | nonce: F.id("d882-unseen-nonce")}
+
+    unseen =
+      F.op(base.root, base, Log.frontier(pre), :command, {:catalog_bootstrap_v1, [record]},
+        cap: F.genesis_delegation(base).id
+      )
+
+    transfer = Op.new(base.root, base.replica, [unseen.id], :authority, base.transfer.body)
+    beacon = F.beacon(base, [transfer.id], 1)
+    log = F.append(pre, [unseen, transfer, beacon])
+    world = %{base | log: log, transfer: transfer, beacon1: beacon}
+
+    r =
+      F.replacement(world, log, "d882-r",
+        prior_catalogs: [%{binding: base.boot.id, catalog: F.cid(w.c0)}]
+      )
+
+    k = F.first(world, r)
+    {:ok, %{cutoff: cutoff}} = Treehouse.CatalogCutoff.derive(log)
+    proof = %{cutoff: cutoff, history: CatalogTrustVectors.raw_history(log)}
+    h0 = CatalogTrustVectors.raw_history(pre)
+    w = %{w | base: world, h0: h0}
+    labels = %{unseen.id => "B2", r.id => "R", F.cid(k) => "K"}
+
+    d881_run(w, "d882_unseen_bootstrap", labels, [
+      {"install C0", W.page(catalogs: [w.c0], logs: [pre]), :eval},
+      {"B2 + R + K", W.page(logs: [W.with_ops(world, [r.op])], proofs: [proof], catalogs: [k]),
+       :eval}
+    ])
+  end
+
+  # D-882 (b): three sibling rotations of the bootstrap from C0 make three binding heads, so
+  # CatalogTrust blocks as `control_history_limit`; the same page holds the honored R1 and K1.
+  defp d882_control_history_limit do
+    w = W.build()
+    base = w.base
+
+    rotations =
+      for i <- 1..3 do
+        new = Identity.from_seed("catalog", "r316-d882-rotation-#{i}")
+
+        rotation = %{
+          version: 1,
+          product: :treehouse,
+          space: base.replica,
+          bootstrap: base.boot.id,
+          parent: base.boot.id,
+          prior_catalog: F.cid(w.c0),
+          generation: 1,
+          new_catalog_key: new.pub,
+          nonce: F.id("d882-rotation-#{i}"),
+          inventory_digest: TransportCatalog.inventory_id(w.c0.catalog.entries),
+          cutoffs: [w.proof.cutoff]
+        }
+
+        CatalogTrustVectors.artifact_json(%{
+          rotation: rotation,
+          old_signature: Identity.sign(base.catalog, TransportCatalog.rotation_bytes(rotation)),
+          new_signature: Identity.sign(new, TransportCatalog.rotation_possession_bytes(rotation))
+        })
+      end
+
+    page = W.page(logs: [W.with_ops(base, [w.r1])], proofs: [w.proof], catalogs: [w.k1])
+
+    d881_run(w, "d882_control_history_limit", %{}, [
+      {"install C0", W.page(catalogs: [w.c0], logs: [base.log]), :eval},
+      {"3 rotations + R1 + K1", %{page | rotations: rotations}, :eval}
+    ])
   end
 
   # Each step either evaluates through the composed evaluator (`:eval`, with a view) or goes

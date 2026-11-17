@@ -43,7 +43,11 @@ defmodule Treehouse.CatalogReplacementTrust do
   `CatalogTrust` is blocked (authority change, fork, control history limit) its decision stands
   and nothing is served, except that a replacement the graph honors, whose first catalog it
   accepts with the serving node bound to that replacement, supersedes the block, so an old-key
-  catalog fork cannot stop an accepted replacement. Routes under the bootstrap or a rotation
+  catalog fork cannot stop an accepted replacement. Only the block classes the graph resolves can
+  be superseded (D-882): an `authority_changed` block or a `catalog_fork` among catalogs. A block
+  that names an unreviewed bootstrap, a page whose Space shows one, a `control_history_limit`
+  block and a block carrying overflow triggers are never superseded, because the graph judges
+  only the reviewed bootstrap and does not resolve a truncated control history. Routes under the bootstrap or a rotation
   binding are never served while blocked, and the graph's watermark on a replacement binding
   is never overwritten by `CatalogTrust`'s own accepted catalog.
 
@@ -236,7 +240,8 @@ defmodule Treehouse.CatalogReplacementTrust do
           not engaged?(result) ->
             mirrored(installed, decision, trust, extra, ops)
 
-          blocked?(trust) and not supersedes?(result, advanced, routes) ->
+          blocked?(trust) and
+              not (supersedable?(trust, decision) and supersedes?(result, advanced, routes)) ->
             installed
             |> mirrored(decision, trust, extra, ops)
             |> Map.put(:refused, refused(result))
@@ -278,6 +283,20 @@ defmodule Treehouse.CatalogReplacementTrust do
   defp engaged?(_error), do: true
 
   defp blocked?(trust), do: Map.get(trust, :blocked) != nil
+
+  # Only the block classes the replacement graph resolves may be superseded (D-882): an
+  # `authority_changed` block, or a `catalog_fork` among catalogs (old-key forks). A block naming
+  # an unreviewed bootstrap, a page that shows one, a `control_history_limit` block and any block
+  # carrying overflow triggers are never superseded: the graph judges only the reviewed bootstrap
+  # and does not resolve a truncated control history.
+  defp supersedable?(
+         %{blocked: %{reason: reason, bootstrap_ids: [], triggers: []}} = trust,
+         %{observed: %{bootstrap_ids: observed}}
+       )
+       when reason in [:authority_changed, :catalog_fork],
+       do: observed -- trust.review.observed_bootstrap_ids == []
+
+  defp supersedable?(_trust, _decision), do: false
 
   # A CatalogTrust block is superseded only by the serving catalog of a replacement node the graph
   # honors (the first catalog of that replacement is accepted). A bootstrap or rotation binding,

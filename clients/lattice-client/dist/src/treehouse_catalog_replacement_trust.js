@@ -24,7 +24,10 @@
 // the resolver treats an op as a replacement node or as raw refusal evidence; a malformed or unauthorized op that is neither
 // changes nothing. While the trust state is blocked its decision stands and nothing is served, except that a replacement the
 // graph honors, whose first catalog it accepts with the serving node bound to that replacement, supersedes the block (so an
-// old-key catalog fork cannot stop an accepted replacement). A sidecar catalog bound to a held replacement op is admitted only
+// old-key catalog fork cannot stop an accepted replacement). Only the block classes the graph resolves can be superseded (D-882):
+// an authority_changed block or a catalog_fork among catalogs. A block that names an unreviewed bootstrap, a page whose Space
+// shows one, a control_history_limit block and a block carrying overflow triggers are never superseded, because the graph
+// judges only the reviewed bootstrap and does not resolve a truncated control history. A sidecar catalog bound to a held replacement op is admitted only
 // if its signature verifies against that op's claimed catalog key, once per catalog id. wrapReplacementTrust carries the trust
 // state's accepted watermark and cumulative routes into the graph state.
 import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
@@ -145,7 +148,7 @@ async function composed(installed, decision, extra, ops) {
     if (!engaged(result))
         return mirrored(installed, decision, extra, ops);
     // A trust block is superseded only by the serving catalog of a replacement node the graph honors.
-    if (trust.blocked !== null && !supersedes(result, advanced, routes)) {
+    if (trust.blocked !== null && !(supersedable(trust, decision) && supersedes(result, advanced, routes))) {
         return { ...mirrored(installed, decision, extra, ops), refused: result.ok ? Object.fromEntries(result.graph.rawEvidence) : {} };
     }
     const binding = { accepted: advanced.accepted, frozen: advanced.frozen };
@@ -158,6 +161,15 @@ function engaged(result) {
     if (!result.ok)
         return true;
     return [...result.graph.nodes.values()].some((n) => n.kind === "replacement") || result.graph.rawEvidence.size > 0;
+}
+// Only the block classes the replacement graph resolves may be superseded (D-882); see the file header.
+function supersedable(trust, decision) {
+    const block = trust.blocked;
+    if (block === null || (block.reason !== "authority_changed" && block.reason !== "catalog_fork"))
+        return false;
+    if (block.bootstrapIds.length > 0 || block.triggers.length > 0)
+        return false;
+    return decision.observed.bootstrapIds.every((id) => trust.review.observedBootstrapIds.includes(id));
 }
 function supersedes(result, advanced, routes) {
     if (!result.ok || advanced.serving === null || routes.length === 0)
