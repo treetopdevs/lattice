@@ -2887,6 +2887,41 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Round 1: 5 findings. Round 2: 2 findings. Dispositions: (1) P2 stale confirmation can produce a corrupt ledger, fixed: sign_reviewed/4 now recomputes CatalogSigningPackage.digest(package.catalog) and checks catalog.binding, bootstrap and space against the reviewed binding before any key access; both fail with :catalog_confirmation_mismatch, and the regression test fails without the fix. (2) P3 bootstrap compatibility assertion is vacuous, fixed: removed the vacuous test; catalog_signing_package_test.exs now encodes real pending and initial_existing packages and asserts the exact reference keys, the mode, the frame equal to Wire.encode_op, and decode. Bytes were not pinned against a pre-change snapshot because existing bootstrap tests already review and sign through that fixture. (3) P3 refusal tests are vacuous (assert_no_ledger on a dir review never receives), fixed: replaced with a sign_reviewed refusal test that checks the ceremony dir afterwards, covering a wrong confirmation, a stale altered map and a rebound catalog with a recomputed digest; the wrong-op-id test keeps its harmless unused assert_no_ledger. (4) P3 stale comment on SigningLedger.extends?/2, fixed: it now describes extends?/2 as the binding-less rule and extends?/3 as the binding-aware form with the replacement-genesis arm. (5) P3 positive replacement path only tested with a Space-only catalog, follow-up: added a unit test that a Thread-bearing replacement genesis passes SigningLedger.extends?/3 and that max_envelopes is 13; the end-to-end Thread-bearing fixture needs PR 4 inventories and is filed as row 363. Final-round findings, left open: P3 apps/lattice_carrier_server/lib/lattice_carrier_server/operator/catalog_signing_package.ex:149, replacement review misclassifies malformed evidence (a corrupt history-frame signature makes decode/1 return :invalid_catalog_package, but review_replacement/4 converts it to :catalog_binding_mismatch; the refusal allowlist omits the decoder error; preserve it and add a review-level malformed-history test; signing remains refused). P3 apps/lattice_carrier_server/test/operator/catalog_replacement_signing_test.exs:369, stale-confirmation tests do not independently protect digest revalidation (both stale-map cases change catalog.binding, so the scope check rejects them independently; an in-memory mutation probe showed that removing the digest recheck leaves all three assertions passing; add a same-binding route mutation retaining the original digest and require :catalog_confirmation_mismatch before ledger access).</dd>
 <dt>Reason</dt><dd>The two final-round P3s are recorded here as open, not fixed in this PR. Nothing here claims resolver acceptance, route switch, catalog trust, closed-binding refusal, a real Space or ceremony; C10-C15 stay OPEN.</dd>
 </dl></section>
+<section id="d850"><h2><span>D-850</span> Follow a re-checked brief instead of stale plan 157</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>Implement row 157 from a brief re-checked against origin/main 4ee13d7d6, and mark the plan superseded with a dated note listing the eleven stale items.</dd>
+<dt>Reason</dt><dd>The plan drift check fired (authority.ex 1189 lines changed since c9a05b40), meeting its judge-moved STOP. Main already exposes chronology and beacons, so the remaining work is a thin read-only combination.</dd>
+</dl></section>
+<section id="d851"><h2><span>D-851</span> Authority.observe/2 is additions only and does not call Verdict</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>Add one public observe/2, two types and one private helper (observe_leases/1) to authority.ex; no existing line changes, no admission or quarantine change, no call into Lattice.Verdict.</dd>
+<dt>Reason</dt><dd>Verdict derives from Authority, so the dependency must stay one-way. git diff origin/main on authority.ex prints no removed lines.</dd>
+</dl></section>
+<section id="d852"><h2><span>D-852</span> No author-asserted tick in the chronology</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>Chronology entries are the existing acquisition records {op_id, holder, delegation_id}; the plan&#x27;s at_tick field is dropped.</dd>
+<dt>Reason</dt><dd>Ticks are author-asserted and untrusted (ADR 0004); the existing acquisition typedoc already omits them.</dd>
+</dl></section>
+<section id="d853"><h2><span>D-853</span> Lease enumeration uses signature-valid delegations only; expired? is the public Authority.expired?/2</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>Leases come from collect_delegations entries with a non-nil deleg. expires_epoch is the minimum integer lease over the chain; entries without one are dropped. expired? calls Authority.expired?/2 exactly, even though it recomputes the pass.</dd>
+<dt>Reason</dt><dd>Delegation.valid_sig? refuses out-of-domain fields (row 289), keeping observe total. Using the public predicate keeps one definition of expiry.</dd>
+</dl></section>
+<section id="d854"><h2><span>D-854</span> Lease status comes from Verdict; key fingerprints only for 32-byte keys</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>ReadModel lease status is Verdict.delegation_status/3 .status (validity, then revoked, then lapsed), shown beside expired?. Keys are fingerprinted only when they are 32-byte binaries, the trust graph reader&#x27;s rule; otherwise nil.</dd>
+<dt>Reason</dt><dd>The two rules can differ legitimately (a revoked chain that also lapsed shows expired?=true, status revoked). Identity.fingerprint/1 raises on a short binary, so is_binary alone is not total.</dd>
+</dl></section>
+<section id="d855"><h2><span>D-855</span> Accept the extra passes on the projection refresh path for now; file row 500</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>ReadModel.observe runs the authority pass twice plus two full passes per leased delegation. Not optimised in this PR; row 500 tracks a one-pass status derivation and the stale sentence in plan 167.</dd>
+<dt>Reason</dt><dd>Unleased logs pay only one extra pass. Optimising would need a judge-side helper, which this read-only row must not add.</dd>
+</dl></section>
+<section id="d856"><h2><span>D-856</span> Beacon epoch wording is global to the log</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>The panel says &quot;Highest accepted beacon epoch on this log: N&quot; and the doc says it is not per causal branch; nothing labels it as now for any one operation.</dd>
+<dt>Reason</dt><dd>A partitioned realm may not have seen the beacon, so a per-op &quot;now&quot; label would overclaim.</dd>
+</dl></section>
 </main>
 </body>
 </html>

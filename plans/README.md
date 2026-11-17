@@ -237,7 +237,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | TODO (direction round 2026-07-18) |
 | 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | DONE (PR #32; hosted run `29755770936` green across all three jobs) |
 | 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
-| 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
+| 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | IN REVIEW (2026-11-16, branch `claude/157-authority-observe`; D-850–D-856) read-only `Authority.observe/2` (additions only to `authority.ex`, no admission or quarantine change), `ReadModel` roles `chronology`/`beacons`/`leases`, roles-panel role history, beacon epoch and lease status, `scripts/township_authority_observe.exs`. Superseded plan text: see the brief note in the plan. Follow-up row 500 |
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | IN PROGRESS (shared carrier, isolation, distribution and causal-policy foundation merged; unified R01a updates order; catalog, WSS and product gates remain) |
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
 | 160 | PD-003-B Toolshed QR ceremony physics spike | P1 | M | 158 | PROPOSED (parallel session, untracked at time of Round 4) |
@@ -507,6 +507,7 @@ SEC-01 and CRYPTO-01 entries above should be read as "now plan 184".
 | 361 | Plan 316 PR 3 residual (D-455, D-456): `catalog_signing_package.ex`, `catalog_evidence.ex`, `release_listing.ex`, `staging.ex` and `initial_provisioning.ex` assume binding == bootstrap, so a replacement package refuses at `CatalogSigningPackage.review` with `catalog_binding_mismatch`. Thread `Binding.binding_id/1` through them, build the full-inventory replacement revision 0 in `release_catalog.ex`, and decide whether the derived record takes the claim's profile fields after a re-pin | P2 | M | 316 PR 4 | IN REVIEW (2026-11-15, [#220](https://github.com/treetopdevs/lattice/pull/220); D-492–D-508) signing path on fixtures only: package `replacement` mode, `review_replacement/4`, `sign_reviewed/4`, `replacement_revision_zero/2`, no re-pin support (D-496). Still open and gated on PR 4: `catalog_evidence`, `release_listing`, `staging`, `initial_provisioning` keep the bootstrap comparison with TODOs (D-493). Row stays open |
 | 362 | Plan 316 PR 3 residual (D-452): opening a ceremony directory that holds binding B with replacement R refuses as `catalog_ledger_corrupt` (the helper's default head_shape reason). Add a named reason such as `catalog_ledger_binding_mismatch` to the custody helper and refusal list | P3 | S | 316 PR 3 | IN REVIEW (2026-11-15, [#220](https://github.com/treetopdevs/lattice/pull/220); D-497, D-503) |
 | 363 | Plan 316 PR 3 follow-up (#220 review, D-508): end-to-end Thread-bearing replacement fixture. Extend `CatalogReplacementVectors` with a Thread history so the claim inventory, cutoffs, `observable/3`, `CatalogEntries.observe`, `review_replacement`, sign and ledger verification all run on a replacement carrying a Thread. Defer to PR 4's real inventories (plans 267/269, OD-16/17, row 320) | P3 | M | 316 PR 4 | TODO (filed 2026-11-15 from PR #220; D-508) |
+| 500 | Row 157 follow-up (D-855): `Township.ReadModel.observe/1` now runs the authority pass twice plus one `Authority.expired?/2` and one `Verdict.delegation_status/3` full pass per leased delegation, on the carrier projection refresh path. Fine at POC scale; derive lease status from one pass (a judge-side helper or a status map in `observe/2`) before a large leased log reaches the instrument. Also refresh the stale chronology sentence in `plans/167-divergence-explainer.md` (line ~98) | P3 | S | 157 | TODO (filed 2026-11-16, D-855) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | PARKED (one-line reason: a STOP condition fired; resumes on a named operator decision) | REJECTED (one-line rationale)
 
@@ -1333,9 +1334,11 @@ Vetted findings **not planned this round** (real, grounded, available for a futu
 
 Considered and rejected this round: none (all surveyed findings were either planned,
 deferred with reasons above, or folded into a plan). One correction made during vetting:
-`Authority.analyze/2`'s `audit` list contains **only quarantine events** — the full
-acquisition chronology is internal timeline state, which is why 157 adds `observe/2`
-instead of a template-only change.
+`Authority.analyze/2`'s `audit` list contains **only quarantine events** — the
+acquisition chronology was then internal timeline state, which is why 157 adds `observe/2`
+instead of a template-only change. (Updated 2026-11-16, row 157: main has since exposed the
+chronology through `analyze_with_records/2` and `acquisitions/3`, and accepted beacons through
+`analyze_with_beacon_evidence/2`; `observe/2` combines them with leases in one read-only view.)
 
 ## Centerless demo track (CD1) — proposed 2026-07-18
 
