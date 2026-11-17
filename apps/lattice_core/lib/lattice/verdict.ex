@@ -61,7 +61,7 @@ defmodule Lattice.Verdict do
   @schema "lattice-verdict-v1"
   @status_schema "lattice-delegation-status-v1"
 
-  @type record :: %{
+  @type verdict_record :: %{
           schema: String.t(),
           replica: String.t(),
           op_id: Op.id(),
@@ -89,7 +89,7 @@ defmodule Lattice.Verdict do
 
   @doc "Explain the judge's verdict on `op_id` in `log`, interpreted by Replica `module`."
   @spec explain(module(), Log.t(), Op.id()) ::
-          {:honored, record()} | {:quarantined, record()} | {:unknown_op, Op.id()}
+          {:honored, verdict_record()} | {:quarantined, verdict_record()} | {:unknown_op, Op.id()}
   def explain(module, %Log{} = log, op_id) do
     case Log.fetch(log, op_id) do
       :error -> {:unknown_op, op_id}
@@ -227,7 +227,7 @@ defmodule Lattice.Verdict do
   `Jason.OrderedObject`, pretty-printed with a trailing newline, as
   `Township.AuditBundle` writes its artifacts.
   """
-  @spec to_json(record() | status()) :: binary()
+  @spec to_json(verdict_record() | status()) :: binary()
   def to_json(%{schema: @schema} = record) do
     OrderedObject.new([
       {"schema", record.schema},
