@@ -234,7 +234,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 150 | Device-hosted carrier boundary (packaged app hosts the sidecar server) | P1 | L | 127, 128, 129, 132, 142, 143 | TODO (optional host mode after unified R23; R31 owns delivery) |
 | 151 | App-owned instrument (Phoenix leaves the demo loop) | P1 | L | 134, 138, 139, 143, 147, 148 | SUPERSEDED for Treehouse by unified R10-R15; Township remainder deferred to R34 |
 | 152 | Serverless two-device onboarding (discharges CD1) | P1 | L | 150, 151, 066-075, 094-100, 110-116 | SUPERSEDED (Plan 177 and unified R01a withdraw additional LAN/CD1 work; helpers retained) |
-| 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | IN PROGRESS (2026-11-16; `Township.AuditReport` + `mix lattice.township.report`, D-700 to D-706; follow-up rows 400 to 407) |
+| 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | IN REVIEW ([#225](https://github.com/treetopdevs/lattice/pull/225); 2026-11-16; `Township.AuditReport` + `mix lattice.township.report`, D-700 to D-706; follow-up rows 400 to 407) |
 | 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | DONE (PR #32; hosted run `29755770936` green across all three jobs) |
 | 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
 | 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
