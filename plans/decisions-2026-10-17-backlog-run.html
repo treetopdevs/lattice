@@ -2889,6 +2889,91 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Round 1: 5 findings. Round 2: 2 findings. Dispositions: (1) P2 stale confirmation can produce a corrupt ledger, fixed: sign_reviewed/4 now recomputes CatalogSigningPackage.digest(package.catalog) and checks catalog.binding, bootstrap and space against the reviewed binding before any key access; both fail with :catalog_confirmation_mismatch, and the regression test fails without the fix. (2) P3 bootstrap compatibility assertion is vacuous, fixed: removed the vacuous test; catalog_signing_package_test.exs now encodes real pending and initial_existing packages and asserts the exact reference keys, the mode, the frame equal to Wire.encode_op, and decode. Bytes were not pinned against a pre-change snapshot because existing bootstrap tests already review and sign through that fixture. (3) P3 refusal tests are vacuous (assert_no_ledger on a dir review never receives), fixed: replaced with a sign_reviewed refusal test that checks the ceremony dir afterwards, covering a wrong confirmation, a stale altered map and a rebound catalog with a recomputed digest; the wrong-op-id test keeps its harmless unused assert_no_ledger. (4) P3 stale comment on SigningLedger.extends?/2, fixed: it now describes extends?/2 as the binding-less rule and extends?/3 as the binding-aware form with the replacement-genesis arm. (5) P3 positive replacement path only tested with a Space-only catalog, follow-up: added a unit test that a Thread-bearing replacement genesis passes SigningLedger.extends?/3 and that max_envelopes is 13; the end-to-end Thread-bearing fixture needs PR 4 inventories and is filed as row 363. Final-round findings, left open: P3 apps/lattice_carrier_server/lib/lattice_carrier_server/operator/catalog_signing_package.ex:149, replacement review misclassifies malformed evidence (a corrupt history-frame signature makes decode/1 return :invalid_catalog_package, but review_replacement/4 converts it to :catalog_binding_mismatch; the refusal allowlist omits the decoder error; preserve it and add a review-level malformed-history test; signing remains refused). P3 apps/lattice_carrier_server/test/operator/catalog_replacement_signing_test.exs:369, stale-confirmation tests do not independently protect digest revalidation (both stale-map cases change catalog.binding, so the scope check rejects them independently; an in-memory mutation probe showed that removing the digest recheck leaves all three assertions passing; add a same-binding route mutation retaining the original digest and require :catalog_confirmation_mismatch before ledger access).</dd>
 <dt>Reason</dt><dd>The two final-round P3s are recorded here as open, not fixed in this PR. Nothing here claims resolver acceptance, route switch, catalog trust, closed-binding refusal, a real Space or ceremony; C10-C15 stay OPEN.</dd>
 </dl></section>
+<section id="d850"><h2><span>D-850</span> Follow a re-checked brief instead of stale plan 157</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>Implement row 157 from a brief re-checked against origin/main 4ee13d7d6, and mark the plan superseded with a dated note listing the eleven stale items.</dd>
+<dt>Reason</dt><dd>The plan drift check fired (authority.ex 1189 lines changed since c9a05b40), meeting its judge-moved STOP. Main already exposes chronology and beacons, so the remaining work is a thin read-only combination.</dd>
+</dl></section>
+<section id="d851"><h2><span>D-851</span> Authority.observe/2 is additions only and does not call Verdict</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>Add one public observe/2, two types and one private helper (observe_leases/1) to authority.ex; no existing line changes, no admission or quarantine change, no call into Lattice.Verdict.</dd>
+<dt>Reason</dt><dd>Verdict derives from Authority, so the dependency must stay one-way. git diff origin/main on authority.ex prints no removed lines. D-858 later added delegations_active/2 and two more private helpers, still as additions only.</dd>
+</dl></section>
+<section id="d852"><h2><span>D-852</span> No author-asserted tick in the chronology</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>Chronology entries are the existing acquisition records {op_id, holder, delegation_id}; the plan&#x27;s at_tick field is dropped.</dd>
+<dt>Reason</dt><dd>Ticks are author-asserted and untrusted (ADR 0004); the existing acquisition typedoc already omits them.</dd>
+</dl></section>
+<section id="d853"><h2><span>D-853</span> Lease enumeration uses signature-valid delegations only; expired? is the public Authority.expired?/2</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>Leases come from collect_delegations entries with a non-nil deleg. expires_epoch is the minimum integer lease over the chain; entries without one are dropped. expired? calls Authority.expired?/2 exactly, even though it recomputes the pass.</dd>
+<dt>Reason</dt><dd>Delegation.valid_sig? refuses out-of-domain fields (row 289), keeping observe total. Using the public predicate keeps one definition of expiry.</dd>
+</dl></section>
+<section id="d854"><h2><span>D-854</span> Lease status comes from Verdict; key fingerprints only for 32-byte keys</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>ReadModel lease status is Verdict.delegation_status/3 .status (validity, then revoked, then lapsed), shown beside expired?. Keys are fingerprinted only when they are 32-byte binaries, the trust graph reader&#x27;s rule; otherwise nil.</dd>
+<dt>Reason</dt><dd>The two rules can differ legitimately (a revoked chain that also lapsed shows expired?=true, status revoked). Identity.fingerprint/1 raises on a short binary, so is_binary alone is not total.</dd>
+</dl></section>
+<section id="d855"><h2><span>D-855</span> Accept the extra passes on the projection refresh path for now; file row 500</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>ReadModel.observe runs the authority pass twice plus two full passes per leased delegation. Not optimised in this PR; row 500 tracks a one-pass status derivation and the stale sentence in plan 167.</dd>
+<dt>Reason</dt><dd>Unleased logs pay only one extra pass. Optimising would need a judge-side helper, which this read-only row must not add.</dd>
+</dl></section>
+<section id="d856"><h2><span>D-856</span> Beacon epoch wording is global to the log</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>The panel says &quot;Highest accepted beacon epoch on this log: N&quot; and the doc says it is not per causal branch; nothing labels it as now for any one operation.</dd>
+<dt>Reason</dt><dd>A partitioned realm may not have seen the beacon, so a per-op &quot;now&quot; label would overclaim.</dd>
+</dl></section>
+<section id="d857"><h2><span>D-857</span> Supersede D-855: batch lease expiry and status before they reach the refresh path</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 review round 1 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>Authority.observe/2 takes each lease&#39;s expired? from the beacons its own judge pass accepted (the same collect_beacons call expired?/2 makes), and ReadModel.observe/1 asks Verdict.delegation_statuses/3 once for every lease instead of delegation_status/3 per lease. delegation_status/3 keeps its per-id path; tests pin the batch equal to it, and to delegation_active?/2 and expired?/2, on succession, bad-signature, bad-chain, revoked-and-lapsed, rejected-beacon and unsupported-profile logs and in the live-path property. A read-model test bounds the 120-lease observation at 25 times one analyze/2 pass.</dd>
+<dt>Reason</dt><dd>The review measured 20.8 s for a valid 120-lease log, past CarrierProjection.refresh/1&#39;s 15 s deadline. Batched, the same log observes in about 0.42 s (480 leases: about 1.5 s), so cost tracks the judge pass rather than lease count.</dd>
+</dl></section>
+<section id="d858"><h2><span>D-858</span> Authority.delegations_active/2 is a read-only derived helper</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 review round 1 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>Add Authority.delegations_active/2, the batched form of delegation_active?/2, as an addition only. It computes the delegation context and accepted beacons once and returns a map whose every value equals delegation_active?(log, id). It is not a Core primitive and adds no wire atom or quarantine reason. It changes no verdict, and analyze/2, delegation_active?/2 and expired?/2 are unchanged.</dd>
+<dt>Reason</dt><dd>Batching only the Verdict pass still left one delegation_active?/2 call per lease, which reruns expired?/2. That cost about 40 ms per lease, so the observation stayed quadratic. The most conservative fix is a helper that only reuses the judge&#39;s private derivation, which D-855 had wrongly ruled out.</dd>
+</dl></section>
+<section id="d859"><h2><span>D-859</span> Chronology and beacons come from one judge pass</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>observe/2 takes the chronology and the accepted beacons from a single do_analyze/2 pass, the same tuple analyze_with_records/2 returns. It does not rebuild timelines as the plan says.</dd>
+<dt>Reason</dt><dd>This is the judge&#39;s own pass, so it cannot diverge from analyze/2, and nothing is duplicated.</dd>
+</dl></section>
+<section id="d860"><h2><span>D-860</span> A standalone runnable script; the demo and bundle stay unchanged</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>scripts/township_authority_observe.exs builds a Sim scenario, prints the chronology, beacon and lease sections, and ends with self-check asserts. township_demo.exs and the audit bundle are not changed.</dd>
+<dt>Reason</dt><dd>The demo bundle has no leases or beacons, and changing it would change verified bundle bytes.</dd>
+</dl></section>
+<section id="d861"><h2><span>D-861</span> Private lease and beacon fixture in the web test</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>instrument_live_test.exs uses a private lease_beacon_log() driven through CarrierProjection and LiveCarrier. Shared fixtures are not modified.</dd>
+<dt>Reason</dt><dd>The test asserts the lease rendering itself, not only the empty state. It follows the existing structural_quarantine_log pattern.</dd>
+</dl></section>
+<section id="d862"><h2><span>D-862</span> Chronology test fixture covers all three acquisition kinds</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>The chronology test uses genesis, then an honored succession (dormant_ticks: 2, at_tick: 3), then a transfer, copied from the clerk fixture in authority_test.exs.</dd>
+<dt>Reason</dt><dd>It exercises every acquisition kind with a fixture already proven on main.</dd>
+</dl></section>
+<section id="d863"><h2><span>D-863</span> New tests live in test/lattice2</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>The new core test is apps/lattice_core/test/lattice2/authority_observe_test.exs.</dd>
+<dt>Reason</dt><dd>test/lattice/ does not exist on main. Authority tests live in lattice2/.</dd>
+</dl></section>
+<section id="d864"><h2><span>D-864</span> No audit.json or AuditBundle change</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>No new keys are added to AuditBundle or audit.json. Row 501 tracks the bundle schema change.</dd>
+<dt>Reason</dt><dd>Changing bundle bytes is a schema decision for the operator, per the plan&#39;s STOP list.</dd>
+</dl></section>
+<section id="d865"><h2><span>D-865</span> Docs ship in the same PR</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>The PR updates row 157&#39;s status, fixes the stale README sentence near line 1337, and adds a superseded note to plan 157.</dd>
+<dt>Reason</dt><dd>This keeps the index truthful without a separate docs PR.</dd>
+</dl></section>
+<section id="d866"><h2><span>D-866</span> Row 157 review: two Codex Sol rounds and dispositions</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 157, <a href="https://github.com/treetopdevs/lattice/pull/231">#231</a> (branch claude/157-authority-observe; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>Decision</dt><dd>Round 1: CHANGES, one P2. The P2 was that a separate Verdict pass and expired?/2 call per lease stalled instrument refreshes (120 leases took 20.8 s, past the 15 s refresh deadline). It was fixed by D-857 and D-858: the 120-lease log now observes in about 0.42 s, a failing-first read-model test bounds it at 25 times one analyze/2 pass, and equivalence tests pin the batch to delegation_status/3, delegation_active?/2 and expired?/2. Round 2: CHANGES, no P1 or P2, one P3. Round 2 checked the P2 and confirmed it fixed (1.57 s against 0.60 s for one analysis pass). The P3 was left open and filed as row 508: in instrument_live_test.exs:88 the chronology assertion checks only the container, so deleting every acquisition row still passes.</dd>
+<dt>Reason</dt><dd>No P1 or P2 is open. The one P3 is a test-strength gap, not a behaviour defect, so it is filed rather than fixed in this closeout.</dd>
+</dl></section>
 <section id="d530"><h2><span>D-530</span> Operator sign-off: first goal, OD-16, OD-17, row 320 and the PR 4 split</h2><dl>
 <dt>When</dt><dd>2026-11-15, <a href="https://github.com/treetopdevs/lattice/pull/221">#221</a></dd>
 <dt>Decision</dt><dd>Operator sign-off 2026-11-15: the operator set the first goal as 'a client that has already trusted a Treehouse catalog accepts a replacement catalog signed by an authorized admin, without the old signer's key', adopted the recommended defaults for OD-16, OD-17 and row 320, and chose 'new modules now, wire later': PR 4 is split into 4a (logic in new files, this PR), 4b (remaining tests) and 4c (the hook into catalog_trust.ex/.ts after plans 267/269 merge). The 267/269 gate is not lifted; it now applies to 4c only. The goal is not met until 4c lands.</dd>
