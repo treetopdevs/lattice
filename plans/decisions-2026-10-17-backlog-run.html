@@ -2888,56 +2888,56 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Reason</dt><dd>The two final-round P3s are recorded here as open, not fixed in this PR. Nothing here claims resolver acceptance, route switch, catalog trust, closed-binding refusal, a real Space or ceremony; C10-C15 stay OPEN.</dd>
 </dl></section>
 <section id="d820"><h2><span>D-820</span> Township.ReadModel text slots: valid UTF-8 or the fixed marker &quot;(malformed)&quot;</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Context</dt><dd>Row 325 (row 311 residual, D-316). Matter command admission checks name, arity and effect shape, never the value, so a resident with an ordinary capability can write any Canonical-encodable term into title, summary, posts or members. Township.ReadModel copied those terms, and the denied admit/remove_member member term, verbatim into the model, the replay frames and AuditBundle state.json. The LiveView then raised in Jason.encode!(@causal_replay) or Phoenix.HTML.Safe, and AuditBundle.write raised.</dd>
 <dt>Decision</dt><dd>Follow the Lattice.Graph.AuthorityBody display-safety contract (row 311, merged on main as b8d14391f) and state it locally in the Township.ReadModel moduledoc. threads.title, threads.summary, each threads.posts entry, each members.current entry, each members.denied[].member and the matching replay-frame state slots are valid UTF-8. A binary that passes String.valid?/1 is copied verbatim; anything else becomes the fixed marker &quot;(malformed)&quot;. The raw term stays in the log under its op id. clerk_locked? stays a boolean. The helper stays private to Township, so a later row 324 Toolshed marker choice is not coupled to it. Non-claims: no length bound, no control-character or bidi filtering, and the marker is not proof of malformation because a member may post that literal text (structural flag filed as row 480). The replay/1 doc no longer says JSON-safe without qualification, and the denied_member_mutation type now says member: String.t().</dd>
 <dt>Reason</dt><dd>Replacing rather than inspecting is the most conservative choice: the contract allows either, inspect/1 output would show attacker-chosen structure in the civic panel, and the fixed marker keeps model, replay and bundle bytes unchanged on honest logs. No public API, wire atom, quarantine reason or Core primitive changes.</dd>
 </dl></section>
 <section id="d821"><h2><span>D-821</span> Sort raw members first, keep duplicate markers</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Context</dt><dd>Several malformed members map to the same marker.</dd>
 <dt>Decision</dt><dd>state_view/1 sorts the raw member terms and then maps display_text/1, so honest output keeps its exact order and bytes. Duplicate &quot;(malformed)&quot; entries are kept so length(members.current) stays the true count. A malformed member cannot be removed through the instrument roster form, which takes typed text; filed as row 481 rather than changing township_web here (D-307 precedent: township_web gets only a test).</dd>
 <dt>Reason</dt><dd>Byte-identical honest output (tracked artifacts/township unchanged) and an accurate member count matter more than a deduplicated display.</dd>
 </dl></section>
 <section id="d822"><h2><span>D-822</span> Row 325 test scope, red-on-main evidence and ledger corrections</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Context</dt><dd>Brief section 3 and D-317 (a property must not be vacuous).</dd>
 <dt>Decision</dt><dd>Added: an example test in read_model_test.exs (raw terms asserted present in Lattice.state first, then the marker in every slot, Jason on threads/members/replay, String.valid? on every frame slot, AuditBundle.write then verify == :ok); a default-suite property in authority_body_test.exs over set_title, set_summary, post, admit and remove_member with encodable_gen/0 arguments and an authorized?/unauthorized toggle (max_runs: 50, not tagged deep_property), whose every run asserts the authorized argument reached raw state or the unauthorized op id is quarantined and, for member commands, listed in members.denied; and one LiveView test in instrument_live_test.exs. Red-on-main checks run locally: with main&#x27;s read_model.ex the example test fails (title is &lt;&lt;255&gt;&gt;, not &quot;(malformed)&quot;) and the LiveView test exits with Protocol.UndefinedError for Jason.Encoder on {:x, 1} at instrument_live.html.heex:361. Mutation check: removing display_text/1 from state_view/1 only turns the new property red on seeds 1-5 after 0, 8, 1, 0 and 2 successful runs. Rows 306 and 311 flip from IN REVIEW to DONE with b8d14391f, since PR #212 merged (D-308 precedent).</dd>
 <dt>Reason</dt><dd>Each test asserts on the marker value, not on documentation text (rule 6). The per-run non-vacuity assertions keep the property from passing on states that never hold attacker terms, the class D-317 named.</dd>
 </dl></section>
 <section id="d823"><h2><span>D-823</span> Row 325 adversarial review disposition</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Context</dt><dd>Gate: one adversarial review with Codex Sol 6.1 High. No authority, canonical, carrier, client codec, src-tauri or workflow path is touched, so the rule-3 second review is not triggered.</dd>
 <dt>Decision</dt><dd>One round of codex exec -m gpt-6.1-sol -c model_reasoning_effort=high (read-only sandbox) on commit b51ad3ff1: no P1-P3 findings. The reviewer traced the slots through the model, replay, AuditBundle and LiveView, ran 210 signed command cases (the five value-writing commands by 21 sample arguments, authorized and unauthorized) asserting every slot valid UTF-8 and the model and replay Jason-encodable, and compared six honest-log model and replay encodings byte for byte against the parent commit, all passing. Nothing to dispose of. Later changes: a test alias tidy-up (Township.AuditBundle aliased in authority_body_test.exs), and the replay/1 doc narrowed to what is covered (frame state follows this contract; nodes and edges follow row 311). A local probe of link_election, the only other Matter command with an argument, with {:x, 1}, &lt;&lt;255&gt;&gt;, %{} and &quot;ok&quot;, authorized and unauthorized, encodes cleanly: it writes no field. Removing display_text/1 from denied_member_mutations/2 alone also turns the new property red on seeds 1-3 after 3, 0 and 9 successful runs.</dd>
 <dt>Reason</dt><dd>Recorded so the PR carries the review outcome next to the change.</dd>
 </dl></section>
 <section id="d824"><h2><span>D-824</span> Normalize inside Township.ReadModel, not in the consumers</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Decision</dt><dd>A private display_text/1 in Township.ReadModel, applied in state_view/1 and denied_member_mutations/2, is the one source of truth for observe/2, replay/1 frames and AuditBundle state.json. LiveView, causal_replay.js and AuditBundle source stay unchanged.</dd>
 <dt>Reason</dt><dd>One fix point covers all four consumers, and township_web is frozen under rule 10.</dd>
 </dl></section>
 <section id="d825"><h2><span>D-825</span> Integers, atoms and nil count as malformed in text slots</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Decision</dt><dd>Text slots hold text only. Every non-binary term becomes &quot;(malformed)&quot;, including values Jason could encode.</dd>
 <dt>Reason</dt><dd>This is the most conservative reading. It matches row 311 treating only binaries as text. Honest UI-authored values are always strings.</dd>
 </dl></section>
 <section id="d826"><h2><span>D-826</span> denied[].member follows the same rule and is typed String.t()</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Decision</dt><dd>The raw denied term is not kept in the model. Correlation goes through op_id.</dd>
 <dt>Reason</dt><dd>The row names members.denied explicitly, and the model travels over PubSub to the display layer.</dd>
 </dl></section>
 <section id="d827"><h2><span>D-827</span> One LiveView test, no township_web source change</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Decision</dt><dd>Reuse the LiveCarrier/CarrierProjection harness to show the marker in the post, title and member panels.</dd>
 <dt>Reason</dt><dd>It is the visible, person-runnable result and shows the crash surface is closed. D-307 is the maintenance precedent under rule 10.</dd>
 </dl></section>
 <section id="d828"><h2><span>D-828</span> Rule 10 is met under the D-217/D-300 maintenance precedent</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Decision</dt><dd>Treat the work as read-surface robustness maintenance. It adds no Township feature.</dd>
 <dt>Reason</dt><dd>D-316 filed row 325 as a residual of the same maintenance slice.</dd>
 </dl></section>
 <section id="d829"><h2><span>D-829</span> Row and decision numbers assigned at PR-open time</h2><dl>
-<dt>When</dt><dd>2026-11-16, row 325 (branch <code>claude/325-township-readmodel-display-safety</code>; decided under operator delegation (2026-11-16), reversible)</dd>
+<dt>When</dt><dd>2026-11-16, row 325, <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a> ( decided under operator delegation (2026-11-16), reversible)</dd>
 <dt>Decision</dt><dd>The brief allocated no row or D- numbers. This slice uses the reserved ranges: D-820 onward and rows 480 onward.</dd>
 <dt>Reason</dt><dd>Main showed row 363 and D-508, but in-flight branches already cite rows 395-398 and D-688-D-690, so earlier numbering would collide.</dd>
 </dl></section>
