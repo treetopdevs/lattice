@@ -4356,6 +4356,22 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>Each chain catalog&#x27;s entries are a subset of the current package&#x27;s entries, which decode already validated against the same observed logs, so a false refusal is unlikely; it would fail closed.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
+<section id="d915"><h2><span>D-915</span> Row 360 review: the ledger&#x27;s catalog copies are authoritative</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 review round 1 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>Review P1: catalogs were merged as <code>Map.new(signed ++ retained)</code>. Catalog ids exclude the signature, so a retained copy of a ledger catalog with a zeroed signature replaced the verified one, made the citing replacement ineligible and turned <code>catalog_binding_closed</code> into <code>:ok</code> (reproduced through <code>sign_reviewed/5</code>).</dd>
+<dt>Options</dt><dd>Ledger copies win; reject any conflicting duplicate as unresolved; both.</dd>
+<dt>Decision</dt><dd>A retained catalog whose id the ledger holds at any revision (keyed on the unfiltered chain, so D-916&#x27;s narrowing cannot reopen it) is dropped and the ledger copy is used. Two different retained envelopes under one catalog or rotation id refuse as <code>catalog_binding_unresolved</code>; byte-identical duplicates collapse.</dd>
+<dt>Reason</dt><dd>Ledger-wins keeps the correct <code>closed</code> verdict instead of a weaker refusal; a deterministic Ed25519 key gives one valid signature per catalog, so a differing copy under a ledger id can only be invalid. Ambiguous retained evidence fails closed.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
+<section id="d916"><h2><span>D-916</span> Row 360 review: a replay is judged on the evidence its first signing had</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 360 review round 1 (branch claude/360-ledger-refuses-closed-binding)</dd>
+<dt>Context</dt><dd>Review P2: after C1 (adding a Thread) is signed, replaying C0&#x27;s original package fed C1 to the resolver without C1&#x27;s Thread history, so C1 pended and the keyless replay refused as <code>catalog_binding_unresolved</code> (reproduced on macOS; <code>release_catalog_test.exs</code>, which requires the replay, skips off Linux). This also corrects D-914&#x27;s reason, which assumed every chain catalog&#x27;s entries are covered by the current package.</dd>
+<dt>Options</dt><dd>Persist Thread histories with the ledger so all its evidence can be judged; supply only the ledger revisions below the package&#x27;s plus the stored package catalog.</dd>
+<dt>Decision</dt><dd>The second: the same ledger evidence the first signing of that revision saw. A same-revision fork sees no stored sibling and still reaches <code>catalog_ledger_fork</code>.</dd>
+<dt>Reason</dt><dd>Persisting histories is a design change beyond this slice (row 553). Leaving a newer ledger catalog out never opens a closed binding: a replacement or rotation citing it pends and refuses; pinned by tests citing C1 directly and through a rotation, with no, valid and forged retained C1.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>

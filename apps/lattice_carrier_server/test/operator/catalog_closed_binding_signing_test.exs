@@ -394,6 +394,109 @@ defmodule LatticeCarrierServer.Operator.CatalogClosedBindingSigningTest do
     assert {:ok, ^envelope} = SignCatalog.sign(bytes, dir, "/absent", package.digest)
   end
 
+  # --- D-915: the ledger's copies are authoritative ----------------------------------
+
+  test "a forged retained copy of a ledger catalog cannot hide closure (D-915)", f do
+    {binding, ceremony, seed} = signed_c0!(f, "forged-retained")
+
+    r =
+      F.replacement(f.base, f.base.log, "r360-forged",
+        prior_catalogs: [%{binding: f.b, catalog: F.cid(f.c0)}]
+      )
+
+    log = F.append(f.base.log, [r.op])
+    forged = %{f.c0 | signature: :binary.copy(<<0>>, 64)}
+    package = package(f.base, log, binding, f.c1)
+
+    assert {:error, :catalog_binding_closed} =
+             sign(package, ceremony, seed, retained: [catalogs: [forged]])
+
+    assert {:ok, state} = SigningLedger.status(ceremony, binding)
+    assert length(state.chain) == 1 and state.head["revision"] == 0
+  end
+
+  test "conflicting retained copies of one catalog id are :catalog_binding_unresolved", f do
+    binding = bootstrap_binding(f.base)
+    package = package(f.base, f.base.log, binding, f.c0)
+    forged = %{f.c0 | signature: :binary.copy(<<0>>, 64)}
+
+    assert :ok = BindingClosure.check(package, [], catalogs: [f.c0, f.c0])
+
+    assert {:error, :catalog_binding_unresolved} =
+             BindingClosure.check(package, [], catalogs: [f.c0, forged])
+  end
+
+  # --- D-916: a replay is judged on the evidence its first signing had -----------------
+
+  describe "an older revision replayed after a newer one is signed" do
+    setup f do
+      {binding, ceremony, seed} = signed_c0!(f, "older-#{System.unique_integer([:positive])}")
+      assert {:ok, _} = sign(package(f.base, f.base.log, binding, f.c1), ceremony, seed)
+      thread = f.base.threads["thread"]
+
+      # c0's own package carries only the Space and the one Thread c0 lists.
+      narrow = fn log, envelope ->
+        %{
+          package(f.base, log, binding, envelope)
+          | histories: %{f.base.replica => log, thread.replica => thread.log}
+        }
+      end
+
+      {:ok, binding: binding, ceremony: ceremony, narrow: narrow}
+    end
+
+    test "replays keyless with c0's own narrower histories", f do
+      assert {:ok, state} = SigningLedger.status(f.ceremony, f.binding)
+      [stored | _] = Enum.filter(state.chain, &(&1.catalog == f.c0.catalog))
+
+      assert {:ok, bytes} = sign(f.narrow.(f.base.log, f.c0), f.ceremony, "/absent")
+      assert bytes == stored.bytes
+    end
+
+    test "still refuses when a replacement cites the newer ledger catalog", f do
+      r =
+        F.replacement(f.base, f.base.log, "r360-cite-c1",
+          prior_catalogs: [%{binding: f.b, catalog: F.cid(f.c1)}]
+        )
+
+      log = F.append(f.base.log, [r.op])
+      forged = %{f.c1 | signature: :binary.copy(<<0>>, 64)}
+      replay = f.narrow.(log, f.c0)
+
+      for retained <- [[], [catalogs: [f.c1]], [catalogs: [forged]]] do
+        assert {:error, refusal} = sign(replay, f.ceremony, "/absent", retained: retained)
+        assert refusal in [:catalog_binding_closed, :catalog_binding_unresolved]
+      end
+
+      # With c1's own (full) histories the closure is visible.
+      assert {:error, :catalog_binding_closed} =
+               sign(package(f.base, log, f.binding, f.c1), f.ceremony, "/absent")
+    end
+
+    test "still refuses when a cited rotation's prior is the newer ledger catalog", f do
+      rotated = F.identity("rot-r360-newer")
+      t = F.rotation(f.base, %{id: f.b, generation: 0}, f.c1, f.base.catalog, rotated, "r360-n")
+      ct = F.catalog(f.base, t.id, 0, nil, rotated, f.c1.catalog.entries)
+
+      r =
+        F.replacement(f.base, f.base.log, "r360-newer-t",
+          parents: [t.id],
+          prior_catalogs: [%{binding: t.id, catalog: F.cid(ct)}],
+          generation: 2
+        )
+
+      log = F.append(f.base.log, [r.op])
+      replay = f.narrow.(log, f.c0)
+
+      assert {:error, refusal} =
+               sign(replay, f.ceremony, "/absent",
+                 retained: [rotations: [t.envelope], catalogs: [ct]]
+               )
+
+      assert refusal in [:catalog_binding_closed, :catalog_binding_unresolved]
+    end
+  end
+
   test "a package without an authenticated Space log is :catalog_binding_unresolved", f do
     binding = bootstrap_binding(f.base)
     package = package(f.base, f.base.log, binding, f.c0)

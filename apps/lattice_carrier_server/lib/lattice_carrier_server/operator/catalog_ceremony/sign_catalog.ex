@@ -50,7 +50,9 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.SignCatalog do
 
   # Row 360: inside the ledger lock and before any key access or ledger write, the
   # PR 4a resolver judges the binding over the package's histories, the ledger's own
-  # signed envelopes and `opts[:retained]` (`rotations:` and `catalogs:` envelopes).
+  # signed envelopes below the package's revision plus its stored copy (D-916; ledger
+  # copies win over retained ones, D-915) and `opts[:retained]` (`rotations:` and
+  # `catalogs:` envelopes).
   # A closed or unresolvable binding refuses, including a replay of a stored revision.
   @doc false
   @spec sign_reviewed(map(), Path.t(), Path.t(), String.t(), keyword()) ::

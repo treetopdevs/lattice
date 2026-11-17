@@ -6,7 +6,12 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
   Closure is the PR 4a resolver's judgment, never a raw read of Space frames:
   `Treehouse.CatalogBindingGraph.resolve/1` runs over the package's authenticated
   Space history, its Thread histories, the custodian ledger's own signed envelopes
-  and any rotations and catalogs the caller retains. The ledger's binding id in
+  below the package's revision (plus the stored copy of the package's own catalog)
+  and any rotations and catalogs the caller retains (D-916: a replay is judged on the
+  evidence its first signing had, since an older package carries no histories for a
+  newer revision's entries). The ledger's copies are authoritative (D-915): a retained
+  catalog whose id the ledger holds at any revision never reaches the resolver, and
+  two conflicting retained copies of one id are unresolved. The ledger's binding id in
   `CatalogBindingGraph.closed/1` (D-275, which includes an ancestor of a cited
   rotation) or in `closed_out/1` is `:catalog_binding_closed`; every resolver error
   and every malformed input is `:catalog_binding_unresolved`. Both refuse.
@@ -46,17 +51,15 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
     with %Log{} = space <- space(package),
          {:ok, record} <- Binding.bootstrap_record(space, binding.bootstrap_id),
          true <- bootstrap_matches?(binding, record),
-         {:ok, catalogs} <- catalogs(chain, Keyword.get(retained, :catalogs, [])) do
+         {:ok, catalogs} <- catalogs(package, chain, Keyword.get(retained, :catalogs, [])),
+         {:ok, rotations} <-
+           unique(Keyword.get(retained, :rotations, []), &TransportCatalog.rotation_id/1) do
       {:ok,
        %{
          bootstrap: %{id: binding.bootstrap_id, record: record},
          space: space,
          histories: Map.delete(package.histories, space.replica),
-         rotations:
-           Map.new(
-             Keyword.get(retained, :rotations, []),
-             &{TransportCatalog.rotation_id(&1), &1}
-           ),
+         rotations: rotations,
          catalogs: catalogs,
          proven_cutoffs: [],
          accepted: nil
@@ -82,13 +85,45 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.BindingClosure do
   defp bootstrap_matches?(binding, record),
     do: Binding.binding_id(binding) != binding.bootstrap_id or record == binding.record
 
-  defp catalogs(chain, retained) do
+  # D-915: the ledger's verified envelopes are authoritative. Catalog ids exclude the
+  # signature, so a retained copy under a ledger id (at any revision, including the ones
+  # D-916 leaves out) is dropped rather than allowed to shadow or stand in for it.
+  # D-916: only ledger revisions below the package's, plus the stored package catalog
+  # itself, are evidence. That is what the first signing of this revision saw; a newer
+  # revision's entries have no histories in an older package and would pend. Leaving one
+  # out never opens a closed binding: a citation of an unheld catalog pends (refuses).
+  defp catalogs(package, chain, retained) do
     signed =
       Enum.map(chain, fn %{bytes: bytes} ->
         {:ok, envelope} = TransportCatalog.decode_catalog_json(bytes)
         envelope
       end)
 
-    {:ok, Map.new(signed ++ retained, &{TransportCatalog.catalog_id(&1.catalog), &1})}
+    ledger = MapSet.new(signed, &TransportCatalog.catalog_id(&1.catalog))
+    revision = package.catalog.revision
+
+    evidence =
+      Enum.filter(signed, &(&1.catalog.revision < revision or &1.catalog == package.catalog))
+
+    with {:ok, kept} <- unique(retained, &TransportCatalog.catalog_id(&1.catalog)) do
+      {:ok,
+       kept
+       |> Map.reject(fn {id, _} -> MapSet.member?(ledger, id) end)
+       |> Map.merge(Map.new(evidence, &{TransportCatalog.catalog_id(&1.catalog), &1}))}
+    end
+  end
+
+  # Retained artifacts keyed by id; byte-identical duplicates collapse, while two different
+  # envelopes under one id are ambiguous evidence and refuse as unresolved.
+  defp unique(artifacts, id_of) do
+    Enum.reduce_while(artifacts, {:ok, %{}}, fn artifact, {:ok, acc} ->
+      id = id_of.(artifact)
+
+      case acc do
+        %{^id => ^artifact} -> {:cont, {:ok, acc}}
+        %{^id => _} -> {:halt, :error}
+        _ -> {:cont, {:ok, Map.put(acc, id, artifact)}}
+      end
+    end)
   end
 end
