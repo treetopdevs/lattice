@@ -85,6 +85,9 @@ defmodule TownshipWeb.InstrumentLiveTest do
              "#roles-panel [data-holder='clerk'][data-fingerprint='xI19LiI0w767']"
            )
 
+    assert has_element?(view, "#roles-panel [data-role-chronology='clerk']")
+    assert has_element?(view, "#roles-panel [data-authority-observe]", "No accepted beacons.")
+
     assert has_element?(view, "#members-panel [data-member='clerk']")
     assert has_element?(view, "#members-panel [data-member='resident']")
     assert has_element?(view, "#members-panel [data-empty='denied-members']")
@@ -223,6 +226,47 @@ defmodule TownshipWeb.InstrumentLiveTest do
            )
 
     refute has_element?(view, "#roles-panel [data-audit-ledger]", "No quarantine events.")
+  end
+
+  test "roles panel shows lease status and the highest accepted beacon epoch", %{conn: conn} do
+    peer_log = lease_beacon_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:lease-beacon:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-lease-status='lapsed'][data-lease-expired='true']",
+             "expires after epoch 3"
+           )
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-lease-status='active'][data-lease-expired='false']",
+             "expires after epoch 9"
+           )
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-beacon-max-epoch]",
+             "Highest accepted beacon epoch on this log: 5"
+           )
+
+    refute has_element?(view, "#roles-panel [data-authority-observe]", "No leased delegations.")
   end
 
   test "trust graph panel shows the omitted count", %{conn: conn} do
@@ -1324,6 +1368,17 @@ defmodule TownshipWeb.InstrumentLiveTest do
     sim = Sim.sync_all(sim)
 
     {Sim.log(sim, "clerk"), unauthorized_revoke.id}
+  end
+
+  defp lease_beacon_log do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-beacon", ["clerk", "resident"], seed: "lease-beacon")
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _lapsed} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    {sim, _active} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 9)
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 5)
+    sim |> Sim.sync_all() |> Sim.log("clerk")
   end
 
   defp peer_status_logs do
