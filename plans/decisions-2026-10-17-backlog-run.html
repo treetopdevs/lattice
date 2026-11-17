@@ -2889,39 +2889,83 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 </dl></section>
 <section id="d790"><h2><span>D-790</span> Row 156: the CLI recomputes close evidence with an explicit --open-certificate</h2><dl>
 <dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 <dt>Decision</dt><dd>mix lattice.election.report takes an optional --open-certificate ID. With it, the task decodes the already verified bundle, builds a BoardSnapshot from its fields and calls UnanimousBoxesV1.verify/4 under that operator-asserted id. Only {:ok, evidence} is rendered; pending, invalid, forked or any other verdict raises &quot;close evidence not verified&quot; and writes nothing. The report labels the id (operator-asserted) and carries the CloseEvidence caveat. The bundle format and offline_bundle.ex are unchanged. Assumed under delegation (2026-11-16).</dd>
 <dt>Reason</dt><dd>Plan 156 said the CLI renders projection plus manifest only, because CloseEvidence is not in the bundle&#x27;s verified output. Probing showed it recomputes exactly from a decoded bundle, so the flag adds verified evidence without smuggling anything into the bundle. Requiring an explicit id keeps the administrative-open prerequisite visible as an assertion.</dd>
 </dl></section>
 <section id="d791"><h2><span>D-791</span> Row 156: the invalid variant comes from replay/3, other variants from hand-built structs</h2><dl>
 <dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 <dt>Decision</dt><dd>The {:invalid, _} test projection comes from Township.Election.replay/3 with one ballot&#x27;s bytes replaced by bytes of a different length (artifact_size_mismatch). The forked, aborted, final and faults cases use hand-built %Projection{} structs.</dd>
 <dt>Reason</dt><dd>OfflineBundle.build/verify reject any findings or requirements (complete_view/1), so a verified bundle only ever yields pending [:profile_unselected]; plan 156&#x27;s &quot;invalid fixture from the offline-bundle malformed path&quot; cannot exist. faults is hard-coded [] and forked, aborted and final are unreachable on main. projector.ex was removed in 292bb437a; the README quarantine-dictionary note now cites election.ex.</dd>
 </dl></section>
 <section id="d792"><h2><span>D-792</span> Row 156: test-only producer and a labelled research harness</h2><dl>
 <dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 <dt>Decision</dt><dd>The scenario lives in apps/lattice_core/test/support/election_report_fixture.ex (compiled only in MIX_ENV=test) and is shared by the test and scripts/research/election_evidence_report.exs. The script refuses to run without the fixture, prints &quot;RESEARCH HARNESS: opaque fixture ballots, no security claim, legacy Attestation.Stub unchanged&quot; first, and writes under the gitignored tmp/. Fixture choices are strings, so the bundle decodes in a fresh dev VM. Nothing touches /township, Township.Matter beyond the link command, or Attestation.Stub.</dd>
 <dt>Reason</dt><dd>The README flags that Township.Election has no producer outside ExUnit and that a runnable election demo invites misreading. Keeping the producer test-only and the script under scripts/research/ (outside the scripts/township_* path filter) holds that boundary.</dd>
 </dl></section>
 <section id="d793"><h2><span>D-793</span> Row 156: the escaper leaves the apostrophe alone</h2><dl>
 <dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 <dt>Decision</dt><dd>Report escapes &amp;, &lt;, &gt; and &quot; only. All attributes are double-quoted, so &#x27; is safe, and the honesty sentence (&quot;the profile&#x27;s construction&quot;) appears verbatim. The rule is in the moduledoc.</dd>
 <dt>Reason</dt><dd>The test asserts the honesty sentence verbatim. A later pass that escapes &#x27; breaks that test loudly, which is intended.</dd>
 </dl></section>
 <section id="d794"><h2><span>D-794</span> Row 156: rendering rules that keep the report verbatim</h2><dl>
 <dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 <dt>Decision</dt><dd>Claim status cells are Atom.to_string(status) with no mapping table and no status-keyed class or colour; styling is neutral grey. inspect/2 runs with limit: :infinity and printable_limit: :infinity. Map keys are sorted by their string form. Construction nil fields render &quot;none&quot;; nil values inside evidence maps render nil. Unknown render options and a non-CloseEvidence value raise ArgumentError. A claim_set_id mismatch renders &quot;no&quot; and relabels the manifest as the module research manifest, not the one the projection names.</dd>
 <dt>Reason</dt><dd>A truncated or translated value would be an honesty defect in an evidence report, and unsorted map keys would make the byte-identical determinism test flaky.</dd>
 </dl></section>
 <section id="d795"><h2><span>D-795</span> Row 156 review: Codex Sol 6.1 high, findings and dispositions</h2><dl>
 <dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 <dt>Context</dt><dd>codex exec -m gpt-6.1-sol -c model_reasoning_effort=high, read-only, over origin/main..HEAD.</dd>
 <dt>Decision</dt><dd>2 findings, both fixed. (1) P2: --out naming the --bundle file, directly or through a symlink or hard link, verified the bundle and then overwrote it with HTML. Fixed: the task compares expanded paths and the device and inode of both files before any write and raises &quot;--out must not be the --bundle file&quot;; the test covers the same path, a symlink and a hard link and checks the bundle bytes are unchanged. (2) P3: the close-section test checked fixture list lengths and skipped ballot_digests in the HTML. Fixed: it now asserts each rendered heading with its count and the full ordered list for ballot_wrapper_ids, ballot_digests, seal_digests and certificate_op_ids. The review found no overclaim, escaping, determinism or verify-before-write defect, and no strict Credo finding. Round 2 (read-only, cb69bf70e..HEAD, no tests run): no findings.</dd>
 <dt>Reason</dt><dd>An evidence report must never destroy the evidence it renders, and the count assertions must check the rendered page, not the fixture.</dd>
 </dl></section>
 <section id="d796"><h2><span>D-796</span> Row 156 review round 1: bounded bundle read and exact scope assertions</h2><dl>
 <dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 <dt>Decision</dt><dd>2 findings, both fixed. (1) P2: the task called File.read! on the untrusted bundle before the verifier's 64 MiB envelope limit applied, so a huge sparse file could exhaust memory before rejection. Fixed: the task reads at most OfflineBundle.max_envelope_byte_size() + 1 bytes and raises &quot;offline bundle exceeds N bytes&quot; before verification and before any write; the test builds a sparse file one byte past the limit, failed on the old code with the verifier's corrupt_offline_bundle message, and passes now. The verifier and its limit are unchanged. (2) P3: the manifest tests counted statuses and exclusions but not scope names. Fixed: the test holds an independent copy of the twelve scopes and descriptions and asserts the rendered rows equal it in sorted order, with each name and description pair exactly once.</dd>
 <dt>Reason</dt><dd>The size limit is only a defence if it holds before the bytes are in memory, and a manifest test must fail when a scope goes missing.</dd>
+</dl></section>
+<section id="d797"><h2><span>D-797</span> Row 156: not_claimed appears exactly 12 times</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>The status cell is &lt;td class=&quot;claim-status&quot;&gt;not_claimed&lt;/td&gt;. The token not_claimed appears nowhere else on the page: no legend and no CSS class. So the cell count and the total substring count are both 12.</dd>
+<dt>Reason</dt><dd>This makes the plan&#x27;s &quot;exactly 12 times&quot; assertion unambiguous. Styling also never depends on status, so nothing renders green.</dd>
+</dl></section>
+<section id="d798"><h2><span>D-798</span> Row 156: no shared HTML helper yet</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>Report hand-rolls its template. It does not wait for plan 154.</dd>
+<dt>Reason</dt><dd>Row 154 is still TODO on main. Plan 156 allows building from scratch. Convergence on a shared helper is due once a third report exists (row 460).</dd>
+</dl></section>
+<section id="d799"><h2><span>D-799</span> Row 156: plan scope amended to five files</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>Plan 156&#x27;s in-scope list and done criteria now name five files: report.ex, the Mix task, the test, the test/support fixture and the scripts/research script, plus the README row.</dd>
+<dt>Reason</dt><dd>The runnable command needs a producer. Without the amendment, the plan&#x27;s &quot;git status shows nothing outside scope&quot; check would fail.</dd>
+</dl></section>
+<section id="d800"><h2><span>D-800</span> Row 156: banned-word list</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>The test bans guaranteed, proven, &quot;receipt-free: yes&quot;, &quot;secure election&quot;, supported and &quot;pending claim&quot;. It does not ban &quot;final&quot;.</dd>
+<dt>Reason</dt><dd>ideal_leakage honestly renders final_result, so banning &quot;final&quot; would fail on honest output.</dd>
+</dl></section>
+<section id="d801"><h2><span>D-801</span> Row 156: follow-up rows take the reserved 460 range</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Decision</dt><dd>An earlier draft left follow-up rows unnumbered until merge. The workflow reserved rows 460 and up for this slice, so the follow-ups are filed now as rows 460 to 467.</dd>
+<dt>Reason</dt><dd>The main table tops out at 363, but in-flight branches already cite rows up to 398. A reserved range avoids collisions without waiting for merge.</dd>
+</dl></section>
+<section id="d802"><h2><span>D-802</span> Row 156 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 156, branch claude/156-election-evidence-report</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+<dt>Context</dt><dd>Codex Sol 6.1 high (codex exec -m gpt-6.1-sol -c model_reasoning_effort=high). Two review passes, recorded in D-795 and D-796.</dd>
+<dt>Decision</dt><dd>First pass (D-795): one P2 (--out could overwrite the bundle, also through a symlink or hard link) and one P3 (close tests checked the fixture, not the page). Both fixed. Its read-only second round found nothing. Second pass (D-796), round 1: verdict CHANGES, one P2 (unbounded bundle read before the size check) and one P3 (manifest tests did not pin the twelve scopes). Both fixed in 55a185e07; the new size test failed on the old code. Round 2: verdict CHANGES, no P1 or P2, one P3. That P3 was not fixed in this PR, and its text was not carried into the closeout, so it is filed as row 467. Round 2 found no P1 or P2, so it did not reopen the round 1 P2 fix.</dd>
+<dt>Reason</dt><dd>The last round still reported a P3, so the review is not clean. Nothing here is a security claim: all twelve scopes render not_claimed, and Attestation.Stub and /township are unchanged.</dd>
 </dl></section>
 </main>
 </body>
