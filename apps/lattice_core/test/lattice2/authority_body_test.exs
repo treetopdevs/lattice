@@ -6,7 +6,7 @@ defmodule Lattice2.AuthorityBodyTest do
   alias Lattice.Canonical
   alias Lattice.Graph.{AuthorityBody, Export, ReplicaSnapshot}
   alias Lattice.Sim
-  alias Township.{Matter, ReadModel}
+  alias Township.{AuditBundle, Matter, ReadModel}
 
   @replica "replica:matter:authority-body"
   @tags [:genesis, :grant, :transfer, :succeed, :heartbeat, :revoke, :request, :beacon]
@@ -257,7 +257,7 @@ defmodule Lattice2.AuthorityBodyTest do
           text <- [state["title"], state["summary"] | state["posts"] ++ state["members"]],
           do: assert(display_text?(text), context)
 
-      assert {:ok, _manifest} = Township.AuditBundle.write(tmp_dir, log)
+      assert {:ok, _manifest} = AuditBundle.write(tmp_dir, log)
       assert is_map(Jason.decode!(File.read!(Path.join(tmp_dir, "state.json"))))
     end
   end
