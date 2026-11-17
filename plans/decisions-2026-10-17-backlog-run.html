@@ -4329,6 +4329,14 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Decision</dt><dd>Round 1: CHANGES, 2 P2, 0 P3. (1) P2 cap_store.ex:148, a full CapStore backlog crashed LiveOps through the {:ok, cap} match in register_tab. Fixed: reproduced with a red test first; the grant helpers return the refusal, register_tab rolls back and returns {:error, :audit_unavailable}, approve_publish leaves the approval pending (D-771, row 441 done). The transport still ignores the result, so the tab connects with no LiveOps caps (fail closed); filed as row 446(b). (2) P2 topology.ex:160, a refused bridge left a live cap. Fixed: Lattice.bridge/4 revokes the cap with reason :bridge_refused (D-770, row 442 done). Only partly closed: the revoked id stays reserved, so a same-id retry returns :cap_id_collision; filed as row 446(a). Round 2: CHANGES, 0 P1 or P2, 2 P3. It verified both round 1 fixes. Its two P3s are left open, not fixed in this PR: (a) backlog.ex:133, drain/1 flushes every batch inside one reset handler, so with a large configured limit (100_000) reset and a queued call can pass their 5 s timeout, which repeats row 314 despite D-765 (row 447); (b) lattice_authority_audit_outage_test.exs:413, no test covers Topology&#x27;s idle replay, so a no-op Topology retry timer passes all tests (row 448).</dd>
 <dt>Reason</dt><dd>The last round found no P1 or P2, and it confirmed the round 1 fixes. The two final-round P3s are recorded as open rows. Nothing here claims durability, a stalled-Audit policy, a global Audit order, or a bounded reset at a non-default limit.</dd>
 </dl></section>
+<section id="d880"><h2><span>D-880</span> Merge pass: the auditor report shows the malformed marker for non-text posts</h2><dl>
+<dt>When</dt><dd>2026-11-17, merge pass over <a href="https://github.com/treetopdevs/lattice/pull/225">#225</a> and <a href="https://github.com/treetopdevs/lattice/pull/230">#230</a></dd>
+<dt>Context</dt><dd>Row 154's report tests expected a map or integer-list post to print in full. Row 325 makes the read model replace every non-text Matter value with <code>(malformed)</code> before a bundle is written, so on the combined tree those two tests failed.</dd>
+<dt>Options</dt><dd>Keep row 325's display-safety contract and update the report tests; or exempt the bundle from the contract so the report can print raw terms.</dd>
+<dt>Decision</dt><dd>Row 325's contract stands. The two report tests now assert the marker for non-text posts and full rendering of a long text post. No library code changed.</dd>
+<dt>Reason</dt><dd>The bundle is what an outsider replays, and attacker-shaped terms in it were the fault row 325 fixed. The raw terms remain in <code>matter.log</code>.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
