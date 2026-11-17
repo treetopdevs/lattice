@@ -8,6 +8,29 @@ defmodule Township.ReadModel do
 
   The trust graph's `omitted` list names admitted authority ops present in the
   log whose delegation could not be drawn; it does not claim the log is complete.
+
+  ## Display-safety contract (row 325)
+
+  This follows the `Lattice.Graph.AuthorityBody` display-safety contract (row
+  311). Matter command arguments are attacker-shaped: admission checks a
+  command's name, arity and effect shape, never its value, so a holder of an
+  ordinary capability can write any Canonical-encodable term into a Matter
+  field. Every Matter text slot in the model and in replay frames is therefore
+  a valid UTF-8 `String.t()`. The slots are `threads.title`, `threads.summary`,
+  each `threads.posts` entry, each `members.current` entry and each
+  `members.denied[].member` (and the matching `"title"`, `"summary"`,
+  `"posts"` and `"members"` keys of each replay frame's `"state"`). A value
+  that is a binary and passes `String.valid?/1` is copied verbatim. Any other
+  value, whether a non-binary term or invalid UTF-8, is shown as the fixed
+  marker `"(malformed)"`; the raw term stays in the log, under its op id.
+  Members are sorted as raw terms before the marker is applied, so honest
+  output is unchanged, and duplicate markers are kept so `members.current`
+  keeps the true count. `clerk_locked?` stays a boolean: only `close_matter`
+  and `reopen_matter` write it, and they write constants.
+
+  Non-claims: no length bound; no control-character or bidi filtering (HEEx
+  escapes HTML and Jason escapes JSON); and a member may post the literal text
+  `"(malformed)"`, so the marker is not proof that a value was malformed.
   """
 
   alias Lattice.{Attestation, Authority, Identity, Log, Op}
@@ -15,6 +38,7 @@ defmodule Township.ReadModel do
   alias Township.Matter
 
   @member_commands [:admit, :remove_member]
+  @malformed_text "(malformed)"
   @replay_fields [
     {"title", "Title"},
     {"summary", "Summary"},
@@ -27,7 +51,7 @@ defmodule Township.ReadModel do
   @type denied_member_mutation :: %{
           op_id: String.t(),
           command: :admit | :remove_member,
-          member: term(),
+          member: String.t(),
           reason: atom()
         }
 
@@ -85,7 +109,12 @@ defmodule Township.ReadModel do
     }
   end
 
-  @doc "Build the JSON-safe causal replay payload for the Township instrument."
+  @doc """
+  Build the causal replay payload for the Township instrument.
+
+  Each frame's `"state"` follows the moduledoc display-safety contract, so the
+  payload is JSON-encodable for any admitted Matter command arguments.
+  """
   @spec replay(Log.t()) :: map()
   def replay(%Log{} = log) do
     ordered_ops = Log.topo_ops(log)
@@ -164,13 +193,19 @@ defmodule Township.ReadModel do
 
   defp state_view(state) do
     %{
-      "title" => state.title,
-      "summary" => state.summary,
-      "posts" => state.posts,
-      "members" => Enum.sort(state.members),
+      "title" => display_text(state.title),
+      "summary" => display_text(state.summary),
+      "posts" => Enum.map(state.posts, &display_text/1),
+      # Sort the raw terms first so honest output keeps its order.
+      "members" => state.members |> Enum.sort() |> Enum.map(&display_text/1),
       "clerk_locked" => state.clerk_locked?
     }
   end
+
+  defp display_text(value) when is_binary(value),
+    do: if(String.valid?(value), do: value, else: @malformed_text)
+
+  defp display_text(_value), do: @malformed_text
 
   defp json_holders(holders) do
     Map.new(holders, fn {role, pub} ->
@@ -200,7 +235,7 @@ defmodule Township.ReadModel do
     |> Enum.flat_map(fn op ->
       with {:ok, reason} <- Map.fetch(reasons, op.id),
            {:ok, command, member} <- member_mutation(op) do
-        [%{op_id: op.id, command: command, member: member, reason: reason}]
+        [%{op_id: op.id, command: command, member: display_text(member), reason: reason}]
       else
         _not_denied_member_mutation -> []
       end
