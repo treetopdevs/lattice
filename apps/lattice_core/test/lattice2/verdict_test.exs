@@ -9,7 +9,7 @@ defmodule Lattice2.VerdictTest do
   @moduletag timeout: 300_000
 
   alias Lattice.{Authority, FaultScenario, Log, Op, Sim, Verdict}
-  alias Lattice.Authority.Delegation
+  alias Lattice.Authority.{Continuation, Delegation}
 
   defp thread_logs(logs), do: for({"thread." <> _ = name, log} <- logs, do: {name, log})
 
@@ -497,6 +497,134 @@ defmodule Lattice2.VerdictTest do
     end
   end
 
+  # --- Row 157: batched status equals the per-id status -----------------------
+
+  defp assert_batch_agrees(module, log, ids) do
+    batch = Verdict.delegation_statuses(module, log, ids)
+    active = Authority.delegations_active(log, ids)
+
+    assert Map.keys(batch) |> Enum.sort() == ids |> Enum.uniq() |> Enum.sort()
+
+    for id <- ids do
+      assert batch[id] == Verdict.delegation_status(module, log, id), "status of #{inspect(id)}"
+      assert active[id] == Authority.delegation_active?(log, id), "active? of #{inspect(id)}"
+    end
+  end
+
+  defp log_delegation_ids(log) do
+    for %Op{kind: :authority, body: body} <- Log.topo_ops(log),
+        %Delegation{id: id} <- [delegation_in_body(body)],
+        uniq: true,
+        do: id
+  end
+
+  defp delegation_in_body({:genesis, %Delegation{} = d, _policies}), do: d
+  defp delegation_in_body({:grant, %Delegation{} = d}), do: d
+  defp delegation_in_body({:transfer, _role, %Delegation{} = d, _tick}), do: d
+  defp delegation_in_body({:succeed, _role, %Delegation{} = d, _tick}), do: d
+  defp delegation_in_body(_body), do: nil
+
+  describe "delegation_statuses/3 (row 157)" do
+    defp batch_sim(seed, replica \\ "replica:verdict:batch", opts \\ []) do
+      {sim, _} =
+        Lattice.Demo.Thread
+        |> Sim.new(replica, ["r0", "r1", "r2"], seed: seed)
+        |> Sim.create_replica("r0", opts)
+
+      Sim.sync_all(sim)
+    end
+
+    defp assert_whole_log_agrees(log) do
+      ids = log_delegation_ids(log) ++ ["never-carried"]
+      assert length(ids) > 2
+      assert_batch_agrees(Lattice.Demo.Thread, log, ids)
+    end
+
+    test "succession candidates, activated and not, agree with the per-id status" do
+      for {tick, expected} <- [{3, :active}, {1, :invalid}] do
+        sim =
+          batch_sim("verdict:batch-succession-#{tick}", "replica:verdict:batch",
+            policies: %{moderator: %{successor: "r1", dormant_ticks: 2}}
+          )
+
+        {sim, succeed} = Sim.succeed(sim, "r1", :moderator, at_tick: tick)
+        {sim, child} = Sim.grant(Sim.sync_all(sim), "r1", "r2", ops: [:lock], roles: [:moderator])
+        log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+        assert %{status: ^expected} =
+                 Verdict.delegation_statuses(Lattice.Demo.Thread, log, [child.id])[child.id]
+
+        assert carried(succeed).id in log_delegation_ids(log)
+        assert_whole_log_agrees(log)
+      end
+    end
+
+    test "bad-signature, bad-chain, revoked-and-lapsed and leased-child statuses agree" do
+      sim = batch_sim("verdict:batch-mixed")
+      {_sim, good} = Sim.grant(sim, "r0", "r1", ops: [:post])
+      forged = %{good | sig: :binary.copy(<<0>>, byte_size(good.sig))}
+      {sim, _} = Sim.append(sim, "r0", :authority, {:grant, forged})
+
+      bad =
+        Delegation.new(Sim.identity(sim, "r1"), sim.replica, Sim.identity(sim, "r2").pub,
+          ops: [:post],
+          parent_id: "missing-parent",
+          expires_epoch: 1
+        )
+
+      {sim, _} = Sim.append(sim, "r1", :authority, {:grant, bad})
+      {sim, parent} = Sim.grant(sim, "r0", "r1", ops: [:post], expires_epoch: 2)
+      # An attenuating child carries a lease no looser than its parent's.
+      {sim, child} = Sim.grant(Sim.sync_all(sim), "r1", "r2", ops: [:post], expires_epoch: 2)
+      assert child.parent_id == parent.id
+      {sim, both} = Sim.grant(sim, "r0", "r2", ops: [:post], expires_epoch: 1)
+      {sim, _} = Sim.revoke(sim, "r0", both.id)
+      {sim, _} = Sim.beacon(sim, "r0", 3)
+      # A stale beacon and a non-root beacon the judge rejects.
+      {sim, _} = Sim.beacon(Sim.sync_all(sim), "r0", 2)
+      {sim, _} = Sim.beacon(sim, "r1", 9)
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      statuses =
+        Verdict.delegation_statuses(Lattice.Demo.Thread, log, [
+          forged.id,
+          bad.id,
+          child.id,
+          both.id
+        ])
+
+      assert statuses[forged.id].status == :invalid
+      assert statuses[bad.id].status == :invalid
+      assert statuses[child.id].status == :lapsed
+      assert statuses[both.id].status == :revoked
+      assert_whole_log_agrees(log)
+    end
+
+    test "an unsupported authority profile agrees with the per-id status" do
+      sim = batch_sim("verdict:batch-unsupported", "replica:treehouse:space:x#authority:bogus")
+      {sim, _} = Sim.grant(sim, "r0", "r1", ops: [:post], expires_epoch: 4)
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert Continuation.family(log.replica) == :unsupported
+      assert_whole_log_agrees(log)
+    end
+
+    test "duplicate ids collapse and a non-binary id raises" do
+      sim = batch_sim("verdict:batch-dupes")
+      {sim, g} = Sim.grant(sim, "r0", "r1", ops: [:post])
+      log = sim |> Sim.sync_all() |> Sim.log("r0")
+
+      assert [g.id] ==
+               Map.keys(Verdict.delegation_statuses(Lattice.Demo.Thread, log, [g.id, g.id]))
+
+      assert Verdict.delegation_statuses(Lattice.Demo.Thread, log, []) == %{}
+
+      assert_raise ArgumentError, fn ->
+        Verdict.delegation_statuses(Lattice.Demo.Thread, log, [g.id, 42])
+      end
+    end
+  end
+
   # --- Property: Verdict never disagrees with the judge ----------------------
   #
   # The action shapes follow the M1 convergence generators
@@ -656,6 +784,12 @@ defmodule Lattice2.VerdictTest do
           end
 
         assert status.status == expected
+      end
+
+      # Row 157: the batched forms equal the per-id ones on every realm's log.
+      for realm <- @realms do
+        log = Sim.log(sim, realm)
+        assert_batch_agrees(@module, log, Map.values(caps) ++ ["never-carried"])
       end
     end
   end

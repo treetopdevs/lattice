@@ -253,6 +253,32 @@ defmodule Township.ReadModelTest do
     end
   end
 
+  test "a validly signed leased grant to a short-binary audience keeps a nil fingerprint" do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-short-lease")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    clerk = Sim.identity(sim, "clerk")
+    genesis = Enum.find(sim.caps["clerk"], &is_nil(&1.parent_id))
+
+    short =
+      Lattice.Authority.Delegation.new(clerk, sim.replica, <<1>>,
+        ops: [:post],
+        parent_id: genesis.id,
+        expires_epoch: 4
+      )
+
+    assert Lattice.Authority.Delegation.valid_sig?(short)
+    {sim, _} = Sim.append(sim, "clerk", :authority, {:grant, short})
+    model = sim |> Sim.sync_all() |> Sim.log("clerk") |> ReadModel.observe()
+
+    assert [%{delegation_id: id, audience: nil, issuer: issuer, status: status}] =
+             model.roles.leases
+
+    assert id == short.id
+    assert issuer == Identity.fingerprint(clerk.pub)
+    assert status == :active
+    assert is_binary(Jason.encode!(model.roles.leases))
+  end
+
   test "observe survives non-integer transfer, succeed and heartbeat ticks" do
     for {build, expected} <- [
           {fn good -> {:transfer, :clerk, good, %{}} end, "transfer :clerk -> "},
@@ -274,6 +300,77 @@ defmodule Township.ReadModelTest do
              ),
              inspect(labels)
     end
+  end
+
+  # Row 157: chronology, beacons and leases from Authority.observe/2.
+  test "the tracked matter log observes a fingerprinted clerk chronology and no leases" do
+    preload_lattice_core()
+    {:ok, log} = Log.restore(Path.join(@tracked_dir, "matter.log"))
+    model = ReadModel.observe(log, labels: tracked_labels())
+
+    assert [_ | _] = clerk = model.roles.chronology.clerk
+    assert List.last(clerk).holder == model.roles.holders.clerk
+    assert Enum.all?(clerk, &(is_binary(&1.holder) and String.length(&1.holder) == 12))
+    assert model.roles.beacons == %{valid: [], max_epoch: nil}
+    assert model.roles.leases == []
+  end
+
+  test "leases report lapsed, revoked and active status with fingerprinted keys" do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident", "neighbor"], seed: "read-model-lease")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, lapsed} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    {sim, active} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 9)
+    {sim, revoked} = Sim.grant(sim, "clerk", "neighbor", ops: [:post], expires_epoch: 9)
+    {sim, _revoke} = Sim.revoke(sim, "clerk", revoked.id)
+    {sim, revoked_lapsed} = Sim.grant(sim, "clerk", "neighbor", ops: [:post], expires_epoch: 3)
+    {sim, _revoke} = Sim.revoke(sim, "clerk", revoked_lapsed.id)
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 5)
+    sim = Sim.sync_all(sim)
+    model = ReadModel.observe(Sim.log(sim, "clerk"))
+    by_id = Map.new(model.roles.leases, &{&1.delegation_id, &1})
+    clerk_fp = Identity.fingerprint(Sim.identity(sim, "clerk").pub)
+
+    assert %{status: :lapsed, expired?: true, expires_epoch: 3, issuer: ^clerk_fp} =
+             by_id[lapsed.id]
+
+    assert %{status: :active, expired?: false, expires_epoch: 9} = by_id[active.id]
+    assert %{status: :revoked, expired?: false} = by_id[revoked.id]
+    # Verdict's precedence puts revoked before lapsed; expired? is the live-path rule.
+    assert %{status: :revoked, expired?: true} = by_id[revoked_lapsed.id]
+
+    assert by_id[active.id].audience ==
+             Identity.fingerprint(Sim.identity(sim, "resident").pub)
+
+    assert model.roles.beacons.max_epoch == 5
+  end
+
+  # Row 157 review: lease status and expiry are batched, so observation cost tracks
+  # one judge pass, not one pass per lease. Before the batch, 120 leases took ~220x
+  # an analyze/2 pass; the bound is a wide ratio, never an absolute time.
+  test "observing a many-lease log costs a few judge passes, not one per lease" do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-many-leases")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    sim =
+      Enum.reduce(1..120, sim, fn epoch, acc ->
+        {acc, _} = Sim.grant(acc, "clerk", "resident", ops: [:post], expires_epoch: epoch)
+        acc
+      end)
+
+    log = Sim.log(sim, "clerk")
+    model = ReadModel.observe(log)
+    assert length(model.roles.leases) == 120
+    assert Enum.all?(model.roles.leases, &(&1.status == :active and not &1.expired?))
+
+    analyze_us = min_time(fn -> Lattice.Authority.analyze(Matter, log) end)
+    observe_us = min_time(fn -> ReadModel.observe(log) end)
+
+    assert observe_us < 25 * max(analyze_us, 1),
+           "observe #{observe_us} us vs analyze #{analyze_us} us"
+  end
+
+  defp min_time(fun) do
+    1..3 |> Enum.map(fn _ -> fun |> :timer.tc() |> elem(0) end) |> Enum.min()
   end
 
   # Row 325: Matter command arguments are attacker-shaped. Every text slot of the

@@ -44,7 +44,8 @@ defmodule Lattice.Verdict do
   `Authority.analyze_with_records/2`, with every descendant on this replica and
   attenuating its parent). Anything else on the log (a bad chain, an unactivated
   candidate) is `:invalid`, revoked or not. Only `:active` permits action; every
-  other status is a refusal.
+  other status is a refusal. `delegation_statuses/3` is the same status for many ids
+  from one pass (row 157); each value equals `delegation_status/3`.
 
   The status also names the delegation's `audience` (hex public key) and granted `ops`
   (in JSON, a non-atom scope term is an object `{"non_atom": ...}`, never an action name,
@@ -142,21 +143,61 @@ defmodule Lattice.Verdict do
   """
   @spec delegation_status(module(), Log.t(), String.t()) :: status()
   def delegation_status(module, %Log{} = log, delegation_id) when is_binary(delegation_id) do
+    log
+    |> status_context(module)
+    |> build_status(delegation_id, &Authority.delegation_active?(without_beacons(log), &1))
+  end
+
+  @doc """
+  `delegation_status/3` for each of `delegation_ids`, keyed by id (row 157).
+
+  Each value equals `delegation_status(module, log, id)`. The judge pass, the
+  delegation map, the root, the frontier and the beacon-free validity check are
+  computed once for the whole batch, so a log with many leases costs one pass, not
+  one pass per id.
+  """
+  @spec delegation_statuses(module(), Log.t(), [String.t()]) :: %{String.t() => status()}
+  def delegation_statuses(module, %Log{} = log, delegation_ids) when is_list(delegation_ids) do
+    ids = Enum.uniq(delegation_ids)
+
+    unless Enum.all?(ids, &is_binary/1),
+      do: raise(ArgumentError, "delegation ids must be binaries")
+
+    context = status_context(log, module)
+    active = Authority.delegations_active(without_beacons(log), ids)
+
+    Map.new(ids, &{&1, build_status(context, &1, fn id -> Map.fetch!(active, id) end)})
+  end
+
+  defp status_context(log, module) do
     {_analysis, beacons, acquisitions} = Authority.analyze_with_records(module, log)
     ordered = Log.topo_ops(log)
-    delegations = delegations(ordered)
-    chain = chain(delegation_id, delegations)
+
+    %{
+      log: log,
+      acquisitions: acquisitions,
+      ordered: ordered,
+      delegations: delegations(ordered),
+      badly_signed: badly_signed_ids(ordered),
+      root: Authority.root(log),
+      latest: beacons |> Enum.map(& &1.epoch) |> Enum.max(fn -> nil end),
+      frontier: frontier(log)
+    }
+  end
+
+  defp build_status(context, delegation_id, active?) do
+    chain = chain(delegation_id, context.delegations)
     expires = tightest_lease(chain)
-    revoked_by = first_revoke(ordered, chain, Authority.root(log), fn _revoke -> true end)
-    latest = beacons |> Enum.map(& &1.epoch) |> Enum.max(fn -> nil end)
+    revoked_by = first_revoke(context.ordered, chain, context.root, fn _revoke -> true end)
+    latest = context.latest
 
     # Validity first, as the judge's cap check: a bad chain is :invalid even when a
     # revoke or a beacon past its lease is also on the log.
     status =
       cond do
-        chain == [] and MapSet.member?(badly_signed_ids(ordered), delegation_id) -> :invalid
+        chain == [] and MapSet.member?(context.badly_signed, delegation_id) -> :invalid
         chain == [] -> :unknown
-        not valid_chain?(log, delegation_id, chain, acquisitions) -> :invalid
+        not valid_chain?(context, delegation_id, chain, active?) -> :invalid
         revoked_by != nil -> :revoked
         expires != nil and latest != nil and latest > expires -> :lapsed
         true -> :active
@@ -177,7 +218,7 @@ defmodule Lattice.Verdict do
       revoked_by: revoked_by,
       expires_epoch: expires,
       latest_beacon_epoch: latest,
-      frontier: frontier(log)
+      frontier: context.frontier
     }
   end
 
@@ -326,9 +367,11 @@ defmodule Lattice.Verdict do
   # Structural validity apart from leases. `Authority.delegation_active?/2` also refuses
   # a lapsed lease, so it is asked on the log without beacon ops: beacons decide only
   # expiry, never chain validity.
-  defp valid_chain?(log, delegation_id, chain, acquisitions) do
-    Authority.delegation_active?(without_beacons(log), delegation_id) or
-      succession_activated?(log, chain, acquisitions)
+  # `active?` is `Authority.delegation_active?/2` on the beacon-free log, asked once
+  # per id or answered from one batch.
+  defp valid_chain?(context, delegation_id, chain, active?) do
+    active?.(delegation_id) or
+      succession_activated?(context.log, chain, context.acquisitions)
   end
 
   defp without_beacons(log) do
