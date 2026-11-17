@@ -106,20 +106,25 @@ defmodule Lattice.LiveOps do
 
       state = put_actor(state, actor)
       state = put_in(state.role_counts[role], state.role_counts[role] + 1)
-      {actor, state} = grant_role_caps(actor, state)
-      {actor, state} = spawn_devices(actor, state)
-      state = put_actor(state, actor)
 
-      state =
-        emit(state, :liveops_actor_joined, %{
-          tab_id: actor.tab_id,
-          session_id: actor.session_id,
-          role: actor.role,
-          label: actor.label,
-          color: actor.color
-        })
+      with {:ok, actor, state} <- grant_role_caps(actor, state),
+           {:ok, actor, state} <- spawn_devices(actor, state) do
+        state = put_actor(state, actor)
 
-      {:reply, {:ok, Serializer.actor_view(state, actor)}, state}
+        state =
+          emit(state, :liveops_actor_joined, %{
+            tab_id: actor.tab_id,
+            session_id: actor.session_id,
+            role: actor.role,
+            label: actor.label,
+            color: actor.color
+          })
+
+        {:reply, {:ok, Serializer.actor_view(state, actor)}, state}
+      else
+        {:error, reason, actor, state, device_pids} ->
+          {:reply, {:error, reason}, refuse_registration(state, actor, device_pids, reason)}
+      end
     end
   end
 
@@ -270,134 +275,187 @@ defmodule Lattice.LiveOps do
     %{state | actors: Map.put(state.actors, actor.tab_id, actor), order: order}
   end
 
+  # CapStore refuses a grant with `{:error, :audit_unavailable}` while its
+  # audit backlog is full (row 313). Grants and devices stop at the first
+  # refusal and `refuse_registration/4` rolls the actor back (row 441, D-771).
   defp grant_role_caps(actor, state) do
-    Enum.reduce(Policy.role_actions(actor.role), {actor, state}, fn action, {actor, state} ->
-      grant_role_cap(actor, state, action)
-    end)
-  end
-
-  defp spawn_devices(actor, state) do
-    Enum.reduce(Policy.role_devices(actor.role), {actor, state}, fn kind, {actor, state} ->
-      device_id = "device-#{state.device_sequence + 1}-#{kind}"
-
-      case Lattice.spawn_linked(
-             actor.tab_id,
-             Lattice.LiveOps.Device,
-             [kind: kind, device_id: device_id, role: actor.role],
-             []
-           ) do
-        {:ok, pid} ->
-          ref = Process.monitor(pid)
-          state = %{state | device_sequence: state.device_sequence + 1}
-          state = put_in(state.device_refs[ref], {actor.tab_id, device_id})
-
-          device = %{
-            id: device_id,
-            kind: kind,
-            role: actor.role,
-            tab_id: actor.tab_id,
-            pid: inspect(pid),
-            state: :connected
-          }
-
-          actor = put_in(actor.devices[device_id], device)
-
-          {actor, state} =
-            grant_device_cap(actor, state, Policy.device_action(kind), pid, device_id, kind)
-
-          state =
-            emit(state, :liveops_device_joined, %{
-              tab_id: actor.tab_id,
-              role: actor.role,
-              device_id: device_id,
-              device_kind: kind
-            })
-
-          {actor, state}
-
-        {:error, reason} ->
-          state = %{state | device_sequence: state.device_sequence + 1}
-
-          state =
-            emit(state, :liveops_device_skipped, %{
-              tab_id: actor.tab_id,
-              role: actor.role,
-              device_kind: kind,
-              reason: inspect(reason)
-            })
-
-          {actor, state}
+    Policy.role_actions(actor.role)
+    |> Enum.reduce_while({:ok, actor, state}, fn action, {:ok, actor, state} ->
+      case grant_role_cap(actor, state, action) do
+        {:ok, actor, state} -> {:cont, {:ok, actor, state}}
+        {:error, reason} -> {:halt, {:error, reason, actor, state, []}}
       end
     end)
   end
 
+  defp spawn_devices(actor, state) do
+    Policy.role_devices(actor.role)
+    |> Enum.reduce_while({:ok, actor, state, []}, fn kind, {:ok, actor, state, pids} ->
+      case spawn_device(actor, state, kind) do
+        {:ok, actor, state, nil} ->
+          {:cont, {:ok, actor, state, pids}}
+
+        {:ok, actor, state, pid} ->
+          {:cont, {:ok, actor, state, [pid | pids]}}
+
+        {:error, reason, actor, state, pid} ->
+          {:halt, {:error, reason, actor, state, [pid | pids]}}
+      end
+    end)
+    |> case do
+      {:ok, actor, state, _pids} -> {:ok, actor, state}
+      refused -> refused
+    end
+  end
+
+  defp spawn_device(actor, state, kind) do
+    device_id = "device-#{state.device_sequence + 1}-#{kind}"
+
+    case Lattice.spawn_linked(
+           actor.tab_id,
+           Lattice.LiveOps.Device,
+           [kind: kind, device_id: device_id, role: actor.role],
+           []
+         ) do
+      {:ok, pid} ->
+        ref = Process.monitor(pid)
+        state = %{state | device_sequence: state.device_sequence + 1}
+        state = put_in(state.device_refs[ref], {actor.tab_id, device_id})
+
+        device = %{
+          id: device_id,
+          kind: kind,
+          role: actor.role,
+          tab_id: actor.tab_id,
+          pid: inspect(pid),
+          state: :connected
+        }
+
+        actor = put_in(actor.devices[device_id], device)
+
+        case grant_device_cap(actor, state, Policy.device_action(kind), pid, device_id, kind) do
+          {:ok, actor, state} ->
+            state =
+              emit(state, :liveops_device_joined, %{
+                tab_id: actor.tab_id,
+                role: actor.role,
+                device_id: device_id,
+                device_kind: kind
+              })
+
+            {:ok, actor, state, pid}
+
+          {:error, reason} ->
+            {:error, reason, actor, state, pid}
+        end
+
+      {:error, reason} ->
+        state = %{state | device_sequence: state.device_sequence + 1}
+
+        state =
+          emit(state, :liveops_device_skipped, %{
+            tab_id: actor.tab_id,
+            role: actor.role,
+            device_kind: kind,
+            reason: inspect(reason)
+          })
+
+        {:ok, actor, state, nil}
+    end
+  end
+
   defp grant_role_cap(actor, state, action) do
-    {:ok, cap} =
-      Lattice.grant(actor.tab_id, __MODULE__, [:call], Policy.role_cap_opts(action, actor.role))
+    with {:ok, cap} <-
+           Lattice.grant(
+             actor.tab_id,
+             __MODULE__,
+             [:call],
+             Policy.role_cap_opts(action, actor.role)
+           ) do
+      entry = %{
+        owner_tab_id: cap.owner_tab_id,
+        action: action,
+        role: actor.role,
+        target: "server_plane",
+        kind: :role,
+        device_id: nil,
+        device_kind: nil,
+        approval_id: nil,
+        approved_by_tab_id: nil
+      }
 
-    entry = %{
-      owner_tab_id: cap.owner_tab_id,
-      action: action,
-      role: actor.role,
-      target: "server_plane",
-      kind: :role,
-      device_id: nil,
-      device_kind: nil,
-      approval_id: nil,
-      approved_by_tab_id: nil
-    }
-
-    put_cap(actor, state, cap, entry)
+      {actor, state} = put_cap(actor, state, cap, entry)
+      {:ok, actor, state}
+    end
   end
 
   defp grant_device_cap(actor, state, action, pid, device_id, kind) do
-    {:ok, cap} =
-      Lattice.grant(
-        actor.tab_id,
-        pid,
-        [:call],
-        Policy.device_cap_opts(action, actor.role, device_id, kind)
-      )
+    with {:ok, cap} <-
+           Lattice.grant(
+             actor.tab_id,
+             pid,
+             [:call],
+             Policy.device_cap_opts(action, actor.role, device_id, kind)
+           ) do
+      entry = %{
+        owner_tab_id: cap.owner_tab_id,
+        action: action,
+        role: actor.role,
+        target: device_id,
+        kind: :device,
+        device_id: device_id,
+        device_kind: kind,
+        approval_id: nil,
+        approved_by_tab_id: nil
+      }
 
-    entry = %{
-      owner_tab_id: cap.owner_tab_id,
-      action: action,
-      role: actor.role,
-      target: device_id,
-      kind: :device,
-      device_id: device_id,
-      device_kind: kind,
-      approval_id: nil,
-      approved_by_tab_id: nil
-    }
-
-    put_cap(actor, state, cap, entry)
+      {actor, state} = put_cap(actor, state, cap, entry)
+      {:ok, actor, state}
+    end
   end
 
   defp grant_publish_cap(state, operator, producer, approval, ttl_ms) do
-    {:ok, cap} =
-      Lattice.grant(
-        operator.tab_id,
-        __MODULE__,
-        [:call],
-        Policy.publish_cap_opts(approval, producer.tab_id, ttl_ms)
-      )
+    with {:ok, cap} <-
+           Lattice.grant(
+             operator.tab_id,
+             __MODULE__,
+             [:call],
+             Policy.publish_cap_opts(approval, producer.tab_id, ttl_ms)
+           ) do
+      entry = %{
+        owner_tab_id: cap.owner_tab_id,
+        action: :publish,
+        role: :graphics_operator,
+        target: "server_plane",
+        kind: :approval,
+        device_id: nil,
+        device_kind: nil,
+        approval_id: approval.id,
+        approved_by_tab_id: producer.tab_id
+      }
 
-    entry = %{
-      owner_tab_id: cap.owner_tab_id,
-      action: :publish,
-      role: :graphics_operator,
-      target: "server_plane",
-      kind: :approval,
-      device_id: nil,
-      device_kind: nil,
-      approval_id: approval.id,
-      approved_by_tab_id: producer.tab_id
-    }
+      {operator, state} = put_cap(operator, state, cap, entry)
+      {:ok, cap, put_actor(state, operator)}
+    end
+  end
 
-    {operator, state} = put_cap(operator, state, cap, entry)
-    state = put_actor(state, operator)
-    {cap, state}
+  # Undoes a registration CapStore refused part way: stops the devices it
+  # spawned, revokes the caps it granted and drops the actor, so a retry after
+  # Audit returns registers afresh (row 441, D-771).
+  defp refuse_registration(state, actor, device_pids, reason) do
+    Enum.each(device_pids, &DynamicSupervisor.terminate_child(Lattice.TabWorkerSupervisor, &1))
+
+    {refs, device_refs} =
+      Enum.split_with(state.device_refs, fn {_ref, {tab_id, _device_id}} ->
+        tab_id == actor.tab_id
+      end)
+
+    Enum.each(refs, fn {ref, _device} -> Process.demonitor(ref, [:flush]) end)
+
+    state = %{put_actor(state, actor) | device_refs: Map.new(device_refs)}
+    state = update_in(state.role_counts[actor.role], &(&1 - 1))
+    {{:ok, _actor}, state} = cleanup_actor(state, actor.tab_id, reason)
+    state
   end
 
   defp put_cap(actor, state, cap, entry) do
@@ -515,9 +573,8 @@ defmodule Lattice.LiveOps do
     ttl_ms = integer_field(payload, :ttl_ms) || @default_publish_ttl_ms
 
     with {:ok, approval} <- fetch_pending_approval(state, approval_id),
-         {:ok, operator} <- fetch_actor(state, approval.operator_tab_id) do
-      {publish_cap, state} = grant_publish_cap(state, operator, actor, approval, ttl_ms)
-
+         {:ok, operator} <- fetch_actor(state, approval.operator_tab_id),
+         {:ok, publish_cap, state} <- grant_publish_cap(state, operator, actor, approval, ttl_ms) do
       approval = %{
         approval
         | status: :approved,

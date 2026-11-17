@@ -230,6 +230,136 @@ defmodule LatticeCore.AuthorityAuditOutageTest do
     assert {:ok, %{flushed: 0, pending: 3, gap: 1}} = Topology.flush_audit()
   end
 
+  # Review round 1, finding 1 (row 441): a grant refused on a full backlog
+  # used to fail LiveOps's `{:ok, cap}` match and kill it.
+  test "a full CapStore backlog refuses LiveOps register_tab without killing LiveOps" do
+    Application.put_env(:lattice_core, :authority_audit_backlog_limit, 1)
+    Lattice.reset!()
+    liveops = Process.whereis(Lattice.LiveOps)
+    stop_audit!()
+
+    {_pid, tab} = connect_tab(identity: %{surface: "liveops-demo", role: "observer"})
+    assert {:error, :unknown_cap} = CapStore.authorize(tab.id, "missing", :call, %{})
+
+    assert {:error, :audit_unavailable} = Lattice.LiveOps.register_tab(tab)
+    assert Process.whereis(Lattice.LiveOps) == liveops
+    refute liveops_actor?(tab.id)
+
+    start_audit!()
+    assert {:ok, %{pending: 0}} = CapStore.flush_audit()
+    assert {:ok, %{caps: [_ | _]}} = Lattice.LiveOps.register_tab(tab)
+    assert liveops_actor?(tab.id)
+    assert Process.whereis(Lattice.LiveOps) == liveops
+  end
+
+  test "a register_tab refused part way revokes the caps it granted and stops its devices" do
+    liveops = Process.whereis(Lattice.LiveOps)
+
+    # Limit 2 refuses the third producer role cap; limit 3 refuses the device
+    # cap after the preview_monitor device has spawned.
+    for limit <- [2, 3] do
+      Application.put_env(:lattice_core, :authority_audit_backlog_limit, limit)
+      Lattice.reset!()
+      stop_audit!()
+
+      {_pid, tab} = connect_tab(identity: %{surface: "liveops-demo", role: "producer"})
+      assert {:error, :audit_unavailable} = Lattice.LiveOps.register_tab(tab)
+      assert Process.whereis(Lattice.LiveOps) == liveops
+      refute liveops_actor?(tab.id)
+
+      owned = owned_caps(tab.id)
+      assert length(owned) == limit
+      assert Enum.all?(owned, & &1.revoked?)
+
+      assert eventually(fn ->
+               {:ok, %{owned_workers: workers}} = Topology.get_tab(tab.id)
+               MapSet.size(workers) == 0
+             end)
+
+      start_audit!()
+      assert {:ok, %{pending: 0}} = CapStore.flush_audit()
+      assert {:ok, %{caps: [_, _, _, _]}} = Lattice.LiveOps.register_tab(tab)
+      assert Enum.count(owned_caps(tab.id), &(not &1.revoked?)) == 4
+    end
+  end
+
+  test "a full CapStore backlog refuses approve_publish and leaves the approval pending" do
+    Application.put_env(:lattice_core, :authority_audit_backlog_limit, 2)
+    Lattice.reset!()
+    liveops = Process.whereis(Lattice.LiveOps)
+
+    {_p, producer} = connect_tab(identity: %{surface: "liveops-demo", role: "producer"})
+    {_g, graphics} = connect_tab(identity: %{surface: "liveops-demo", role: "graphics_operator"})
+    {:ok, producer_actor} = Lattice.LiveOps.register_tab(producer)
+    {:ok, graphics_actor} = Lattice.LiveOps.register_tab(graphics)
+    stop_audit!()
+
+    # Each successful authorize defers one :cap_use, so the approve call's own
+    # authorize fills the backlog and its publish grant is refused.
+    assert {:ok, %{approval_id: approval_id}} =
+             Lattice.call(graphics.id, liveops_cap(graphics_actor, :request_publish), %{
+               action: "request_publish",
+               overlay: "Outage lower third"
+             })
+
+    assert {:error, :audit_unavailable} =
+             Lattice.call(producer.id, liveops_cap(producer_actor, :approve_publish), %{
+               action: "approve_publish",
+               request_id: approval_id
+             })
+
+    assert Process.whereis(Lattice.LiveOps) == liveops
+
+    # The public approval view stringifies atom values, nil included.
+    assert [%{id: ^approval_id, status: "pending", publish_cap_id: "nil"}] =
+             Lattice.LiveOps.snapshot().approvals
+  end
+
+  # Review round 1, finding 2 (row 442): `Lattice.bridge/4` used to leave the
+  # granted bridge cap live when Topology refused the bridge.
+  test "a bridge Topology refuses revokes the cap Lattice.bridge granted" do
+    Application.put_env(:lattice_core, :authority_audit_backlog_limit, 2)
+    Lattice.reset!()
+    stop_audit!()
+
+    # Two deferred :tab_connect records fill Topology's backlog; CapStore's is empty.
+    {_a, tab_a} = connect_tab()
+    {_b, tab_b} = connect_tab()
+
+    assert {:error, :audit_unavailable} =
+             Lattice.bridge(tab_a.id, tab_b.id, [:call], id: "outage-bridge")
+
+    assert {:ok, %{revoked?: true, revoked_reason: :bridge_refused}} =
+             CapStore.get("outage-bridge")
+
+    refute Topology.bridge_allowed?(tab_a.id, tab_b.id, "outage-bridge")
+    assert {:error, :revoked} = CapStore.authorize(tab_a.id, "outage-bridge", :call, %{})
+
+    start_audit!()
+    assert {:ok, %{pending: 0}} = Topology.flush_audit()
+
+    # A revoked id stays reserved (D-770), so the retry names a fresh one.
+    assert {:error, :cap_id_collision} =
+             Lattice.bridge(tab_a.id, tab_b.id, [:call], id: "outage-bridge")
+
+    assert {:ok, %{id: "outage-bridge-2"}} =
+             Lattice.bridge(tab_a.id, tab_b.id, [:call], id: "outage-bridge-2")
+
+    assert Topology.bridge_allowed?(tab_a.id, tab_b.id, "outage-bridge-2")
+  end
+
+  test "a bridge to a disconnected tab revokes the cap Lattice.bridge granted" do
+    {_a, tab_a} = connect_tab()
+    {_b, tab_b} = connect_tab()
+    {:ok, _closed} = Lattice.disconnect_tab(tab_b.id)
+
+    assert {:error, :tab_not_connected} =
+             Lattice.bridge(tab_a.id, tab_b.id, [:call], id: "closed-bridge")
+
+    assert {:ok, %{revoked?: true, revoked_reason: :bridge_refused}} =
+             CapStore.get("closed-bridge")
+  end
+
   test "a full backlog still commits revocations; the :audit_gap record is written before replayed records" do
     Application.put_env(:lattice_core, :authority_audit_backlog_limit, 3)
     Lattice.reset!()
@@ -456,6 +586,19 @@ defmodule LatticeCore.AuthorityAuditOutageTest do
 
   defp records(type, source) do
     Enum.filter(Audit.events(), &(&1.type == type and &1.metadata[:audit_source] == source))
+  end
+
+  defp liveops_actor?(tab_id) do
+    Enum.any?(Lattice.LiveOps.snapshot().actors, &(&1.tab_id == tab_id))
+  end
+
+  defp liveops_cap(actor, action) do
+    action = Atom.to_string(action)
+    actor.caps |> Enum.find(&(&1.action == action)) |> Map.fetch!(:id)
+  end
+
+  defp owned_caps(tab_id) do
+    CapStore.snapshot().caps |> Map.values() |> Enum.filter(&(&1.owner_tab_id == tab_id))
   end
 
   defp records_for_tab(tab_id, source) do

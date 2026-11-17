@@ -2947,6 +2947,18 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Install both with npm ci under Node 22 and rerun; all 41 then pass. No TS source was changed.</dd>
 <dt>Reason</dt><dd>The full suite is then a real gate for this slice rather than an environment report (compare D-252).</dd>
 </dl></section>
+<section id="d770"><h2><span>D-770</span> A refused Lattice.bridge revokes its cap; the id stays reserved</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 review round 1 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Finding 2 (P2, reproduced): <code>Lattice.bridge/4</code> grants the bridge cap and then calls <code>Topology.create_bridge/3</code>. When Topology refused (<code>:audit_unavailable</code> on a full backlog, or the older <code>:tab_not_connected</code>), the cap stayed live and registered to the source tab, and a retry with the same explicit id failed with <code>:cap_id_collision</code>. Options: revoke on refusal, delete the cap record, or move the bridge into one CapStore call.</dd>
+<dt>Decision</dt><dd>On any refusal, <code>Lattice.bridge/4</code> revokes the cap with reason <code>:bridge_refused</code> and returns the refusal. The revoked id stays reserved, so a retry after Audit returns names a fresh id (default ids are random, so only explicit <code>id:</code> callers see this). Rows 441 and 442 are done.</dd>
+<dt>Reason</dt><dd>Most conservative under delegation: revocation always commits, even on a full backlog, and keeps the audit trail coherent (the deferred <code>:grant</code> is followed by a <code>:revoke</code>). Deleting the record would leave an audited grant with no cap, and reusing a revoked id would let one audited id name two caps. A single CapStore bridge call is a new API, beyond this slice. Tests: a refused bridge on a full Topology backlog and to a disconnected tab, both through <code>Lattice.bridge/4</code>.</dd>
+</dl></section>
+<section id="d771"><h2><span>D-771</span> LiveOps handles a refused grant and rolls back a partial registration</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 313 review round 1 (branch claude/313-capstore-topology-audit-defer)</dd>
+<dt>Context</dt><dd>Finding 1 (P2, reproduced): with CapStore&#x27;s audit backlog full, <code>LiveOps.register_tab/1</code> failed its <code>{:ok, cap} = Lattice.grant(...)</code> match and LiveOps died, losing its state. The same match sat in the device and approval grants.</dd>
+<dt>Decision</dt><dd>The role, device and publish grant helpers return the refusal. <code>register_tab/1</code> stops at the first refusal, stops the devices it spawned, revokes the caps it granted, drops the actor and restores the role count, then returns <code>{:error, :audit_unavailable}</code>; a retry after Audit returns registers afresh. <code>approve_publish</code> returns the refusal and leaves the approval pending. The WebSocket transport already ignores the result of <code>register_tab/1</code>, so the tab connects without LiveOps caps (fail closed); no transport change.</dd>
+<dt>Reason</dt><dd>A whole-or-nothing registration avoids an actor holding part of its role, and keeps LiveOps alive. Tests: a full backlog refusing an observer; a producer refused at the third role cap and at the device cap (caps revoked, device stopped, retry succeeds); a refused approval.</dd>
+</dl></section>
 </main>
 </body>
 </html>
