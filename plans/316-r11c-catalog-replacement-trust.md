@@ -16,7 +16,7 @@ their TS twins, with new `binding_graph_v1.json` / `binding_graph_ts_v1.json` ve
 PR 2 authoring preflight switched to call them (the interim mirror is deleted). It is built under
 the operator's 2026-11-15 "new modules now, wire later" decision and does not edit
 `catalog_trust.ex`, `treehouse_catalog_trust.ts`, their dist or native `catalog_eval`. Not
-claimed: the retained-client resolver does not call it yet, so no client accepts a replacement;
+claimed: the retained-client resolver does not call it yet; a replacement is accepted only by a composed evaluator with a runnable demo (D-688, `scripts/treehouse_replacement_demo.sh`, rows 395 and 396), with no production caller;
 no route switch, native, custodian refusal, real Space or ceremony. PR 4b (row 380) adds test
 breadth; PR 4c (row 381) wires catalog_trust after plans 267/269. Design rows 382 and 383 are
 done in the resolver (convergence design, D-588–D-639), and rows 386 and 387 in the resolver and
