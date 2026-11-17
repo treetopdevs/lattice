@@ -1,6 +1,6 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3, PR 4a and PR 6 are MERGED (#213, #214, #216, #217, #218, #220, #221; 4a is `13719b0f6`: resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). PR 3's closed-binding refusal (row 360) is IN REVIEW (PR_LINK, D-910–D-925). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3, PR 4a and PR 6 are MERGED (#213, #214, #216, #217, #218, #220, #221; 4a is `13719b0f6`: resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). PR 3's closed-binding refusal (row 360) is IN REVIEW ([#234](https://github.com/treetopdevs/lattice/pull/234), D-910–D-925). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
 PR 3's generation keying and PR 6's exporter test were the fixture-startable slices. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal needed only PR 4a's `closed/1` and `closed_out/1` and is in review (row 360); PR 6's C15 run waits on PR 4c. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
