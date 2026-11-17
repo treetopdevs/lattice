@@ -40,7 +40,7 @@ defmodule Mix.Tasks.Lattice.Township.ExplainDivergence do
 
     case Divergence.explain(log_a, log_b) do
       %{error: :different_replicas, a: ra, b: rb} ->
-        Mix.raise("bundles are for different replicas: #{ra} vs #{rb}")
+        Mix.raise("bundles are for different replicas: #{safe(ra)} vs #{safe(rb)}")
 
       report ->
         if format == "json" do
@@ -63,7 +63,7 @@ defmodule Mix.Tasks.Lattice.Township.ExplainDivergence do
     end
   end
 
-  defp render(%{converged?: true}, replica), do: ["CONVERGED: replica #{replica}"]
+  defp render(%{converged?: true}, replica), do: ["CONVERGED: replica #{safe(replica)}"]
 
   defp render(report, replica) do
     [verdict(report, replica)] ++
@@ -73,10 +73,10 @@ defmodule Mix.Tasks.Lattice.Township.ExplainDivergence do
         "state mismatch :#{m.field}  a: #{describe(m.a)}  b: #{describe(m.b)}"
       end) ++
       Enum.map(report.quarantine_delta, fn d ->
-        "authority quarantine #{d.op_id}  a: #{inspect(d.reason_a)}  b: #{inspect(d.reason_b)}"
+        "authority quarantine #{safe(d.op_id)}  a: #{inspect(d.reason_a)}  b: #{inspect(d.reason_b)}"
       end) ++
       Enum.map(report.structural_delta, fn d ->
-        "structural quarantine #{d.op_id}  a: #{inspect(d.reason_a)}  b: #{inspect(d.reason_b)}"
+        "structural quarantine #{safe(d.op_id)}  a: #{inspect(d.reason_a)}  b: #{inspect(d.reason_b)}"
       end) ++
       Enum.map(report.holder_delta, fn d ->
         "holder :#{d.role}  a: #{d.a || "none"}  b: #{d.b || "none"}"
@@ -100,14 +100,14 @@ defmodule Mix.Tasks.Lattice.Township.ExplainDivergence do
         {n, noun, suffix} -> "#{plural(n, noun)}#{suffix}"
       end)
 
-    Enum.join(["DIVERGED: replica #{replica}" | parts], ", ")
+    Enum.join(["DIVERGED: replica #{safe(replica)}" | parts], ", ")
   end
 
   defp plural(1, noun), do: "1 #{noun}"
   defp plural(n, noun), do: "#{n} #{noun}s"
 
   defp list_line(_label, []), do: []
-  defp list_line(label, ids), do: ["#{label}: #{Enum.join(ids, " ")}"]
+  defp list_line(label, ids), do: ["#{label}: #{Enum.map_join(ids, " ", &safe/1)}"]
 
   defp describe(%{entries: n, sha256: sha}),
     do: "#{n} #{if n == 1, do: "entry", else: "entries"} (sha #{sha})"
@@ -120,5 +120,17 @@ defmodule Mix.Tasks.Lattice.Township.ExplainDivergence do
   defp jsonable(list) when is_list(list), do: Enum.map(list, &jsonable/1)
   defp jsonable(value) when is_boolean(value) or is_nil(value), do: value
   defp jsonable(value) when is_atom(value), do: Atom.to_string(value)
+
+  defp jsonable(value) when is_binary(value),
+    do: if(String.valid?(value), do: value, else: inspect(value))
+
   defp jsonable(value), do: value
+
+  # Ids and labels come from log content. Print ordinary tokens verbatim and anything else
+  # (newlines, terminal escapes, invalid UTF-8) as an escaped Elixir literal.
+  defp safe(value) when is_binary(value) do
+    if value =~ ~r/\A[A-Za-z0-9:#._\-]+\z/, do: value, else: inspect(value)
+  end
+
+  defp safe(value), do: inspect(value)
 end

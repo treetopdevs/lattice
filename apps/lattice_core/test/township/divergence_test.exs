@@ -129,6 +129,74 @@ defmodule Township.DivergenceTest do
     assert report.state_equal?
   end
 
+  test "a MapSet value and a list value are different state, not normalized together" do
+    sim = Sim.partition(base(), "clerk", "resident")
+    {sim, _} = Sim.command(sim, "clerk", :set_title, [MapSet.new(["x"])])
+    {sim, _} = Sim.command(sim, "resident", :set_title, [["x"]])
+    {sim, _} = Sim.command(sim, "resident", :post, ["y"])
+    a = Sim.log(sim, "clerk")
+    b = Sim.log(sim, "resident")
+    report = Divergence.explain(a, b)
+
+    refute report.state_equal?
+    fields = Enum.map(report.state_mismatches, & &1.field)
+    assert :title in fields
+    refute :unattributed in fields
+  end
+
+  describe "hostile quarantined op ids" do
+    setup do
+      previous = Mix.shell()
+      Mix.shell(Mix.Shell.Process)
+      on_exit(fn -> Mix.shell(previous) end)
+      :ok
+    end
+
+    defp bad_id_pair(tmp, id) do
+      sim = base()
+      {sim, post} = Sim.command(sim, "clerk", :post, ["accepted"])
+      good = Sim.log(sim, "clerk")
+      forged = %{post | body: {:post, ["tampered"]}, sig: <<0::512>>, id: id}
+      {:quarantined, bad, _reason} = Log.accept(good, forged)
+      dir_a = Path.join(tmp, "a")
+      dir_b = Path.join(tmp, "b")
+      {:ok, _} = AuditBundle.write(dir_a, bad)
+      {:ok, _} = AuditBundle.write(dir_b, good)
+      {dir_a, dir_b}
+    end
+
+    defp drain do
+      receive do
+        {:mix_shell, :info, [line]} -> [line | drain()]
+      after
+        0 -> []
+      end
+    end
+
+    @tag :tmp_dir
+    test "text output escapes newlines and terminal controls in ids", %{tmp_dir: tmp} do
+      {a, b} = bad_id_pair(tmp, "x\nCONVERGED: replica victim\e[2J")
+      ExplainDivergence.run(["--a", a, "--b", b])
+      lines = drain()
+      assert hd(lines) =~ "DIVERGED"
+
+      for line <- lines do
+        refute line =~ "\e"
+        refute String.starts_with?(line, "CONVERGED")
+      end
+
+      assert length(Enum.filter(lines, &String.starts_with?(&1, "structural quarantine"))) == 1
+    end
+
+    @tag :tmp_dir
+    test "json output survives a non-UTF-8 id", %{tmp_dir: tmp} do
+      {a, b} = bad_id_pair(tmp, <<255>>)
+      ExplainDivergence.run(["--a", a, "--b", b, "--format", "json"])
+      assert {:ok, decoded} = Jason.decode(Enum.join(drain(), "\n"))
+      assert [%{"reason_a" => "bad_signature"}] = decoded["structural_delta"]
+    end
+  end
+
   test "logs of different replicas return the error map" do
     other = Sim.new(Matter, "replica:matter:other", ["clerk"], seed: "other")
     {other, _} = Sim.create_replica(other, "clerk")
@@ -267,7 +335,18 @@ defmodule Township.DivergenceTest do
             assert report.state_mismatches == []
           else
             refute report.converged?
-            assert report.state_mismatches != []
+            state_a = Lattice.state(Matter, a)
+            state_b = Lattice.state(Matter, b)
+
+            expected =
+              (Map.keys(state_a) ++ Map.keys(state_b))
+              |> Enum.uniq()
+              |> Enum.filter(&(Map.get(state_a, &1) != Map.get(state_b, &1)))
+              |> Enum.sort()
+
+            actual = report.state_mismatches |> Enum.map(& &1.field) |> Enum.sort()
+            refute :unattributed in actual
+            assert actual == expected
           end
 
           if report.converged?, do: assert(bytes_equal?)

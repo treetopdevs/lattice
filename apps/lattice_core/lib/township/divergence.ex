@@ -35,7 +35,9 @@ defmodule Township.Divergence do
     * `converged?` is true only when the op sets and frontiers are equal, the state
       bytes are equal and every delta list is empty. `state_equal?` can be true while
       `converged?` is false (an extra quarantined op does not change state).
-    * `state_mismatches` compares the Matter fields in declaration order. If the state
+    * `state_mismatches` compares the Matter fields in declaration order, then any other
+      state key in sorted order. A set and a list with the same elements are different
+      values and are reported as a difference. If the state
       bytes differ but no field comparison explains it, one `%{field: :unattributed}`
       entry is returned instead of silently reporting no difference. In that case the
       tool is partial and only the byte comparison can be trusted.
@@ -134,7 +136,7 @@ defmodule Township.Divergence do
 
   defp state_mismatches(state_a, state_b, state_equal?) do
     found =
-      Enum.flat_map(@fields, fn field ->
+      Enum.flat_map(fields_to_compare(state_a, state_b), fn field ->
         value_a = normalize(Map.get(state_a, field))
         value_b = normalize(Map.get(state_b, field))
 
@@ -161,8 +163,27 @@ defmodule Township.Divergence do
     end
   end
 
-  defp normalize(%MapSet{} = set), do: set |> MapSet.to_list() |> Enum.sort()
+  # Declared fields first, in order, then any other key either state carries, sorted, so a
+  # field Matter gains later is attributed instead of falling to `:unattributed`.
+  defp fields_to_compare(state_a, state_b) do
+    extra =
+      (state_keys(state_a) ++ state_keys(state_b))
+      |> Enum.uniq()
+      |> Enum.reject(&(&1 in @fields))
+      |> Enum.sort()
+
+    @fields ++ extra
+  end
+
+  defp state_keys(%{} = state), do: state |> Map.keys() |> Enum.reject(&(&1 == :__struct__))
+  defp state_keys(_other), do: []
+
+  # A set is tagged so a MapSet never compares equal to a plain list of the same elements.
+  defp normalize(%MapSet{} = set), do: {:set, set |> MapSet.to_list() |> Enum.sort()}
   defp normalize(value), do: value
+
+  defp summarize({:set, elements}),
+    do: %{entries: length(elements), sha256: digest({:set, elements})}
 
   defp summarize(value) when is_list(value) do
     %{entries: length(value), sha256: digest(value)}
