@@ -88,9 +88,17 @@ defmodule Lattice do
   def bridge(from_tab_id, to_tab_id, ops, opts) do
     target = {:tab, to_tab_id}
 
-    with {:ok, cap} <- grant(from_tab_id, target, ops, opts),
-         {:ok, _bridge} <- Topology.create_bridge(from_tab_id, to_tab_id, cap) do
-      {:ok, cap}
+    with {:ok, cap} <- grant(from_tab_id, target, ops, opts) do
+      case Topology.create_bridge(from_tab_id, to_tab_id, cap) do
+        {:ok, _bridge} ->
+          {:ok, cap}
+
+        # A refused bridge must not leave its cap live (row 313 review, D-770).
+        # Revocation always commits, and the revoked id stays reserved.
+        {:error, reason} ->
+          _ = CapStore.revoke(cap.id, :bridge_refused)
+          {:error, reason}
+      end
     end
   end
 
