@@ -290,8 +290,10 @@ defmodule Township.ElectionReportTest do
 
       link = Path.join(ctx.tmp_dir, "bundle-link.etf")
       File.ln_s!(bundle, link)
+      hard_link = Path.join(ctx.tmp_dir, "bundle-hard-link.etf")
+      File.ln!(bundle, hard_link)
 
-      for target <- [bundle, link] do
+      for target <- [bundle, link, hard_link] do
         assert_raise Mix.Error, ~r/--out must not be the --bundle file/, fn ->
           ReportTask.run(["--bundle", bundle, "--out", target])
         end
