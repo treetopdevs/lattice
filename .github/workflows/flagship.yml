@@ -77,7 +77,10 @@ jobs:
     name: Verify flagship artifact
     needs: changes
     if: needs.changes.outputs.legacy == 'true'
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: the floating label moved to Ubuntu 26.04 on 2026-11-16 and the locked
+    # Playwright refuses "chromium on ubuntu26.04-x64" (backlog row 398). The Runner image key step
+    # below reads ImageOS, so the apt cache key follows this label (ubuntu24-...).
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
 
     steps:
