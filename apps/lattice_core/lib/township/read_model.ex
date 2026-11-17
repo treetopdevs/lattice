@@ -10,7 +10,8 @@ defmodule Township.ReadModel do
   `Lattice.Authority.observe/2` (row 157). They are global to the log: the highest
   accepted beacon epoch is not the epoch any one operation observed. A lease's
   `expired?` is the live-path `Authority.expired?/2` check, while `status` is
-  `Lattice.Verdict.delegation_status/3`, so a revoked or invalid chain reports that
+  `Lattice.Verdict.delegation_statuses/3` (each equal to
+  `delegation_status/3`), so a revoked or invalid chain reports that
   status even when it has also lapsed. No author-asserted tick is shown.
 
   The trust graph's `omitted` list names admitted authority ops present in the
@@ -101,7 +102,7 @@ defmodule Township.ReadModel do
         audit: analysis.audit,
         chronology: chronology_view(observation.chronology),
         beacons: observation.beacons,
-        leases: Enum.map(observation.leases, &lease_view(log, &1))
+        leases: lease_views(log, observation.leases)
       },
       members: %{
         current: state_view["members"],
@@ -237,14 +238,20 @@ defmodule Township.ReadModel do
     end)
   end
 
-  defp lease_view(log, lease) do
+  # One batched status pass for every lease, not one judge pass per lease.
+  defp lease_views(log, leases) do
+    statuses = Verdict.delegation_statuses(Matter, log, Enum.map(leases, & &1.delegation_id))
+    Enum.map(leases, &lease_view(&1, Map.fetch!(statuses, &1.delegation_id).status))
+  end
+
+  defp lease_view(lease, status) do
     %{
       delegation_id: lease.delegation_id,
       issuer: key_fingerprint(lease.issuer),
       audience: key_fingerprint(lease.audience),
       expires_epoch: lease.expires_epoch,
       expired?: lease.expired?,
-      status: Verdict.delegation_status(Matter, log, lease.delegation_id).status
+      status: status
     }
   end
 

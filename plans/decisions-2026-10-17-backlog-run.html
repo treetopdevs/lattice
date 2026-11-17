@@ -2922,6 +2922,16 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>The panel says &quot;Highest accepted beacon epoch on this log: N&quot; and the doc says it is not per causal branch; nothing labels it as now for any one operation.</dd>
 <dt>Reason</dt><dd>A partitioned realm may not have seen the beacon, so a per-op &quot;now&quot; label would overclaim.</dd>
 </dl></section>
+<section id="d857"><h2><span>D-857</span> Supersede D-855: batch lease expiry and status before they reach the refresh path</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 review round 1 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>Authority.observe/2 takes each lease&#39;s expired? from the beacons its own judge pass accepted (the same collect_beacons call expired?/2 makes), and ReadModel.observe/1 asks Verdict.delegation_statuses/3 once for every lease instead of delegation_status/3 per lease. delegation_status/3 keeps its per-id path; tests pin the batch equal to it, and to delegation_active?/2 and expired?/2, on succession, bad-signature, bad-chain, revoked-and-lapsed, rejected-beacon and unsupported-profile logs and in the live-path property. A read-model test bounds the 120-lease observation at 25 times one analyze/2 pass.</dd>
+<dt>Reason</dt><dd>The review measured 20.8 s for a valid 120-lease log, past CarrierProjection.refresh/1&#39;s 15 s deadline. Batched, the same log observes in about 0.42 s (480 leases: about 1.5 s), so cost tracks the judge pass rather than lease count.</dd>
+</dl></section>
+<section id="d858"><h2><span>D-858</span> Authority.delegations_active/2 is a read-only derived helper</h2><dl>
+<dt>When</dt><dd>2026-11-16, row 157 review round 1 (branch claude/157-authority-observe; assumed under operator delegation)</dd>
+<dt>Decision</dt><dd>Add Authority.delegations_active/2, the batched form of delegation_active?/2, as an addition only. It computes the delegation context and accepted beacons once and returns a map whose every value equals delegation_active?(log, id). It is not a Core primitive and adds no wire atom or quarantine reason. It changes no verdict, and analyze/2, delegation_active?/2 and expired?/2 are unchanged.</dd>
+<dt>Reason</dt><dd>Batching only the Verdict pass still left one delegation_active?/2 call per lease, which reruns expired?/2. That cost about 40 ms per lease, so the observation stayed quadratic. The most conservative fix is a helper that only reuses the judge&#39;s private derivation, which D-855 had wrongly ruled out.</dd>
+</dl></section>
 </main>
 </body>
 </html>

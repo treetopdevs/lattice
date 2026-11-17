@@ -628,11 +628,74 @@ defmodule Lattice.Authority do
     %{
       chronology: records,
       beacons: %{valid: beacons, max_epoch: max_epoch},
-      leases: observe_leases(log)
+      leases: observe_leases(log, beacons)
     }
   end
 
-  defp observe_leases(log) do
+  @doc """
+  `delegation_active?/2` for each of `delegation_ids`, from one pass over `log`
+  (row 157).
+
+  A read-only derived helper: each value equals `delegation_active?(log, id)`, but
+  the delegation context and the accepted beacons are computed once for the whole
+  batch instead of once per id. It changes no verdict and confers nothing.
+  """
+  @spec delegations_active(Log.t(), [String.t()]) :: %{String.t() => boolean()}
+  def delegations_active(%Log{} = log, delegation_ids) when is_list(delegation_ids) do
+    ordered = Log.topo_ops(log)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
+    delegations = collect_delegations(ordered)
+    supported? = Continuation.family(log.replica) != :unsupported
+    beacons = live_beacons(log, ordered, delegations, commitment, genesis_ids, succession_ids)
+
+    Map.new(delegation_ids, fn id ->
+      active? =
+        case Map.fetch(delegations, id) do
+          {:ok, %{deleg: %Delegation{} = d}} ->
+            supported? and
+              validate_delegation(
+                d,
+                delegations,
+                commitment,
+                genesis_ids,
+                succession_ids,
+                log.replica
+              ) == :ok and
+              not chain_lapsed?(d, delegations, beacons)
+
+          _ ->
+            false
+        end
+
+      {id, active?}
+    end)
+  end
+
+  # The beacons `expired?/2` accepts, computed once.
+  defp live_beacons(log, ordered, delegations, commitment, genesis_ids, succession_ids) do
+    ancestors = Dag.all_ancestors(Log.ops(log))
+
+    deleg_valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
+    root = resolve_root(ordered, delegations, deleg_valid, commitment)
+    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid, root)
+    {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root, beacon_policies)
+    beacons
+  end
+
+  # `expired?/2`'s predicate against an already-computed beacon set.
+  defp chain_lapsed?(%Delegation{} = d, delegations, beacons) do
+    d
+    |> delegation_chain_links(delegations)
+    |> Enum.any?(fn %Delegation{expires_epoch: expires} ->
+      expires != nil and Enum.any?(beacons, fn %{epoch: epoch} -> epoch > expires end)
+    end)
+  end
+
+  # `beacons` are the judge pass's accepted beacons: the same `collect_beacons/4`
+  # call over the same log as `expired?/2`, so `expired?` here equals it.
+  defp observe_leases(log, beacons) do
     delegations = collect_delegations(Log.topo_ops(log))
 
     delegations
@@ -653,7 +716,7 @@ defmodule Lattice.Authority do
               issuer: d.issuer,
               audience: d.audience,
               expires_epoch: expires,
-              expired?: expired?(log, id)
+              expired?: chain_lapsed?(d, delegations, beacons)
             }
           ]
 

@@ -112,6 +112,35 @@ defmodule Lattice2.AuthorityObserveTest do
     refute Enum.any?(leases, &(&1.delegation_id == unleased.id))
   end
 
+  test "lease expired? equals expired?/2 with rejected beacons and a leased child" do
+    {sim, _genesis} = succession_sim()
+    {sim, parent} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 4)
+
+    {sim, child} =
+      Sim.grant(Sim.sync_all(sim), "resident", "neighbor", ops: [:post], expires_epoch: 4)
+
+    {sim, early} = Sim.grant(sim, "clerk", "neighbor", ops: [:post], expires_epoch: 2)
+    {sim, _} = Sim.beacon(sim, "clerk", 3)
+    # A stale root beacon and a non-root beacon past every lease: both rejected.
+    {sim, _} = Sim.beacon(Sim.sync_all(sim), "clerk", 1)
+    {sim, _} = Sim.beacon(sim, "resident", 9)
+    log = sim |> Sim.sync_all() |> Sim.log("clerk")
+    leases = Authority.observe(Matter, log).leases
+
+    assert Enum.sort([parent.id, child.id, early.id]) == Enum.map(leases, & &1.delegation_id)
+    assert child.parent_id == parent.id
+
+    for lease <- leases,
+        do: assert(lease.expired? == Authority.expired?(log, lease.delegation_id))
+
+    assert %{early.id => true, parent.id => false, child.id => false} ==
+             Map.new(leases, &{&1.delegation_id, &1.expired?})
+
+    ids = [parent.id, child.id, early.id, "never-carried"]
+    active = Authority.delegations_active(log, ids)
+    for id <- ids, do: assert(active[id] == Authority.delegation_active?(log, id))
+  end
+
   test "a genesis-only log observes the genesis holder and nothing else" do
     {sim, genesis} = succession_sim()
     observation = Authority.observe(Matter, Sim.log(sim, "clerk"))

@@ -344,6 +344,35 @@ defmodule Township.ReadModelTest do
     assert model.roles.beacons.max_epoch == 5
   end
 
+  # Row 157 review: lease status and expiry are batched, so observation cost tracks
+  # one judge pass, not one pass per lease. Before the batch, 120 leases took ~220x
+  # an analyze/2 pass; the bound is a wide ratio, never an absolute time.
+  test "observing a many-lease log costs a few judge passes, not one per lease" do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-many-leases")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    sim =
+      Enum.reduce(1..120, sim, fn epoch, acc ->
+        {acc, _} = Sim.grant(acc, "clerk", "resident", ops: [:post], expires_epoch: epoch)
+        acc
+      end)
+
+    log = Sim.log(sim, "clerk")
+    model = ReadModel.observe(log)
+    assert length(model.roles.leases) == 120
+    assert Enum.all?(model.roles.leases, &(&1.status == :active and not &1.expired?))
+
+    analyze_us = min_time(fn -> Lattice.Authority.analyze(Matter, log) end)
+    observe_us = min_time(fn -> ReadModel.observe(log) end)
+
+    assert observe_us < 25 * max(analyze_us, 1),
+           "observe #{observe_us} us vs analyze #{analyze_us} us"
+  end
+
+  defp min_time(fun) do
+    1..3 |> Enum.map(fn _ -> fun |> :timer.tc() |> elem(0) end) |> Enum.min()
+  end
+
   defp listform_log(field) do
     sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
     {sim, _genesis} = Sim.create_replica(sim, "clerk")
