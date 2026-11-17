@@ -236,7 +236,7 @@ the integration/branch strategy. The direction spikes 010–013 are out of that 
 | 152 | Serverless two-device onboarding (discharges CD1) | P1 | L | 150, 151, 066-075, 094-100, 110-116 | SUPERSEDED (Plan 177 and unified R01a withdraw additional LAN/CD1 work; helpers retained) |
 | 154 | Self-contained HTML auditor report from the Township audit bundle (`mix lattice.township.report`) | P1 | M | — | TODO (direction round 2026-07-18) |
 | 155 | Instrument renders computed evidence: authority ledger panel + replay frame holders/state | P1 | S–M | — (before 157) | DONE (PR #32; hosted run `29755770936` green across all three jobs) |
-| 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | TODO (direction round 2026-07-18) |
+| 156 | Election evidence report: projection + close evidence + the 12-scope non-claim manifest | P2 | M | — (154 rec. for style) | IN REVIEW (2026-11-16, branch `claude/156-election-evidence-report`, not yet pushed; D-790–D-795) `Township.Election.Report`, `mix lattice.election.report [--open-certificate]`, test-only fixture and `scripts/research/election_evidence_report.exs` research harness. No security claim: all 12 scopes render `not_claimed`; Stub and `/township` unchanged |
 | 157 | Public `Authority.observe/2` (role chronology, leases, beacon frontier) + instrument panel | P2 | M–L | 155 | TODO (direction round 2026-07-18) |
 | 158 | Real-device beta POC program map: shared carrier/distribution foundation, then Township, Toolshed, Treehouse | **P0** | XL | 029, 037, 128, 132, 141, 142 | IN PROGRESS (shared carrier, isolation, distribution and causal-policy foundation merged; unified R01a updates order; catalog, WSS and product gates remain) |
 | 159 | Wave A1 kickoff — shared beta foundation | P1 | — | 158 | DRAFT (parallel session, untracked at time of Round 4) |
@@ -1327,7 +1327,7 @@ Vetted findings **not planned this round** (real, grounded, available for a futu
   report. MED confidence; needs a design pass on retention/keying before it's plannable.
 - **Unified quarantine-reason dictionary** — reason atoms span three namespaces
   (structural in `log.ex`, ~31 authority atoms in `authority.ex`, election-side reasons in
-  `projector.ex`/`unanimous_boxes_v1.ex`); election reasons surface nowhere human-readable
+  `election.ex`/`unanimous_boxes_v1.ex`; `projector.ex` was removed in 292bb437a); election reasons surface nowhere human-readable
   today. Partially addressed by 154 (authority gloss) and 156 (election reasons rendered);
   a full cross-subsystem dictionary is deferred until those two land.
 
