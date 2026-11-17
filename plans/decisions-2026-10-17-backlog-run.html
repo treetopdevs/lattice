@@ -4341,8 +4341,14 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 </dl></section>
 <section id="d894"><h2><span>D-894</span> Rule 10 and the review gate</h2><dl>
 <dt>When</dt><dd>2026-11-17, row 324 (branch claude/324-toolshed-readmodel-text-contract); decided under operator delegation (2026-11-16), reversible</dd>
-<dt>Decision</dt><dd>Row 324 already exists, so this is execution of a filed residual, not a new Toolshed plan; follow-ups are rows only. The evidence tier is core (unit and property suite); no vectors change. One adversarial review; no second review, since no authority, canonical, carrier, client codec, src-tauri or workflow path is touched.</dd>
+<dt>Decision</dt><dd>Row 324 already exists, so this is execution of a filed residual, not a new Toolshed plan; follow-ups are rows only. The evidence tier is core (unit and property suite); no vectors change. One adversarial review (D-895); no second review, since no authority, canonical, carrier, client codec, src-tauri or workflow path is touched. The hosted exact-tip CI run is still outstanding until the branch is pushed.</dd>
 <dt>Reason</dt><dd>Same maintenance precedent as D-828.</dd>
+</dl></section>
+<section id="d895"><h2><span>D-895</span> Row 324 adversarial review disposition</h2><dl>
+<dt>When</dt><dd>2026-11-17, row 324 (branch claude/324-toolshed-readmodel-text-contract); decided under operator delegation (2026-11-16), reversible</dd>
+<dt>Context</dt><dd>Gate: one adversarial review with Codex Sol 6.1 High (D-894).</dd>
+<dt>Decision</dt><dd>One round of codex exec -m gpt-6.1-sol -c model_reasoning_effort=high (read-only sandbox) on commit dac023024, over origin/main..HEAD: no P1-P3 findings. The reviewer traced admission, Authority request collection, the requests/2 projection and the demo; the review was static (no tests run by the reviewer). Nothing to dispose of. Local gates at that commit: full lattice_core suite 76 properties, 1290 tests, 0 failures once clients/lattice-client and clients/treehouse-tauri-shell had node_modules installed (41 reciprocal tests failed with :enoent before that, all environmental).</dd>
+<dt>Reason</dt><dd>Recorded so the PR carries the review outcome next to the change.</dd>
 </dl></section>
 </main>
 </body>
