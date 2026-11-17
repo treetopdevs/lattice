@@ -4438,6 +4438,14 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The graph cannot vouch for a block it does not resolve. It reads one bootstrap, so it says nothing about a second one, and it does not judge a truncated or over-limit control history. No existing accepted-replacement test needs <code>control_history_limit</code> to be superseded. Requiring empty <code>triggers</code> and checking the observed bootstrap ids directly also covers an <code>authority_changed</code> block that kept precedence over a later unseen-bootstrap fork.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
 </dl></section>
+<section id="d930"><h2><span>D-930</span> Row 524: the chain walk never re-points a route the watermark already reserves</h2><dl>
+<dt>When</dt><dd>2026-11-17, review round 1 of the row 524 watermark slice</dd>
+<dt>Context</dt><dd>Row 524 made <code>CatalogBindingGraph.advance/2</code> and <code>advanceCatalogBindingState</code> fold every catalog on the accepted chain over the stored routes, newest winning. With the watermark reserving <code>u -&gt; U</code>, KZ2 (Rz2's first catalog) mapped <code>u -&gt; Thread2</code> and froze; KZ21 (KZ2's revision 1) moved Thread2 to a fresh route and was promoted, since RouteCompat checks only the served catalog. The fold then imported KZ2, overwrote <code>u</code> with Thread2, and a later KZ22 moving Thread2 back to <code>u</code> was accepted and served, in both runtimes.</dd>
+<dt>Options</dt><dd>Keep every route the stored watermark already holds and add only fresh chain routes; or refuse promotion (<code>catalog_rollback</code>) when any catalog on the chain conflicts with the stored routes.</dd>
+<dt>Decision</dt><dd>Keep existing reservations. In both runtimes a chain entry whose route the stored routes already hold is skipped; among fresh routes the newer catalog still wins. No resolver decision changes, and both binding-graph vectors only gain the new scenario <code>S12r: an unaccepted intermediate catalog keeps a reserved route/one page</code> (KZ21 promoted with <code>u</code> still U, then KZ22 is <code>catalog_rollback</code> with KZ21 still served). The property oracle uses the same rule. Whether such a chain should be promotable at all is row 570.</dd>
+<dt>Reason</dt><dd>The stored routes are the routes this client served or accepted, and the accepted catalog already passed RouteCompat against them, so they can only be lost, never corrected, by an overwrite. Refusing promotion would change resolver decisions and vector outcomes, which is a design change beyond this slice.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-16), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>

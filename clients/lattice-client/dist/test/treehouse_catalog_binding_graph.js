@@ -245,6 +245,29 @@ test("row 524: advanceCatalogBindingState walks a rotation's prior catalog", () 
     assert.deepEqual(routes(new Map([["k", "p"], ["p", "k"]])), { "/k": "space", "/p": "thread" });
     assert.deepEqual(routes(new Map([["k", "x"]])), { "/k": "space" });
 });
+// Row 524, review round 1 (D-930): a route the stored watermark reserves keeps its replica when the accepted chain walks an
+// intermediate catalog this client never accepted.
+test("row 524: advanceCatalogBindingState keeps a stored route over the chain", () => {
+    const result = { ok: true,
+        graph: { catalogs: new Map([["k", { entries: [{ route: "/k", replica: "thread2" }] }], ["p", { entries: [{ route: "/u", replica: "thread2" }] }]]),
+            catParent: new Map([["k", "p"], ["p", null]]), decision: { accepted: true, head: "t", generation: 1, catalog: "k", revision: 1,
+                clearsAuthorityChanged: true, block: null, serving: "k" } } };
+    const a = { binding: "b", generation: 0, catalog: "c", revision: 0, routes: { "/u": "u" } };
+    assert.deepEqual(advanceCatalogBindingState({ accepted: a, frozen: true }, result).accepted.routes, { "/u": "u", "/k": "thread2" });
+});
+test("row 524: an unaccepted intermediate catalog never re-points a reserved route", () => {
+    const name = "S12r: an unaccepted intermediate catalog keeps a reserved route/one page";
+    const stateIn = (step) => {
+        const o = outcomes.find((x) => x.scenario === name && x.step === step);
+        assert.ok(o, `${name}, delivery ${step}`);
+        return o.stateIn;
+    };
+    const before = stateIn(4).accepted.routes;
+    const promoted = stateIn(5).accepted.routes;
+    for (const [route, replica] of Object.entries(before))
+        assert.equal(promoted[route], replica);
+    assert.ok(Object.keys(promoted).length > Object.keys(before).length);
+});
 // Row 524: a chain delivered on one page persists the same watermark routes as the same chain delivered catalog by catalog,
 // including the route its intermediate catalog moved away (this runtime's own persisted state).
 test("row 524: one-page and separate deliveries persist the same watermark routes", () => {

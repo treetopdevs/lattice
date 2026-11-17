@@ -3366,6 +3366,26 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     rz2f = carrying(base, lz, "s12r-z2f", fresh.("s12r-z2f"), child)
     kz2f = F.first(base, rz2f)
 
+    # Row 524, review round 1: KZ21 (KZ2's revision 1) moves the squatting Thread2 off u onto a
+    # fresh route, and KZ22 (revision 2) moves it back to u. KZ2 itself is never accepted, so
+    # its u -> Thread2 must not overwrite the reservation u -> U when KZ21 is promoted.
+    move_squat = fn k, rev, to ->
+      F.catalog(
+        base,
+        rz2.id,
+        rev,
+        F.cid(k),
+        rz2.catalog_key,
+        for(
+          e <- k.catalog.entries,
+          do: if(e.replica == squat.replica, do: %{e | route: to}, else: e)
+        )
+      )
+    end
+
+    kz21 = move_squat.(kz2, 1, route("s12r-z21-t2"))
+    kz22 = move_squat.(kz21, 2, u.route)
+
     labels =
       Map.merge(base_labels(base, c0), %{
         "R" => r.id,
@@ -3376,7 +3396,9 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
         "Rz2" => rz2.id,
         "KZ2" => F.cid(kz2),
         "Rz2f" => rz2f.id,
-        "KZ2f" => F.cid(kz2f)
+        "KZ2f" => F.cid(kz2f),
+        "KZ21" => F.cid(kz21),
+        "KZ22" => F.cid(kz22)
       })
 
     out = ["KR", "KR1"]
@@ -3428,6 +3450,33 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
               closed: ["B", "R", "Rz"],
               closed_out: out,
               decision: accept("Rz2f", "KZ2f", clears: true)
+            )
+          )
+        ]
+      ),
+      # Row 524, review round 1: promoting KZ21 keeps u reserved for U, so KZ22, which moves
+      # Thread2 back to u, is catalog_rollback and the watermark's KZ21 stays served.
+      one(
+        "S12r: an unaccepted intermediate catalog keeps a reserved route/one page",
+        labels,
+        [
+          first,
+          step(ev(lr, catalogs: [c0, kr, kr1]), on_kr1.(true)),
+          hd(tail),
+          step(
+            ev(add(lz, [rz2]), catalogs: [c0, kr, kr1, kz, kz2, kz21]),
+            ok(["Rz2"],
+              closed: ["B", "R", "Rz"],
+              closed_out: out,
+              decision: accept("Rz2", "KZ21", clears: true)
+            )
+          ),
+          step(
+            ev(add(lz, [rz2]), catalogs: [c0, kr, kr1, kz, kz2, kz21, kz22]),
+            ok(["Rz2"],
+              closed: ["B", "R", "Rz"],
+              closed_out: out,
+              decision: [head: "Rz2", reason: "catalog_rollback", serving: "KZ21"]
             )
           )
         ]

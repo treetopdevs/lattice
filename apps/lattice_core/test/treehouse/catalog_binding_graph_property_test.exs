@@ -480,12 +480,15 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
         base = if a, do: a.routes, else: %{}
 
         # Row 524: every catalog on the accepted chain, walked over the artifacts' own
-        # `previous` and rotation `prior_catalog` links (facts.lineage), oldest first.
-        routes =
+        # `previous` and rotation `prior_catalog` links (facts.lineage), oldest first. A route
+        # the stored routes already hold keeps its replica (D-930).
+        fresh =
           d.catalog
           |> oracle_chain(g.catalogs, facts.lineage, [])
           |> Enum.flat_map(&g.catalogs[&1].entries)
-          |> Enum.reduce(base, &Map.put(&2, &1.route, &1.replica))
+          |> Enum.reduce(%{}, &Map.put(&2, &1.route, &1.replica))
+
+        routes = Map.merge(fresh, base)
 
         accepted = %{
           binding: d.head,

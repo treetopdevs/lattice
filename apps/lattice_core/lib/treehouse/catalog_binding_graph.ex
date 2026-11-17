@@ -124,7 +124,9 @@ defmodule Treehouse.CatalogBindingGraph do
   lifts `frozen`; it adds the routes of every catalog on the accepted chain (the D-881 walk,
   row 524: the accepted catalog, then each `cat_parent` link, which is `previous` or a
   rotation's prior catalog, oldest first and newest winning) to the cumulative `routes`, so a
-  chain delivered on one page persists what separate deliveries persist. A block
+  chain delivered on one page persists what separate deliveries persist. A route the stored
+  `routes` already hold is never re-pointed (D-930), so an intermediate catalog that was never
+  accepted cannot overwrite a reservation. A block
   with `freeze` sets `frozen`. Nothing is served while frozen. On `trust_pending` (row 386,
   repair (a)) the detail's `freeze`, derived only from the complete authenticated part, is
   ORed into `frozen` and its `serving` is served unless frozen; a `trust_pending` without those
@@ -184,13 +186,18 @@ defmodule Treehouse.CatalogBindingGraph do
   defp routes(nil), do: %{}
   defp routes(accepted), do: Map.get(accepted, :routes, %{})
 
-  # Row 524: every catalog on the accepted chain, oldest first, put over the cumulative routes
-  # (the chain wins, as in `CatalogReplacementTrust`'s D-881 mirror).
-  defp chain_routes(id, catalogs, parent, routes) do
+  # Row 524: every catalog on the accepted chain, oldest first, added to the cumulative routes.
+  # A route the stored watermark already reserves keeps its replica (D-930): an intermediate
+  # catalog this client never accepted (one that froze, say) must not re-point it, and the
+  # accepted catalog itself passed RouteCompat against these routes. Among fresh routes the
+  # newer catalog wins.
+  defp chain_routes(id, catalogs, parent, reserved) do
     id
     |> chain(catalogs, parent, [])
-    |> Enum.reduce(routes, fn cid, acc ->
-      Enum.reduce(catalogs[cid].entries, acc, &Map.put(&2, &1.route, &1.replica))
+    |> Enum.reduce(reserved, fn cid, acc ->
+      Enum.reduce(catalogs[cid].entries, acc, fn e, acc ->
+        if Map.has_key?(reserved, e.route), do: acc, else: Map.put(acc, e.route, e.replica)
+      end)
     end)
   end
 

@@ -21621,6 +21621,547 @@
       }
     },
     {
+      "scenario": "S12r: an unaccepted intermediate catalog keeps a reserved route/one page",
+      "step": 1,
+      "label": {
+        "heads": [
+          "B"
+        ],
+        "closed": [],
+        "closed_out": [],
+        "nodes": [
+          "B"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "B",
+          "catalog": "C0",
+          "clears": false,
+          "serving": "C0"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "C0"
+        }
+      },
+      "ts": {
+        "heads": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed": [],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": [
+            "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "clears": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+          "binding_status": "missing",
+          "catalog_status": "missing"
+        },
+        "after": {
+          "accepted": {
+            "binding": "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+            "generation": 0,
+            "catalog": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc",
+            "revision": 0,
+            "routes": {
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "AiyT-u3yXUXzMr4yIH1Opc5_QgaQt0KE8QEYHx6yJuc"
+        }
+      }
+    },
+    {
+      "scenario": "S12r: an unaccepted intermediate catalog keeps a reserved route/one page",
+      "step": 2,
+      "label": {
+        "heads": [
+          "R"
+        ],
+        "closed": [
+          "B"
+        ],
+        "closed_out": [],
+        "nodes": [
+          "B",
+          "R"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "R",
+          "catalog": "KR1",
+          "clears": true,
+          "serving": "KR1"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "KR1"
+        }
+      },
+      "ts": {
+        "heads": [
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek"
+        ],
+        "closed_out": {},
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0": [
+            "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0",
+          "catalog": "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w",
+          "clears": true,
+          "serving": "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w",
+          "binding_status": "closed",
+          "catalog_status": "ancestor_of_cited"
+        },
+        "after": {
+          "accepted": {
+            "binding": "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0",
+            "generation": 1,
+            "catalog": "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w",
+            "revision": 1,
+            "routes": {
+              "/r/4LWBCwMhmHF-ngOqBvm1boE94IJGPaLkVNm31n3k8Ac": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+              "/r/by2kpDBKn8W0fZKg_wDU4Wfs3FRDGwCqjWkRrBzWROk": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU"
+            }
+          },
+          "frozen": false,
+          "serving": "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w"
+        }
+      }
+    },
+    {
+      "scenario": "S12r: an unaccepted intermediate catalog keeps a reserved route/one page",
+      "step": 3,
+      "label": {
+        "heads": [
+          "Rz"
+        ],
+        "closed": [
+          "B",
+          "R"
+        ],
+        "closed_out": [
+          "KR",
+          "KR1"
+        ],
+        "nodes": [
+          "B",
+          "R",
+          "Rz"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "authority_changed",
+          "block": "authority_changed",
+          "freeze": true,
+          "head": "Rz",
+          "catalog": null,
+          "clears": false,
+          "serving": null
+        },
+        "after": {
+          "frozen": true,
+          "serving": null
+        }
+      },
+      "ts": {
+        "heads": [
+          "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0"
+        ],
+        "closed_out": {
+          "QGQxBnMHVwFoPLIH68njy_OPO3_RGxZAD2NV9xHoCFU": "catalog_rollback",
+          "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA": [
+            "vqPZnwH9qao5_oxsZX6fKpKYlB3m9FSZgS0PnS_r2jA"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "authority_changed",
+          "block": {
+            "reason": "authority_changed",
+            "ids": [
+              "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA"
+            ],
+            "freeze": true
+          },
+          "head": "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA",
+          "catalog": null,
+          "clears": false,
+          "serving": null,
+          "binding_status": "closed",
+          "catalog_status": "closed_out"
+        },
+        "after": {
+          "accepted": {
+            "binding": "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0",
+            "generation": 1,
+            "catalog": "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w",
+            "revision": 1,
+            "routes": {
+              "/r/4LWBCwMhmHF-ngOqBvm1boE94IJGPaLkVNm31n3k8Ac": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+              "/r/by2kpDBKn8W0fZKg_wDU4Wfs3FRDGwCqjWkRrBzWROk": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU"
+            }
+          },
+          "frozen": true,
+          "serving": null
+        }
+      }
+    },
+    {
+      "scenario": "S12r: an unaccepted intermediate catalog keeps a reserved route/one page",
+      "step": 4,
+      "label": {
+        "heads": [
+          "Rz2"
+        ],
+        "closed": [
+          "B",
+          "R",
+          "Rz"
+        ],
+        "closed_out": [
+          "KR",
+          "KR1"
+        ],
+        "nodes": [
+          "B",
+          "R",
+          "Rz",
+          "Rz2"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "freeze": false,
+          "head": "Rz2",
+          "catalog": "KZ21",
+          "clears": true,
+          "serving": "KZ21"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "KZ21"
+        }
+      },
+      "ts": {
+        "heads": [
+          "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA",
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0"
+        ],
+        "closed_out": {
+          "QGQxBnMHVwFoPLIH68njy_OPO3_RGxZAD2NV9xHoCFU": "catalog_rollback",
+          "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI": {
+            "kind": "replacement",
+            "generation": 3,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI": [
+            "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": true,
+          "reason": null,
+          "block": null,
+          "head": "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI",
+          "catalog": "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w",
+          "clears": true,
+          "serving": "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w",
+          "binding_status": "closed",
+          "catalog_status": "closed_out"
+        },
+        "after": {
+          "accepted": {
+            "binding": "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI",
+            "generation": 3,
+            "catalog": "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w",
+            "revision": 1,
+            "routes": {
+              "/r/4LWBCwMhmHF-ngOqBvm1boE94IJGPaLkVNm31n3k8Ac": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/7kqmcPLddAisrVG4gTqCykidxZtgJcx5FeNpGfDxDuo": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+              "/r/QZk9DhjshY0Qk2pe2YFuF1IfdMsPeCYPBl9pkPnxC8k": "replica:treehouse:thread:YazRegs1YYPQAqcGKEd4WKv-Hrf3kYCjheb24rKN4Uw#authority:bounded-continuation-v1#root:cyHcpUIzIbJ_9Pk_IXaK_4kbvomiGOdbEUNWXf9sKlo",
+              "/r/by2kpDBKn8W0fZKg_wDU4Wfs3FRDGwCqjWkRrBzWROk": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/fzwPYy2rbDqtin3pgKF5spB-5wgasWnZ8qcIjd0WtKI": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w"
+        }
+      }
+    },
+    {
+      "scenario": "S12r: an unaccepted intermediate catalog keeps a reserved route/one page",
+      "step": 5,
+      "label": {
+        "heads": [
+          "Rz2"
+        ],
+        "closed": [
+          "B",
+          "R",
+          "Rz"
+        ],
+        "closed_out": [
+          "KR",
+          "KR1"
+        ],
+        "nodes": [
+          "B",
+          "R",
+          "Rz",
+          "Rz2"
+        ],
+        "refused": [],
+        "raw": {},
+        "refusals": {},
+        "pending": [],
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_rollback",
+          "block": null,
+          "freeze": false,
+          "head": "Rz2",
+          "catalog": null,
+          "clears": false,
+          "serving": "KZ21"
+        },
+        "after": {
+          "frozen": false,
+          "serving": "KZ21"
+        }
+      },
+      "ts": {
+        "heads": [
+          "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI"
+        ],
+        "closed": [
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek",
+          "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA",
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0"
+        ],
+        "closed_out": {
+          "QGQxBnMHVwFoPLIH68njy_OPO3_RGxZAD2NV9xHoCFU": "catalog_rollback",
+          "Vu1iI7AJoIXK5AwR-B7wKY2jDHQp5JNsH02DjqOLj4w": "catalog_rollback"
+        },
+        "nodes": {
+          "7hIunnEDG6ZhjxKADltH7Ht88ITP19v0qobjWJ_dHek": {
+            "kind": "bootstrap",
+            "generation": 0,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "FOnpVCJpWKU1PKDSJBcDPcupgTHF1LtCsrwFQBYjIRA": {
+            "kind": "replacement",
+            "generation": 2,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "Oe_p6Ubu2XaKdxbo_ih9aZNDOfVib2mIYQorg4nLYu0": {
+            "kind": "replacement",
+            "generation": 1,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          },
+          "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI": {
+            "kind": "replacement",
+            "generation": 3,
+            "refused": false,
+            "core_reason": null,
+            "pending": 0
+          }
+        },
+        "raw_evidence": {},
+        "refusals": {},
+        "catalog_heads": {
+          "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI": [
+            "lGXexuamvRESg_f9gL1rUIqiRsW47Om0kkmArZuEjkU"
+          ]
+        },
+        "forks": [],
+        "decision": {
+          "accepted": false,
+          "reason": "catalog_rollback",
+          "block": null,
+          "head": "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI",
+          "catalog": null,
+          "clears": false,
+          "serving": "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w",
+          "binding_status": "current",
+          "catalog_status": "current"
+        },
+        "after": {
+          "accepted": {
+            "binding": "TV5PK3-ErzDWm1AEvHhC2T429RhbGPmEq5VzRwahPhI",
+            "generation": 3,
+            "catalog": "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w",
+            "revision": 1,
+            "routes": {
+              "/r/4LWBCwMhmHF-ngOqBvm1boE94IJGPaLkVNm31n3k8Ac": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/7kqmcPLddAisrVG4gTqCykidxZtgJcx5FeNpGfDxDuo": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/8Zp4rGj0T-ZjUGk-yNBSoN4Ldiq9HVX3KlmfA3riQIw": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc",
+              "/r/QZk9DhjshY0Qk2pe2YFuF1IfdMsPeCYPBl9pkPnxC8k": "replica:treehouse:thread:YazRegs1YYPQAqcGKEd4WKv-Hrf3kYCjheb24rKN4Uw#authority:bounded-continuation-v1#root:cyHcpUIzIbJ_9Pk_IXaK_4kbvomiGOdbEUNWXf9sKlo",
+              "/r/by2kpDBKn8W0fZKg_wDU4Wfs3FRDGwCqjWkRrBzWROk": "replica:treehouse:thread:kF5In_9wCVii_j97WfyjXkmQdkgdn5RO2ZgMu0Gn3uY#authority:bounded-continuation-v1#root:-MpTJ8f2wMXJSC4VVZCYMx-TVGuOf5YZrjDDPMEjulU",
+              "/r/fzwPYy2rbDqtin3pgKF5spB-5wgasWnZ8qcIjd0WtKI": "replica:treehouse:space:5lPMd3rVxw5w0UOujIQLsJyMWokvTxN1Gxpr0kkiog4#authority:bounded-continuation-v1#root:r3IaFKL45qBIks7q6lJganxhjVBz98jdUr0tI_SL1uc"
+            }
+          },
+          "frozen": false,
+          "serving": "0UwGLt76s-lOtPdjaxUJ7bEKk7HVynlwrwVTJZ_K37w"
+        }
+      }
+    },
+    {
       "scenario": "S13: a missing watermark catalog is a derived block that does not freeze",
       "step": 1,
       "label": {

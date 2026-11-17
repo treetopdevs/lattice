@@ -557,6 +557,52 @@ defmodule Treehouse.CatalogBindingGraphTest do
            |> Enum.sort() == [1, 2]
   end
 
+  # Review round 1 (D-930): promoting KZ21 walks KZ2, which this client never accepted; KZ2's
+  # u -> Thread2 must not overwrite the reservation u -> U that KR served.
+  @tag :row_524
+  @tag timeout: 120_000
+  test "row 524: an unaccepted intermediate catalog never re-points a reserved route" do
+    name = "S12r: an unaccepted intermediate catalog keeps a reserved route/one page"
+    before = state_after(name, 4).accepted.routes
+    promoted = state_after(name, 5)
+
+    assert promoted.accepted.catalog ==
+             Enum.find(@scenarios, &(&1.name == name)).labels["KZ21"]
+
+    for {route, replica} <- before, do: assert(promoted.accepted.routes[route] == replica)
+    assert map_size(promoted.accepted.routes) > map_size(before)
+  end
+
+  @tag :row_524
+  test "row 524: advance/2 keeps a stored route over the chain" do
+    result =
+      {:ok,
+       %{
+         catalogs: %{
+           "k" => %{entries: [%{route: "/k", replica: "thread2"}]},
+           "p" => %{entries: [%{route: "/u", replica: "thread2"}]}
+         },
+         cat_parent: %{"k" => "p", "p" => nil},
+         decision: %{
+           accepted: true,
+           head: "t",
+           generation: 1,
+           catalog: "k",
+           revision: 1,
+           clears_authority_changed: true,
+           block: nil,
+           serving: "k"
+         }
+       }}
+
+    a = %{binding: "b", generation: 0, catalog: "c", revision: 0, routes: %{"/u" => "u"}}
+
+    assert %{accepted: %{routes: %{"/u" => "u", "/k" => "thread2"} = routes}} =
+             G.advance(%{accepted: a, frozen: true}, result)
+
+    assert map_size(routes) == 2
+  end
+
   # The chain reaches a rotation's prior catalog (`cat_parent` of a rotation's first catalog).
   @tag :row_524
   test "row 524: advance/2 walks a rotation's prior catalog" do
