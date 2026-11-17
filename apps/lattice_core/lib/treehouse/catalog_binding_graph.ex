@@ -2,17 +2,18 @@ defmodule Treehouse.CatalogBindingGraph do
   @moduledoc """
   Plan 316 PR 4a: the pure binding-graph resolver for `replace_catalog_v1` (steps 1-3 and
   5-9, D-270, D-275 to D-279, OD-16, OD-17, row 320, and the convergence design of rows 382
-  and 383). Not wired: nothing in `Treehouse.CatalogTrust` calls it yet (4c), so it changes no
-  route, watermark or retained client behaviour. It adds no Core primitive, wire atom or
-  quarantine reason, and it produces no route.
+  and 383). `Treehouse.CatalogReplacementTrust.composed/5` calls `resolve/1` and `advance/2`
+  once a replacement op exists; `Treehouse.CatalogTrust` itself does not call it (4c). It adds
+  no Core primitive, wire atom or quarantine reason, and it produces no route.
 
   Input (`resolve/1`): the honored `bootstrap` (`%{id, record}`), the authenticated `space`
   union log, retained `rotations` and `catalogs` as `%{id => normalized envelope}`, the
   `proven_cutoffs` the caller already verified page-level (whole `{replica, frontier,
   log_digest}` cutoffs, D-A19), and the persisted `accepted` watermark (`%{binding,
   generation, catalog, revision, routes}`, where `routes` is the cumulative `route => replica`
-  map of every route ever served), and optionally the Thread `histories` (`replica => %Log{}`,
-  the shape `Treehouse.CatalogTrust` holds) that entry facts are judged against (row 390). This
+  map of every route ever served, every route on an accepted chain included), and optionally
+  the Thread `histories` (`replica => %Log{}`, the shape `Treehouse.CatalogTrust` holds) that
+  entry facts are judged against (row 390). This
   module persists nothing: `advance/2` is the pure merge rule the caller applies to
   `%{accepted, frozen}` (row 383).
 
@@ -120,7 +121,10 @@ defmodule Treehouse.CatalogBindingGraph do
   The merge rule over the persisted `%{accepted, frozen}` (row 383; TS
   `advanceCatalogBindingState`). Returns `%{accepted, frozen, serving}`. Only an accepting
   decision that clears (or any accepting decision while not frozen) moves the watermark and
-  lifts `frozen`; it adds the accepted catalog's routes to the cumulative `routes`. A block
+  lifts `frozen`; it adds the routes of every catalog on the accepted chain (the D-881 walk,
+  row 524: the accepted catalog, then each `cat_parent` link, which is `previous` or a
+  rotation's prior catalog, oldest first and newest winning) to the cumulative `routes`, so a
+  chain delivered on one page persists what separate deliveries persist. A block
   with `freeze` sets `frozen`. Nothing is served while frozen. On `trust_pending` (row 386,
   repair (a)) the detail's `freeze`, derived only from the complete authenticated part, is
   ORed into `frozen` and its `serving` is served unless frozen; a `trust_pending` without those
@@ -128,16 +132,14 @@ defmodule Treehouse.CatalogBindingGraph do
   Pending evidence therefore never lifts a freeze and never sets one by itself.
   """
   @spec advance(map(), term()) :: %{accepted: map() | nil, frozen: boolean(), serving: term()}
-  def advance(state, {:ok, %{decision: d, catalogs: catalogs}}) do
+  def advance(state, {:ok, %{decision: d, catalogs: catalogs} = graph}) do
     frozen = Map.get(state, :frozen, false)
     accepted = Map.get(state, :accepted)
 
     cond do
       d.accepted and (not frozen or d.clears_authority_changed) ->
-        routes =
-          Enum.reduce(catalogs[d.catalog].entries, routes(accepted), fn e, acc ->
-            Map.put(acc, e.route, e.replica)
-          end)
+        parent = Map.get(graph, :cat_parent, %{})
+        routes = chain_routes(d.catalog, catalogs, parent, routes(accepted))
 
         %{
           accepted: %{
@@ -181,6 +183,24 @@ defmodule Treehouse.CatalogBindingGraph do
 
   defp routes(nil), do: %{}
   defp routes(accepted), do: Map.get(accepted, :routes, %{})
+
+  # Row 524: every catalog on the accepted chain, oldest first, put over the cumulative routes
+  # (the chain wins, as in `CatalogReplacementTrust`'s D-881 mirror).
+  defp chain_routes(id, catalogs, parent, routes) do
+    id
+    |> chain(catalogs, parent, [])
+    |> Enum.reduce(routes, fn cid, acc ->
+      Enum.reduce(catalogs[cid].entries, acc, &Map.put(&2, &1.route, &1.replica))
+    end)
+  end
+
+  # The chain from `id` up its `cat_parent` links, oldest first. It ends at nil, at an id the
+  # graph does not hold, or at an id already on the chain.
+  defp chain(id, catalogs, parent, acc) do
+    if id == nil or not Map.has_key?(catalogs, id) or id in acc,
+      do: acc,
+      else: chain(Map.get(parent, id), catalogs, parent, [id | acc])
+  end
 
   @doc """
   The authoring resolve for one claim (design section 2.7). As `resolve/1`, except that a

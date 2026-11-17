@@ -15,8 +15,9 @@ defmodule Treehouse.CatalogBindingGraphTest do
   alias Treehouse.CatalogReplacementAuthoring, as: A
 
   @base F.base()
+  @scenarios S.all(@base)
 
-  for scenario <- S.all(@base) do
+  for scenario <- @scenarios do
     @scenario scenario
     test @scenario.name do
       @base
@@ -514,6 +515,88 @@ defmodule Treehouse.CatalogBindingGraphTest do
              frozen: false,
              serving: nil
            }
+  end
+
+  # --- row 524: the watermark keeps every route on the accepted chain -----------------------
+
+  defp state_after(name, step) do
+    scenario = Enum.find(@scenarios, &(&1.name == name)) || flunk("no scenario #{name}")
+    Enum.at(S.run(@base, scenario), step - 1).state_in
+  end
+
+  # A replacement chain delivered on one page persists the same routes as the same chain
+  # delivered one catalog at a time, including the route its intermediate catalog moved away.
+  @tag :row_524
+  @tag timeout: 120_000
+  test "row 524: one-page and separate deliveries persist the same watermark routes" do
+    separate = state_after("S12r: a replacement chain moves a route/separate", 4)
+    one_page = state_after("S12r: a replacement chain moves a route/one page", 3)
+    assert separate == one_page
+    assert %{accepted: %{catalog: kr1, routes: routes}, frozen: false} = one_page
+
+    scenario =
+      Enum.find(@scenarios, &(&1.name == "S12r: a replacement chain moves a route/one page"))
+
+    assert kr1 == scenario.labels["KR1"]
+    # Space plus Thread U at u (served by KR) and at u2 (moved there by KR1).
+    assert map_size(routes) == 3
+    assert routes |> Map.values() |> Enum.frequencies() |> Map.values() |> Enum.sort() == [1, 2]
+  end
+
+  @tag :row_524
+  @tag timeout: 120_000
+  test "row 524: C0 and C1 on one page persist the route C1 moved, as separate deliveries do" do
+    s12_separate = state_after("S12: a route served earlier is never re-pointed", 3)
+    s12_one_page = state_after("S12: C0 and C1 on one page keep the route C1 moved", 2)
+    assert s12_separate == s12_one_page
+    # Space plus the Thread at b (served by C0) and at b2 (moved there by C1).
+    assert s12_one_page.accepted.routes
+           |> Map.values()
+           |> Enum.frequencies()
+           |> Map.values()
+           |> Enum.sort() == [1, 2]
+  end
+
+  # The chain reaches a rotation's prior catalog (`cat_parent` of a rotation's first catalog).
+  @tag :row_524
+  test "row 524: advance/2 walks a rotation's prior catalog" do
+    result =
+      {:ok,
+       %{
+         catalogs: %{
+           "k" => %{entries: [%{route: "/k", replica: "space"}]},
+           "p" => %{entries: [%{route: "/p", replica: "thread"}]}
+         },
+         cat_parent: %{"k" => "p", "p" => nil},
+         decision: %{
+           accepted: true,
+           head: "t",
+           generation: 1,
+           catalog: "k",
+           revision: 0,
+           clears_authority_changed: false,
+           block: nil,
+           serving: "k"
+         }
+       }}
+
+    assert %{accepted: %{routes: routes}, frozen: false, serving: "k"} =
+             G.advance(%{accepted: nil, frozen: false}, result)
+
+    assert routes == %{"/k" => "space", "/p" => "thread"}
+
+    # A cycle or an id the graph does not hold ends the walk.
+    cyclic = put_in(elem(result, 1).cat_parent, %{"k" => "p", "p" => "k"})
+
+    assert %{accepted: %{routes: ^routes}} =
+             G.advance(%{accepted: nil, frozen: false}, {:ok, cyclic})
+
+    dangling = put_in(elem(result, 1).cat_parent, %{"k" => "x"})
+
+    assert %{accepted: %{routes: %{"/k" => "space"} = only}} =
+             G.advance(%{accepted: nil, frozen: false}, {:ok, dangling})
+
+    assert map_size(only) == 1
   end
 
   # --- row 386 (C4) and row 387 in the authoring preflight ----------------------------------

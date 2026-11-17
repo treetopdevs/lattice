@@ -1039,8 +1039,10 @@ function serving(a, graph, closed) {
 }
 /**
  * The merge rule over the persisted {accepted, frozen} (row 383; BEAM CatalogBindingGraph.advance/2). Only an accepting decision
- * that clears (or any accepting decision while not frozen) moves the watermark, adds its catalog's routes to the cumulative
- * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
+ * that clears (or any accepting decision while not frozen) moves the watermark, adds the routes of every catalog on the accepted
+ * chain to the cumulative routes (the D-881 walk, row 524: the accepted catalog, then each catParent link, which is previous or
+ * a rotation's prior catalog, oldest first and newest winning, so a chain delivered on one page persists what separate
+ * deliveries persist) and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
  * (derived only from the complete authenticated part) is ORed into frozen and its serving is served unless frozen; any other
  * error, or a trust_pending without those fields, keeps the state and serves nothing.
  */
@@ -1058,8 +1060,14 @@ export function advanceCatalogBindingState(state, result) {
     const d = result.graph.decision;
     if (d.accepted && (!state.frozen || d.clearsAuthorityChanged)) {
         const routes = { ...routesOf(state.accepted) };
-        for (const e of result.graph.catalogs.get(d.catalog).entries)
-            routes[e.route] = e.replica;
+        // The chain from the accepted catalog up its catParent links, oldest first; it ends at null, at an id the graph does not
+        // hold, or at an id already on the chain.
+        const chain = [];
+        for (let id = d.catalog; id != null && result.graph.catalogs.has(id) && !chain.includes(id); id = result.graph.catParent.get(id))
+            chain.unshift(id);
+        for (const id of chain)
+            for (const e of result.graph.catalogs.get(id).entries)
+                routes[e.route] = e.replica;
         return { accepted: { binding: d.head, generation: d.generation, catalog: d.catalog, revision: d.revision, routes },
             frozen: false, serving: d.serving };
     }

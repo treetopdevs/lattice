@@ -463,6 +463,12 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
        do: a.catalog
   end
 
+  defp oracle_chain(id, catalogs, links, acc) do
+    if id == nil or not Map.has_key?(catalogs, id) or id in acc,
+      do: acc,
+      else: oracle_chain(Map.get(links, id), catalogs, links, [id | acc])
+  end
+
   # Design section 1.3, recomputed from the oracle.
   defp model(state, {:ok, g}, facts) do
     d = g.decision
@@ -472,7 +478,14 @@ defmodule Treehouse.CatalogBindingGraphPropertyTest do
       d.accepted and (not state.frozen or clears?(a, d.head, g, facts)) ->
         k = g.catalogs[d.catalog]
         base = if a, do: a.routes, else: %{}
-        routes = Enum.reduce(k.entries, base, &Map.put(&2, &1.route, &1.replica))
+
+        # Row 524: every catalog on the accepted chain, walked over the artifacts' own
+        # `previous` and rotation `prior_catalog` links (facts.lineage), oldest first.
+        routes =
+          d.catalog
+          |> oracle_chain(g.catalogs, facts.lineage, [])
+          |> Enum.flat_map(&g.catalogs[&1].entries)
+          |> Enum.reduce(base, &Map.put(&2, &1.route, &1.replica))
 
         accepted = %{
           binding: d.head,

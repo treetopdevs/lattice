@@ -14,7 +14,10 @@ export interface CatalogBindingNode {
     coreReason: string | null;
     pending: readonly ProvenCutoff[];
 }
-/** The accepted watermark; `routes` is the cumulative route -> replica map of every route ever served. */
+/**
+ * The accepted watermark; `routes` is the cumulative route -> replica map of every route ever served, every route on an accepted
+ * chain included (row 524).
+ */
 export interface CatalogBindingAccepted {
     binding: string;
     generation: number;
@@ -151,8 +154,10 @@ export declare function catalogBindingReasonRank(reason: string): number;
 export declare function resolveCatalogBindingGraph(input: CatalogBindingGraphInput): Promise<CatalogBindingGraphResult>;
 /**
  * The merge rule over the persisted {accepted, frozen} (row 383; BEAM CatalogBindingGraph.advance/2). Only an accepting decision
- * that clears (or any accepting decision while not frozen) moves the watermark, adds its catalog's routes to the cumulative
- * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
+ * that clears (or any accepting decision while not frozen) moves the watermark, adds the routes of every catalog on the accepted
+ * chain to the cumulative routes (the D-881 walk, row 524: the accepted catalog, then each catParent link, which is previous or
+ * a rotation's prior catalog, oldest first and newest winning, so a chain delivered on one page persists what separate
+ * deliveries persist) and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
  * (derived only from the complete authenticated part) is ORed into frozen and its serving is served unless frozen; any other
  * error, or a trust_pending without those fields, keeps the state and serves nothing.
  */

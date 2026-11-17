@@ -241,7 +241,7 @@ test("authoring carries entries past a closed-out squat catalog", async () => {
 test("advanceCatalogBindingState lifts frozen only on an accepting decision that clears", () => {
   const a = {binding: "b", generation: 0, catalog: "c", revision: 0, routes: {"/a": "space"}};
   const result = (accepted: boolean, clears: boolean, block: CatalogBindingBlock | null): CatalogBindingGraphResult => ({ok: true,
-    graph: {catalogs: new Map([["k", {entries: [{route: "/k", replica: "space"}]}]]),
+    graph: {catalogs: new Map([["k", {entries: [{route: "/k", replica: "space"}]}]]), catParent: new Map([["k", null]]),
       decision: {accepted, head: "h", generation: 1, catalog: accepted ? "k" : null, revision: 0, clearsAuthorityChanged: clears,
         block, serving: accepted ? "k" : null}} as unknown as CatalogBindingGraph});
   const frozen = {accepted: a, frozen: true};
@@ -263,6 +263,42 @@ test("advanceCatalogBindingState lifts frozen only on an accepting decision that
   for (const state of [frozen, open]) {
     assert.deepEqual(advanceCatalogBindingState(state, {ok: false, reason: "trust_pending", detail: {ids: []}}),
       {accepted: a, frozen: state.frozen, serving: null});
+  }
+});
+
+// Row 524: an accepting decision adds every catalog on the accepted chain (D-881 walk), which reaches a rotation's prior
+// catalog through catParent; a cycle or an id the graph does not hold ends the walk.
+test("row 524: advanceCatalogBindingState walks a rotation's prior catalog", () => {
+  const result = (catParent: Map<string, string | null>): CatalogBindingGraphResult => ({ok: true,
+    graph: {catalogs: new Map([["k", {entries: [{route: "/k", replica: "space"}]}], ["p", {entries: [{route: "/p", replica: "thread"}]}]]),
+      catParent, decision: {accepted: true, head: "t", generation: 1, catalog: "k", revision: 0, clearsAuthorityChanged: false,
+        block: null, serving: "k"}} as unknown as CatalogBindingGraph});
+  const empty = {accepted: null, frozen: false};
+  const routes = (catParent: Map<string, string | null>) => advanceCatalogBindingState(empty, result(catParent)).accepted!.routes;
+  assert.deepEqual(routes(new Map([["k", "p"], ["p", null]])), {"/k": "space", "/p": "thread"});
+  assert.deepEqual(routes(new Map([["k", "p"], ["p", "k"]])), {"/k": "space", "/p": "thread"});
+  assert.deepEqual(routes(new Map([["k", "x"]])), {"/k": "space"});
+});
+
+// Row 524: a chain delivered on one page persists the same watermark routes as the same chain delivered catalog by catalog,
+// including the route its intermediate catalog moved away (this runtime's own persisted state).
+test("row 524: one-page and separate deliveries persist the same watermark routes", () => {
+  const stateAt = (scenario: string, step: number) => {
+    const o = outcomes.find((x) => x.scenario === scenario && x.step === step);
+    assert.ok(o, `${scenario}, delivery ${step}`);
+    return o.stateIn as {accepted: {routes: Record<string, string>}; frozen: boolean};
+  };
+  const pairs: [string, number, string, number][] = [
+    ["S12r: a replacement chain moves a route/separate", 4, "S12r: a replacement chain moves a route/one page", 3],
+    ["S12: a route served earlier is never re-pointed", 3, "S12: C0 and C1 on one page keep the route C1 moved", 2],
+  ];
+  for (const [a, i, b, j] of pairs) {
+    const separate = stateAt(a, i);
+    const onePage = stateAt(b, j);
+    assert.deepEqual(onePage, separate);
+    // Space plus the Thread at its first route and at the route the later catalog moved it to.
+    const counts = Object.values(onePage.accepted.routes).reduce((m, r) => m.set(r, (m.get(r) ?? 0) + 1), new Map<string, number>());
+    assert.deepEqual([...counts.values()].sort(), [1, 2]);
   }
 });
 

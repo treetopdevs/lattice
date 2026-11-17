@@ -199,6 +199,8 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
       &s10_rotation_fork/1,
       &s11_head_limit/1,
       &s12_cumulative_routes/1,
+      &s12_one_page/1,
+      &s12r_replacement_chain/1,
       &s13_missing_watermark/1,
       &s14_same_page_trade/1,
       &s15_seen_only/1,
@@ -3253,7 +3255,188 @@ defmodule Treehouse.CatalogBindingGraphScenarios do
     ]
   end
 
+  # Row 524: S12 with C0 and C1 delivered on one page. The watermark keeps every route on the
+  # accepted chain (route b from C0 as well as b2 from C1), so the squat R2 stays frozen exactly
+  # as after separate deliveries.
+  defp s12_one_page(base) do
+    [space] = F.base_entries(base)
+    thread = other(base, space, "thread", "s12-b")
+    c0 = F.catalog(base, base.boot.id, 0, nil, base.catalog, [space, thread])
+
+    c1 =
+      F.catalog(base, base.boot.id, 1, F.cid(c0), base.catalog, [
+        space,
+        %{thread | route: route("s12-b2")}
+      ])
+
+    r = F.replacement(base, base.log, "s12-r")
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    child = [
+      parents: [r.id],
+      prior_catalogs: [%{binding: r.id, catalog: F.cid(kr)}],
+      generation: 2
+    ]
+
+    fresh = [
+      %{space | route: route("s12-r2-space")},
+      %{thread | route: route("s12-r2-thread")}
+    ]
+
+    squat = %{other(base, space, "thread2", "unused") | route: thread.route}
+    r2 = carrying(base, lr, "s12-r2", fresh ++ [squat], child)
+    k2 = F.first(base, r2)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "C1" => F.cid(c1),
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "R2" => r2.id,
+        "K2" => F.cid(k2)
+      })
+
+    out = ["C0", "C1"]
+
+    one("S12: C0 and C1 on one page keep the route C1 moved", labels, [
+      step(ev(base.log, catalogs: [c0, c1]), ok(["B"], decision: accept("B", "C1"))),
+      step(ev(lr, catalogs: [c0, c1, kr]), frozen_at("R", closed: ["B"], closed_out: out)),
+      step(
+        ev(add(lr, [r2]), catalogs: [c0, c1, kr, k2]),
+        frozen_at("R2", closed: ["B", "R"], closed_out: out)
+      )
+    ])
+  end
+
+  # Row 524: the same rule on a replacement chain. The watermark is B/C0; R cites {B, C0} and its
+  # KR adds Thread U at route u; KR1 (KR's revision 1) moves U to u2. Rz citing {R, nil} closes
+  # KR and KR1 out (frozen). Rz2 under Rz maps u to another replica: route u was served by KR,
+  # so Rz2 stays frozen whether KR and KR1 arrived separately or on one page.
+  defp s12r_replacement_chain(base) do
+    c0 = F.c0(base)
+    [space] = c0.catalog.entries
+    u = other(base, space, "thread", "s12r-u")
+
+    r =
+      carrying(base, base.log, "s12r-r", [space, u],
+        prior_catalogs: [%{binding: base.boot.id, catalog: F.cid(c0)}]
+      )
+
+    kr = F.first(base, r)
+    lr = add(base.log, [r])
+
+    kr1 =
+      F.catalog(
+        base,
+        r.id,
+        1,
+        F.cid(kr),
+        r.catalog_key,
+        for(
+          e <- kr.catalog.entries,
+          do: if(e.kind == :thread, do: %{e | route: route("s12r-u2")}, else: e)
+        )
+      )
+
+    rz =
+      carrying(base, lr, "s12r-z", [space],
+        parents: [r.id],
+        prior_catalogs: [%{binding: r.id, catalog: nil}],
+        generation: 2
+      )
+
+    kz = F.first(base, rz)
+    lz = add(lr, [rz])
+    squat = %{other(base, space, "thread2", "unused") | route: u.route}
+
+    # Fresh routes for Space and U (KR1's replicas must be carried), plus the squat on u.
+    fresh = fn name ->
+      [%{space | route: route(name <> "-space")}, %{u | route: route(name <> "-u")}]
+    end
+
+    child = [
+      parents: [rz.id],
+      prior_catalogs: [%{binding: rz.id, catalog: F.cid(kz)}],
+      generation: 3
+    ]
+
+    rz2 = carrying(base, lz, "s12r-z2", fresh.("s12r-z2") ++ [squat], child)
+    kz2 = F.first(base, rz2)
+    rz2f = carrying(base, lz, "s12r-z2f", fresh.("s12r-z2f"), child)
+    kz2f = F.first(base, rz2f)
+
+    labels =
+      Map.merge(base_labels(base, c0), %{
+        "R" => r.id,
+        "KR" => F.cid(kr),
+        "KR1" => F.cid(kr1),
+        "Rz" => rz.id,
+        "KZ" => F.cid(kz),
+        "Rz2" => rz2.id,
+        "KZ2" => F.cid(kz2),
+        "Rz2f" => rz2f.id,
+        "KZ2f" => F.cid(kz2f)
+      })
+
+    out = ["KR", "KR1"]
+    first = step(ev(base.log, catalogs: [c0]), ok(["B"], decision: accept("B", "C0")))
+
+    on_kr1 = fn clears ->
+      ok(["R"], closed: ["B"], decision: accept("R", "KR1", clears: clears))
+    end
+
+    tail = [
+      step(
+        ev(lz, catalogs: [c0, kr, kr1, kz]),
+        frozen_at("Rz", closed: ["B", "R"], closed_out: out)
+      ),
+      step(
+        ev(add(lz, [rz2]), catalogs: [c0, kr, kr1, kz, kz2]),
+        frozen_at("Rz2", closed: ["B", "R", "Rz"], closed_out: out)
+      )
+    ]
+
+    [
+      one(
+        "S12r: a replacement chain moves a route/separate",
+        labels,
+        [
+          first,
+          step(
+            ev(lr, catalogs: [c0, kr]),
+            ok(["R"], closed: ["B"], decision: accept("R", "KR", clears: true))
+          ),
+          step(ev(lr, catalogs: [c0, kr, kr1]), on_kr1.(false))
+        ] ++ tail
+      ),
+      one(
+        "S12r: a replacement chain moves a route/one page",
+        labels,
+        [first, step(ev(lr, catalogs: [c0, kr, kr1]), on_kr1.(true))] ++ tail
+      ),
+      one(
+        "S12r: a resolution with fresh routes clears/one page",
+        labels,
+        [
+          first,
+          step(ev(lr, catalogs: [c0, kr, kr1]), on_kr1.(true)),
+          hd(tail),
+          step(
+            ev(add(lz, [rz2f]), catalogs: [c0, kr, kr1, kz, kz2f]),
+            ok(["Rz2f"],
+              closed: ["B", "R", "Rz"],
+              closed_out: out,
+              decision: accept("Rz2f", "KZ2f", clears: true)
+            )
+          )
+        ]
+      )
+    ]
+  end
+
   # S13 (C9): the accepted K1 missing from one delivery is a derived block (nothing served,
+  # no freeze); the next complete delivery serves R1/K1 again without a resolution.
   # no freeze); the next complete delivery serves R1/K1 again without a resolution.
   defp s13_missing_watermark(base) do
     c0 = F.c0(base)
