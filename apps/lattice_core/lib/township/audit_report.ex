@@ -23,7 +23,8 @@ defmodule Township.AuditReport do
     not_holder: "The author did not hold the role when the action was taken.",
     stale_holder: "The author held the role earlier but a later holder superseded them.",
     lease_expired: "The delegation lease had lapsed at the action's logical epoch.",
-    unauthorized_beacon: "A logical-tick beacon was signed by someone other than the root.",
+    unauthorized_beacon:
+      "A logical-tick beacon failed authorization under the replica's policy; the reason does not identify who signed it.",
     stale_beacon: "A logical-tick beacon did not advance past the accepted epoch.",
     malformed_term: "The operation's authority term was structurally invalid.",
     no_capability: "The command carried no capability.",
@@ -90,13 +91,15 @@ defmodule Township.AuditReport do
     do: ["<dt>", escape(key), "</dt><dd><code>", escape(value), "</code></dd>\n"]
 
   defp sections(snapshot, model) do
+    structural = structural_rejections(snapshot.log)
+
     [
       matter_section(model, snapshot.labels),
       holders_section(model.roles.holders, snapshot.labels),
-      ledger_section(model),
+      ledger_section(model, structural),
       attestation_section(model.attest),
       graph_section(model.trust_graph),
-      dag_section(snapshot.log, model.roles.quarantine)
+      dag_section(snapshot.log, model.roles.quarantine, structural)
     ]
   end
 
@@ -124,7 +127,7 @@ defmodule Township.AuditReport do
     ["<h2>Current holders</h2>\n", table(["Role", "Label", "Fingerprint"], rows)]
   end
 
-  defp ledger_section(model) do
+  defp ledger_section(model, structural) do
     audit_rows =
       model.roles.audit
       |> Enum.map(fn entry ->
@@ -154,8 +157,11 @@ defmodule Township.AuditReport do
     [
       "<h2>Authority ledger</h2>\n",
       table(["Event", "Op", "Reason", "Role"], audit_rows),
-      "<h3>All quarantined operations</h3>\n",
+      "<h3>Authority-quarantined operations</h3>\n",
       table(["Op", "Reason"], quarantine_rows),
+      "<h3>Structurally rejected operations</h3>\n",
+      "<p>Rejected on arrival (for example a bad signature); preserved as evidence and never part of the accepted history.</p>\n",
+      table(["Op", "Reason"], structural_rows(structural)),
       "<h3>Denied member mutations</h3>\n",
       table(["Command", "Op", "Reason", "Member"], denied_rows)
     ]
@@ -196,11 +202,22 @@ defmodule Township.AuditReport do
     ["<h3>Omitted ill-formed delegations</h3>\n", list(Enum.sort(ids))]
   end
 
-  defp dag_section(log, quarantine) do
+  defp structural_rejections(log) do
+    case Log.verified_quarantine(log) do
+      {:ok, findings} -> findings
+      {:error, _} -> []
+    end
+  end
+
+  defp structural_rows(findings),
+    do: Enum.map(findings, fn f -> [f.op_id, to_string(f.reason)] end)
+
+  defp dag_section(log, quarantine, structural) do
     [
       "<h2>Op-DAG summary</h2>\n<dl>\n",
       kv("Total ops", log |> Log.op_ids() |> Enum.count()),
-      kv("Quarantined", length(quarantine)),
+      kv("Authority-quarantined", length(quarantine)),
+      kv("Structurally rejected", length(structural)),
       "</dl>\n<h3>Frontier</h3>\n",
       list(log |> Log.frontier() |> Enum.sort())
     ]
@@ -220,8 +237,8 @@ defmodule Township.AuditReport do
 
   defp label(fp, labels) do
     case Map.fetch(labels, fp) do
-      {:ok, name} -> "#{name} #{fp}"
-      :error -> to_string(fp)
+      {:ok, name} -> "#{text(name)} #{text(fp)}"
+      :error -> text(fp)
     end
   end
 
@@ -244,8 +261,7 @@ defmodule Township.AuditReport do
     table(Enum.map(keys, &to_string/1), rows)
   end
 
-  defp cell(value) when is_binary(value), do: value
-  defp cell(value), do: inspect(value)
+  defp cell(value), do: text(value)
 
   defp table(_headers, []), do: ["<p><em>none</em></p>\n"]
 
@@ -295,9 +311,15 @@ defmodule Township.AuditReport do
     """
   end
 
+  defp text(value) when is_binary(value),
+    do: if(String.printable?(value), do: value, else: inspect(value))
+
+  defp text(value) when is_atom(value) or is_number(value), do: to_string(value)
+  defp text(value), do: inspect(value, charlists: :as_lists)
+
   defp escape(value) do
     value
-    |> to_string()
+    |> text()
     |> String.replace("&", "&amp;")
     |> String.replace("<", "&lt;")
     |> String.replace(">", "&gt;")

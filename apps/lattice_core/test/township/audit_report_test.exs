@@ -74,6 +74,62 @@ defmodule Township.AuditReportTest do
     assert html =~ "not_holder"
 
     assert html =~ "did not hold the role"
+
+    # the holder table binds clerk to the resident fingerprint, not just any mention
+    [_, after_holders] = String.split(html, "<h2>Current holders</h2>", parts: 2)
+    [holders, _] = String.split(after_holders, "<h2>", parts: 2)
+
+    assert holders =~
+             ~r/<td>clerk<\/td><td>[^<]*#{info.resident_fp}[^<]*<\/td><td>#{info.resident_fp}<\/td>/
+  end
+
+  @tag :tmp_dir
+  test "structured and integer-list state renders without crashing", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    sim = Sim.new(Matter, "replica:matter:structured", ["clerk"], seed: "report-structured")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, _} = Sim.command(sim, "clerk", :post, [%{"text" => "hello"}])
+    {sim, _} = Sim.command(sim, "clerk", :post, [[65, 66]])
+    assert {:ok, _} = AuditBundle.write(dir, Sim.log(sim, "clerk"))
+
+    assert {:ok, html, :verified} = AuditReport.render(dir)
+    assert html =~ "hello"
+    assert html =~ "[65, 66]"
+    refute html =~ "<li>AB</li>"
+  end
+
+  @tag :tmp_dir
+  test "structural rejections are listed and counted separately", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    sim = Sim.new(Matter, "replica:matter:rejected", ["clerk"], seed: "report-rejected")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, post} = Sim.command(sim, "clerk", :post, ["accepted post"])
+    rejected = %{post | body: {:post, ["rejected post"]}, sig: <<0::512>>}
+    rejected = %{rejected | id: Lattice.Op.recompute_id(rejected)}
+    {:quarantined, log, :bad_signature} = Lattice.Log.accept(Sim.log(sim, "clerk"), rejected)
+    assert {:ok, _} = AuditBundle.write(dir, log)
+
+    assert {:ok, html, :verified} = AuditReport.render(dir)
+    assert html =~ "Structurally rejected operations"
+    assert html =~ rejected.id
+    assert html =~ "bad_signature"
+    assert html =~ "Structurally rejected</dt><dd><code>1</code>"
+    assert html =~ "Authority-quarantined</dt><dd><code>0</code>"
+  end
+
+  @tag :tmp_dir
+  test "beacon gloss does not name a signer", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    sim = Sim.new(Matter, "replica:matter:beacon", ["clerk"], seed: "report-beacon")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, beacon} = Sim.append(sim, "clerk", :authority, {:beacon, 1, %{}})
+    assert {:ok, _} = AuditBundle.write(dir, Sim.log(sim, "clerk"))
+
+    assert {:ok, html, :verified} = AuditReport.render(dir)
+    assert html =~ beacon.id
+    assert html =~ "unauthorized_beacon"
+    refute html =~ "someone other than the root"
+    assert html =~ "does not identify who signed it"
   end
 
   @tag :tmp_dir
@@ -113,10 +169,13 @@ defmodule Township.AuditReportTest do
 
   @tag :tmp_dir
   test "hostile verification error text is escaped", %{tmp_dir: tmp} do
-    dir = Path.join(tmp, "<script>alert(1)</script>")
-    File.mkdir_p!(dir)
+    dir = Path.join(tmp, "bundle")
+    write_bundle(dir)
+    File.write!(Path.join(dir, "<img src=x onerror=alert(1)>.txt"), "x")
+
     assert {:failed, html, [_ | _]} = AuditReport.render(dir)
-    refute html =~ "<script"
+    refute html =~ "<img"
+    assert html =~ "&lt;img src=x onerror=alert(1)&gt;.txt"
   end
 
   @tag :tmp_dir
@@ -173,6 +232,33 @@ defmodule Township.AuditReportTest do
 
     assert_raise Mix.Error, ~r/inside the bundle/, fn ->
       ReportTask.run(["--dir", dir, "--out", Path.join(dir, "report.html")])
+    end
+
+    assert Map.new(File.ls!(dir), &{&1, File.read!(Path.join(dir, &1))}) == before
+    assert :ok = AuditBundle.verify(dir)
+  end
+
+  @tag :tmp_dir
+  test "task refuses --out reached through a symlink into the bundle", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    write_bundle(dir)
+    alias_dir = Path.join(tmp, "alias")
+    File.ln_s!(dir, alias_dir)
+    before = Map.new(File.ls!(dir), &{&1, File.read!(Path.join(dir, &1))})
+
+    assert_raise Mix.Error, ~r/inside the bundle/, fn ->
+      ReportTask.run(["--dir", dir, "--out", Path.join(alias_dir, "matter.log")])
+    end
+
+    assert_raise Mix.Error, ~r/inside the bundle/, fn ->
+      ReportTask.run(["--dir", alias_dir, "--out", Path.join(dir, "matter.log")])
+    end
+
+    link = Path.join(tmp, "link.html")
+    File.ln_s!(Path.join(dir, "matter.log"), link)
+
+    assert_raise Mix.Error, ~r/inside the bundle/, fn ->
+      ReportTask.run(["--dir", dir, "--out", link])
     end
 
     assert Map.new(File.ls!(dir), &{&1, File.read!(Path.join(dir, &1))}) == before

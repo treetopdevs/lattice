@@ -35,9 +35,31 @@ defmodule Mix.Tasks.Lattice.Township.Report do
     Path.join(Path.dirname(dir), Path.basename(dir) <> ".report.html")
   end
 
+  # Resolve symlinks component by component (a missing tail is kept as written), so a
+  # destination alias into the bundle cannot bypass the containment check.
+  defp resolve(path), do: resolve_parts(Path.split(path), "", 0)
+
+  defp resolve_parts([], acc, _depth), do: acc
+
+  defp resolve_parts([part | rest], acc, depth) do
+    candidate = if acc == "", do: part, else: Path.join(acc, part)
+
+    case File.read_link(candidate) do
+      {:ok, _} when depth > 40 ->
+        Mix.raise("too many symbolic links resolving: #{candidate}")
+
+      {:ok, target} ->
+        target = Path.expand(target, Path.dirname(candidate))
+        resolve_parts(Path.split(target) ++ rest, "", depth + 1)
+
+      {:error, _} ->
+        resolve_parts(rest, candidate, depth)
+    end
+  end
+
   defp report(dir, out) do
-    dir = Path.expand(dir)
-    out = Path.expand(out)
+    dir = resolve(Path.expand(dir))
+    out = resolve(Path.expand(out))
 
     if out == dir or String.starts_with?(out, dir <> "/") do
       Mix.raise("refusing --out inside the bundle directory: #{out}")

@@ -2903,6 +2903,10 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>A reason-atom gloss map sits beside the verbatim atom; atoms without a gloss (for example bad_delegation_sig) show the atom alone. No new Core primitive, wire atom or quarantine reason is added.</dd>
 <dt>Reason</dt><dd>The atom stays the authoritative evidence; the gloss is reader help and must not be mistaken for a verdict.</dd>
 </dl></section>
+<section id="d704"><h2><span>D-704</span> Row 154 review round 1: render values as text, resolve aliases, split rejection evidence</h2><dl>
+<dt>Decision</dt><dd>Non-binary state values render through inspect (charlists as lists), never to_string; the task resolves symlinks in both --dir and --out before the containment check; structural rejections (bad_signature evidence) get their own section and count beside authority-quarantined ops; the unauthorized_beacon gloss no longer names a signer. D-700 to D-703 were already taken by the first commit, so this round starts at D-704.</dd>
+<dt>Reason</dt><dd>A verifiable structured post must not crash or silently mutate in the report, an alias must not defeat the overwrite guard, and rejection evidence preserved in the bundle must be visible to the auditor.</dd>
+</dl></section>
 </main>
 </body>
 </html>
