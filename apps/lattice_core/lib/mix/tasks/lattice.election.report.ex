@@ -55,6 +55,7 @@ defmodule Mix.Tasks.Lattice.Election.Report do
     html = Report.render(projection, close_evidence: close_evidence)
 
     out = Path.expand(out_path)
+    refuse_bundle_overwrite!(bundle_path, out)
     File.mkdir_p!(Path.dirname(out))
     File.write!(out, html)
 
@@ -69,6 +70,24 @@ defmodule Mix.Tasks.Lattice.Election.Report do
     end
 
     :ok
+  end
+
+  # The report must never replace the evidence it was rendered from, including
+  # through a symlink or hard link to the bundle file.
+  defp refuse_bundle_overwrite!(bundle_path, out) do
+    same_path? = Path.expand(bundle_path) == out
+
+    same_file? =
+      with {:ok, bundle_stat} <- File.stat(bundle_path),
+           {:ok, out_stat} <- File.stat(out) do
+        {bundle_stat.major_device, bundle_stat.inode} == {out_stat.major_device, out_stat.inode}
+      else
+        _ -> false
+      end
+
+    if same_path? or same_file? do
+      Mix.raise("--out must not be the --bundle file: #{out}")
+    end
   end
 
   defp close_evidence(_bytes, nil), do: nil

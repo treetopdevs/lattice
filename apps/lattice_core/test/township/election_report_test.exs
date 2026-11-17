@@ -159,10 +159,19 @@ defmodule Township.ElectionReportTest do
       assert length(evidence.seal_digests) == 2
       assert length(evidence.certificate_op_ids) == 1
 
-      for id <-
-            evidence.ballot_wrapper_ids ++ evidence.seal_digests ++ evidence.certificate_op_ids do
-        assert html =~ "<li><code>#{id}</code></li>"
+      for {label, ids} <- [
+            {"ballot_wrapper_ids", evidence.ballot_wrapper_ids},
+            {"ballot_digests", evidence.ballot_digests},
+            {"seal_digests", evidence.seal_digests},
+            {"certificate_op_ids", evidence.certificate_op_ids}
+          ] do
+        items = Enum.map_join(ids, &"<li><code>#{&1}</code></li>")
+        assert html =~ "<h3>#{label} (#{length(ids)})</h3>\n<ol>#{items}</ol>\n"
       end
+
+      assert html =~ "<h3>ballot_wrapper_ids (2)</h3>"
+      assert html =~ "<h3>seal_digests (2)</h3>"
+      assert html =~ "<h3>certificate_op_ids (1)</h3>"
 
       without = Report.render(ctx.projection)
       refute without =~ "Close evidence"
@@ -278,6 +287,17 @@ defmodule Township.ElectionReportTest do
       end
 
       refute File.exists?(Path.dirname(out))
+
+      link = Path.join(ctx.tmp_dir, "bundle-link.etf")
+      File.ln_s!(bundle, link)
+
+      for target <- [bundle, link] do
+        assert_raise Mix.Error, ~r/--out must not be the --bundle file/, fn ->
+          ReportTask.run(["--bundle", bundle, "--out", target])
+        end
+      end
+
+      assert File.read!(bundle) == ctx.bytes
 
       for argv <- [
             ["--bundle", bundle],
