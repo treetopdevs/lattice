@@ -585,6 +585,147 @@ defmodule Lattice.Authority do
           {analysis(), beacon_evidence(), acquisition_records()}
   def analyze_with_records(module, %Log{} = log), do: do_analyze(module, log)
 
+  @typedoc "One leased delegation as of the whole log (live-path view, like `expired?/2`)."
+  @type lease :: %{
+          delegation_id: String.t(),
+          issuer: Identity.pubkey(),
+          audience: Identity.pubkey(),
+          expires_epoch: non_neg_integer(),
+          expired?: boolean()
+        }
+
+  @typedoc "Read-only observation of a log's role chronology, beacons and leases (row 157)."
+  @type observation :: %{
+          chronology: acquisition_records(),
+          beacons: %{valid: beacon_evidence(), max_epoch: non_neg_integer() | nil},
+          leases: [lease()]
+        }
+
+  @doc """
+  Read-only observation of the authority timeline in `log` (row 157).
+
+  Returns, from one ordinary analysis pass of the judge:
+
+    * `chronology` - the honored role acquisitions per role, oldest first, the
+      same records `analyze_with_records/2` returns. Author-asserted ticks are
+      omitted: they are untrusted and are not shown.
+    * `beacons` - the beacons that pass accepted (`valid`, sorted by op id) and
+      `max_epoch`, the highest accepted epoch anywhere on the log. It is global
+      to the log, not per causal branch, and is not the epoch any one operation
+      observed.
+    * `leases` - every signature-valid delegation whose chain carries a lease,
+      sorted by delegation id, with the tightest `expires_epoch` on its chain and
+      `expired?`, exactly `expired?/2` (the live-path check).
+
+  The view is global to the log and live-path. It changes no verdict, confers no
+  capability or authority, and is not proof that a later operation saw any of it.
+  """
+  @spec observe(module(), Log.t()) :: observation()
+  def observe(module, %Log{} = log) do
+    {_analysis, beacons, records} = do_analyze(module, log)
+    max_epoch = beacons |> Enum.map(& &1.epoch) |> Enum.max(fn -> nil end)
+
+    %{
+      chronology: records,
+      beacons: %{valid: beacons, max_epoch: max_epoch},
+      leases: observe_leases(log, beacons)
+    }
+  end
+
+  @doc """
+  `delegation_active?/2` for each of `delegation_ids`, from one pass over `log`
+  (row 157).
+
+  A read-only derived helper: each value equals `delegation_active?(log, id)`, but
+  the delegation context and the accepted beacons are computed once for the whole
+  batch instead of once per id. It changes no verdict and confers nothing.
+  """
+  @spec delegations_active(Log.t(), [String.t()]) :: %{String.t() => boolean()}
+  def delegations_active(%Log{} = log, delegation_ids) when is_list(delegation_ids) do
+    ordered = Log.topo_ops(log)
+    {commitment, genesis_ids, succession_ids} = deleg_context(log, ordered)
+    delegations = collect_delegations(ordered)
+    supported? = Continuation.family(log.replica) != :unsupported
+    beacons = live_beacons(log, ordered, delegations, commitment, genesis_ids, succession_ids)
+
+    Map.new(delegation_ids, fn id ->
+      active? =
+        case Map.fetch(delegations, id) do
+          {:ok, %{deleg: %Delegation{} = d}} ->
+            supported? and
+              validate_delegation(
+                d,
+                delegations,
+                commitment,
+                genesis_ids,
+                succession_ids,
+                log.replica
+              ) == :ok and
+              not chain_lapsed?(d, delegations, beacons)
+
+          _ ->
+            false
+        end
+
+      {id, active?}
+    end)
+  end
+
+  # The beacons `expired?/2` accepts, computed once.
+  defp live_beacons(log, ordered, delegations, commitment, genesis_ids, succession_ids) do
+    ancestors = Dag.all_ancestors(Log.ops(log))
+
+    deleg_valid =
+      validate_delegations(delegations, commitment, genesis_ids, succession_ids, log.replica)
+
+    root = resolve_root(ordered, delegations, deleg_valid, commitment)
+    beacon_policies = collect_beacon_policy_sources(ordered, delegations, deleg_valid, root)
+    {beacons, _beacon_q} = collect_beacons(ordered, ancestors, root, beacon_policies)
+    beacons
+  end
+
+  # `expired?/2`'s predicate against an already-computed beacon set.
+  defp chain_lapsed?(%Delegation{} = d, delegations, beacons) do
+    d
+    |> delegation_chain_links(delegations)
+    |> Enum.any?(fn %Delegation{expires_epoch: expires} ->
+      expires != nil and Enum.any?(beacons, fn %{epoch: epoch} -> epoch > expires end)
+    end)
+  end
+
+  # `beacons` are the judge pass's accepted beacons: the same `collect_beacons/4`
+  # call over the same log as `expired?/2`, so `expired?` here equals it.
+  defp observe_leases(log, beacons) do
+    delegations = collect_delegations(Log.topo_ops(log))
+
+    delegations
+    |> Enum.flat_map(fn
+      {id, %{deleg: %Delegation{} = d}} ->
+        expires =
+          d
+          |> delegation_chain_links(delegations)
+          |> Enum.map(& &1.expires_epoch)
+          |> Enum.filter(&is_integer/1)
+          |> Enum.min(fn -> nil end)
+
+        if expires == nil,
+          do: [],
+          else: [
+            %{
+              delegation_id: id,
+              issuer: d.issuer,
+              audience: d.audience,
+              expires_epoch: expires,
+              expired?: chain_lapsed?(d, delegations, beacons)
+            }
+          ]
+
+      _invalid_only ->
+        []
+    end)
+    |> Enum.sort_by(& &1.delegation_id)
+  end
+
   defp do_analyze(module, log) do
     ops = Log.ops(log)
     ordered = Dag.topo_sort(ops)

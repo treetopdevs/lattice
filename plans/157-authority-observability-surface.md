@@ -1,3 +1,22 @@
+> **Superseded by brief (2026-11-16, row 157; D-850).** This plan was written at `c9a05b40`
+> and its drift check fired against `origin/main` at `4ee13d7d6` (`authority.ex` +1189 lines
+> changed, `read_model.ex` 89, `instrument_live.html.heex` 42), so the "judge moved" STOP
+> condition was met. The implementation followed a re-checked brief instead. Stale items:
+> (1) `analyze/2` now wraps private `do_analyze/2`, beside public `analyze_with_beacon_evidence/2`,
+> `analyze_with_records/2` and `acquisitions/3`; (2) chronology is already public without
+> `at_tick`, which stays omitted because ticks are author-asserted and untrusted, so this plan's
+> `at_tick` field was dropped; (3) accepted beacons are already public; (4) helper arities moved
+> (`deleg_context/2` returns a 3-tuple, `validate_delegations/5` takes the replica,
+> `collect_beacons/4` takes policy sources, witnessed beacons were added); (5) `Delegation` moved
+> to `Lattice.Authority.Delegation`; (6) `Lattice.Verdict.delegation_status/3` now exists and
+> supplies the panel's lease status word; (7) authority tests live in `test/lattice2/`, not
+> `test/lattice/`; (8) plan 155 landed, so the roles panel ends with the audit ledger block;
+> (9) `read_model.ex`, `audit_bundle.ex` and `sim.ex` line references moved; (10) vectors are
+> exported to `clients/lattice-client/test/vectors`; (11) `ReadModel.observe` totality is pinned
+> by `authority_body_test.exs`. What shipped: `Authority.observe/2` (additions only),
+> `ReadModel` roles `chronology`/`beacons`/`leases`, the roles-panel block and
+> `scripts/township_authority_observe.exs`.
+
 # Plan 157: Expose role chronology and lease/beacon state as a public Authority surface, and render it in the instrument
 
 > **Executor instructions**: Follow this plan step by step. Run every

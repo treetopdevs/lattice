@@ -6,6 +6,14 @@ defmodule Township.ReadModel do
   supplied log. Vouch bodies remain caller-held attestation evidence, outside
   `Township.Matter`. Optional realm labels affect only delegation-graph labels.
 
+  The roles panel's `chronology`, `beacons` and `leases` come from the read-only
+  `Lattice.Authority.observe/2` (row 157). They are global to the log: the highest
+  accepted beacon epoch is not the epoch any one operation observed. A lease's
+  `expired?` is the live-path `Authority.expired?/2` check, while `status` is
+  `Lattice.Verdict.delegation_statuses/3` (each equal to
+  `delegation_status/3`), so a revoked or invalid chain reports that
+  status even when it has also lapsed. No author-asserted tick is shown.
+
   The trust graph's `omitted` list names admitted authority ops present in the
   log whose delegation could not be drawn; it does not claim the log is complete.
 
@@ -33,7 +41,7 @@ defmodule Township.ReadModel do
   `"(malformed)"`, so the marker is not proof that a value was malformed.
   """
 
-  alias Lattice.{Attestation, Authority, Identity, Log, Op}
+  alias Lattice.{Attestation, Authority, Identity, Log, Op, Verdict}
   alias Lattice.Graph.{AuthorityBody, ReplicaSnapshot}
   alias Township.Matter
 
@@ -55,9 +63,30 @@ defmodule Township.ReadModel do
           reason: atom()
         }
 
+  @type lease_view :: %{
+          delegation_id: String.t(),
+          issuer: String.t() | nil,
+          audience: String.t() | nil,
+          expires_epoch: non_neg_integer(),
+          expired?: boolean(),
+          status: :active | :revoked | :lapsed | :invalid | :unknown
+        }
+
+  @type roles :: %{
+          holders: %{atom() => String.t() | nil},
+          quarantine: [String.t()],
+          reasons: %{String.t() => atom()},
+          audit: [map()],
+          chronology: %{
+            atom() => [%{op_id: String.t(), holder: String.t() | nil, delegation_id: String.t()}]
+          },
+          beacons: %{valid: Authority.beacon_evidence(), max_epoch: non_neg_integer() | nil},
+          leases: [lease_view()]
+        }
+
   @type t :: %{
           threads: map(),
-          roles: map(),
+          roles: roles(),
           members: map(),
           attest: map(),
           trust_graph: %{nodes: [map()], edges: [map()], omitted: [String.t()]},
@@ -80,6 +109,7 @@ defmodule Township.ReadModel do
     state = Lattice.state(Matter, log)
     state_view = state_view(state)
     analysis = Authority.analyze(Matter, log)
+    observation = Authority.observe(Matter, log)
     receipt_free? = Attestation.receipt_free?(attestation)
 
     %{
@@ -93,7 +123,10 @@ defmodule Township.ReadModel do
         holders: fingerprint_holders(analysis.holders),
         quarantine: analysis.quarantine |> MapSet.to_list() |> Enum.sort(),
         reasons: analysis.reasons,
-        audit: analysis.audit
+        audit: analysis.audit,
+        chronology: chronology_view(observation.chronology),
+        beacons: observation.beacons,
+        leases: lease_views(log, observation.leases)
       },
       members: %{
         current: state_view["members"],
@@ -227,6 +260,42 @@ defmodule Township.ReadModel do
       {role, pub && Identity.fingerprint(pub)}
     end)
   end
+
+  defp chronology_view(chronology) do
+    Map.new(chronology, fn {role, acquisitions} ->
+      {role,
+       Enum.map(acquisitions, fn acquisition ->
+         %{
+           op_id: acquisition.op_id,
+           holder: key_fingerprint(acquisition.holder),
+           delegation_id: acquisition.delegation_id
+         }
+       end)}
+    end)
+  end
+
+  # One batched status pass for every lease, not one judge pass per lease.
+  defp lease_views(log, leases) do
+    statuses = Verdict.delegation_statuses(Matter, log, Enum.map(leases, & &1.delegation_id))
+    Enum.map(leases, &lease_view(&1, Map.fetch!(statuses, &1.delegation_id).status))
+  end
+
+  defp lease_view(lease, status) do
+    %{
+      delegation_id: lease.delegation_id,
+      issuer: key_fingerprint(lease.issuer),
+      audience: key_fingerprint(lease.audience),
+      expires_epoch: lease.expires_epoch,
+      expired?: lease.expired?,
+      status: status
+    }
+  end
+
+  # Same key rule as the trust graph's total reader: only a 32-byte key is drawn.
+  defp key_fingerprint(pub) when is_binary(pub) and byte_size(pub) == 32,
+    do: Identity.fingerprint(pub)
+
+  defp key_fingerprint(_pub), do: nil
 
   @spec denied_member_mutations(Log.t(), %{String.t() => atom()}) ::
           [denied_member_mutation()]

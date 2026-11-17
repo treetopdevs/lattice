@@ -201,6 +201,15 @@ defmodule Lattice2.AuthorityBodyTest do
       assert is_binary(Jason.encode!(model.trust_graph))
       assert is_binary(Jason.encode!(ReadModel.replay(log)))
       assert is_binary(Jason.encode!(model.op_dag))
+      # Row 157: the roles panel's chronology and lease views stay display-safe.
+      assert is_binary(Jason.encode!(model.roles.leases))
+      assert is_binary(Jason.encode!(model.roles.chronology))
+
+      fingerprints =
+        Enum.flat_map(model.roles.leases, &[&1.issuer, &1.audience]) ++
+          for {_role, entries} <- model.roles.chronology, entry <- entries, do: entry.holder
+
+      assert Enum.all?(fingerprints, &(is_nil(&1) or String.valid?(&1)))
       graph = ReplicaSnapshot.build(Matter, log)
 
       for format <- [:mermaid, :dot],
