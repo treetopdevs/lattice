@@ -297,6 +297,8 @@ jobs:
         run: npm run build
       - name: Run full test suite
         run: mix test
+      - name: Replacement demo, BEAM equals TS (row 528)
+        run: MIX=mix scripts/treehouse_replacement_demo.sh
       - name: Regenerate TS oracle vectors
         # Run in :test env, not the default :dev env. A cache-restored _build/dev can
         # carry .beam mtimes newer than the freshly checked-out .ex sources, so Mix's
