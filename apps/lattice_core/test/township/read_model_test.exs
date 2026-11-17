@@ -276,6 +276,44 @@ defmodule Township.ReadModelTest do
     end
   end
 
+  # Row 157: chronology, beacons and leases from Authority.observe/2.
+  test "the tracked matter log observes a fingerprinted clerk chronology and no leases" do
+    preload_lattice_core()
+    {:ok, log} = Log.restore(Path.join(@tracked_dir, "matter.log"))
+    model = ReadModel.observe(log, labels: tracked_labels())
+
+    assert [_ | _] = clerk = model.roles.chronology.clerk
+    assert List.last(clerk).holder == model.roles.holders.clerk
+    assert Enum.all?(clerk, &(is_binary(&1.holder) and String.length(&1.holder) == 12))
+    assert model.roles.beacons == %{valid: [], max_epoch: nil}
+    assert model.roles.leases == []
+  end
+
+  test "leases report lapsed, revoked and active status with fingerprinted keys" do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident", "neighbor"], seed: "read-model-lease")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, lapsed} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    {sim, active} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 9)
+    {sim, revoked} = Sim.grant(sim, "clerk", "neighbor", ops: [:post], expires_epoch: 9)
+    {sim, _revoke} = Sim.revoke(sim, "clerk", revoked.id)
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 5)
+    sim = Sim.sync_all(sim)
+    model = ReadModel.observe(Sim.log(sim, "clerk"))
+    by_id = Map.new(model.roles.leases, &{&1.delegation_id, &1})
+    clerk_fp = Identity.fingerprint(Sim.identity(sim, "clerk").pub)
+
+    assert %{status: :lapsed, expired?: true, expires_epoch: 3, issuer: ^clerk_fp} =
+             by_id[lapsed.id]
+
+    assert %{status: :active, expired?: false, expires_epoch: 9} = by_id[active.id]
+    assert %{status: :revoked, expired?: false} = by_id[revoked.id]
+
+    assert by_id[active.id].audience ==
+             Identity.fingerprint(Sim.identity(sim, "resident").pub)
+
+    assert model.roles.beacons.max_epoch == 5
+  end
+
   defp listform_log(field) do
     sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-listform")
     {sim, _genesis} = Sim.create_replica(sim, "clerk")
