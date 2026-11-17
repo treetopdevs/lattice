@@ -161,9 +161,9 @@ defmodule LatticeCore.LiveOpsTest do
   # Row 231: `Audit.events/0` is a plain call, so a snapshot taken while Audit
   # is mid-restart used to exit `:noproc` inside LiveOps. Terminating the child
   # through the supervisor makes the unavailable window deterministic. No tab
-  # is registered while Audit is down: `emit/3` now defers its own audit write
-  # (row 310), but `register_tab/1` grants through `Lattice.CapStore`, which
-  # still records through `Audit.record/2` and would crash (row 313).
+  # is registered while Audit is down here; `emit/3` defers its own audit write
+  # (row 310), and the CapStore grant hop in `register_tab/1` now defers too
+  # (row 313, covered in lattice_authority_audit_outage_test.exs).
   test "snapshot survives an unavailable Audit" do
     before = Process.whereis(Lattice.LiveOps)
     :ok = Supervisor.terminate_child(LatticeCore.Supervisor, Lattice.Audit)
@@ -190,8 +190,9 @@ defmodule LatticeCore.LiveOpsTest do
 
   # Row 310: `emit/3` defers audit writes while Audit is down instead of exiting
   # LiveOps. Emits are driven only through `record_denial/4` and
-  # `device_event/6`, which do not call `Lattice.CapStore`; a CapStore hop still
-  # records through `Audit.record/2` and would crash during the outage (row 313).
+  # `device_event/6`, which do not call `Lattice.CapStore`. CapStore and
+  # Topology hops defer through their own backlogs since row 313; those paths
+  # are covered in lattice_authority_audit_outage_test.exs.
   # Only the automatic-retry test relies on the 1 s retry timer; tests that
   # assert a flush count hold it off (`hold_audit_retry!/0`); elsewhere
   # Audit stays terminated for the whole deferral window, so a timer fire there
