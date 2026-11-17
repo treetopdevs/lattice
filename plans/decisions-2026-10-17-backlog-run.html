@@ -2907,6 +2907,10 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>Non-binary state values render through inspect (charlists as lists), never to_string; the task resolves symlinks in both --dir and --out before the containment check; structural rejections (bad_signature evidence) get their own section and count beside authority-quarantined ops; the unauthorized_beacon gloss no longer names a signer. D-700 to D-703 were already taken by the first commit, so this round starts at D-704.</dd>
 <dt>Reason</dt><dd>A verifiable structured post must not crash or silently mutate in the report, an alias must not defeat the overwrite guard, and rejection evidence preserved in the bundle must be visible to the auditor.</dd>
 </dl></section>
+<section id="d705"><h2><span>D-705</span> Row 154 review round 2: identity-based overwrite guard, unbounded inspect, hedged glosses</h2><dl>
+<dt>Decision</dt><dd>The report task additionally refuses an --out whose existing ancestor (or itself) is the bundle directory by device and inode, or is hard-linked to a bundle file, which covers case-insensitive aliases; state values render through inspect with limit and printable_limit set to infinity; glosses state only what the reason establishes (no_capability says no matching delegation was found in the included log; lease_expired claims no chronology; not_holder, stale_holder, stale_beacon and revoked_capability are scoped to the log view that judged the operation).</dd>
+<dt>Reason</dt><dd>A textual prefix check misses filesystem aliases, default inspect limits silently truncate verified state, and a gloss is reader help that must not invent facts the atom does not carry.</dd>
+</dl></section>
 </main>
 </body>
 </html>

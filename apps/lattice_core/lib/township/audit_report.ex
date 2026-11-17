@@ -20,20 +20,25 @@ defmodule Township.AuditReport do
   @attestation_sentence "The legacy attestation stub is not receipt-free and makes no coercion-resistance claim."
 
   @gloss %{
-    not_holder: "The author did not hold the role when the action was taken.",
-    stale_holder: "The author held the role earlier but a later holder superseded them.",
-    lease_expired: "The delegation lease had lapsed at the action's logical epoch.",
+    not_holder:
+      "The author was not a holder of the role in the log view that judged this operation.",
+    stale_holder:
+      "The author held the role earlier, and the log view that judged this operation records a later holder.",
+    lease_expired:
+      "The delegation lease was expired at the logical epoch the log view supplies for this operation; the reason does not establish a real-time order between the operation and the epoch.",
     unauthorized_beacon:
       "A logical-tick beacon failed authorization under the replica's policy; the reason does not identify who signed it.",
-    stale_beacon: "A logical-tick beacon did not advance past the accepted epoch.",
+    stale_beacon:
+      "A logical-tick beacon did not advance past the epoch accepted in the log view that judged it.",
     malformed_term: "The operation's authority term was structurally invalid.",
-    no_capability: "The command carried no capability.",
+    no_capability:
+      "No matching delegation was found in the included log for this command's capability (the command may have carried none, or one the log does not contain).",
     invalid_capability: "The command's capability did not verify.",
     capability_wrong_audience: "The capability was issued to a different identity.",
     capability_not_visible: "The capability's delegation chain was not visible to the author.",
     operation_not_granted: "The capability did not grant this operation.",
     role_not_granted: "The capability did not grant this role.",
-    revoked_capability: "The capability had been revoked.",
+    revoked_capability: "The capability was revoked in the log view that judged this operation.",
     malformed_command: "The command body was malformed.",
     unknown_command: "The command is not defined by this replica.",
     bad_command_arity: "The command had the wrong number of arguments."
@@ -145,7 +150,7 @@ defmodule Township.AuditReport do
     denied_rows =
       model.members.denied
       |> Enum.map(fn d ->
-        [to_string(d.command), to_string(d.op_id), reason_text(d.reason), inspect(d.member)]
+        [to_string(d.command), to_string(d.op_id), reason_text(d.reason), text(d.member)]
       end)
       |> Enum.sort()
 
@@ -170,7 +175,7 @@ defmodule Township.AuditReport do
   defp attestation_section(attest) do
     [
       "<h2>Attestation</h2>\n<dl>\n",
-      kv("Status", inspect(attest.status)),
+      kv("Status", text(attest.status)),
       kv("receipt_free?", attest.receipt_free?),
       "</dl>\n<p>",
       escape(@attestation_sentence),
@@ -312,10 +317,16 @@ defmodule Township.AuditReport do
   end
 
   defp text(value) when is_binary(value),
-    do: if(String.printable?(value), do: value, else: inspect(value))
+    do:
+      if(String.printable?(value),
+        do: value,
+        else: inspect(value, limit: :infinity, printable_limit: :infinity)
+      )
 
   defp text(value) when is_atom(value) or is_number(value), do: to_string(value)
-  defp text(value), do: inspect(value, charlists: :as_lists)
+
+  defp text(value),
+    do: inspect(value, charlists: :as_lists, limit: :infinity, printable_limit: :infinity)
 
   defp escape(value) do
     value

@@ -57,11 +57,41 @@ defmodule Mix.Tasks.Lattice.Township.Report do
     end
   end
 
+  # Filesystem aliases (case-insensitive names, hard links) defeat a textual check, so
+  # compare identities too: any existing ancestor of `out`, or `out` itself, that is the
+  # bundle directory or one of its files means the write would land in the bundle.
+  defp same_file_tree?(dir, out) do
+    case file_id(dir) do
+      nil -> false
+      dir_id -> dir_id in ancestor_ids(out) or file_id(out) in bundle_file_ids(dir)
+    end
+  end
+
+  defp ancestor_ids(path) do
+    parent = Path.dirname(path)
+    ids = if file_id(path), do: [file_id(path)], else: []
+    if parent == path, do: ids, else: ids ++ ancestor_ids(parent)
+  end
+
+  defp bundle_file_ids(dir) do
+    case File.ls(dir) do
+      {:ok, names} -> names |> Enum.map(&file_id(Path.join(dir, &1))) |> Enum.reject(&is_nil/1)
+      _ -> []
+    end
+  end
+
+  defp file_id(path) do
+    case File.stat(path) do
+      {:ok, %{inode: inode, major_device: dev}} when inode != 0 -> {dev, inode}
+      _ -> nil
+    end
+  end
+
   defp report(dir, out) do
     dir = resolve(Path.expand(dir))
     out = resolve(Path.expand(out))
 
-    if out == dir or String.starts_with?(out, dir <> "/") do
+    if out == dir or String.starts_with?(out, dir <> "/") or same_file_tree?(dir, out) do
       Mix.raise("refusing --out inside the bundle directory: #{out}")
     end
 

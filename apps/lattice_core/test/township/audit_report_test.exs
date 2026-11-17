@@ -73,7 +73,7 @@ defmodule Township.AuditReportTest do
     assert html =~ info.stale_id
     assert html =~ "not_holder"
 
-    assert html =~ "did not hold the role"
+    assert html =~ "was not a holder of the role"
 
     # the holder table binds clerk to the resident fingerprint, not just any mention
     [_, after_holders] = String.split(html, "<h2>Current holders</h2>", parts: 2)
@@ -263,6 +263,66 @@ defmodule Township.AuditReportTest do
 
     assert Map.new(File.ls!(dir), &{&1, File.read!(Path.join(dir, &1))}) == before
     assert :ok = AuditBundle.verify(dir)
+  end
+
+  @tag :tmp_dir
+  test "large structured state renders in full", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    sim = Sim.new(Matter, "replica:matter:large", ["clerk"], seed: "report-large")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, _} = Sim.command(sim, "clerk", :post, [Enum.to_list(1..150)])
+    long = %{"text" => String.duplicate("a", 5000) <> "TAIL_MARKER"}
+    {sim, _} = Sim.command(sim, "clerk", :post, [long])
+    assert {:ok, _} = AuditBundle.write(dir, Sim.log(sim, "clerk"))
+
+    assert {:ok, html, :verified} = AuditReport.render(dir)
+    assert html =~ "149, 150]"
+    assert html =~ "TAIL_MARKER"
+    refute html =~ "100, ..."
+  end
+
+  @tag :tmp_dir
+  test "reason glosses do not assert unestablished facts", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    write_bundle(dir)
+    assert {:ok, html, :verified} = AuditReport.render(dir)
+    assert html =~ "not_holder: The author was not a holder of the role in the log view"
+    refute html =~ "carried no capability."
+    refute html =~ "had lapsed at the action"
+    refute html =~ "when the action was taken"
+  end
+
+  @tag :tmp_dir
+  test "task refuses --out that is a hard link to a bundle file", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    write_bundle(dir)
+    link = Path.join(tmp, "hard.html")
+    :ok = File.ln(Path.join(dir, "matter.log"), link)
+    before = File.read!(Path.join(dir, "matter.log"))
+
+    assert_raise Mix.Error, ~r/inside the bundle/, fn ->
+      ReportTask.run(["--dir", dir, "--out", link])
+    end
+
+    assert File.read!(Path.join(dir, "matter.log")) == before
+  end
+
+  @tag :tmp_dir
+  test "task refuses a case alias of the bundle directory", %{tmp_dir: tmp} do
+    dir = Path.join(tmp, "bundle")
+    write_bundle(dir)
+    upper = Path.join(tmp, "BUNDLE")
+
+    # Only meaningful on a case-insensitive filesystem; elsewhere the alias is a new path.
+    if File.exists?(upper) do
+      before = File.read!(Path.join(dir, "matter.log"))
+
+      assert_raise Mix.Error, ~r/inside the bundle/, fn ->
+        ReportTask.run(["--dir", dir, "--out", Path.join(upper, "matter.log")])
+      end
+
+      assert File.read!(Path.join(dir, "matter.log")) == before
+    end
   end
 
   test "task usage errors raise" do
