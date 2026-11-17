@@ -2905,6 +2905,12 @@ An acquisition with no delegation in its op (R04 continuation) is refused fail-c
 <dt>Decision</dt><dd>(1) No normalization: state values are compared with strict equality and a MapSet is summarized from its own struct bytes. (2) Verification errors and the bundle path are escaped (inspect) before they reach <code>Mix.raise</code>. (3) Invalid UTF-8 binaries in JSON become <code>{"bytes_base64": ...}</code>; valid strings are unchanged. (4) The drain helper splits messages on newlines and a new test covers verification-error injection. All three P2 findings reproduced with failing tests first; both P3 findings fixed. No wire, vector or authority change.</dd>
 <dt>Reason</dt><dd>Comparing raw values removes the class of normalization collisions instead of patching one marker, and a tagged object is the smallest lossless JSON encoding.</dd>
 </dl></section>
+<section id="d733"><h2><span>D-733</span> Row 167: review summary and follow-up rows (operator delegation 2026-11-16, reversible)</h2><dl>
+<dt>When</dt><dd>2026-11-16, branch claude/167-divergence-explainer</dd>
+<dt>Context</dt><dd>Two review rounds ran. Round 1 returned CHANGES with 3 P1/P2 findings and 1 P3. Round 2 returned CHANGES with 3 P1/P2 findings and 2 P3. All findings were fixed in this PR (D-731, D-732), each P2 reproduced by a failing test first.</dd>
+<dt>Decision</dt><dd>No third review round ran. The round 2 P2 fixes are therefore not confirmed by a later review; only the tests and gates confirm them. Deferred items are filed as rows 420 to 427: carrier failure messages (420), Matter field list test (421), cross-runtime explainer (422), unified reason dictionary (423), Authority.observe rendering (424), live peer report explainer (425), deep_property completeness run (426), other replicas (427).</dd>
+<dt>Reason</dt><dd>Delegated decision: ship the working slice and record the gap plainly instead of adding review rounds. Nothing here claims an explainer for peer reports or other replicas, and the byte oracle is unchanged.</dd>
+</dl></section>
 </main>
 </body>
 </html>
