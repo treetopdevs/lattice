@@ -1,0 +1,23 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:36
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:36
+@@ -632,7 +632,8 @@
+        core_reason: p.core_reason,
+        # A rotation keeps its parent's service, so it inherits the unproven recovery cutoffs,
+        # and it owes its own declared cutoffs too (CatalogTrust parity).
+-       pending: Enum.uniq(p.pending ++ unproven(r.cutoffs, ctx))
++       # MUTANT m4: a rotation no longer inherits its parent's pending cutoffs (D-A15).
++      pending: Enum.uniq(unproven(r.cutoffs, ctx))
+      }}
+   end
+ 
+@@ -760,8 +761,10 @@
+ 
+     # D-A15: a node owes its own declared cutoffs plus those it inherits from a same-service
+     # parent (every parent is an eligible node here; declared_graph judged it).
++    # MUTANT m4: a replacement no longer inherits same-service parent cutoffs (D-A15).
+     inherited =
+       for p <- claim.parents,
++          p == :never,
+           pn <- [parent_node(p, ctx, st)],
+           {pn.service_id, pn.service_key} == {claim.new_service_id, claim.new_service_key},
+           cut <- pn.pending,

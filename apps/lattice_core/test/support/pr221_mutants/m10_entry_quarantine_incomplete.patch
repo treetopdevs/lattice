@@ -1,0 +1,12 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
+@@ -1056,7 +1056,8 @@
+       {:error, r, _} when r in [:invalid_verified_history, :unsupported_cutoff] ->
+         :pending
+ 
+-      {:error, _reason, [_ | _]} when not complete? ->
++      # MUTANT m10: a quarantine on an incomplete slice is final.
++      {:error, _reason, [_ | _]} when not complete? and false ->
+         if CatalogEntries.structure_status(probe, histories) == :invalid, do: :bad, else: :pending
+ 
+       {:error, _reason, _refused} ->

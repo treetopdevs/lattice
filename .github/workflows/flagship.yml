@@ -77,7 +77,10 @@ jobs:
     name: Verify flagship artifact
     needs: changes
     if: needs.changes.outputs.legacy == 'true'
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: the floating label moved to Ubuntu 26.04 on 2026-11-16 and the locked
+    # Playwright refuses "chromium on ubuntu26.04-x64" (backlog row 398). The Runner image key step
+    # below reads ImageOS, so the apt cache key follows this label (ubuntu24-...).
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
 
     steps:
@@ -310,7 +313,7 @@ jobs:
           npm --prefix clients/lattice-client run continuation:vectors
           MIX_ENV=test mix test apps/lattice_core/test/treehouse/bounded_continuation_reciprocal_test.exs
       - name: Regenerate TS-authored vector writers
-        # Four writers have committed outputs at their default paths, so the diff below covers them.
+        # Five writers have committed outputs at their default paths, so the diff below covers them.
         # The cutoff and catalog writers have none, so they smoke-run into a scratch directory where
         # they cannot leave untracked files. Every writer asserts the wire vocabulary before writing.
         working-directory: clients/lattice-client
@@ -319,6 +322,7 @@ jobs:
           npx tsx test/support/export_member_continuity.ts
           npx tsx test/support/export_member_continuity_semantics.ts
           npx tsx test/support/export_treehouse_catalog_trust.ts
+          npx tsx test/support/export_treehouse_catalog_binding_graph.ts
           scratch="$(mktemp -d)"
           npx tsx test/support/export_treehouse_catalog_cutoff.ts --out "$scratch/cutoff.json"
           npx tsx test/support/export_treehouse_catalog_cutoff.ts --with-member-continuity --out "$scratch/cutoff-mc.json"

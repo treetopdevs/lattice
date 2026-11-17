@@ -2,7 +2,7 @@ defmodule Township.ReadModelTest do
   use ExUnit.Case, async: true
 
   alias Lattice.{Attestation, Identity, Log, Sim}
-  alias Township.{Matter, ReadModel}
+  alias Township.{AuditBundle, Matter, ReadModel}
 
   @repo_root Path.expand("../../../..", __DIR__)
   @tracked_dir Path.join(@repo_root, "artifacts/township")
@@ -371,6 +371,74 @@ defmodule Township.ReadModelTest do
 
   defp min_time(fun) do
     1..3 |> Enum.map(fn _ -> fun |> :timer.tc() |> elem(0) end) |> Enum.min()
+  end
+
+  # Row 325: Matter command arguments are attacker-shaped. Every text slot of the
+  # model and of each replay frame is valid UTF-8; anything else is the marker.
+  @tag :tmp_dir
+  test "non-text Matter values and denied members render as the malformed marker",
+       %{tmp_dir: tmp_dir} do
+    {log, denied_id} = malformed_text_log()
+
+    # Non-vacuity: the raw terms reached materialized state.
+    raw = Lattice.state(Matter, log)
+    assert raw.title == <<255>>
+    assert {:x, 1} = raw.summary
+    assert %{} in raw.posts
+    assert {:m, 1} in raw.members
+
+    model = ReadModel.observe(log)
+    assert model.threads.title == "(malformed)"
+    assert model.threads.summary == "(malformed)"
+    assert model.threads.posts == ["(malformed)", "ok", "(malformed)"]
+    assert "(malformed)" in model.members.current
+    assert "good" in model.members.current
+
+    assert [%{op_id: ^denied_id, command: :admit, member: "(malformed)", reason: :no_capability}] =
+             model.members.denied
+
+    assert is_binary(Jason.encode!(model.threads))
+    assert is_binary(Jason.encode!(model.members))
+    replay = ReadModel.replay(log)
+    assert is_binary(Jason.encode!(replay))
+
+    for %{"state" => state} <- replay["frames"],
+        text <- [state["title"], state["summary"] | state["posts"] ++ state["members"]],
+        do: assert(is_binary(text) and String.valid?(text), inspect(state))
+
+    assert {:ok, _manifest} = AuditBundle.write(tmp_dir, log)
+    assert AuditBundle.verify(tmp_dir) == :ok
+  end
+
+  defp malformed_text_log do
+    sim = Sim.new(Matter, @replica, ["clerk", "resident"], seed: "read-model-malformed")
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+
+    {sim, _grant} =
+      Sim.grant(sim, "clerk", "resident", ops: [:post, :set_title, :set_summary, :admit])
+
+    sim = Sim.sync_all(sim)
+
+    sim =
+      Enum.reduce(
+        [
+          set_title: <<255>>,
+          set_summary: {:x, 1},
+          post: %{},
+          post: "ok",
+          post: <<0xC3>>,
+          admit: {:m, 1},
+          admit: "good"
+        ],
+        sim,
+        fn {command, arg}, sim ->
+          {sim, _op} = Sim.command(sim, "resident", command, [arg])
+          sim
+        end
+      )
+
+    {sim, denied} = Sim.command(sim, "resident", :admit, [<<255>>], cap: :none)
+    {sim |> Sim.sync_all() |> Sim.log("clerk"), denied.id}
   end
 
   defp listform_log(field) do

@@ -1,15 +1,30 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3 and PR 6 are MERGED (#213, #214, #216, #217, #218); the PR 3 replacement signing path on fixtures (rows 361 part, 362) is in review in #220. Remaining: PR 4, PR 5 native, PR 6's C15 run, PR 7 rule 8.
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3 and PR 6 are MERGED (#213, #214, #216, #217, #218, #220). PR 4a is open as draft #221 (resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
 PR 3's generation keying and PR 6's exporter test were the fixture-startable slices. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
 and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
 implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
 atom and claims no route switch, catalog trust or C10–C15.
 PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_catalog/4`, the TS
-twin, and the row 318 bootstrap size preflight) is in review as PR #216 (D-400–D-435). Its binding-graph
+twin, and the row 318 bootstrap size preflight) is merged as PR #216 (D-400–D-435). Its binding-graph
 coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
 authoring result is not resolver acceptance, a route switch or catalog trust.
+PR 4a (#221, D-530–D-687) is open as a draft: the replacement-binding resolver as new pure modules in
+both runtimes (`Treehouse.CatalogBindingGraph`, `Treehouse.CatalogReplacementAuthority` and
+their TS twins, with new `binding_graph_v1.json` / `binding_graph_ts_v1.json` vectors), and the
+PR 2 authoring preflight switched to call them (the interim mirror is deleted). It is built under
+the operator's 2026-11-15 "new modules now, wire later" decision and does not edit
+`catalog_trust.ex`, `treehouse_catalog_trust.ts`, their dist or native `catalog_eval`. Not
+claimed: the retained-client resolver does not call it yet; a replacement is accepted only by a composed evaluator with a runnable demo (D-688, `scripts/treehouse_replacement_demo.sh`, rows 395 and 396), with no production caller;
+no route switch, native, custodian refusal, real Space or ceremony. PR 4b (row 380) adds test
+breadth; PR 4c (row 381) wires catalog_trust after plans 267/269. Design rows 382 and 383 are
+done in the resolver (convergence design, D-588–D-639), and rows 386 and 387 in the resolver and
+authoring (amendment revision 2, D-641); 4c also carries the row 381 obligations. Rows 386 and 388
+are answered under delegation (D-683 to D-685, assumed and reversible); row 390 is built (repair
+(c)); row 391 stays open. Convergence stops here by operator direction (D-687): safety properties
+are green; the liveness gaps are rows 392 (old-key revision served before the binding closed),
+393 (`control_history_limit`) and 394 (F-retained), run with `--only pr221_open`. C10–C15 stay OPEN until 4c.
 PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
 the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
 bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
@@ -368,6 +383,37 @@ accepted state between resolver calls and runs both delivery orders.
   leave the bootstrap catalog resolving; a missing page is `trust_pending` with no partial
   promotion. Same bytes are idempotent; a rollback is refused.
 
+**PR 4 split (operator decision 2026-11-15, D-530).** PR 4 is delivered as **4a** (all
+resolver logic in new files plus the PR 2 authoring switch, #221), **4b** (remaining tests in new
+files, row 380) and **4c** (the hook into `catalog_trust.ex` / `.ts`, after plans 267/269 merge,
+row 381). The 267/269 gate is not lifted; it now applies to 4c only.
+
+**PR 4a — resolver as new pure modules (operator decision 2026-11-15, "new modules now, wire
+later"; D-530).** The full PR 4a text (scope, the D-A1 to D-A19 readings, the convergence design
+of rows 382 and 383, row dispositions, 4c tasks, the operator questions and the 4a non-claims)
+moved verbatim to D-640 in the decisions log; the convergence amendment revision 2 (rows 386,
+387 and 389) is D-641 (entries D-649 to D-672), its build is D-673 to D-680 and its review is
+D-643 to D-648 and D-682. Block design in force: the block is derived on every call and the
+caller keeps one sticky `frozen` bit plus the accepted watermark through `advance/2`;
+`trust_pending` carries `freeze` (the complete-part decision's freezing block when it does not
+accept) and `serving` (nil when the watermark binding is changed, closed or forked on complete
+evidence), never `:unchanged`, and only an accepting decision that clears lifts the freeze; a
+refused or closed-out watermark binding freezes even when its catalog is missing (C6). Validity
+in force: a replacement Core refuses at its own closure (Stage A) is intrinsically invalid raw
+evidence with no closure effect; a conflicting cited floor route is reserved to none, and
+`carries?` uses the same admission check; floors are memoized and deduplicated by whole entry;
+the authoring `trust_pending` escape drops only pending ids inside the claim's D-275 set, and
+the post-sign check re-resolves the full input. Rows 382, 383, 386 and 387 are done in the
+resolver and the authoring preflight in both runtimes; 386 is not reachable in production until
+the row 381 obligation lands and awaits operator confirmation of repair (a) (row 388). Open: the entry-variant floor (row 390) and floor
+overflow (row 391) classes, the operator questions in rows 384 and 388, and the row 389
+evidence remainder (reference model, (p), (b1)-(b4), exercise counters, the StreamData (f)
+generator, (e1), the TS property twin and missing TS scenario twins, a Core flip, S5 and a
+post-sign negative). Non-claims are unchanged: no route
+switch or retained-client acceptance until 4c, no native `catalog_eval`, no custodian
+closed-binding refusal, C10–C15 OPEN, no Core primitive, wire atom or quarantine reason, and
+historical vectors and wire bytes unchanged.
+
 **PR 5** — native parity (`catalog_eval` replacement node, D-270 nodes in `chains.rs`, row 319).
 **PR 6** — a plan 266 exporter test now; after PR 4, the C15 two-cycle BEAM/TS reconstruction
 (Space plus 12 Threads, one new child, a combined replacement). **PR 7** — the operator run, rule 8.
@@ -399,8 +445,9 @@ grep -o '](\.\./[^)]*)' plans/316-r11c-catalog-replacement-trust.md   # every ta
 | OD-13 | Does custodian re-initialization after a replacement need a new ceremony report? | Yes, under rule 8. |
 | OD-14 | What does Treehouse show for `catalog_fork` / `authority_changed`? | "Transport paused, ask your admin", no automatic retry. |
 | OD-15 | May a replacement keep both keys and the service ID? | Yes; the no-op refusal stays rotation-only (plan 274). |
-| OD-16 | Adopt the closing rule (D-275), and D-278's reading that a resolution's deps need the cited replacement ops but not the refusing controls, as contract §4 amendments? | Yes. Sign-off gates PR 4 and PR 3's closed-binding refusal; without D-275 an old-key holder can pause transport indefinitely. |
-| OD-17 | Which checks make a union-refused replacement a citable D-276 node? (Rule 3: third round on node eligibility.) | Every intrinsic check: steps 1, 2 (incl. causal honored bootstrap) and 4–6; any failure is raw evidence with no head or closure effect. |
+| OD-16 | Adopt the closing rule (D-275), and D-278's reading that a resolution's deps need the cited replacement ops but not the refusing controls, as contract §4 amendments? | **Adopted by the operator 2026-11-15 (D-530).** Yes. Sign-off gates PR 4 and PR 3's closed-binding refusal; without D-275 an old-key holder can pause transport indefinitely. |
+| OD-17 | Which checks make a union-refused replacement a citable D-276 node? (Rule 3: third round on node eligibility.) | **Adopted by the operator 2026-11-15 (D-530).** Every intrinsic check: steps 1, 2 (incl. causal honored bootstrap) and 4–6; any failure is raw evidence with no head or closure effect. |
+| Row 320 | After `authority_changed` from a closed-out accepted catalog, is a fresh admin resolution citing the current heads enough to clear it? | **Adopted by the operator 2026-11-15 (D-530).** Yes. Implemented in the 4a resolver (`clears_authority_changed`); wired in 4c; how it clears is redesigned by row 383 before 4c. |
 
 ## 10. Explicit non-claims
 
@@ -415,6 +462,8 @@ reason or wire atom; no production, Phase G or receipt-free W4. C10–C15 stay O
   design-slice gates pass. **Implementation done:** every PR's tests pass; vectors agree in BEAM,
   TS and, after PR 5, native.
 - **STOP:** PR 0 needs a Core primitive or context field; a historical Space vector or wire byte
-  changes; PR 4 starts before 267/269, OD-16, OD-17 and row 320; C10 needs an old key, new root or injected trust.
+  changes; PR 4c starts before plans 267/269 merge (OD-16, OD-17 and row 320 were adopted
+  2026-11-15; under the operator's "new modules now, wire later" decision 4a and 4b may run
+  first, touching no `catalog_trust` file); C10 needs an old key, new root or injected trust.
 
-**Decisions:** D-265–D-280 (design), D-281+ (process): `plans/decisions-2026-10-17-backlog-run.html`.
+**Decisions:** D-265–D-280 (design), D-281+ (process; PR 4a is D-530–D-682): `plans/decisions-2026-10-17-backlog-run.html`.
