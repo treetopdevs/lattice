@@ -1,0 +1,55 @@
+#!/bin/sh
+# GNU-timeout lookalike for backup.sh tests. Does not wait; optionally
+# intercepts restic dump when the dump plan's next line is "timeout".
+set -eu
+dir=${TREEHOUSE_BACKUP_STUB_DIR:?}
+log=$dir/log
+plan=$dir/dump_plan
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --signal | --kill-after | -s | -k)
+      if [ $# -lt 2 ]; then
+        echo "timeout stub: missing option argument" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --signal=* | --kill-after=*)
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "timeout stub: unexpected option: $1" >&2
+      exit 2
+      ;;
+    *)
+      # duration
+      shift
+      break
+      ;;
+  esac
+done
+
+{
+  printf 'timeout'
+  for a in "$@"; do
+    printf ' %s' "$a"
+  done
+  printf '\n'
+} >> "$log"
+
+if [ "${1:-}" = restic ] && [ "${2:-}" = dump ]; then
+  next=$(head -n 1 "$plan" 2>/dev/null || true)
+  if [ "$next" = timeout ]; then
+    tail -n +2 "$plan" > "$plan.tmp"
+    mv "$plan.tmp" "$plan"
+    printf 'timeout-dump 124\n' >> "$log"
+    exit 124
+  fi
+fi
+
+exec "$@"

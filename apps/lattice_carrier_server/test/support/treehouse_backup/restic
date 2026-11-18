@@ -1,0 +1,132 @@
+#!/bin/sh
+# Stub restic for backup.sh seed-guard tests. Honors TREEHOUSE_BACKUP_STUB_DIR.
+set -eu
+dir=${TREEHOUSE_BACKUP_STUB_DIR:?}
+log=$dir/log
+
+{
+  printf 'restic'
+  for a in "$@"; do
+    printf ' %s' "$a"
+  done
+  printf '\n'
+} >> "$log"
+
+cmd=${1:-}
+if [ $# -gt 0 ]; then
+  shift
+fi
+
+case "$cmd" in
+  tag)
+    filter_tag=
+    set_to=
+    target=
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --tag)
+          if [ $# -lt 2 ]; then
+            echo "restic stub: --tag needs a value" >&2
+            exit 1
+          fi
+          filter_tag=$2
+          shift 2
+          ;;
+        --set)
+          if [ $# -lt 2 ]; then
+            echo "restic stub: --set needs a value" >&2
+            exit 1
+          fi
+          set_to=$2
+          shift 2
+          ;;
+        *)
+          target=$1
+          shift
+          ;;
+      esac
+    done
+    pending=$dir/pending
+    incomplete=$dir/incomplete
+    daily=$dir/daily
+    if [ "$set_to" = incomplete ] && [ "$filter_tag" = pending ]; then
+      if [ "${TREEHOUSE_BACKUP_STUB_QUARANTINE:-}" = fail ]; then
+        exit 1
+      fi
+      if [ -s "$pending" ]; then
+        cat "$pending" >> "$incomplete"
+        : > "$pending"
+      fi
+      exit 0
+    fi
+    if [ "$set_to" = daily ]; then
+      if [ -n "$target" ]; then
+        printf '%s\n' "$target" >> "$daily"
+      elif [ "$filter_tag" = pending ] && [ -s "$pending" ]; then
+        cat "$pending" >> "$daily"
+        : > "$pending"
+      fi
+      exit 0
+    fi
+    echo "restic stub: unhandled tag invocation" >&2
+    exit 1
+    ;;
+  backup)
+    ids=$dir/backup_ids
+    if [ ! -s "$ids" ]; then
+      echo "restic stub: no backup ids left" >&2
+      exit 1
+    fi
+    id=$(head -n 1 "$ids")
+    tail -n +2 "$ids" > "$ids.tmp"
+    mv "$ids.tmp" "$ids"
+    printf '%s\n' "$id" >> "$dir/pending"
+    printf 'snapshot %s saved\n' "$id"
+    exit 0
+    ;;
+  dump)
+    plan=$dir/dump_plan
+    if [ ! -s "$plan" ]; then
+      echo "restic stub: dump plan empty" >&2
+      exit 1
+    fi
+    next=$(head -n 1 "$plan")
+    tail -n +2 "$plan" > "$plan.tmp"
+    mv "$plan.tmp" "$plan"
+    case "$next" in
+      ok)
+        cat "$dir/good_seed"
+        exit 0
+        ;;
+      wrong)
+        cat "$dir/wrong_seed"
+        exit 0
+        ;;
+      malformed)
+        printf 'not-a-seed\n'
+        exit 0
+        ;;
+      empty)
+        exit 0
+        ;;
+      fail | missing)
+        exit 1
+        ;;
+      timeout)
+        echo "restic stub: dump timeout must be intercepted by the timeout stub" >&2
+        exit 1
+        ;;
+      *)
+        echo "restic stub: unknown dump plan: $next" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  forget)
+    exit 0
+    ;;
+  *)
+    echo "restic stub: unexpected command: $cmd" >&2
+    exit 1
+    ;;
+esac
