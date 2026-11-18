@@ -48,7 +48,7 @@ defmodule T do
   def requests(model) do
     for r <- model.requests do
       IO.puts(
-        "  request #{String.slice(r.op, 0, 10)}… by #{r.author_fingerprint}: resolved? #{r.resolved?}"
+        "  request #{String.slice(r.op, 0, 10)}… by #{r.author_fingerprint}: ref #{r.ref} payload #{inspect(r.payload)} resolved? #{r.resolved?}"
       )
     end
   end
@@ -155,6 +155,17 @@ T.loan(model)
 {tool, return_req} = Sim.request(tool, "neighbor", "custody", {:custody_transfer, [:return]})
 tool = Sim.sync_all(tool)
 T.say("neighbor requests the return — durable, visible, timestamped until resolved:")
+T.requests(ReadModel.observe(Sim.log(tool, "founder")))
+
+# Row 324: any realm can append an admitted request with any terms. Its ref is
+# a text slot, so a non-text ref shows the fixed marker; payload stays raw.
+{tool, _junk} = Sim.append(tool, "neighbor", :inbox, {:request, <<255, 0>>, :junk})
+tool = Sim.sync_all(tool)
+
+T.say(
+  "an attacker-shaped request shows ref (malformed); its raw bytes stay in the log under its op id:"
+)
+
 T.requests(ReadModel.observe(Sim.log(tool, "founder")))
 
 # Q-06: the current validated custody holder (the lender) resolves the request.

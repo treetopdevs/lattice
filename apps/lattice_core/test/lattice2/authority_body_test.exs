@@ -274,6 +274,7 @@ defmodule Lattice2.AuthorityBodyTest do
   # D-317: the property must reach loan/3, Toolshed's only AuthorityBody
   # consumer, so it first establishes custody with the borrower and an active
   # leased borrow Cap, then lets the borrower append attacker-shaped grants.
+  # It covers loan/3 only; the next property covers requests/2 (row 324).
   property "Toolshed.ReadModel loan projection stays display-safe on admitted attacker-shaped authority bodies" do
     sim = Sim.new(Toolshed.Tool, "replica:tool:authority-body", ["owner", "borrower"], seed: "ab")
     {sim, _genesis} = Sim.create_replica(sim, "owner")
@@ -311,6 +312,41 @@ defmodule Lattice2.AuthorityBodyTest do
       assert String.valid?(model.loan.borrower_fingerprint)
       assert String.valid?(model.custody.holder_fingerprint)
       for r <- model.requests, do: assert(String.valid?(r.author_fingerprint))
+    end
+  end
+
+  # Row 324: the loan property above appends its bodies as :authority, and
+  # Authority collects requests only from :inbox ops, so it never reaches
+  # requests/2. This property appends attacker-shaped :inbox requests and checks
+  # each one by op id (D-317 non-vacuity) before checking the text contract.
+  property "Toolshed request ref stays display-safe on admitted attacker-shaped :inbox requests" do
+    sim = Sim.new(Toolshed.Tool, "replica:tool:request-ref", ["owner", "borrower"], seed: "rr")
+    {sim, _genesis} = Sim.create_replica(sim, "owner")
+    sim = Sim.sync_all(sim)
+
+    # An explicit invalid-UTF-8 branch so most seeds reach the binary case.
+    bad_utf8 = map(binary(max_length: 8), &(&1 <> <<255>>))
+    pairs = tuple({one_of([constant("custody"), bad_utf8, encodable_gen()]), encodable_gen()})
+
+    check all(
+            {ref, payload} <- filter(pairs, fn {r, p} -> signable?({:request, r, p}) end, 50),
+            max_runs: 50
+          ) do
+      {sim, op} = Sim.append(sim, "borrower", :inbox, {:request, ref, payload})
+      model = sim |> Sim.sync_all() |> Sim.log("owner") |> Toolshed.ReadModel.observe()
+      context = inspect({ref, payload})
+
+      assert [r] = Enum.filter(model.requests, &(&1.op == op.id)), context
+      assert is_binary(r.ref) and String.valid?(r.ref), context
+
+      if is_binary(ref) and String.valid?(ref),
+        do: assert(r.ref == ref, context),
+        else: assert(r.ref == "(malformed)", context)
+
+      assert r.payload == payload, context
+      assert String.valid?(inspect(r.payload)), context
+      assert String.valid?(r.author_fingerprint), context
+      assert is_binary(Jason.encode!(Map.delete(r, :payload))), context
     end
   end
 
