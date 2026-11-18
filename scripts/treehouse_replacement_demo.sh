@@ -30,8 +30,11 @@ fi
 log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
+# Row 528: both files under --only, so the D-881/D-882 "BEAM equals TS" test runs too (CI runs
+# this script in the flagship unit job).
 if MIX_ENV=test "$mix_bin" test apps/lattice_core/test/treehouse/catalog_replacement_trust_demo_test.exs \
-  --include replacement_demo >"$log" 2>&1; then
+  apps/lattice_core/test/treehouse/catalog_replacement_trust_test.exs \
+  --only replacement_demo >"$log" 2>&1; then
   grep -E '^(\[beam\]|\[ts\]|BEAM == TS)' "$log"
 else
   cat "$log"

@@ -43,7 +43,10 @@ export interface CatalogBindingNode {
   serviceKey: string; origin: string; parents: readonly string[]; prior: readonly CatalogPriorCatalog[];
   inventory: string | null; refused: boolean; coreReason: string | null; pending: readonly ProvenCutoff[];
 }
-/** The accepted watermark; `routes` is the cumulative route -> replica map of every route ever served. */
+/**
+ * The accepted watermark; `routes` is the cumulative route -> replica map of every route ever served, every route on an accepted
+ * chain included (row 524).
+ */
 export interface CatalogBindingAccepted {
   binding: string; generation: number; catalog: string; revision: number; routes: Readonly<Record<string, string>>;
 }
@@ -1067,8 +1070,12 @@ function serving(a: CatalogBindingAccepted | null, graph: CatalogBindingGraph, c
 
 /**
  * The merge rule over the persisted {accepted, frozen} (row 383; BEAM CatalogBindingGraph.advance/2). Only an accepting decision
- * that clears (or any accepting decision while not frozen) moves the watermark, adds its catalog's routes to the cumulative
- * routes and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
+ * that clears (or any accepting decision while not frozen) moves the watermark, adds the routes of every catalog on the accepted
+ * chain to the cumulative routes (the D-881 walk, row 524: the accepted catalog, then each catParent link, which is previous or
+ * a rotation's prior catalog, oldest first and newest winning, so a chain delivered on one page persists what separate
+ * deliveries persist; a route the stored routes already hold is never re-pointed, D-930; any route still missing is then filled
+ * from the graph's catalogRoutes for the accepted catalog, which also reaches a replacement's cited prior catalogs, skipping
+ * RESERVED, D-931) and lifts frozen; a block with freeze sets frozen; nothing is served while frozen. On trust_pending the detail's freeze
  * (derived only from the complete authenticated part) is ORed into frozen and its serving is served unless frozen; any other
  * error, or a trust_pending without those fields, keeps the state and serves nothing.
  */
@@ -1085,8 +1092,26 @@ export function advanceCatalogBindingState(state: CatalogBindingState, result: C
   }
   const d = result.graph.decision;
   if (d.accepted && (!state.frozen || d.clearsAuthorityChanged)) {
-    const routes: Record<string, string> = {...routesOf(state.accepted)};
-    for (const e of result.graph.catalogs.get(d.catalog!)!.entries) routes[e.route] = e.replica;
+    const reserved = routesOf(state.accepted);
+    const routes: Record<string, string> = {...reserved};
+    // The chain from the accepted catalog up its catParent links, oldest first; it ends at null, at an id the graph does not
+    // hold, or at an id already on the chain.
+    const chain: string[] = [];
+    for (let id: string | null | undefined = d.catalog; id != null && result.graph.catalogs.has(id) && !chain.includes(id);
+      id = result.graph.catParent.get(id)) chain.unshift(id);
+    // A route the stored watermark already reserves keeps its replica (D-930): an intermediate catalog this client never
+    // accepted must not re-point it, and the accepted catalog itself passed RouteCompat. Among fresh routes the newer wins.
+    for (const id of chain) {
+      for (const e of result.graph.catalogs.get(id)!.entries) {
+        if (!Object.prototype.hasOwnProperty.call(reserved, e.route)) routes[e.route] = e.replica;
+      }
+    }
+    // Review round 2 (D-931): the accepted catalog's cumulative catalogRoutes (its floor through every cited prior catalog,
+    // across replacement bindings, plus its own chain) fills only routes still missing, so a replacement's cited prior catalog
+    // keeps its routes on one page. A RESERVED (reserved-to-none) route is not a served route and is never stored.
+    for (const [route, replica] of result.graph.catalogRoutes?.get(d.catalog!) ?? []) {
+      if (replica !== RESERVED && !Object.prototype.hasOwnProperty.call(routes, route)) routes[route] = replica;
+    }
     return {accepted: {binding: d.head!, generation: d.generation!, catalog: d.catalog!, revision: d.revision!, routes},
       frozen: false, serving: d.serving};
   }
