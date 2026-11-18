@@ -1,16 +1,16 @@
 # 316 — R11c catalog replacement trust and recovery
 
-Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3 and PR 6 are MERGED (#213, #214, #216, #217, #218, #220). PR 4a is open as draft #221 (resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
+Status: PR 0 GO (API-sufficiency probe, test only, 2026-11-02); design merged in #211 (`7bdace22e`). PRs 0–3, PR 4a and PR 6 are MERGED (#213, #214, #216, #217, #218, #220, #221; 4a is `13719b0f6`: resolver as new pure modules; safety properties green, liveness gaps are rows 392–394). PR 3's closed-binding refusal (row 360) is IN REVIEW ([#234](https://github.com/treetopdevs/lattice/pull/234), D-910–D-925). Remaining: PR 4b, PR 4c, PR 5 native, PR 6's C15 run, PR 7 rule 8.
 PR 3's generation keying and PR 6's exporter test were the fixture-startable slices. PR 4 waits on OD-16 (D-275/D-278), OD-17, plans 267/269
-and row 320; PR 3's closed-binding refusal and PR 6's C15 run wait on PR 4. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
+and row 320; PR 3's closed-binding refusal needed only PR 4a's `closed/1` and `closed_out/1` and is in review (row 360); PR 6's C15 run waits on PR 4c. PR 5 native track; PR 7 rule 8. C10–C15 OPEN.
 PR 1 (claim codec, `replace_catalog_v1` Space command and Stage A, `replacement_v1.json`) is
-implemented on branch `claude/316-pr1-replacement-codec`, pending rule 3 review; it adds no wire
+merged (#214); it adds no wire
 atom and claims no route switch, catalog trust or C10–C15.
 PR 2 (authoring preflight: `Space.prepare_replace_catalog/3` + `author_replace_catalog/4`, the TS
 twin, and the row 318 bootstrap size preflight) is merged as PR #216 (D-400–D-435). Its binding-graph
 coverage is interim until PR 4 exposes one pure binding-graph function (row 352); a successful
 authoring result is not resolver acceptance, a route switch or catalog trust.
-PR 4a (#221, D-530–D-687) is open as a draft: the replacement-binding resolver as new pure modules in
+PR 4a (#221, D-530–D-687) is merged (`13719b0f6`): the replacement-binding resolver as new pure modules in
 both runtimes (`Treehouse.CatalogBindingGraph`, `Treehouse.CatalogReplacementAuthority` and
 their TS twins, with new `binding_graph_v1.json` / `binding_graph_ts_v1.json` vectors), and the
 PR 2 authoring preflight switched to call them (the interim mirror is deleted). It is built under
@@ -25,12 +25,24 @@ are answered under delegation (D-683 to D-685, assumed and reversible); row 390 
 (c)); row 391 stays open. Convergence stops here by operator direction (D-687): safety properties
 are green; the liveness gaps are rows 392 (old-key revision served before the binding closed),
 393 (`control_history_limit`) and 394 (F-retained), run with `--only pr221_open`. C10–C15 stay OPEN until 4c.
-PR 3's generation keying (fixture only) is implemented on branch `claude/316-pr3-ledger-generation`:
+PR 3's generation keying (fixture only) is merged (#217):
 the custodian ledger is keyed by `{binding_id, catalog_key}` (`Binding.binding_id/1`; bootstrap
 bytes unchanged), `Binding.replacement/3` derives a replacement binding from a normalized claim
 (derivation only, no production caller), and a replacement revision 0 must equal the claim's
-inventory digest under the new service identity. The closed-binding refusal still waits on PR 4;
-binding-id threading through signing/evidence/listing/staging is row 361.
+inventory digest under the new service identity. Binding-id threading through
+signing/evidence/listing/staging is row 361.
+PR 3's closed-binding refusal (row 360, D-910–D-917) is DONE: `SignCatalog.sign_reviewed/5` (and so
+the CLI's `sign/4`) runs `CatalogBindingGraph.resolve/1` inside the ledger lock, before key access
+and before any ledger write, over the package's Space and Thread histories, the ledger's own signed
+envelopes below the package's revision plus its stored copy (D-916; ledger copies always win over
+retained ones, D-915) and retained rotations/catalogs (`BindingClosure.check/3`). A binding in `closed/1`
+(D-275, including ancestor B of a cited rotation T) or `closed_out/1` refuses as
+`catalog_binding_closed`; every resolver error or malformed input, any retained catalog or rotation
+the resolver refuses, and any replacement made raw evidence by its evidence (D-917) refuses as
+`catalog_binding_unresolved`. Non-claims: closure is judged only over the Space history the package
+carries (no freshness; row 550); no retained-client acceptance, route switch or 4c wiring; no
+custodian rotation or replacement ceremony (OD-13, row 361); no CLI-level closed-binding test (row
+551). C10–C15 stay OPEN.
 Native `catalog_eval` fails closed on `replace_catalog_v1`: it refuses the command as
 `unknown_command` (`commands.rs:89`) before Space policy or projection, until PR 5 (row 319,
 after plan 267). BEAM/TS admit it to Stage A while native refuses it; this is a known,
@@ -78,7 +90,7 @@ govern admin acquisition and renewal; the custodian holds a key.
 | The closed `CatalogTrust.reason` set already contains every outcome R11c needs. | `catalog_trust.ex:91-110` |
 | Authority observation APIs: `holder_epoch/3`, `acquisitions/3`, `analyze_with_beacon_evidence/2`, `analyze_with_records/2`, `continuation_profile/1`. | `authority.ex:135-180`, `:554-590` |
 | Epoch/basis derivation and sign-last pattern for a Space command that carries a claim. | `member_continuity_authoring.ex` (`epoch/1`, `placeholder/1`, `intent/4`); `member_continuity.ex` `epoch/2` |
-| The custodian ledger is keyed on `binding.bootstrap_id` and `binding.record.catalog_key`. | `catalog_ceremony/signing_ledger.ex:23-48`; `catalog_ceremony/binding.ex` |
+| The custodian ledger is keyed on `binding.bootstrap_id` and `binding.record.catalog_key` (superseded: PR 3, #217, re-keyed it by `{Binding.binding_id/1, catalog_key}`). | `catalog_ceremony/signing_ledger.ex:23-48` (at design time); `catalog_ceremony/binding.ex` |
 | Seed and backup both lost: "Replacement is the R11c procedure, which is not built." | `docs/treehouse_catalog_signer_custody.md:417-420` |
 
 **Grounding corrections** (D-273): native rotation exists (`catalog_eval/chains.rs`, plan 267)
@@ -323,8 +335,8 @@ authority reclassification of the frozen state cancels the pending attempt befor
 signing call (C13 "cancel pending signing"). Follow-up observation: `author_catalog_bootstrap/3`
 has no `catalog_command_too_large` preflight either; that is a separate row.
 
-**PR 3 — custodian and ledger generation** (fixture only; the closed-binding refusal waits on
-PR 4). Files: `catalog_ceremony/signing_ledger.ex`, `binding.ex`, `space_export.ex`,
+**PR 3 — custodian and ledger generation** (fixture only; the closed-binding refusal is
+DONE, row 360). Files: `catalog_ceremony/signing_ledger.ex`, `binding.ex`, `space_export.ex`,
 `release_catalog.ex`. Key the ledger by `{binding_id, catalog_key}`; it takes the closed set from
 the PR 4 resolver over Space history plus retained rotations and catalogs, never from raw Space
 frames. Tests: accepts revision 0 under the new binding; refuses under a closed binding (incl.
