@@ -385,17 +385,41 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   @spec honored_bootstrap(Log.t(), map()) ::
           {:ok, String.t()} | {:error, :binding_not_found | :binding_fork | :invalid_space_log}
   def honored_bootstrap(log, record) do
-    with {:ok, %{bootstraps: found}} <- CatalogBootstrap.observe(log) do
-      authored = Enum.filter(found, &authored_by_root?(log, &1))
+    case root_bootstraps(log) do
+      {:ok, []} -> {:error, :binding_not_found}
+      {:ok, [%{record: ^record, id: id}]} -> {:ok, id}
+      {:ok, [_one]} -> {:error, :binding_not_found}
+      {:ok, _many} -> {:error, :binding_fork}
+      :error -> {:error, :invalid_space_log}
+    end
+  end
 
-      case Enum.uniq_by(authored, & &1.id) do
-        [] -> {:error, :binding_not_found}
-        [%{record: ^record, id: id}] -> {:ok, id}
-        [_one] -> {:error, :binding_not_found}
-        _many -> {:error, :binding_fork}
-      end
-    else
-      _ -> {:error, :invalid_space_log}
+  @doc """
+  The record of the one honored root-authored bootstrap op `bootstrap_id`, read from the
+  Space log itself (row 360). A replacement binding's `record` is rewritten by
+  `replacement/3`, so a caller that needs the exact bootstrap record (the PR 4 resolver's
+  `bootstrap` input) takes it from here. The same rule as `honored_bootstrap/2`: never
+  chosen by arrival order, and a fork of root-authored bootstraps is refused.
+  """
+  @spec bootstrap_record(Log.t(), String.t()) ::
+          {:ok, map()} | {:error, :binding_not_found | :binding_fork | :invalid_space_log}
+  def bootstrap_record(log, bootstrap_id) do
+    case root_bootstraps(log) do
+      {:ok, [%{id: ^bootstrap_id, record: record}]} -> {:ok, record}
+      {:ok, [_ | [_ | _]]} -> {:error, :binding_fork}
+      {:ok, _none_or_other} -> {:error, :binding_not_found}
+      :error -> {:error, :invalid_space_log}
+    end
+  end
+
+  # Root-authored bootstrap observations, unique by op id.
+  defp root_bootstraps(log) do
+    case CatalogBootstrap.observe(log) do
+      {:ok, %{bootstraps: found}} ->
+        {:ok, found |> Enum.filter(&authored_by_root?(log, &1)) |> Enum.uniq_by(& &1.id)}
+
+      _ ->
+        :error
     end
   end
 
