@@ -1,7 +1,5 @@
-> **Superseded by brief (2026-11-16, row 157; D-850).** This plan was written at `c9a05b40`
-> and its drift check fired against `origin/main` at `4ee13d7d6` (`authority.ex` +1189 lines
-> changed, `read_model.ex` 89, `instrument_live.html.heex` 42), so the "judge moved" STOP
-> condition was met. The implementation followed a re-checked brief instead. Stale items:
+> **Superseded by brief (2026-11-16, row 157; D-850).** The files this plan cites had changed on main since it was written, so the
+> "judge moved" STOP condition was met; the evidence is in PR #231. The implementation followed a re-checked brief instead. Stale items:
 > (1) `analyze/2` now wraps private `do_analyze/2`, beside public `analyze_with_beacon_evidence/2`,
 > `analyze_with_records/2` and `acquisitions/3`; (2) chronology is already public without
 > `at_tick`, which stays omitted because ticks are author-asserted and untrusted, so this plan's
