@@ -1,0 +1,33 @@
+{
+  "name": "@treetopdevs/lattice-browser-starter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Thin Vite + Vue 3.5 browser app starter on @treetopdevs/lattice-client and @treetopdevs/lattice-shell-kit (demo IndexedDB custody, Treehouse + Township + Toolshed live multi-app showcase).",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5180",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "test": "tsx --preserve-symlinks test/custody_and_products.ts",
+    "test:live": "tsx --preserve-symlinks test/live_ecosystem_gate.ts",
+    "test:browser": "node test/browser_e2e.mjs"
+  },
+  "dependencies": {
+    "@noble/curves": "2.2.0",
+    "@treetopdevs/lattice-client": "file:../lattice-client",
+    "@treetopdevs/lattice-shell-kit": "file:../lattice-shell-kit",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@vitejs/plugin-vue": "6.0.7",
+    "@vue/compiler-core": "3.5.39",
+    "@vue/compiler-sfc": "3.5.39",
+    "tsx": "4.23.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vue-tsc": "3.3.6",
+    "ws": "^8.18.3",
+    "@types/ws": "^8.18.1"
+  }
+}

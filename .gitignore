@@ -14,10 +14,13 @@
 /clients/township-tauri-shell/dist/
 /clients/township-tauri-shell/src-tauri/gen/schemas/
 /clients/township-tauri-shell/src-tauri/target/
+/clients/lattice-browser-starter/node_modules/
+/clients/lattice-browser-starter/dist/
 /output/playwright/
 /output/flagship/
 /output/liveops/
 /output/browser_beam_carrier/
+/output/demo_ecosystem/
 
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/
