@@ -46,7 +46,7 @@ function allSpecifiers(text: string): string[] {
 const intoDemo = (file: string, spec: string) => spec.startsWith(".") && resolve(dirname(file), spec).startsWith(DEMO);
 
 test("session and ui import nothing from src/demo", () => {
-  // Every layer except the composition root (App.tsx until M1a.7) and the demo itself. Type-only imports
+  // Every layer except the composition root (src/composition.tsx since M1a.7) and the demo itself. Type-only imports
   // count too: a session or ui type that names a demo type ties the layer to the demo.
   const layers = ["session", "ui", "lib", "native", "local", "app"].flatMap((dir) => sourceFiles(join(SRC, dir)));
   const files = [...layers, join(SRC, "polyfills.ts"), join(APP, "index.ts")].filter(existsSync);
@@ -60,7 +60,7 @@ test("session and ui import nothing from src/demo", () => {
 });
 
 test("the composition root reaches src/demo only behind __DEV__ or EXPO_PUBLIC_TREEHOUSE_DEMO=1", () => {
-  const file = join(SRC, "App.tsx");
+  const file = join(SRC, "composition.tsx");
   const text = readFileSync(file, "utf8");
   // The gate itself: the flag must be read by dot notation so Metro inlines it (SDK 58 env-var guide).
   assert.match(text, /const DEMO_ENABLED = __DEV__ \|\| process\.env\.EXPO_PUBLIC_TREEHOUSE_DEMO === "1";/);
@@ -85,7 +85,8 @@ test("the demo bar states that demo keys are public, so anyone can post as them"
   // The Keychain mode is gone from the switcher: only the public demo identities remain.
   assert.deepEqual([...DEMO_ROLES], ["founder", "neighbor"]);
   assert.ok(!/Keychain/.test(readFileSync(join(DEMO, "DemoBar.tsx"), "utf8")));
-  assert.ok(!/Keychain/.test(readFileSync(join(SRC, "App.tsx"), "utf8")));
+  for (const file of ["composition.tsx", join("app", "(tabs)", "group.tsx"), join("ui", "SessionProvider.tsx")])
+    assert.ok(!/Keychain/.test(readFileSync(join(SRC, file), "utf8")), `${file} offers no Keychain demo mode`);
 });
 
 test("trust card text equals the approved hosting sentence", async () => {
@@ -101,9 +102,10 @@ test("trust card text equals the approved hosting sentence", async () => {
     .trim();
   assert.ok(quote.length > 0, "01 has the approved block quote");
   assert.equal(HOSTING_SENTENCE, quote);
-  // The M0 card omitted the reader; the App must render the approved constant and drop the old copy.
-  const app = readFileSync(join(SRC, "App.tsx"), "utf8");
-  assert.ok(app.includes("HOSTING_SENTENCE"), "App renders the approved sentence");
+  // The M0 card omitted the reader; the Group tab (the trust card's home since M1a.7) must render the approved
+  // constant and drop the old copy.
+  const app = readFileSync(join(SRC, "app", "(tabs)", "group.tsx"), "utf8");
+  assert.ok(app.includes("HOSTING_SENTENCE"), "the Group tab renders the approved sentence");
   assert.ok(!app.includes("holds a plaintext copy"), "the M0 trust-card copy is gone");
 });
 
@@ -163,14 +165,18 @@ test("a launch whose held history fails verification shows history_invalid and d
     .split("\n")
     .find((line) => line.startsWith("| `history_invalid` |"))!;
   assert.ok(row.includes(`"${HISTORY_INVALID}"`), "the notice is 04's wording");
-  // App.tsx reads the verify-on-open result after session.open() and returns before host.goOnline().
-  const app = readFileSync(join(SRC, "App.tsx"), "utf8");
-  const connect = app.slice(app.indexOf("await session.open();"));
-  const check = connect.indexOf("session.read().history");
-  const online = connect.indexOf("await host.goOnline();");
+  // The app session (M1a.7) reads the verify-on-open result after session.open() and goes online only when it
+  // passed; the session's own goOnline refuses history_invalid as well (link_commands.test).
+  const wiring = readFileSync(join(SRC, "native", "app_session.ts"), "utf8");
+  const connect = wiring.slice(wiring.indexOf("await session.open();"));
+  const check = connect.indexOf("session.read().history.ok");
+  const online = connect.indexOf("await session.goOnline();");
   assert.ok(check > 0 && check < online, "history is checked before going online");
-  assert.match(connect.slice(check, online), /HISTORY_INVALID[\s\S]*return;/);
-  // The manual toggle may not go online over history that failed, and the pill is inert without a group.
-  assert.match(app, /!host\.isOnline\(\) && sessionRef\.current\?\.read\(\)\.history\.ok === false\) return;/);
-  assert.match(app, /disabled=\{!demo\}/);
+  // SessionProvider shows the notice with its reason; the screens turn sync on only through the session.
+  const provider = readFileSync(join(SRC, "ui", "SessionProvider.tsx"), "utf8");
+  assert.match(provider, /HISTORY_INVALID\} \(\$\{history\.reason\}\)/);
+  const group = readFileSync(join(SRC, "app", "(tabs)", "group.tsx"), "utf8");
+  assert.ok(!/host\.goOnline\(/.test(group + provider), "no M0 host path goes online");
+  assert.match(group, /session\.goOnline\(\)/);
+  assert.match(group, /disabled=\{!session\}/);
 });

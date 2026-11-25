@@ -50,8 +50,9 @@ test("session layer imports no react, react-native, expo or native modules", () 
 });
 
 test("ui and route layers do not import lattice-client", () => {
-  // src/App.tsx is the M0 screen until Expo Router lands (M1a.7); it is the ui layer today.
-  const files = [...sourceFiles(join(SRC, "app")), ...sourceFiles(join(SRC, "ui")), join(SRC, "App.tsx")].filter(existsSync);
+  // Since M1a.7 the routes live in src/app (Expo Router) and src/App.tsx is gone.
+  const files = [...sourceFiles(join(SRC, "app")), ...sourceFiles(join(SRC, "ui"))].filter(existsSync);
+  assert.ok(files.some((f) => f.includes(join("src", "app"))), "src/app has routes to scan");
   assert.ok(files.length > 0, "there is a ui layer to scan");
   const offenders = files.flatMap((file) =>
     specifiers(file)

@@ -1,7 +1,6 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes } from "./custody";
-import { emptySnapshot, ExpoSqliteStorage, type MobileStorage } from "./storage";
 
 /** Dev-only probe of the three native facilities M0 never executed. Reports; never repairs. */
 
@@ -13,22 +12,29 @@ export interface SelfCheckDeps {
     getItemAsync(key: string): Promise<string | null>;
     deleteItemAsync(key: string): Promise<void>;
   };
-  storage: MobileStorage & {
-    backend(): "sqlite" | "memory";
-    ready?(): Promise<unknown>;
-    lastError?(): string | undefined;
-  };
+  /** Opens a SQLite database by name (expo-sqlite on the phone). There is no memory fallback. */
+  storage: { openDb(name: string): Promise<ProbeDb> };
+}
+
+type SqlParam = string | number | null;
+
+/** The part of expo-sqlite's SQLiteDatabase the probe uses. */
+export interface ProbeDb {
+  execAsync(source: string): Promise<void>;
+  runAsync(source: string, ...params: SqlParam[]): Promise<unknown>;
+  getAllAsync<T>(source: string, ...params: SqlParam[]): Promise<T[]>;
 }
 
 export interface SelfCheck {
   ok: boolean;
   custody: { ok: boolean; detail: string };
-  storage: { ok: boolean; backend: "sqlite" | "memory"; detail: string };
+  storage: { ok: boolean; backend: "sqlite" | "none"; detail: string };
   crypto: { ok: boolean; detail: string };
 }
 
 const THROWAWAY_KEY = "treehouse_selfcheck_throwaway_v1";
-const NAMESPACE = "treehouse_selfcheck";
+/** Its own throwaway file: never an identity replica store, the local store or the M0 snapshot file. */
+const PROBE_DB = "treehouse_selfcheck_v1.db";
 
 // Public known answers: SHA-256("abc") (FIPS 180-2) and RFC 8032 section 7.1 test 1 (empty message).
 const SHA256_ABC = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
@@ -72,20 +78,22 @@ async function checkCustody(d: SelfCheckDeps["secureStore"]): Promise<SelfCheck[
 }
 
 async function checkStorage(s: SelfCheckDeps["storage"]): Promise<SelfCheck["storage"]> {
+  let db: ProbeDb;
   try {
-    await s.ready?.();
-    const snap = emptySnapshot(NAMESPACE);
-    snap.profiles["selfcheck"] = { frames: [], outbox: [], acked: ["a"] };
-    await s.save(snap);
-    const back = await s.load(NAMESPACE);
-    await s.clear(NAMESPACE);
-    const backend = s.backend();
-    const same = JSON.stringify(back) === JSON.stringify(snap);
-    if (!same) return { ok: false, backend, detail: "read-back differs from written snapshot" };
-    if (backend !== "sqlite") return { ok: false, backend, detail: `memory fallback answered${s.lastError?.() ? `: ${s.lastError?.()}` : ""}` };
-    return { ok: true, backend, detail: "snapshot round-trip on sqlite" };
+    db = await s.openDb(PROBE_DB);
   } catch (e) {
-    return { ok: false, backend: s.backend(), detail: msg(e) };
+    return { ok: false, backend: "none", detail: msg(e) };
+  }
+  try {
+    await db.execAsync("CREATE TABLE IF NOT EXISTS probe (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);");
+    const value = bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(8)));
+    await db.runAsync("INSERT INTO probe (key, value) VALUES ('probe', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", value);
+    const back = await db.getAllAsync<{ value: string }>("SELECT value FROM probe WHERE key = 'probe'");
+    await db.runAsync("DELETE FROM probe WHERE key = 'probe'");
+    if (back.length !== 1 || back[0]!.value !== value) return { ok: false, backend: "sqlite", detail: "read-back differs from written row" };
+    return { ok: true, backend: "sqlite", detail: "row round-trip on sqlite" };
+  } catch (e) {
+    return { ok: false, backend: "sqlite", detail: msg(e) };
   }
 }
 
@@ -119,9 +127,23 @@ async function checkCrypto(): Promise<SelfCheck["crypto"]> {
   }
 }
 
-// One shared storage handle for the app's lifetime, so repeated runs do not leak SQLite connections.
-let sharedStorage: ExpoSqliteStorage | null = null;
+// One shared probe handle for the app's lifetime, so repeated runs do not leak SQLite connections.
+let sharedProbe: Promise<ProbeDb> | null = null;
 let inFlight: Promise<SelfCheck> | null = null;
+
+const expoStorage: SelfCheckDeps["storage"] = {
+  openDb(name) {
+    sharedProbe ??= (async () => {
+      const { openDatabaseAsync } = await import("expo-sqlite");
+      const handle: ProbeDb = await openDatabaseAsync(name);
+      return handle;
+    })().catch((e: unknown) => {
+      sharedProbe = null;
+      throw e;
+    });
+    return sharedProbe;
+  },
+};
 
 export async function runSelfCheck(deps?: SelfCheckDeps): Promise<SelfCheck> {
   if (deps) return runWith(deps);
@@ -133,8 +155,7 @@ export async function runSelfCheck(deps?: SelfCheckDeps): Promise<SelfCheck> {
 }
 
 async function runDefault(): Promise<SelfCheck> {
-  sharedStorage ??= new ExpoSqliteStorage();
-  const storage = sharedStorage;
+  const storage = expoStorage;
   let custody: SelfCheck["custody"];
   try {
     const secureStore = await import("expo-secure-store");

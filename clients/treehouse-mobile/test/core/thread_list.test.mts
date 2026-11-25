@@ -68,3 +68,17 @@ test("thread list shows waiting counts and listed threads this phone does not ho
   assert.equal(list.threads[0]!.unreadCount, 0, "my own message is never unread");
   assert.equal(list.threads[0]!.connection, "reconnecting");
 });
+
+test("a removed last message keeps who removed it, so the list never says the author deleted a moderator removal", async () => {
+  // Review (M1a.7 close): ThreadListItem.last.removed was a boolean and the Threads tab always showed the
+  // author placeholder.
+  const { projectThreadList } = await import("../../src/session/projections/thread_list");
+  const timeline = {
+    title: "General",
+    archived: false,
+    unreadCount: 0,
+    messages: [{ id: "m", standing: "honored", text: "", author: "a", removed: "by_moderator" }],
+  } as never;
+  const list = projectThreadList({ space: null, timelines: { "replica:treehouse:thread:x": timeline }, profiles: {}, feed: { configured: false, routes: [] } });
+  assert.equal(list.threads[0]!.last?.removed, "by_moderator");
+});

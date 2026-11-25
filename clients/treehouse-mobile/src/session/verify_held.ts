@@ -8,7 +8,7 @@ import {
   verifyCarrierOp,
   verifyEd25519,
 } from "@treetopdevs/lattice-client";
-import type { TreehouseProduct, Verifier } from "@treetopdevs/lattice-client";
+import type { CarrierOpFrame, TreehouseProduct, Verifier } from "@treetopdevs/lattice-client";
 import type { HeldProfile } from "./ports";
 
 // Verify on open (M1a.2): the mobile form of the Tauri shell's verifyProfile and validateProfiles
@@ -62,6 +62,26 @@ const PREFIX: Record<TreehouseProduct, string> = {
 const empty = (p: HeldProfile | undefined) =>
   !p || (p.frames.length === 0 && p.outbox.length === 0 && p.acked.length === 0);
 
+/**
+ * The key the replica's #root: commitment names, from a held frame with no deps that it authored, or null.
+ * Shared by verify-on-open and the Space frames export (which must find the root even when history failed).
+ */
+export async function committedRootAuthor(replica: string, frames: readonly CarrierOpFrame[]): Promise<string | null> {
+  const commitment = townshipReplicaCommitment(replica);
+  if (commitment === null) return null;
+  for (const frame of frames) {
+    if (frame.deps.length !== 0) continue;
+    let tag: string | null = null;
+    try {
+      tag = await townshipReplicaRootTag(frame.author);
+    } catch {
+      tag = null;
+    }
+    if (tag === commitment) return frame.author;
+  }
+  return null;
+}
+
 /** One replica's checks. Returns the observation, whose Space state lists the referenced Threads. */
 async function verifyOne(entry: HeldEntry, verifier: Verifier) {
   const { replica, product } = entry;
@@ -96,12 +116,12 @@ async function verifyOne(entry: HeldEntry, verifier: Verifier) {
     throw new Invalid("invalid_retained_history");
   }
   // Select the root by the #root: commitment, never by position: a relay may serve a competing genesis.
-  const commitment = townshipReplicaCommitment(replica);
+  const rootAuthor = await committedRootAuthor(replica, profile.frames);
   let rootId: string | undefined;
   for (const op of ops) {
     if (op.deps.length !== 0 || op.authority?.type !== "genesis") continue;
     const author = profile.frames.find((frame) => frame.id === op.id)?.author;
-    if (author !== undefined && commitment === (await townshipReplicaRootTag(author))) {
+    if (rootAuthor !== null && author === rootAuthor) {
       rootId = op.id;
       break;
     }

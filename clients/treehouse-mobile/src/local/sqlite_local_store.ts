@@ -67,8 +67,9 @@ export async function openSqliteLocalStore(db: LocalSqliteDb): Promise<LocalStor
     if (!(row.key in DEFAULT_SETTINGS)) continue; // a setting a newer build wrote; keep it, ignore it
     const value = JSON.parse(row.json) as unknown;
     const key = row.key as keyof Settings;
-    if (typeof value !== typeof DEFAULT_SETTINGS[key]) throw new Error(`local_store: unreadable setting ${row.key}`);
-    snapshot.settings[key] = value as Settings[typeof key];
+    if (typeof value !== typeof DEFAULT_SETTINGS[key] || value === null || Array.isArray(value))
+      throw new Error(`local_store: unreadable setting ${row.key}`);
+    (snapshot.settings as Record<string, unknown>)[key] = value;
   }
 
   return createCachedLocalStore(snapshot, {

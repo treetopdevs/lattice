@@ -18,9 +18,14 @@ export interface Draft {
 /** Device settings. `syncEnabled: false` is the person turning sync off (the Offline pill in 03). */
 export interface Settings {
   syncEnabled: boolean;
+  /**
+   * Which replica store each key opens, by public key (M1a.7): 0 is the first; a re-sync after history_invalid
+   * moves one key to a fresh store and never touches the old one. Device-local, never part of a signed op.
+   */
+  replicaStoreEpochs: Readonly<Record<string, number>>;
 }
 
-export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({ syncEnabled: true });
+export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({ syncEnabled: true, replicaStoreEpochs: Object.freeze({}) });
 
 export type LocalKind = "petname" | "draft" | "read" | "setting";
 

@@ -54,6 +54,26 @@ export async function goOffline(ctx: LinkContext): Promise<Outcome<FeedState, Li
   });
 }
 
+/**
+ * Lifecycle (03): the app came to the foreground. Start the feed and sync once, but only when the person has
+ * sync on and the history and key allow it; otherwise report the idle state. Never writes `syncEnabled`.
+ */
+export async function foreground(ctx: LinkContext): Promise<Outcome<FeedState, LinkRefusal>> {
+  if (!ctx.historyOk() || !ctx.identityOk() || !ctx.local.setting("syncEnabled")) return ok(ctx.link.state());
+  return attempt(async () => {
+    await ctx.link.start();
+    return ctx.link.syncNow();
+  });
+}
+
+/** Lifecycle (03): the app went to the background. Stop the feed and close sockets; `syncEnabled` stays. */
+export async function background(ctx: LinkContext): Promise<Outcome<FeedState, LinkRefusal>> {
+  return attempt(async () => {
+    await ctx.link.stop();
+    return ctx.link.state();
+  });
+}
+
 /** Sync now. While sync is off the link dials nothing and reports its idle state. */
 export async function syncNow(ctx: LinkContext): Promise<Outcome<FeedState, LinkRefusal>> {
   if (!ctx.historyOk()) return refuse("history_invalid");

@@ -1,6 +1,6 @@
 import type { FeedState, HeldProfile, RouteConnection } from "@treetopdevs/lattice-shell-kit/sync";
 import type { ReplicaView } from "./replica_view";
-import type { ThreadTimeline } from "./thread_timeline";
+import type { Removed, ThreadTimeline } from "./thread_timeline";
 
 // ThreadList (03): one row per thread the Space lists, in the judge's Space order, from the timelines
 // (title, archived, last message, unread), the held profiles (waiting) and the feed (link state). A listed
@@ -12,7 +12,7 @@ export interface ThreadListItem {
   held: boolean;
   archived: boolean;
   /** The last counted message, or a removed placeholder; null when there is none. */
-  last: { text: string; author: string; removed: boolean } | null;
+  last: { text: string; author: string; removed: Removed | null } | null;
   unreadCount: number;
   /** Authored ids not yet acknowledged by the relay. */
   waitingCount: number;
@@ -49,7 +49,7 @@ export function projectThreadList(inputs: ThreadListInputs): ThreadList {
       title: timeline?.title || title,
       held: timeline !== undefined,
       archived: timeline?.archived ?? false,
-      last: last ? { text: last.text, author: last.author, removed: last.removed !== null } : null,
+      last: last ? { text: last.text, author: last.author, removed: last.removed } : null,
       unreadCount: timeline?.unreadCount ?? 0,
       waitingCount: (profile?.outbox ?? []).filter((id) => !acked.has(id)).length,
       connection: inputs.feed.routes.find((r) => r.replica === replica)?.connection ?? null,

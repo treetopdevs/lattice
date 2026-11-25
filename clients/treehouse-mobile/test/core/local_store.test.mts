@@ -202,6 +202,21 @@ test("settings default and persist", async () => {
   }
 });
 
+test("the per-key replica store pointer survives a reopen (M1a.7 re-sync)", async () => {
+  for (const adapter of adapters) {
+    const disk = await adapter.disk();
+    try {
+      const store = await disk.open();
+      assert.deepEqual(store.setting("replicaStoreEpochs"), {}, `${adapter.name}: every key starts at store 0`);
+      await store.setSetting("replicaStoreEpochs", { keyA: 1 });
+      await store.setSetting("replicaStoreEpochs", { ...store.setting("replicaStoreEpochs"), keyB: 2 });
+      assert.deepEqual((await disk.open()).setting("replicaStoreEpochs"), { keyA: 1, keyB: 2 }, `${adapter.name}: durable`);
+    } finally {
+      disk.close();
+    }
+  }
+});
+
 // --- import scan -------------------------------------------------------------------------------------
 
 function sourceFiles(dir: string): string[] {

@@ -10,6 +10,8 @@ import alphabet from "../../route_alphabet.json";
 import { archiveThread as archiveThreadCommand } from "./commands/archive_thread";
 import { deleteMessage as deleteMessageCommand } from "./commands/delete_message";
 import { editMessage as editMessageCommand } from "./commands/edit_message";
+import { exportSpaceFrames as exportSpaceFramesCommand } from "./commands/export_space";
+import type { SpaceExport } from "./commands/export_space";
 import * as linkCommands from "./commands/link_commands";
 import type { LinkContext } from "./commands/link_commands";
 import * as localCommands from "./commands/local_commands";
@@ -21,6 +23,7 @@ import type {
   ArchiveRefusal,
   DeleteRefusal,
   EditRefusal,
+  ExportRefusal,
   LinkRefusal,
   LocalRefusal,
   Outcome,
@@ -100,7 +103,21 @@ export interface TreehouseSession {
   goOnline(): Promise<Outcome<FeedState, LinkRefusal>>;
   goOffline(): Promise<Outcome<FeedState, LinkRefusal>>;
   syncNow(): Promise<Outcome<FeedState, LinkRefusal>>;
+  /**
+   * Lifecycle (03): the app is in the foreground. Starts the feed and syncs once when sync is on and the
+   * history and key allow it; otherwise reports the idle state. Never changes the person's sync setting.
+   */
+  foreground(): Promise<Outcome<FeedState, LinkRefusal>>;
+  /** Lifecycle (03): the app is in the background. Stops the feed and closes sockets. No background work. */
+  background(): Promise<Outcome<FeedState, LinkRefusal>>;
+  /**
+   * The held Space frames in the D-31 export shape (04). Offered in every phase, including history_invalid
+   * and identity_mismatch; nothing is signed or written.
+   */
+  exportSpaceFrames(): Promise<Outcome<SpaceExport, ExportRefusal>>;
 }
+
+export type { SpaceExport };
 
 /**
  * Everything of ShellHost except the route book's saved routes, which the RelayLink owns. Its validators
@@ -119,6 +136,11 @@ export interface SessionPorts {
    * passes an explicitly in-memory one, so no command reports success over persistence that is not there.
    */
   local: LocalStore;
+  /**
+   * A check the caller already failed before open (the M0 carry-over): open reports it as history_invalid
+   * even when the store itself verifies, so the session never goes online or signs over it.
+   */
+  blockedHistory?: HistoryCheck & { ok: false };
   /** Verify on open and before each merge. Defaults to verifyHeld (lattice-client's checks). */
   verify?: (held: readonly HeldEntry[], verifier: Verifier) => Promise<VerifyHeldResult>;
 }
@@ -403,7 +425,7 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
           store.replicas().map((r) => ({ ...r, profile: store.profile(r.replica) })),
           verifier,
         );
-        history = verdict.ok ? { ok: true } : verdict;
+        history = !verdict.ok ? verdict : ports.blockedHistory ?? { ok: true };
       } catch (error) {
         history = { ok: false, replica: null, reason: error instanceof Error ? error.message : String(error) };
       }
@@ -453,6 +475,22 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
         }
         return outcome;
       }),
+    foreground: () =>
+      whenOpen(async () => {
+        const outcome = await linkCommands.foreground(linkCtx);
+        if (outcome.ok) {
+          stampSync(outcome.value, true);
+          recompute(outcome.value);
+        }
+        return outcome;
+      }),
+    background: () =>
+      whenOpen(async () => {
+        const outcome = await linkCommands.background(linkCtx);
+        if (outcome.ok) recompute(outcome.value);
+        return outcome;
+      }),
+    exportSpaceFrames: () => whenOpen(() => exportSpaceFramesCommand(store)),
   };
 }
 

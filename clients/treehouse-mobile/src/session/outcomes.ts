@@ -86,7 +86,18 @@ export type LocalRefusal = "storage_failed" | "not_open";
 /** goOnline, goOffline, syncNow. `link_failed` when the relay link itself throws (not a route state). */
 export type LinkRefusal = "history_invalid" | "identity_mismatch" | "storage_failed" | "link_failed" | "not_open";
 
-export type AnyCommandRefusal = PostRefusal | EditRefusal | DeleteRefusal | RemoveRefusal | ArchiveRefusal | LocalRefusal | LinkRefusal;
+/** Space frames export (04). `no_space` when no Space frame is held; `export_failed` when lattice-client refuses. */
+export type ExportRefusal = "no_space" | "export_failed" | "not_open";
+
+export type AnyCommandRefusal =
+  | PostRefusal
+  | EditRefusal
+  | DeleteRefusal
+  | RemoveRefusal
+  | ArchiveRefusal
+  | LocalRefusal
+  | LinkRefusal
+  | ExportRefusal;
 
 /** App rule O-10: 4,000 characters (code points), well under the relay's 64,000-byte socket frame. */
 export const MESSAGE_MAX_CHARS = 4_000;

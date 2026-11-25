@@ -41,7 +41,15 @@ const NAMESPACE = randomBytes(16).toString("hex");
 
 export function testIdentity(realm: string): TestIdentity {
   if (!/^[a-z][a-z0-9-]{0,31}$/.test(realm)) throw new Error(`invalid test realm: ${realm}`);
-  const seed = createHash("sha256").update(`treehouse-mobile-test:${NAMESPACE}:${realm}`).digest();
+  return identityFromSeed(realm, createHash("sha256").update(`treehouse-mobile-test:${NAMESPACE}:${realm}`).digest());
+}
+
+/**
+ * A TestIdentity over a seed the caller holds (the loopback demo server, which must serve demo seeds as the
+ * public demo relay does). The seed stays in the signer closure and in the caller; it is never returned.
+ */
+export function identityFromSeed(realm: string, seed: Uint8Array): TestIdentity {
+  if (!/^[a-z][a-z0-9-]{0,31}$/.test(realm)) throw new Error(`invalid test realm: ${realm}`);
   const publicKey = ed25519.getPublicKey(seed);
   const signer: CarrierOpSigner = { publicKey, sign: (bytes: Uint8Array) => ed25519.sign(bytes, seed) };
   const pubkey = Buffer.from(publicKey).toString("base64");
@@ -72,10 +80,12 @@ export function heads(frames: readonly CarrierOpFrame[]): string[] {
   return frames.filter((f) => !referenced.has(f.id)).map((f) => f.id).sort();
 }
 
-export async function buildGroup(opts: { members?: number } = {}): Promise<Group> {
+export async function buildGroup(
+  opts: { members?: number; identities?: { admin: TestIdentity; members: TestIdentity[] } } = {},
+): Promise<Group> {
   const count = opts.members ?? 2;
-  const admin = testIdentity("admin");
-  const members = Array.from({ length: count }, (_, i) => testIdentity(`member-${i + 1}`));
+  const admin = opts.identities?.admin ?? testIdentity("admin");
+  const members = opts.identities?.members ?? Array.from({ length: count }, (_, i) => testIdentity(`member-${i + 1}`));
   const nonce = () => randomBytes(12).toString("base64url");
 
   const prepared = await prepareTreehouseSpaceCreation({

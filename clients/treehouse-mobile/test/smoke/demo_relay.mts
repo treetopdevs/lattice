@@ -1,116 +1,109 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import WebSocket from "ws";
-import {
-  createIdentityFromSeedHex,
-  loadOrCreateDeviceIdentity,
-  MemoryKeyStore,
-} from "../../src/native/custody";
-import { MemoryMobileStorage } from "../../src/native/storage";
-import { TreehouseMobileHost } from "../../src/lib/treehouse_mobile_host";
+import { createIdentityFromSeedHex, loadOrCreateDeviceIdentity, MemoryKeyStore } from "../../src/native/custody";
+import { openAppSession } from "../../src/native/app_session";
+import type { AppRoute, AppSessionDeps } from "../../src/native/app_session";
+import { MemoryLocalDisk, openMemoryLocalStore } from "../../src/local/local_store";
 import { DEFAULT_DEMO_WSS_ORIGIN, fetchDemoEndpoints } from "../../src/demo/manifest";
 import { fetchDemoSeed } from "../../src/demo/identities";
+import { nodeSqliteDb } from "../support/node_sqlite";
 
-// Smoke gate against the public demo relay (moved from test/m0_wss_gate.mts in M1a.0). It reads only:
-// the offline post is queued locally and never relayed. Set DEMO_WSS_WRITE=1 to also relay that post,
-// which adds one message to a shared demo thread on every run.
+// Smoke gate against the public demo relay (moved from test/m0_wss_gate.mts in M1a.0; on the app session
+// since M1a.7). It reads only: the link is stopped before the post, so the post stays saved on this machine
+// and is never relayed. Set DEMO_WSS_WRITE=1 to also relay that post, which adds one message to a shared demo
+// thread on every run.
 const WRITE = process.env.DEMO_WSS_WRITE === "1";
 
-const origin = (process.argv[2] || process.env.DEMO_WSS_ORIGIN || DEFAULT_DEMO_WSS_ORIGIN).replace(
-  /\/$/,
-  "",
-);
+const origin = (process.argv[2] || process.env.DEMO_WSS_ORIGIN || DEFAULT_DEMO_WSS_ORIGIN).replace(/\/$/, "");
+
+async function until(check: () => boolean, what: string, ms = 30_000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
 
 async function run(): Promise<void> {
-  // 1. Verify KeyStore device identity round-trip
+  // 1. KeyStore device identity round-trip.
   const keyStore = new MemoryKeyStore();
   const device1 = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
   const device2 = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
   assert.equal(device1.publicKeyBase64, device2.publicKeyBase64, "device identity must persist across loads");
   console.log(`KEYSTORE OK: device key ${device1.fingerprint} persisted`);
 
-  // 2. Fetch manifest & founder demo seed from live Fly.io WSS testbed
+  // 2. Manifest and the founder's public demo seed.
   const manifest = await fetchDemoEndpoints(origin);
   const founderSeed = await fetchDemoSeed(origin, "founder");
   const founder = createIdentityFromSeedHex(founderSeed.realm, founderSeed.seedHex, "demo-seed");
+  const routes: AppRoute[] = manifest.endpoints
+    .filter((ep) => ep.product === "Treehouse.Space" || ep.product === "Treehouse.Thread")
+    .map((ep) => ({
+      replica: ep.replica,
+      product: ep.product as AppRoute["product"],
+      url: ep.ws_url,
+      expectedPeerRealm: ep.peer_realm,
+      expectedPeerPubkey: ep.peer_pubkey,
+    }));
+  assert.equal(routes.length, 2, "expected Space + Thread Treehouse routes");
+  for (const r of routes) assert.ok(r.url.startsWith("wss://"), `expected wss://, got ${r.url}`);
+  const space = routes.find((r) => r.product === "Treehouse.Space")!.replica;
+  const thread = routes.find((r) => r.product === "Treehouse.Thread")!.replica;
 
-  const realmByPubkey: Record<string, string> = {};
-  for (const info of Object.values(manifest.participants)) {
-    realmByPubkey[info.pubkey] = info.realm;
-  }
-
-  // 3. Connect TreehouseMobileHost over authenticated wss://
-  const sharedStorage = new MemoryMobileStorage();
-  const host = new TreehouseMobileHost({
-    storage: sharedStorage,
-    webSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+  // 3. The app session over SQLite files (node:sqlite) and a durable-for-the-run local store.
+  const root = mkdtempSync(join(tmpdir(), "treehouse-smoke-"));
+  const localDisk = new MemoryLocalDisk();
+  const deps = async (): Promise<AppSessionDeps> => ({
+    local: await openMemoryLocalStore(localDisk),
+    clock: { now: () => Date.now() },
+    openReplicaDb: async (name) => nodeSqliteDb(join(root, name)),
+    readLegacyProfiles: async () => null,
+    link: { webSocket: WebSocket as unknown as typeof globalThis.WebSocket },
   });
+  try {
+    const first = await openAppSession(await deps(), { identity: founder, routes });
+    // The Space and the Thread sync on separate sockets: wait for both before asserting either.
+    await until(
+      () => first.session.read().group?.replica === space && (first.session.read().timelines[thread]?.messages.length ?? 0) >= 1,
+      "the space and the thread pulled",
+    );
+    const models = first.session.read();
+    assert.equal(models.group?.replica, space);
+    assert.equal(models.group?.name, "Canopy Demo Space", `unexpected space name: ${models.group?.name}`);
+    assert.equal(models.audit.replicas.find((r) => r.replica === space)?.quarantined.length, 0, "nothing quarantined on the Space");
+    assert.equal(models.timelines[thread]!.canPost, true, "founder should have post capability");
+    console.log(`SPACE OK: "${models.group?.name}" (${models.group?.memberCount} members)`);
+    console.log(`THREAD OK: "#${models.timelines[thread]!.title}" (${models.timelines[thread]!.messages.length} posts)`);
 
-  await host.configure(manifest.endpoints, founder, realmByPubkey);
-  const feedState = await host.goOnline();
+    // 4. Stop the link first, then author: the post is saved, never relayed in read-only mode.
+    assert.equal((await first.session.goOffline()).ok, true);
+    const text = `[mobile offline persistence check ${Date.now()}]`;
+    const posted = await first.session.postMessage(thread, text);
+    assert.ok(posted.ok, JSON.stringify(posted));
+    assert.equal(first.session.read().linkStatus.waiting, 1, "expected 1 waiting post");
+    await first.close();
 
-  assert.equal(feedState.configured, true, "feed should be configured");
-  assert.equal(host.getEndpoints().length, 2, "expected Space + Thread Treehouse routes");
-
-  const spaceEp = host.getSpaceEndpoint();
-  const threadEp = host.getThreadEndpoint();
-  assert.ok(spaceEp, "Treehouse.Space endpoint missing");
-  assert.ok(threadEp, "Treehouse.Thread endpoint missing");
-  assert.ok(spaceEp.ws_url.startsWith("wss://"), `expected wss:// for Space, got ${spaceEp.ws_url}`);
-  assert.ok(threadEp.ws_url.startsWith("wss://"), `expected wss:// for Thread, got ${threadEp.ws_url}`);
-
-  // 4. Observe verified Space & Thread projections
-  const spaceView = host.observeSpace(spaceEp.replica);
-  assert.equal(spaceView.name, "Canopy Demo Space", `unexpected space name: ${spaceView.name}`);
-  assert.ok(spaceView.members.length >= 1, `expected >= 1 admitted member, got ${spaceView.members.length}`);
-  assert.equal(spaceView.quarantinedCount, 0, `expected 0 quarantined ops on Space, got ${spaceView.quarantinedCount}`);
-  console.log(
-    `SPACE OK: "${spaceView.name}" (${spaceView.opCount} ops, ${spaceView.members.length} admitted member(s), 0 quarantined)`,
-  );
-
-  const threadBefore = host.observeThread(threadEp.replica);
-  assert.ok(threadBefore.posts.length >= 1, `expected >= 1 thread post, got ${threadBefore.posts.length}`);
-  assert.equal(threadBefore.canPost, true, "founder should have post capability");
-  console.log(
-    `THREAD OK: "#${threadBefore.title}" (${threadBefore.posts.length} posts, ${threadBefore.opCount} ops)`,
-  );
-
-  // 5. Go offline, author a signed post locally, verify outbox queueing & restart persistence
-  await host.goOffline();
-  assert.equal(host.isOnline(), false, "host should be offline");
-
-  const offlineText = `[M0 offline persistence check ${Date.now()}]`;
-  const queuedFrame = await host.postMessage(threadEp.replica, offlineText);
-  const threadOffline = host.observeThread(threadEp.replica);
-  assert.equal(threadOffline.pendingCount, 1, "expected 1 pending offline post in outbox");
-  assert.ok(
-    threadOffline.posts.some((p) => p.id === queuedFrame.id && p.pending && p.text === offlineText),
-    "offline post should appear immediately as pending in observed thread",
-  );
-  await host.dispose();
-
-  // Simulate app relaunch with a fresh host sharing the same durable storage
-  const restartedHost = new TreehouseMobileHost({
-    storage: sharedStorage,
-    webSocket: WebSocket as unknown as typeof globalThis.WebSocket,
-  });
-  await restartedHost.configure(manifest.endpoints, founder, realmByPubkey);
-  const threadAfterRestart = restartedHost.observeThread(threadEp.replica);
-  assert.equal(threadAfterRestart.pendingCount, 1, "pending offline post must survive app restart");
-  assert.ok(
-    threadAfterRestart.posts.some((p) => p.id === queuedFrame.id && p.pending && p.text === offlineText),
-    "offline post must remain visible after app restart",
-  );
-  console.log("OFFLINE OUTBOX OK: queued signed op persisted across simulated app restart");
-  if (WRITE) {
-    await restartedHost.goOnline();
-    await restartedHost.syncNow();
-    assert.equal(restartedHost.getPendingCount(threadEp.replica), 0, "DEMO_WSS_WRITE: queued post relayed");
-    console.log("WRITE OK: queued post relayed to the demo thread (DEMO_WSS_WRITE=1)");
-  } else {
-    console.log("READ ONLY: queued post not relayed (set DEMO_WSS_WRITE=1 to relay it)");
+    // 5. Relaunch over the same files: still saved, still waiting, sync still off.
+    const second = await openAppSession(await deps(), { identity: founder, routes });
+    const mine = second.session.read().timelines[thread]!.messages.find((m) => m.id === posted.value.id);
+    assert.equal(mine?.delivery, "saved", "the post must survive the relaunch as saved");
+    assert.equal(second.session.read().linkStatus.pill, "offline");
+    console.log("OFFLINE OUTBOX OK: saved post persisted across a relaunch over the same SQLite file");
+    if (WRITE) {
+      await second.session.goOnline();
+      await until(() => second.session.read().linkStatus.waiting === 0, "the post relayed");
+      console.log("WRITE OK: saved post relayed to the demo thread (DEMO_WSS_WRITE=1)");
+    } else {
+      console.log("READ ONLY: saved post not relayed (set DEMO_WSS_WRITE=1 to relay it)");
+    }
+    await second.close();
+    console.log(`PASS: mobile smoke against ${origin}`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
-  await restartedHost.dispose();
-  console.log(`PASS: M0 mobile gate verified against ${origin}`);
 }
 
 run().catch((err) => {

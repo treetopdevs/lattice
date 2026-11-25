@@ -63,8 +63,20 @@ export const message = {
   tryAgain: "Try again",
 } as const;
 
+/** Tab titles (04: three tabs). */
+export const tabs = {
+  threads: "Threads",
+  people: "People",
+  group: "Group",
+} as const;
+
 export const thread = {
+  screenTitle: "Thread",
   empty: "No messages yet.",
+  post: "Post",
+  write: "Write a message",
+  cannotPost: "This phone can't post in this thread.",
+  notHeld: "Not on this phone yet.",
   noThreads: "No threads yet.",
   // 04 says "Archived. Read only."; 01 never uses "read", so the banner says what it means instead.
   archived: "Archived. No new messages.",
@@ -89,6 +101,7 @@ export const actions = {
 export const relay = {
   syncNow: "Sync now",
   pauseSync: "Pause sync",
+  resumeSync: "Turn sync on",
 } as const;
 
 /** People tab (04). */
@@ -101,6 +114,19 @@ export const people = {
   confirmMakeModerator: (name: string | number) => `Make ${name} the moderator? The current moderator loses that role.`,
   confirmTransferAdmin: (name: string | number) =>
     `Make ${name} the admin? You stop being admin. This can only be reversed by ${name}.`,
+} as const;
+
+/** Recovery offers on the problem screens (04): export, and re-sync from the relay into a fresh store. */
+export const recovery = {
+  export: "Save group data to a file",
+  exportTitle: "Treehouse group data",
+  resync: "Re-sync from relay",
+  resyncTitle: "Re-sync from relay?",
+  confirmResync:
+    "This phone starts a fresh copy of the group from the relay. The saved data that failed its check stays on this phone and is not used. Messages in it that never reached the relay are not sent, and the saved file does not hold them.",
+  confirm: "Re-sync",
+  cancel: "Cancel",
+  carryOverFailed: "Group data from the earlier version of this app failed its check and was not moved. It stays on this phone.",
 } as const;
 
 /** One line per SessionStatus phase (04, Problem screens); empty for the ordinary member phase. */
@@ -130,6 +156,8 @@ export const refusalCopy: Record<AllRefusalReasons, string> = {
   not_open: "Treehouse is still opening.",
   link_failed: "The relay connection hit an error. Try again.",
   identity_mismatch: "The key on this phone doesn't match the saved group. Nothing was signed or sent.",
+  no_space: "There is no group data on this phone to save.",
+  export_failed: "The group data on this phone failed its check, so no file was made.",
   // The six pinned application denials, in 03's wording.
   "missing or not-causal target": "That message isn't on this phone yet.",
   "quarantined target": "That message doesn't count in the group, so it can't be changed.",

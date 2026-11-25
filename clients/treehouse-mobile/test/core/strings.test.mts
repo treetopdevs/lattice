@@ -74,9 +74,12 @@ test("strings contain none of the prohibited or never-used words", async () => {
     }
   }
 
-  // Copy outside strings.ts (the M0 screen and the demo fence) still passes Plan 178's scan.
+  // Copy outside strings.ts (the routes, the composition root and the demo fence) still passes Plan 178's scan.
   const sources = [
-    join(ROOT, "src/App.tsx"),
+    join(ROOT, "src/composition.tsx"),
+    ...readdirSync(join(ROOT, "src/app"), { recursive: true, withFileTypes: true })
+      .filter((d) => d.isFile())
+      .map((d) => join(d.parentPath, d.name)),
     ...readdirSync(join(ROOT, "src/ui")).map((f) => join(ROOT, "src/ui", f)),
     ...readdirSync(join(ROOT, "src/demo")).map((f) => join(ROOT, "src/demo", f)),
   ];
