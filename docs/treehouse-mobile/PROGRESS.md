@@ -26,10 +26,10 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | | |
 |---|---|
 | As of | 2026-11-25 |
-| Milestone | M0.1 self-check passed on the simulator (sqlite) after a Hermes SHA-256 shim; M1a.0 and M1a.1 done at Core; M1a.2 replica store at Simulator for its contract on expo-sqlite (not wired into the app); M1a.3 local store and M1a.6 demo fence at Core; M1a.8 CI job written, never run |
+| Milestone | M0.1 self-check passed on the simulator (sqlite) after a Hermes SHA-256 shim; M1a.0 and M1a.1 done at Core; M1a.2 replica store at Simulator for its contract on expo-sqlite (not wired into the app); M1a.3 local store, M1a.4 read models, M1a.5 command pipeline and M1a.6 demo fence at Core; M1a.8 CI job written, never run |
 | Highest evidence tier reached | Simulator |
-| Works today | On the iPhone 17 Pro simulator (iOS 26.5): self-check passes (custody, storage sqlite, crypto with subtle SHA-256); read-only sync from the demo relay stays live and shows the welcome post, also after relaunch; the `SqliteReplicaStore` contract passes 6/6 on real expo-sqlite. Core: verify-on-open (`verifyHeld`) and gated merge, carry-over of the M0 snapshot outbox, local store (petnames, drafts, read markers, settings), demo code fenced behind `__DEV__`/`EXPO_PUBLIC_TREEHOUSE_DEMO=1`, approved trust-card sentence, no-relay-access status against the local relay |
-| Does not work today | the app still runs on the M0 host bridge, so the replica store, carry-over and local store are not used by the running app (verify-on-open does run at launch over the M0 snapshot, and a failure stops sync with a history_invalid notice, Core evidence only); post, force-quit and relaunch never run on a simulator; a phone's own key on the relay (no in-app path dials with the device key now that Keychain mode is gone); invitations; edit, delete, archive; people management; the CI job has never executed |
+| Works today | On the iPhone 17 Pro simulator (iOS 26.5): self-check passes (custody, storage sqlite, crypto with subtle SHA-256); read-only sync from the demo relay stays live and shows the welcome post, also after relaunch and again after M1a.5 (launch smoke only); the trust card shows the approved hosting sentence and the demo-keys notice; the `SqliteReplicaStore` contract passes 6/6 on real expo-sqlite. Core: verify-on-open (`verifyHeld`) and gated merge, carry-over of the M0 snapshot outbox, local store (petnames, drafts, read markers, settings), demo code fenced behind `__DEV__`/`EXPO_PUBLIC_TREEHOUSE_DEMO=1`, no-relay-access status against the local relay; the session's read models (status, group, link pill, threads, timelines, abilities, roster, audit) checked against Sim vectors and the judge; edit, delete, moderator remove, archive, petname, draft, mark-read, goOnline, goOffline and syncNow on `TreehouseSession`; all copy in `src/ui/strings.ts` |
+| Does not work today | the app still runs on the M0 host bridge and the M0 screen, so the replica store, carry-over, local store, the new read models and the new commands are not used by the running app (verify-on-open does run at launch over the M0 snapshot, and a failure stops sync with a history_invalid notice, Core evidence only); building the judged view costs about 5 s at 4,000 ops in Node (quadratic, Hermes not measured); post, force-quit and relaunch never run on a simulator; a phone's own key on the relay (no in-app path dials with the device key now that Keychain mode is gone); invitations; edit, delete, archive from the UI; people management; the CI job has never executed |
 
 ## Status board
 
@@ -38,15 +38,15 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | M0 scaffold, typecheck, Hermes bundle | done | Core | `tsc --noEmit` clean; `expo export --platform ios` bundled 708 modules (2026-11-25) |
 | M0 live relay gate | done | Core | `npm test` against `lattice-demo-wss.fly.dev` passed with `MemoryKeyStore` and `MemoryMobileStorage` (2026-11-25), as `test/m0_wss_gate.mts`. Since M1a.0 that script is `test:smoke` (`test/smoke/demo_relay.mts`, imports rewired) and has not been rerun after the move; `npm test` now runs the Core suite |
 | M0.1 simulator boot with real SecureStore and SQLite | doing (post/relaunch step not run) | Simulator | iPhone 17 Pro, iOS 26.5, Xcode 27.2: self-check custody, storage `sqlite`, crypto all pass (screenshots `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m01_selfcheck_subtle.png`, `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m01_selfcheck.png`, `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m01_selfcheck_after_m1a2.png`); read-only sync live and same after relaunch (`/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m01_threads_live.png`, `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m01_threads_relaunch.png`). Post, force-quit, relaunch not run (no loopback relay pointer) |
-| M0.2 trust-card copy | done | Core | approved hosting sentence from 01 in `src/ui/trust_card.ts`; `demo_fence.test.mts` asserts it. Not seen on a simulator yet |
+| M0.2 trust-card copy | done | Simulator | approved hosting sentence from 01, now in `src/ui/strings.ts` (re-exported by `src/ui/trust_card.ts`); `demo_fence.test.mts` and `strings.test.mts` assert it. Seen on the Relay & Safety tab in the dev build during the M1a.5 launch smoke, read from the accessibility tree (`/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m1a5_trust_card.png`) |
 | M0.3 device-key identity against the relay | doing | Core | refused Space route gives `no_relay_access` and 04's copy against the local relay (`demo_fence.test.mts`). No in-app path dials with the device key, so the screen copy cannot appear for this case yet |
 | M1a.0 test harness and fixtures | done | Core | 4 named tests pass in the 18/18 Core suite; `tsc --noEmit` clean (2026-11-25). Needs `MIX_ENV=test mix compile` for the local relay tests. Smoke script not run |
 | M1a.1 ports, session and post tracer | done | Core | 9 named tests pass in the Core suite (68/68 on 2026-11-25). Simulator: read-only sync and relaunch seen through the app (M0.1 row); the post and relaunch scenario not run |
 | M1a.2 SQLite replica store | doing (not wired into the app) | Simulator | contract 6/6 on expo-sqlite in the dev build (`/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m1a2_replica_store_green.png`; RED control 4/5 `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m1a2_red_control.png`). Verify-on-open, gated merge and carry-over: Core only. Force-quit relaunch not run |
 | M1a.3 local store | done | Core | `local_store.test.mts` 10/10 (memory and node:sqlite adapters). `openExpoLocalStore` never ran on a device |
-| M1a.4 read models | todo | - | |
-| M1a.5 command pipeline | todo | - | |
-| M1a.6 demo bootstrap fenced | done | Core | `demo_fence.test.mts` 5/5 (refused and admitted against the local relay); release `expo export --platform ios` holds 0 `lattice-demo-wss` strings. The new App.tsx launched in the dev build during M1a.2's stage 3, but the demo bar and trust card were not screenshotted |
+| M1a.4 read models | done (not wired into the screen; 150 ms budget met by the projection only) | Core | 11 named tests plus more in the Core suite (108/108 after the review fix round, 2026-11-25); Sim vectors and real-signed judge authoring as references; 4,000-op projection about 9 ms (asserted under 150 ms), a whole replica change about 4.7 s (asserted under a measured 15 s ceiling; the 150 ms budget is unmet there). App.tsx does not read the new models |
+| M1a.5 command pipeline | done (not wired into the screen) | Core | 9 named tests plus extra checks in the Core suite (108/108 after the review fix round, 2026-11-25). Dev build still launches with the new session (`/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m1a5_threads_live.png`), launch evidence only; no command ran on a simulator |
+| M1a.6 demo bootstrap fenced | done | Core | `demo_fence.test.mts` 5/5 (refused and admitted against the local relay); release `expo export --platform ios` holds 0 `lattice-demo-wss` strings (rechecked after M1a.5). The demo-keys notice and trust card were seen in the dev build during the M1a.5 launch smoke (`m1a5_trust_card.png`); the demo bar's role switcher was not exercised |
 | M1a.7 navigation and lifecycle | todo | - | |
 | M1a.8 CI job | doing (never run) | - | `treehouse_mobile` job in `flagship.yml`; actionlint adds no findings; steps dry-run on macOS only. Needs the first hosted run |
 | M1b.1 to M1b.7 chat loop | todo | - | |
@@ -62,20 +62,28 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | G-1 relay admits only manifest realms | a self-made key cannot connect (confirmed 2026-11-25); join flow cannot complete | 05 |
 | Mobile custody holds one key | cannot create bounded Threads or grant them to new members | M1a.1, O-11 |
 | G-2 no self-service replica provisioning | no Start a group, New thread or rollover | 05 |
-| No loopback relay pointer in the dev build | the app only knows the public demo relay's manifest, seeds and routes and goes online at every launch, so the post, force-quit and relaunch scenario (M0.1, M1a.1, M1a.2) cannot run without writing to the public relay | M1a.4, M1a.7 |
-| Replica store, carry-over and local store not wired | the running app still reads and writes the M0 host's snapshot through `host_session_ports.ts`; `session.open()` verifies that snapshot at launch and App.tsx stays offline with a history_invalid notice on failure, but the host's own merges are not gated by the session and no export or re-sync action exists yet (04) | M1a.4 |
-| Carry-over must run before `storage.ts` goes | `carryOverLegacyProfiles` exists (Core) but nothing calls it; deleting `src/native/storage.ts` first would strand unsynced posts. `storage.ts` stays while the host and selfcheck import it | M1a.4 |
-| Gated merge re-verifies every held replica | signatures are cached, but each merge re-hashes and re-materializes all held frames | M1a.4 budget test |
-| Hermes has no WebCrypto | `src/polyfills_crypto.ts` installs SHA-256 only for `crypto.subtle.digest`; `lattice-client/src/treehouse_offline_enrollment.ts:28` calls `crypto.subtle` unguarded, so any other algorithm throws on a phone | M1a.5, M2 |
+| No loopback relay pointer in the dev build | the app only knows the public demo relay's manifest, seeds and routes and goes online at every launch, so the post, force-quit and relaunch scenario (M0.1, M1a.1, M1a.2) cannot run without writing to the public relay. M1a.5 found `scripts/demo_ecosystem_relay.sh` runs `pilot_node.exs` on loopback and writes `demo-endpoints.json`, but nothing local serves the `/demo-endpoints.json` and `/demo-seed/<role>` routes the demo code fetches, so this needs new seed-serving code | M1a.7 |
+| Replica store, carry-over and local store not wired | carried from M1a.4 (it conflicted with that slice's file list and Core tier). The running app still reads and writes the M0 host's snapshot through `host_session_ports.ts`; `session.open()` verifies that snapshot at launch and App.tsx stays offline with a history_invalid notice on failure, but the host's own merges are not gated by the session, no export or re-sync action exists yet (04), and the history_invalid notice has not been seen on a simulator | M1a.7 |
+| Carry-over must run before `storage.ts` goes | `carryOverLegacyProfiles` exists (Core) but nothing calls it; deleting `src/native/storage.ts` first would strand unsynced posts. `storage.ts` and `treehouse_mobile_host.ts` stay while the host and selfcheck import them | M1a.7 |
+| Judged view cost grows quadratically; 150 ms budget unmet end to end | `replica_view.ts` builds one decode and judge per replica change from lattice-client's decode plus two materializes: 48+49 ms at 500 ops, 153+143 ms at 1,000, 522+525 ms at 2,000, about 2.5+2.5 s at 4,000 in Node, run synchronously by the session on every frame that arrives. The 4,000-op test asserts 150 ms on the projection only (about 9 ms) and a measured 15 s ceiling on a whole replica change (about 4.7 s), so it catches regressions but does not claim the budget. Needs a lattice-client change (incremental judged view); not measured on Hermes | M1a.4 budget test, lattice-client |
+| Gated merge re-verifies every held replica | signatures are cached, but each merge re-hashes and re-materializes all held frames; not measured in M1a.4 | M1a.7 |
+| Hermes has no WebCrypto | `src/polyfills_crypto.ts` installs SHA-256 only for `crypto.subtle.digest`; `lattice-client/src/treehouse_offline_enrollment.ts:28` calls `crypto.subtle` unguarded, so any other algorithm throws on a phone. M1a.4 and M1a.5 add no new `crypto.subtle` use (only `canonicalHash` SHA-256) | M2 |
+| New read models and commands not on screen | App.tsx is still the M0 screen with the M0 capability picker and per-render reduction; it does not read `Abilities`, `ThreadList`, `Roster` or `AuditView`, has no edit, delete, remove or archive controls, and keeps inline copy (its `DELIVERY_LABEL` duplicates `strings.deliveryLabel`). The enlarged session ran on Hermes only as a launch smoke | M1a.7 |
+| Ability probes the judge with a synthetic op | closed in the review fix round: the archive list is gone and `abilities.ts` asks `treehouseCommandOpStatus` about a probe op targeting a probe post of this key's own. The probe depends on the judge checking a target before the archive rule; an exported per-command policy query in lattice-client would be cleaner. The delegation match is pinned to `memberCapability` by a Core test | lattice-client |
+| 4,000-op ceiling headroom | the whole-change ceiling (15 s) is about 3x the 4.7 s measured on this Mac; the Linux CI job has never run, so it may need adjusting there | M1a.8 |
+| identity_mismatch copy has one line | `phaseCopy.identity_mismatch` says the key "doesn't match the saved group" even for a locked key with nothing held (`key_unavailable`); the screen should branch on `reason` | M1a.7 |
+| Pipeline signs before the pre-judge | a former role holder (`not_holder`) or a command on an archived Thread is signed, then refused by the pre-judge and discarded; nothing is saved, but with a biometric Keychain this would prompt for a signature that is thrown away. Deferred from the review (agy minor) | M1a.7 |
+| Winning edit id grouped in the app | `thread_timeline.ts` groups honored edit effects by root to ask lattice-client's `lww` for the winning edit id, because `causalListEntries` returns the winning value but not its op id. Not a reducer (the winner is upstream's), but an exported winner id would remove the grouping | lattice-client |
+| Read model limits | `relay_refused` lasts for the last sync only (O-6); removal-pending and relay access are known only for this phone's own key; audit grants show only live or not_live (lattice-client does not export revoked versus lapsed); "joining" is inferred from an honored, unrevoked invitation until a ceremony store exists; `lastSyncMs` is a session stamp because `FeedState` has no timestamp or sync counter: it moves when every route is live and compared and either a relay result moved or a `syncNow` completed, so a feed-driven sync that changes nothing does not move it; a key the held Space neither admits nor invites, with no other key's outbox, is `key_only` | M1b, M2 |
 | Replica store device check lives in `App.tsx` | the dev-only "Replica store check" card is the simulator gate's entry point; M1a.7 must carry it over | M1a.7 |
 | `CI=1 expo start` does not watch files | a stale bundle is served after edits; restart Metro with `--clear` | - |
 | M1a.8 job never ran | `npm ci` for Expo/RN deps and the Core suite have never run on Linux; the Core tests need Node 22.13+ for `node:sqlite` | M1a.8 |
-| Demo bar and trust card not seen on screen | M1a.6 is Core only; the dev build launched with the new App.tsx but they were not screenshotted | M1a.6, M1a.7 |
+| Demo bar role switcher not exercised on screen | the trust card and demo-keys notice were seen in the M1a.5 launch smoke; switching roles was not tried | M1a.7 |
 | Doc 06's M1a.3 row says "first-seen times" | stale; 03 names `ReplicaStore.firstSeenMs` as owner and LocalStore holds none | 06 |
-| M0 host re-reduces per render and rewrites the whole snapshot per save | will not scale past small threads | M1a.4 |
-| M0 capability picker ignores required roles | may offer an action the judge then refuses | M1a.4 |
-| `src/lib/host_session_ports.ts` is a temporary bridge | the session reads and writes the M0 host's identity-scoped snapshot so no queued post is stranded; its `firstSeenMs` returns undefined, its link `start`/`stop` do nothing (the host still owns online/offline) and its `syncNow` only forwards the post nudge to the host while online | M1a.2, M1a.4, M1a.6 |
-| Session `goOnline`/`goOffline`/`syncNow` not on `TreehouseSession` yet | tests drive the RelayLink directly | M1a.5 |
+| M0 host re-reduces per render and rewrites the whole snapshot per save | will not scale past small threads; the session's projections replace it once the screen reads them | M1a.7 |
+| M0 capability picker ignores required roles | may offer an action the judge then refuses; the session's `Abilities` model fixes this but App.tsx does not read it | M1a.7 |
+| M0 screen's LocalStore is in memory | `local` is now a required session port; `App.tsx` passes `openMemoryLocalStore()` explicitly, so petnames, drafts, read markers and the sync setting do not persist across launches until M1a.7 wires `openExpoLocalStore`. The M0 screen calls no local command | M1a.7 |
+| `src/lib/host_session_ports.ts` is a temporary bridge | the session reads and writes the M0 host's identity-scoped snapshot so no queued post is stranded; its `firstSeenMs` returns undefined, its link `start`/`stop` do nothing (the host still owns online/offline), so the session's new `goOnline`/`goOffline` do not drive the running app, and its `syncNow` only forwards the post nudge to the host while online | M1a.7 |
 | Local relay fixture borrows a Tauri shell script | `test/support/local_relay.ts` runs `clients/treehouse-tauri-shell/test/support/treehouse_enrollment_fixture.exs` by path to create empty logs | M1a.8 |
 | `test:smoke` `DEMO_WSS_WRITE=1` branch never run | the moved smoke script is typechecked only; without the flag it does not relay | M1a.0 |
 | Plan 180 orders iOS after E1 | plan index does not yet say 296 is a parallel track | O-7 |
@@ -84,14 +92,178 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 
 Follow the build order in [07-implementation-plan.md](07-implementation-plan.md):
 
-1. M1a.8: push the juncture and get the `treehouse_mobile` job green on Linux.
-2. M1a.4 read models: switch the app from `createHostBridge` to `SqliteReplicaStore`, call `carryOverLegacyProfiles` first, then delete `src/native/storage.ts` and `treehouse_mobile_host.ts` (its demo code has moved to `src/demo/`). Fold `ReadModels.history` into SessionStatus and take over `relayAccess` from `src/ui/trust_card.ts`.
-3. Add a dev-build pointer to a loopback relay without widening release behaviour, then run the post, force-quit and relaunch scenario on the simulator (M0.1, M1a.1, M1a.2).
-4. M1a.5 and M1a.7 per 07; M1a.7 keeps the Replica store check card.
+1. M1a.8: push the junctures and get the `treehouse_mobile` job green on Linux.
+2. M1a.7 per 07, plus the items carried from M1a.4: switch the app from `createHostBridge` to `SqliteReplicaStore`, call `carryOverLegacyProfiles` first, then delete `src/native/storage.ts` and `treehouse_mobile_host.ts` (its demo code has moved to `src/demo/`); gate the host's merges through the session; add the export / re-sync recovery action (04); put the read models, commands and `strings.ts` copy on screen; keep the Replica store check card.
+3. Add a dev-build pointer to a loopback relay (with local serving of `/demo-endpoints.json` and `/demo-seed/<role>`) without widening release behaviour, then run the post, force-quit and relaunch scenario on the simulator (M0.1, M1a.1, M1a.2) and look at the history_invalid notice.
+4. Ask for a lattice-client change that makes the judged view incremental, and measure `replica_view` on Hermes.
 
 ## Log
 
 Newest first.
+
+### 2026-11-25 · feat(treehouse-mobile): M1a.4 read models and M1a.5 command pipeline
+
+Screenshots are in the session scratchpad
+`/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/`.
+
+- **M1a.4 read models (Core only; nothing ran on the simulator or Hermes for this slice).**
+  - New pure projections under `src/session/projections/`: `replica_view` (one shared decode and
+    judge per replica change; live delegations computed on first read), `abilities`,
+    `group_summary`, `link_status` (takes over `relayAccess`; `trust_card.ts` re-exports it),
+    `roster`, `session_status`, `thread_list` and `audit_view`.
+  - `thread_timeline` extended: delivery saved, sending, on_relay, relay_refused, stopped;
+    standing and the not-counted reason from the judge; lineage ref, edited flag, removed
+    placeholder (by author or moderator); first-seen time, unread, arrivedLate, unreadCount and
+    thread health (ops and bytes).
+  - `TreehouseSession` publishes status, group, linkStatus, threads, abilities, roster and audit
+    beside the existing timelines, link and history; unchanged models stay identical and an
+    untouched thread is not re-projected. `SessionPorts` gains an optional `local: LocalStore`
+    (defaults to an empty memory store so the host bridge still typechecks). `App.tsx` gained two
+    delivery labels only because `Record<Delivery, string>` grew.
+  - Decisions under delegation, recorded in 03: pill precedence offline, relay_refused,
+    reconnecting, live, partly_connected, connecting; arrivedLate is positional (unread and sorted
+    above a read id; LocalStore keeps no viewed time); my own, removed and not-counted messages are
+    never unread; my not-counted posts follow the counted timeline, other people's appear in the
+    audit view only; audit grants are live or not_live; `threadSlots.total` is
+    `TREEHOUSE_LITE_THREAD_CAP` (3); custody unavailable with history present is
+    identity_mismatch (`key_unavailable`); "joining" is inferred from an honored, unrevoked
+    invitation; `lastSyncMs` is stamped by the session.
+  - App-side logic weighed against STOP condition 1, none re-implements a reducer: abilities
+    composes `liveTreehouseDelegations`, `treehouseCommandRoles`, `authorityRole` and the
+    materialized holder, as the Tauri snapshot does, and hard-codes the archive-blocked commands
+    (`post`, `author_edit`, `author_tombstone`) mirroring `archiveStatus` (new Known gap); removed
+    placeholders use `causalListEntries` over honored post effects without deletes; the winning
+    edit is lattice-client's `lww`.
+  - References: Sim vectors (Space state, holders, members, roster; thread order and winning
+    text; quarantine reasons verbatim in the audit view; every Sim command op checked against
+    abilities over its own causal past); the judge through real-signed authoring over 3 states ×
+    4 keys × 9 commands; shell-kit's real `createFeedController` over FakeRelay for delivery
+    (`test/support/fake_feed_link.ts`, plus `test/support/authoring.ts`).
+  - RED: 18 new tests, 0 pass (module not found, undefined `phase`, assertion failures, and the
+    4,000-op test at 5,267.8 ms). Mutation check: removing the holder rule from `abilities.ts`
+    failed "abilities match the judge"; restored.
+  - Tests changed after RED: the 4,000-op test asserts the 150 ms budget on the app's projection
+    over the shared judged view only (about 10 ms); the standing test pins the judge's verdict
+    (both posts `revoked_capability`); edit-lineage asserts added; the abilities property gained a
+    "roles moved to alice" state so `not_holder` is exercised; the delivery test asserts
+    `lastSyncMs`. M1a.1's `session_tracer.test.mts` now filters removed placeholders.
+  - FAILED budget end to end: building the judged view (decode plus two materializes) costs about
+    2.5 s + 2.5 s at 4,000 ops in Node and grows quadratically (48+49 ms at 500, 153+143 ms at
+    1,000, 522+525 ms at 2,000). Measured and printed, not asserted; needs a lattice-client change;
+    not measured on Hermes. The carried "gated merge re-verifies every held replica" was not
+    measured.
+  - NOT DONE, carried to M1a.7 (they conflict with the slice file list and Core tier, and an
+    unverified storage swap is the stranded-posts risk of defect (a)): switching the app to
+    `SqliteReplicaStore`, calling `carryOverLegacyProfiles`, deleting `src/native/storage.ts` and
+    `src/lib/treehouse_mobile_host.ts`, gating the host's merges, the export / re-sync action (04),
+    seeing the history_invalid notice on a simulator, and moving the screen off the M0 capability
+    picker and per-render reduction.
+- **M1a.5 commands and strings (Core).**
+  - New commands under `src/session/commands/`, all through `pipeline.ts` (ability, author,
+    pre-judge, save, nudge): `edit_message.ts` (`author_edit`; target is the held lineage's latest
+    edit, never the caller's `ref.latest`), `delete_message.ts` (`author_tombstone`),
+    `remove_message.ts` (`moderator_tombstone`), `archive_thread.ts`, `local_commands.ts`
+    (petname, draft, markRead; nothing signed; a failed write is `storage_failed`) and
+    `link_commands.ts` (goOnline, goOffline, syncNow over `syncEnabled`; refused with
+    `history_invalid`). `pipeline.ts` lets `PipelineStep.command` be a function of held frames;
+    `post_message.ts` shares `checkText` with edit; `outcomes.ts` gains the Text, ThreadCommand,
+    Edit, Delete, Remove, Archive, Local, Link and AnyCommand refusal unions.
+  - `TreehouseSession` exposes `editMessage`, `deleteMessage`, `removeMessage`, `archiveThread`,
+    `setPetname`, `saveDraft`, `markRead`, `goOnline`, `goOffline` and `syncNow`, closing the
+    gap "goOnline/goOffline/syncNow not on TreehouseSession". Signed commands share
+    `postMessage`'s guards; local and link commands refuse `not_open` before open.
+  - New `src/ui/strings.ts`: all copy as typed Records keyed by session unions (`refusalCopy`
+    over `AnyCommandRefusal | AbilityRefusal`, so a missing reason fails `tsc`), plus delivery,
+    pill, removed placeholder, phase copy and 04's confirmations; `trust_card.ts` re-exports it.
+  - Decisions recorded in 03: signatures are `editMessage(thread, ref, text)`,
+    `deleteMessage(thread, ref)`, `removeMessage(thread, ref)` with the timeline's
+    `MessageLineage` (03 said `editMessage(ref, text)`; `MessageRef` has no replica and
+    `local_store.test`'s import scan forbids signed commands reaching `src/local`); only
+    `ref.root` is trusted; no app-side archive or target pre-check; new reasons `not_open` and
+    `link_failed`. Copy change: 04's archived banner "Archived. Read only." used 01's never-used
+    "Read"; it is now "Archived. No new messages." in `strings.ts` and 04.
+  - Six application denials: Sim reference (`treehouse_thread_archive`; the session's audit
+    quarantine set equals Sim's) for `archived thread`, `wrong author`, `quarantined target`;
+    judge only, authored through the commands, for `missing or not-causal target`, `wrong target
+    kind or thread`, `already tombstoned` (no Sim vector pins them at full frontier). The
+    moderator test uses a real `change_moderator` transfer: the former holder is refused
+    `not_holder` by the pre-judge, the new holder's remove counts, a member without the role gets
+    `no_capability` before signing.
+  - RED: 16 new tests in 8 files, 0 pass (missing session methods, missing `src/ui/strings`).
+    Mutation checks: a lineage target forced to the root failed the edit and delete tests; "Read
+    only." and "Nothing hosted." in strings failed the never-used and Plan 178 scans; restored.
+  - Hermes: the new commands reach WebCrypto only through `canonicalHash` SHA-256, which the shim
+    covers.
+  - Simulator launch smoke (optional, launch only, not a slice gate): iPhone 17 Pro, iOS 26.5,
+    dev build, fresh Metro bundle (827 modules). The app launches; Threads shows "Live · gen#5"
+    with the welcome post "On relay" (`m1a5_threads_live.png`); Relay & Safety shows the approved
+    hosting sentence and the demo-keys notice, read from the accessibility tree
+    (`m1a5_trust_card.png`), the first on-screen sighting of both. Only lattice-client require
+    cycle warnings. No command ran on the simulator (the M0 screen has no such controls).
+  - NOT DONE: `App.tsx` inline copy not moved into `strings.ts` (M1a.7 replaces the screen);
+    commands not wired to any control. NOT RUN: post, force-quit, relaunch; no loopback pointer
+    was added because nothing local serves `/demo-endpoints.json` or `/demo-seed/<role>`. Left
+    for M1a.7.
+- **Integrator gate.** `tsc --noEmit` exit 0; Core suite 104/104 pass, 0 fail; `expo export
+  --platform ios --clear` bundled `index-249eb2ae6828df541d832f9bb7ecd329.hbc` (2.6 MB) with 0
+  `lattice-demo-wss` and 0 replica-store devcheck strings; progress script ok (staged). No
+  cross-slice fixes were needed. Tier: Core for both slices; the M1a.5 launch smoke is Simulator
+  launch evidence for M0.2 copy only. Nothing was written to the public demo relay (the launch
+  smoke synced read-only).
+
+- **Independent review and fix round.** Reviewers: Codex (`gpt-6.1-sol`, high; the user's standing
+  model, run in place of the requested 6.2) and Antigravity Neon (medium). 17 findings (7 Codex, 10
+  agy; 13 distinct after duplicates): 16 accepted (3 of them in part), 1 rejected, and 2 parts
+  deferred. One fix round, no second review.
+  - Accepted and fixed:
+    - abilities (Codex blocker, agy major, STOP 1): `ARCHIVE_BLOCKED` is removed. The archive refusal
+      now comes from lattice-client's `treehouseCommandOpStatus` over a probe op (mutation check:
+      dropping the probe fails "abilities match the judge" on the archived state). The delegation
+      match is kept as composition, as the Tauri shell's `treehouse_workflow.ts:623-635` does it, and
+      a new test pins it to `memberCapability` at every prefix of the four vectors, with both
+      granted and denied verdicts exercised.
+      `postMessage`'s app-side archive pre-check is gone, so the pre-judge names "archived thread"
+      after the capability check.
+    - delivery (both): a message now shows the least delivered of my lineage ops. A new test
+      covers an offline edit of an acked post (`saved`), a refused edit (`relay_refused`) and an
+      unsent delete (`saved`). RED: `on_relay` where `saved` was expected. `edited` is false on
+      removed placeholders, and the O(E²) spread is gone.
+    - identity_mismatch (Codex): signing, `goOnline` and `syncNow` now stop. RED (observed with the gate
+      disabled once): under Bob's key over Alice's outbox, `postMessage` returned `ok: true` with an
+      id, so the post was signed and saved. A locked key with
+      nothing held is `identity_mismatch` (`key_unavailable`), not `no_key` (agy, in part). The new
+      reason `identity_mismatch` has copy.
+    - `local` (Codex) is now a required port, and the no-op backend is deleted. The 4,000-op test
+      (both) asserts the whole change under a measured ceiling, and the projection-only 150 ms under
+      an honest name.
+    - Roster: a Thread with zero frames is no longer a moderator mismatch (both). GroupSummary slots
+      are the contract's 12, with `inviteScopeCap` 3 (both).
+    - Refusal copy no longer says "grant" (agy).
+    - `lastSyncMs` (agy, in part): every completed `syncNow` stamps, and only all-live routes
+      stamp. RED: 2,000 where 62,000 was expected.
+  - Rejected, with evidence:
+    - agy claimed `thread_timeline` duplicates `causalListEntries` (STOP 1). The placeholder list
+      is `causalListEntries` itself. The edit grouping only prepares input for upstream's `lww`,
+      because `causalListEntries` (`reducers.ts:77`) returns the winning value, not its op id. This
+      is recorded as a Known gap.
+    - Also rejected, in part:
+      - agy's "a true-to-false `matchesRelay` flip is stamped as success". `matchesRelay` is
+        shell-kit's comparison result after a completed sync (`feed.ts:39`). The delivery test
+        stamps a pending sync by design.
+      - agy's "a key not in the Space should be `identity_mismatch`". The outbox keeps every
+        authored id, so a key change on a phone that ever authored is already `outbox_other_key`.
+        A revoked invitee is `key_only`.
+  - Deferred, both recorded in Known gaps:
+    - the pipeline signs before the pre-judge refuses `not_holder` (agy minor), to M1a.7;
+    - the end-to-end 150 ms budget, to lattice-client.
+  - Decisions are recorded in 03 ("Decisions recorded in the M1a.4-M1a.5 review fix round").
+  - The fixes do not change what the M0 screen shows. `App.tsx` passes an explicit in-memory
+    LocalStore, which is the same default as before. The launch-smoke screenshots predate the fix
+    round, and the app was not relaunched after it.
+- **Final gate (after the fix round).** `tsc --noEmit` exit 0. Core suite 108/108 pass, 0 fail.
+  `expo export --platform ios --clear` exit 0, `index-cb19e4060f9a0ba7b97774b366f107bf.hbc`, with
+  0 `lattice-demo-wss` and 0 replica-store devcheck strings. Progress script ok (staged). Tier:
+  Core.
 
 ### 2026-11-25 · feat(treehouse-mobile): M1a.2 SQLite replica store, M1a.3 local store, M1a.6 demo fence, M1a.8 CI
 

@@ -7,12 +7,47 @@ import type { RouteAlphabet, RouteValidators } from "@treetopdevs/lattice-shell-
 import { createFeedController, createRelayConnector } from "@treetopdevs/lattice-shell-kit/sync";
 import type { FeedController, ShellHost } from "@treetopdevs/lattice-shell-kit/sync";
 import alphabet from "../../route_alphabet.json";
+import { archiveThread as archiveThreadCommand } from "./commands/archive_thread";
+import { deleteMessage as deleteMessageCommand } from "./commands/delete_message";
+import { editMessage as editMessageCommand } from "./commands/edit_message";
+import * as linkCommands from "./commands/link_commands";
+import type { LinkContext } from "./commands/link_commands";
+import * as localCommands from "./commands/local_commands";
 import { postMessage as postMessageCommand } from "./commands/post_message";
+import { removeMessage as removeMessageCommand } from "./commands/remove_message";
 import type { CommandContext } from "./commands/pipeline";
-import type { Outcome, PostRefusal } from "./outcomes";
-import type { Clock, FeedState, KeyCustody, RelayLink, ReplicaStore, RouteConfig } from "./ports";
+import { refuse } from "./outcomes";
+import type {
+  ArchiveRefusal,
+  DeleteRefusal,
+  EditRefusal,
+  LinkRefusal,
+  LocalRefusal,
+  Outcome,
+  PostRefusal,
+  RemoveRefusal,
+} from "./outcomes";
+import type { Clock, FeedState, KeyCustody, RelayLink, ReplicaStore, RouteConfig, TreehouseProduct } from "./ports";
+import { createCachedLocalStore } from "../local/local_store";
+import type { Draft, LocalStore } from "../local/local_store";
+import { projectAbilities } from "./projections/abilities";
+import type { Abilities } from "./projections/abilities";
+import { projectAuditView } from "./projections/audit_view";
+import type { AuditView } from "./projections/audit_view";
+import { projectGroupSummary } from "./projections/group_summary";
+import type { GroupSummary } from "./projections/group_summary";
+import { projectLinkStatus } from "./projections/link_status";
+import type { LinkStatus } from "./projections/link_status";
+import { viewReplica } from "./projections/replica_view";
+import type { ReplicaView } from "./projections/replica_view";
+import { projectRoster } from "./projections/roster";
+import type { Roster } from "./projections/roster";
+import { projectSessionStatus } from "./projections/session_status";
+import type { HistoryCheck, SessionStatus } from "./projections/session_status";
+import { projectThreadList } from "./projections/thread_list";
+import type { ThreadList } from "./projections/thread_list";
 import { projectThreadTimeline } from "./projections/thread_timeline";
-import type { ThreadTimeline } from "./projections/thread_timeline";
+import type { MessageLineage, ThreadTimeline } from "./projections/thread_timeline";
 import { strictOpVerifier, verifyHeld } from "./verify_held";
 import type { HeldEntry, VerifyHeldResult } from "./verify_held";
 
@@ -24,17 +59,27 @@ export { strictOpVerifier };
 // the RelayLink's config), so createFeedController and syncRoutes run unchanged.
 
 export interface ReadModels {
+  status: SessionStatus;
+  /** Null until a Space is held. */
+  group: GroupSummary | null;
+  linkStatus: LinkStatus;
+  threads: ThreadList;
+  abilities: Abilities;
+  roster: Roster;
+  audit: AuditView;
   /** One timeline per held Thread replica. An unchanged thread keeps the identical object. */
   timelines: Readonly<Record<string, ThreadTimeline>>;
+  /** shell-kit's raw feed state, for the adapters that still read it directly. */
   link: FeedState;
   /**
    * Verify-on-open result (M1a.2). Not ok means `history_invalid` (03): nothing is posted, nothing is
-   * deleted. `replica` is null when the store itself could not open. M1a.4 folds this into SessionStatus.
+   * deleted. `replica` is null when the store itself could not open. `status` carries the same result as
+   * its phase; this field stays for the M0 screen until M1a.7 reads `status`.
    */
   history: HistoryCheck;
 }
 
-export type HistoryCheck = { ok: true } | { ok: false; replica: string | null; reason: string };
+export type { HistoryCheck };
 
 export interface TreehouseSession {
   open(): Promise<void>;
@@ -42,6 +87,19 @@ export interface TreehouseSession {
   subscribe<T>(select: (m: ReadModels) => T, listener: (value: T) => void): () => void;
   read(): ReadModels;
   postMessage(thread: string, text: string): Promise<Outcome<{ id: string }, PostRefusal>>;
+  /** Edit my message. Only `ref.root` is trusted; the target is the held lineage's latest edit. */
+  editMessage(thread: string, ref: MessageLineage, text: string): Promise<Outcome<{ id: string }, EditRefusal>>;
+  /** Delete my message for the group (author_tombstone). Irreversible. */
+  deleteMessage(thread: string, ref: MessageLineage): Promise<Outcome<{ id: string }, DeleteRefusal>>;
+  /** Remove anyone's message as the moderator holder (moderator_tombstone). */
+  removeMessage(thread: string, ref: MessageLineage): Promise<Outcome<{ id: string }, RemoveRefusal>>;
+  archiveThread(thread: string): Promise<Outcome<{ id: string }, ArchiveRefusal>>;
+  setPetname(pubkey: string, name: string | null): Promise<Outcome<null, LocalRefusal>>;
+  saveDraft(thread: string, draft: Draft | null): Promise<Outcome<null, LocalRefusal>>;
+  markRead(thread: string, ids: readonly string[]): Promise<Outcome<null, LocalRefusal>>;
+  goOnline(): Promise<Outcome<FeedState, LinkRefusal>>;
+  goOffline(): Promise<Outcome<FeedState, LinkRefusal>>;
+  syncNow(): Promise<Outcome<FeedState, LinkRefusal>>;
 }
 
 /**
@@ -56,6 +114,11 @@ export interface SessionPorts {
   clock: Clock;
   /** Builds the session's RelayLink over its host. Called once, at construction. */
   link(host: SessionHost): RelayLink;
+  /**
+   * Device-local facts (read markers, petnames, settings). Required: a caller that has no persistent store
+   * passes an explicitly in-memory one, so no command reports success over persistence that is not there.
+   */
+  local: LocalStore;
   /** Verify on open and before each merge. Defaults to verifyHeld (lattice-client's checks). */
   verify?: (held: readonly HeldEntry[], verifier: Verifier) => Promise<VerifyHeldResult>;
 }
@@ -83,12 +146,25 @@ export const strictCarrierVerifier: CarrierVerifier = {
   verify: (pubkey, bytes, signature) => verifyEd25519(signature, bytes, pubkey),
 };
 
+/** Keep `previous` when `next` is structurally equal, so a selector sees the identical object. */
+function keep<T>(previous: T | undefined, next: T): T {
+  if (previous === next) return next;
+  return previous !== undefined && JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+}
+
 export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
   const { custody, store } = ports;
+  const { local } = ports;
   const verify = ports.verify ?? ((held, verifier) => verifyHeld(held, { verifier }));
   const verifier = rememberingVerifier(strictOpVerifier);
   let history: HistoryCheck = { ok: true };
+  let custodyStatus: "none" | "available" | "unavailable" = "none";
   let myKey: string | null = null;
+  let lastSyncMs: number | null = null;
+  let lastSyncMark = "";
+  const views = new Map<string, { count: number; view: ReplicaView }>();
+  /** Per Thread: the inputs its timeline was last projected from, so an untouched thread is not re-projected. */
+  const timelineInputs = new Map<string, { view: ReplicaView; outbox: number; acked: number; route: string; read: ReadonlySet<string>; key: string | null; timeline: ThreadTimeline }>();
   let opened = false;
   let unsubscribe: (() => void)[] = [];
   const subscribers = new Set<{ select: (m: ReadModels) => unknown; listener: (v: unknown) => void; last: unknown }>();
@@ -139,35 +215,138 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
   };
   const link = ports.link(host);
 
-  let models: ReadModels = { timelines: {}, link: link.state(), history };
+  /** The judged view of one held replica, rebuilt only when its frames grew (frames are append-only). */
+  const viewOf = (replica: string, product: TreehouseProduct): ReplicaView => {
+    const frames = store.profile(replica)?.frames ?? [];
+    const cached = views.get(replica);
+    if (cached && cached.count === frames.length && cached.view.product === product) return cached.view;
+    const view = viewReplica(replica, product, frames);
+    views.set(replica, { count: frames.length, view });
+    return view;
+  };
 
-  const connectionOf = (replica: string, state: FeedState) =>
-    state.routes.find((r) => r.replica === replica)?.connection ?? null;
+  /**
+   * Stamp a completed sync: every route is live and has compared with the relay (matchesRelay is a result,
+   * true or false), and either some route's relay result (match, acknowledged count, generation) moved, or
+   * `completed` says a syncNow just finished. An offline post changes only the pending count, so it never
+   * stamps; a route that is reconnecting keeps its last result but is not a completed sync.
+   */
+  const stampSync = (state: FeedState, completed = false): void => {
+    if (!state.configured || state.routes.length === 0) return;
+    if (state.routes.some((r) => r.matchesRelay === null || r.connection !== "live")) return;
+    const mark = JSON.stringify(state.routes.map((r) => [r.replica, r.matchesRelay, r.acked, r.generation]));
+    if (mark === lastSyncMark && !completed) return;
+    lastSyncMark = mark;
+    lastSyncMs = ports.clock.now();
+  };
 
-  /** Recompute the timelines of `replicas` (all when omitted), keeping equal results identical. */
-  const recompute = (replicas?: readonly string[], linkState?: FeedState): void => {
-    const state = linkState ?? models.link;
-    const threads = store.replicas().filter((r) => r.product === "Treehouse.Thread").map((r) => r.replica);
-    const targets = new Set(replicas ?? threads);
+  const build = (state: FeedState, previous: ReadModels | null): ReadModels => {
+    // Unverified history is never shown: with history_invalid (or before open) every replica-derived model
+    // is empty.
+    const held = history.ok && opened ? store.replicas() : [];
+    const heldViews = held.map((r) => viewOf(r.replica, r.product));
+    const space = heldViews.find((v) => v.product === "Treehouse.Space") ?? null;
+    const threadViews = heldViews.filter((v) => v.product === "Treehouse.Thread");
+    const profiles = Object.fromEntries(held.map((r) => [r.replica, store.profile(r.replica)]));
+    const routeOf = (replica: string) => state.routes.find((r) => r.replica === replica) ?? null;
+
     const timelines: Record<string, ThreadTimeline> = {};
-    let timelinesChanged = false;
-    for (const replica of threads) {
-      const previous = models.timelines[replica];
-      if (previous && !targets.has(replica)) {
-        timelines[replica] = previous;
+    for (const view of threadViews) {
+      const profile = profiles[view.replica];
+      const route = routeOf(view.replica);
+      const read = local.readIds(view.replica);
+      // First-seen times are written with the frame, so a grown view covers them.
+      const inputs = { view, outbox: profile?.outbox.length ?? 0, acked: profile?.acked.length ?? 0, route: JSON.stringify(route), read, key: myKey };
+      const cached = timelineInputs.get(view.replica);
+      if (
+        cached &&
+        cached.view === inputs.view &&
+        cached.outbox === inputs.outbox &&
+        cached.acked === inputs.acked &&
+        cached.route === inputs.route &&
+        cached.read === inputs.read &&
+        cached.key === inputs.key
+      ) {
+        timelines[view.replica] = cached.timeline;
         continue;
       }
-      const next = projectThreadTimeline({ replica, profile: store.profile(replica), myKey, connection: connectionOf(replica, state) });
-      if (previous && JSON.stringify(previous) === JSON.stringify(next)) timelines[replica] = previous;
-      else {
-        timelines[replica] = next;
-        timelinesChanged = true;
-      }
+      const next = projectThreadTimeline({
+        replica: view.replica,
+        profile,
+        myKey,
+        route,
+        readIds: read,
+        firstSeen: (id) => store.firstSeenMs(view.replica, id),
+        view,
+      });
+      const timeline = keep(previous?.timelines[view.replica], next);
+      timelineInputs.set(view.replica, { ...inputs, timeline });
+      timelines[view.replica] = timeline;
     }
-    if (Object.keys(models.timelines).length !== threads.length) timelinesChanged = true;
-    if (!timelinesChanged && linkState === undefined) return;
-    // An unchanged set of timelines keeps the identical record, so a whole-record selector stays quiet.
-    models = { timelines: timelinesChanged ? timelines : models.timelines, link: state, history };
+    const sameTimelines =
+      previous !== null &&
+      Object.keys(previous.timelines).length === threadViews.length &&
+      threadViews.every((v) => previous.timelines[v.replica] === timelines[v.replica]);
+
+    let waiting = 0;
+    const spaceWaiting = new Set<string>();
+    for (const r of held) {
+      const profile = profiles[r.replica];
+      const acked = new Set(profile?.acked ?? []);
+      for (const id of profile?.outbox ?? [])
+        if (!acked.has(id)) {
+          waiting++;
+          if (r.product === "Treehouse.Space") spaceWaiting.add(id);
+        }
+    }
+
+    const next: ReadModels = {
+      status: projectSessionStatus({
+        custody: custodyStatus,
+        myKey,
+        history,
+        space,
+        held: held.map((r) => ({ replica: r.replica, profile: profiles[r.replica] })),
+      }),
+      group: projectGroupSummary({ space, myKey }),
+      linkStatus: projectLinkStatus({
+        feed: state,
+        space: space?.replica ?? null,
+        syncEnabled: local.setting("syncEnabled"),
+        waiting,
+        lastSyncMs,
+      }),
+      threads: projectThreadList({ space, timelines, profiles, feed: state }),
+      abilities: projectAbilities({ views: heldViews, myKey }),
+      roster: projectRoster({
+        space,
+        threads: threadViews,
+        myKey,
+        petname: (key) => local.petname(key),
+        spaceRoute: space ? routeOf(space.replica) : null,
+        waitingIds: spaceWaiting,
+      }),
+      audit: projectAuditView({ views: heldViews, feed: state }),
+      timelines: sameTimelines ? previous!.timelines : timelines,
+      link: state,
+      history,
+    };
+    if (previous === null) return next;
+    const merged = { ...next } as Record<keyof ReadModels, unknown>;
+    for (const key of Object.keys(next) as (keyof ReadModels)[])
+      if (key !== "timelines") merged[key] = keep(previous[key], next[key]);
+    const result = merged as unknown as ReadModels;
+    return (Object.keys(result) as (keyof ReadModels)[]).every((key) => result[key] === previous[key]) ? previous : result;
+  };
+
+  let models: ReadModels = build(link.state(), null);
+
+  /** Recompute every read model from its inputs, keeping each unchanged one identical, then publish. */
+  const recompute = (linkState?: FeedState): void => {
+    if (linkState) stampSync(linkState);
+    const next = build(linkState ?? models.link, models);
+    if (next === models) return;
+    models = next;
     publish();
   };
 
@@ -192,10 +371,30 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
     },
   };
 
+  /**
+   * 02 Invariant 8: when the key and the held history disagree (this phone's outbox holds another key's
+   * ops), nothing is signed and nothing goes online. A key that is missing or locked is the custody's own
+   * refusal (identity_unavailable) for signing; transport stops for every identity_mismatch reason.
+   */
+  const mismatched = () => models.status.phase === "identity_mismatch";
+  const linkCtx: LinkContext = { link, local, historyOk: () => history.ok, identityOk: () => !mismatched() };
+
+  /** Every signed command: refused before open, with history_invalid, and with identity_mismatch. */
+  const signed = <R extends string>(run: () => Promise<Outcome<{ id: string }, R>>) => {
+    if (!opened) return Promise.resolve(refuse("identity_unavailable" as const));
+    if (!history.ok) return Promise.resolve(refuse("history_invalid" as const));
+    if (mismatched())
+      return Promise.resolve(refuse(models.status.reason === "outbox_other_key" ? ("identity_mismatch" as const) : ("identity_unavailable" as const)));
+    return run();
+  };
+  const whenOpen = <T, R extends string>(run: () => Promise<Outcome<T, R>>) =>
+    opened ? run() : Promise.resolve(refuse("not_open" as const));
+
   return {
     async open() {
       if (opened) return;
-      myKey = (await custody.status()) === "available" ? await custody.publicKey() : null;
+      custodyStatus = await custody.status();
+      myKey = custodyStatus === "available" ? await custody.publicKey() : null;
       // No silent fallback (M1a.2): a store that cannot open, or held history that fails verification, is
       // history_invalid with its reason. Nothing is deleted or rewritten to recover.
       try {
@@ -208,15 +407,17 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
       } catch (error) {
         history = { ok: false, replica: null, reason: error instanceof Error ? error.message : String(error) };
       }
+      opened = true;
       if (!history.ok) {
-        models = { ...models, history };
-        opened = true;
-        publish();
+        recompute();
         return;
       }
-      unsubscribe = [store.onChange((replica) => recompute([replica])), link.onState((state) => recompute(undefined, state))];
-      opened = true;
-      recompute(undefined, link.state());
+      unsubscribe = [
+        store.onChange(() => recompute()),
+        link.onState((state) => recompute(state)),
+        local.onChange(() => recompute()),
+      ];
+      recompute(link.state());
     },
     async close() {
       if (!opened) return;
@@ -233,11 +434,25 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
       };
     },
     read: () => models,
-    postMessage(thread, text) {
-      if (!opened) return Promise.resolve({ ok: false, reason: "identity_unavailable" } as const);
-      if (!history.ok) return Promise.resolve({ ok: false, reason: "history_invalid" } as const);
-      return postMessageCommand(ctx, thread, text);
-    },
+    postMessage: (thread, text) => signed(() => postMessageCommand(ctx, thread, text)),
+    editMessage: (thread, ref, text) => signed(() => editMessageCommand(ctx, thread, ref, text)),
+    deleteMessage: (thread, ref) => signed(() => deleteMessageCommand(ctx, thread, ref)),
+    removeMessage: (thread, ref) => signed(() => removeMessageCommand(ctx, thread, ref)),
+    archiveThread: (thread) => signed(() => archiveThreadCommand(ctx, thread)),
+    setPetname: (pubkey, name) => whenOpen(() => localCommands.setPetname(local, pubkey, name)),
+    saveDraft: (thread, draft) => whenOpen(() => localCommands.saveDraft(local, thread, draft)),
+    markRead: (thread, ids) => whenOpen(() => localCommands.markRead(local, thread, ids)),
+    goOnline: () => whenOpen(() => linkCommands.goOnline(linkCtx)),
+    goOffline: () => whenOpen(() => linkCommands.goOffline(linkCtx)),
+    syncNow: () =>
+      whenOpen(async () => {
+        const outcome = await linkCommands.syncNow(linkCtx);
+        if (outcome.ok) {
+          stampSync(outcome.value, true);
+          recompute(outcome.value);
+        }
+        return outcome;
+      }),
   };
 }
 

@@ -1,6 +1,5 @@
-import { carrierOpsToSemanticOps, materialize, treehouseCommandDecoders, treehouseThreadSchema } from "@treetopdevs/lattice-client";
-import { MESSAGE_MAX_CHARS, refuse } from "../outcomes";
-import type { Outcome, PostRefusal } from "../outcomes";
+import { MESSAGE_MAX_CHARS, ok, refuse } from "../outcomes";
+import type { Outcome, PostRefusal, TextRefusal } from "../outcomes";
 import { runCommand } from "./pipeline";
 import type { CommandContext } from "./pipeline";
 
@@ -10,20 +9,25 @@ export async function postMessage(
   thread: string,
   rawText: string,
 ): Promise<Outcome<{ id: string }, PostRefusal>> {
+  const checked = checkText(rawText);
+  if (!checked.ok) return checked;
+  const text = checked.value;
+  // No app-side archive check: after the capability check, the pre-judge names "archived thread" itself.
+  return runCommand<never>(ctx, {
+    replica: thread,
+    product: "Treehouse.Thread",
+    command: { command: "post", text },
+  });
+}
+
+/** The message text rules shared by post and edit (O-10): trimmed, non-empty, at most 4,000 code points. */
+export function checkText(rawText: string): Outcome<string, TextRefusal> {
   const text = rawText.trim();
   if (text.length === 0) return refuse("empty_text");
   if ([...text].length > MESSAGE_MAX_CHARS) return refuse("text_too_long");
   // lattice-client refuses to sign a lone surrogate; say so here rather than as a custody failure.
   if (!wellFormedUtf16(text)) return refuse("malformed_text");
-  return runCommand<"archived thread">(ctx, {
-    replica: thread,
-    product: "Treehouse.Thread",
-    command: { command: "post", text },
-    refuseEarly(frames) {
-      const ops = carrierOpsToSemanticOps([...frames], {}, treehouseCommandDecoders("Treehouse.Thread"));
-      return materialize(treehouseThreadSchema, ops).state.archived === true ? "archived thread" : null;
-    },
-  });
+  return ok(text);
 }
 
 /** True unless the text holds a lone UTF-16 surrogate (no String.prototype.isWellFormed reliance on Hermes). */

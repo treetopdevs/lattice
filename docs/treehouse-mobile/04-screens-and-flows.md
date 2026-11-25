@@ -141,7 +141,7 @@ Long-press sheet (items appear only when allowed):
 | State | Shown |
 |---|---|
 | Empty thread | "No messages yet." |
-| Archived | banner "Archived. Read only." with a link to the successor if one exists; composer replaced by the banner |
+| Archived | banner "Archived. No new messages." with a link to the successor if one exists; composer replaced by the banner |
 | Cannot post (no grant, lapsed, removed) | composer replaced by one line with the reason and who can fix it |
 | My message not counted | greyed bubble, reason line, "Copy text" so it can be re-sent |
 | Relay did not accept | warning mark; details give the relay's reason; "Try again" runs sync |

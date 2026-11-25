@@ -27,6 +27,7 @@ import { TreehouseMobileHost } from "./lib/treehouse_mobile_host";
 import type { DemoRole } from "./demo/identities";
 import type { DemoEndpointsManifest } from "./demo/manifest";
 import { createHostBridge, identityCustody } from "./lib/host_session_ports";
+import { openMemoryLocalStore } from "./local/local_store";
 import { systemClock } from "./session/memory/clock";
 import { createTreehouseSession, type TreehouseSession } from "./session/session";
 import type { Delivery } from "./session/projections/thread_timeline";
@@ -71,6 +72,8 @@ const DELIVERY_LABEL: Record<Delivery, string> = {
   saved: "Saved on this phone",
   sending: "Sending",
   on_relay: "On relay",
+  relay_refused: "Relay did not accept",
+  stopped: "Relay is not accepting messages",
 };
 
 type TabId = "threads" | "people" | "relay";
@@ -188,6 +191,9 @@ export default function App(): React.JSX.Element {
           store: bridge.store,
           clock: systemClock,
           link: () => bridge.link,
+          // M0 screen: read markers, petnames and settings are explicitly in memory until M1a.7 wires
+          // openExpoLocalStore; this screen calls no local command.
+          local: await openMemoryLocalStore(),
         });
         await session.open();
         if (stale()) {

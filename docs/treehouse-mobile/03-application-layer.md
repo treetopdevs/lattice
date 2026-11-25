@@ -97,6 +97,10 @@ pill reduces them, with the Space route as the anchor:
 | **Relay refused this phone** | Space route `refused` (wrong relay key or no relay access) |
 | **Offline** | the person turned sync off, or the app has no network |
 
+The rows overlap (Space live with a Thread reconnecting, for example), so the pill takes the first
+match in this order (M1a.4): Offline (sync off, nothing configured, or every route idle), Relay
+refused this phone, Reconnecting, Live, Partly connected, Connecting.
+
 `· N waiting` is appended whenever the outbox has unacked ids. `matchesRelay` means "this
 phone holds what the relay advertises". It never means every member has it.
 
@@ -106,7 +110,12 @@ phone holds what the relay advertises". It never means every member has it.
 - A message that this phone first held after the person last viewed the thread, but that sorts
   above the last message they saw, gets `arrivedLate`. The timeline shows a small "arrived
   later" mark and the thread counts it as unread.
-- Unread is "ids in the timeline not in the read marker". It is not a position.
+- `LocalStore` keeps read ids, not a viewed time, so M1a.4 decides `arrivedLate` by position: an
+  unread message that sorts above some message in the read set.
+- Unread is "ids in the timeline not in the read marker". It is not a position. My own messages,
+  removed placeholders and not-counted posts are never unread.
+- A removed message keeps its place as a placeholder with no text. My own not-counted posts follow
+  the counted timeline in the judge's canonical order (M1a.4).
 - First-seen time is owned by `ReplicaStore` (`firstSeenMs(replica, id)`), written in the same
   transaction that first retains (or authors) a frame; `LocalStore` does not hold it.
   It labels day separators and message details. It is device-local and absent after a
@@ -153,6 +162,52 @@ app-level reasons (`identity_unavailable`, `no_capability`, `empty_text`, `text_
 `malformed_text` (a lone UTF-16 surrogate, which lattice-client will not sign), `thread_slots_full`,
 `storage_failed`). Each reason has exactly one line of copy in the
 strings table; a missing mapping fails typecheck.
+
+Decisions recorded for M1a.5:
+
+- Thread commands take the Thread first, as `postMessage` does: `editMessage(thread, ref, text)`,
+  `deleteMessage(thread, ref)`, `removeMessage(thread, ref)`, where `ref` is the timeline's
+  `MessageLineage` (`{root, latest}`). Only `ref.root` is trusted. The target is the latest
+  edit in the lineage as the held timeline shows it, so a stale `ref.latest` cannot fork the
+  lineage. A root the timeline does not show is passed to the judge unchanged, and the judge
+  names the denial.
+- There is no app-side archive or target check before signing for these commands. The
+  pre-judge returns the judge's reason. A moderator remove still counts after an archive.
+- Local commands refuse `storage_failed`, or `not_open` before the session opens. Link
+  commands add `history_invalid` (held history that failed its check never goes online) and
+  `link_failed` (the link threw, as opposed to a route state). `syncNow` while sync is off
+  dials nothing and returns the idle state.
+- The archived banner says "Archived. No new messages." because 01 never uses "read", so 04's
+  "Read only." is not used.
+
+Decisions recorded in the M1a.4-M1a.5 review fix round:
+
+- `Ability` holds no app list of which commands an archive blocks. After the delegation match and
+  the holder check, abilities ask lattice-client's `treehouseCommandOpStatus` about a probe op of
+  the command by this key, targeting a probe post of this key's own, and report only
+  `application_archived_thread`. The delegation match (audience, ops, roles over
+  `liveTreehouseDelegations`) is the filter `memberCapability` applies, as the Tauri shell's
+  snapshot composes it; a Core test pins it to `memberCapability` for every key and command at every
+  prefix of the four vectors. `postMessage` has no app-side archive check either: the pre-judge
+  names "archived thread" after the capability check.
+- A message's `delivery` is the least delivered of my ops in its lineage: the root post, the
+  winning edit and my deletes (order: relay refused, stopped, saved, sending, on relay). An unsent
+  or refused edit or delete of an acknowledged post is not "on relay". `edited` is false on a
+  removed placeholder.
+- `identity_mismatch` stops signing and transport (02 Invariant 8). With `outbox_other_key`,
+  signed commands refuse `identity_mismatch`; with the key missing or locked they refuse
+  `identity_unavailable`; `goOnline` and `syncNow` refuse `identity_mismatch` for every reason.
+  Custody `unavailable` is `identity_mismatch` (`key_unavailable`) even with nothing held, so a
+  locked key is never routed to key creation. A key that the held Space neither admits nor invites,
+  with no outbox of another key, stays `key_only`: the outbox keeps every authored id, so a key
+  change on a phone that ever authored shows as `outbox_other_key`.
+- `LocalStore` is a required session port. A caller with no persistent store passes an explicitly
+  in-memory one (the M0 screen does until M1a.7).
+- `lastSyncMs` is stamped when every route is live and has compared with the relay, and either a
+  route's relay result moved or a `syncNow` just completed.
+- `GroupSummary.threadSlots.total` is the contract's 12 Threads per Space; `inviteScopeCap`
+  reports `TREEHOUSE_LITE_THREAD_CAP` (3) separately. A Thread with no frames yet is not a Roster
+  moderator mismatch.
 
 Moderator authority is held per replica: the Space and each Thread have their own holder. The
 UI presents one Group moderator, so `changeModerator` writes one transfer per replica and

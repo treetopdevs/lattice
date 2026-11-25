@@ -57,7 +57,36 @@ export type PostRefusal =
   | "archived thread"
   | "storage_failed"
   | "history_invalid"
+  | "identity_mismatch"
   | QuarantineReason;
+
+/** Text checks shared by post and edit, made before anything is signed. */
+export type TextRefusal = "empty_text" | "text_too_long" | "malformed_text";
+
+/**
+ * Every signed Thread command: the pipeline's reasons plus a session whose held history failed its check, or
+ * whose key does not match the held history (02 Invariant 8: stop and say so).
+ */
+export type ThreadCommandRefusal =
+  | "identity_unavailable"
+  | "no_capability"
+  | "storage_failed"
+  | "history_invalid"
+  | "identity_mismatch"
+  | QuarantineReason;
+
+export type EditRefusal = ThreadCommandRefusal | TextRefusal;
+export type DeleteRefusal = ThreadCommandRefusal;
+export type RemoveRefusal = ThreadCommandRefusal;
+export type ArchiveRefusal = ThreadCommandRefusal;
+
+/** Device-local commands (petname, draft, read marker). `not_open` before the session has opened. */
+export type LocalRefusal = "storage_failed" | "not_open";
+
+/** goOnline, goOffline, syncNow. `link_failed` when the relay link itself throws (not a route state). */
+export type LinkRefusal = "history_invalid" | "identity_mismatch" | "storage_failed" | "link_failed" | "not_open";
+
+export type AnyCommandRefusal = PostRefusal | EditRefusal | DeleteRefusal | RemoveRefusal | ArchiveRefusal | LocalRefusal | LinkRefusal;
 
 /** App rule O-10: 4,000 characters (code points), well under the relay's 64,000-byte socket frame. */
 export const MESSAGE_MAX_CHARS = 4_000;

@@ -127,6 +127,7 @@ test("a refused space route yields the no relay access status", async (t) => {
     await store.adopt(group.thread.replica, "Treehouse.Thread");
     let link: ReturnType<typeof createFeedRelayLink> | null = null;
     const session = createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
       custody: MemoryKeyCustody.holding(identity.signer),
       store,
       clock: new ManualClock(2_000),

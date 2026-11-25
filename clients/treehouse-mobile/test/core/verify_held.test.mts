@@ -134,6 +134,7 @@ test("a failed verify leaves the store untouched and surfaces history_invalid", 
   let started = 0;
   const member = group.members[0]!;
   const session = L.createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
     custody: L.MemoryKeyCustody.holding(member.signer),
     store: new L.MemoryReplicaStore(disk, new L.ManualClock(2_000)),
     clock: new L.ManualClock(2_000),
@@ -164,6 +165,7 @@ test("a failed verify leaves the store untouched and surfaces history_invalid", 
 
   // A store that cannot open is also history_invalid, with its reason, and never a silent empty store.
   const broken = L.createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
     custody: L.MemoryKeyCustody.holding(member.signer),
     store: Object.assign(new L.MemoryReplicaStore(), {
       open: async () => {
@@ -194,6 +196,7 @@ test("a pull that would make held history invalid is refused and writes nothing"
   await store.adopt(other.thread.replica, "Treehouse.Thread");
   let host: Parameters<Parameters<typeof L.createTreehouseSession>[0]["link"]>[0] | null = null;
   const session = L.createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
     custody: new L.MemoryKeyCustody(),
     store,
     clock: new L.ManualClock(0),
@@ -232,6 +235,7 @@ test("a device holding nothing yet converges through the local relay with every 
   await store.adopt(group.thread.replica, "Treehouse.Thread");
   let link: ReturnType<typeof L.createFeedRelayLink> | null = null;
   const session = L.createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
     custody: L.MemoryKeyCustody.holding(member.signer),
     store,
     clock: new L.ManualClock(1_000),

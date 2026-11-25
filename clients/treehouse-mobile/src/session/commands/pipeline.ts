@@ -32,7 +32,8 @@ export type PipelineRefusal = "identity_unavailable" | "no_capability" | "storag
 export interface PipelineStep<R extends string> {
   replica: string;
   product: TreehouseProduct;
-  command: TreehouseCommand;
+  /** The command, or a function of the held frames (edit and tombstone targets come from the held lineage). */
+  command: TreehouseCommand | ((frames: readonly CarrierOpFrame[]) => TreehouseCommand);
   /** App-level refusal decided on the held frames before anything is signed (e.g. archived). */
   refuseEarly?(frames: readonly CarrierOpFrame[]): R | null;
 }
@@ -52,7 +53,8 @@ export async function runCommand<R extends string>(
   const frames = profile.frames;
   const early = step.refuseEarly?.(frames) ?? null;
   if (early !== null) return refuse(early);
-  const capability = memberCapability(frames, key, step.replica, { product: step.product, command: step.command.command });
+  const command = typeof step.command === "function" ? step.command(frames) : step.command;
+  const capability = memberCapability(frames, key, step.replica, { product: step.product, command: command.command });
   if (!capability) return refuse("no_capability");
 
   // 2. Author: deps are the held frontier, the signature comes from custody.
@@ -66,7 +68,7 @@ export async function runCommand<R extends string>(
       deps: frontier(ops),
       signer: { publicKey: base64ToBytes(key), sign: (bytes) => ctx.custody.sign(bytes) },
       capId: capability.id,
-      command: step.command,
+      command,
     });
   } catch {
     return refuse("identity_unavailable");

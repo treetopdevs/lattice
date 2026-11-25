@@ -55,8 +55,9 @@ async function seededStore(
  */
 const SIM_VECTOR_THREAD_ONLY = { verify: async () => ({ ok: true }) as const };
 
-function offlineSession(L: Layers, store: InstanceType<Layers["MemoryReplicaStore"]>, custody: { status(): Promise<"none" | "available" | "unavailable">; publicKey(): Promise<string | null>; create(): Promise<string>; sign(bytes: Uint8Array): Promise<Uint8Array> }, extra: { verify?: () => Promise<{ ok: true }> } = {}) {
+async function offlineSession(L: Layers, store: InstanceType<Layers["MemoryReplicaStore"]>, custody: { status(): Promise<"none" | "available" | "unavailable">; publicKey(): Promise<string | null>; create(): Promise<string>; sign(bytes: Uint8Array): Promise<Uint8Array> }, extra: { verify?: () => Promise<{ ok: true }> } = {}) {
   return L.createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
     custody,
     store,
     clock: new L.ManualClock(2_000),
@@ -70,7 +71,7 @@ test("timeline equals Sim order and text for treehouse_thread_conflicts", async 
   const { loadTreehouseVector } = await import("../support/vectors");
   const vector = loadTreehouseVector("treehouse_thread_conflicts");
   const { store } = await seededStore(L, [{ replica: vector.replica, product: "Treehouse.Thread", frames: vector.frames }]);
-  const session = offlineSession(L, store, new L.MemoryKeyCustody(), SIM_VECTOR_THREAD_ONLY);
+  const session = await offlineSession(L, store, new L.MemoryKeyCustody(), SIM_VECTOR_THREAD_ONLY);
   await session.open();
   try {
     const timeline = session.read().timelines[vector.replica]!;
@@ -93,13 +94,15 @@ test("timeline omits quarantined posts for treehouse_thread_archive", async () =
   const vector = loadTreehouseVector("treehouse_thread_archive");
   assert.ok(Object.keys(vector.expected.quarantined).length > 0, "the vector quarantines something");
   const { store } = await seededStore(L, [{ replica: vector.replica, product: "Treehouse.Thread", frames: vector.frames }]);
-  const session = offlineSession(L, store, new L.MemoryKeyCustody(), SIM_VECTOR_THREAD_ONLY);
+  const session = await offlineSession(L, store, new L.MemoryKeyCustody(), SIM_VECTOR_THREAD_ONLY);
   await session.open();
   try {
     const timeline = session.read().timelines[vector.replica]!;
+    // M1a.4 keeps a removed message's place as a placeholder; the shown messages are the rest.
+    const shown = timeline.messages.filter((m) => m.removed === null);
     const ids = timeline.messages.map((m) => m.id);
-    assert.deepEqual(ids, vector.expected.order, "order equals Sim");
-    assert.deepEqual(timeline.messages.map((m) => m.text), (vector.expected.state as { posts: string[] }).posts);
+    assert.deepEqual(shown.map((m) => m.id), vector.expected.order, "order equals Sim");
+    assert.deepEqual(shown.map((m) => m.text), (vector.expected.state as { posts: string[] }).posts);
     for (const id of Object.keys(vector.expected.quarantined))
       assert.ok(!ids.includes(id), `quarantined ${id} is not in the timeline`);
     assert.equal(timeline.archived, true);
@@ -123,6 +126,7 @@ test("post appears as saved while the link is stopped, then on_relay after sync"
   ]);
   let link: ReturnType<typeof L.createFeedRelayLink> | null = null;
   const session = L.createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
     custody: L.MemoryKeyCustody.holding(member.signer),
     store,
     clock: new L.ManualClock(5_000),
@@ -181,7 +185,7 @@ test("post by a key without a grant is refused no_capability and writes nothing"
     { replica: group.thread.replica, product: "Treehouse.Thread", frames: group.thread.frames },
   ]);
   const { custody, counter } = counting(L.MemoryKeyCustody.holding(testIdentity("stranger").signer));
-  const session = offlineSession(L, store, custody);
+  const session = await offlineSession(L, store, custody);
   await session.open();
   try {
     const before = structuredClone(store.profile(group.thread.replica));
@@ -204,7 +208,7 @@ test("empty and over-long text are refused before signing", async () => {
     { replica: group.thread.replica, product: "Treehouse.Thread", frames: group.thread.frames },
   ]);
   const { custody, counter } = counting(L.MemoryKeyCustody.holding(group.members[0]!.signer));
-  const session = offlineSession(L, store, custody);
+  const session = await offlineSession(L, store, custody);
   await session.open();
   try {
     const before = structuredClone(store.profile(group.thread.replica));
@@ -233,7 +237,7 @@ test("a second session on the same store sees the queued post after restart", as
     { replica: group.thread.replica, product: "Treehouse.Thread" as const, frames: group.thread.frames },
   ];
   const { store, disk } = await seededStore(L, seeds);
-  const first = offlineSession(L, store, L.MemoryKeyCustody.holding(member.signer));
+  const first = await offlineSession(L, store, L.MemoryKeyCustody.holding(member.signer));
   await first.open();
   const posted = await first.postMessage(group.thread.replica, "still here after restart");
   assert.ok(posted.ok);
@@ -242,7 +246,7 @@ test("a second session on the same store sees the queued post after restart", as
   // Restart: a new store object over the same durable disk, a new session, the same key.
   const reopened = new L.MemoryReplicaStore(disk, new L.ManualClock(9_000));
   await reopened.open();
-  const second = offlineSession(L, reopened, L.MemoryKeyCustody.holding(member.signer));
+  const second = await offlineSession(L, reopened, L.MemoryKeyCustody.holding(member.signer));
   await second.open();
   try {
     const message = second.read().timelines[group.thread.replica]!.messages.find((m) => m.id === posted.value.id);
@@ -269,6 +273,7 @@ test("subscribe fires once per change and not when an unrelated slice changes", 
   ]);
   const link = new L.MemoryRelayLink();
   const session = L.createTreehouseSession({
+    local: await (await import("../../src/local/local_store")).openMemoryLocalStore(),
     custody: L.MemoryKeyCustody.holding(group.members[0]!.signer),
     store,
     clock: new L.ManualClock(2_000),
