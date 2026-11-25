@@ -16,6 +16,7 @@ actually built and verified lives only in [PROGRESS.md](PROGRESS.md).
 | 4 | [04-screens-and-flows.md](04-screens-and-flows.md) | What does each screen show, do and say? |
 | 5 | [05-capability-matrix.md](05-capability-matrix.md) | Which features does the substrate support today? |
 | 6 | [06-milestones.md](06-milestones.md) | In what order do we build, and what is still undecided? |
+| 7 | [07-implementation-plan.md](07-implementation-plan.md) | Exactly how is each slice built and tested? |
 | - | [PROGRESS.md](PROGRESS.md) | What is done, at which evidence tier, as of the last commit? |
 
 ## The six findings that shape everything else

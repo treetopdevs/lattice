@@ -2,7 +2,8 @@
 
 Supersedes the milestone table in Plan 296. Each slice is small enough for one agent and one
 PR, names its gate and names the highest evidence tier it may claim. Status lives in
-[PROGRESS.md](PROGRESS.md), not here.
+[PROGRESS.md](PROGRESS.md), not here. Files, signatures, named tests, gate commands and the
+exact build order for each slice are in [07-implementation-plan.md](07-implementation-plan.md).
 
 ## Sequence
 
@@ -25,16 +26,20 @@ M0 was committed with its simulator proof not run.
 ## M1a: foundation (no visible change)
 
 Build the layers in [03](03-application-layer.md) under the M0 screen, then delete the M0 host.
+M1a.1 is a tracer: one thread read and one post through the new layers, visible in the app,
+before the layers are widened.
 
 | Slice | Scope | Gate | Tier |
 |---|---|---|---|
-| M1a.1 | Ports and memory adapters (custody includes per-Thread keys); `TreehouseSession` skeleton; `SessionStatus` | Node tests | Core |
+| M1a.0 | Core test harness: Sim vector loader, group fixture, local BEAM relay fixture; public-relay gate becomes an opt-in smoke | Node tests | Core |
+| M1a.1 | Ports and memory adapters; `TreehouseSession`; tracer: thread timeline and `postMessage` through the session, shown in the M0 screen | Node tests; simulator relaunch | Core |
 | M1a.2 | `ReplicaStore` on SQLite with per-frame append, append-only checks, verify on open | Node tests on memory; adapter test on simulator | Simulator |
 | M1a.3 | `LocalStore`: petnames, drafts, read markers, first-seen times | Node tests | Core |
-| M1a.4 | Read models: `GroupSummary`, `LinkStatus`, `ThreadList`, `ThreadTimeline`, `Abilities` (using `memberCapability`) | Node tests against Sim vectors and the demo relay | Core |
-| M1a.5 | Command pipeline with typed outcomes; `postMessage` moved onto it; strings table with exhaustive reason mapping | Node tests incl. every refusal | Core |
-| M1a.6 | Demo bootstrap moved to `src/demo/`, excluded from release builds | build check | Core |
+| M1a.4 | Read models: `GroupSummary`, `LinkStatus`, `ThreadList`, `ThreadTimeline`, `Abilities` (using `memberCapability`), `Roster`, `AuditView`, `SessionStatus` | Node tests against Sim vectors and the local relay | Core |
+| M1a.5 | Remaining thread commands on the pipeline with typed outcomes; strings table with exhaustive reason mapping | Node tests incl. every refusal | Core |
+| M1a.6 | Demo bootstrap moved to `src/demo/`, excluded from release builds; covers M0.2 and the rest of M0.3 | Node tests | Core |
 | M1a.7 | Navigation skeleton (three tabs, pushed thread screen), lifecycle (foreground, background) | simulator run | Simulator |
+| M1a.8 | CI job: typecheck, Core tests, progress check | job green | Core |
 
 ## M1b: chat loop on iOS
 
@@ -53,18 +58,20 @@ through an offline period, with results equal to Sim. Demo identities only.
 
 ## M2: people and invitations
 
-Blocked on G-1 for anything beyond demo identities.
+The ceremony can be built and tested now: the local BEAM relay used by the test fixtures
+admits any key written into its manifest. G-1 blocks only the public demo relay and real use.
 
 | Slice | Scope | Gate | Tier |
 |---|---|---|---|
-| M2.0 | G-1 option (b) on the demo relay, or a recorded decision to use manual admission | device key connects | Core |
+| M2.0 | G-1 option (b) on the public demo relay, or a recorded decision to use manual admission (substrate track; not needed for M2.1 to M2.5 against a local relay) | device key connects to the public demo | Core |
 | M2.1 | Onboarding: welcome, trust card, key creation, choose | simulator | Simulator |
 | M2.2 | Ceremony saga, both sides, text artifacts via paste and share | Node test of the full saga incl. crash at every step | Core |
 | M2.3 | QR show and scan for request, single-thread offer, acceptance | two simulators or one phone and one simulator | Simulator |
 | M2.4 | People tab: roster, petnames, key check, invitations in progress, revoke | simulator | Simulator |
 | M2.5 | Remove member, change moderator, transfer admin with confirmations; removed and problem screens | Sim-compared | Simulator |
 
-Exit: a fresh install with its own key joins the demo Group through the app alone and posts.
+Exit: a fresh install with its own key joins a Group on a local relay through the app alone
+and posts. Doing the same on the public demo relay additionally needs M2.0.
 
 ## M3: iOS polish and first real phones
 
@@ -108,4 +115,4 @@ confirmed or changed by the operator; changing one means editing the doc that ow
 | O-7 | Plan 180 puts iOS after E1; Plan 296 is iOS first | 296 runs as a parallel demo track with no E1 claim; record in the plan index | The operator started 296 directly | 05 |
 | O-8 | Show first-seen time on messages? | Day separators and message details only, never per-bubble clock times | A per-bubble time reads as a send time, which does not exist | 03 |
 | O-9 | Enforce the PROGRESS rule in CI? | Local script now; CI job when the mobile client gets its own workflow | No mobile CI job exists yet | README |
-| O-10 | Message length limit | 4,000 characters, refused locally with `text_too_long` | No limit is pinned upstream; confirm against relay frame bounds before M1a.5 | 03 |
+| O-10 | Message length limit | 4,000 characters, refused locally with `text_too_long` | No domain limit is pinned upstream; 4,000 characters is well under the relay's 64,000-byte socket frame | 03 |

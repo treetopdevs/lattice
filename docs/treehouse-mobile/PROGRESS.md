@@ -26,7 +26,7 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | | |
 |---|---|
 | As of | 2026-11-25 |
-| Milestone | M0 committed, simulator proof not run; design set written |
+| Milestone | M0 committed, simulator proof not run; design set and implementation plan written |
 | Highest evidence tier reached | Core |
 | Works today | Node gate: connect to the demo relay as a demo identity, read the Group and Thread, post offline, queue survives a simulated restart |
 | Does not work today | anything on a simulator or phone (never launched); a phone's own key on the relay; invitations; edit, delete, archive; people management |
@@ -40,16 +40,18 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | M0.1 simulator boot with real SecureStore and SQLite | todo | - | never run |
 | M0.2 trust-card copy | todo | - | current copy omits who can read |
 | M0.3 device-key identity against the relay | doing | Core | tried from Node 2026-11-25: both routes refused `unauthenticated`, zero frames held. Screen copy for this state still to do |
-| M1a.1 ports and session skeleton | todo | - | |
+| M1a.0 test harness and fixtures | todo | - | |
+| M1a.1 ports, session and post tracer | todo | - | |
 | M1a.2 SQLite replica store | todo | - | |
 | M1a.3 local store | todo | - | |
 | M1a.4 read models | todo | - | |
 | M1a.5 command pipeline | todo | - | |
 | M1a.6 demo bootstrap fenced | todo | - | |
 | M1a.7 navigation and lifecycle | todo | - | |
+| M1a.8 CI job | todo | - | |
 | M1b.1 to M1b.7 chat loop | todo | - | |
-| M2.0 relay access for device keys | blocked (G-1) | - | |
-| M2.1 to M2.5 people and invitations | todo | - | |
+| M2.0 public demo relay access for device keys | blocked (G-1) | - | |
+| M2.1 to M2.5 people and invitations | todo | - | testable against a local relay without M2.0 |
 | M3 polish and first phones | todo | - | |
 | M4 Android | todo | - | |
 
@@ -69,14 +71,29 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 
 ## Next up
 
-1. M0.1: launch on the iOS Simulator and record what happens.
-2. M0.2 and the rest of M0.3: fix the trust card; show a clear "no relay access" state for a device key.
-3. M1a.1 to M1a.5: the application layer under the existing screen.
-4. Decide O-5 so M2 is not waiting on it.
+Follow the build order in [07-implementation-plan.md](07-implementation-plan.md):
+
+1. M0.1: launch on the iOS Simulator and run the self-check.
+2. M1a.0: Core test harness with the local relay.
+3. M1a.1: the post tracer through the new session.
+4. Then M1a.2, M1a.3, M1a.6 and M1a.8 in parallel.
 
 ## Log
 
 Newest first.
+
+### 2026-11-25 · Add Treehouse Mobile implementation plan
+
+- Wrote `07-implementation-plan.md`: target layout, test references, build order, and for M0.1
+  and M1a.0 to M1a.8 the files, signatures, named tests, gates and tiers; M1b as scenario
+  table; M2 as outline.
+- Aligned `06-milestones.md` with it: added M1a.0 (harness) and M1a.8 (CI), made M1a.1 a
+  tracer, and narrowed the G-1 block to the public demo relay.
+- Found while planning: shell-kit's test helpers boot a local BEAM relay from a manifest that
+  can admit any key, so the invitation flow is testable without server changes. The M0 gate
+  does not submit to the public relay. Xcode 27 and iOS simulators are installed. The relay's
+  socket frame limit is 64,000 bytes.
+- No app code changed. Checks run: progress script. Tier: none (docs).
 
 ### 2026-11-25 · Add Treehouse Mobile design set and progress log
 
