@@ -70,13 +70,34 @@ type SqliteDb = {
 export class ExpoSqliteStorage implements MobileStorage {
   private readonly fallback = new MemoryMobileStorage();
   private dbPromise: Promise<SqliteDb | null> | null = null;
+  private opened: SqliteDb | null = null;
+  private openError: string | undefined;
+
+  /** Why the last open attempt fell back to memory, if it did. */
+  lastError(): string | undefined {
+    return this.openError;
+  }
+
+  /** Which backend answered: "sqlite" only once the database actually opened. */
+  backend(): "sqlite" | "memory" {
+    return this.opened ? "sqlite" : "memory";
+  }
+
+  /** Forces the lazy open so backend() is meaningful before the first load/save. */
+  async ready(): Promise<"sqlite" | "memory"> {
+    await this.open();
+    return this.backend();
+  }
 
   private async open(): Promise<SqliteDb | null> {
     if (this.dbPromise) return this.dbPromise;
     this.dbPromise = (async () => {
       try {
         const mod = await import("expo-sqlite");
-        if (typeof mod.openDatabaseAsync !== "function") return null;
+        if (typeof mod.openDatabaseAsync !== "function") {
+          this.openError = "expo-sqlite has no openDatabaseAsync";
+          return null;
+        }
         const db = (await mod.openDatabaseAsync(SQLITE_DB_NAME)) as unknown as SqliteDb;
         await db.execAsync(`
           PRAGMA journal_mode = WAL;
@@ -86,8 +107,10 @@ export class ExpoSqliteStorage implements MobileStorage {
             updated_at INTEGER NOT NULL
           );
         `);
+        this.opened = db;
         return db;
-      } catch {
+      } catch (e) {
+        this.openError = e instanceof Error ? e.message : String(e);
         return null;
       }
     })();

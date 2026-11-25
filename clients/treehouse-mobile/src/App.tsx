@@ -21,6 +21,7 @@ import {
   loadOrCreateDeviceIdentity,
   type MobileIdentity,
 } from "./native/custody";
+import { runSelfCheck, type SelfCheck } from "./native/selfcheck";
 import {
   DEFAULT_DEMO_WSS_ORIGIN,
   fetchDemoEndpoints,
@@ -99,6 +100,7 @@ export default function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [selfCheck, setSelfCheck] = useState<SelfCheck | "running" | null>(null);
 
   const connect = useCallback(
     async (targetOrigin: string, mode: IdentityMode) => {
@@ -456,6 +458,39 @@ export default function App(): React.JSX.Element {
                 </Text>
               ) : null}
             </View>
+
+            {__DEV__ ? (
+              <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+                <Text style={[styles.cardTitle, { color: c.text }]}>Self-check</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Run self-check"
+                  disabled={selfCheck === "running"}
+                  onPress={() => {
+                    setSelfCheck("running");
+                    runSelfCheck().then(setSelfCheck, () => setSelfCheck(null));
+                  }}
+                  style={[styles.actionBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border, borderWidth: 1 }]}
+                >
+                  <Text style={[styles.actionBtnText, { color: c.text }]}>Run Self-check</Text>
+                </Pressable>
+                {selfCheck === "running" ? (
+                  <Text style={[styles.mono, { color: c.muted, marginTop: 8 }]}>running</Text>
+                ) : selfCheck ? (
+                  <View testID="selfcheck-result" style={{ marginTop: 8 }}>
+                    <Text style={[styles.mono, { color: c.text }]}>
+                      custody: {selfCheck.custody.ok ? "pass" : "FAIL"} ({selfCheck.custody.detail})
+                    </Text>
+                    <Text style={[styles.mono, { color: c.text }]}>
+                      storage: {selfCheck.storage.ok ? "pass" : "FAIL"} {selfCheck.storage.backend} ({selfCheck.storage.detail})
+                    </Text>
+                    <Text style={[styles.mono, { color: c.text }]}>
+                      crypto: {selfCheck.crypto.ok ? "pass" : "FAIL"} ({selfCheck.crypto.detail})
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
 
             {/* Route Feed State */}
             <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>

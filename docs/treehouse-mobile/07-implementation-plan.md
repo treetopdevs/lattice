@@ -36,7 +36,9 @@ Stop, record the reason in PROGRESS and ask, rather than work around any of thes
 
 ## Ground rules for every slice
 
-1. Branch from the current tip; one slice, one commit or PR.
+1. Branch from the current tip. Commits are made once per juncture (M0.1; M1a.0+M1a.1;
+   M1a.2+M1a.3+M1a.6+M1a.8; M1a.4+M1a.5; M1a.7; M1b), with each slice's RED evidence collected
+   in the commit body, by operator instruction 2026-11-25.
 2. TDD: write the named tests first and keep the failing output as RED evidence in the commit
    body. Then make them pass.
 3. Touch only the files the slice lists. Slices listed as parallel have disjoint file sets.
@@ -222,6 +224,7 @@ export interface ReplicaStore {
   adopt(replica: string, product: TreehouseProduct): Promise<void>;
   appendAuthored(replica: string, frame: CarrierOpFrame): Promise<void>;
   mergeSync(replica: string, pulled: CarrierOpFrame[], ackedIds: string[]): Promise<boolean>;
+  firstSeenMs(replica: string, id: string): number | undefined;   // sole owner of first-seen times
   onChange(listener: (replica: string) => void): () => void;
 }
 export interface RelayLink {
@@ -283,6 +286,9 @@ the new path. **Tier.** Core, plus Simulator if the relaunch is done. **PROGRESS
 `test/core/verify_held.test.mts`. Deleted at the end: `src/native/storage.ts` once nothing
 imports it.
 
+The `ReplicaStore` port also exposes `firstSeenMs(replica, id): number | undefined`, the single
+owner of first-seen times (see [03](03-application-layer.md)).
+
 **Schema.**
 
 ```sql
@@ -299,7 +305,7 @@ CREATE TABLE meta    (key TEXT PRIMARY KEY, value TEXT NOT NULL);   -- schema_ve
 - No silent fallback: if the database cannot open, `open()` rejects and the session reports
   `history_invalid` with the reason.
 - `first_seen_ms` is written here because it must be set in the same transaction that retains
-  the frame; `LocalStore` reads it (M1a.3).
+  the frame; `LocalStore` reads it through `ReplicaStore.firstSeenMs` (M1a.3).
 
 **Verify on open** (`verify_held.ts`, pure): for each held replica, every frame's id and
 signature check, deps are closed, outbox and acked ids are held, the genesis matches the
@@ -359,8 +365,10 @@ export interface LocalStore {
 
 **Files.** New under `src/session/projections/`: `group_summary.ts`, `link_status.ts`,
 `thread_list.ts`, `abilities.ts`, `roster.ts`, `audit_view.ts`, `session_status.ts`; extend
-`thread_timeline.ts`. Tests: one `*.test.mts` per file. Delete `src/lib/treehouse_mobile_host.ts`
-when `App.tsx` no longer imports it.
+`thread_timeline.ts`. Tests: one `*.test.mts` per file. Do not delete
+`src/lib/treehouse_mobile_host.ts` here: its demo code (`fetchDemoEndpoints`, `fetchDemoSeed`,
+role switcher) moves to `src/demo/` in M1a.6 first. Delete it once M1a.6 has landed and
+`App.tsx` no longer imports it.
 
 Each projection is a pure function `(inputs) => readModel` with the field set in
 [03](03-application-layer.md). The session recomputes a projection only when one of its
@@ -444,7 +452,9 @@ object when the result is structurally equal, so subscribers do not re-render.
 
 **Files.** New: `src/app/_layout.tsx`, `src/app/(tabs)/_layout.tsx`, `threads.tsx`,
 `people.tsx`, `group.tsx`, `src/app/thread/[replica].tsx`, `src/native/lifecycle.ts`,
-`src/ui/SessionProvider.tsx`, `src/ui/useReadModel.ts`. Deleted: `src/App.tsx`.
+`src/ui/SessionProvider.tsx`, `src/ui/useReadModel.ts`. Deleted: `src/App.tsx`. Edited:
+  `index.ts` (it imports `src/App.tsx`; point the entry at Expo Router, `expo-router/entry`, and
+  set `main` in `package.json` to match, in the same change that deletes `App.tsx`).
 
 - Read the SDK 58 Expo Router docs first; install with `npx expo install`.
 - `useReadModel(select)` wraps `session.subscribe` with `useSyncExternalStore`.
@@ -467,9 +477,11 @@ existing classifier).
 
 - Triggers on `clients/treehouse-mobile/**`, `clients/lattice-client/**`,
   `clients/lattice-shell-kit/**`, `docs/treehouse-mobile/**`.
-- Steps: `npm ci` in the three packages, `tsc --noEmit`, `test:core` (needs the BEAM build
-  the workflow already has for the local relay), and
-  `scripts/check_treehouse_mobile_progress.sh origin/main..HEAD`.
+- Steps: `npm ci` in the three packages, build `clients/lattice-client` (the mobile package
+  consumes its build output), build the BEAM relay itself (do not assume another job's build),
+  `tsc --noEmit`, `test:core`, and `scripts/check_treehouse_mobile_progress.sh` over the same
+  `BASE..HEAD` range `flagship.yml` already computes for its other checks, not
+  `origin/main..HEAD`.
 - No simulator job yet; that comes with M3.
 
 **Gate.** The job is green on the slice's own PR. **Tier.** Core. **PROGRESS row.** M1a.8.

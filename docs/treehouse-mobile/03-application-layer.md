@@ -31,8 +31,8 @@ plain Node. That is what makes the Core evidence tier cheap.
 | Port | Purpose | Methods (shape, not final names) |
 |---|---|---|
 | `KeyCustody` | hold the device key and per-Thread root keys | `status()`, `publicKey()`, `create()`, `sign(bytes)`, `createThreadKey(nonce)`, `threadPublicKey(nonce)`, `signThread(nonce, bytes)` |
-| `ReplicaStore` | held frames per replica | `open()`, `appendAuthored(replica, frame)`, `mergeSync(replica, frames, ackedIds)`, `profile(replica)`, `replicas()` |
-| `LocalStore` | device-local facts | petnames, drafts, read markers, first-seen times, ceremonies, routes, settings |
+| `ReplicaStore` | held frames per replica | `open()`, `appendAuthored(replica, frame)`, `mergeSync(replica, frames, ackedIds)`, `profile(replica)`, `replicas()`, `firstSeenMs(replica, id)` |
+| `LocalStore` | device-local facts | petnames, drafts, read markers, ceremonies, routes, settings |
 | `RelayLink` | sync and availability | thin wrapper over shell-kit `createFeedController`, `syncRoutes` |
 | `Clock` | local time | `now()`; used for first-seen times only |
 | `Handoff` | move artifacts between phones | `showQr(text)`, `scan()`, `share(text)`, `incomingLinks()` |
@@ -107,7 +107,8 @@ phone holds what the relay advertises". It never means every member has it.
   above the last message they saw, gets `arrivedLate`. The timeline shows a small "arrived
   later" mark and the thread counts it as unread.
 - Unread is "ids in the timeline not in the read marker". It is not a position.
-- First-seen time is recorded by `LocalStore` when a frame is first retained (or authored).
+- First-seen time is owned by `ReplicaStore` (`firstSeenMs(replica, id)`), written in the same
+  transaction that first retains (or authors) a frame; `LocalStore` does not hold it.
   It labels day separators and message details. It is device-local and absent after a
   reinstall, in which case no time is shown.
 - Unread counts move only while the app is in the foreground. Notifications and background

@@ -26,10 +26,10 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | | |
 |---|---|
 | As of | 2026-11-25 |
-| Milestone | M0 committed, simulator proof not run; design set and implementation plan written |
+| Milestone | M0 committed; M0.1 self-check built, simulator gate not run (blocked: Xcode selection) |
 | Highest evidence tier reached | Core |
 | Works today | Node gate: connect to the demo relay as a demo identity, read the Group and Thread, post offline, queue survives a simulated restart |
-| Does not work today | anything on a simulator or phone (never launched); a phone's own key on the relay; invitations; edit, delete, archive; people management |
+| Does not work today | anything verified on a simulator beyond launch (self-check never tapped) or on a phone; a phone's own key on the relay; invitations; edit, delete, archive; people management |
 
 ## Status board
 
@@ -37,7 +37,7 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 |---|---|---|---|
 | M0 scaffold, typecheck, Hermes bundle | done | Core | `tsc --noEmit` clean; `expo export --platform ios` bundled 708 modules (2026-11-25) |
 | M0 live relay gate | done | Core | `npm test` against `lattice-demo-wss.fly.dev` passed with `MemoryKeyStore` and `MemoryMobileStorage` (2026-11-25) |
-| M0.1 simulator boot with real SecureStore and SQLite | todo | - | never run |
+| M0.1 simulator boot with real SecureStore and SQLite | blocked (Xcode-beta cannot run simulator input on this macOS) | Core | self-check code and 3 Core tests pass; app built, installed and launched on iPhone 17 Pro (iOS 26.5, screenshot `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m01_launch.png`, launch only); self-check not tapped, three-pass sqlite gate not run |
 | M0.2 trust-card copy | todo | - | current copy omits who can read |
 | M0.3 device-key identity against the relay | doing | Core | tried from Node 2026-11-25: both routes refused `unauthenticated`, zero frames held. Screen copy for this state still to do |
 | M1a.0 test harness and fixtures | todo | - | |
@@ -62,7 +62,8 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | G-1 relay admits only manifest realms | a self-made key cannot connect (confirmed 2026-11-25); join flow cannot complete | 05 |
 | Mobile custody holds one key | cannot create bounded Threads or grant them to new members | M1a.1, O-11 |
 | G-2 no self-service replica provisioning | no Start a group, New thread or rollover | 05 |
-| M0 simulator proof missing | Keychain, SQLite and Hermes runtime paths are unexecuted | M0.1 |
+| M0 simulator proof missing | the app launches, but Keychain and SQLite self-check results and persistence across relaunch are unverified; adapter has not failed, it was not exercised | M0.1 |
+| Simulator input blocked | `agent-device press` fails (DTServiceHub) while `xcode-select` points at Xcode-beta; `/Applications/Xcode.app` also exists | M0.1 |
 | M0 host re-reduces per render and rewrites the whole snapshot per save | will not scale past small threads | M1a.2, M1a.4 |
 | M0 capability picker ignores required roles | may offer an action the judge then refuses | M1a.4 |
 | No verify-on-open | saved frames are trusted at launch | M1a.2 |
@@ -73,7 +74,7 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 
 Follow the build order in [07-implementation-plan.md](07-implementation-plan.md):
 
-1. M0.1: launch on the iOS Simulator and run the self-check.
+1. M0.1: fix the Xcode selection for the agent-device daemon, then tap Relay & Safety > Run Self-check and screenshot; custody, storage (must say sqlite) and crypto must all pass, on three runs. Do the post/relaunch step against a local relay only, never the public demo relay.
 2. M1a.0: Core test harness with the local relay.
 3. M1a.1: the post tracer through the new session.
 4. Then M1a.2, M1a.3, M1a.6 and M1a.8 in parallel.
@@ -81,6 +82,37 @@ Follow the build order in [07-implementation-plan.md](07-implementation-plan.md)
 ## Log
 
 Newest first.
+
+### 2026-11-25 · feat(treehouse-mobile): M0.1 simulator boot and self-check
+
+- Added `src/native/selfcheck.ts` (`runSelfCheck`, injectable deps): custody through
+  expo-secure-store with no fallback, storage via `ExpoSqliteStorage.backend()` reporting
+  sqlite vs memory, crypto via getRandomValues, SHA-256 "abc" and RFC 8032 test 1 known
+  answers. Added a `__DEV__` Self-check card to the Relay & Safety tab in `src/App.tsx`, and
+  `backend()`/`ready()` accessors on `ExpoSqliteStorage` (outside the slice file list, so the
+  silent memory fallback is observable). Declared `@noble/hashes` 2.2.0 (already transitive).
+- RED: `test/core/selfcheck.test.mts` failed with ERR_MODULE_NOT_FOUND before the module
+  existed. GREEN: 3/3 pass; `tsc --noEmit` clean.
+- Simulator: `expo run:ios` built with 0 errors, installed and launched on iPhone 17 Pro,
+  iOS 26.5; Threads screen showed Live gen#5 as demo-founder (launch evidence only,
+  `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m01_launch.png`).
+- FAILED / NOT RUN: `agent-device press` and `dismiss-overlay` failed three times with "this
+  Xcode cannot start its simulator service on this macOS" (DTServiceHub; `xcode-select -p` is
+  Xcode-beta), so Self-check was not tapped and the three-pass `storage: sqlite` gate did not
+  run. The post, force-quit, relaunch scenario was deliberately not run: the app only reaches
+  the public demo relay and posting there is forbidden. The adapter itself has not failed.
+- Doc changes: ground rule 1 of 07 now commits once per juncture (operator instruction); plan
+  fixes: M1a.4 keeps `treehouse_mobile_host.ts` until M1a.6 moves the demo code, M1a.7 rewires
+  `index.ts`, M1a.8 builds `lattice-client` and the BEAM relay and uses flagship.yml's
+  `BASE..HEAD`, first-seen owner is `ReplicaStore.firstSeenMs` (07 M1a.2, 03).
+- Review (Codex Sol, Antigravity Neon), one fix round: 10 findings (3 + 7), 9 accepted and fixed
+  (default deps load inside error handling; run guard and disabled button; throwaway key deleted
+  on exception paths; shared storage handle; keychainAccessible option mirrored; sqlite open error
+  surfaced; tests for backend()/ready() and cleanup; stale PROGRESS wording; 07 firstSeenMs port).
+  1 partly rejected: the screenshot path is session scratch and stays, labelled launch-only. 0
+  deferred. The agy "spec edits outside file list" point is covered by the operator-requested
+  plan-defect fixes.
+- Final gate: `tsc --noEmit` 0; core tests 5/5; progress script ok. Tier: Core. Simulator not claimed.
 
 ### 2026-11-25 · Add Treehouse Mobile implementation plan
 
