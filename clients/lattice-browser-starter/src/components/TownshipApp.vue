@@ -25,6 +25,13 @@ const status = ref("");
 const error = ref("");
 const busy = ref(false);
 
+const liveViewUrl = computed(() => {
+  const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+  return host === "127.0.0.1" || host === "localhost"
+    ? "http://localhost:4120/township"
+    : "/township";
+});
+
 const view = computed(() =>
   props.frames.length > 0 ? observeTownshipMatter(props.frames, props.realmByPubkey) : null,
 );
@@ -186,9 +193,9 @@ async function toggleLock(unauthorized: boolean) {
       </template>
 
       <div class="notice-box">
-        Run <code>scripts/demo_ecosystem_township_live.sh</code> and open
-        <a href="http://localhost:4120/township" target="_blank" rel="noreferrer">
-          http://localhost:4120/township
+        Open
+        <a :href="liveViewUrl" target="_blank" rel="noreferrer">
+          {{ liveViewUrl }}
         </a>
         to watch Phoenix LiveView + Vue causal replay update in real time from posts authored here.
       </div>

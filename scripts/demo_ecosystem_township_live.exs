@@ -31,8 +31,19 @@ if is_nil(township_ep) or is_nil(observer_meta) do
   System.halt(1)
 end
 
-uri = URI.parse(township_ep["ws_url"])
-carrier_port = uri.port || 4203
+# Always connect to the loopback carrier listener directly (even when demo-endpoints.json
+# advertises a public wss:// origin for external browser clients).
+manifest_path = Path.join(demo_dir, "manifest.json")
+
+carrier_port =
+  if File.exists?(manifest_path) do
+    manifest = manifest_path |> File.read!() |> Jason.decode!()
+    inst = Enum.find(manifest["instances"] || [], &(&1["name"] == "township_matter"))
+    get_in(inst || %{}, ["listener", "port"]) || 4203
+  else
+    URI.parse(township_ep["ws_url"]).port || 4203
+  end
+
 server_realm = township_ep["peer_realm"]
 server_pubkey = Base.decode64!(township_ep["peer_pubkey"])
 replica = township_ep["replica"]
@@ -43,7 +54,7 @@ observer_seed = Base.decode16!(observer_seed_hex, case: :mixed)
 observer = %Identity{realm_id: observer_meta["realm"], pub: pub, priv: priv}
 
 connect_opts = [
-  hostname: uri.host || "127.0.0.1",
+  hostname: "127.0.0.1",
   port: carrier_port,
   identity: observer,
   realm: observer.realm_id,
@@ -51,6 +62,23 @@ connect_opts = [
   peer_pubkey: server_pubkey,
   replica: replica
 ]
+
+case System.get_env("PHX_HOST") do
+  host when is_binary(host) and host != "" ->
+    current = Application.get_env(:township_web, TownshipWeb.Endpoint, [])
+
+    Application.put_env(
+      :township_web,
+      TownshipWeb.Endpoint,
+      Keyword.merge(current,
+        url: [host: host, port: 443, scheme: "https"],
+        check_origin: ["https://#{host}", "http://localhost:#{System.get_env("PORT", "4120")}"]
+      )
+    )
+
+  _ ->
+    :ok
+end
 
 Application.put_env(:township_web, :instrument_projection_options,
   feed: :server_push,

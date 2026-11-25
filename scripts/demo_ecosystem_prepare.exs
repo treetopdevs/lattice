@@ -37,14 +37,20 @@ defmodule DemoEcosystemPrepare do
       IO.puts("Demo ecosystem already prepared at #{dir} (pass --reset to regenerate).")
       :ok
     else
-      prepare_fresh(dir, opts.base_port)
+      prepare_fresh(dir, opts.base_port, opts.public_origin, opts.export_demo_seeds)
     end
   end
 
   defp parse_args(argv) do
     {parsed, _rest, invalid} =
       OptionParser.parse(argv,
-        strict: [dir: :string, reset: :boolean, base_port: :integer]
+        strict: [
+          dir: :string,
+          reset: :boolean,
+          base_port: :integer,
+          public_origin: :string,
+          export_demo_seeds: :boolean
+        ]
       )
 
     if invalid != [] do
@@ -54,11 +60,14 @@ defmodule DemoEcosystemPrepare do
     %{
       dir: Keyword.get(parsed, :dir, System.get_env("DEMO_ECOSYSTEM_DIR") || @default_dir),
       reset: Keyword.get(parsed, :reset, false),
-      base_port: Keyword.get(parsed, :base_port, @default_base_port)
+      base_port: Keyword.get(parsed, :base_port, @default_base_port),
+      public_origin: Keyword.get(parsed, :public_origin, System.get_env("DEMO_PUBLIC_ORIGIN")),
+      export_demo_seeds:
+        Keyword.get(parsed, :export_demo_seeds, System.get_env("DEMO_EXPORT_SEEDS") == "1")
     }
   end
 
-  defp prepare_fresh(dir, base_port) do
+  defp prepare_fresh(dir, base_port, public_origin, export_demo_seeds) do
     identities_dir = Path.join(dir, "identities")
     logs_dir = Path.join(dir, "logs")
 
@@ -148,11 +157,13 @@ defmodule DemoEcosystemPrepare do
           }
           |> maybe_put_reporter(spec.state_reporter)
 
+        ws_url = public_ws_url(public_origin, spec.name, spec.port)
+
         endpoint_entry = %{
           "name" => spec.name,
           "product" => spec.product,
           "replica" => spec.log.replica,
-          "ws_url" => "ws://127.0.0.1:#{spec.port}/carrier",
+          "ws_url" => ws_url,
           "peer_realm" => spec.realm,
           "peer_pubkey" => Base.encode64(carrier_id.pub),
           "relay_realms" => relay_realms,
@@ -259,10 +270,59 @@ defmodule DemoEcosystemPrepare do
       File.chmod!(path, 0o644)
     end
 
+    if export_demo_seeds do
+      public_seeds_dir = Path.join(dir, "public_seeds")
+      File.mkdir_p!(public_seeds_dir)
+      File.chmod!(public_seeds_dir, 0o755)
+
+      for {role_name, id} <- [
+            {"founder", founder},
+            {"neighbor", neighbor},
+            {"observer", observer}
+          ] do
+        seed_hex =
+          Path.join(identities_dir, "participant_#{role_name}.seed")
+          |> File.read!()
+          |> String.trim()
+
+        payload = %{
+          "role" => role_name,
+          "realm" => id.realm_id,
+          "seedHex" => seed_hex,
+          "notice" => "Public WSS demo testbed seed only — never use for private data."
+        }
+
+        out_path = Path.join(public_seeds_dir, "#{role_name}.json")
+        File.write!(out_path, Jason.encode!(payload, pretty: true) <> "\n")
+        File.chmod!(out_path, 0o644)
+      end
+    end
+
     IO.puts("Prepared unified demo ecosystem in #{dir}")
     IO.puts("  manifest:  #{manifest_path}")
     IO.puts("  endpoints: #{endpoints_path}")
     :ok
+  end
+
+  defp public_ws_url(nil, _name, port), do: "ws://127.0.0.1:#{port}/carrier"
+  defp public_ws_url("", _name, port), do: "ws://127.0.0.1:#{port}/carrier"
+
+  defp public_ws_url(origin, name, _port) do
+    trimmed = String.trim_trailing(origin, "/")
+
+    ws_origin =
+      cond do
+        String.starts_with?(trimmed, "https://") ->
+          "wss://" <> String.trim_leading(trimmed, "https://")
+
+        String.starts_with?(trimmed, "http://") ->
+          "ws://" <> String.trim_leading(trimmed, "http://")
+
+        true ->
+          trimmed
+      end
+
+    "#{ws_origin}/ws/#{name}"
   end
 
   defp maybe_put_reporter(map, nil), do: map
@@ -377,7 +437,7 @@ defmodule DemoEcosystemPrepare do
         space.replica,
         Log.frontier(space),
         :command,
-        {:admit_member, [invite_op.id, Base.encode64(neighbor.pub), "neighbor", acceptance]},
+        {:admit_member, [invite_op.id, Base.encode64(neighbor.pub), "member", acceptance]},
         cap: space_cap.id
       )
 

@@ -82,6 +82,9 @@ export default defineConfig({
   resolve: {
     preserveSymlinks: true,
   },
+  build: {
+    assetsDir: "starter-assets",
+  },
   server: {
     host: "127.0.0.1",
     port: 5180,

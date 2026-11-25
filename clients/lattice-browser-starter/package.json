@@ -10,7 +10,8 @@
     "build": "npm run typecheck && vite build",
     "test": "tsx --preserve-symlinks test/custody_and_products.ts",
     "test:live": "tsx --preserve-symlinks test/live_ecosystem_gate.ts",
-    "test:browser": "node test/browser_e2e.mjs"
+    "test:browser": "node test/browser_e2e.mjs",
+    "test:wss": "tsx --preserve-symlinks test/wss_smoke.ts"
   },
   "dependencies": {
     "@noble/curves": "2.2.0",
