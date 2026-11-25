@@ -49,12 +49,19 @@ async function seededStore(
   return { store, disk };
 }
 
-function offlineSession(L: Layers, store: InstanceType<Layers["MemoryReplicaStore"]>, custody: { status(): Promise<"none" | "available" | "unavailable">; publicKey(): Promise<string | null>; create(): Promise<string>; sign(bytes: Uint8Array): Promise<Uint8Array> }) {
+/**
+ * Sim vectors hold one Thread with no Space, which verify-on-open (M1a.2) rightly refuses as
+ * unreferenced. Only the vector-seeded sessions skip it; group-seeded sessions hold the Space and verify.
+ */
+const SIM_VECTOR_THREAD_ONLY = { verify: async () => ({ ok: true }) as const };
+
+function offlineSession(L: Layers, store: InstanceType<Layers["MemoryReplicaStore"]>, custody: { status(): Promise<"none" | "available" | "unavailable">; publicKey(): Promise<string | null>; create(): Promise<string>; sign(bytes: Uint8Array): Promise<Uint8Array> }, extra: { verify?: () => Promise<{ ok: true }> } = {}) {
   return L.createTreehouseSession({
     custody,
     store,
     clock: new L.ManualClock(2_000),
     link: () => new L.MemoryRelayLink(),
+    ...extra,
   });
 }
 
@@ -63,7 +70,7 @@ test("timeline equals Sim order and text for treehouse_thread_conflicts", async 
   const { loadTreehouseVector } = await import("../support/vectors");
   const vector = loadTreehouseVector("treehouse_thread_conflicts");
   const { store } = await seededStore(L, [{ replica: vector.replica, product: "Treehouse.Thread", frames: vector.frames }]);
-  const session = offlineSession(L, store, new L.MemoryKeyCustody());
+  const session = offlineSession(L, store, new L.MemoryKeyCustody(), SIM_VECTOR_THREAD_ONLY);
   await session.open();
   try {
     const timeline = session.read().timelines[vector.replica]!;
@@ -86,7 +93,7 @@ test("timeline omits quarantined posts for treehouse_thread_archive", async () =
   const vector = loadTreehouseVector("treehouse_thread_archive");
   assert.ok(Object.keys(vector.expected.quarantined).length > 0, "the vector quarantines something");
   const { store } = await seededStore(L, [{ replica: vector.replica, product: "Treehouse.Thread", frames: vector.frames }]);
-  const session = offlineSession(L, store, new L.MemoryKeyCustody());
+  const session = offlineSession(L, store, new L.MemoryKeyCustody(), SIM_VECTOR_THREAD_ONLY);
   await session.open();
   try {
     const timeline = session.read().timelines[vector.replica]!;
@@ -170,6 +177,7 @@ test("post by a key without a grant is refused no_capability and writes nothing"
   const { buildGroup, testIdentity } = await import("../support/group_fixture");
   const group = await buildGroup({ members: 1 });
   const { store } = await seededStore(L, [
+    { replica: group.space.replica, product: "Treehouse.Space", frames: group.space.frames },
     { replica: group.thread.replica, product: "Treehouse.Thread", frames: group.thread.frames },
   ]);
   const { custody, counter } = counting(L.MemoryKeyCustody.holding(testIdentity("stranger").signer));
@@ -192,6 +200,7 @@ test("empty and over-long text are refused before signing", async () => {
   const { buildGroup } = await import("../support/group_fixture");
   const group = await buildGroup({ members: 1 });
   const { store } = await seededStore(L, [
+    { replica: group.space.replica, product: "Treehouse.Space", frames: group.space.frames },
     { replica: group.thread.replica, product: "Treehouse.Thread", frames: group.thread.frames },
   ]);
   const { custody, counter } = counting(L.MemoryKeyCustody.holding(group.members[0]!.signer));
@@ -219,7 +228,10 @@ test("a second session on the same store sees the queued post after restart", as
   const { buildGroup } = await import("../support/group_fixture");
   const group = await buildGroup({ members: 1 });
   const member = group.members[0]!;
-  const seeds = [{ replica: group.thread.replica, product: "Treehouse.Thread" as const, frames: group.thread.frames }];
+  const seeds = [
+    { replica: group.space.replica, product: "Treehouse.Space" as const, frames: group.space.frames },
+    { replica: group.thread.replica, product: "Treehouse.Thread" as const, frames: group.thread.frames },
+  ];
   const { store, disk } = await seededStore(L, seeds);
   const first = offlineSession(L, store, L.MemoryKeyCustody.holding(member.signer));
   await first.open();
@@ -261,6 +273,7 @@ test("subscribe fires once per change and not when an unrelated slice changes", 
     store,
     clock: new L.ManualClock(2_000),
     link: () => link,
+    ...SIM_VECTOR_THREAD_ONLY,
   });
   await session.open();
   try {

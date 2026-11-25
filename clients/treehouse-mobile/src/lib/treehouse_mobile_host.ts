@@ -50,9 +50,8 @@ import {
   type PersistedMobileSnapshot,
 } from "../native/storage";
 
-export const DEFAULT_DEMO_WSS_ORIGIN = "https://lattice-demo-wss.fly.dev";
-
-export interface DemoEndpoint {
+/** One route the host syncs; the demo manifest (src/demo, M1a.6) supplies these in dev builds. */
+export interface HostEndpoint {
   name: string;
   product: string;
   replica: string;
@@ -61,25 +60,6 @@ export interface DemoEndpoint {
   peer_pubkey: string;
   relay_realms: string[];
   initial_ops: number;
-}
-
-export interface DemoParticipantInfo {
-  realm: string;
-  pubkey: string;
-  seed_file: string;
-}
-
-export interface DemoEndpointsManifest {
-  mode: string;
-  notice: string;
-  manifest_path: string;
-  health: {
-    livez: string;
-    readyz: string;
-  };
-  participants: Record<string, DemoParticipantInfo>;
-  endpoints: DemoEndpoint[];
-  treehouse_routes: CarrierRoute[];
 }
 
 export interface TreehouseSpaceView {
@@ -121,30 +101,7 @@ export interface TreehouseMobileHostOptions {
   onFeedState?: (state: FeedState) => void;
 }
 
-export async function fetchDemoEndpoints(
-  origin = DEFAULT_DEMO_WSS_ORIGIN,
-): Promise<DemoEndpointsManifest> {
-  const base = origin.replace(/\/$/, "");
-  const res = await fetch(`${base}/demo-endpoints.json`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`demo_endpoints_fetch_failed:${res.status}`);
-  }
-  return (await res.json()) as DemoEndpointsManifest;
-}
-
-export async function fetchDemoSeed(
-  origin: string,
-  role: "founder" | "neighbor" | "observer",
-): Promise<{ realm: string; seedHex: string }> {
-  const base = origin.replace(/\/$/, "");
-  const res = await fetch(`${base}/demo-seed/${role}`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`demo_seed_fetch_failed:${role}:${res.status}`);
-  }
-  return (await res.json()) as { realm: string; seedHex: string };
-}
-
-function productForReplica(endpoints: DemoEndpoint[], replica: string): TreehouseProduct {
+function productForReplica(endpoints: HostEndpoint[], replica: string): TreehouseProduct {
   const ep = endpoints.find((item) => item.replica === replica);
   if (ep?.product === "Treehouse.Space" || ep?.product === "Treehouse.Thread") {
     return ep.product;
@@ -213,7 +170,7 @@ export class TreehouseMobileHost implements ShellHost {
 
   private namespace = "default";
   private identity: MobileIdentity | null = null;
-  private endpoints: DemoEndpoint[] = [];
+  private endpoints: HostEndpoint[] = [];
   private realmByPubkey: Record<string, string> = {};
   private routeConfig: RouteConfig | null = null;
   private snapshot: PersistedMobileSnapshot = { version: 1, namespace: "default", profiles: {} };
@@ -237,7 +194,7 @@ export class TreehouseMobileHost implements ShellHost {
   }
 
   async configure(
-    endpoints: DemoEndpoint[],
+    endpoints: HostEndpoint[],
     identity: MobileIdentity,
     realmByPubkey: Record<string, string> = {},
     namespace?: string,
@@ -491,15 +448,15 @@ export class TreehouseMobileHost implements ShellHost {
     return this.identity;
   }
 
-  getEndpoints(): DemoEndpoint[] {
+  getEndpoints(): HostEndpoint[] {
     return this.endpoints;
   }
 
-  getSpaceEndpoint(): DemoEndpoint | undefined {
+  getSpaceEndpoint(): HostEndpoint | undefined {
     return this.endpoints.find((ep) => ep.product === "Treehouse.Space");
   }
 
-  getThreadEndpoint(): DemoEndpoint | undefined {
+  getThreadEndpoint(): HostEndpoint | undefined {
     return this.endpoints.find((ep) => ep.product === "Treehouse.Thread");
   }
 

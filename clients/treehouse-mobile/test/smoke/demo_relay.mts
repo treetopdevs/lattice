@@ -6,12 +6,9 @@ import {
   MemoryKeyStore,
 } from "../../src/native/custody";
 import { MemoryMobileStorage } from "../../src/native/storage";
-import {
-  DEFAULT_DEMO_WSS_ORIGIN,
-  fetchDemoEndpoints,
-  fetchDemoSeed,
-  TreehouseMobileHost,
-} from "../../src/lib/treehouse_mobile_host";
+import { TreehouseMobileHost } from "../../src/lib/treehouse_mobile_host";
+import { DEFAULT_DEMO_WSS_ORIGIN, fetchDemoEndpoints } from "../../src/demo/manifest";
+import { fetchDemoSeed } from "../../src/demo/identities";
 
 // Smoke gate against the public demo relay (moved from test/m0_wss_gate.mts in M1a.0). It reads only:
 // the offline post is queued locally and never relayed. Set DEMO_WSS_WRITE=1 to also relay that post,

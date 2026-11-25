@@ -16,7 +16,6 @@ import {
   View,
 } from "react-native";
 import {
-  createIdentityFromSeedHex,
   ExpoSecureStoreKeyStore,
   loadOrCreateDeviceIdentity,
   pubkeyColor,
@@ -24,20 +23,50 @@ import {
   type MobileIdentity,
 } from "./native/custody";
 import { runSelfCheck, type SelfCheck } from "./native/selfcheck";
-import {
-  DEFAULT_DEMO_WSS_ORIGIN,
-  fetchDemoEndpoints,
-  fetchDemoSeed,
-  TreehouseMobileHost,
-  type DemoEndpointsManifest,
-} from "./lib/treehouse_mobile_host";
+import { TreehouseMobileHost } from "./lib/treehouse_mobile_host";
+import type { DemoRole } from "./demo/identities";
+import type { DemoEndpointsManifest } from "./demo/manifest";
 import { createHostBridge, identityCustody } from "./lib/host_session_ports";
 import { systemClock } from "./session/memory/clock";
 import { createTreehouseSession, type TreehouseSession } from "./session/session";
 import type { Delivery } from "./session/projections/thread_timeline";
+import {
+  HOSTING_SENTENCE,
+  NO_GROUP_YET,
+  NO_RELAY_ACCESS,
+  HISTORY_INVALID,
+  RELAY_REFUSED_PILL,
+  relayAccess,
+} from "./ui/trust_card";
+
+// M1a.6: demo code (public demo identities, the demo relay manifest, the demo bar) is reachable only in
+// dev builds or with EXPO_PUBLIC_TREEHOUSE_DEMO=1. The flag is read by dot notation so Metro inlines it
+// (SDK 58 environment-variable guide); without it the demo modules are never required. Without the demo
+// the app holds only this phone's own device key and no group (joining comes with invitations).
+const DEMO_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_TREEHOUSE_DEMO === "1";
+interface DemoModules {
+  manifest: typeof import("./demo/manifest");
+  identities: typeof import("./demo/identities");
+  bar: typeof import("./demo/DemoBar");
+}
+const demo: DemoModules | null = DEMO_ENABLED
+  ? {
+      manifest: require("./demo/manifest"),
+      identities: require("./demo/identities"),
+      bar: require("./demo/DemoBar"),
+    }
+  : null;
+const DEMO_ORIGIN = demo?.manifest.DEFAULT_DEMO_WSS_ORIGIN ?? "";
+
+// M1a.2 simulator gate: the ReplicaStore contract against expo-sqlite. Dev builds only; a release bundle
+// never requires the module (Metro folds __DEV__).
+const replicaStoreCheck: typeof import("./native/replica_store_device_check") | null = __DEV__
+  ? require("./native/replica_store_device_check")
+  : null;
+type ReplicaStoreCheckResult = import("./native/replica_store_device_check").DeviceCheckResult;
 
 // M1a.1: the thread tab reads the session's ThreadTimeline and Post calls session.postMessage. The M0
-// host still owns routes, sync and the People tab until M1a.4 and M1a.6.
+// host still owns routes, sync and the People tab until M1a.4.
 const DELIVERY_LABEL: Record<Delivery, string> = {
   saved: "Saved on this phone",
   sending: "Sending",
@@ -45,7 +74,6 @@ const DELIVERY_LABEL: Record<Delivery, string> = {
 };
 
 type TabId = "threads" | "people" | "relay";
-type IdentityMode = "founder" | "neighbor" | "device";
 
 interface Palette {
   bg: string;
@@ -116,18 +144,20 @@ export default function App(): React.JSX.Element {
   const connectGenRef = useRef(0);
 
   const [tab, setTab] = useState<TabId>("threads");
-  const [origin, setOrigin] = useState(DEFAULT_DEMO_WSS_ORIGIN);
-  const [originDraft, setOriginDraft] = useState(DEFAULT_DEMO_WSS_ORIGIN);
-  const [identityMode, setIdentityMode] = useState<IdentityMode>("founder");
+  const [origin, setOrigin] = useState(DEMO_ORIGIN);
+  const [originDraft, setOriginDraft] = useState(DEMO_ORIGIN);
+  const [role, setRole] = useState<DemoRole>("founder");
+  const [ownIdentity, setOwnIdentity] = useState<MobileIdentity | null>(null);
   const [manifest, setManifest] = useState<DemoEndpointsManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [selfCheck, setSelfCheck] = useState<SelfCheck | "running" | null>(null);
+  const [storeCheck, setStoreCheck] = useState<ReplicaStoreCheckResult | "running" | string | null>(null);
 
   const connect = useCallback(
-    async (targetOrigin: string, mode: IdentityMode) => {
+    async (targetOrigin: string, mode: DemoRole) => {
       // A later connect (identity or origin switch) supersedes this one: never keep a session whose
       // key differs from the identity the host was configured with.
       const generation = ++connectGenRef.current;
@@ -135,22 +165,17 @@ export default function App(): React.JSX.Element {
       setLoading(true);
       setError(null);
       try {
-        const fetchedManifest = await fetchDemoEndpoints(targetOrigin);
+        if (!demo) {
+          // No demo: this phone's own key only. No route is known, so nothing dials (no group yet).
+          const own = await loadOrCreateDeviceIdentity(keyStoreRef.current!, "mobile-device");
+          if (!stale()) setOwnIdentity(own);
+          return;
+        }
+        const fetchedManifest = await demo.manifest.fetchDemoEndpoints(targetOrigin);
         if (stale()) return;
         setManifest(fetchedManifest);
-
-        const realmByPubkey: Record<string, string> = {};
-        for (const info of Object.values(fetchedManifest.participants)) {
-          realmByPubkey[info.pubkey] = info.realm;
-        }
-
-        let identity: MobileIdentity;
-        if (mode === "device") {
-          identity = await loadOrCreateDeviceIdentity(keyStoreRef.current!, "mobile-device");
-        } else {
-          const seed = await fetchDemoSeed(targetOrigin, mode);
-          identity = createIdentityFromSeedHex(seed.realm, seed.seedHex, "demo-seed");
-        }
+        const realmByPubkey = demo.manifest.demoRealmByPubkey(fetchedManifest);
+        const identity = await demo.identities.loadDemoIdentity(targetOrigin, mode);
         // Nothing shared (manifest, session, host) is touched until this connect is known to be current.
         if (stale()) return;
 
@@ -170,6 +195,13 @@ export default function App(): React.JSX.Element {
           return;
         }
         sessionRef.current = session;
+        // Verify-on-open runs over the held snapshot; a failure is history_invalid (03, 04): show it with
+        // its reason code and do not go online, so nothing more is merged into history that failed.
+        const history = session.read().history;
+        if (!history.ok) {
+          setError(`${HISTORY_INVALID} (${history.reason})`);
+          return;
+        }
         await host.goOnline();
       } catch (err) {
         if (!stale()) setError(err instanceof Error ? err.message : String(err));
@@ -184,13 +216,13 @@ export default function App(): React.JSX.Element {
   );
 
   useEffect(() => {
-    void connect(origin, identityMode);
+    void connect(origin, role);
     return () => {
       void sessionRef.current?.close();
       sessionRef.current = null;
       void host.dispose();
     };
-  }, [connect, host, origin, identityMode]);
+  }, [connect, host, origin, role]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
@@ -211,11 +243,14 @@ export default function App(): React.JSX.Element {
     return named?.realm ?? pubkeyFingerprint(pubkey);
   };
   const feedState = host.getFeedState();
-  const identity = host.getIdentity();
+  const identity = host.getIdentity() ?? ownIdentity;
   const online = host.isOnline();
   const totalPending = host.getTotalPendingCount();
+  const access = relayAccess(feedState, spaceEp?.replica ?? null);
 
   const statusPill = useMemo(() => {
+    if (access === "no_relay_access") return { label: RELAY_REFUSED_PILL, color: c.error };
+    if (!demo) return { label: "No group yet", color: c.muted };
     if (loading) return { label: "Connecting…", color: c.warn };
     if (!online) {
       return {
@@ -232,9 +267,11 @@ export default function App(): React.JSX.Element {
       };
     }
     return { label: "Syncing…", color: c.warn };
-  }, [loading, online, totalPending, feedState, c.live, c.warn]);
+  }, [access, loading, online, totalPending, feedState, c.live, c.warn, c.error, c.muted]);
 
   const handleToggleOnline = async () => {
+    // history_invalid: stay offline and keep the banner that says why.
+    if (!host.isOnline() && sessionRef.current?.read().history.ok === false) return;
     setError(null);
     try {
       if (host.isOnline()) {
@@ -281,6 +318,7 @@ export default function App(): React.JSX.Element {
         </View>
         <Pressable
           onPress={handleToggleOnline}
+          disabled={!demo}
           style={[styles.pill, { borderColor: statusPill.color, backgroundColor: c.surfaceAlt }]}
           accessibilityRole="button"
         >
@@ -289,7 +327,13 @@ export default function App(): React.JSX.Element {
         </Pressable>
       </View>
 
-      {error ? (
+      {access === "no_relay_access" ? (
+        <View testID="no-relay-access" style={[styles.errorBanner, { backgroundColor: c.error }]}>
+          <Text style={styles.errorText}>{NO_RELAY_ACCESS}</Text>
+        </View>
+      ) : null}
+
+      {error && access !== "no_relay_access" ? (
         <View style={[styles.errorBanner, { backgroundColor: c.error }]}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
@@ -301,7 +345,11 @@ export default function App(): React.JSX.Element {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        {loading && !spaceView ? (
+        {!demo && tab !== "relay" ? (
+          <View style={styles.center}>
+            <Text style={[styles.mutedText, { color: c.muted, textAlign: "center" }]}>{NO_GROUP_YET}</Text>
+          </View>
+        ) : loading && !spaceView ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={c.accent} />
             <Text style={[styles.mutedText, { color: c.muted, marginTop: 12 }]}>
@@ -395,8 +443,7 @@ export default function App(): React.JSX.Element {
                 </>
               ) : (
                 <Text style={[styles.readOnlyNote, { color: c.muted }]}>
-                  Read-only key ({identity?.realm}): switch to Founder or Neighbor in Relay & Safety
-                  to post, or request an invitation to this space.
+                  This key ({identity?.realm}) cannot post in this thread.
                 </Text>
               )}
             </View>
@@ -437,86 +484,48 @@ export default function App(): React.JSX.Element {
           </ScrollView>
         ) : (
           <ScrollView contentContainerStyle={styles.scrollContent}>
-            {/* D1 Honest Relay Disclosure */}
+            {/* Trust card: the approved hosting sentence (01) */}
             <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-              <Text style={[styles.cardTitle, { color: c.text }]}>Relay & Safety Disclosure</Text>
-              <Text style={[styles.disclosureText, { color: c.muted }]}>
-                The relay holds a plaintext copy and can go offline, but cannot forge messages or
-                change membership. Every message and membership change is Ed25519-signed and
-                verified locally on this device.
+              <Text style={[styles.cardTitle, { color: c.text }]}>Relay</Text>
+              <Text testID="trust-card" style={[styles.disclosureText, { color: c.muted }]}>
+                {HOSTING_SENTENCE}
               </Text>
+              {access === "no_relay_access" ? (
+                <Text style={[styles.disclosureText, { color: c.error, marginTop: 8 }]}>{NO_RELAY_ACCESS}</Text>
+              ) : null}
             </View>
 
-            {/* Identity Switcher */}
+            {/* This phone's key (demo identities are chosen in the demo bar) */}
             <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-              <Text style={[styles.cardTitle, { color: c.text }]}>Active Identity</Text>
-              <View style={styles.segmentRow}>
-                {(["founder", "neighbor", "device"] as IdentityMode[]).map((mode) => {
-                  const active = identityMode === mode;
-                  return (
-                    <Pressable
-                      key={mode}
-                      onPress={() => setIdentityMode(mode)}
-                      style={[
-                        styles.segmentBtn,
-                        {
-                          backgroundColor: active ? c.accent : c.surfaceAlt,
-                          borderColor: active ? c.accent : c.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentText,
-                          { color: active ? c.accentText : c.text },
-                        ]}
-                      >
-                        {mode === "device" ? "Keychain" : mode[0]!.toUpperCase() + mode.slice(1)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Text style={[styles.cardTitle, { color: c.text }]}>Key</Text>
               {identity ? (
-                <Text style={[styles.mono, { color: c.muted, marginTop: 8 }]}>
+                <Text style={[styles.mono, { color: c.muted }]}>
                   {identity.realm} · {identity.fingerprint} ({identity.source})
                 </Text>
               ) : null}
-            </View>
-
-            {/* Relay Endpoint */}
-            <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-              <Text style={[styles.cardTitle, { color: c.text }]}>WSS Relay Origin</Text>
-              <TextInput
-                value={originDraft}
-                onChangeText={setOriginDraft}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={[
-                  styles.originInput,
-                  { backgroundColor: c.surfaceAlt, color: c.text, borderColor: c.border },
-                ]}
-              />
-              <View style={styles.actionRow}>
-                <Pressable
-                  onPress={() => setOrigin(originDraft.trim() || DEFAULT_DEMO_WSS_ORIGIN)}
-                  style={[styles.actionBtn, { backgroundColor: c.accent }]}
-                >
-                  <Text style={[styles.actionBtnText, { color: c.accentText }]}>Reconnect</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void host.syncNow()}
-                  style={[styles.actionBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border, borderWidth: 1 }]}
-                >
-                  <Text style={[styles.actionBtnText, { color: c.text }]}>Sync Now</Text>
-                </Pressable>
-              </View>
-              {manifest ? (
-                <Text style={[styles.mono, { color: c.muted, marginTop: 8 }]}>
-                  Mode: {manifest.mode} · Routes: {host.getEndpoints().length}
-                </Text>
+              {demo ? (
+                <View style={[styles.actionRow, { marginTop: 10 }]}>
+                  <Pressable
+                    onPress={() => void host.syncNow()}
+                    style={[styles.actionBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border, borderWidth: 1 }]}
+                  >
+                    <Text style={[styles.actionBtnText, { color: c.text }]}>Sync Now</Text>
+                  </Pressable>
+                </View>
               ) : null}
             </View>
+
+            {demo ? (
+              <demo.bar.DemoBar
+                colors={c}
+                role={role}
+                onRole={setRole}
+                originDraft={originDraft}
+                onOriginDraft={setOriginDraft}
+                onReconnect={() => setOrigin(originDraft.trim() || DEMO_ORIGIN)}
+                detail={manifest ? `Mode: ${manifest.mode} · Routes: ${host.getEndpoints().length}` : null}
+              />
+            ) : null}
 
             {__DEV__ ? (
               <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
@@ -546,6 +555,43 @@ export default function App(): React.JSX.Element {
                     <Text style={[styles.mono, { color: c.text }]}>
                       crypto: {selfCheck.crypto.ok ? "pass" : "FAIL"} ({selfCheck.crypto.detail})
                     </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {replicaStoreCheck ? (
+              <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+                <Text style={[styles.cardTitle, { color: c.text }]}>Replica store check</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Run replica store check"
+                  disabled={storeCheck === "running"}
+                  onPress={() => {
+                    setStoreCheck("running");
+                    replicaStoreCheck
+                      .runReplicaStoreDeviceCheck()
+                      .then(setStoreCheck, (e: unknown) => setStoreCheck(`error: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160)));
+                  }}
+                  style={[styles.actionBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border, borderWidth: 1 }]}
+                >
+                  <Text style={[styles.actionBtnText, { color: c.text }]}>Run replica store check</Text>
+                </Pressable>
+                {storeCheck === "running" ? (
+                  <Text style={[styles.mono, { color: c.muted, marginTop: 8 }]}>running</Text>
+                ) : typeof storeCheck === "string" ? (
+                  <Text style={[styles.mono, { color: c.text, marginTop: 8 }]}>{storeCheck}</Text>
+                ) : storeCheck ? (
+                  <View testID="replica-store-check-result" style={{ marginTop: 8 }}>
+                    <Text style={[styles.mono, { color: c.text }]}>
+                      {storeCheck.adapter}: {storeCheck.passed}/{storeCheck.total} pass
+                    </Text>
+                    {storeCheck.cases.map((k) => (
+                      <Text key={k.name} style={[styles.mono, { color: c.text }]}>
+                        {k.ok ? "pass" : "FAIL"} {k.name}
+                        {k.detail ? ` (${k.detail})` : ""}
+                      </Text>
+                    ))}
                   </View>
                 ) : null}
               </View>
@@ -695,23 +741,6 @@ const styles = StyleSheet.create({
   cardRow: { fontSize: 13, marginBottom: 4 },
   disclosureText: { fontSize: 13, lineHeight: 19 },
   memberRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
-  segmentRow: { flexDirection: "row", gap: 8 },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  segmentText: { fontSize: 13, fontWeight: "600" },
-  originInput: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 13,
-    marginBottom: 10,
-  },
   actionRow: { flexDirection: "row", gap: 8 },
   actionBtn: {
     flex: 1,

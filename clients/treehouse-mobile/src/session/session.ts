@@ -1,3 +1,5 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { base64ToBytes, treehouseCommandDecoders, verifyEd25519 } from "@treetopdevs/lattice-client";
 import type { CarrierSigner, CarrierVerifier, ConnectCarrierWebSocketOptions, Verifier } from "@treetopdevs/lattice-client";
 import { createRouteValidators } from "@treetopdevs/lattice-shell-kit";
@@ -11,6 +13,10 @@ import type { Outcome, PostRefusal } from "./outcomes";
 import type { Clock, FeedState, KeyCustody, RelayLink, ReplicaStore, RouteConfig } from "./ports";
 import { projectThreadTimeline } from "./projections/thread_timeline";
 import type { ThreadTimeline } from "./projections/thread_timeline";
+import { strictOpVerifier, verifyHeld } from "./verify_held";
+import type { HeldEntry, VerifyHeldResult } from "./verify_held";
+
+export { strictOpVerifier };
 
 // TreehouseSession: one device identity in one Group (03). The UI subscribes to read models and calls
 // commands; everything else is reached through the ports. Internally the session is shell-kit's
@@ -21,7 +27,14 @@ export interface ReadModels {
   /** One timeline per held Thread replica. An unchanged thread keeps the identical object. */
   timelines: Readonly<Record<string, ThreadTimeline>>;
   link: FeedState;
+  /**
+   * Verify-on-open result (M1a.2). Not ok means `history_invalid` (03): nothing is posted, nothing is
+   * deleted. `replica` is null when the store itself could not open. M1a.4 folds this into SessionStatus.
+   */
+  history: HistoryCheck;
 }
+
+export type HistoryCheck = { ok: true } | { ok: false; replica: string | null; reason: string };
 
 export interface TreehouseSession {
   open(): Promise<void>;
@@ -43,19 +56,28 @@ export interface SessionPorts {
   clock: Clock;
   /** Builds the session's RelayLink over its host. Called once, at construction. */
   link(host: SessionHost): RelayLink;
+  /** Verify on open and before each merge. Defaults to verifyHeld (lattice-client's checks). */
+  verify?: (held: readonly HeldEntry[], verifier: Verifier) => Promise<VerifyHeldResult>;
 }
 
 const MAX_ROUTES = 16;
 
-export const strictOpVerifier: Verifier = {
-  async verify(author, bytes, sig) {
-    try {
-      return verifyEd25519(sig, bytes, base64ToBytes(author));
-    } catch {
-      return false;
-    }
-  },
-};
+/**
+ * The strict op verifier, remembering passes. The key binds author, signature and the digest of the signed
+ * bytes, so a remembered pass can only ever answer the identical check again.
+ */
+function rememberingVerifier(inner: Verifier): Verifier {
+  const passed = new Set<string>();
+  return {
+    async verify(author, bytes, sig) {
+      const key = `${author}|${bytesToHex(sig)}|${bytesToHex(sha256(bytes))}`;
+      if (passed.has(key)) return true;
+      const ok = await inner.verify(author, bytes, sig);
+      if (ok) passed.add(key);
+      return ok;
+    },
+  };
+}
 
 export const strictCarrierVerifier: CarrierVerifier = {
   verify: (pubkey, bytes, signature) => verifyEd25519(signature, bytes, pubkey),
@@ -63,6 +85,9 @@ export const strictCarrierVerifier: CarrierVerifier = {
 
 export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
   const { custody, store } = ports;
+  const verify = ports.verify ?? ((held, verifier) => verifyHeld(held, { verifier }));
+  const verifier = rememberingVerifier(strictOpVerifier);
+  let history: HistoryCheck = { ok: true };
   let myKey: string | null = null;
   let opened = false;
   let unsubscribe: (() => void)[] = [];
@@ -87,7 +112,26 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
       if (!product) throw new Error("unknown_replica");
       return treehouseCommandDecoders(product);
     },
-    mergeSync: (replica, pulled, acked) => store.mergeSync(replica, pulled, acked),
+    // A pull is retained only if the held set would still verify with it (as the Tauri shell's mergeSync
+    // runs verifyProfile first): held frames are never deleted, so a bad pull must not reach the store.
+    async mergeSync(replica, pulled, acked) {
+      if (!history.ok) throw new Error("history_invalid");
+      const current = store.profile(replica);
+      const product = productOf(replica);
+      if (!current || !product) throw new Error("unknown_replica");
+      const ids = new Set(current.frames.map((f) => f.id));
+      const candidate = {
+        frames: [...current.frames, ...pulled.filter((f) => !ids.has(f.id))],
+        outbox: current.outbox,
+        acked: [...new Set([...current.acked, ...acked])],
+      };
+      const verdict = await verify(
+        store.replicas().map((r) => ({ ...r, profile: r.replica === replica ? candidate : store.profile(r.replica) })),
+        verifier,
+      );
+      if (!verdict.ok) throw new Error(verdict.reason);
+      return store.mergeSync(replica, pulled, acked);
+    },
     signer(): CarrierSigner {
       if (myKey === null) throw new Error("identity_unavailable");
       return { publicKey: base64ToBytes(myKey), sign: (bytes) => custody.sign(bytes) };
@@ -95,7 +139,7 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
   };
   const link = ports.link(host);
 
-  let models: ReadModels = { timelines: {}, link: link.state() };
+  let models: ReadModels = { timelines: {}, link: link.state(), history };
 
   const connectionOf = (replica: string, state: FeedState) =>
     state.routes.find((r) => r.replica === replica)?.connection ?? null;
@@ -123,14 +167,18 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
     if (Object.keys(models.timelines).length !== threads.length) timelinesChanged = true;
     if (!timelinesChanged && linkState === undefined) return;
     // An unchanged set of timelines keeps the identical record, so a whole-record selector stays quiet.
-    models = { timelines: timelinesChanged ? timelines : models.timelines, link: state };
+    models = { timelines: timelinesChanged ? timelines : models.timelines, link: state, history };
+    publish();
+  };
+
+  function publish(): void {
     for (const sub of [...subscribers]) {
       const value = sub.select(models);
       if (Object.is(value, sub.last)) continue;
       sub.last = value;
       sub.listener(value);
     }
-  };
+  }
 
   const linkActive = () =>
     link.state().routes.some((r) => r.connection === "live" || r.connection === "connecting" || r.connection === "reconnecting");
@@ -148,7 +196,24 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
     async open() {
       if (opened) return;
       myKey = (await custody.status()) === "available" ? await custody.publicKey() : null;
-      await store.open();
+      // No silent fallback (M1a.2): a store that cannot open, or held history that fails verification, is
+      // history_invalid with its reason. Nothing is deleted or rewritten to recover.
+      try {
+        await store.open();
+        const verdict = await verify(
+          store.replicas().map((r) => ({ ...r, profile: store.profile(r.replica) })),
+          verifier,
+        );
+        history = verdict.ok ? { ok: true } : verdict;
+      } catch (error) {
+        history = { ok: false, replica: null, reason: error instanceof Error ? error.message : String(error) };
+      }
+      if (!history.ok) {
+        models = { ...models, history };
+        opened = true;
+        publish();
+        return;
+      }
       unsubscribe = [store.onChange((replica) => recompute([replica])), link.onState((state) => recompute(undefined, state))];
       opened = true;
       recompute(undefined, link.state());
@@ -170,6 +235,7 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
     read: () => models,
     postMessage(thread, text) {
       if (!opened) return Promise.resolve({ ok: false, reason: "identity_unavailable" } as const);
+      if (!history.ok) return Promise.resolve({ ok: false, reason: "history_invalid" } as const);
       return postMessageCommand(ctx, thread, text);
     },
   };

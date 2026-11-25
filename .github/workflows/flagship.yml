@@ -31,6 +31,7 @@ jobs:
       township: ${{ steps.classify.outputs.township }}
       treehouse: ${{ steps.classify.outputs.treehouse }}
       legacy: ${{ steps.classify.outputs.legacy }}
+      mobile: ${{ steps.classify.outputs.mobile }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -44,9 +45,9 @@ jobs:
           HEAD: ${{ github.sha }}
         run: |
           set -euo pipefail
-          core=false; township=false; treehouse=false; legacy=false; docs=false
+          core=false; township=false; treehouse=false; legacy=false; mobile=false; docs=false
           if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            core=true; township=true; treehouse=true; legacy=true
+            core=true; township=true; treehouse=true; legacy=true; mobile=true
           else
             # Run the diff before classifying so a failure exits here under set -e and fails the job
             # (fail closed) instead of leaving every output false inside a process substitution.
@@ -55,8 +56,15 @@ jobs:
             while IFS= read -r path; do
               case "$path" in
                 clients/township-tauri-shell/*|apps/township_web/*|apps/township_bench/*|scripts/township_*|scripts/android-pilot/*|playwright.township*.config.mjs) township=true ;;
-                # Shell kit (plan 186): only Treehouse consumes it; a second consumer adds its flag here.
-                clients/treehouse-tauri-shell/*|clients/lattice-shell-kit/*|tools/android-witness-validator/*|scripts/treehouse_*) treehouse=true ;;
+                # Shell kit (plan 186): Treehouse and Treehouse Mobile consume it; a further consumer adds its flag here.
+                clients/lattice-shell-kit/*) treehouse=true; mobile=true ;;
+                # The mobile local relay reuses this Tauri fixture to write its empty path logs.
+                clients/treehouse-tauri-shell/test/support/treehouse_enrollment_fixture.exs) treehouse=true; mobile=true ;;
+                clients/treehouse-tauri-shell/*|tools/android-witness-validator/*|scripts/treehouse_*) treehouse=true ;;
+                # Treehouse Mobile (M1a.8): nothing else consumes the app, and its design docs carry the
+                # PROGRESS log that the mobile job checks, so both route here ahead of the docs class.
+                # clients/lattice-client/* stays core, which turns mobile on below.
+                clients/treehouse-mobile/*|docs/treehouse-mobile/*) mobile=true ;;
                 apps/lattice_server/*|apps/lattice_demo/*|apps/lattice_stress/*|scripts/lattice_*|playwright.config.mjs|tests/*) legacy=true ;;
                 docs/android_pilot_*) township=true ;;
                 docs/township_*) township=true ;;
@@ -69,9 +77,9 @@ jobs:
             done < "$RUNNER_TEMP/changed-paths.txt"
           fi
           # Any path outside the product-only prefixes runs everything (fail closed).
-          if [ "$core" = true ]; then township=true; treehouse=true; legacy=true; fi
-          for k in core township treehouse legacy; do echo "$k=${!k}" >> "$GITHUB_OUTPUT"; done
-          echo "core=$core township=$township treehouse=$treehouse legacy=$legacy docs=$docs"
+          if [ "$core" = true ]; then township=true; treehouse=true; legacy=true; mobile=true; fi
+          for k in core township treehouse legacy mobile; do echo "$k=${!k}" >> "$GITHUB_OUTPUT"; done
+          echo "core=$core township=$township treehouse=$treehouse legacy=$legacy mobile=$mobile docs=$docs"
 
   verify:
     name: Verify flagship artifact
@@ -747,6 +755,101 @@ jobs:
         # Plan 181 5b. The seam is compiled out of the ordinary build, so its tests run only here.
         working-directory: clients/treehouse-tauri-shell/src-tauri
         run: cargo test --locked --features treehouse-dev-trace
+
+  treehouse_mobile:
+    # Treehouse Mobile slice M1a.8: typecheck, the Node Core suite against the in-process and local
+    # BEAM relays, and the PROGRESS log check. No simulator job until M3; nothing here reaches the
+    # public demo relay (the smoke gate is not run, and it submits only with DEMO_WSS_WRITE=1).
+    name: Treehouse mobile core
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          # The PROGRESS check walks every commit in BASE..HEAD, so it needs the full history.
+          fetch-depth: 0
+      - name: Set up BEAM
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "28.1"
+          elixir-version: "1.19.5"
+          install-hex: false
+          install-rebar: false
+      - name: Install Hex and Rebar
+        # setup-beam runs mix local.hex and mix local.rebar once with no retry, and a hosted runner that
+        # times out reaching builds.hex.pm fails the whole job (backlog row 228). Install them here
+        # instead, a bounded four attempts each; a fourth failure still fails the job.
+        shell: bash
+        run: |
+          for tool in hex rebar; do
+            attempt=1
+            until mix "local.$tool" --force; do
+              if [ "$attempt" -ge 4 ]; then
+                echo "mix local.$tool failed after $attempt attempts" >&2
+                exit 1
+              fi
+              echo "::warning::mix local.$tool failed (attempt $attempt of 4); retrying"
+              sleep $((attempt * 15))
+              attempt=$((attempt + 1))
+            done
+          done
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            clients/lattice-client/package-lock.json
+            clients/lattice-shell-kit/package-lock.json
+            clients/treehouse-mobile/package-lock.json
+      - name: Cache deps and _build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-treehouse-mobile-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-treehouse-mobile-mix-
+      - name: Install Elixir dependencies
+        run: mix deps.get
+      - name: Build the BEAM relay and test support
+        # The local relay (pilot_node.exs) and the empty-log fixture load _build/test. Build it here
+        # from current source rather than trusting another job or restored BEAM mtimes.
+        run: env MIX_ENV=test mix compile --force --warnings-as-errors
+      - name: Install Node dependencies
+        run: |
+          npm --prefix clients/lattice-client ci
+          npm --prefix clients/lattice-shell-kit ci
+          npm --prefix clients/treehouse-mobile ci
+      - name: Build TS client
+        # The mobile package consumes lattice-client through its file: dependency's built output.
+        run: npm --prefix clients/lattice-client run build
+      - name: Typecheck
+        working-directory: clients/treehouse-mobile
+        run: npm run typecheck
+      - name: Core suite
+        working-directory: clients/treehouse-mobile
+        run: npm run test:core
+      - name: PROGRESS log updated by every mobile commit
+        # The same BASE and HEAD the changes job classifies. With no usable BASE (workflow_dispatch,
+        # a new branch, or history the runner lacks), check every commit since the script's baseline
+        # instead of skipping (fail closed).
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            scripts/check_treehouse_mobile_progress.sh "$HEAD"
+          else
+            scripts/check_treehouse_mobile_progress.sh "$BASE..$HEAD"
+          fi
 
   packaged_macos:
     name: Packaged macOS convergence
@@ -1852,7 +1955,7 @@ jobs:
   required:
     name: Required checks
     if: always()
-    needs: [changes, verify, unit, treehouse_native, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, treehouse_offline_enrollment_macos, carrier_release, treehouse_android_preview, treehouse_android_launch, android_pilot_contract, android_pilot_verify]
+    needs: [changes, verify, unit, treehouse_native, treehouse_mobile, packaged_macos, treehouse_packaged_macos, treehouse_packaged_macos_enrollment, treehouse_offline_enrollment_macos, carrier_release, treehouse_android_preview, treehouse_android_launch, android_pilot_contract, android_pilot_verify]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:

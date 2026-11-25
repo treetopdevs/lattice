@@ -249,7 +249,8 @@ export interface TreehouseSession {
 }
 export type PostRefusal =
   | "identity_unavailable" | "no_capability" | "empty_text" | "text_too_long"
-  | "archived thread" | "storage_failed" | QuarantineReason;
+  | "malformed_text" | "archived thread" | "storage_failed" | "history_invalid"
+  | QuarantineReason;
 ```
 
 The session implements shell-kit's `ShellHost` internally (route book from `RelayLink`

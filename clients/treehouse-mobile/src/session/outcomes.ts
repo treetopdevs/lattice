@@ -56,6 +56,7 @@ export type PostRefusal =
   | "malformed_text"
   | "archived thread"
   | "storage_failed"
+  | "history_invalid"
   | QuarantineReason;
 
 /** App rule O-10: 4,000 characters (code points), well under the relay's 64,000-byte socket frame. */

@@ -1,4 +1,5 @@
 import "react-native-get-random-values";
+import "./polyfills_crypto";
 
 // Ensure structuredClone exists on older Hermes builds.
 if (typeof globalThis.structuredClone !== "function") {

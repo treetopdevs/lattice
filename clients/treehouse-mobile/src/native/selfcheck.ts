@@ -89,7 +89,7 @@ async function checkStorage(s: SelfCheckDeps["storage"]): Promise<SelfCheck["sto
   }
 }
 
-function checkCrypto(): SelfCheck["crypto"] {
+async function checkCrypto(): Promise<SelfCheck["crypto"]> {
   try {
     if (typeof globalThis.crypto?.getRandomValues !== "function") {
       return { ok: false, detail: "crypto.getRandomValues unavailable" };
@@ -102,13 +102,18 @@ function checkCrypto(): SelfCheck["crypto"] {
     if (bytesToHex(sha256(new TextEncoder().encode("abc"))) !== SHA256_ABC) {
       return { ok: false, detail: "sha-256 known answer mismatch" };
     }
+    // lattice-client hashes op ids through WebCrypto, so the probe must exercise that path too.
+    const subtle = globalThis.crypto.subtle as SubtleCrypto | undefined;
+    if (typeof subtle?.digest !== "function") return { ok: false, detail: "crypto.subtle.digest unavailable" };
+    const viaSubtle = new Uint8Array(await subtle.digest("SHA-256", new TextEncoder().encode("abc")));
+    if (bytesToHex(viaSubtle) !== SHA256_ABC) return { ok: false, detail: "crypto.subtle sha-256 known answer mismatch" };
     const sk = hexToBytes(RFC8032_SEED);
     if (bytesToHex(ed25519.getPublicKey(sk)) !== RFC8032_PUB) {
       return { ok: false, detail: "ed25519 public key mismatch" };
     }
     const sig = ed25519.sign(new Uint8Array(0), sk);
     if (bytesToHex(sig) !== RFC8032_SIG) return { ok: false, detail: "ed25519 signature mismatch" };
-    return { ok: true, detail: "getRandomValues, sha-256, ed25519 known answers" };
+    return { ok: true, detail: "getRandomValues, sha-256, subtle sha-256, ed25519 known answers" };
   } catch (e) {
     return { ok: false, detail: msg(e) };
   }
@@ -138,13 +143,13 @@ async function runDefault(): Promise<SelfCheck> {
     custody = { ok: false, detail: `expo-secure-store unavailable: ${msg(e)}` };
   }
   const st = await checkStorage(storage);
-  const crypto = checkCrypto();
+  const crypto = await checkCrypto();
   return { ok: false, custody, storage: st, crypto };
 }
 
 async function runWith(d: SelfCheckDeps): Promise<SelfCheck> {
   const custody = await checkCustody(d.secureStore);
   const storage = await checkStorage(d.storage);
-  const crypto = checkCrypto();
+  const crypto = await checkCrypto();
   return { ok: custody.ok && storage.ok && crypto.ok, custody, storage, crypto };
 }

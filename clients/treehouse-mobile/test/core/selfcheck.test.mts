@@ -81,3 +81,38 @@ test("self-check removes the throwaway key when custody throws after the write",
   assert.equal(r.custody.ok, false);
   assert.equal(deleted.length, 1);
 });
+
+test("self-check crypto fails when crypto.subtle.digest is missing (Hermes has no WebCrypto)", async () => {
+  const desc = Object.getOwnPropertyDescriptor(globalThis.crypto, "subtle")
+    ?? Object.getOwnPropertyDescriptor(Object.getPrototypeOf(globalThis.crypto), "subtle");
+  Object.defineProperty(globalThis.crypto, "subtle", { value: undefined, configurable: true });
+  try {
+    const r = await runSelfCheck({ secureStore: memorySecure(), storage: memoryStorage("sqlite") });
+    assert.equal(r.crypto.ok, false);
+    assert.match(r.crypto.detail, /subtle/);
+  } finally {
+    delete (globalThis.crypto as { subtle?: unknown }).subtle;
+    if (desc && !("subtle" in globalThis.crypto)) Object.defineProperty(globalThis.crypto, "subtle", desc);
+  }
+});
+
+test("polyfilled crypto.subtle.digest returns the SHA-256 known answer and refuses other algorithms", async () => {
+  const realSubtle = globalThis.crypto.subtle;
+  Object.defineProperty(globalThis.crypto, "subtle", { value: undefined, configurable: true });
+  try {
+    await import("../../src/polyfills_crypto");
+    const subtle = globalThis.crypto.subtle;
+    assert.notEqual(subtle, realSubtle);
+    const out = new Uint8Array(await subtle.digest("SHA-256", new TextEncoder().encode("abc")));
+    assert.equal(
+      Buffer.from(out).toString("hex"),
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    );
+    await assert.rejects(subtle.digest("SHA-1", new Uint8Array(0)), /unsupported/);
+  } finally {
+    delete (globalThis.crypto as { subtle?: unknown }).subtle;
+    if (globalThis.crypto.subtle !== realSubtle) {
+      Object.defineProperty(globalThis.crypto, "subtle", { value: realSubtle, configurable: true });
+    }
+  }
+});
