@@ -1,5 +1,14 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
+## Read first: design docs and the progress log
+
+The design for this app lives in [`docs/treehouse-mobile/`](../../docs/treehouse-mobile/README.md). Read its README before changing anything here.
+
+- Use the terms in `01-ubiquitous-language.md` in code and copy.
+- The UI imports only the application layer described in `03-application-layer.md`. Do not re-implement reducers, capability selection or codecs; they come from `@treetopdevs/lattice-client` and `@treetopdevs/lattice-shell-kit`.
+- **Every commit that touches this directory or `docs/treehouse-mobile/` must update `docs/treehouse-mobile/PROGRESS.md` in the same commit.** Run `scripts/check_treehouse_mobile_progress.sh` (from the repo root) before committing; it fails if the log was not updated.
+- Record only the evidence tier that actually ran (Core, Simulator, Physical). "Not run" is a valid entry.
+
 ## Expo has changed — do not trust your training data
 
 Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:

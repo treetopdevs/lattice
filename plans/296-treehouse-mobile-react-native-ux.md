@@ -6,6 +6,22 @@ IN PROGRESS (M0 started 2026-11-25). Focuses on the small-group chat UI/UX over 
 Lattice 2.0 substrate (`@treetopdevs/lattice-client` + `@treetopdevs/lattice-shell-kit`) against
 the live WSS testbed (`https://lattice-demo-wss.fly.dev`).
 
+## Detailed design and progress (added 2026-11-25)
+
+The detailed design is in [`docs/treehouse-mobile/`](../docs/treehouse-mobile/README.md), and
+status is tracked in [`docs/treehouse-mobile/PROGRESS.md`](../docs/treehouse-mobile/PROGRESS.md).
+Where this plan and those docs differ, the docs win. Known differences:
+
+- The M0 exit proof "iOS Simulator boots and syncs live" was not run. The live gate used memory
+  adapters, so SecureStore and SQLite are unexecuted.
+- The invitation flow is three hand-offs (join request, offer, acceptance), not a "2-scan" wizard.
+- A phone's own key cannot reach the relay yet: admission is a static manifest. This blocks M2
+  beyond demo identities, and Start a Group and New Thread need relay provisioning.
+- Role and action words follow the frozen contract: `admin` (not "Founder"), Delete (not "Hide")
+  for an irreversible tombstone, `change moderator`.
+- The trust-card sentence must name who can read and who can withhold (Plan 177 D1).
+- The milestone table below is superseded by `docs/treehouse-mobile/06-milestones.md`.
+
 ## Objective
 
 Build a native-feeling small-group chat mobile app for **Treehouse** (`clients/treehouse-mobile/`)
