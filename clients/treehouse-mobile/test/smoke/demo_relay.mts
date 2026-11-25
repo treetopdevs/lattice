@@ -4,14 +4,19 @@ import {
   createIdentityFromSeedHex,
   loadOrCreateDeviceIdentity,
   MemoryKeyStore,
-} from "../src/native/custody";
-import { MemoryMobileStorage } from "../src/native/storage";
+} from "../../src/native/custody";
+import { MemoryMobileStorage } from "../../src/native/storage";
 import {
   DEFAULT_DEMO_WSS_ORIGIN,
   fetchDemoEndpoints,
   fetchDemoSeed,
   TreehouseMobileHost,
-} from "../src/lib/treehouse_mobile_host";
+} from "../../src/lib/treehouse_mobile_host";
+
+// Smoke gate against the public demo relay (moved from test/m0_wss_gate.mts in M1a.0). It reads only:
+// the offline post is queued locally and never relayed. Set DEMO_WSS_WRITE=1 to also relay that post,
+// which adds one message to a shared demo thread on every run.
+const WRITE = process.env.DEMO_WSS_WRITE === "1";
 
 const origin = (process.argv[2] || process.env.DEMO_WSS_ORIGIN || DEFAULT_DEMO_WSS_ORIGIN).replace(
   /\/$/,
@@ -98,8 +103,16 @@ async function run(): Promise<void> {
     threadAfterRestart.posts.some((p) => p.id === queuedFrame.id && p.pending && p.text === offlineText),
     "offline post must remain visible after app restart",
   );
-  await restartedHost.dispose();
   console.log("OFFLINE OUTBOX OK: queued signed op persisted across simulated app restart");
+  if (WRITE) {
+    await restartedHost.goOnline();
+    await restartedHost.syncNow();
+    assert.equal(restartedHost.getPendingCount(threadEp.replica), 0, "DEMO_WSS_WRITE: queued post relayed");
+    console.log("WRITE OK: queued post relayed to the demo thread (DEMO_WSS_WRITE=1)");
+  } else {
+    console.log("READ ONLY: queued post not relayed (set DEMO_WSS_WRITE=1 to relay it)");
+  }
+  await restartedHost.dispose();
   console.log(`PASS: M0 mobile gate verified against ${origin}`);
 }
 

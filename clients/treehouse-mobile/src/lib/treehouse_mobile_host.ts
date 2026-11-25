@@ -343,6 +343,15 @@ export class TreehouseMobileHost implements ShellHost {
   }
 
   async appendLocalFrame(replica: string, frame: CarrierOpFrame): Promise<void> {
+    await this.saveLocalFrame(replica, frame);
+
+    if (this.online && this.feed) {
+      await this.feed.syncNow();
+    }
+  }
+
+  /** Save the frame and its outbox entry in one write; never syncs (the session bridge nudges separately). */
+  async saveLocalFrame(replica: string, frame: CarrierOpFrame): Promise<void> {
     await this.serializeWrite(async () => {
       const current = this.snapshot.profiles[replica] ?? { frames: [], outbox: [], acked: [] };
       if (!current.frames.some((existing) => existing.id === frame.id)) {
@@ -355,10 +364,6 @@ export class TreehouseMobileHost implements ShellHost {
       await this.storage.save(this.snapshot);
       this.onStateChange?.();
     });
-
-    if (this.online && this.feed) {
-      await this.feed.syncNow();
-    }
   }
 
   async postMessage(threadReplica: string, rawText: string): Promise<CarrierOpFrame> {

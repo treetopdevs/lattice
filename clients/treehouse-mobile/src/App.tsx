@@ -19,6 +19,8 @@ import {
   createIdentityFromSeedHex,
   ExpoSecureStoreKeyStore,
   loadOrCreateDeviceIdentity,
+  pubkeyColor,
+  pubkeyFingerprint,
   type MobileIdentity,
 } from "./native/custody";
 import { runSelfCheck, type SelfCheck } from "./native/selfcheck";
@@ -29,6 +31,18 @@ import {
   TreehouseMobileHost,
   type DemoEndpointsManifest,
 } from "./lib/treehouse_mobile_host";
+import { createHostBridge, identityCustody } from "./lib/host_session_ports";
+import { systemClock } from "./session/memory/clock";
+import { createTreehouseSession, type TreehouseSession } from "./session/session";
+import type { Delivery } from "./session/projections/thread_timeline";
+
+// M1a.1: the thread tab reads the session's ThreadTimeline and Post calls session.postMessage. The M0
+// host still owns routes, sync and the People tab until M1a.4 and M1a.6.
+const DELIVERY_LABEL: Record<Delivery, string> = {
+  saved: "Saved on this phone",
+  sending: "Sending",
+  on_relay: "On relay",
+};
 
 type TabId = "threads" | "people" | "relay";
 type IdentityMode = "founder" | "neighbor" | "device";
@@ -86,10 +100,20 @@ export default function App(): React.JSX.Element {
   const bump = useCallback(() => setTick((n) => n + 1), []);
 
   const hostRef = useRef<TreehouseMobileHost | null>(null);
+  const bridgeRef = useRef<ReturnType<typeof createHostBridge> | null>(null);
+  if (!bridgeRef.current) bridgeRef.current = createHostBridge(() => hostRef.current!);
+  const bridge = bridgeRef.current;
   if (!hostRef.current) {
-    hostRef.current = new TreehouseMobileHost({ onStateChange: bump });
+    hostRef.current = new TreehouseMobileHost({
+      onStateChange: () => {
+        bridge.notify();
+        bump();
+      },
+    });
   }
   const host = hostRef.current;
+  const sessionRef = useRef<TreehouseSession | null>(null);
+  const connectGenRef = useRef(0);
 
   const [tab, setTab] = useState<TabId>("threads");
   const [origin, setOrigin] = useState(DEFAULT_DEMO_WSS_ORIGIN);
@@ -104,10 +128,15 @@ export default function App(): React.JSX.Element {
 
   const connect = useCallback(
     async (targetOrigin: string, mode: IdentityMode) => {
+      // A later connect (identity or origin switch) supersedes this one: never keep a session whose
+      // key differs from the identity the host was configured with.
+      const generation = ++connectGenRef.current;
+      const stale = () => generation !== connectGenRef.current;
       setLoading(true);
       setError(null);
       try {
         const fetchedManifest = await fetchDemoEndpoints(targetOrigin);
+        if (stale()) return;
         setManifest(fetchedManifest);
 
         const realmByPubkey: Record<string, string> = {};
@@ -122,22 +151,43 @@ export default function App(): React.JSX.Element {
           const seed = await fetchDemoSeed(targetOrigin, mode);
           identity = createIdentityFromSeedHex(seed.realm, seed.seedHex, "demo-seed");
         }
+        // Nothing shared (manifest, session, host) is touched until this connect is known to be current.
+        if (stale()) return;
 
+        await sessionRef.current?.close();
+        sessionRef.current = null;
         await host.configure(fetchedManifest.endpoints, identity, realmByPubkey);
+        if (stale()) return;
+        const session = createTreehouseSession({
+          custody: identityCustody(identity),
+          store: bridge.store,
+          clock: systemClock,
+          link: () => bridge.link,
+        });
+        await session.open();
+        if (stale()) {
+          await session.close();
+          return;
+        }
+        sessionRef.current = session;
         await host.goOnline();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        if (!stale()) setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setLoading(false);
-        bump();
+        if (!stale()) {
+          setLoading(false);
+          bump();
+        }
       }
     },
-    [host, bump],
+    [host, bridge, bump],
   );
 
   useEffect(() => {
     void connect(origin, identityMode);
     return () => {
+      void sessionRef.current?.close();
+      sessionRef.current = null;
       void host.dispose();
     };
   }, [connect, host, origin, identityMode]);
@@ -154,7 +204,12 @@ export default function App(): React.JSX.Element {
   const spaceEp = host.getSpaceEndpoint();
   const threadEp = host.getThreadEndpoint();
   const spaceView = spaceEp ? host.observeSpace(spaceEp.replica) : null;
-  const threadView = threadEp ? host.observeThread(threadEp.replica) : null;
+  const timeline = threadEp ? sessionRef.current?.read().timelines[threadEp.replica] ?? null : null;
+  const authorLabel = (pubkey: string): string => {
+    if (identity && pubkey === identity.publicKeyBase64) return identity.realm;
+    const named = Object.values(manifest?.participants ?? {}).find((p) => p.pubkey === pubkey);
+    return named?.realm ?? pubkeyFingerprint(pubkey);
+  };
   const feedState = host.getFeedState();
   const identity = host.getIdentity();
   const online = host.isOnline();
@@ -194,12 +249,14 @@ export default function App(): React.JSX.Element {
   };
 
   const handleSend = async () => {
-    if (!threadEp || !draft.trim() || sending) return;
+    const session = sessionRef.current;
+    if (!threadEp || !session || !draft.trim() || sending) return;
     setSending(true);
     setError(null);
     try {
-      await host.postMessage(threadEp.replica, draft);
-      setDraft("");
+      const result = await session.postMessage(threadEp.replica, draft);
+      if (result.ok) setDraft("");
+      else setError(result.reason);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -260,15 +317,15 @@ export default function App(): React.JSX.Element {
               ]}
             >
               <Text style={[styles.subHeaderTitle, { color: c.text }]}>
-                # {threadView?.title || "General"}
+                # {timeline?.title || "General"}
               </Text>
               <Text style={[styles.subHeaderMeta, { color: c.muted }]}>
-                {threadView ? `${threadView.posts.length} posts · ${threadView.opCount} ops` : ""}
+                {timeline ? `${timeline.messages.length} posts · ${host.getFrames(timeline.replica).length} ops` : ""}
               </Text>
             </View>
 
             <FlatList
-              data={threadView?.posts ?? []}
+              data={timeline?.messages ?? []}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.messageList}
               ListEmptyComponent={
@@ -279,16 +336,18 @@ export default function App(): React.JSX.Element {
               renderItem={({ item }) => (
                 <View style={[styles.messageCard, { backgroundColor: c.surface, borderColor: c.border }]}>
                   <View style={styles.messageHeader}>
-                    <View style={[styles.avatar, { backgroundColor: item.authorColor }]}>
+                    <View style={[styles.avatar, { backgroundColor: pubkeyColor(item.author) }]}>
                       <Text style={styles.avatarText}>
-                        {item.authorLabel.slice(0, 2).toUpperCase()}
+                        {authorLabel(item.author).slice(0, 2).toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={[styles.authorName, { color: c.text }]}>{item.authorLabel}</Text>
-                    {item.pending ? (
-                      <Text style={[styles.pendingTag, { color: c.warn }]}>Queued offline</Text>
+                    <Text style={[styles.authorName, { color: c.text }]}>{authorLabel(item.author)}</Text>
+                    {item.delivery && item.delivery !== "on_relay" ? (
+                      <Text style={[styles.pendingTag, { color: c.warn }]}>{DELIVERY_LABEL[item.delivery]}</Text>
                     ) : (
-                      <Text style={[styles.signedTag, { color: c.muted }]}>Verified</Text>
+                      <Text style={[styles.signedTag, { color: c.muted }]}>
+                        {item.delivery ? DELIVERY_LABEL[item.delivery] : "Verified"}
+                      </Text>
                     )}
                   </View>
                   <Text style={[styles.messageBody, { color: c.text }]}>{item.text}</Text>
@@ -300,7 +359,7 @@ export default function App(): React.JSX.Element {
             <View
               style={[styles.composer, { backgroundColor: c.surface, borderTopColor: c.border }]}
             >
-              {threadView?.canPost ? (
+              {timeline?.canPost ? (
                 <>
                   <TextInput
                     value={draft}

@@ -9,7 +9,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --preserve-symlinks test/m0_wss_gate.mts"
+    "test": "tsx --preserve-symlinks --test \"test/core/**/*.test.mts\"",
+    "test:core": "tsx --preserve-symlinks --test \"test/core/**/*.test.mts\"",
+    "test:smoke": "tsx --preserve-symlinks test/smoke/demo_relay.mts"
   },
   "dependencies": {
     "@noble/curves": "2.2.0",

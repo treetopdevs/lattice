@@ -150,7 +150,8 @@ Refusal reasons are a closed union per command. They include the judge's quarant
 the six pinned application denials (`missing or not-causal target`, `quarantined target`,
 `wrong target kind or thread`, `wrong author`, `already tombstoned`, `archived thread`), and
 app-level reasons (`identity_unavailable`, `no_capability`, `empty_text`, `text_too_long`,
-`thread_slots_full`, `storage_failed`). Each reason has exactly one line of copy in the
+`malformed_text` (a lone UTF-16 surrogate, which lattice-client will not sign), `thread_slots_full`,
+`storage_failed`). Each reason has exactly one line of copy in the
 strings table; a missing mapping fails typecheck.
 
 Moderator authority is held per replica: the Space and each Thread have their own holder. The
