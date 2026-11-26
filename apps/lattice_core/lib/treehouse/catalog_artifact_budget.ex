@@ -33,40 +33,53 @@ defmodule Treehouse.CatalogArtifactBudget do
   @doc """
   Compact JSON length of a catalog or rotation envelope's carrier term.
 
-  An envelope that does not normalize as a catalog or rotation envelope measures one byte over
-  the per-artifact limit, so `check/1` fails closed on it (the TS twin's codec does the same).
+  An envelope that does not normalize as a catalog or rotation envelope, or that normalizes but
+  holds a value the wire codec refuses (a float version such as `1.0`, which the normalizer's
+  `==` admits), measures one byte over the per-artifact limit, so `check/1` fails closed on it
+  (the TS twin's codec does the same).
   """
   @spec artifact_json_bytes(term()) :: non_neg_integer()
   def artifact_json_bytes(envelope) do
     case normalize(envelope) do
-      {:ok, normalized} -> normalized |> Wire.encode_value() |> Jason.encode!() |> byte_size()
+      {:ok, normalized} -> encoded_bytes(normalized)
       :error -> @max_artifact_bytes + 1
     end
+  end
+
+  defp encoded_bytes(normalized) do
+    normalized |> Wire.encode_value() |> Jason.encode!() |> byte_size()
+  rescue
+    _error in [ArgumentError, Jason.EncodeError] -> @max_artifact_bytes + 1
   end
 
   @doc """
   Refuses a size list CatalogTrust would refuse: count, per-artifact or total.
 
-  Every size must be a non-negative integer; anything else fails closed. The walk stops at the
-  first size over the per-artifact limit or once the running total passes the total limit.
+  Every size must be a non-negative integer and the list must be proper; anything else fails
+  closed. The walk stops at the first size over the per-artifact limit or once the running
+  total passes the total limit.
   """
   @spec check(term()) :: :ok | {:error, :control_history_limit}
-  def check(sizes) when is_list(sizes) do
-    if length(sizes) > @max_artifacts, do: {:error, :control_history_limit}, else: total(sizes, 0)
+  def check(sizes) do
+    if within_count?(sizes, 0), do: total(sizes, 0), else: {:error, :control_history_limit}
   end
-
-  def check(_sizes), do: {:error, :control_history_limit}
 
   @doc """
   Measures envelopes lazily and checks them as `check/1` would, stopping at the first refusal
-  so an oversized history is not serialized in full.
+  so an oversized history is not serialized in full. A non-list or improper list fails closed.
   """
-  @spec check_envelopes([term()]) :: :ok | {:error, :control_history_limit}
-  def check_envelopes(envelopes) when is_list(envelopes) do
-    if length(envelopes) > @max_artifacts,
-      do: {:error, :control_history_limit},
-      else: envelopes |> Stream.map(&artifact_json_bytes/1) |> total(0)
+  @spec check_envelopes(term()) :: :ok | {:error, :control_history_limit}
+  def check_envelopes(envelopes) do
+    if within_count?(envelopes, 0),
+      do: envelopes |> Stream.map(&artifact_json_bytes/1) |> total(0),
+      else: {:error, :control_history_limit}
   end
+
+  # A proper list of at most @max_artifacts elements; stops walking once the count is exceeded.
+  defp within_count?([], _count), do: true
+  defp within_count?([_ | _], count) when count >= @max_artifacts, do: false
+  defp within_count?([_ | rest], count), do: within_count?(rest, count + 1)
+  defp within_count?(_improper, _count), do: false
 
   defp total(sizes, sum) do
     Enum.reduce_while(sizes, {:ok, sum}, fn

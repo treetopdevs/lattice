@@ -82,6 +82,7 @@ defmodule Treehouse.CatalogArtifactBudgetTest do
           [-1],
           [-max | full],
           full ++ [nil],
+          [1 | :bad],
           :not_a_list
         ] do
       assert CatalogArtifactBudget.check(sizes) == {:error, :control_history_limit},
@@ -106,6 +107,8 @@ defmodule Treehouse.CatalogArtifactBudgetTest do
           Map.put(catalog, :extra, 1),
           %{rotation | old_signature: self()},
           %{rotation | rotation: %{rotation.rotation | version: -1}},
+          %{rotation | rotation: %{rotation.rotation | version: 1.0}},
+          %{catalog | catalog: %{catalog.catalog | version: 1.0}},
           nil
         ] do
       assert CatalogArtifactBudget.artifact_json_bytes(envelope) == over
@@ -113,6 +116,11 @@ defmodule Treehouse.CatalogArtifactBudgetTest do
 
     assert CatalogArtifactBudget.check_envelopes([%{catalog: nil}]) ==
              {:error, :control_history_limit}
+
+    for envelopes <- [[catalog | :bad], [nil | :bad], :not_a_list] do
+      assert CatalogArtifactBudget.check_envelopes(envelopes) ==
+               {:error, :control_history_limit}
+    end
 
     assert CatalogArtifactBudget.check_envelopes([catalog, rotation]) == :ok
   end
