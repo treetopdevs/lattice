@@ -4760,6 +4760,12 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>Another session owns that branch, and the public post is not covered by the delegation.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
 </dl></section>
+<section id="d956"><h2><span>D-956</span> Merge monitor: operator grant of 2026-11-26</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>The operator asked for an agent that checks about every 30 minutes and merges PRs with green CI and all comments addressed. A scheduled task does one pass per run. It merges a non-draft PR against main, with a merge commit, only when every check and the Flagship evidence run pass on the exact head and every review thread, review and comment finding is resolved or answered. It skips drafts, <code>codex/*</code> branches, Dependabot and conflicted PRs. It does not fix code, push, or bypass required checks. This supersedes the "nothing is merged" line in D-950.</dd>
+<dt>Reason</dt><dd>Operator instruction. The scope (all open non-draft PRs, so PRs #237 and #238 as well as this run's slices) is the coordinator's reading of "prs to merge".</dd>
+<dt>Status</dt><dd>Operator instruction (2026-11-26); the scope reading is assumed under delegation, reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
