@@ -6,6 +6,9 @@
 // checkCatalogReplacementAuthority on the frozen history. A retained rotation or catalog the resolver refuses on its own
 // bytes still refuses, so nothing is signed over evidence Stage B rejects structurally. Authoring-only: retained-client
 // trust waits on 4c. Non-claim: catalog entry facts are not observed against retained histories here (row 354, 4c).
+// Retained evidence over CatalogTrust's artifact budgets (1,024 artifacts, CATALOG_ARTIFACT_BYTES per artifact, 16 MiB in
+// total) refuses as control_history_limit before the resolver runs (rows 355, 525). Sizes are the compact JSON of each
+// distinct envelope; non-claim: that is a lower bound, so a distributor's padded copy may still exceed a verifier's budget.
 import { verifyEd25519 } from "./signature";
 import { analyzeAuthority, resolveContinuationProfileFromFrames } from "./authority";
 import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
@@ -22,6 +25,9 @@ import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 import {
   catalogBindingReasonRank, coverCatalogReplacementClaim, resolveCatalogBindingGraph, resolveCatalogBindingGraphForClaim,
 } from "./treehouse_catalog_binding_graph";
+import {
+  TREEHOUSE_CATALOG_MAX_ARTIFACTS, catalogEnvelopeJsonBytes, catalogRotationEnvelopeJsonBytes, checkCatalogArtifactBudget,
+} from "./treehouse_catalog_artifact_budget";
 import { checkCatalogReplacementAuthority } from "./treehouse_catalog_replacement_authority";
 import {
   canonicalBytesForCatalogReplacementClaim, canonicalBytesForCatalogReplacementPossession, catalogInventoryId,
@@ -272,8 +278,6 @@ async function derive(replica: string, space: TreehouseCatalogReplacementHistory
 
 // --- retained-evidence coverage (plan 316 PR 4a-2) ------------------------------------------------------------------
 
-const maxArtifacts = 1_024;
-
 // D-276 eligibility, the D-275 closing rule and section-3 precedence are the resolver's (row 352). The caller's retained
 // rotations and catalogs are normalized and scoped here; any one the resolver refuses on its own bytes (anything but a
 // refusal inherited from a union-refused node) refuses the preflight, highest precedence first, before coverage.
@@ -282,10 +286,14 @@ type Retained = {ok: true; rotations: Map<string, CatalogRotationEnvelope>; cata
 
 async function coverage(history: JudgedHistory, replica: string, bootstrap: {id: string; record: CatalogBootstrap},
   claim: CatalogReplacementClaim, request: TreehouseCatalogReplacementRequest): Promise<string | null> {
-  // CatalogTrust refuses more than 1,024 retained artifacts; its JSON byte budgets are not mirrored here (row 355).
-  if (request.catalogs.length + request.rotations.length > maxArtifacts) return "control_history_limit";
+  // CatalogTrust's budgets (rows 355, 525): the raw count first, then the JSON bytes of the de-duplicated envelopes (the
+  // verifier stores one record per id), measured as compact canonical JSON.
+  if (request.catalogs.length + request.rotations.length > TREEHOUSE_CATALOG_MAX_ARTIFACTS) return "control_history_limit";
   const held = retained(replica, bootstrap, request);
   if (!held.ok) return held.reason;
+  const overBudget = checkCatalogArtifactBudget([...[...held.rotations.values()].map(catalogRotationEnvelopeJsonBytes),
+    ...[...held.catalogs.values()].map(catalogEnvelopeJsonBytes)]);
+  if (overBudget !== null) return overBudget;
   // resolveCatalogBindingGraphForClaim keeps the verifier's head limit but lets a claim citing every head root through it
   // (design section 2.7): three old-key rotations under the accepted binding cannot block the resolution that closes them out.
   const resolved = await resolveCatalogBindingGraphForClaim({bootstrap, frames: history.frames, rotations: held.rotations,
