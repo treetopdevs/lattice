@@ -70,6 +70,11 @@ export type {
   TreehouseCatalogReplacementHistory, TreehouseCatalogReplacementJournal, TreehouseCatalogReplacementJournalEntry,
   TreehouseCatalogReplacementPrepareResult, TreehouseCatalogReplacementRequest, TreehouseCatalogReplacementStatus,
 } from "./treehouse_catalog_replacement_authoring";
+// CatalogTrust's retained-artifact budgets for authoring preflights (rows 355, 525); compact JSON is a lower bound.
+export {
+  CATALOG_ARTIFACT_BYTES, TREEHOUSE_CATALOG_MAX_ARTIFACTS, TREEHOUSE_CATALOG_MAX_TOTAL_BYTES, catalogEnvelopeJsonBytes,
+  catalogRotationEnvelopeJsonBytes, checkCatalogArtifactBudget, checkCatalogEnvelopeBudget,
+} from "./treehouse_catalog_artifact_budget";
 export { observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, assembleMemberContinuityFromFrames } from "./treehouse_member_continuity";
 export type { MemberContinuityObservation, MemberContinuityReviewRequest, MemberContinuityReview, MemberContinuityReviewResult, MemberContinuityAssemblyResult } from "./treehouse_member_continuity";
 
