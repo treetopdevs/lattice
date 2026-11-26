@@ -4832,6 +4832,12 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The last round has no P1 or P2. The tracked demo bundle has no beacon, lease or election link, so the filled tables are shown only by Sim-built tests; row 601 asks for a fixture bundle.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
 </dl></section>
+<section id="d968"><h2><span>D-968</span> Row 321: checker-strictness findings stop at round four</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>), hosted bot review of <code>88122d2c2</code></dd>
+<dt>Decision</dt><dd>The Codex bot raised two more P2 items of the same class (a blocked <code>catalog_rollback</code> decision would pass; the missing-verdict rule skips complete-part graphs). They are not fixed in PR #241. Both threads were answered and resolved, and the class is filed as row 602: state the allowed decision shapes once, from the resolver's <code>sole/5</code> table, and mutation-test the checker against each one.</dd>
+<dt>Reason</dt><dd>Working-policy rule 3: a third round on one class of finding is a design question, not another repair. This was the fourth round, each fix restarted hosted checks and drew a new finding of the same kind, and none of them is a fault in the resolver or in shipped code. The property already found no counterexample over real histories.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
