@@ -85,6 +85,8 @@ defmodule Treehouse.CatalogReplacementTrust do
   }
 
   @empty_binding %{accepted: nil, frozen: false}
+  # Row 527: held catalogs revived per page, so the retries are bounded per page.
+  @revive_limit 16
 
   @doc "Prepare the first installed state; as `CatalogTrust.prepare_installation/1`, wrapped."
   @spec prepare_installation(map()) :: map()
@@ -220,35 +222,75 @@ defmodule Treehouse.CatalogReplacementTrust do
   # dropped for good only when the decision retains its binding without overflow triggers and its
   # last trial was not a `trust_pending` refusal (a revision whose predecessor has not arrived
   # waits for it); otherwise it stays held. Returns the decision and the held catalogs it settled (taken or
-  # dropped). The retries are CatalogTrust evaluations bounded only by the sidecar (row 355).
+  # dropped).
+  #
+  # A judgement that raises a block the page alone does not (a fork between held catalogs, or
+  # one a held catalog opens against the page) is final: it is returned with nothing settled, so
+  # every held catalog stays held and no subset retry can take one side of a fork or drop the
+  # other. Only a reject (a held catalog that fails its signature or does not decode) or a block
+  # the page already carries leads to the retries, and a retry that raises a block ends them the
+  # same way. (A `catalog_fork` among catalogs keeps them in the trust state, so such a judgement
+  # is taken; this guard is hardening for any block that would not be.) At most `@revive_limit`
+  # held catalogs, in sidecar order, are revived per page; the rest stay held for a later page,
+  # so the retries are bounded per page whatever the sidecar holds.
   defp revive(judge, legacy, []), do: {judge.(legacy), []}
 
-  defp revive(judge, legacy, revived) do
+  defp revive(judge, legacy, held) do
+    revived = Enum.take(held, @revive_limit)
     all = judge.(with_catalogs(legacy, revived))
 
     if taken?(all, revived) do
       {all, revived}
     else
-      {decision, taken, left} = revive_each(judge, legacy, judge.(legacy), [], revived)
-      {decision, taken ++ droppable(decision, left)}
+      alone = judge.(legacy)
+
+      if raises?(all, alone) do
+        {all, []}
+      else
+        case revive_each(judge, legacy, alone, [], revived) do
+          {:blocked, trial} -> {trial, []}
+          {decision, taken, left} -> {decision, taken ++ droppable(decision, left)}
+        end
+      end
     end
   end
 
-  # `left` pairs each catalog not taken with its last trial.
+  # `left` pairs each catalog not taken with its last trial; a trial that raises a block ends the
+  # retries.
   defp revive_each(judge, legacy, decision, taken, rest) do
-    {decision, taken, left} =
-      Enum.reduce(rest, {decision, taken, []}, fn json, {decision, taken, left} ->
+    result =
+      Enum.reduce_while(rest, {decision, taken, []}, fn json, {decision, taken, left} ->
         trial = judge.(with_catalogs(legacy, taken ++ [json]))
 
-        if taken?(trial, taken ++ [json]),
-          do: {trial, taken ++ [json], left},
-          else: {decision, taken, left ++ [{json, trial}]}
+        cond do
+          taken?(trial, taken ++ [json]) -> {:cont, {trial, taken ++ [json], left}}
+          raises?(trial, decision) -> {:halt, {:blocked, trial}}
+          true -> {:cont, {decision, taken, left ++ [{json, trial}]}}
+        end
       end)
 
-    if left != [] and length(left) < length(rest),
-      do: revive_each(judge, legacy, decision, taken, Enum.map(left, &elem(&1, 0))),
-      else: {decision, taken, left}
+    case result do
+      {:blocked, _trial} = blocked ->
+        blocked
+
+      {decision, taken, left} ->
+        if left != [] and length(left) < length(rest),
+          do: revive_each(judge, legacy, decision, taken, Enum.map(left, &elem(&1, 0))),
+          else: {decision, taken, left}
+    end
   end
+
+  # Whether `trial` carries a block that `baseline` (the page without the held catalog) does not.
+  defp raises?(trial, baseline) do
+    block = block_of(trial)
+    block != nil and block != block_of(baseline)
+  end
+
+  defp block_of(%{kind: :reject}), do: nil
+  defp block_of(%{kind: :retain_blocked, next: trust}), do: {:retain_blocked, trust.blocked}
+  defp block_of(%{next: %{blocked: nil}}), do: nil
+  defp block_of(%{next: %{blocked: block}}), do: {:carried, block}
+  defp block_of(_decision), do: nil
 
   defp with_catalogs(page, jsons), do: %{page | catalogs: page.catalogs ++ jsons}
 

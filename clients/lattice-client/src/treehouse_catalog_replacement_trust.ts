@@ -161,16 +161,28 @@ async function settle(installed: InstalledReplacementTrust,
 // forged variant costs neither the authentic catalog nor the page's evidence and a held revision tried before its first
 // catalog is not lost. A catalog still not taken is dropped for good only when the decision retains its binding without
 // overflow triggers and its last trial was not a trust_pending refusal (a revision whose predecessor has not arrived waits
-// for it); otherwise it stays held. settled is every held catalog taken or dropped. The retries are trust
-// evaluations bounded only by the sidecar (row 355).
+// for it); otherwise it stays held. settled is every held catalog taken or dropped.
+//
+// A judgement that raises a block the page alone does not (a fork between held catalogs, or one a held catalog opens against
+// the page) is final: it is returned with nothing settled, so every held catalog stays held and no subset retry can take one
+// side of a fork or drop the other. Only a reject (a held catalog that fails its signature or does not decode) or a block the
+// page already carries leads to the retries, and a retry that raises a block ends them the same way. (A catalog_fork among
+// catalogs keeps them in the trust state, so such a judgement is taken; this guard is hardening for any block that would not
+// be.) At most REVIVE_LIMIT held
+// catalogs, in sidecar order, are revived per page; the rest stay held for a later page, so the retries are bounded per page
+// whatever the sidecar holds.
+const REVIVE_LIMIT = 16;
+
 async function revive(judge: (page: TreehouseCatalogEvidencePage) => Promise<TreehouseCatalogTrustDecision>,
-  legacy: TreehouseCatalogEvidencePage, revived: readonly string[]):
+  legacy: TreehouseCatalogEvidencePage, held: readonly string[]):
   Promise<{decision: TreehouseCatalogTrustDecision; settled: Set<string>}> {
   const withCatalogs = (jsons: readonly string[]) => ({...legacy, catalogs: [...legacy.catalogs, ...jsons]});
-  if (revived.length === 0) return {decision: await judge(legacy), settled: new Set()};
+  if (held.length === 0) return {decision: await judge(legacy), settled: new Set()};
+  const revived = held.slice(0, REVIVE_LIMIT);
   const all = await judge(withCatalogs(revived));
   if (taken(all, revived)) return {decision: all, settled: new Set(revived)};
   let decision = await judge(legacy);
+  if (raises(all, decision)) return {decision: all, settled: new Set()};
   const accepted: string[] = [];
   let rest = [...revived];
   // Each catalog not taken, with its last trial.
@@ -179,13 +191,27 @@ async function revive(judge: (page: TreehouseCatalogEvidencePage) => Promise<Tre
     left = [];
     for (const json of rest) {
       const trial = await judge(withCatalogs([...accepted, json]));
-      if (taken(trial, [...accepted, json])) { decision = trial; accepted.push(json); } else left.push({json, trial});
+      if (taken(trial, [...accepted, json])) { decision = trial; accepted.push(json); }
+      else if (raises(trial, decision)) return {decision: trial, settled: new Set()};
+      else left.push({json, trial});
     }
     const progress = left.length < rest.length;
     rest = left.map((l) => l.json);
     if (rest.length === 0 || !progress) break;
   }
   return {decision, settled: new Set([...accepted, ...droppable(decision, left)])};
+}
+
+// Whether trial carries a block that baseline (the page without the held catalog) does not.
+function raises(trial: TreehouseCatalogTrustDecision, baseline: TreehouseCatalogTrustDecision): boolean {
+  const block = blockOf(trial);
+  return block !== null && block !== blockOf(baseline);
+}
+
+function blockOf(decision: TreehouseCatalogTrustDecision): string | null {
+  if (decision.kind === "reject") return null;
+  if (decision.kind === "retain_blocked") return canonical(["retain_blocked", decision.next.blocked]);
+  return decision.next.blocked == null ? null : canonical(["carried", decision.next.blocked]);
 }
 
 function taken(decision: TreehouseCatalogTrustDecision, jsons: readonly string[]): boolean {

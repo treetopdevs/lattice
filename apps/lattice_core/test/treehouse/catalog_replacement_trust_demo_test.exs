@@ -184,6 +184,20 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
          {"R1 + K1 + rotation without old_signature", r.page_no_signature, false},
          {"R1 + K1 + rotation with an extra key", r.page_extra_key, false}
        ]},
+      # Review round 3 of rows 526 and 527 (security), replayed in both runtimes.
+      {"held_fork_junk",
+       [
+         {"install C0", page_c0, false},
+         {"CT + CT1 + CT1b + junk", W.page(catalogs: [r.ct, r.ct1, r.ct1b, r.junk_t]), false},
+         {"T", r.page_t, false}
+       ]},
+      {"revive_bound",
+       [
+         {"install C0", page_c0, false},
+         {"17 junk under T", W.page(catalogs: r.junks), false},
+         {"T", r.page_t, false},
+         {"empty", W.page(), false}
+       ]},
       {"closed_unbound",
        [
          {"install C0", page_c0, false},
@@ -291,6 +305,12 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
 
     assert %{"accepted" => "B/C0", "routes" => 0, "sidecar" => 1} =
              List.last(beam_views["blocked_bad_rotation"])
+
+    assert %{"kind" => "retain_blocked", "reason" => "catalog_fork", "routes" => 0} =
+             List.last(beam_views["held_fork_junk"])
+
+    assert [_, %{"sidecar" => 17}, %{"sidecar" => 1}, %{"sidecar" => 0, "accepted" => "B/C0"}] =
+             beam_views["revive_bound"]
 
     assert %{"accepted" => "R2/K2r", "reason" => nil} = List.last(beam_views["closed_unbound"])
     [_, rn, tn] = beam_views["nonadmin_unbound"]
@@ -590,6 +610,21 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     t4 = W.rotation(w, %{id: t3.id, generation: 3}, k3, t3.key, "demo-t4")
     k4 = F.catalog(base, t4.id, 0, nil, t4.key, k3.catalog.entries)
     ct1 = F.catalog(base, t.id, 1, F.cid(ct), t.key, ct.catalog.entries)
+    moved = Enum.map(ct.catalog.entries, &%{&1 | route: "/r/" <> F.id("demo-ct1b")})
+    ct1b = F.catalog(base, t.id, 1, F.cid(ct), t.key, moved)
+
+    junks =
+      for i <- 1..17,
+          do:
+            F.catalog(
+              base,
+              t.id,
+              0,
+              nil,
+              Lattice.Identity.from_seed("junk", "demo-bound-#{i}"),
+              ct.catalog.entries
+            )
+
     tt = W.rotation(w, %{id: t.id, generation: 1}, ct, t.key, "demo-tt")
     ctt = F.catalog(base, tt.id, 0, nil, tt.key, ct.catalog.entries)
     forged = %{t2.envelope | new_signature: <<7, 0::size(504)>>}
@@ -629,6 +664,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         | rotations: [CatalogTrustVectors.artifact_json(Map.put(t.envelope, :extra, 1))]
       },
       ct1: ct1,
+      ct1b: ct1b,
+      junks: junks,
       tr: tr,
       tn: tn,
       page_three:
@@ -647,7 +684,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         F.cid(ctt) => "CTT",
         r2.id => "R2",
         F.cid(k2r) => "K2r",
-        F.cid(ct1) => "CT1"
+        F.cid(ct1) => "CT1",
+        F.cid(ct1b) => "CT1b"
       }
     }
   end

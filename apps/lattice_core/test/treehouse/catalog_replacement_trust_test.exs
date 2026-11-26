@@ -1497,6 +1497,100 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       assert done.next.extra.catalogs == []
     end
 
+    test "two held revisions that fork under T keep the fork: nothing served, all held", c do
+      %{w: w, t: t, ct: ct} = c
+      {ct1, ct1b} = revision_fork(w, t, ct, "held-fork")
+      held = W.evaluate(c.d1.next, W.page(catalogs: [ct, ct1, ct1b]))
+      assert length(held.next.extra.catalogs) == 3
+
+      t_page = W.page(rotations: [t.envelope], proofs: [w.proof])
+      done = W.evaluate(held.next, t_page)
+      direct = W.evaluate(c.d1.next, %{t_page | catalogs: held.next.extra.catalogs})
+      assert {direct.kind, direct.reason} == {:retain_blocked, :catalog_fork}
+
+      assert {done.kind, done.reason, done.routes} == {:retain_blocked, :catalog_fork, []}
+      # The fork evidence is in the trust state, as when the catalogs come with T.
+      assert done.next.trust == direct.next.trust
+      assert done.next.extra.catalogs == []
+    end
+
+    test "a held revision that forks the page's revision keeps the fork", c do
+      %{w: w, t: t, ct: ct} = c
+      {ct1, ct1b} = revision_fork(w, t, ct, "held-fork-page")
+      held = W.evaluate(c.d1.next, W.page(catalogs: [ct1b]))
+      assert length(held.next.extra.catalogs) == 1
+
+      page = W.page(rotations: [t.envelope], proofs: [w.proof], catalogs: [ct, ct1])
+      done = W.evaluate(held.next, page)
+
+      direct =
+        W.evaluate(c.d1.next, %{page | catalogs: page.catalogs ++ held.next.extra.catalogs})
+
+      assert {done.kind, done.reason, done.routes} == {:retain_blocked, :catalog_fork, []}
+      assert done.next.trust == direct.next.trust
+    end
+
+    test "a forged variant beside a held fork does not let the retries take one side", c do
+      %{w: w, t: t, ct: ct, junk: junk} = c
+      {ct1, ct1b} = revision_fork(w, t, ct, "held-fork-junk")
+      held = W.evaluate(c.d1.next, W.page(catalogs: [ct, ct1, ct1b, junk]))
+      assert length(held.next.extra.catalogs) == 4
+
+      done = W.evaluate(held.next, W.page(rotations: [t.envelope], proofs: [w.proof]))
+      assert {done.kind, done.reason, done.routes} == {:retain_blocked, :catalog_fork, []}
+      assert W.view(done, c.labels, c.old)["accepted"] == "B/C0"
+    end
+
+    test "sixteen forged pending revisions ahead of CT cannot starve it past the bound", c do
+      %{w: w, t: t, ct: ct} = c
+      ct_json = CatalogTrustVectors.artifact_json(ct)
+
+      # Revisions of unseen predecessors under T, signed by keys other than T's, that sort ahead
+      # of CT in the sidecar: each fails its signature before it could wait as trust_pending, so
+      # it is dropped and the window moves on. (Only T's key holder can sign revisions that wait;
+      # that starvation is the sidecar budget follow-up.)
+      ahead =
+        for i <- 1..200,
+            key = Lattice.Identity.from_seed("junk", "rr-ahead-#{i}"),
+            cat = F.catalog(w.base, t.id, 1, F.id("rr-unseen-#{i}"), key, ct.catalog.entries),
+            CatalogTrustVectors.artifact_json(cat) < ct_json,
+            do: cat
+
+      ahead = Enum.take(ahead, 16)
+      assert length(ahead) == 16
+      held = W.evaluate(c.d1.next, W.page(catalogs: ahead ++ [ct]))
+      assert List.last(held.next.extra.catalogs) == ct_json
+
+      first = W.evaluate(held.next, W.page(rotations: [t.envelope], proofs: [w.proof]))
+      assert first.next.extra.catalogs == [ct_json]
+      second = W.evaluate(first.next, W.page())
+      assert W.view(second, c.labels, c.old)["accepted"] == "T/CT"
+      assert second.next.extra.catalogs == []
+    end
+
+    test "at most sixteen held catalogs are revived per page; the rest stay held", c do
+      %{w: w, t: t, ct: ct} = c
+
+      junks =
+        for i <- 1..17 do
+          key = Lattice.Identity.from_seed("junk", "rr-bound-#{i}")
+          F.catalog(w.base, t.id, 0, nil, key, ct.catalog.entries)
+        end
+
+      held = W.evaluate(c.d1.next, W.page(catalogs: junks))
+      assert length(held.next.extra.catalogs) == 17
+
+      t_page = W.page(rotations: [t.envelope], proofs: [w.proof])
+      first = W.evaluate(held.next, t_page)
+      refute first.kind == :reject
+      assert length(first.next.extra.catalogs) == 1
+      assert hd(first.next.extra.catalogs) == List.last(held.next.extra.catalogs)
+
+      second = W.evaluate(first.next, W.page())
+      assert second.next.extra.catalogs == []
+      assert W.view(second, c.labels, c.old)["accepted"] == "B/C0"
+    end
+
     test "a held junk catalog under a block does not drop the page's evidence", c do
       %{w: w, t: t, junk: junk} = c
       base = w.base
@@ -1690,5 +1784,12 @@ defmodule Treehouse.CatalogReplacementTrustTest do
         assert W.view(recovered, c.labels, c.old)["accepted"] == "R1/K1"
       end
     end
+  end
+
+  # Two revisions of CT under T, the second moving every route: a catalog_fork.
+  defp revision_fork(w, t, ct, seed) do
+    moved = Enum.map(ct.catalog.entries, &%{&1 | route: "/r/" <> F.id(seed)})
+    ct1 = F.catalog(w.base, t.id, 1, F.cid(ct), t.key, ct.catalog.entries)
+    {ct1, F.catalog(w.base, t.id, 1, F.cid(ct), t.key, moved)}
   end
 end
