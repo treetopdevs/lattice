@@ -8,6 +8,10 @@ defmodule Mix.Tasks.Lattice.Township.Report do
   inside the bundle directory is refused, since it would corrupt the bundle's exact
   verifiable file set. The file is always written; a bundle that fails verification
   gets a NOT VERIFIED report and a non-zero exit.
+
+  The report is written to a new temporary file in the destination directory and
+  renamed over `--out` (`Township.ReportFile`), so a link at `--out`, including one
+  swapped in after the containment check, is replaced and never written through.
   """
 
   use Mix.Task
@@ -89,9 +93,13 @@ defmodule Mix.Tasks.Lattice.Township.Report do
 
   defp report(dir, out) do
     dir = resolve(Path.expand(dir))
-    out = resolve(Path.expand(out))
+    out = Path.expand(out)
+    # The containment check follows a leaf symlink; the write replaces the leaf itself,
+    # under its resolved parent, so a link at --out is never written through.
+    resolved = resolve(out)
+    out = Path.join(resolve(Path.dirname(out)), Path.basename(out))
 
-    if out == dir or String.starts_with?(out, dir <> "/") or same_file_tree?(dir, out) do
+    if Enum.any?([resolved, out], &inside_bundle?(dir, &1)) do
       Mix.raise("refusing --out inside the bundle directory: #{out}")
     end
 
@@ -100,16 +108,30 @@ defmodule Mix.Tasks.Lattice.Township.Report do
 
     case AuditReport.render(dir) do
       {:ok, html, :verified} ->
-        File.write!(out, html)
+        write_report!(out, html)
         Mix.shell().info("Township audit report written: #{out} (VERIFIED)")
 
       {:failed, html, errors} ->
-        File.write!(out, html)
+        write_report!(out, html)
 
         Mix.raise(
           "Township audit bundle verification failed (report written to #{out}):\n- " <>
             Enum.join(errors, "\n- ")
         )
+    end
+  end
+
+  defp inside_bundle?(dir, path) do
+    path == dir or String.starts_with?(path, dir <> "/") or same_file_tree?(dir, path)
+  end
+
+  defp write_report!(out, html) do
+    case Township.ReportFile.write(out, html) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Mix.raise("could not write report #{out}: #{:file.format_error(reason)}")
     end
   end
 end
