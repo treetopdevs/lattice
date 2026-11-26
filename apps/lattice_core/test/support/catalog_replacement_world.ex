@@ -10,7 +10,14 @@ defmodule Treehouse.CatalogReplacementWorld do
   alias Lattice.{Authority, Identity, Log, Op}
   alias Lattice.Authority.Delegation
   alias Treehouse.CatalogBindingGraphFixtures, as: F
-  alias Treehouse.{CatalogCutoff, CatalogReplacementTrust, CatalogTrustVectors, Space}
+
+  alias Treehouse.{
+    CatalogCutoff,
+    CatalogReplacementTrust,
+    CatalogTrustVectors,
+    Space,
+    TransportCatalog
+  }
 
   @expected %{trust_revision: 0, history_generation: 0}
   def expected, do: @expected
@@ -85,11 +92,49 @@ defmodule Treehouse.CatalogReplacementWorld do
     }
   end
 
-  @doc "A page in `CatalogTrust`'s shape; `history` is a Space `Log`."
+  @doc """
+  Rows 526 and 527: a signed rotation of `parent` (`%{id, generation}`) over the `prior` catalog
+  envelope, signed by `old` (the parent's catalog key) and by a new key seeded from `label`. Its
+  cutoffs are the real Space cutoff `w.proof` proves (C0 and K1 hold only the Space entry), so the
+  rotation's recovery is complete once `w.proof` is retained. Returns `%{id, envelope, key, json}`.
+  """
+  def rotation(w, parent, prior, old, label) do
+    new = Identity.from_seed("catalog", "r526-rotation-" <> label)
+
+    rotation = %{
+      version: 1,
+      product: :treehouse,
+      space: w.base.replica,
+      bootstrap: w.base.boot.id,
+      parent: parent.id,
+      prior_catalog: F.cid(prior),
+      generation: parent.generation + 1,
+      new_catalog_key: new.pub,
+      nonce: F.id("r526-rotation-" <> label),
+      inventory_digest: TransportCatalog.inventory_id(prior.catalog.entries),
+      cutoffs: [w.proof.cutoff]
+    }
+
+    envelope = %{
+      rotation: rotation,
+      old_signature: Identity.sign(old, TransportCatalog.rotation_bytes(rotation)),
+      new_signature: Identity.sign(new, TransportCatalog.rotation_possession_bytes(rotation))
+    }
+
+    %{
+      id: TransportCatalog.rotation_id(envelope),
+      envelope: envelope,
+      key: new,
+      json: CatalogTrustVectors.artifact_json(envelope)
+    }
+  end
+
+  @doc "A page in `CatalogTrust`'s shape; `history` is a Space `Log`, `rotations` envelopes."
   def page(opts \\ []) do
     %{
       catalogs: Enum.map(Keyword.get(opts, :catalogs, []), &CatalogTrustVectors.artifact_json/1),
-      rotations: [],
+      rotations:
+        Enum.map(Keyword.get(opts, :rotations, []), &CatalogTrustVectors.artifact_json/1),
       histories: Enum.map(Keyword.get(opts, :logs, []), &CatalogTrustVectors.raw_history/1),
       cutoff_proofs: Keyword.get(opts, :proofs, [])
     }
@@ -215,8 +260,8 @@ defmodule Treehouse.CatalogReplacementWorld do
   end
 
   defp signed_by?(json, key) do
-    {:ok, envelope} = Treehouse.TransportCatalog.decode_catalog_json(json)
-    Treehouse.TransportCatalog.verify_catalog(envelope, key) == :ok
+    {:ok, envelope} = TransportCatalog.decode_catalog_json(json)
+    TransportCatalog.verify_catalog(envelope, key) == :ok
   end
 
   @doc "One narrated line; the TS consumer builds the same text."
