@@ -1,0 +1,12 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
+@@ -833,7 +833,8 @@
+   # not only on its own closure) therefore still makes the candidate raw evidence (OD-17; PR #221
+   # round 1, finding 1). A refusal that appears only on the wider union is step 3 (`refused?`).
+   defp own_closure(op, ctx) do
+-    case Authority.analyze(Space, prefix_log(ctx.cops, ctx.replica, [op.id])).reasons[op.id] do
++    # MUTANT m11: step 4 re-judged on the union (the full analysis, not the op's own closure).
++    case ctx.analysis.reasons[op.id] do
+       nil -> []
+       :application_invalid_catalog -> [{:invalid_catalog_transition, :stage_a}]
+       _core -> [{:catalog_authority_refused, :core_refused_at_prefix}]

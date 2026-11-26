@@ -24,8 +24,13 @@
 #   m8_floor_no_memo                 NOT RUN (stopped mid-run; over the 10 minute budget)
 #   m9_entry_facts_ignored           NOT RUN
 #   m10_entry_quarantine_incomplete  NOT RUN
+#   m11_step4_rejudged_on_union      row 321, recorded below
 # m2 to m4 are not covered by this table. Patches m5 to m10 target the four pass-2 fixes
 # (Stage A prefix, D-275 escape, floor dedupe, floor memo) and the row 390 entry-fact fixes.
+# m11 (row 321) targets D-279 itself: step 4's own-closure Core judgment re-read from the full
+# union analysis, the "immutable check judged against growing evidence" class. Expected KILLED
+# by property M's d279 check (an accepted candidate becomes raw evidence) or by the deterministic
+# "M exercise" test, with R389_MUTANT_TESTS set to catalog_resolution_property_test.exs.
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
