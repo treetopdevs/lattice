@@ -90,6 +90,7 @@ defmodule Township.AuditReportTest do
       sim: sim,
       log: log,
       chronology: [genesis.id, claim.id, transfer_op.id],
+      transfer_delegation: deleg.id,
       beacons: [b1.id, b5.id],
       stale: stale.id,
       non_root: non_root.id,
@@ -100,6 +101,8 @@ defmodule Township.AuditReportTest do
       unauth: unauth.id
     }
   end
+
+  defp fp(sim, realm), do: Lattice.Identity.fingerprint(Sim.identity(sim, realm))
 
   defp write_observe_bundle(dir, info \\ observe_scenario()) do
     assert {:ok, _} = AuditBundle.write(dir, info.log)
@@ -478,11 +481,20 @@ defmodule Township.AuditReportTest do
       [_, clerk] = String.split(chronology, "<h3>clerk</h3>", parts: 2)
 
       rows =
-        ~r{<tr><td>(\d+)</td><td>[^<]*</td><td>([^<]*)</td><td>[^<]*</td></tr>}
+        ~r{<tr><td>(\d+)</td><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td></tr>}
         |> Regex.scan(clerk)
-        |> Enum.map(fn [_, n, id] -> {n, id} end)
+        |> Enum.map(fn [_, n, holder, id, deleg] -> {n, holder, id, deleg} end)
 
-      assert rows == Enum.zip(["1", "2", "3"], info.chronology)
+      holders = Enum.map(["clerk", "resident", "neighbor"], &fp(info.sim, &1))
+      delegations = Enum.map(model_for(dir).roles.chronology.clerk, & &1.delegation_id)
+
+      assert rows ==
+               [["1", "2", "3"], holders, info.chronology, delegations]
+               |> Enum.zip()
+
+      assert List.last(delegations) == info.transfer_delegation
+      assert delegations |> Enum.uniq() |> length() == 3
+      assert Enum.all?(delegations, &(is_binary(&1) and &1 != ""))
       assert chronology =~ "Author-asserted ticks are untrusted (ADR 0004) and are not shown"
       refute chronology =~ "at_tick"
       refute chronology =~ "tick 3"
@@ -552,21 +564,28 @@ defmodule Township.AuditReportTest do
                leases |> Enum.map(& &1.delegation_id) |> Enum.sort()
 
       rendered =
-        ~r{<tr><td>([^<]*)</td><td>[^<]*</td><td>[^<]*</td><td>(\d+)</td><td>(true|false)</td><td>([a-z]+)</td></tr>}
+        ~r{<tr><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td><td>(\d+)</td><td>(true|false)</td><td>([a-z]+)</td></tr>}
         |> Regex.scan(section(html, "Leases"))
-        |> Enum.map(fn [_, id, epoch, expired, status] -> {id, epoch, expired, status} end)
+        |> Enum.map(fn [_, id, issuer, audience, epoch, expired, status] ->
+          {id, issuer, audience, epoch, expired, status}
+        end)
 
       expected =
         leases
         |> Enum.sort_by(& &1.delegation_id)
         |> Enum.map(fn l ->
-          {l.delegation_id, to_string(l.expires_epoch), to_string(l.expired?),
-           to_string(l.status)}
+          {l.delegation_id, l.issuer, l.audience, to_string(l.expires_epoch),
+           to_string(l.expired?), to_string(l.status)}
         end)
 
       assert rendered == expected
-      assert {_, "3", "true", _} = List.keyfind(rendered, info.expired, 0)
-      assert {_, "9", "false", "active"} = List.keyfind(rendered, info.active, 0)
+      clerk = fp(info.sim, "clerk")
+      resident = fp(info.sim, "resident")
+      neighbor = fp(info.sim, "neighbor")
+      assert {_, ^clerk, ^resident, "3", "true", _} = List.keyfind(rendered, info.expired, 0)
+
+      assert {_, ^clerk, ^neighbor, "9", "false", "active"} =
+               List.keyfind(rendered, info.active, 0)
     end
 
     test "election evidence lists link commands with their verdict and the manifest", %{
@@ -585,14 +604,19 @@ defmodule Township.AuditReportTest do
       assert slice =~ "not a verified election link"
 
       rows =
-        ~r{<tr><td>([^<]*)</td><td>[^<]*</td><td>([^<]*)</td><td>([^<]*)</td></tr>}
+        ~r{<tr><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td></tr>}
         |> Regex.scan(section(html, "Election evidence"))
-        |> Map.new(fn [_, id, digest, verdict] -> {id, {digest, verdict}} end)
+        |> Map.new(fn [_, id, author, digest, verdict] -> {id, {author, digest, verdict}} end)
 
+      resident = fp(info.sim, "resident")
+      outsider = fp(info.sim, "outsider")
       assert map_size(rows) == 3
-      assert rows[info.hostile] == {"&lt;script&gt;x&lt;/script&gt;", "honored in this log"}
-      assert rows[info.listy] == {"[123]", "honored in this log"}
-      assert {"digest:outsider", verdict} = rows[info.unauth]
+
+      assert rows[info.hostile] ==
+               {resident, "&lt;script&gt;x&lt;/script&gt;", "honored in this log"}
+
+      assert rows[info.listy] == {resident, "[123]", "honored in this log"}
+      assert {^outsider, "digest:outsider", verdict} = rows[info.unauth]
       assert verdict =~ "#{reason}: "
       refute html =~ "<script"
 
@@ -610,6 +634,43 @@ defmodule Township.AuditReportTest do
       for banned <- ["guaranteed", "proven", "receipt-free: yes", "secure election", "supported"] do
         refute lower =~ banned, "election slice contains #{inspect(banned)}"
       end
+    end
+
+    test "a vacant role renders as vacant, not as an unknown key", %{tmp_dir: tmp} do
+      dir = Path.join(tmp, "bundle")
+      sim = Sim.new(Matter, "replica:matter:report-vacant", ["clerk"], seed: "report-vacant")
+      assert {:ok, _} = AuditBundle.write(dir, Sim.log(sim, "clerk"))
+      assert model_for(dir).roles.holders == %{clerk: nil}
+
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+      holders = section(html, "Current holders")
+      assert holders =~ "<tr><td>clerk</td><td>none (vacant)</td><td></td></tr>"
+      refute holders =~ "unknown key"
+    end
+
+    test "a nil or non-list link_election argument never renders as an empty cell", %{
+      tmp_dir: tmp
+    } do
+      dir = Path.join(tmp, "bundle")
+      {sim, _} = succession_sim()
+      {sim, _} = Sim.grant(sim, "clerk", "resident", ops: [:link_election])
+      sim = Sim.sync_all(sim)
+      {sim, nil_arg} = Sim.command(sim, "resident", :link_election, [nil])
+      {sim, empty} = Sim.command(sim, "resident", :link_election, [""])
+      {sim, bare} = Sim.append(sim, "resident", :command, {:link_election, nil})
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+      assert {:ok, _} = AuditBundle.write(dir, log)
+
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+
+      digests =
+        ~r{<tr><td>([^<]*)</td><td>[^<]*</td><td>([^<]*)</td><td>[^<]*</td></tr>}
+        |> Regex.scan(section(html, "Election evidence"))
+        |> Map.new(fn [_, id, digest] -> {id, digest} end)
+
+      assert digests[nil_arg.id] == "nil"
+      assert digests[empty.id] == ""
+      assert digests[bare.id] == "nil"
     end
 
     test "a bundle without beacons, leases or links shows the empty states", %{tmp_dir: tmp} do

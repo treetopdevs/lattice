@@ -53,6 +53,7 @@ defmodule Township.AuditReport do
   @election_intro "This audit bundle (township-audit-bundle-v1) carries no election board, election spec, projection or close evidence. The VERIFIED banner covers matter.log only. No election phase, result or close is shown, and none can be derived from this bundle."
   @link_caption "The report holds no election spec, so it cannot run Township.Election.verify_link/3; a row is the authority verdict on a command in this log, not a verified election link."
   @unknown_key "unknown key"
+  @vacant_role "none (vacant)"
 
   @gloss %{
     not_holder:
@@ -166,7 +167,7 @@ defmodule Township.AuditReport do
     rows =
       holders
       |> Enum.sort_by(fn {role, _fp} -> to_string(role) end)
-      |> Enum.map(fn {role, fp} -> [to_string(role), key_label(fp, labels), fp || ""] end)
+      |> Enum.map(fn {role, fp} -> [to_string(role), holder_label(fp, labels), fp || ""] end)
 
     ["<h2>Current holders</h2>\n", table(["Role", "Label", "Fingerprint"], rows)]
   end
@@ -349,9 +350,14 @@ defmodule Township.AuditReport do
     ]
   end
 
-  # A well-formed command carries one argument; anything else is shown whole.
-  defp spec_digest_arg([digest]), do: digest
-  defp spec_digest_arg(args), do: args
+  # A well-formed command carries one binary argument; anything else (including a nil
+  # digest or a non-list body) is shown inspected, so it never collapses to an empty cell.
+  defp spec_digest_arg([digest]) when is_binary(digest), do: digest
+  defp spec_digest_arg([other]), do: inspect_whole(other)
+  defp spec_digest_arg(args), do: inspect_whole(args)
+
+  defp inspect_whole(value),
+    do: inspect(value, charlists: :as_lists, limit: :infinity, printable_limit: :infinity)
 
   defp link_verdict(nil), do: "honored in this log"
   defp link_verdict(reason), do: reason_text(reason)
@@ -417,6 +423,10 @@ defmodule Township.AuditReport do
 
   defp role_text(nil), do: ""
   defp role_text(role), do: to_string(role)
+
+  # A role with no current holder is vacant, not an unfingerprintable key.
+  defp holder_label(nil, _labels), do: @vacant_role
+  defp holder_label(fp, labels), do: key_label(fp, labels)
 
   defp key_label(nil, _labels), do: @unknown_key
   defp key_label(fp, labels), do: label(fp, labels)
