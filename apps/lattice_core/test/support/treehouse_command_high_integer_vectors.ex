@@ -10,8 +10,8 @@ defmodule Treehouse.CommandHighIntegerVectors do
 
   alias Lattice.{Authority, Identity, Log, Op, Sim}
   alias Lattice.Carrier.Wire
-  alias Treehouse.{MemberContinuitySemanticFixture, Space, Thread}
   alias Treehouse.MemberContinuityCertificate, as: Certificate
+  alias Treehouse.{MemberContinuitySemanticFixture, Space, Thread}
 
   @path "treehouse_command/high_integer_v1.json"
   @high 9_007_199_254_740_992
