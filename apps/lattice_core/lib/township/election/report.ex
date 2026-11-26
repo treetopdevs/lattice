@@ -52,6 +52,30 @@ defmodule Township.Election.Report do
   def close_caveat, do: @close_caveat
 
   @doc """
+  The honesty paragraph followed by the research security-manifest section, as iodata.
+
+  This is the same markup `render/2` emits for those two pieces when the projection
+  names the module research manifest; both go through one code path. Every value in it
+  is owned by this module (`honesty_sentence/0` and `SecurityProfile.research/0`), and
+  it takes no caller input. It is escaped by this module's escaper, which leaves `'`
+  alone (D-793), so it is only safe to embed in a page that keeps every attribute
+  double-quoted; a future change must not feed caller data into it.
+  """
+  @spec security_manifest_html() :: iodata()
+  def security_manifest_html, do: [honesty_paragraph(), security_manifest_section_html()]
+
+  @doc """
+  The research security-manifest section alone, as iodata.
+
+  `render/2` emits exactly these bytes for a projection that names the module research
+  manifest; the honesty paragraph sits in its header instead, so only this part is a
+  contiguous substring of a rendered report. The same module-owned-values and
+  double-quoted-attribute rules as `security_manifest_html/0` apply.
+  """
+  @spec security_manifest_section_html() :: iodata()
+  def security_manifest_section_html, do: manifest_section(SecurityProfile.research(), true)
+
+  @doc """
   Render one projection, and optionally verified close evidence, as an HTML document.
 
   The only option is `close_evidence: CloseEvidence.t() | nil` (default `nil`).
@@ -93,9 +117,7 @@ defmodule Township.Election.Report do
   defp header(projection, module_claim_set_id, matches?) do
     [
       "<h1>Township election evidence report</h1>\n",
-      "<p class=\"honesty\">",
-      escape(@honesty_sentence),
-      "</p>\n",
+      honesty_paragraph(),
       kv_table([
         {"election_id", code(projection.election_id || "none")},
         {"phase", code(text(projection.phase))},
@@ -105,6 +127,8 @@ defmodule Township.Election.Report do
       ])
     ]
   end
+
+  defp honesty_paragraph, do: ["<p class=\"honesty\">", escape(@honesty_sentence), "</p>\n"]
 
   defp projection_section(%Projection{} = projection) do
     {tag, payload} = status_parts(projection.status)

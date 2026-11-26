@@ -231,6 +231,16 @@ defmodule Township.ElectionReportTest do
       assert hostile =~ "&quot;a&quot; &amp; 'b'"
     end
 
+    test "render/2 shares the public security-manifest markup", ctx do
+      html = Report.render(ctx.projection)
+      section = IO.iodata_to_binary(Report.security_manifest_section_html())
+      honesty = ~s(<p class="honesty">) <> Report.honesty_sentence() <> "</p>\n"
+
+      assert String.contains?(html, section)
+      assert String.contains?(html, honesty)
+      assert IO.iodata_to_binary(Report.security_manifest_html()) == honesty <> section
+    end
+
     test "a claim set id mismatch says no and relabels the manifest", ctx do
       matching = Report.render(ctx.projection)
 
