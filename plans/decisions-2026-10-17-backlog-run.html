@@ -4868,6 +4868,12 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>No review round confirmed the round 2 fixes; the hosted bots review the pushed head. One unrelated Node-peer test (<code>CatalogValidCapacityTest</code>) timed out locally at a load average near 400; hosted CI is the gate for it.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
 </dl></section>
+<section id="d974"><h2><span>D-974</span> Row 598: the return to pending after evidence loss is a checker gap, not a resolver regression</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 598 and 594 slice (branch claude/598-594-d279-evidence-loss-and-honest-rotations, PR <a href="https://github.com/treetopdevs/lattice/pull/246">#246</a>)</dd>
+<dt>Decision</dt><dd>All 25 hits found by the probe are ids whose cited ancestor catalog was dropped, and each settles again when that catalog is restored. The checker now counts a return to pending as neutral only when the id depends by bytes on the lost catalog and restoring it gives back the remembered verdict, or when the outcome is exactly <code>control_history_limit</code>. Every other return to pending still fails. Property M now also draws evidence-loss histories and honest-key rotations. No library file changed and no <code>r321_open</code> repro was needed.</dd>
+<dt>Reason</dt><dd>The D-279 contract is over bytes and causal ancestry, and an unheld ancestor cannot be judged. Review round 1: Codex Sol 6.1 high PASS and Gemini 4 Neon medium PASS, no findings. Mutant m11 is still killed. Honest-rotation reach in deep histories is low (one watermark hit on the seed shown), filed as row 607. The indefinite <code>trust_pending</code> after a lost cited catalog belongs to the 4c eviction obligation (rows 381 and 388), not a new row.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
