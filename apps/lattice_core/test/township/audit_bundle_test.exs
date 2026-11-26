@@ -101,6 +101,25 @@ defmodule Township.AuditBundleTest do
     end
   end
 
+  @tag :tmp_dir
+  test "an oversized matter.log is refused before verification", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "bundle")
+    File.cp_r!(@tracked_dir, dir)
+    path = Path.join(dir, "matter.log")
+    limit = AuditBundle.max_matter_log_byte_size()
+    File.rm!(path)
+
+    File.open!(path, [:write, :binary], fn io ->
+      {:ok, _} = :file.position(io, limit)
+      :ok = IO.binwrite(io, "x")
+    end)
+
+    assert File.stat!(path).size == limit + 1
+    expected = {:error, ["matter.log exceeds #{limit} bytes"]}
+    assert AuditBundle.verify(dir) == expected
+    assert AuditBundle.load_verified(dir) == expected
+  end
+
   test "fresh processes emit and independently verify the outsider audit bundle" do
     out_dir =
       Path.join(System.tmp_dir!(), "township_audit_bundle_#{System.unique_integer([:positive])}")
