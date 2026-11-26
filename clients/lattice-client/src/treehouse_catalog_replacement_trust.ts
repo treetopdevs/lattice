@@ -133,7 +133,12 @@ export async function evaluateReplacementTrust(input: {
   const {legacy, candidates, bound, revived} = split(installed, incoming);
   const judge = (page: TreehouseCatalogEvidencePage) =>
     evaluateTreehouseCatalogTrust({installed: installed.trust, expected, incoming: page});
-  const {decision, settled} = await revive(judge, legacy, revived);
+  // A revived catalog whose signature fails against its binding's key is dropped before any judgement, so forged catalogs can
+  // neither turn the whole-set judgement into a reject that hides a fork nor crowd the retry window (review round 3).
+  const keys = revived.length === 0 ? new Map<string, string>() : await bindingKeys(installed.trust, legacy.rotations);
+  const forged = revived.filter((json) => forgedUnder(json, keys));
+  const {decision, settled} = await revive(judge, legacy, revived.filter((json) => !forgedUnder(json, keys)));
+  for (const json of forged) settled.add(json);
   const catalogs = [...installed.extra.catalogs.filter((json) => !settled.has(json)), ...bound];
   if (decision.kind === "reject") return decision;
   const heldRotations = installed.extra.rotations ?? [];
@@ -244,11 +249,7 @@ async function droppable(decision: TreehouseCatalogTrustDecision, left: Left, le
   const trust = decision.next;
   if (rank(decision) > 0) {
     const keys = await bindingKeys(trust, legacy.rotations);
-    return left.filter(({json}) => {
-      const envelope = decodeCatalog(json);
-      const key = envelope === null ? undefined : keys.get(envelope.catalog.binding);
-      return envelope !== null && key !== undefined && !verifyCatalogEnvelope(envelope, key);
-    }).map((l) => l.json);
+    return left.filter(({json}) => forgedUnder(json, keys)).map((l) => l.json);
   }
   const known = new Set([trust.review.bootstrapId, ...trust.rotations.map((r) => r.id)]);
   return left.filter(({json, trial}) => {
@@ -256,6 +257,12 @@ async function droppable(decision: TreehouseCatalogTrustDecision, left: Left, le
     const envelope = decodeCatalog(json);
     return envelope !== null && known.has(envelope.catalog.binding);
   }).map((l) => l.json);
+}
+
+function forgedUnder(json: string, keys: ReadonlyMap<string, string>): boolean {
+  const envelope = decodeCatalog(json);
+  const key = envelope === null ? undefined : keys.get(envelope.catalog.binding);
+  return envelope !== null && key !== undefined && !verifyCatalogEnvelope(envelope, key);
 }
 
 async function bindingKeys(trust: InstalledTreehouseCatalogTrustV1, rotations: readonly string[]):

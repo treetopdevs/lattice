@@ -1547,9 +1547,9 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       ct_json = CatalogTrustVectors.artifact_json(ct)
 
       # Revisions of unseen predecessors under T, signed by keys other than T's, that sort ahead
-      # of CT in the sidecar: each fails its signature before it could wait as trust_pending, so
-      # it is dropped and the window moves on. (Only T's key holder can sign revisions that wait;
-      # that starvation is the sidecar budget follow-up.)
+      # of CT in the sidecar: each fails its signature against T's key, so it is dropped before
+      # any judgement and CT is taken on the same page (review round 3). (Only T's key holder can
+      # sign revisions that wait; that starvation is the sidecar budget follow-up.)
       ahead =
         for i <- 1..200,
             key = Lattice.Identity.from_seed("junk", "rr-ahead-#{i}"),
@@ -1563,33 +1563,26 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       assert List.last(held.next.extra.catalogs) == ct_json
 
       first = W.evaluate(held.next, W.page(rotations: [t.envelope], proofs: [w.proof]))
-      assert first.next.extra.catalogs == [ct_json]
-      second = W.evaluate(first.next, W.page())
-      assert W.view(second, c.labels, c.old)["accepted"] == "T/CT"
-      assert second.next.extra.catalogs == []
+      assert W.view(first, c.labels, c.old)["accepted"] == "T/CT"
+      assert first.next.extra.catalogs == []
     end
 
-    test "at most sixteen held catalogs are revived per page; the rest stay held", c do
+    test "seventeen held pending revisions: the page still lands and every one stays held", c do
       %{w: w, t: t, ct: ct} = c
 
-      junks =
-        for i <- 1..17 do
-          key = Lattice.Identity.from_seed("junk", "rr-bound-#{i}")
-          F.catalog(w.base, t.id, 0, nil, key, ct.catalog.entries)
-        end
+      # Revisions of unseen predecessors signed by T's key: each waits as trust_pending, so the
+      # bounded retries settle none of them and the page alone is the decision.
+      pending =
+        for i <- 1..17,
+            do: F.catalog(w.base, t.id, 1, F.id("rr-bound-#{i}"), t.key, ct.catalog.entries)
 
-      held = W.evaluate(c.d1.next, W.page(catalogs: junks))
+      held = W.evaluate(c.d1.next, W.page(catalogs: pending))
       assert length(held.next.extra.catalogs) == 17
 
-      t_page = W.page(rotations: [t.envelope], proofs: [w.proof])
+      t_page = W.page(rotations: [t.envelope], proofs: [w.proof], catalogs: [ct])
       first = W.evaluate(held.next, t_page)
-      refute first.kind == :reject
-      assert length(first.next.extra.catalogs) == 1
-      assert hd(first.next.extra.catalogs) == List.last(held.next.extra.catalogs)
-
-      second = W.evaluate(first.next, W.page())
-      assert second.next.extra.catalogs == []
-      assert W.view(second, c.labels, c.old)["accepted"] == "B/C0"
+      assert W.view(first, c.labels, c.old)["accepted"] == "T/CT"
+      assert first.next.extra.catalogs == held.next.extra.catalogs
     end
 
     test "a held junk catalog under a block does not drop the page's evidence", c do
@@ -1835,6 +1828,30 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       assert {direct.kind, direct.reason, direct.routes} == {:retain_blocked, :catalog_fork, []}
       assert {done.kind, done.reason, done.routes} == {:retain_blocked, :catalog_fork, []}
       assert W.view(done, c.labels, c.old)["accepted"] == "B/C0"
+    end
+
+    test "sixteen forged catalogs ahead of CT1b cannot hide its fork with the page's CT1", c do
+      %{w: w, t: t, ct: ct, ct1: ct1, ct1b: ct1b} = c
+      ct1b_json = CatalogTrustVectors.artifact_json(ct1b)
+
+      ahead =
+        for i <- 1..200,
+            key = Identity.from_seed("junk", "r3-mask-#{i}"),
+            cat = F.catalog(w.base, t.id, 0, nil, key, ct.catalog.entries),
+            CatalogTrustVectors.artifact_json(cat) < ct1b_json,
+            do: cat
+
+      ahead = Enum.take(ahead, 16)
+      assert length(ahead) == 16
+      held = W.evaluate(c.d1.next, W.page(catalogs: ahead ++ [ct1b]))
+      assert List.last(held.next.extra.catalogs) == ct1b_json
+
+      page = W.page(rotations: [t.envelope], catalogs: [ct, ct1], proofs: [w.proof])
+      done = W.evaluate(held.next, page)
+      valid = W.evaluate(c.d1.next, %{page | catalogs: page.catalogs ++ [ct1b_json]})
+      assert {valid.kind, valid.reason} == {:retain_blocked, :catalog_fork}
+      assert {done.kind, done.reason, done.routes} == {:retain_blocked, :catalog_fork, []}
+      assert done.next.extra.catalogs == []
     end
 
     test "an orphan rotation does not turn a fork the held catalogs raise into a reject", c do

@@ -177,8 +177,13 @@ defmodule Treehouse.CatalogReplacementTrust do
     {legacy, candidates, bound, revived} = split(installed, incoming)
     trust_input = fn page -> %{installed: installed.trust, expected: expected, incoming: page} end
     judge = &CatalogTrust.evaluate(trust_input.(&1))
+    # A revived catalog whose signature fails against its binding's key is dropped before any
+    # judgement, so forged catalogs can neither turn the whole-set judgement into a reject that
+    # hides a fork nor crowd the retry window (review round 3).
+    keys = revived_keys(installed, legacy, revived)
+    {forged, revived} = Enum.split_with(revived, &forged?(&1, keys))
     {decision, settled} = revive(judge, legacy, revived)
-    settled = MapSet.new(settled)
+    settled = MapSet.new(settled ++ forged)
     catalogs = Enum.reject(held, &MapSet.member?(settled, &1)) ++ bound
 
     case decision do
@@ -361,6 +366,11 @@ defmodule Treehouse.CatalogReplacementTrust do
       _ -> false
     end
   end
+
+  defp revived_keys(_installed, _legacy, []), do: %{}
+
+  defp revived_keys(installed, legacy, _revived),
+    do: binding_keys(installed.trust, legacy.rotations)
 
   defp binding_keys(trust, rotations) do
     bootstrap =

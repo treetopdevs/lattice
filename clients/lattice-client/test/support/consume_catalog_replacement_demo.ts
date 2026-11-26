@@ -15,7 +15,7 @@ import type { TreehouseCatalogEvidencePage, TreehouseCatalogRawHistory } from ".
 // A step with mode "trust" goes through the trust evaluator alone and is wrapped with the public wrap (it has no view); a run
 // may carry its own history (the review findings of the Codex round).
 interface Step { title: string; print: boolean; mode?: "eval" | "trust"; page: TreehouseCatalogEvidencePage }
-interface Doc { format: string; history: TreehouseCatalogRawHistory; labels: Record<string, string>;
+interface Doc { format: string; history: TreehouseCatalogRawHistory; labels: Record<string, string>; reject_runs: string[];
   runs: {name: string; history?: TreehouseCatalogRawHistory; steps: Step[]}[] }
 
 const doc = JSON.parse(readFileSync(process.argv[2]!, "utf8")) as Doc;
@@ -76,8 +76,12 @@ for (const run of doc.runs) {
       continue;
     }
     const result = await evaluateReplacementTrust({installed: state, expected, incoming: step.page});
-    // A reject changes nothing; its view is its kind and reason only, as on BEAM.
-    if (result.kind === "reject") { views[run.name]!.push({kind: "reject", reason: result.reason}); continue; }
+    // A reject changes nothing; its view is its kind and reason only, as on BEAM. Only the listed runs may reject.
+    if (result.kind === "reject") {
+      assert.ok(doc.reject_runs.includes(run.name), `${run.name} ${step.title}: ${result.reason}`);
+      views[run.name]!.push({kind: "reject", reason: result.reason});
+      continue;
+    }
     state = result.next;
     const v = view(result);
     views[run.name]!.push(v);

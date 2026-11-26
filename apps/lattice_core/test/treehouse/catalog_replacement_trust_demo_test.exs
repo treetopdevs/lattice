@@ -252,6 +252,18 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
          {"CT1", W.page(catalogs: [r.ct1]), false},
          {"T", r.page_t, false}
        ]},
+      {"forged_mask",
+       [
+         {"install C0", page_c0, false},
+         {"16 forged + CT1b", r.round3.page_mask, false},
+         {"T + CT + CT1", r.round3.page_t_ct_ct1, false}
+       ]},
+      {"blocked_legacy_duplicate",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"T duplicate key + CT", r.round3.page_legacy_duplicate, false}
+       ]},
       {"rotation_closed_wire",
        [
          {"install C0", page_c0, false},
@@ -344,7 +356,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     assert %{"kind" => "retain_blocked", "reason" => "catalog_fork", "routes" => 0} =
              List.last(beam_views["held_fork_junk"])
 
-    assert [_, %{"sidecar" => 17}, %{"sidecar" => 1}, %{"sidecar" => 0, "accepted" => "B/C0"}] =
+    # Forged catalogs are dropped before any judgement (review round 3).
+    assert [_, %{"sidecar" => 17}, %{"sidecar" => 0}, %{"sidecar" => 0, "accepted" => "B/C0"}] =
              beam_views["revive_bound"]
 
     assert %{"accepted" => "R2/K2r", "reason" => nil} = List.last(beam_views["closed_unbound"])
@@ -367,6 +380,19 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
              beam_views["rotation_closed_wire"]
 
     assert loose == dup
+
+    assert %{"kind" => "retain_blocked", "reason" => "catalog_fork", "routes" => 0} =
+             List.last(beam_views["forged_mask"])
+
+    assert %{"kind" => "retain_blocked", "routes" => 0, "sidecar" => 1} =
+             List.last(beam_views["blocked_legacy_duplicate"])
+
+    # Only these runs may reject a step; the TS consumer refuses a reject anywhere else.
+    reject_runs = ["rotation_closed_wire"]
+
+    for {name, views} <- beam_views,
+        %{"kind" => "reject"} <- views,
+        do: assert(name in reject_runs, name)
 
     # The order, repeat and freeze runs, asserted on BEAM before TS must agree.
     assert [_, %{"accepted" => "B/C0"}, %{"accepted" => "R1/K1", "frozen" => false}] =
@@ -441,6 +467,7 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     doc = %{
       "format" => "lattice-replacement-demo-v1",
       "history" => w.h0,
+      "reject_runs" => reject_runs,
       "labels" => labels,
       "runs" =>
         for {name, steps} <- runs do
@@ -769,6 +796,16 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
       end)
 
     with_k2 = W.page(catalogs: [k2], proofs: [w.proof])
+    ct1b_json = CatalogTrustVectors.artifact_json(x.ct1b)
+
+    ahead =
+      for i <- 1..200,
+          key = Lattice.Identity.from_seed("junk", "demo-mask-#{i}"),
+          cat = F.catalog(base, t.id, 0, nil, key, ct.catalog.entries),
+          CatalogTrustVectors.artifact_json(cat) < ct1b_json,
+          do: cat
+
+    ["map", t_pairs] = Wire.encode_value(t.envelope)
 
     %{
       page_variants: %{
@@ -783,7 +820,13 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         | rotations: Enum.map(siblings, &elem(&1, 1))
       },
       page_duplicate: %{with_k2 | rotations: [Jason.encode!(["map", [wrong | pairs]])]},
-      page_loose: %{with_k2 | rotations: [Jason.encode!(["map", loose])]}
+      page_loose: %{with_k2 | rotations: [Jason.encode!(["map", loose])]},
+      page_mask: W.page(catalogs: Enum.take(ahead, 16) ++ [x.ct1b]),
+      page_t_ct_ct1: W.page(rotations: [t.envelope], catalogs: [ct, x.ct1], proofs: [w.proof]),
+      page_legacy_duplicate: %{
+        W.page(catalogs: [ct], proofs: [w.proof])
+        | rotations: [Jason.encode!(["map", [wrong | t_pairs]])]
+      }
     }
   end
 
