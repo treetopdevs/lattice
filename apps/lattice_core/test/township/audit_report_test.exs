@@ -201,6 +201,8 @@ defmodule Township.AuditReportTest do
     ReportTask.run(["--dir", dir, "--out", out])
     assert File.exists?(out)
     assert File.read!(out) =~ "VERIFIED"
+    assert File.read!(out) == elem(AuditReport.render(dir), 1)
+    assert File.ls!(Path.dirname(out)) == ["report.html"]
     assert_received {:mix_shell, :info, [msg]}
     assert msg =~ "(VERIFIED)"
     assert :ok = AuditBundle.verify(dir)
@@ -307,6 +309,32 @@ defmodule Township.AuditReportTest do
     end
 
     assert File.read!(Path.join(dir, "matter.log")) == before
+  end
+
+  @tag :tmp_dir
+  test "task replaces a symlink or hard link at --out, never writing through", %{tmp_dir: tmp} do
+    Mix.shell(Mix.Shell.Process)
+    on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
+    dir = Path.join(tmp, "bundle")
+    write_bundle(dir)
+    {:ok, expected, :verified} = AuditReport.render(dir)
+    victim = Path.join(tmp, "victim.txt")
+    File.write!(victim, "victim bytes")
+    out_dir = Path.join(tmp, "out")
+    File.mkdir_p!(out_dir)
+
+    for {name, link!} <- [{"sym.html", &File.ln_s!/2}, {"hard.html", &File.ln!/2}] do
+      out = Path.join(out_dir, name)
+      link!.(victim, out)
+
+      ReportTask.run(["--dir", dir, "--out", out])
+      assert File.read!(victim) == "victim bytes"
+      assert File.lstat!(out).type == :regular
+      assert File.read!(out) == expected
+    end
+
+    assert Enum.sort(File.ls!(out_dir)) == ["hard.html", "sym.html"]
+    assert :ok = AuditBundle.verify(dir)
   end
 
   @tag :tmp_dir

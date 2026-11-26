@@ -8,6 +8,9 @@ defmodule Township.AuditBundle do
   This proves authenticity and projection consistency, not completeness: omitted
   history cannot be detected without independent retained evidence. Realm labels
   from the manifest are display metadata used only in delegation-graph node labels.
+
+  `matter.log` is untrusted input: the verifier reads at most one byte past
+  `max_matter_log_byte_size/0` and refuses a longer log before decoding it.
   """
 
   alias Jason.OrderedObject
@@ -26,6 +29,7 @@ defmodule Township.AuditBundle do
     %{"file" => "manifest.json", "kind" => "display_manifest"}
   ]
   @files @artifact_entries |> Enum.map(& &1["file"]) |> Enum.sort()
+  @max_matter_log_byte_size 64 * 1_024 * 1_024
 
   @type labels :: %{optional(String.t()) => String.t()}
   @type verify_error :: String.t()
@@ -33,6 +37,10 @@ defmodule Township.AuditBundle do
   @doc "The exact files in a version-one Township audit bundle."
   @spec files() :: [String.t()]
   def files, do: @files
+
+  @doc "The largest `matter.log`, in bytes, that `load_verified/1` will read."
+  @spec max_matter_log_byte_size() :: pos_integer()
+  def max_matter_log_byte_size, do: @max_matter_log_byte_size
 
   @doc "Write a deterministic bundle rooted in `log` to `dir`."
   @spec write(String.t(), Log.t(), keyword()) :: {:ok, map()} | {:error, term()}
@@ -73,6 +81,9 @@ defmodule Township.AuditBundle do
   Consumers materialize this snapshot without re-reading a mutable bundle directory.
   The fingerprint identifies the bytes whose accepted operations were verified;
   it does not assert that no other operations exist elsewhere.
+  A `matter.log` longer than `max_matter_log_byte_size/0`, or in compressed term
+  encoding (which would expand past that bound inside the decoder), is refused before
+  decoding.
   """
   @spec load_verified(String.t()) ::
           {:ok,
@@ -92,7 +103,8 @@ defmodule Township.AuditBundle do
          {:ok, manifest_doc, manifest_bytes} <- read_manifest(dir),
          {:ok, labels} <- validate_manifest(manifest_doc),
          :ok <- preload_lattice_core(),
-         {:ok, %{log: log, sha256: sha256}} <- Log.restore_verified(Path.join(dir, "matter.log")),
+         {:ok, bytes} <- read_matter_log(dir),
+         {:ok, %{log: log, sha256: sha256}} <- Log.restore_verified_bytes(bytes),
          {:ok, expected, known_fingerprints} <- rederive(log, labels) do
       expected = Map.put(expected, "manifest.json", json(manifest_doc))
 
@@ -123,6 +135,33 @@ defmodule Township.AuditBundle do
     else
       {:error, errors} when is_list(errors) -> {:error, errors}
       {:error, reason} -> {:error, [format_error(reason)]}
+    end
+  end
+
+  # Read at most one byte past the limit, so an oversized log is refused unread.
+  defp read_matter_log(dir) do
+    limit = @max_matter_log_byte_size
+
+    case File.open(Path.join(dir, "matter.log"), [:read, :binary], &:file.read(&1, limit + 1)) do
+      {:ok, {:ok, bytes}} when byte_size(bytes) > limit ->
+        {:error, "matter.log exceeds #{limit} bytes"}
+
+      # `Log.dump_bytes/1` never compresses; a compressed term would expand past the
+      # byte bound inside the decoder, so it is refused before decoding.
+      {:ok, {:ok, <<131, 80, _rest::binary>>}} ->
+        {:error, "matter.log uses compressed term encoding"}
+
+      {:ok, {:ok, bytes}} ->
+        {:ok, bytes}
+
+      {:ok, :eof} ->
+        {:ok, ""}
+
+      {:ok, {:error, _reason} = error} ->
+        error
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

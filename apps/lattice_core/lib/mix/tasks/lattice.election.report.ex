@@ -14,6 +14,9 @@ defmodule Mix.Tasks.Lattice.Election.Report do
   verified `{:ok, evidence}` is accepted; any other verdict raises and writes
   nothing. The bundle format is unchanged.
 
+  The report is written to a new temporary file beside `--out` and renamed over it
+  (`Township.ReportFile`), so a link at `--out` is replaced, never written through.
+
   The report makes no security claim: every scope of the research manifest
   renders as explicitly not claimed.
   """
@@ -59,7 +62,14 @@ defmodule Mix.Tasks.Lattice.Election.Report do
     out = Path.expand(out_path)
     refuse_bundle_overwrite!(bundle_path, out)
     File.mkdir_p!(Path.dirname(out))
-    File.write!(out, html)
+
+    case Township.ReportFile.write(out, html) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Mix.raise("could not write report #{out}: #{:file.format_error(reason)}")
+    end
 
     shell = Mix.shell()
     shell.info("Election evidence report written: #{out}")
