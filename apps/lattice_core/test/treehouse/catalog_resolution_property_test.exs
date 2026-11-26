@@ -13,8 +13,8 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   intrinsic verdict of every rotation, candidate and catalog in each graph and in each
   trust_pending step's recomputed complete part, never later raw, intrinsically refused or back to
   pending, only union-reclassified, with a freeze of a held watermark only `authority_changed` or
-  `catalog_fork`; its exercise and non-vacuity tests run in the default suite, and `R321_STATS=1`
-  prints its counters), O (order independence after the honest
+  `catalog_fork`; half its histories come from the freeze script, its exercise and non-vacuity
+  tests run in the default suite, and `R321_STATS=1` prints its counters), O (order independence after the honest
   resolution) and LW (L with one permanently withheld Space frame, a contract non-claim, run
   only to report). Tagged `@tag :pr221_open` and excluded from the default suite: LW (lifecycle
   section 4 and C14 make no liveness claim against withheld unknown Space ops), L, O, OM and LM,

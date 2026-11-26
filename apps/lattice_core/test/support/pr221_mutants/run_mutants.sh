@@ -24,7 +24,10 @@
 #   m8_floor_no_memo                 NOT RUN (stopped mid-run; over the 10 minute budget)
 #   m9_entry_facts_ignored           NOT RUN
 #   m10_entry_quarantine_incomplete  NOT RUN
-#   m11_step4_rejudged_on_union      row 321, recorded below
+#   m11_step4_rejudged_on_union      KILLED (row 321; runs 60, seed 1, R389_MUTANT_TESTS set to
+#                                    catalog_resolution_property_test.exs only, about 5 minutes):
+#                                    M (its d279 check names the accepted candidate as raw
+#                                    evidence), M exercise, S1, S1F and S2
 # m2 to m4 are not covered by this table. Patches m5 to m10 target the four pass-2 fixes
 # (Stage A prefix, D-275 escape, floor dedupe, floor memo) and the row 390 entry-fact fixes.
 # m11 (row 321) targets D-279 itself: step 4's own-closure Core judgment re-read from the full
