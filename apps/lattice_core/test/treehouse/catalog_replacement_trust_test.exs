@@ -7,6 +7,7 @@ defmodule Treehouse.CatalogReplacementTrustTest do
   """
   use ExUnit.Case, async: true
 
+  alias Lattice.Carrier.Wire
   alias Lattice.{Identity, Log, Op}
   alias Treehouse.CatalogBindingGraphFixtures, as: F
   alias Treehouse.{CatalogReplacementTrust, CatalogTrust, CatalogTrustVectors, TransportCatalog}
@@ -1784,6 +1785,205 @@ defmodule Treehouse.CatalogReplacementTrustTest do
         assert W.view(recovered, c.labels, c.old)["accepted"] == "R1/K1"
       end
     end
+  end
+
+  # --- rows 526 and 527, review round 3 ---------------------------------------------------------
+
+  describe "rows 526 and 527: review round 3" do
+    setup do
+      w = W.build()
+      base = w.base
+      log = W.with_ops(base, [w.r1])
+      d1 = W.install(w) |> W.evaluate(W.page(catalogs: [w.c0], logs: [base.log]))
+      accepted = W.evaluate(d1.next, W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1]))
+      t = W.rotation(w, %{id: base.boot.id, generation: 0}, w.c0, base.catalog, "r3-t")
+      ct = F.catalog(base, t.id, 0, nil, t.key, w.c0.catalog.entries)
+      {ct1, ct1b} = revision_fork(w, t, ct, "r3-fork")
+      orphan = W.rotation(w, %{id: F.id("r3-nowhere"), generation: 1}, w.c0, base.catalog, "r3-o")
+      moved = Enum.map(F.base_entries(base), &%{&1 | route: "/r/" <> F.id("r3-sibling")})
+      c1 = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, F.base_entries(base))
+      c1b = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, moved)
+      blocked = W.evaluate(d1.next, W.page(catalogs: [c1, c1b]))
+      assert blocked.trust_decision.reason == :catalog_fork
+
+      %{
+        w: w,
+        log: log,
+        d1: d1,
+        accepted: accepted,
+        t: t,
+        ct: ct,
+        ct1: ct1,
+        ct1b: ct1b,
+        orphan: orphan,
+        blocked: blocked,
+        labels: Map.merge(w.labels, %{t.id => "T", F.cid(ct) => "CT", F.cid(ct1) => "CT1"}),
+        old: base.record.catalog_key
+      }
+    end
+
+    test "sixteen JSON variants of CT1 ahead of a sibling CT1b cannot take one side of the fork",
+         c do
+      %{w: w, t: t, ct: ct} = c
+      {variants, ct1b} = variant_fork(c)
+      held = W.evaluate(c.d1.next, %{W.page() | catalogs: variants ++ [ct1b]})
+      assert held.next.extra.catalogs == variants ++ [ct1b]
+
+      page = W.page(rotations: [t.envelope], catalogs: [ct], proofs: [w.proof])
+      done = W.evaluate(held.next, page)
+      direct = W.evaluate(c.d1.next, %{page | catalogs: page.catalogs ++ variants ++ [ct1b]})
+      assert {direct.kind, direct.reason, direct.routes} == {:retain_blocked, :catalog_fork, []}
+      assert {done.kind, done.reason, done.routes} == {:retain_blocked, :catalog_fork, []}
+      assert W.view(done, c.labels, c.old)["accepted"] == "B/C0"
+    end
+
+    test "an orphan rotation does not turn a fork the held catalogs raise into a reject", c do
+      %{w: w, t: t, ct: ct, ct1: ct1, ct1b: ct1b, orphan: orphan} = c
+      held = W.evaluate(c.d1.next, W.page(catalogs: [ct, ct1, ct1b]))
+      t_page = W.page(rotations: [t.envelope], proofs: [w.proof])
+      revived = W.evaluate(held.next, t_page)
+      assert {revived.kind, revived.reason} == {:retain_blocked, :catalog_fork}
+
+      done = W.evaluate(held.next, %{t_page | rotations: t_page.rotations ++ [orphan.json]})
+      assert {done.kind, done.reason, done.routes} == {:retain_blocked, :catalog_fork, []}
+      refute Map.has_key?(done.next.extra, :rotations)
+      assert W.view(done, c.labels, c.old)["accepted"] == "B/C0"
+    end
+
+    test "a held forged catalog cannot trade a control_history_limit block for a fork", c do
+      %{w: w, log: log, blocked: blocked} = c
+      [{t1, _} | _] = rotations = sibling_rotations(w, "r3-limit")
+      junk_key = Identity.from_seed("junk", "r3-limit-junk")
+      junk = F.catalog(w.base, t1, 0, nil, junk_key, w.c0.catalog.entries)
+      with_junk = W.evaluate(blocked.next, W.page(catalogs: [junk]))
+      assert length(with_junk.next.extra.catalogs) == 1
+
+      page = %{
+        W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1])
+        | rotations: Enum.map(rotations, &elem(&1, 1))
+      }
+
+      plain = W.evaluate(blocked.next, page)
+
+      assert {plain.kind, plain.reason, plain.routes} ==
+               {:retain_blocked, :control_history_limit, []}
+
+      result = W.evaluate(with_junk.next, page)
+      assert {result.kind, result.reason, result.routes} == {plain.kind, plain.reason, []}
+      assert result.next.trust == plain.next.trust
+      assert result.next.binding == plain.next.binding
+    end
+
+    test "under a block a held revision whose predecessor is missing stays held", c do
+      %{w: w, t: t, ct: ct, ct1: ct1, blocked: blocked} = c
+      ct1_json = CatalogTrustVectors.artifact_json(ct1)
+      held = W.evaluate(blocked.next, W.page(catalogs: [ct1]))
+      assert held.next.extra.catalogs == [ct1_json]
+
+      rotated = W.evaluate(held.next, W.page(rotations: [t.envelope], proofs: [w.proof]))
+      refute rotated.kind == :reject
+      assert rotated.next.extra.catalogs == [ct1_json]
+      assert rotated.routes == []
+
+      # A forged variant of CT under T, which no trial judges under the block, is still dropped.
+      junk =
+        F.catalog(w.base, t.id, 0, nil, Identity.from_seed("junk", "r3-j"), ct.catalog.entries)
+
+      forged = W.evaluate(held.next, W.page(catalogs: [junk]))
+      after_t = W.evaluate(forged.next, W.page(rotations: [t.envelope], proofs: [w.proof]))
+      assert after_t.next.extra.catalogs == [ct1_json]
+    end
+
+    test "a sidecar rotation with a duplicate key or non-canonical base64 is refused as in TS",
+         c do
+      %{w: w, accepted: accepted} = c
+      t2 = W.rotation(w, %{id: w.r1.id, generation: 1}, w.k1, w.new_catalog, "r3-t2")
+      k2 = F.catalog(w.base, t2.id, 0, nil, t2.key, w.k1.catalog.entries)
+
+      for bad <- malformed_rotation_jsons(t2) do
+        page = %{W.page(catalogs: [k2], proofs: [w.proof]) | rotations: [bad]}
+        result = W.evaluate(accepted.next, page)
+
+        direct =
+          CatalogTrust.evaluate(%{
+            installed: accepted.next.trust,
+            expected: @expected,
+            incoming: page
+          })
+
+        assert {result.kind, result.reason} == {:reject, :malformed_catalog}
+        assert result == direct
+      end
+    end
+  end
+
+  # Sixteen whitespace-prefixed JSON variants of CT1 (which sort ahead of any `{`) and its sibling.
+  defp variant_fork(c) do
+    json = CatalogTrustVectors.artifact_json(c.ct1)
+
+    prefixes =
+      for a <- [" ", "\t", "\n", "\r"], b <- [" ", "\t", "\n", "\r"], do: a <> b
+
+    {Enum.sort(Enum.map(prefixes, &(&1 <> json))), CatalogTrustVectors.artifact_json(c.ct1b)}
+  end
+
+  # Three sibling rotations of the bootstrap from C0: three binding heads, a
+  # `control_history_limit` block. Returns `[{id, json}]`.
+  defp sibling_rotations(w, seed) do
+    base = w.base
+
+    for i <- 1..3 do
+      new = Identity.from_seed("catalog", "#{seed}-#{i}")
+
+      rotation = %{
+        version: 1,
+        product: :treehouse,
+        space: base.replica,
+        bootstrap: base.boot.id,
+        parent: base.boot.id,
+        prior_catalog: F.cid(w.c0),
+        generation: 1,
+        new_catalog_key: new.pub,
+        nonce: F.id("#{seed}-#{i}"),
+        inventory_digest: TransportCatalog.inventory_id(w.c0.catalog.entries),
+        cutoffs: [w.proof.cutoff]
+      }
+
+      envelope = %{
+        rotation: rotation,
+        old_signature: Identity.sign(base.catalog, TransportCatalog.rotation_bytes(rotation)),
+        new_signature: Identity.sign(new, TransportCatalog.rotation_possession_bytes(rotation))
+      }
+
+      {TransportCatalog.rotation_id(envelope), CatalogTrustVectors.artifact_json(envelope)}
+    end
+  end
+
+  # T2's envelope with a wrong `old_signature` pair ahead of the valid one (the wire decoder keeps
+  # the last), and with a non-canonical base64 `new_signature` (unused low bits set).
+  defp malformed_rotation_jsons(t2) do
+    ["map", pairs] = Wire.encode_value(t2.envelope)
+    wrong = [["atom", "old_signature"], ["bin", Base.encode64(<<0::512>>)]]
+    duplicate = Jason.encode!(["map", [wrong | pairs]])
+
+    loose =
+      Enum.map(pairs, fn
+        [["atom", "new_signature"], ["bin", text]] ->
+          [["atom", "new_signature"], ["bin", noncanonical(text)]]
+
+        pair ->
+          pair
+      end)
+
+    [duplicate, Jason.encode!(["map", loose])]
+  end
+
+  # 64 bytes encode to 86 characters and "=="; the last character carries 4 unused bits.
+  defp noncanonical(text) do
+    <<head::binary-size(85), last, "==">> = text
+    alphabet = ~c"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    index = Enum.find_index(alphabet, &(&1 == last))
+    head <> <<Enum.at(alphabet, Bitwise.bxor(index, 1))>> <> "=="
   end
 
   # Two revisions of CT under T, the second moving every route: a catalog_fork.

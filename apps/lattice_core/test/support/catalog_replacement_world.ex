@@ -239,7 +239,13 @@ defmodule Treehouse.CatalogReplacementWorld do
 
   # --- the shared view and narration (the TS consumer prints the same lines) ----------------
 
-  @doc "The runtime-neutral view of one decision; BEAM and TS must produce the same map."
+  @doc """
+  The runtime-neutral view of one decision; BEAM and TS must produce the same map. A reject
+  changes nothing, so its view is its kind and reason only.
+  """
+  def view(%{kind: :reject} = result, _labels, _catalog_key),
+    do: %{"kind" => "reject", "reason" => to_string(result.reason)}
+
   def view(result, labels, catalog_key) do
     label = &Map.get(labels, &1, "?" <> &1)
     next = result.next

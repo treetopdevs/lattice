@@ -76,8 +76,8 @@ for (const run of doc.runs) {
       continue;
     }
     const result = await evaluateReplacementTrust({installed: state, expected, incoming: step.page});
-    assert.notEqual(result.kind, "reject", `${run.name} ${step.title}: ${result.kind === "reject" ? result.reason : ""}`);
-    if (result.kind === "reject") continue;
+    // A reject changes nothing; its view is its kind and reason only, as on BEAM.
+    if (result.kind === "reject") { views[run.name]!.push({kind: "reject", reason: result.reason}); continue; }
     state = result.next;
     const v = view(result);
     views[run.name]!.push(v);

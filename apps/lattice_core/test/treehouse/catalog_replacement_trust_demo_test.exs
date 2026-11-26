@@ -10,6 +10,7 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
   """
   use ExUnit.Case, async: false
 
+  alias Lattice.Carrier.Wire
   alias Treehouse.{CatalogReplacementTrust, CatalogTrust, CatalogTrustVectors, TransportCatalog}
   alias Treehouse.CatalogReplacementWorld, as: W
 
@@ -224,6 +225,40 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
          {"junk under T", W.page(catalogs: [r.junk_t]), false},
          {"R1 + K1 + T", r.page_recover, false}
        ]},
+      # Review round 3 of rows 526 and 527, replayed in both runtimes.
+      {"variant_fork",
+       [
+         {"install C0", page_c0, false},
+         {"16 CT1 variants + CT1b", r.round3.page_variants, false},
+         {"T + CT", r.round3.page_t_ct, false}
+       ]},
+      {"orphan_fork",
+       [
+         {"install C0", page_c0, false},
+         {"CT + CT1 + CT1b", W.page(catalogs: [r.ct, r.ct1, r.ct1b]), false},
+         {"T + orphan", r.round3.page_t_orphan, false}
+       ]},
+      {"limit_junk",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"junk under T1", r.round3.page_limit_junk, false},
+         {"T1 T2 T3 + R1 + K1", r.round3.page_limit, false}
+       ]},
+      {"blocked_pending",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"CT1", W.page(catalogs: [r.ct1]), false},
+         {"T", r.page_t, false}
+       ]},
+      {"rotation_closed_wire",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"T2 duplicate key + K2", r.round3.page_duplicate, false},
+         {"T2 loose base64 + K2", r.round3.page_loose, false}
+       ]},
       {"k1_first",
        [
          {"install C0", page_c0, false},
@@ -316,6 +351,22 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     [_, rn, tn] = beam_views["nonadmin_unbound"]
     assert tn["reason"] == rn["reason"]
     assert List.last(beam_views["blocked_junk"]) == List.last(beam_views["blocked_plain"])
+
+    # Review round 3, asserted on BEAM before TS must agree.
+    for name <- ["variant_fork", "orphan_fork"] do
+      assert %{"kind" => "retain_blocked", "reason" => "catalog_fork", "routes" => 0} =
+               List.last(beam_views[name])
+    end
+
+    assert %{"reason" => "control_history_limit", "routes" => 0} =
+             List.last(beam_views["limit_junk"])
+
+    assert %{"sidecar" => 1, "routes" => 0} = List.last(beam_views["blocked_pending"])
+
+    assert [_, _, %{"kind" => "reject", "reason" => "malformed_catalog"} = dup, loose] =
+             beam_views["rotation_closed_wire"]
+
+    assert loose == dup
 
     # The order, repeat and freeze runs, asserted on BEAM before TS must agree.
     assert [_, %{"accepted" => "B/C0"}, %{"accepted" => "R1/K1", "frozen" => false}] =
@@ -652,6 +703,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     recover = W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1])
 
     %{
+      round3:
+        round_three(w, %{t: t, t2: t2, k2: k2, ct: ct, ct1: ct1, ct1b: ct1b, orphan: orphan}),
       u: u,
       orphan: orphan,
       page_bad_rotation: %{recover | rotations: [CatalogTrustVectors.artifact_json(bad)]},
@@ -688,6 +741,91 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         F.cid(ct1b) => "CT1b"
       }
     }
+  end
+
+  # Review round 3: sixteen whitespace-prefixed JSON variants of CT1 ahead of its sibling CT1b,
+  # an orphan beside a held fork, a forged catalog under one of three sibling rotations (a
+  # `control_history_limit` block), and T2 with a duplicate key or non-canonical base64.
+  defp round_three(w, %{t: t, t2: t2, k2: k2, ct: ct} = x) do
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    base = w.base
+    json = CatalogTrustVectors.artifact_json(x.ct1)
+    spaces = [" ", "\t", "\n", "\r"]
+    variants = Enum.sort(for a <- spaces, b <- spaces, do: a <> b <> json)
+    siblings = sibling_rotations(w)
+    junk_key = Lattice.Identity.from_seed("junk", "demo-limit-junk")
+    junk = F.catalog(base, elem(hd(siblings), 0), 0, nil, junk_key, w.c0.catalog.entries)
+    log = W.with_ops(base, [w.r1])
+    ["map", pairs] = Wire.encode_value(t2.envelope)
+    wrong = [["atom", "old_signature"], ["bin", Base.encode64(<<0::512>>)]]
+
+    loose =
+      Enum.map(pairs, fn
+        [["atom", "new_signature"], ["bin", text]] ->
+          [["atom", "new_signature"], ["bin", noncanonical(text)]]
+
+        pair ->
+          pair
+      end)
+
+    with_k2 = W.page(catalogs: [k2], proofs: [w.proof])
+
+    %{
+      page_variants: %{
+        W.page()
+        | catalogs: variants ++ [CatalogTrustVectors.artifact_json(x.ct1b)]
+      },
+      page_t_ct: W.page(rotations: [t.envelope], catalogs: [ct], proofs: [w.proof]),
+      page_t_orphan: W.page(rotations: [t.envelope, x.orphan.envelope], proofs: [w.proof]),
+      page_limit_junk: W.page(catalogs: [junk]),
+      page_limit: %{
+        W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1])
+        | rotations: Enum.map(siblings, &elem(&1, 1))
+      },
+      page_duplicate: %{with_k2 | rotations: [Jason.encode!(["map", [wrong | pairs]])]},
+      page_loose: %{with_k2 | rotations: [Jason.encode!(["map", loose])]}
+    }
+  end
+
+  defp sibling_rotations(w) do
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    base = w.base
+
+    for i <- 1..3 do
+      new = Lattice.Identity.from_seed("catalog", "demo-limit-#{i}")
+
+      rotation = %{
+        version: 1,
+        product: :treehouse,
+        space: base.replica,
+        bootstrap: base.boot.id,
+        parent: base.boot.id,
+        prior_catalog: F.cid(w.c0),
+        generation: 1,
+        new_catalog_key: new.pub,
+        nonce: F.id("demo-limit-#{i}"),
+        inventory_digest: TransportCatalog.inventory_id(w.c0.catalog.entries),
+        cutoffs: [w.proof.cutoff]
+      }
+
+      envelope = %{
+        rotation: rotation,
+        old_signature:
+          Lattice.Identity.sign(base.catalog, TransportCatalog.rotation_bytes(rotation)),
+        new_signature:
+          Lattice.Identity.sign(new, TransportCatalog.rotation_possession_bytes(rotation))
+      }
+
+      {TransportCatalog.rotation_id(envelope), CatalogTrustVectors.artifact_json(envelope)}
+    end
+  end
+
+  # 64 bytes encode to 86 characters and "=="; the last character carries 4 unused bits.
+  defp noncanonical(text) do
+    <<head::binary-size(85), last, "==">> = text
+    alphabet = ~c"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    index = Enum.find_index(alphabet, &(&1 == last))
+    head <> <<Enum.at(alphabet, Bitwise.bxor(index, 1))>> <> "=="
   end
 
   defp fixture_orphan(f) do

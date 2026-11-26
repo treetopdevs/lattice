@@ -178,6 +178,25 @@ defmodule Treehouse.TransportCatalog do
     end
   end
 
+  @doc """
+  A rotation envelope from its JSON artifact bytes, read as `decode_catalog_json/1` reads a
+  catalog: the closed JSON reader (unique map keys, canonical base64), then exactly the three
+  envelope fields with 64-byte signatures and a normalizable rotation, as the TS codec requires.
+  """
+  @spec decode_rotation_json(binary()) :: {:ok, map()} | {:error, atom()}
+  def decode_rotation_json(bytes) do
+    with {:ok, envelope} <- decode_artifact(bytes),
+         true <-
+           fields?(envelope, [:rotation, :old_signature, :new_signature]) and
+             bytes?(envelope.old_signature, 64) and bytes?(envelope.new_signature, 64),
+         {:ok, _} <- normalize_rotation(envelope.rotation) do
+      {:ok, envelope}
+    else
+      {:error, :control_history_limit} = error -> error
+      _ -> {:error, :malformed_catalog}
+    end
+  end
+
   @spec normalize_catalog(term()) :: {:ok, map()} | {:error, :malformed_catalog}
   def normalize_catalog(value) do
     if fields?(value, @catalog_fields) and value.version == 1 and value.product == :treehouse and

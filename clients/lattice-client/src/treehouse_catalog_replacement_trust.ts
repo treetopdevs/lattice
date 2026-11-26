@@ -13,7 +13,10 @@
 // evaluator; any other decodable rotation is a sidecar candidate (row 526). A catalog bound to neither the bootstrap nor such
 // a rotation is replacement-bound and is kept in the sidecar, so a first catalog may arrive before its op or its rotation. A
 // held catalog whose binding becomes the trust evaluator's is handed back with that page (row 527); one it does not take
-// is tried alone, and dropped only once its binding is retained and it is not waiting on a predecessor. With a
+// is tried alone, and dropped only once its binding is retained and it is not waiting on a predecessor, or, while blocked,
+// only when its signature fails against its binding's key. Held catalogs never make the result less blocked than the page
+// alone, never take one side of a fork they raise, and a subset of them is taken only when every one was tried; an orphan
+// rotation never turns the block they raise into a reject. With a
 // replace_catalog_v1 op held, the graph sees only the sidecar catalogs and rotations that reach a held op: one bound to an unheld id waits and cannot pin the client. Its reason
 // is trust_pending when a sidecar catalog or rotation waits, or the first catalog of a sidecar rotation the graph keeps open
 // is not held, and nothing else explains the result. A page that cannot be scanned is judged by the trust evaluator; an
@@ -139,7 +142,10 @@ export async function evaluateReplacementTrust(input: {
     // Row 526: an orphan rotation is judged exactly as before this row, with every incoming rotation. A block the trust
     // evaluator keeps stands (nothing is served and the orphan is not held); every held catalog stays held, since nothing
     // was taken.
+    // A block the revived catalogs raised that this judgement does not carry (it sees the page without them) stands
+    // instead, with the orphan not held: an orphan never turns a block into a reject or a weaker block (review round 3).
     const orphaned = await judge({...legacy, rotations: incoming.rotations});
+    if (raises(decision, orphaned)) return settle(installed, decision, putExtra(catalogs, heldRotations));
     if (orphaned.kind === "reject") return orphaned;
     if (orphaned.kind !== "retain_blocked") return recovery("malformed_catalog");
     return settle(installed, orphaned, putExtra([...installed.extra.catalogs, ...bound], heldRotations));
@@ -159,59 +165,66 @@ async function settle(installed: InstalledReplacementTrust,
 // under a block (retain_blocked keeps neither the page nor the catalog). When the page with every revived catalog is not taken
 // whole, the page is judged alone and the revived catalogs are tried one at a time, in sidecar order, to a fixpoint, so a
 // forged variant costs neither the authentic catalog nor the page's evidence and a held revision tried before its first
-// catalog is not lost. A catalog still not taken is dropped for good only when the decision retains its binding without
-// overflow triggers and its last trial was not a trust_pending refusal (a revision whose predecessor has not arrived waits
-// for it); otherwise it stays held. settled is every held catalog taken or dropped.
+// catalog is not lost. A catalog still not taken is dropped for good only as droppable allows; otherwise it stays held.
+// settled is every held catalog taken or dropped.
 //
-// A judgement that raises a block the page alone does not (a fork between held catalogs, or one a held catalog opens against
-// the page) is final: it is returned with nothing settled, so every held catalog stays held and no subset retry can take one
-// side of a fork or drop the other. Only a reject (a held catalog that fails its signature or does not decode) or a block the
-// page already carries leads to the retries, and a retry that raises a block ends them the same way. (A catalog_fork among
-// catalogs keeps them in the trust state, so such a judgement is taken; this guard is hardening for any block that would not
-// be.) At most REVIVE_LIMIT held
-// catalogs, in sidecar order, are revived per page; the rest stay held for a later page, so the retries are bounded per page
-// whatever the sidecar holds.
+// Decisions are ranked: no block (or a reject), a block the graph may supersede, any other block. A judgement that outranks
+// the page alone (a fork between held catalogs, or one a held catalog opens against the page) is final: it is returned with
+// nothing settled, so every held catalog stays held and no subset retry can take one side of a fork or drop the other. A
+// retry that outranks the decision so far ends the retries the same way, and the result never ranks below the page alone, so
+// a held catalog that fails inside the trust evaluator (which then reports the older saved block) can never trade a stronger
+// block for a weaker one (review round 3).
+//
+// The whole-set judgement sees every revived catalog; only the retries are bounded, to the first REVIVE_LIMIT in sidecar
+// order. A subset is taken only when no revived catalog went untried: otherwise the page alone is the decision and only the
+// window's droppable catalogs settle, so a catalog outside the window can never be the unseen side of a fork whose other side
+// was taken.
 const REVIVE_LIMIT = 16;
 
-async function revive(judge: (page: TreehouseCatalogEvidencePage) => Promise<TreehouseCatalogTrustDecision>,
-  legacy: TreehouseCatalogEvidencePage, held: readonly string[]):
+type Judge = (page: TreehouseCatalogEvidencePage) => Promise<TreehouseCatalogTrustDecision>;
+type Left = {json: string; trial: TreehouseCatalogTrustDecision}[];
+
+async function revive(judge: Judge, legacy: TreehouseCatalogEvidencePage, held: readonly string[]):
   Promise<{decision: TreehouseCatalogTrustDecision; settled: Set<string>}> {
   const withCatalogs = (jsons: readonly string[]) => ({...legacy, catalogs: [...legacy.catalogs, ...jsons]});
   if (held.length === 0) return {decision: await judge(legacy), settled: new Set()};
-  const revived = held.slice(0, REVIVE_LIMIT);
-  const all = await judge(withCatalogs(revived));
-  if (taken(all, revived)) return {decision: all, settled: new Set(revived)};
-  let decision = await judge(legacy);
-  if (raises(all, decision)) return {decision: all, settled: new Set()};
+  const all = await judge(withCatalogs(held));
+  const alone = await judge(legacy);
+  if (taken(all, held) && rank(all) >= rank(alone)) return {decision: all, settled: new Set(held)};
+  if (raises(all, alone)) return {decision: all, settled: new Set()};
+  const window = held.slice(0, REVIVE_LIMIT);
+  const outside = held.length > window.length;
+  let decision = alone;
   const accepted: string[] = [];
-  let rest = [...revived];
+  let rest = [...window];
   // Each catalog not taken, with its last trial.
-  let left: {json: string; trial: TreehouseCatalogTrustDecision}[] = [];
+  let left: Left = [];
   for (;;) {
     left = [];
     for (const json of rest) {
       const trial = await judge(withCatalogs([...accepted, json]));
       if (taken(trial, [...accepted, json])) { decision = trial; accepted.push(json); }
-      else if (raises(trial, decision)) return {decision: trial, settled: new Set()};
+      else if (raises(trial, decision)) return {decision: rank(trial) < rank(alone) ? alone : trial, settled: new Set()};
       else left.push({json, trial});
     }
     const progress = left.length < rest.length;
     rest = left.map((l) => l.json);
     if (rest.length === 0 || !progress) break;
   }
-  return {decision, settled: new Set([...accepted, ...droppable(decision, left)])};
+  if ((accepted.length > 0 && outside) || rank(decision) < rank(alone))
+    return {decision: alone, settled: new Set(await droppable(alone, left, legacy))};
+  return {decision, settled: new Set([...accepted, ...await droppable(decision, left, legacy)])};
 }
 
-// Whether trial carries a block that baseline (the page without the held catalog) does not.
+// Whether trial outranks baseline (the page without the held catalog).
 function raises(trial: TreehouseCatalogTrustDecision, baseline: TreehouseCatalogTrustDecision): boolean {
-  const block = blockOf(trial);
-  return block !== null && block !== blockOf(baseline);
+  return rank(trial) > rank(baseline);
 }
 
-function blockOf(decision: TreehouseCatalogTrustDecision): string | null {
-  if (decision.kind === "reject") return null;
-  if (decision.kind === "retain_blocked") return canonical(["retain_blocked", decision.next.blocked]);
-  return decision.next.blocked == null ? null : canonical(["carried", decision.next.blocked]);
+// 0: no block (a reject carries none); 1: a block the graph may supersede (D-882); 2: any other.
+function rank(decision: TreehouseCatalogTrustDecision): number {
+  if (decision.kind === "reject" || decision.next.blocked == null) return 0;
+  return supersedable(decision.next, decision) ? 1 : 2;
 }
 
 function taken(decision: TreehouseCatalogTrustDecision, jsons: readonly string[]): boolean {
@@ -220,15 +233,45 @@ function taken(decision: TreehouseCatalogTrustDecision, jsons: readonly string[]
   return jsons.every((json) => retained.has(json));
 }
 
-function droppable(decision: TreehouseCatalogTrustDecision,
-  left: readonly {json: string; trial: TreehouseCatalogTrustDecision}[]): string[] {
+// Never with overflow triggers. Without a block: a catalog whose binding the decision retains and whose last trial was not a
+// trust_pending refusal (a revision whose predecessor has not arrived waits for it). Under a block the trust evaluator reports
+// every refusal as the block, so a trial says nothing about the catalog: only one whose signature fails against its binding's
+// key (the reviewed bootstrap's catalog key, or a retained or page rotation's new key, which the rotation id commits to) is
+// dropped (review round 3).
+async function droppable(decision: TreehouseCatalogTrustDecision, left: Left, legacy: TreehouseCatalogEvidencePage):
+  Promise<string[]> {
   if (decision.kind === "reject" || (decision.next.blocked?.triggers.length ?? 0) > 0) return [];
-  const known = new Set([decision.next.review.bootstrapId, ...decision.next.rotations.map((r) => r.id)]);
+  const trust = decision.next;
+  if (rank(decision) > 0) {
+    const keys = await bindingKeys(trust, legacy.rotations);
+    return left.filter(({json}) => {
+      const envelope = decodeCatalog(json);
+      const key = envelope === null ? undefined : keys.get(envelope.catalog.binding);
+      return envelope !== null && key !== undefined && !verifyCatalogEnvelope(envelope, key);
+    }).map((l) => l.json);
+  }
+  const known = new Set([trust.review.bootstrapId, ...trust.rotations.map((r) => r.id)]);
   return left.filter(({json, trial}) => {
     if (trial.kind === "reject" && trial.reason === "trust_pending") return false;
     const envelope = decodeCatalog(json);
     return envelope !== null && known.has(envelope.catalog.binding);
   }).map((l) => l.json);
+}
+
+async function bindingKeys(trust: InstalledTreehouseCatalogTrustV1, rotations: readonly string[]):
+  Promise<Map<string, string>> {
+  const keys = new Map<string, string>();
+  const space = trust.histories.find((h) => h.replica === trust.review.space);
+  try {
+    const observed = space === undefined ? null : await treehouseCatalogBootstrapsFromFrames(space);
+    const bootstrap = observed?.ok ? observed.bootstraps.find((b) => b.id === trust.review.bootstrapId) : undefined;
+    if (bootstrap !== undefined) keys.set(bootstrap.id, bootstrap.record.catalogKey);
+  } catch { /* no bootstrap key: nothing bound to it is dropped */ }
+  for (const json of [...trust.rotations.map((r) => r.json), ...rotations]) {
+    const envelope = decodeRotation(json);
+    if (envelope !== null) keys.set(catalogRotationId(envelope), envelope.rotation.newCatalogKey);
+  }
+  return keys;
 }
 
 // The sidecar: catalogs always, rotations only when any are held, so a saved state, a view or a same() check from before row
