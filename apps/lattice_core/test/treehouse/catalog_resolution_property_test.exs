@@ -531,6 +531,25 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
                refusal.(:recovery_incomplete, ri_block, %{"r" => %{refused?: false, pending: []}})
              ])
 
+    # `sole/5` blocks on its head (`ids: [h]`) and checks `refused?` before pending cutoffs: a
+    # block naming another id, or recovery_incomplete on a refused head, is not derived.
+    assert [{:d279, _}] =
+             M.check_d279(world, [
+               ok,
+               refusal.(car, %{car_block | ids: ["q"]}, %{
+                 "r" => %{refused?: true},
+                 "q" => %{refused?: false}
+               })
+             ])
+
+    assert [{:d279, _}] =
+             M.check_d279(world, [
+               ok,
+               refusal.(:recovery_incomplete, ri_block, %{
+                 "r" => %{refused?: true, pending: ["c"]}
+               })
+             ])
+
     assert M.check_d279(world, [ok, refusal.(car, car_block, %{"r" => %{refused?: true}})]) == []
 
     assert M.check_d279(world, [

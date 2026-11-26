@@ -785,7 +785,8 @@ defmodule Treehouse.CatalogResolutionModel do
 
   # `sole/5`'s union-level reasons, each against its head on the full union: an unblocked
   # decision carries only `nil` or `catalog_rollback`, `catalog_authority_refused` needs its head
-  # `refused?` and `recovery_incomplete` its head with pending cutoffs (fail-closed otherwise).
+  # `refused?` and `recovery_incomplete` its head unrefused with pending cutoffs, each block
+  # naming exactly that head (`sole/5` builds `ids: [h]`; fail-closed otherwise).
   defp union_derived?(_g, _d, nil, reason), do: reason in [nil, :catalog_rollback]
 
   defp union_derived?(g, d, block, reason)
@@ -798,11 +799,13 @@ defmodule Treehouse.CatalogResolutionModel do
 
     node = fn h -> get_in(g, [:nodes, h]) || %{} end
 
-    heads != [] and
+    heads != [] and Map.get(block, :ids) == heads and
       Enum.all?(heads, fn h ->
+        refused? = Map.get(node.(h), :refused?, false) == true
+
         if reason == :catalog_authority_refused,
-          do: Map.get(node.(h), :refused?, false) == true,
-          else: Map.get(node.(h), :pending, []) != []
+          do: refused?,
+          else: not refused? and Map.get(node.(h), :pending, []) != []
       end)
   end
 
