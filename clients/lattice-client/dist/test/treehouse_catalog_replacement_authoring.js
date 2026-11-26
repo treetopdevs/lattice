@@ -543,6 +543,9 @@ test("retained evidence over CatalogTrust's JSON byte budgets is refused before 
     assert.equal(new Set(full.map((e) => transportCatalogId(e.catalog))).size, 128);
     assert.equal(await run(full), "invalid_catalog_transition");
     assert.equal(await run([first, ...full]), "control_history_limit");
+    // Retained rotations count too: one valid rotation takes the 16 MiB of catalogs over.
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), seededSigner("r525-ts-budget-rotation"), "budget");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: full, rotations: [t.envelope] }))), "control_history_limit");
     // Evidence changed after preparation never signs; author reports any failed re-derivation as stale_verified_state, so
     // this pins the cancellation, not the budget reason.
     const attempt = await prepared(f);

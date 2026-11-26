@@ -21,7 +21,7 @@ import { townshipCapTerm } from "./township";
 import { treehouseCatalogBootstrapsFromFrames, treehouseCommandDecoders, treehouseSpaceSchema } from "./treehouse";
 import { deriveTreehouseCatalogCutoff } from "./treehouse_catalog_cutoff";
 import { catalogBindingReasonRank, coverCatalogReplacementClaim, resolveCatalogBindingGraph, resolveCatalogBindingGraphForClaim, } from "./treehouse_catalog_binding_graph";
-import { TREEHOUSE_CATALOG_MAX_ARTIFACTS, catalogEnvelopeJsonBytes, catalogRotationEnvelopeJsonBytes, checkCatalogArtifactBudget, } from "./treehouse_catalog_artifact_budget";
+import { TREEHOUSE_CATALOG_MAX_ARTIFACTS, checkCatalogEnvelopeBudget, } from "./treehouse_catalog_artifact_budget";
 import { checkCatalogReplacementAuthority } from "./treehouse_catalog_replacement_authority";
 import { canonicalBytesForCatalogReplacementClaim, canonicalBytesForCatalogReplacementPossession, catalogInventoryId, catalogReplacementClaimToCarrierTerm, catalogRotationId, normalizeCatalogEnvelope, normalizeCatalogReplacementClaim, normalizeCatalogRotationEnvelope, transportCatalogId, verifyCatalogReplacementPossession, } from "./treehouse_catalog_codec";
 const requestFields = ["author", "nonce", "parents", "priorCatalogs", "generation", "newCatalogKey", "newServiceId",
@@ -249,8 +249,7 @@ async function coverage(history, replica, bootstrap, claim, request) {
     const held = retained(replica, bootstrap, request);
     if (!held.ok)
         return held.reason;
-    const overBudget = checkCatalogArtifactBudget([...[...held.rotations.values()].map(catalogRotationEnvelopeJsonBytes),
-        ...[...held.catalogs.values()].map(catalogEnvelopeJsonBytes)]);
+    const overBudget = checkCatalogEnvelopeBudget(held.rotations.values(), held.catalogs.values());
     if (overBudget !== null)
         return overBudget;
     // resolveCatalogBindingGraphForClaim keeps the verifier's head limit but lets a claim citing every head root through it

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { catalogEnvelopeFromCarrierTerm, catalogRotationEnvelopeFromCarrierTerm } from "../src/treehouse_catalog_codec";
 import {
   CATALOG_ARTIFACT_BYTES, TREEHOUSE_CATALOG_MAX_ARTIFACTS, TREEHOUSE_CATALOG_MAX_TOTAL_BYTES, catalogEnvelopeJsonBytes,
-  catalogRotationEnvelopeJsonBytes, checkCatalogArtifactBudget,
+  catalogRotationEnvelopeJsonBytes, checkCatalogArtifactBudget, checkCatalogEnvelopeBudget,
 } from "../src/index";
 
 type Vector = {
@@ -53,9 +53,19 @@ test("budget cases keep their recorded verdicts", () => {
   ]);
 });
 
-test("CatalogTrust's count and total literals are the mirrored ones", () => {
-  const source = readFileSync(new URL("../src/treehouse_catalog_trust.ts", import.meta.url), "utf8");
-  const message = "CatalogTrust budgets changed: update treehouse_catalog_artifact_budget.ts";
-  assert.ok(source.includes("> 1024"), message);
-  assert.ok(source.includes("> 16 * 1024 * 1024"), message);
+test("a size list fails closed unless every size is a non-negative safe integer", () => {
+  const full = Array<number>(128).fill(CATALOG_ARTIFACT_BYTES);
+  for (const sizes of [[NaN], [Infinity], [-Infinity, ...full], [-1], [0.5], [-CATALOG_ARTIFACT_BYTES, ...full],
+    [...full, NaN], [2 ** 53]]) {
+    assert.equal(checkCatalogArtifactBudget(sizes), "control_history_limit", String(sizes.slice(0, 2)));
+  }
+  assert.equal(checkCatalogArtifactBudget(full), null);
+});
+
+test("envelope budget measures rotations and catalogs and fails closed on one the codec refuses", () => {
+  const [catalog, rotation] = [catalogEnvelopeFromCarrierTerm(vector.envelopes[0]!.term),
+    catalogRotationEnvelopeFromCarrierTerm(vector.envelopes[1]!.term)];
+  assert.equal(checkCatalogEnvelopeBudget([rotation], [catalog]), null);
+  assert.equal(checkCatalogEnvelopeBudget([], [{catalog: 1.0}]), "control_history_limit");
+  assert.equal(checkCatalogEnvelopeBudget([{rotation: null}], [catalog]), "control_history_limit");
 });

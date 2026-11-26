@@ -1,6 +1,6 @@
 // TS twin of Treehouse.CatalogArtifactBudget (rows 355, 525): CatalogTrust's retained-artifact budgets for an authoring
 // preflight. CatalogTrust refuses retained evidence as control_history_limit over 1,024 artifacts, one artifact's JSON over
-// CATALOG_ARTIFACT_BYTES, or more than 16 MiB of JSON in total; a drift test pins these against treehouse_catalog_trust.ts.
+// CATALOG_ARTIFACT_BYTES, or more than 16 MiB of JSON in total. The count and total are private there, so nothing pins them.
 // Sizes are the compact JSON of an envelope's carrier term, the length the operator distribution emits. Non-claim: that is
 // a lower bound, so a distributor's copy padded with whitespace may still exceed a verifier's budget.
 import { CATALOG_ARTIFACT_BYTES } from "./treehouse_catalog_json";
@@ -21,15 +21,24 @@ export function catalogEnvelopeJsonBytes(envelope) {
 export function catalogRotationEnvelopeJsonBytes(envelope) {
     return measure(catalogRotationEnvelopeToCarrierTerm(envelope));
 }
-/** Refuses a size list CatalogTrust would refuse: count, per-artifact or total. */
+/** Refuses a size list CatalogTrust would refuse: count, per-artifact or total. Every size must be a non-negative safe
+ * integer; anything else (NaN, an infinity, a negative or a fraction) fails closed. */
 export function checkCatalogArtifactBudget(sizes) {
-    if (sizes.length > TREEHOUSE_CATALOG_MAX_ARTIFACTS)
-        return "control_history_limit";
-    let total = 0;
+    let total = 0, count = 0;
     for (const size of sizes) {
-        if (size > CATALOG_ARTIFACT_BYTES)
+        if (++count > TREEHOUSE_CATALOG_MAX_ARTIFACTS || !Number.isSafeInteger(size) || size < 0 || size > CATALOG_ARTIFACT_BYTES ||
+            (total += size) > TREEHOUSE_CATALOG_MAX_TOTAL_BYTES)
             return "control_history_limit";
-        total += size;
     }
-    return total > TREEHOUSE_CATALOG_MAX_TOTAL_BYTES ? "control_history_limit" : null;
+    return null;
+}
+/** Measures retained envelopes lazily and checks them as checkCatalogArtifactBudget does, stopping at the first refusal so
+ * an oversized history is not serialized in full. */
+export function checkCatalogEnvelopeBudget(rotations, catalogs) {
+    return checkCatalogArtifactBudget((function* () {
+        for (const rotation of rotations)
+            yield catalogRotationEnvelopeJsonBytes(rotation);
+        for (const catalog of catalogs)
+            yield catalogEnvelopeJsonBytes(catalog);
+    })());
 }

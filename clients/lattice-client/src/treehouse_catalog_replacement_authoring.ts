@@ -26,7 +26,7 @@ import {
   catalogBindingReasonRank, coverCatalogReplacementClaim, resolveCatalogBindingGraph, resolveCatalogBindingGraphForClaim,
 } from "./treehouse_catalog_binding_graph";
 import {
-  TREEHOUSE_CATALOG_MAX_ARTIFACTS, catalogEnvelopeJsonBytes, catalogRotationEnvelopeJsonBytes, checkCatalogArtifactBudget,
+  TREEHOUSE_CATALOG_MAX_ARTIFACTS, checkCatalogEnvelopeBudget,
 } from "./treehouse_catalog_artifact_budget";
 import { checkCatalogReplacementAuthority } from "./treehouse_catalog_replacement_authority";
 import {
@@ -291,8 +291,7 @@ async function coverage(history: JudgedHistory, replica: string, bootstrap: {id:
   if (request.catalogs.length + request.rotations.length > TREEHOUSE_CATALOG_MAX_ARTIFACTS) return "control_history_limit";
   const held = retained(replica, bootstrap, request);
   if (!held.ok) return held.reason;
-  const overBudget = checkCatalogArtifactBudget([...[...held.rotations.values()].map(catalogRotationEnvelopeJsonBytes),
-    ...[...held.catalogs.values()].map(catalogEnvelopeJsonBytes)]);
+  const overBudget = checkCatalogEnvelopeBudget(held.rotations.values(), held.catalogs.values());
   if (overBudget !== null) return overBudget;
   // resolveCatalogBindingGraphForClaim keeps the verifier's head limit but lets a claim citing every head root through it
   // (design section 2.7): three old-key rotations under the accepted binding cannot block the resolution that closes them out.
