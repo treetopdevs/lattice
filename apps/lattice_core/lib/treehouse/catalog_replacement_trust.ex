@@ -23,7 +23,8 @@ defmodule Treehouse.CatalogReplacementTrust do
   goes to it; any other is replacement-bound and kept in the sidecar (so a first catalog may
   arrive before its op or its rotation). A held catalog whose binding becomes CatalogTrust's is
   handed back to it with that page (row 527); one it does not take is tried alone, and dropped only
-  once its binding is retained. CatalogTrust's `:reject` passes through. With no
+  once its binding is retained and it is not waiting on a predecessor (`trust_pending`).
+  CatalogTrust's `:reject` passes through. With no
   `replace_catalog_v1` op in the Space history the `CatalogTrust` decision is returned (as
   `trust_decision`) with the watermark mirrored, so a Space without a replacement behaves as
   before. With one, the graph decides what is accepted and served, over the sidecar catalogs and
@@ -186,9 +187,19 @@ defmodule Treehouse.CatalogReplacementTrust do
 
           :orphans ->
             # Row 526: a rotation that reaches neither a retained replacement op nor a held
-            # sidecar rotation is refused exactly as before this row: CatalogTrust judges the
-            # page with every incoming rotation.
-            orphaned(trust_input.(%{legacy | rotations: incoming.rotations}))
+            # sidecar rotation is judged exactly as before this row: CatalogTrust sees the page
+            # with every incoming rotation. A block it keeps stands (nothing is served and the
+            # orphan is not held); every held catalog stays held, since nothing was taken.
+            case CatalogTrust.evaluate(trust_input.(%{legacy | rotations: incoming.rotations})) do
+              %{kind: :reject} = reject ->
+                reject
+
+              %{kind: :retain_blocked, next: blocked} = kept ->
+                settle(installed, kept, blocked, put_extra(held ++ bound, held_rotations))
+
+              _ ->
+                malformed()
+            end
         end
 
       reject ->
@@ -206,8 +217,9 @@ defmodule Treehouse.CatalogReplacementTrust do
   # page is judged alone and the revived catalogs are tried one at a time, in sidecar order, to a
   # fixpoint, so a forged variant costs neither the authentic catalog nor the page's evidence and
   # a held revision tried before its first catalog is not lost. A catalog still not taken is
-  # dropped for good only when the decision retains its binding without overflow triggers;
-  # otherwise it stays held. Returns the decision and the held catalogs it settled (taken or
+  # dropped for good only when the decision retains its binding without overflow triggers and its
+  # last trial was not a `trust_pending` refusal (a revision whose predecessor has not arrived
+  # waits for it); otherwise it stays held. Returns the decision and the held catalogs it settled (taken or
   # dropped). The retries are CatalogTrust evaluations bounded only by the sidecar (row 355).
   defp revive(judge, legacy, []), do: {judge.(legacy), []}
 
@@ -217,11 +229,12 @@ defmodule Treehouse.CatalogReplacementTrust do
     if taken?(all, revived) do
       {all, revived}
     else
-      {decision, taken} = revive_each(judge, legacy, judge.(legacy), [], revived)
-      {decision, taken ++ droppable(decision, revived -- taken)}
+      {decision, taken, left} = revive_each(judge, legacy, judge.(legacy), [], revived)
+      {decision, taken ++ droppable(decision, left)}
     end
   end
 
+  # `left` pairs each catalog not taken with its last trial.
   defp revive_each(judge, legacy, decision, taken, rest) do
     {decision, taken, left} =
       Enum.reduce(rest, {decision, taken, []}, fn json, {decision, taken, left} ->
@@ -229,12 +242,12 @@ defmodule Treehouse.CatalogReplacementTrust do
 
         if taken?(trial, taken ++ [json]),
           do: {trial, taken ++ [json], left},
-          else: {decision, taken, left ++ [json]}
+          else: {decision, taken, left ++ [{json, trial}]}
       end)
 
     if left != [] and length(left) < length(rest),
-      do: revive_each(judge, legacy, decision, taken, left),
-      else: {decision, taken}
+      do: revive_each(judge, legacy, decision, taken, Enum.map(left, &elem(&1, 0))),
+      else: {decision, taken, left}
   end
 
   defp with_catalogs(page, jsons), do: %{page | catalogs: page.catalogs ++ jsons}
@@ -246,29 +259,21 @@ defmodule Treehouse.CatalogReplacementTrust do
 
   defp taken?(_decision, _jsons), do: false
 
-  defp droppable(%{kind: kind, next: trust}, jsons) when kind != :reject do
+  defp droppable(%{kind: kind, next: trust}, left) when kind != :reject do
     if Map.get(trust.blocked || %{}, :triggers, []) == [] do
       known = MapSet.new([trust.review.bootstrap_id | Enum.map(trust.rotations, & &1.id)])
 
-      Enum.filter(jsons, fn json ->
-        case TransportCatalog.decode_catalog_json(json) do
-          {:ok, %{catalog: %{binding: binding}}} -> MapSet.member?(known, binding)
-          _ -> false
-        end
-      end)
+      for {json, trial} <- left,
+          not match?(%{kind: :reject, reason: :trust_pending}, trial),
+          {:ok, %{catalog: %{binding: binding}}} <- [TransportCatalog.decode_catalog_json(json)],
+          MapSet.member?(known, binding),
+          do: json
     else
       []
     end
   end
 
-  defp droppable(_decision, _jsons), do: []
-
-  defp orphaned(input) do
-    case CatalogTrust.evaluate(input) do
-      %{kind: :reject} = reject -> reject
-      _ -> malformed()
-    end
-  end
+  defp droppable(_decision, _left), do: []
 
   # The sidecar: catalogs always, rotations only when any are held, so a saved state, a view or an
   # equality check from before row 526 is unchanged.
@@ -610,11 +615,14 @@ defmodule Treehouse.CatalogReplacementTrust do
   # No public rotation JSON decoder exists, so this follows
   # `TransportCatalog.decode_catalog_json/1`: the closed JSON reader, then the wire value
   # decoder, then the rotation's own normalizer. It only reads rotations `CatalogTrust`
-  # already accepted and retained, and the ids of incoming ones to place a catalog.
+  # already accepted and retained, and the ids of incoming ones to place a catalog. The envelope
+  # must be exactly the three fields with 64-byte signatures, as the TS codec requires:
+  # `rotation_id/1` raises otherwise, and that is an undecodable rotation.
   defp decode_rotation(json) do
     with {:ok, raw} <- CatalogJSON.decode(json),
          {:ok, %{rotation: rotation} = envelope} <- Wire.decode_value(raw),
-         {:ok, _} <- TransportCatalog.normalize_rotation(rotation) do
+         {:ok, _} <- TransportCatalog.normalize_rotation(rotation),
+         id when is_binary(id) <- TransportCatalog.rotation_id(envelope) do
       {:ok, envelope}
     else
       _ -> :error

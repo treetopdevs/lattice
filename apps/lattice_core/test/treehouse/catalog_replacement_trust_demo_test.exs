@@ -162,6 +162,28 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
          {"CT + CT1 + junk", W.page(catalogs: [r.ct, r.ct1, r.junk_t]), false},
          {"T", r.page_t, false}
        ]},
+      # Review round 2 of rows 526 and 527, replayed in both runtimes.
+      {"held_revision_first",
+       [
+         {"install C0", page_c0, false},
+         {"CT1", W.page(catalogs: [r.ct1]), false},
+         {"T", r.page_t, false},
+         {"CT", W.page(catalogs: [r.ct]), false}
+       ]},
+      {"blocked_orphan",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"orphan rotation", W.page(rotations: [r.orphan.envelope]), false}
+       ]},
+      {"blocked_bad_rotation",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"R1 + K1 + 63-byte rotation", r.page_bad_rotation, false},
+         {"R1 + K1 + rotation without old_signature", r.page_no_signature, false},
+         {"R1 + K1 + rotation with an extra key", r.page_extra_key, false}
+       ]},
       {"closed_unbound",
        [
          {"install C0", page_c0, false},
@@ -260,6 +282,16 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
 
     assert %{"accepted" => "T/CT", "sidecar" => 0} = List.last(beam_views["forged_held"])
     assert %{"accepted" => "T/CT1", "sidecar" => 0} = List.last(beam_views["forged_held_chain"])
+
+    assert %{"accepted" => "T/CT1", "sidecar" => 0, "reason" => nil} =
+             List.last(beam_views["held_revision_first"])
+
+    assert %{"kind" => "retain_blocked", "routes" => 0, "sidecar_rotations" => 0} =
+             List.last(beam_views["blocked_orphan"])
+
+    assert %{"accepted" => "B/C0", "routes" => 0, "sidecar" => 1} =
+             List.last(beam_views["blocked_bad_rotation"])
+
     assert %{"accepted" => "R2/K2r", "reason" => nil} = List.last(beam_views["closed_unbound"])
     [_, rn, tn] = beam_views["nonadmin_unbound"]
     assert tn["reason"] == rn["reason"]
@@ -325,6 +357,11 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
            ] = extra_views["malformed_block"]
 
     assert last["frozen"] == false
+
+    assert [_, %{"kind" => "retain_blocked", "reason" => "authority_changed"} = blocked] =
+             extra_views["orphan_authority"]
+
+    assert {blocked["routes"], blocked["sidecar_rotations"]} == {0, 0}
     beam_views = Map.merge(beam_views, extra_views)
 
     path =
@@ -447,6 +484,26 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         ]
       },
       %{
+        name: "orphan_authority",
+        history: hd(f.histories),
+        install: fixture_install,
+        old_key: f.space.catalog.pub,
+        steps: [
+          {"accept catalog",
+           %{
+             catalogs: [f.catalog_json],
+             rotations: [],
+             histories: f.histories,
+             cutoff_proofs: []
+           }, :eval},
+          {"thread transfer + orphan rotation",
+           %{
+             plain.(CatalogTrustVectors.raw_history(thread_log))
+             | rotations: [CatalogTrustVectors.artifact_json(fixture_orphan(f))]
+           }, :eval}
+        ]
+      },
+      %{
         name: "malformed_block",
         history: hd(f.histories),
         install: fixture_install,
@@ -555,9 +612,22 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     moved = Enum.map(F.base_entries(base), &%{&1 | route: "/r/" <> F.id("demo-sibling")})
     c1 = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, F.base_entries(base))
     c1b = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, moved)
+    orphan = W.rotation(w, %{id: F.id("demo-nowhere"), generation: 1}, w.c0, base.catalog, "o")
+    bad = %{t.envelope | old_signature: binary_part(t.envelope.old_signature, 0, 63)}
+    recover = W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1])
 
     %{
       u: u,
+      orphan: orphan,
+      page_bad_rotation: %{recover | rotations: [CatalogTrustVectors.artifact_json(bad)]},
+      page_no_signature: %{
+        recover
+        | rotations: [CatalogTrustVectors.artifact_json(Map.delete(t.envelope, :old_signature))]
+      },
+      page_extra_key: %{
+        recover
+        | rotations: [CatalogTrustVectors.artifact_json(Map.put(t.envelope, :extra, 1))]
+      },
       ct1: ct1,
       tr: tr,
       tn: tn,
@@ -580,6 +650,19 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         F.cid(ct1) => "CT1"
       }
     }
+  end
+
+  defp fixture_orphan(f) do
+    next = Lattice.Identity.from_seed("catalog-demo-orphan", "r2-demo-orphan")
+
+    rotation = %{
+      f.rotation
+      | parent: CatalogTrustVectors.id("r2-demo-nowhere"),
+        nonce: CatalogTrustVectors.id("r2-demo-orphan"),
+        new_catalog_key: next.pub
+    }
+
+    CatalogTrustVectors.sign_rotation(rotation, f.space.catalog, next)
   end
 
   defp fixture_install(f) do

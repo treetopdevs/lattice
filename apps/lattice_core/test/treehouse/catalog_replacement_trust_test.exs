@@ -1554,4 +1554,141 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       assert result.reason == refused.reason
     end
   end
+
+  # --- rows 526 and 527, review round 2 ---------------------------------------------------------
+
+  describe "rows 526 and 527: review round 2" do
+    setup do
+      w = W.build()
+      base = w.base
+      log = W.with_ops(base, [w.r1])
+      d1 = W.install(w) |> W.evaluate(W.page(catalogs: [w.c0], logs: [base.log]))
+      t = W.rotation(w, %{id: base.boot.id, generation: 0}, w.c0, base.catalog, "r2-t")
+      ct = F.catalog(base, t.id, 0, nil, t.key, w.c0.catalog.entries)
+      ct1 = F.catalog(base, t.id, 1, F.cid(ct), t.key, ct.catalog.entries)
+      orphan = W.rotation(w, %{id: F.id("r2-nowhere"), generation: 1}, w.c0, base.catalog, "r2-o")
+      moved = Enum.map(F.base_entries(base), &%{&1 | route: "/r/" <> F.id("r2-sibling")})
+      c1 = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, F.base_entries(base))
+      c1b = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, moved)
+      blocked = W.evaluate(d1.next, W.page(catalogs: [c1, c1b]))
+      labels = Map.merge(w.labels, %{t.id => "T", F.cid(ct) => "CT", F.cid(ct1) => "CT1"})
+
+      %{
+        w: w,
+        log: log,
+        d1: d1,
+        t: t,
+        ct: ct,
+        ct1: ct1,
+        orphan: orphan,
+        blocked: blocked,
+        labels: labels,
+        old: base.record.catalog_key
+      }
+    end
+
+    test "a held revision whose predecessor is missing waits for it after its rotation", c do
+      %{w: w, t: t, ct: ct, ct1: ct1} = c
+      held = W.evaluate(c.d1.next, W.page(catalogs: [ct1]))
+      rotated = W.evaluate(held.next, W.page(rotations: [t.envelope], proofs: [w.proof]))
+      refute rotated.kind == :reject
+      assert length(rotated.next.extra.catalogs) == 1
+      assert rotated.reason == :trust_pending
+
+      done = W.evaluate(rotated.next, W.page(catalogs: [ct]))
+      assert W.view(done, c.labels, c.old)["accepted"] == "T/CT1"
+      assert done.next.extra.catalogs == []
+      assert done.reason == nil
+    end
+
+    test "an orphan rotation on a page that changes authority keeps the block" do
+      f = CatalogTrustVectors.fixture(1)
+      next = Identity.from_seed("catalog-r2-orphan", "r2-orphan")
+
+      rotation = %{
+        f.rotation
+        | parent: CatalogTrustVectors.id("r2-nowhere"),
+          nonce: CatalogTrustVectors.id("r2-orphan"),
+          new_catalog_key: next.pub
+      }
+
+      orphan = CatalogTrustVectors.sign_rotation(rotation, f.space.catalog, next)
+      thread_log = W.thread_transfer_log(hd(f.threads))
+      wrapped = CatalogReplacementTrust.wrap(install(f))
+
+      plain = %{
+        catalogs: [],
+        rotations: [],
+        histories: [CatalogTrustVectors.raw_history(thread_log)],
+        cutoff_proofs: []
+      }
+
+      with_orphan = %{plain | rotations: [CatalogTrustVectors.artifact_json(orphan)]}
+
+      eval =
+        &CatalogReplacementTrust.evaluate(%{
+          installed: wrapped,
+          expected: @expected,
+          incoming: &1
+        })
+
+      without = eval.(plain)
+      assert {without.kind, without.reason} == {:retain_blocked, :authority_changed}
+
+      result = eval.(with_orphan)
+      assert {result.kind, result.reason} == {:retain_blocked, :authority_changed}
+      assert result.routes == []
+      refute Map.has_key?(result.next.extra, :rotations)
+
+      assert result.next.trust ==
+               CatalogTrust.evaluate(%{
+                 installed: wrapped.trust,
+                 expected: @expected,
+                 incoming: with_orphan
+               }).next
+    end
+
+    test "an orphan rotation while blocked keeps the block", c do
+      %{blocked: blocked, orphan: orphan} = c
+      assert blocked.trust_decision.reason == :catalog_fork
+      result = W.evaluate(blocked.next, W.page(rotations: [orphan.envelope]))
+      assert result.kind == :retain_blocked
+      assert result.routes == []
+      refute Map.has_key?(result.next.extra, :rotations)
+    end
+
+    # The BEAM twin once threw on these in `split` and judged the page without its partition; the
+    # TS codec never decoded them. Both now leave the rotation to CatalogTrust, which refuses the
+    # page under the block exactly as it would without the replacement layer.
+    test "a malformed rotation envelope is CatalogTrust's to judge, as in the TS twin", c do
+      %{w: w, log: log, blocked: blocked, t: t} = c
+      recover = W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1])
+
+      for bad <- [
+            %{t.envelope | old_signature: binary_part(t.envelope.old_signature, 0, 63)},
+            Map.delete(t.envelope, :old_signature),
+            Map.put(t.envelope, :extra, 1)
+          ] do
+        page = %{recover | rotations: [CatalogTrustVectors.artifact_json(bad)]}
+        result = W.evaluate(blocked.next, page)
+
+        expected =
+          CatalogTrust.evaluate(%{
+            installed: blocked.next.trust,
+            expected: @expected,
+            incoming: page
+          })
+
+        assert result.trust_decision == expected
+        assert result.kind == expected.kind
+        assert result.routes == []
+        assert W.view(result, c.labels, c.old)["accepted"] == "B/C0"
+        # K1 is replacement-bound, so it stays in the sidecar instead of being lost to the
+        # refused page; R1 alone then reaches R1/K1 without K1 being sent again.
+        assert result.next.extra.catalogs == [CatalogTrustVectors.artifact_json(w.k1)]
+        recovered = W.evaluate(result.next, W.page(logs: [log], proofs: [w.proof]))
+        assert W.view(recovered, c.labels, c.old)["accepted"] == "R1/K1"
+      end
+    end
+  end
 end
