@@ -283,6 +283,30 @@ defmodule Township.ElectionReportTest do
     end
 
     @tag :tmp_dir
+    test "replaces a symlink or hard link at --out, never writing through", ctx do
+      bundle = Path.join(ctx.tmp_dir, "bundle.etf")
+      File.write!(bundle, ctx.bytes)
+      expected = Report.render(ctx.projection)
+      victim = Path.join(ctx.tmp_dir, "victim.txt")
+      File.write!(victim, "victim bytes")
+      out_dir = Path.join(ctx.tmp_dir, "out")
+      File.mkdir_p!(out_dir)
+
+      for {name, link!} <- [{"sym.html", &File.ln_s!/2}, {"hard.html", &File.ln!/2}] do
+        out = Path.join(out_dir, name)
+        link!.(victim, out)
+
+        assert :ok = ReportTask.run(["--bundle", bundle, "--out", out])
+        assert File.read!(victim) == "victim bytes"
+        assert File.lstat!(out).type == :regular
+        assert File.read!(out) == expected
+      end
+
+      assert Enum.sort(File.ls!(out_dir)) == ["hard.html", "sym.html"]
+      assert File.read!(bundle) == ctx.bytes
+    end
+
+    @tag :tmp_dir
     test "fails closed on a wrong certificate, a corrupted bundle or bad usage", ctx do
       bundle = Path.join(ctx.tmp_dir, "bundle.etf")
       File.write!(bundle, ctx.bytes)

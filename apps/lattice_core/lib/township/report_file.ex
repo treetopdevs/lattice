@@ -21,7 +21,8 @@ defmodule Township.ReportFile do
   def write(path, bytes, opts \\ []) do
     opts = Keyword.validate!(opts, suffix: nil)
     suffix = opts[:suffix] || Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
-    tmp = Path.join(Path.dirname(path), "." <> Path.basename(path) <> "." <> suffix <> ".tmp")
+    # Fixed short stem, so a destination basename near NAME_MAX still gets a valid name.
+    tmp = Path.join(Path.dirname(path), ".report-" <> suffix <> ".tmp")
 
     case :file.open(tmp, [:write, :exclusive, :raw, :binary]) do
       {:ok, io} -> write_and_rename(io, tmp, path, bytes)

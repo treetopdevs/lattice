@@ -120,6 +120,23 @@ defmodule Township.AuditBundleTest do
     assert AuditBundle.load_verified(dir) == expected
   end
 
+  @tag :tmp_dir
+  test "a compressed matter.log is refused before it is decoded", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "bundle")
+    File.cp_r!(@tracked_dir, dir)
+    path = Path.join(dir, "matter.log")
+    # A genuine dump, recompressed: valid content, but decoding would bypass the byte bound.
+    compressed =
+      path |> File.read!() |> :erlang.binary_to_term() |> :erlang.term_to_binary([:compressed])
+
+    assert <<131, 80, _::binary>> = compressed
+    File.write!(path, compressed)
+
+    expected = {:error, ["matter.log uses compressed term encoding"]}
+    assert AuditBundle.verify(dir) == expected
+    assert AuditBundle.load_verified(dir) == expected
+  end
+
   test "fresh processes emit and independently verify the outsider audit bundle" do
     out_dir =
       Path.join(System.tmp_dir!(), "township_audit_bundle_#{System.unique_integer([:positive])}")

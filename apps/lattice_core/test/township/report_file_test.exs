@@ -41,13 +41,21 @@ defmodule Township.ReportFileTest do
   end
 
   test "a link planted at the temporary name is refused and left in place", ctx do
-    tmp = Path.join(ctx.dir, ".report.html.fixed.tmp")
+    tmp = Path.join(ctx.dir, ".report-fixed.tmp")
     File.ln_s!(ctx.victim, tmp)
 
     assert {:error, :eexist} = ReportFile.write(ctx.dest, "new report", suffix: "fixed")
     assert File.read!(ctx.victim) == "victim bytes"
     refute File.exists?(ctx.dest)
     assert File.lstat!(tmp).type == :symlink
+  end
+
+  test "a destination basename near NAME_MAX still writes", ctx do
+    dest = Path.join(ctx.dir, String.duplicate("r", 250) <> ".html")
+
+    assert :ok = ReportFile.write(dest, "long name")
+    assert File.read!(dest) == "long name"
+    assert File.ls!(ctx.dir) == [Path.basename(dest)]
   end
 
   test "a directory at the destination fails and removes the temporary file", ctx do

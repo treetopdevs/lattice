@@ -10,8 +10,8 @@ defmodule Mix.Tasks.Lattice.Township.Report do
   gets a NOT VERIFIED report and a non-zero exit.
 
   The report is written to a new temporary file in the destination directory and
-  renamed over `--out` (`Township.ReportFile`), so a link swapped in at `--out` after
-  the containment check is replaced and never written through.
+  renamed over `--out` (`Township.ReportFile`), so a link at `--out`, including one
+  swapped in after the containment check, is replaced and never written through.
   """
 
   use Mix.Task
@@ -93,9 +93,13 @@ defmodule Mix.Tasks.Lattice.Township.Report do
 
   defp report(dir, out) do
     dir = resolve(Path.expand(dir))
-    out = resolve(Path.expand(out))
+    out = Path.expand(out)
+    # The containment check follows a leaf symlink; the write replaces the leaf itself,
+    # under its resolved parent, so a link at --out is never written through.
+    resolved = resolve(out)
+    out = Path.join(resolve(Path.dirname(out)), Path.basename(out))
 
-    if out == dir or String.starts_with?(out, dir <> "/") or same_file_tree?(dir, out) do
+    if Enum.any?([resolved, out], &inside_bundle?(dir, &1)) do
       Mix.raise("refusing --out inside the bundle directory: #{out}")
     end
 
@@ -115,6 +119,10 @@ defmodule Mix.Tasks.Lattice.Township.Report do
             Enum.join(errors, "\n- ")
         )
     end
+  end
+
+  defp inside_bundle?(dir, path) do
+    path == dir or String.starts_with?(path, dir <> "/") or same_file_tree?(dir, path)
   end
 
   defp write_report!(out, html) do

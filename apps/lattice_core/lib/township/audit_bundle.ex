@@ -81,7 +81,9 @@ defmodule Township.AuditBundle do
   Consumers materialize this snapshot without re-reading a mutable bundle directory.
   The fingerprint identifies the bytes whose accepted operations were verified;
   it does not assert that no other operations exist elsewhere.
-  A `matter.log` longer than `max_matter_log_byte_size/0` is refused before decoding.
+  A `matter.log` longer than `max_matter_log_byte_size/0`, or in compressed term
+  encoding (which would expand past that bound inside the decoder), is refused before
+  decoding.
   """
   @spec load_verified(String.t()) ::
           {:ok,
@@ -143,6 +145,11 @@ defmodule Township.AuditBundle do
     case File.open(Path.join(dir, "matter.log"), [:read, :binary], &:file.read(&1, limit + 1)) do
       {:ok, {:ok, bytes}} when byte_size(bytes) > limit ->
         {:error, "matter.log exceeds #{limit} bytes"}
+
+      # `Log.dump_bytes/1` never compresses; a compressed term would expand past the
+      # byte bound inside the decoder, so it is refused before decoding.
+      {:ok, {:ok, <<131, 80, _rest::binary>>}} ->
+        {:error, "matter.log uses compressed term encoding"}
 
       {:ok, {:ok, bytes}} ->
         {:ok, bytes}
