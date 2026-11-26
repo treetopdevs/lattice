@@ -1,0 +1,15 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:36
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:36
+@@ -1335,6 +1335,12 @@
+   # P that strictly descends from T's prior catalog (CatalogTrust `rotation_forks`); a pending
+   # descendant is already pending under the open P.
+   defp rotation_forks(final, closed, cat, ctx) do
++    # MUTANT m3: rotation forks are never reported.
++    _ = {closed, cat, ctx}
++    []
++  end
++
++  def unused_rotation_forks(final, closed, cat, ctx) do
+     final
+     |> Enum.flat_map(fn
+       {tid, %{kind: :rotation, prior: [%{binding: p, catalog: prior}]}} ->

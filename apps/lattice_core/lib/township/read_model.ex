@@ -5,13 +5,48 @@ defmodule Township.ReadModel do
   Matter state, authority verdicts, and graph evidence are projections of the
   supplied log. Vouch bodies remain caller-held attestation evidence, outside
   `Township.Matter`. Optional realm labels affect only delegation-graph labels.
+
+  The roles panel's `chronology`, `beacons` and `leases` come from the read-only
+  `Lattice.Authority.observe/2` (row 157). They are global to the log: the highest
+  accepted beacon epoch is not the epoch any one operation observed. A lease's
+  `expired?` is the live-path `Authority.expired?/2` check, while `status` is
+  `Lattice.Verdict.delegation_statuses/3` (each equal to
+  `delegation_status/3`), so a revoked or invalid chain reports that
+  status even when it has also lapsed. No author-asserted tick is shown.
+
+  The trust graph's `omitted` list names admitted authority ops present in the
+  log whose delegation could not be drawn; it does not claim the log is complete.
+
+  ## Display-safety contract (row 325)
+
+  This follows the `Lattice.Graph.AuthorityBody` display-safety contract (row
+  311). Matter command arguments are attacker-shaped: admission checks a
+  command's name, arity and effect shape, never its value, so a holder of an
+  ordinary capability can write any Canonical-encodable term into a Matter
+  field. Every Matter text slot in the model and in replay frames is therefore
+  a valid UTF-8 `String.t()`. The slots are `threads.title`, `threads.summary`,
+  each `threads.posts` entry, each `members.current` entry and each
+  `members.denied[].member` (and the matching `"title"`, `"summary"`,
+  `"posts"` and `"members"` keys of each replay frame's `"state"`). A value
+  that is a binary and passes `String.valid?/1` is copied verbatim. Any other
+  value, whether a non-binary term or invalid UTF-8, is shown as the fixed
+  marker `"(malformed)"`; the raw term stays in the log, under its op id.
+  Members are sorted as raw terms before the marker is applied, so honest
+  output is unchanged, and duplicate markers are kept so `members.current`
+  keeps the true count. `clerk_locked?` stays a boolean: only `close_matter`
+  and `reopen_matter` write it, and they write constants.
+
+  Non-claims: no length bound; no control-character or bidi filtering (HEEx
+  escapes HTML and Jason escapes JSON); and a member may post the literal text
+  `"(malformed)"`, so the marker is not proof that a value was malformed.
   """
 
-  alias Lattice.{Attestation, Authority, Identity, Log, Op}
-  alias Lattice.Graph.ReplicaSnapshot
+  alias Lattice.{Attestation, Authority, Identity, Log, Op, Verdict}
+  alias Lattice.Graph.{AuthorityBody, ReplicaSnapshot}
   alias Township.Matter
 
   @member_commands [:admit, :remove_member]
+  @malformed_text "(malformed)"
   @replay_fields [
     {"title", "Title"},
     {"summary", "Summary"},
@@ -24,16 +59,37 @@ defmodule Township.ReadModel do
   @type denied_member_mutation :: %{
           op_id: String.t(),
           command: :admit | :remove_member,
-          member: term(),
+          member: String.t(),
           reason: atom()
+        }
+
+  @type lease_view :: %{
+          delegation_id: String.t(),
+          issuer: String.t() | nil,
+          audience: String.t() | nil,
+          expires_epoch: non_neg_integer(),
+          expired?: boolean(),
+          status: :active | :revoked | :lapsed | :invalid | :unknown
+        }
+
+  @type roles :: %{
+          holders: %{atom() => String.t() | nil},
+          quarantine: [String.t()],
+          reasons: %{String.t() => atom()},
+          audit: [map()],
+          chronology: %{
+            atom() => [%{op_id: String.t(), holder: String.t() | nil, delegation_id: String.t()}]
+          },
+          beacons: %{valid: Authority.beacon_evidence(), max_epoch: non_neg_integer() | nil},
+          leases: [lease_view()]
         }
 
   @type t :: %{
           threads: map(),
-          roles: map(),
+          roles: roles(),
           members: map(),
           attest: map(),
-          trust_graph: map(),
+          trust_graph: %{nodes: [map()], edges: [map()], omitted: [String.t()]},
           op_dag: map()
         }
 
@@ -53,6 +109,7 @@ defmodule Township.ReadModel do
     state = Lattice.state(Matter, log)
     state_view = state_view(state)
     analysis = Authority.analyze(Matter, log)
+    observation = Authority.observe(Matter, log)
     receipt_free? = Attestation.receipt_free?(attestation)
 
     %{
@@ -66,7 +123,10 @@ defmodule Township.ReadModel do
         holders: fingerprint_holders(analysis.holders),
         quarantine: analysis.quarantine |> MapSet.to_list() |> Enum.sort(),
         reasons: analysis.reasons,
-        audit: analysis.audit
+        audit: analysis.audit,
+        chronology: chronology_view(observation.chronology),
+        beacons: observation.beacons,
+        leases: lease_views(log, observation.leases)
       },
       members: %{
         current: state_view["members"],
@@ -82,7 +142,13 @@ defmodule Township.ReadModel do
     }
   end
 
-  @doc "Build the JSON-safe causal replay payload for the Township instrument."
+  @doc """
+  Build the causal replay payload for the Township instrument.
+
+  Each frame's `"state"` follows the moduledoc display-safety contract. Nodes
+  and edges come from `Lattice.Graph.ReplicaSnapshot`, which follows the row 311
+  `Lattice.Graph.AuthorityBody` contract.
+  """
   @spec replay(Log.t()) :: map()
   def replay(%Log{} = log) do
     ordered_ops = Log.topo_ops(log)
@@ -161,13 +227,19 @@ defmodule Township.ReadModel do
 
   defp state_view(state) do
     %{
-      "title" => state.title,
-      "summary" => state.summary,
-      "posts" => state.posts,
-      "members" => Enum.sort(state.members),
+      "title" => display_text(state.title),
+      "summary" => display_text(state.summary),
+      "posts" => Enum.map(state.posts, &display_text/1),
+      # Sort the raw terms first so honest output keeps its order.
+      "members" => state.members |> Enum.sort() |> Enum.map(&display_text/1),
       "clerk_locked" => state.clerk_locked?
     }
   end
+
+  defp display_text(value) when is_binary(value),
+    do: if(String.valid?(value), do: value, else: @malformed_text)
+
+  defp display_text(_value), do: @malformed_text
 
   defp json_holders(holders) do
     Map.new(holders, fn {role, pub} ->
@@ -189,6 +261,42 @@ defmodule Township.ReadModel do
     end)
   end
 
+  defp chronology_view(chronology) do
+    Map.new(chronology, fn {role, acquisitions} ->
+      {role,
+       Enum.map(acquisitions, fn acquisition ->
+         %{
+           op_id: acquisition.op_id,
+           holder: key_fingerprint(acquisition.holder),
+           delegation_id: acquisition.delegation_id
+         }
+       end)}
+    end)
+  end
+
+  # One batched status pass for every lease, not one judge pass per lease.
+  defp lease_views(log, leases) do
+    statuses = Verdict.delegation_statuses(Matter, log, Enum.map(leases, & &1.delegation_id))
+    Enum.map(leases, &lease_view(&1, Map.fetch!(statuses, &1.delegation_id).status))
+  end
+
+  defp lease_view(lease, status) do
+    %{
+      delegation_id: lease.delegation_id,
+      issuer: key_fingerprint(lease.issuer),
+      audience: key_fingerprint(lease.audience),
+      expires_epoch: lease.expires_epoch,
+      expired?: lease.expired?,
+      status: status
+    }
+  end
+
+  # Same key rule as the trust graph's total reader: only a 32-byte key is drawn.
+  defp key_fingerprint(pub) when is_binary(pub) and byte_size(pub) == 32,
+    do: Identity.fingerprint(pub)
+
+  defp key_fingerprint(_pub), do: nil
+
   @spec denied_member_mutations(Log.t(), %{String.t() => atom()}) ::
           [denied_member_mutation()]
   defp denied_member_mutations(log, reasons) do
@@ -197,7 +305,7 @@ defmodule Township.ReadModel do
     |> Enum.flat_map(fn op ->
       with {:ok, reason} <- Map.fetch(reasons, op.id),
            {:ok, command, member} <- member_mutation(op) do
-        [%{op_id: op.id, command: command, member: member, reason: reason}]
+        [%{op_id: op.id, command: command, member: display_text(member), reason: reason}]
       else
         _not_denied_member_mutation -> []
       end
@@ -211,11 +319,11 @@ defmodule Township.ReadModel do
   defp member_mutation(_op), do: :error
 
   defp trust_graph(log, labels) when is_map(labels) do
-    events = delegation_events(log)
+    {events, omitted} = delegation_events(log)
 
     nodes =
       events
-      |> Enum.flat_map(fn {_kind, delegation} -> [delegation.issuer, delegation.audience] end)
+      |> Enum.flat_map(fn {_kind, dview} -> [pub(dview.issuer), pub(dview.audience)] end)
       |> Enum.uniq()
       |> Enum.map(fn pub ->
         fingerprint = Identity.fingerprint(pub)
@@ -224,40 +332,68 @@ defmodule Township.ReadModel do
       end)
 
     edges =
-      Enum.map(events, fn {kind, delegation} ->
+      Enum.map(events, fn {kind, dview} ->
         %{
-          from: Identity.fingerprint(delegation.issuer),
-          to: Identity.fingerprint(delegation.audience),
-          kind: delegation_edge_kind(kind, delegation)
+          from: Identity.fingerprint(pub(dview.issuer)),
+          to: Identity.fingerprint(pub(dview.audience)),
+          kind: delegation_edge_kind(kind, dview)
         }
       end)
 
-    %{nodes: nodes, edges: edges}
+    %{nodes: nodes, edges: edges, omitted: omitted}
   end
 
+  # Row 309: bodies go through the one total reader. An admitted but ill-formed
+  # delegation (list-form roles/ops, short or non-binary keys) or a role that is
+  # not a scalar name contributes no node or edge rather than crashing the reader.
+  # Row 306: such a delegation op is named in `omitted` (topo order) instead of
+  # vanishing silently. Heartbeat, revoke, request, command and other bodies are
+  # not delegations and are never counted.
   defp delegation_events(log) do
-    log
-    |> Log.topo_ops()
-    |> Enum.filter(&(&1.kind == :authority))
-    |> Enum.flat_map(fn op ->
-      case op.body do
-        {:genesis, delegation, _policies} -> [{"genesis", delegation}]
-        {:grant, delegation} -> [{"grant", delegation}]
-        {:transfer, role, delegation, _tick} -> [{"transfer:#{role}", delegation}]
-        {:succeed, role, delegation, _tick} -> [{"succeed:#{role}", delegation}]
-        _other -> []
-      end
-    end)
+    classified =
+      log
+      |> Log.topo_ops()
+      |> Enum.filter(&(&1.kind == :authority))
+      |> Enum.flat_map(fn op -> classify(op.id, AuthorityBody.parse(op.body)) end)
+
+    {for({:event, kind, dview} <- classified, do: {kind, dview}),
+     for({:omitted, id} <- classified, do: id)}
   end
 
-  defp delegation_edge_kind(kind, delegation) do
-    roles =
-      if MapSet.size(delegation.roles) > 0 do
-        " roles=[#{delegation.roles |> Enum.sort() |> Enum.join(",")}]"
-      else
-        ""
-      end
+  defp classify(id, {:genesis, dview}), do: event(id, "genesis", dview)
+  defp classify(id, {:grant, dview}), do: event(id, "grant", dview)
 
-    "#{kind}#{roles} ops=[#{delegation.ops |> Enum.sort() |> Enum.join(",")}]"
+  defp classify(id, {kind, {:name, _raw, role}, dview, _tick}) when kind in [:transfer, :succeed],
+    do: event(id, "#{kind}:#{role}", dview)
+
+  defp classify(id, {kind, {:malformed, _raw}, _dview, _tick})
+       when kind in [:transfer, :succeed],
+       do: [{:omitted, id}]
+
+  defp classify(_id, _other), do: []
+
+  defp event(id, kind, dview),
+    do: if(renderable?(dview), do: [{:event, kind, dview}], else: [{:omitted, id}])
+
+  # Match every field the edge reads, not only `well_formed?`, so a drift
+  # between the parser's member rule and the judge's cannot raise below.
+  defp renderable?(dview),
+    do:
+      match?(
+        %{
+          well_formed?: true,
+          issuer: {:ok, _},
+          audience: {:ok, _},
+          roles: {:ok, _},
+          ops: {:ok, _}
+        },
+        dview
+      )
+
+  defp pub({:ok, pub}), do: pub
+
+  defp delegation_edge_kind(kind, %{roles: {:ok, roles}, ops: {:ok, ops}}) do
+    roles = if roles == [], do: "", else: " roles=[#{Enum.join(roles, ",")}]"
+    "#{kind}#{roles} ops=[#{Enum.join(ops, ",")}]"
   end
 end

@@ -19,7 +19,13 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
     ReleaseReadiness
   }
 
-  alias LatticeCarrierServer.Operator.CatalogCeremony.{SigningCommands, SigningLedger, Store}
+  alias LatticeCarrierServer.Operator.CatalogCeremony.{
+    Binding,
+    SigningCommands,
+    SigningLedger,
+    Store
+  }
+
   alias Treehouse.TransportCatalog
 
   @spec prepare(Path.t(), binary(), Path.t(), Path.t(), Path.t()) ::
@@ -146,6 +152,52 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
     }
   end
 
+  @doc """
+  The revision-0 catalog a replacement binding installs, rebuilt from exactly one
+  explicit prior catalog (row 361 signing path, fixtures only).
+
+  Every entry takes the binding's new service id and key; the catalog names the
+  binding's op id, the bootstrap, revision 0 and no previous. The claim commits the
+  inventory, so a carried set that does not match `binding.inventory_digest` refuses
+  as `:catalog_inventory_mismatch` rather than being trusted. This does not choose a
+  prior head among forked heads (that is the PR 4 resolver's `prior_catalogs`
+  coverage) and it is not acceptance of the replacement.
+  """
+  @spec replacement_revision_zero(map(), map()) :: {:ok, map()} | {:error, atom()}
+  def replacement_revision_zero(prior, %{record: record} = binding) do
+    entries =
+      prior.entries
+      |> Enum.map(&%{&1 | service_id: record.service_id, service_key: record.service_key})
+      |> Enum.sort_by(& &1.replica)
+
+    catalog = %{
+      version: 1,
+      product: :treehouse,
+      space: prior.space,
+      bootstrap: binding.bootstrap_id,
+      binding: Binding.binding_id(binding),
+      revision: 0,
+      previous: nil,
+      entries: entries
+    }
+
+    with {:ok, catalog} <- TransportCatalog.normalize_catalog(catalog),
+         true <- TransportCatalog.inventory_id(catalog.entries) == binding.inventory_digest do
+      {:ok, catalog}
+    else
+      false -> {:error, :catalog_inventory_mismatch}
+      _ -> {:error, :catalog_invalid}
+    end
+  rescue
+    _ -> {:error, :catalog_invalid}
+  end
+
+  @doc "Encode a replacement revision-0 catalog as a `replacement`-mode signing package."
+  @spec replacement_package(map(), %{String.t() => Lattice.Log.t()}) ::
+          {:ok, binary()} | {:error, atom()}
+  def replacement_package(catalog, histories),
+    do: CatalogSigningPackage.encode(catalog, histories, nil, "replacement")
+
   defp candidate(review, envelopes, head) do
     [reference] = Enum.filter(review.record["artifacts"], &(&1["kind"] == "reference"))
     [child_artifact] = Enum.filter(review.record["artifacts"], &(&1["kind"] == "log"))
@@ -184,7 +236,7 @@ defmodule LatticeCarrierServer.Operator.ReleaseCatalog do
            product: :treehouse,
            space: space.replica,
            bootstrap: review.binding.bootstrap_id,
-           binding: review.binding.bootstrap_id,
+           binding: Binding.binding_id(review.binding),
            revision: if(prior, do: prior.catalog.revision + 1, else: 0),
            previous: head,
            entries: entries

@@ -1,10 +1,17 @@
 defmodule Treehouse.CatalogArtifactIntegerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: true, group: :node_subprocess_b
   alias Treehouse.{CatalogTrust, CatalogTrustVectors}
   @client Path.expand("../../../../clients/lattice-client", __DIR__)
   @expected %{trust_revision: 0, history_generation: 0}
 
-  @tag timeout: 120_000
+  # BEAM CPU work, not a hang: check/1 re-runs CatalogTrust.protect (authority
+  # analysis and signature checks) over every control and case. Measured 16.0 s
+  # (:8) and 12.7 s (:18) without hogs (ambient load avg 88); 106.0 s and 118.7 s
+  # under the row 342 load recipe (16 hogs, `+S 4:4`, ambient ~21, 2026-11-02).
+  # One or both tests exceeded the old 120 s tag in all 5 earlier loaded runs.
+  # The tag is about 2x the worst measured duration. Measured with all node
+  # modules in one group; the shipped two-group split passed 3/3 loaded runs.
+  @tag timeout: 240_000
   test "fresh TypeScript raw artifact spellings agree with BEAM" do
     {json, 0} =
       System.cmd("node", ["--import", "tsx", "test/support/catalog_artifact_integer_peer.ts"],
@@ -14,7 +21,8 @@ defmodule Treehouse.CatalogArtifactIntegerTest do
     check(Jason.decode!(json))
   end
 
-  @tag timeout: 120_000
+  # Same measurement and reason as the first test above (row 342).
+  @tag timeout: 240_000
   test "fresh BEAM raw artifact spellings agree with actual TypeScript" do
     path = temporary()
     CatalogTrustVectors.write_public_fixture!(path)

@@ -23,8 +23,8 @@ defmodule Treehouse.Space do
   ]
 
   # The root's capability set is final: the continuation pin adds no ops, so rotation and
-  # attestation ops are granted at birth. `replace_catalog_v1` is a closed wire atom with no
-  # Space command yet.
+  # attestation ops are granted at birth. `replace_catalog_v1` is the bounded-admin replacement
+  # proposal (plan 316); a Core-honored one is an authorized signed proposal, not a route switch.
   @bounded_genesis_ops @preview_commands ++
                          [:catalog_bootstrap_v1, :attest_member_key_v1, :replace_catalog_v1]
   @bounded_suffix "#authority:bounded-continuation-v1"
@@ -103,6 +103,10 @@ defmodule Treehouse.Space do
 
   command(:attest_member_key_v1, [:_claim, :_possession, :_vouches],
     do: [{:admin_actions, {:write, "attest_member_key_v1"}}]
+  )
+
+  command(:replace_catalog_v1, [:_claim, :_catalog_possession, :_service_possession],
+    do: [{:admin_actions, {:write, "replace_catalog_v1"}}]
   )
 
   @doc "Prepare deterministic root-only creation; pending signed ops are not yet persisted."
@@ -321,25 +325,90 @@ defmodule Treehouse.Space do
     end
   end
 
+  @doc """
+  Review step for one `replace_catalog_v1` attempt (plan 316 PR 2); signs nothing.
+
+  Freezes the frontier and derives the claim from the judged history: the honored bootstrap,
+  the current `:admin` holder and its acquisition capability, the beacon epoch basis, the
+  inventory and the recovery cutoffs. Returns the exact possession bytes to sign and a
+  caller-owned journal entry keyed by the claim nonce. See `Treehouse.CatalogReplacementAuthoring`.
+  """
+  @spec prepare_replace_catalog(Log.t(), map(), map()) :: {:ok, map()} | {:error, atom()}
+  def prepare_replace_catalog(log, request, journal),
+    do: Treehouse.CatalogReplacementAuthoring.prepare(log, request, journal)
+
+  @doc """
+  Sign one prepared `replace_catalog_v1` attempt last, after re-reading `log_source`, refusing a
+  reclassified frozen state or a moved claim, and verifying both possession signatures. The frame
+  is withheld when the re-read after the signing call shows reclassification.
+  """
+  @spec author_replace_catalog(Identity.t() | map(), Log.t() | (-> Log.t()), map(), map()) ::
+          {:ok, map()} | {:error, atom(), map()}
+  def author_replace_catalog(signer, log_source, attempt, possession),
+    do: Treehouse.CatalogReplacementAuthoring.author(signer, log_source, attempt, possession)
+
   # Try each root genesis capability, in canonical order, and return the first authored op the
   # judge honors; an op that would quarantine (revoked, expired, not granted) is never returned.
   defp honored_bootstrap(identity, log, record) do
     deps = Enum.sort(Log.frontier(log))
+    caps = root_capabilities(log, identity)
 
-    log
-    |> root_capabilities(identity)
-    |> Enum.find_value({:error, :bootstrap_not_honored}, fn cap ->
-      with {:ok, op} <-
-             Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
-               cap: cap
-             ),
-           false <-
-             MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
-        {:ok, op}
-      else
-        _ -> nil
-      end
-    end)
+    with {:ok, fitting} <- bootstrap_envelope(identity, log.replica, deps, record, caps) do
+      Enum.find_value(
+        fitting,
+        {:error, :bootstrap_not_honored},
+        &honored_bootstrap(identity, log, deps, record, &1)
+      )
+    end
+  end
+
+  # Lifecycle contract §2 (row 318): the signature slot is fixed at 64 bytes, so a zero-signed
+  # placeholder measures the signed push envelope byte-exactly before any signature is made. A
+  # retained genesis may carry a malformed capability id of any length, so each candidate cap is
+  # measured; one that does not fit is skipped, and only when none fits is the bootstrap refused.
+  defp bootstrap_envelope(_identity, _replica, _deps, _record, []), do: {:ok, []}
+
+  defp bootstrap_envelope(identity, replica, deps, record, caps) do
+    statuses = for cap <- caps, do: {cap, bootstrap_status(identity, replica, deps, record, cap)}
+
+    case for({cap, :ok} <- statuses, do: cap) do
+      [] ->
+        case Enum.find(statuses, fn {_, status} -> status != {:error, :capacity_stop} end) do
+          nil -> {:error, :catalog_command_too_large}
+          {_, error} -> error
+        end
+
+      fitting ->
+        {:ok, fitting}
+    end
+  end
+
+  defp bootstrap_status(identity, replica, deps, record, cap) do
+    op = %Op{
+      id: "",
+      replica: replica,
+      author: identity.pub,
+      deps: deps,
+      kind: :command,
+      body: {:catalog_bootstrap_v1, [record]},
+      cap: cap,
+      sig: <<0::512>>
+    }
+
+    Treehouse.MemberContinuityAuthoring.envelope_status(%{op | id: Op.recompute_id(op)})
+  end
+
+  defp honored_bootstrap(identity, log, deps, record, cap) do
+    with {:ok, op} <-
+           Op.authored(identity, log.replica, deps, :command, {:catalog_bootstrap_v1, [record]},
+             cap: cap
+           ),
+         false <-
+           MapSet.member?(Authority.analyze(__MODULE__, Log.append!(log, op)).quarantine, op.id) do
+      {:ok, op}
+    else
+      _ -> nil
+    end
   end
 
   defp bootstrap_profile(log) do
@@ -579,6 +648,33 @@ defmodule Treehouse.Space do
     end
   end
 
+  # Stage A only (plan 316 §3): closed shape, the honored causal bootstrap, the literal
+  # claim-to-op bindings and both possession signatures. Profile, lease, epoch and the binding
+  # graph are the resolver's stage B; this never calls the resolver.
+  def command_op_status(
+        %Op{body: {:replace_catalog_v1, [claim, catalog_possession, service_possession]}} = op,
+        visible,
+        context
+      ) do
+    with {:ok, claim} <- TransportCatalog.normalize_replacement_claim(claim),
+         true <- claim.space == op.replica,
+         true <- honored_bootstrap?(claim.bootstrap, op.replica, visible, context),
+         true <-
+           claim.author == op.author and claim.cap == op.cap and
+             claim.deps == Enum.sort(Enum.uniq(op.deps)),
+         true <- MapSet.member?(visible, claim.holder_epoch),
+         :ok <-
+           TransportCatalog.verify_replacement_possession(
+             claim,
+             catalog_possession,
+             service_possession
+           ) do
+      :ok
+    else
+      _ -> {:error, :application_invalid_catalog}
+    end
+  end
+
   def command_op_status(%Op{body: {:issue_invitation, [recipient, threads]}}, _visible, context) do
     if Invitation.recipient?(recipient) and threads == thread_scope(context),
       do: :ok,
@@ -629,6 +725,14 @@ defmodule Treehouse.Space do
       true ->
         :ok
     end
+  end
+
+  defp honored_bootstrap?(id, replica, visible, context) do
+    MapSet.member?(visible, id) and Map.get(context.verdicts, id) == :honored and
+      match?(
+        %Op{replica: ^replica, kind: :command, body: {:catalog_bootstrap_v1, [_]}},
+        context.visible_ops[id]
+      )
   end
 
   defp thread_scope(context) do

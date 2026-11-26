@@ -304,6 +304,7 @@ export type DecodedTerm =
   | boolean
   | number
   | { type: "invalid_beacon_integer" }
+  | { type: "opaque_high_integer" }
   | { type: "legacy_beacon_epoch"; decimal: string }
   | BinTerm
   | AtomTerm
@@ -1625,6 +1626,14 @@ function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
         {type: "legacy_beacon_epoch", decimal: epoch[1]}]};
     }
   }
+  // replace_catalog_v1 arguments keep wire uint64s above MAX_SAFE_INTEGER as opaque sentinels, so
+  // its decoder refuses them as `application_invalid_catalog` like BEAM instead of `malformed_term`.
+  if (op.kind === "command" && body[0] === "tuple" && body.length === 2 && Array.isArray(body[1]) &&
+      body[1].length === 2 && body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
+      body[1][0][1] === "replace_catalog_v1" && body[1][1]?.[0] === "list") {
+    return { type: "tuple", values: [decodeCarrierTerm(body[1][0], "strict", inner),
+      decodeCarrierTerm(body[1][1], "opaque_integer", inner)] };
+  }
   if (op.kind !== "authority" || body[0] !== "tuple" || body.length !== 2 ||
       !Array.isArray(body[1]) || body[1].length !== 3 || body[1][0]?.[0] !== "atom") {
     return decodeCarrierTerm(body);
@@ -1651,7 +1660,7 @@ function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
   ] };
 }
 
-type TermDecodeContext = "strict" | "beacon_metadata" | "beacon_certificate" | "beacon_claim";
+type TermDecodeContext = "strict" | "opaque_integer" | "beacon_metadata" | "beacon_certificate" | "beacon_claim";
 
 function decodeCarrierTerm(
   term: CarrierTerm,
@@ -1663,7 +1672,7 @@ function decodeCarrierTerm(
   if (term.length !== expectedLength) {
     throw new Error("malformed carrier term arity");
   }
-  const childContext = context === "strict" ? "strict" : "beacon_metadata";
+  const childContext = context === "strict" || context === "opaque_integer" ? context : "beacon_metadata";
 
   switch (tag) {
     case "nil":
@@ -1672,7 +1681,10 @@ function decodeCarrierTerm(
       if (typeof term[1] !== "boolean") throw new Error("malformed bool term");
       return term[1];
     case "int": {
-      if (context !== "strict" && typeof term[1] === "string" && canonicalHighUint64Text(term[1])) {
+      if (context === "opaque_integer" && typeof term[1] === "string" && canonicalHighUint64Text(term[1])) {
+        return { type: "opaque_high_integer" };
+      }
+      if (context !== "strict" && context !== "opaque_integer" && typeof term[1] === "string" && canonicalHighUint64Text(term[1])) {
         // An opaque invalid value cannot satisfy a numeric, binary or nullable field.
         return { type: "invalid_beacon_integer" };
       }

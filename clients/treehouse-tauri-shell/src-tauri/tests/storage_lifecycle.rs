@@ -155,3 +155,27 @@ fn v1_record_opens_byte_identical_and_only_a_v2_commit_replaces_it() {
     assert!(store.commit(3, &v2.to_string()).unwrap());
     assert_eq!(store.open().unwrap().record, Some(v2.to_string()));
 }
+
+#[test]
+fn history_cap_is_inclusive_and_an_over_cap_commit_leaves_the_record() {
+    use treehouse_tauri_shell::preview::HISTORY_BYTES;
+    let dir = tempfile::tempdir().unwrap();
+    let mut store =
+        PreviewStore::at_directory(dir.path(), Arc::new(InMemoryCarrierKeySeedStore::default()))
+            .unwrap();
+    let first = pending();
+    assert!(store.commit(0, &first.to_string()).unwrap());
+    let mut next = pending();
+    next["revision"] = json!(2);
+    // Trailing JSON whitespace keeps the envelope valid while it reaches the cap to the byte.
+    let text = next.to_string();
+    let at_cap = text.clone() + &" ".repeat(HISTORY_BYTES - text.len());
+    assert_eq!(at_cap.len(), HISTORY_BYTES);
+    assert_eq!(
+        store.commit(1, &format!("{at_cap} ")),
+        Err("preview_storage_limit".into())
+    );
+    assert_eq!(store.open().unwrap().record, Some(first.to_string()));
+    assert!(store.commit(1, &at_cap).unwrap());
+    assert_eq!(store.open().unwrap().record, Some(at_cap));
+}

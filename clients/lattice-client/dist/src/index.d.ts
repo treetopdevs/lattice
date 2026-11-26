@@ -26,6 +26,8 @@ export type { TreehouseCatalogCutoffInput, TreehouseCatalogCutoffResult, Treehou
 export { prepareTreehouseCatalogInstallation, evaluateTreehouseCatalogTrust, resolveTreehouseCatalogRoute, } from "./treehouse_catalog_trust";
 export type { TreehouseCatalogRawHistory, TreehouseCatalogBootstrapReview, TreehouseCatalogCutoffProof, TreehouseCatalogEvidencePage, TreehouseCatalogStoreToken, TreehouseCatalogWatermark, TreehouseCatalogOverflowTrigger, TreehouseCatalogBlock, InstalledTreehouseCatalogTrustV1, TreehouseCatalogTrustReason, TreehouseCatalogRefusalDetail, VerifiedTreehouseCatalogRoute, TreehouseCatalogTrustDecision, TreehouseCatalogRouteDecision, } from "./treehouse_catalog_trust";
 export * from "./treehouse_member_continuity_codec";
+export { prepareTreehouseCatalogReplacementFromFrames, authorTreehouseCatalogReplacementFromFrames } from "./treehouse_catalog_replacement_authoring";
+export type { TreehouseCatalogReplacementAttempt, TreehouseCatalogReplacementAuthorResult, TreehouseCatalogReplacementCurrent, TreehouseCatalogReplacementHistory, TreehouseCatalogReplacementJournal, TreehouseCatalogReplacementJournalEntry, TreehouseCatalogReplacementPrepareResult, TreehouseCatalogReplacementRequest, TreehouseCatalogReplacementStatus, } from "./treehouse_catalog_replacement_authoring";
 export { observeMemberContinuityFromFrames, reviewMemberContinuityFromFrames, assembleMemberContinuityFromFrames } from "./treehouse_member_continuity";
 export type { MemberContinuityObservation, MemberContinuityReviewRequest, MemberContinuityReview, MemberContinuityReviewResult, MemberContinuityAssemblyResult } from "./treehouse_member_continuity";
 export * from "./treehouse_public_frames";

@@ -1,0 +1,15 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
+@@ -967,8 +967,10 @@
+         # Invalid outranks pending: a contradicting entry fact refutes the catalog even while its
+         # chain pends, and a chain-valid catalog with missing facts pends.
+         cond do
+-          chain == :bad_chain or facts == :bad -> {:bad_chain, nil, st}
+-          chain == :pending or facts == :pending -> {:pending, nil, st}
++          # MUTANT m9: entry facts are not a validity input (row 390 repair (c) reverted).
++          _ = facts
++          chain == :bad_chain -> {:bad_chain, nil, st}
++          chain == :pending -> {:pending, nil, st}
+           true -> {:ok, routes, st}
+         end
+     end

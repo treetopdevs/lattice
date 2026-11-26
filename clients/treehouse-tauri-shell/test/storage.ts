@@ -21,6 +21,10 @@ assert.throws(
   () => parseState(" ".repeat(HISTORY_BYTES + 1)),
   /preview_storage_limit/,
 );
+// Row 257: the cap is inclusive, to the byte. Trailing JSON whitespace keeps the record valid at any size.
+const atCap = JSON.stringify(good).padEnd(HISTORY_BYTES, " ");
+assert.deepEqual(parseState(atCap), good);
+assert.throws(() => parseState(`${atCap} `), /preview_storage_limit/);
 assert.throws(
   () =>
     parseState(

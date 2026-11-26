@@ -10,7 +10,7 @@ import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
 import { syncTreehouse, syncTreehouseRoute } from "../src/treehouse_host";
 import type { SyncTreehouseOptions } from "../src/treehouse_host";
 import { TreehouseWorkflow } from "../src/treehouse_workflow";
-import { parseState } from "../src/treehouse_state";
+import { HISTORY_BYTES, byteLength, parseState } from "../src/treehouse_state";
 import type { LocalProfile } from "../src/treehouse_state";
 import { FakeClock, FakeRelay } from "@treetopdevs/lattice-shell-kit/testing";
 import { FaultNative } from "./support/fault_native";
@@ -630,3 +630,57 @@ console.log("PASS fake-relay enrollment: pull, accept, grant, member post and co
   console.log("PASS unauthenticated and unknown reasons still reject, after committing the pass's progress");
 }
 
+
+// ---- 7. row 257: the largest merge the record holds commits; the next padding step writes nothing ------
+{
+  const f = await founder();
+  const relays = new Relays();
+  const copy = (from: FaultNative) => {
+    const n = new FaultNative();
+    n.seed = from.seed;
+    n.record = from.record;
+    return n;
+  };
+  const base = copy(f.native);
+  // A second device with the same key fills the Thread on the relay to within one padding post of the cap.
+  const twin = await fresh(copy(base));
+  const route = twin.state.relay!.routes.find((r) => r.replica === f.thread)!;
+  while (byteLength(JSON.stringify(twin.state)) < HISTORY_BYTES - 50_000)
+    await twin.command(f.thread, { command: "post", text: "r".repeat(30_000) });
+  await syncTreehouseRoute(twin, route, relays.options());
+  const local = new Set(profileOf(base, f.thread).frames.map((x) => x.id));
+  const pulled = threadOf(twin).frames.filter((x) => !local.has(x.id));
+  assert(pulled.length > 1);
+  // Post text is stored as base64, so three more characters are four more record bytes. One probe sizes
+  // the local padding post that leaves the merged record within one such step of the cap.
+  const padded = async (text: number) => {
+    const native = copy(base);
+    const app = await fresh(native);
+    await app.command(f.thread, { command: "post", text: "p".repeat(text) });
+    return { native, app };
+  };
+  const probe = await padded(3_000);
+  await probe.app.mergeSync(f.thread, pulled, []);
+  const steps = Math.floor((HISTORY_BYTES - byteLength(probe.native.record!)) / 4);
+  const largest = 3_000 + 3 * steps;
+  assert(steps > 0 && largest < 45_000, `padding ${largest} stays a single signable post`);
+
+  const full = await padded(largest);
+  assert.deepEqual(await full.app.mergeSync(f.thread, pulled, []), { added: pulled.length, acked: pulled.length });
+  const size = byteLength(full.native.record!);
+  assert(size <= HISTORY_BYTES && size > HISTORY_BYTES - 4, `the merged record (${size} bytes) is at the cap`);
+  assert.equal(parseState(full.native.record).revision, full.app.state.revision, "and it reopens");
+  // Full means full: a post that would grow the record past the cap is refused and writes nothing.
+  const saved = full.native.record;
+  await assert.rejects(full.app.command(f.thread, { command: "post", text: "x" }), /preview_storage_limit/);
+  assert.equal(full.native.record, saved);
+
+  const over = await padded(largest + 3);
+  const before = over.native.record;
+  const writes = over.native.writes;
+  await assert.rejects(over.app.mergeSync(f.thread, pulled, []), /preview_storage_limit/);
+  assert.equal(over.native.record, before, "the next step over the cap writes nothing");
+  assert.equal(over.native.writes, writes);
+  assert(!threadOf(over.app).frames.some((x) => x.id === pulled.at(-1)!.id), "and holds none of the pull");
+  console.log("PASS the largest merge the 1 MiB record holds commits; the next padding step refuses before any write");
+}

@@ -64,6 +64,36 @@ export interface CatalogRotationEnvelope {
     oldSignature: string;
     newSignature: string;
 }
+export interface CatalogPriorCatalog {
+    binding: string;
+    catalog: string | null;
+}
+/** Closed `replace_catalog_v1` claim (lifecycle §3); structural shape only, not resolver trust. */
+export interface CatalogReplacementClaim {
+    version: 1;
+    product: "treehouse";
+    space: string;
+    bootstrap: string;
+    profileGenesis: string;
+    profileId: string;
+    parents: string[];
+    priorCatalogs: CatalogPriorCatalog[];
+    generation: number;
+    nonce: string;
+    newCatalogKey: string;
+    newServiceId: string;
+    newServiceKey: string;
+    newOrigin: string;
+    inventoryDigest: string;
+    cutoffs: CatalogCutoff[];
+    author: string;
+    cap: string;
+    holderEpoch: string;
+    deps: string[];
+    epoch: number;
+    epochBasis: string[];
+}
+export type CatalogReplacementPurpose = "catalog" | "service";
 export declare function normalizeCatalogBootstrap(value: unknown): CatalogBootstrap | null;
 export declare function catalogBootstrapToCarrierTerm(value: unknown): CarrierTerm | null;
 export declare function catalogBootstrapFromCarrierTerm(value: unknown): CatalogBootstrap | null;
@@ -87,6 +117,16 @@ export declare function catalogRotationFromCarrierTerm(value: unknown): CatalogR
 export declare function normalizeCatalogRotationEnvelope(value: unknown): CatalogRotationEnvelope | null;
 export declare function catalogRotationEnvelopeToCarrierTerm(value: unknown): CarrierTerm | null;
 export declare function catalogRotationEnvelopeFromCarrierTerm(value: unknown): CatalogRotationEnvelope | null;
+export declare function normalizeCatalogReplacementClaim(value: unknown): CatalogReplacementClaim | null;
+export declare function catalogReplacementClaimToCarrierTerm(value: unknown): CarrierTerm | null;
+export declare function catalogReplacementClaimFromCarrierTerm(value: unknown): CatalogReplacementClaim | null;
+/** A decoded command argument; never throws, so a malformed claim stays an application refusal. */
+export declare function catalogReplacementClaimFromDecodedTerm(value: unknown): CatalogReplacementClaim | null;
+/** Pre-hash and debug bytes for vectors only; not a signing domain. */
+export declare function canonicalBytesForCatalogReplacementClaim(value: unknown): Uint8Array;
+export declare function canonicalBytesForCatalogReplacementPossession(purpose: CatalogReplacementPurpose, value: unknown): Uint8Array;
+/** Both new-key possession signatures; key control only, never authority or custody. */
+export declare function verifyCatalogReplacementPossession(claim: unknown, catalogSignature: unknown, serviceSignature: unknown): boolean;
 export declare function canonicalBytesForTransportCatalog(value: unknown): Uint8Array;
 export declare function transportCatalogId(value: unknown): string;
 export declare function canonicalBytesForCatalogRotation(value: unknown): Uint8Array;

@@ -12,6 +12,23 @@ defmodule Lattice.LiveOps do
   revocation, expiry, use-limit, ops, schema, and the action caveat. LiveOps only
   executes the overlay/approval/publish workflow and renders state, deriving every
   capability's status from `CapStore` so the two can never drift.
+
+  Every event is mirrored to `Lattice.Audit`. Audit writes are deferred, not
+  dropped, while Audit is unavailable (row 310): `audit_queue` holds the
+  unacknowledged events (exact `kind` and `data`) oldest first, and
+  `audit_cursor` marks the newest event Audit acknowledged, so a flush touches
+  only the batch it writes, never the whole backlog (row 310 round 3). Later
+  events are replayed in order, tagged
+  `audit_deferred: true`, on the next emit, on a 1 s retry timer, or through
+  `flush_audit/0`. Each of those writes at most `@audit_batch` (500) records, a
+  pending `:liveops_audit_gap` record included, and, if more
+  remain, queues an immediate continuation message, so a large backlog drains
+  in bounded batches with snapshot and control calls served between them. The
+  exception is `reset/0`: it drains the whole backlog to a live Audit in one
+  call, so it blocks for time proportional to the backlog (a known residual,
+  row 310 round 2). A reset that discards unrecorded events leaves one
+  `:liveops_audit_gap` record with the dropped count. A stalled Audit (a call
+  timeout) still exits LiveOps.
   """
 
   use GenServer
@@ -20,6 +37,8 @@ defmodule Lattice.LiveOps do
   alias Lattice.LiveOps.{Policy, Serializer}
 
   @default_publish_ttl_ms 15_000
+  @audit_batch 500
+  @default_audit_retry_ms 1_000
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -33,6 +52,21 @@ defmodule Lattice.LiveOps do
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
   def events, do: GenServer.call(__MODULE__, :events)
   def reset, do: GenServer.call(__MODULE__, :reset)
+
+  @doc """
+  Replays any audit records deferred while `Lattice.Audit` was unavailable.
+
+  Writes at most one bounded batch (500 records); any remainder continues
+  automatically without blocking callers. Returns
+  `{:ok, %{flushed: n, pending: m, gap: g}}`: `n` Audit records this call wrote,
+  counting a `:liveops_audit_gap` record; `m` events still waiting for Audit;
+  and `g` events a `reset/0` discarded unrecorded whose gap record is not
+  written yet.
+  """
+  def flush_audit, do: GenServer.call(__MODULE__, :flush_audit)
+
+  @doc false
+  def audit_batch, do: @audit_batch
   def export(format \\ :json), do: GenServer.call(__MODULE__, {:export, format})
 
   def record_denial(tab_id, action, reason, metadata \\ %{}) do
@@ -72,20 +106,25 @@ defmodule Lattice.LiveOps do
 
       state = put_actor(state, actor)
       state = put_in(state.role_counts[role], state.role_counts[role] + 1)
-      {actor, state} = grant_role_caps(actor, state)
-      {actor, state} = spawn_devices(actor, state)
-      state = put_actor(state, actor)
 
-      state =
-        emit(state, :liveops_actor_joined, %{
-          tab_id: actor.tab_id,
-          session_id: actor.session_id,
-          role: actor.role,
-          label: actor.label,
-          color: actor.color
-        })
+      with {:ok, actor, state} <- grant_role_caps(actor, state),
+           {:ok, actor, state} <- spawn_devices(actor, state) do
+        state = put_actor(state, actor)
 
-      {:reply, {:ok, Serializer.actor_view(state, actor)}, state}
+        state =
+          emit(state, :liveops_actor_joined, %{
+            tab_id: actor.tab_id,
+            session_id: actor.session_id,
+            role: actor.role,
+            label: actor.label,
+            color: actor.color
+          })
+
+        {:reply, {:ok, Serializer.actor_view(state, actor)}, state}
+      else
+        {:error, reason, actor, state, device_pids} ->
+          {:reply, {:error, reason}, refuse_registration(state, actor, device_pids, reason)}
+      end
     end
   end
 
@@ -136,7 +175,31 @@ defmodule Lattice.LiveOps do
 
   def handle_call(:snapshot, _from, state), do: {:reply, Serializer.snapshot(state), state}
   def handle_call(:events, _from, state), do: {:reply, Enum.reverse(state.events), state}
-  def handle_call(:reset, _from, _state), do: {:reply, :ok, fresh_state()}
+
+  # Reset is a destructive control call, so it drains the whole backlog to a
+  # live Audit before discarding events; only what Audit cannot take becomes
+  # the gap (row 310 round 1).
+  def handle_call(:reset, _from, state) do
+    state = drain_audit(state)
+    cancel_audit_retry(state)
+    gap = state.audit_gap + audit_pending(state)
+    {:reply, :ok, schedule_audit_retry(%{fresh_state() | audit_gap: gap}, audit_retry_ms())}
+  end
+
+  def handle_call(:flush_audit, _from, state) do
+    before = state.audit_cursor
+    gap_before = state.audit_gap
+    state = flush_audit(state)
+    gap_written = if gap_before > 0 and state.audit_gap == 0, do: 1, else: 0
+
+    {:reply,
+     {:ok,
+      %{
+        flushed: state.audit_cursor - before + gap_written,
+        pending: audit_pending(state),
+        gap: state.audit_gap
+      }}, state}
+  end
 
   def handle_call({:export, :json}, _from, state) do
     {:reply, Jason.encode!(Serializer.snapshot(state), pretty: true), state}
@@ -169,6 +232,10 @@ defmodule Lattice.LiveOps do
   end
 
   @impl true
+  def handle_info(:flush_audit, state) do
+    {:noreply, flush_audit(%{state | audit_retry: nil})}
+  end
+
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     case Map.pop(state.device_refs, ref) do
       {{tab_id, device_id}, device_refs} ->
@@ -195,7 +262,11 @@ defmodule Lattice.LiveOps do
       operation_sequence: 0,
       device_sequence: 0,
       denials: 0,
-      device_refs: %{}
+      device_refs: %{},
+      audit_cursor: 0,
+      audit_queue: :queue.new(),
+      audit_gap: 0,
+      audit_retry: nil
     }
   end
 
@@ -204,134 +275,187 @@ defmodule Lattice.LiveOps do
     %{state | actors: Map.put(state.actors, actor.tab_id, actor), order: order}
   end
 
+  # CapStore refuses a grant with `{:error, :audit_unavailable}` while its
+  # audit backlog is full (row 313). Grants and devices stop at the first
+  # refusal and `refuse_registration/4` rolls the actor back (row 441, D-771).
   defp grant_role_caps(actor, state) do
-    Enum.reduce(Policy.role_actions(actor.role), {actor, state}, fn action, {actor, state} ->
-      grant_role_cap(actor, state, action)
-    end)
-  end
-
-  defp spawn_devices(actor, state) do
-    Enum.reduce(Policy.role_devices(actor.role), {actor, state}, fn kind, {actor, state} ->
-      device_id = "device-#{state.device_sequence + 1}-#{kind}"
-
-      case Lattice.spawn_linked(
-             actor.tab_id,
-             Lattice.LiveOps.Device,
-             [kind: kind, device_id: device_id, role: actor.role],
-             []
-           ) do
-        {:ok, pid} ->
-          ref = Process.monitor(pid)
-          state = %{state | device_sequence: state.device_sequence + 1}
-          state = put_in(state.device_refs[ref], {actor.tab_id, device_id})
-
-          device = %{
-            id: device_id,
-            kind: kind,
-            role: actor.role,
-            tab_id: actor.tab_id,
-            pid: inspect(pid),
-            state: :connected
-          }
-
-          actor = put_in(actor.devices[device_id], device)
-
-          {actor, state} =
-            grant_device_cap(actor, state, Policy.device_action(kind), pid, device_id, kind)
-
-          state =
-            emit(state, :liveops_device_joined, %{
-              tab_id: actor.tab_id,
-              role: actor.role,
-              device_id: device_id,
-              device_kind: kind
-            })
-
-          {actor, state}
-
-        {:error, reason} ->
-          state = %{state | device_sequence: state.device_sequence + 1}
-
-          state =
-            emit(state, :liveops_device_skipped, %{
-              tab_id: actor.tab_id,
-              role: actor.role,
-              device_kind: kind,
-              reason: inspect(reason)
-            })
-
-          {actor, state}
+    Policy.role_actions(actor.role)
+    |> Enum.reduce_while({:ok, actor, state}, fn action, {:ok, actor, state} ->
+      case grant_role_cap(actor, state, action) do
+        {:ok, actor, state} -> {:cont, {:ok, actor, state}}
+        {:error, reason} -> {:halt, {:error, reason, actor, state, []}}
       end
     end)
   end
 
+  defp spawn_devices(actor, state) do
+    Policy.role_devices(actor.role)
+    |> Enum.reduce_while({:ok, actor, state, []}, fn kind, {:ok, actor, state, pids} ->
+      case spawn_device(actor, state, kind) do
+        {:ok, actor, state, nil} ->
+          {:cont, {:ok, actor, state, pids}}
+
+        {:ok, actor, state, pid} ->
+          {:cont, {:ok, actor, state, [pid | pids]}}
+
+        {:error, reason, actor, state, pid} ->
+          {:halt, {:error, reason, actor, state, [pid | pids]}}
+      end
+    end)
+    |> case do
+      {:ok, actor, state, _pids} -> {:ok, actor, state}
+      refused -> refused
+    end
+  end
+
+  defp spawn_device(actor, state, kind) do
+    device_id = "device-#{state.device_sequence + 1}-#{kind}"
+
+    case Lattice.spawn_linked(
+           actor.tab_id,
+           Lattice.LiveOps.Device,
+           [kind: kind, device_id: device_id, role: actor.role],
+           []
+         ) do
+      {:ok, pid} ->
+        ref = Process.monitor(pid)
+        state = %{state | device_sequence: state.device_sequence + 1}
+        state = put_in(state.device_refs[ref], {actor.tab_id, device_id})
+
+        device = %{
+          id: device_id,
+          kind: kind,
+          role: actor.role,
+          tab_id: actor.tab_id,
+          pid: inspect(pid),
+          state: :connected
+        }
+
+        actor = put_in(actor.devices[device_id], device)
+
+        case grant_device_cap(actor, state, Policy.device_action(kind), pid, device_id, kind) do
+          {:ok, actor, state} ->
+            state =
+              emit(state, :liveops_device_joined, %{
+                tab_id: actor.tab_id,
+                role: actor.role,
+                device_id: device_id,
+                device_kind: kind
+              })
+
+            {:ok, actor, state, pid}
+
+          {:error, reason} ->
+            {:error, reason, actor, state, pid}
+        end
+
+      {:error, reason} ->
+        state = %{state | device_sequence: state.device_sequence + 1}
+
+        state =
+          emit(state, :liveops_device_skipped, %{
+            tab_id: actor.tab_id,
+            role: actor.role,
+            device_kind: kind,
+            reason: inspect(reason)
+          })
+
+        {:ok, actor, state, nil}
+    end
+  end
+
   defp grant_role_cap(actor, state, action) do
-    {:ok, cap} =
-      Lattice.grant(actor.tab_id, __MODULE__, [:call], Policy.role_cap_opts(action, actor.role))
+    with {:ok, cap} <-
+           Lattice.grant(
+             actor.tab_id,
+             __MODULE__,
+             [:call],
+             Policy.role_cap_opts(action, actor.role)
+           ) do
+      entry = %{
+        owner_tab_id: cap.owner_tab_id,
+        action: action,
+        role: actor.role,
+        target: "server_plane",
+        kind: :role,
+        device_id: nil,
+        device_kind: nil,
+        approval_id: nil,
+        approved_by_tab_id: nil
+      }
 
-    entry = %{
-      owner_tab_id: cap.owner_tab_id,
-      action: action,
-      role: actor.role,
-      target: "server_plane",
-      kind: :role,
-      device_id: nil,
-      device_kind: nil,
-      approval_id: nil,
-      approved_by_tab_id: nil
-    }
-
-    put_cap(actor, state, cap, entry)
+      {actor, state} = put_cap(actor, state, cap, entry)
+      {:ok, actor, state}
+    end
   end
 
   defp grant_device_cap(actor, state, action, pid, device_id, kind) do
-    {:ok, cap} =
-      Lattice.grant(
-        actor.tab_id,
-        pid,
-        [:call],
-        Policy.device_cap_opts(action, actor.role, device_id, kind)
-      )
+    with {:ok, cap} <-
+           Lattice.grant(
+             actor.tab_id,
+             pid,
+             [:call],
+             Policy.device_cap_opts(action, actor.role, device_id, kind)
+           ) do
+      entry = %{
+        owner_tab_id: cap.owner_tab_id,
+        action: action,
+        role: actor.role,
+        target: device_id,
+        kind: :device,
+        device_id: device_id,
+        device_kind: kind,
+        approval_id: nil,
+        approved_by_tab_id: nil
+      }
 
-    entry = %{
-      owner_tab_id: cap.owner_tab_id,
-      action: action,
-      role: actor.role,
-      target: device_id,
-      kind: :device,
-      device_id: device_id,
-      device_kind: kind,
-      approval_id: nil,
-      approved_by_tab_id: nil
-    }
-
-    put_cap(actor, state, cap, entry)
+      {actor, state} = put_cap(actor, state, cap, entry)
+      {:ok, actor, state}
+    end
   end
 
   defp grant_publish_cap(state, operator, producer, approval, ttl_ms) do
-    {:ok, cap} =
-      Lattice.grant(
-        operator.tab_id,
-        __MODULE__,
-        [:call],
-        Policy.publish_cap_opts(approval, producer.tab_id, ttl_ms)
-      )
+    with {:ok, cap} <-
+           Lattice.grant(
+             operator.tab_id,
+             __MODULE__,
+             [:call],
+             Policy.publish_cap_opts(approval, producer.tab_id, ttl_ms)
+           ) do
+      entry = %{
+        owner_tab_id: cap.owner_tab_id,
+        action: :publish,
+        role: :graphics_operator,
+        target: "server_plane",
+        kind: :approval,
+        device_id: nil,
+        device_kind: nil,
+        approval_id: approval.id,
+        approved_by_tab_id: producer.tab_id
+      }
 
-    entry = %{
-      owner_tab_id: cap.owner_tab_id,
-      action: :publish,
-      role: :graphics_operator,
-      target: "server_plane",
-      kind: :approval,
-      device_id: nil,
-      device_kind: nil,
-      approval_id: approval.id,
-      approved_by_tab_id: producer.tab_id
-    }
+      {operator, state} = put_cap(operator, state, cap, entry)
+      {:ok, cap, put_actor(state, operator)}
+    end
+  end
 
-    {operator, state} = put_cap(operator, state, cap, entry)
-    state = put_actor(state, operator)
-    {cap, state}
+  # Undoes a registration CapStore refused part way: stops the devices it
+  # spawned, revokes the caps it granted and drops the actor, so a retry after
+  # Audit returns registers afresh (row 441, D-771).
+  defp refuse_registration(state, actor, device_pids, reason) do
+    Enum.each(device_pids, &DynamicSupervisor.terminate_child(Lattice.TabWorkerSupervisor, &1))
+
+    {refs, device_refs} =
+      Enum.split_with(state.device_refs, fn {_ref, {tab_id, _device_id}} ->
+        tab_id == actor.tab_id
+      end)
+
+    Enum.each(refs, fn {ref, _device} -> Process.demonitor(ref, [:flush]) end)
+
+    state = %{put_actor(state, actor) | device_refs: Map.new(device_refs)}
+    state = update_in(state.role_counts[actor.role], &(&1 - 1))
+    {{:ok, _actor}, state} = cleanup_actor(state, actor.tab_id, reason)
+    state
   end
 
   defp put_cap(actor, state, cap, entry) do
@@ -449,9 +573,8 @@ defmodule Lattice.LiveOps do
     ttl_ms = integer_field(payload, :ttl_ms) || @default_publish_ttl_ms
 
     with {:ok, approval} <- fetch_pending_approval(state, approval_id),
-         {:ok, operator} <- fetch_actor(state, approval.operator_tab_id) do
-      {publish_cap, state} = grant_publish_cap(state, operator, actor, approval, ttl_ms)
-
+         {:ok, operator} <- fetch_actor(state, approval.operator_tab_id),
+         {:ok, publish_cap, state} <- grant_publish_cap(state, operator, actor, approval, ttl_ms) do
       approval = %{
         approval
         | status: :approved,
@@ -664,10 +787,129 @@ defmodule Lattice.LiveOps do
       data: data
     }
 
-    Audit.record(kind, Map.put(data, :liveops_event_id, event.id))
-    push_demo_event(kind, data)
+    state = %{
+      state
+      | events: [event | state.events],
+        sequence: event.id,
+        audit_queue: :queue.in(event, state.audit_queue)
+    }
 
-    %{state | events: [event | state.events], sequence: event.id}
+    state = flush_audit(state, event.id)
+    push_demo_event(kind, data)
+    state
+  end
+
+  # Writes up to `@audit_batch` events newer than `audit_cursor` to Audit,
+  # oldest first, and stops at the first `{:error, :unavailable}`. A backlog
+  # left after a full batch is continued by an immediate `:flush_audit`
+  # message, so the mailbox interleaves other calls (row 310 round 1); an
+  # unavailable Audit re-arms the 1 s retry instead. `current_id` is the event being
+  # emitted right now: it alone is recorded without the `audit_deferred` marker,
+  # so a healthy-path record is byte-identical to the pre-row-310 one.
+  defp flush_audit(state, current_id \\ nil) do
+    gap_before = state.audit_gap
+    state = flush_audit_gap(state)
+
+    if state.audit_gap > 0 do
+      schedule_audit_retry(state, audit_retry_ms())
+    else
+      # A gap record written by this call counts toward the batch (row 310 round 2).
+      allowance = if gap_before > 0, do: @audit_batch - 1, else: @audit_batch
+
+      {state, outcome} = write_audit_batch(state, allowance, current_id)
+      delay = if outcome == :ok, do: 0, else: audit_retry_ms()
+      schedule_audit_retry(state, delay)
+    end
+  end
+
+  # Pops from the front of the oldest-first `audit_queue`, so the work is
+  # bounded by `allowance` plus one failed write, not by the backlog size
+  # (row 310 round 3: the old newest-first scan made an outage O(N^2)).
+  defp write_audit_batch(state, 0, _current_id), do: {state, :ok}
+
+  defp write_audit_batch(state, allowance, current_id) do
+    case :queue.peek(state.audit_queue) do
+      :empty ->
+        {state, :ok}
+
+      {:value, event} ->
+        metadata =
+          event.data
+          |> Map.put(:liveops_event_id, event.id)
+          |> mark_deferred(event.id != current_id)
+
+        case Audit.try_record(event.kind, metadata) do
+          {:ok, _record} ->
+            state = %{state | audit_cursor: event.id, audit_queue: :queue.drop(state.audit_queue)}
+            write_audit_batch(state, allowance - 1, current_id)
+
+          {:error, :unavailable} ->
+            {state, :unavailable}
+        end
+    end
+  end
+
+  defp drain_audit(state) do
+    before = {state.audit_cursor, state.audit_gap}
+    state = flush_audit(state)
+
+    cond do
+      state.audit_gap == 0 and audit_pending(state) == 0 -> state
+      {state.audit_cursor, state.audit_gap} == before -> state
+      true -> drain_audit(state)
+    end
+  end
+
+  defp flush_audit_gap(%{audit_gap: 0} = state), do: state
+
+  defp flush_audit_gap(state) do
+    case Audit.try_record(:liveops_audit_gap, %{dropped: state.audit_gap, reason: :reset}) do
+      {:ok, _record} -> %{state | audit_gap: 0}
+      {:error, :unavailable} -> state
+    end
+  end
+
+  defp mark_deferred(metadata, true), do: Map.put(metadata, :audit_deferred, true)
+  defp mark_deferred(metadata, false), do: metadata
+
+  defp audit_pending(state), do: state.sequence - state.audit_cursor
+
+  # Runtime-configurable so tests can hold the retry timer off while they
+  # assert an explicit flush's count (row 310 round 2).
+  defp audit_retry_ms,
+    do: Application.get_env(:lattice_core, :liveops_audit_retry_ms, @default_audit_retry_ms)
+
+  # Arms one `:flush_audit` timer while records are owed. A continuation
+  # (`delay` 0) replaces a pending 1 s retry so a healthy backlog never idles.
+  defp schedule_audit_retry(state, delay) do
+    cond do
+      state.audit_gap == 0 and audit_pending(state) == 0 ->
+        state
+
+      state.audit_retry == nil ->
+        %{state | audit_retry: Process.send_after(self(), :flush_audit, delay)}
+
+      delay == 0 ->
+        cancel_audit_retry(state)
+        %{state | audit_retry: Process.send_after(self(), :flush_audit, 0)}
+
+      true ->
+        state
+    end
+  end
+
+  defp cancel_audit_retry(%{audit_retry: nil}), do: :ok
+
+  defp cancel_audit_retry(%{audit_retry: ref}) do
+    if Process.cancel_timer(ref) == false do
+      receive do
+        :flush_audit -> :ok
+      after
+        0 -> :ok
+      end
+    end
+
+    :ok
   end
 
   defp push_demo_event(kind, data) do

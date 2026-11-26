@@ -1,0 +1,13 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:35
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex	2026-11-16 02:41:35
+@@ -1051,8 +1051,8 @@
+   # under the node may use it, but its replicas may move onto fresh routes. The reservation is
+   # part of the route map, so it propagates down every chain and into later floors.
+   defp merge_floor({:ok, e1, r1}, {:ok, e2, r2}) do
+-    {:ok, Enum.uniq(e1 ++ e2),
+-     Map.merge(r1, r2, fn _route, x, y -> if x == y and x != :none, do: x, else: :none end)}
++    # MUTANT m1: the first cited prior's floor wins; later priors are ignored.
++    if e1 == [] and r1 == %{}, do: {:ok, e2, r2}, else: {:ok, e1, r1}
+   end
+ 
+   # --- closure and heads ------------------------------------------------------

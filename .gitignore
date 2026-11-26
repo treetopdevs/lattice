@@ -42,3 +42,4 @@ erl_crash.dump
 
 # Local toolchain override (mise: defer Erlang/Elixir to asdf's OTP 28).
 .mise.toml
+artifacts/*.report.html

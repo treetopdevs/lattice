@@ -83,6 +83,28 @@ defmodule Lattice.FaultScenario do
       ],
       rerun: true
     },
+    # Plan 287: a leased delegate keeps its attributed pre-lapse result but loses
+    # permission once a root beacon passes the lease; nobody else can cite the lease.
+    "handoff_lapse" => %{
+      scenario: "handoff_lapse",
+      fault:
+        "root leases post to agent (expires_epoch 3); agent posts; root beacons 4; " <>
+          "agent posts again; peer posts citing the agent's delegation",
+      invariant: "attributed_result_survives_lost_permission",
+      realms: ["root", "agent", "peer"],
+      root: "root",
+      modules: %{"thread" => Thread},
+      checks: [
+        {"pre_lapse_honored", :replay},
+        {"pre_lapse_authored_by_agent", :replay},
+        {"post_lapse_quarantined_lease_expired", :replay},
+        {"peer_cannot_cite_agent_delegation", :replay},
+        {"beacon_honored", :replay},
+        {"states_equal", :replay},
+        {"reasons_identical_across_realms", :replay}
+      ],
+      rerun: true
+    },
     # Plan 204: process-level scenarios run by the lattice_carrier_server test suite.
     # Their checks are recorded, never re-derived; the log hashes, quarantine table
     # and DOT are still recomputed from the verified server log.
@@ -127,9 +149,26 @@ defmodule Lattice.FaultScenario do
 
   @carrier_scenarios ["stall_shutdown", "crash_relay"]
 
+  @handoff_texts %{
+    pre: "agent result before lapse",
+    post: "agent result after lapse",
+    misuse: "peer citing agent cap"
+  }
+
+  # The lease the agent receives and the beacon epoch that passes it.
+  @handoff_expires_epoch 3
+  @handoff_beacon_epoch 4
+
   @doc "Names of the scenarios this module can run, in report order."
   @spec scenarios() :: [String.t()]
-  def scenarios, do: ["partition_converge", "revoke_offline"]
+  def scenarios, do: ["partition_converge", "revoke_offline", "handoff_lapse"]
+
+  @doc """
+  The `handoff_lapse` post texts. `evaluate/3` finds the agent's and the peer's posts
+  by these texts, so they are part of the scenario's verifier-owned definition.
+  """
+  @spec handoff_texts() :: %{pre: String.t(), post: String.t(), misuse: String.t()}
+  def handoff_texts, do: @handoff_texts
 
   @doc """
   Names of the plan 204 carrier scenarios. Their evidence is written by the
@@ -156,13 +195,15 @@ defmodule Lattice.FaultScenario do
   Run scenario `name` with `seed` and return its final logs.
 
   `opts[:variant]` selects a test-only negative control: `:no_revoke` skips the
-  revocation step of `revoke_offline`.
+  revocation step of `revoke_offline`; `:no_beacon` skips the lapsing beacon of
+  `handoff_lapse`.
   """
   @spec run(String.t(), String.t(), keyword()) :: {:ok, logs()} | {:error, :unknown_scenario}
   def run(name, seed, opts \\ []) when is_binary(name) and is_binary(seed) do
     case name do
       "partition_converge" -> {:ok, partition_converge(seed)}
       "revoke_offline" -> {:ok, revoke_offline(seed, Keyword.get(opts, :variant))}
+      "handoff_lapse" -> {:ok, handoff_lapse(seed, Keyword.get(opts, :variant))}
       _other -> {:error, :unknown_scenario}
     end
   end
@@ -264,6 +305,43 @@ defmodule Lattice.FaultScenario do
     Map.merge(named_logs("space", space), named_logs("thread", thread))
   end
 
+  defp handoff_lapse(seed, variant) do
+    realms = spec("handoff_lapse").realms
+    %{pre: pre, post: post, misuse: misuse} = @handoff_texts
+
+    {thread, _} =
+      Thread
+      |> Sim.new(replica_name("handoff_lapse", "thread"), realms, seed: seed)
+      |> Sim.create_replica("root")
+
+    {thread, cap} =
+      Sim.grant(thread, "root", "agent",
+        ops: [:post],
+        live: true,
+        expires_epoch: @handoff_expires_epoch
+      )
+
+    thread = Sim.sync_all(thread)
+    {thread, _} = Sim.command(thread, "agent", :post, [pre], cap: cap.id)
+    thread = Sim.sync_all(thread)
+
+    # The lapse is causal: every realm sees the beacon before the agent's next post,
+    # so this is the "recipient saw the lapse and still tried" case.
+    thread =
+      if variant == :no_beacon do
+        thread
+      else
+        {thread, _} = Sim.beacon(thread, "root", @handoff_beacon_epoch)
+        Sim.sync_all(thread)
+      end
+
+    {thread, _} = Sim.command(thread, "agent", :post, [post], cap: cap.id)
+    # `peer` never held the agent's delegation; it cites the id anyway.
+    {thread, _} = Sim.command(thread, "peer", :post, [misuse], cap: cap.id)
+
+    thread |> Sim.sync_all() |> then(&named_logs("thread", &1))
+  end
+
   defp isolate(sim, realm),
     do: sim |> Sim.partition(realm, "root") |> Sim.partition(realm, "peer")
 
@@ -322,6 +400,45 @@ defmodule Lattice.FaultScenario do
     }
   end
 
+  # Each op is found by its post text alone, never by the beacon, so the
+  # `:no_beacon` control still locates every op and violates only the lapse check.
+  defp evaluate("handoff_lapse", seed, logs) do
+    keys = realm_keys("handoff_lapse", seed)
+    thread = for {"thread." <> _, log} <- logs, do: log
+    %{pre: pre, post: post, misuse: misuse} = @handoff_texts
+
+    %{
+      "pre_lapse_honored" =>
+        nonempty_all?(thread, fn log ->
+          with_post(log, pre, &(honored?(log, &1) and posted?(log, pre)))
+        end),
+      "pre_lapse_authored_by_agent" =>
+        nonempty_all?(thread, fn log -> with_post(log, pre, &(&1.author == keys["agent"])) end),
+      "post_lapse_quarantined_lease_expired" =>
+        nonempty_all?(thread, fn log ->
+          with_post(log, post, fn op ->
+            op.author == keys["agent"] and op.cap == agent_cap(log, pre) and
+              reason(log, op) == :lease_expired and not posted?(log, post)
+          end)
+        end),
+      # The judge checks the audience before the lease, so the peer's citation of
+      # the agent's delegation fails as :capability_wrong_audience with or without
+      # the beacon. Pinned as the judge reports it (plan 287 STOP conditions).
+      "peer_cannot_cite_agent_delegation" =>
+        nonempty_all?(thread, fn log ->
+          with_post(log, misuse, fn op ->
+            op.author == keys["peer"] and op.cap == agent_cap(log, pre) and
+              reason(log, op) == :capability_wrong_audience and not posted?(log, misuse)
+          end)
+        end),
+      # Vacuous without a beacon; it guards against a quarantined beacon, not its absence.
+      "beacon_honored" =>
+        nonempty_all?(thread, fn log -> Enum.all?(beacon_ops(log), &honored?(log, &1)) end),
+      "states_equal" => same?(thread, &Lattice.state(Thread, &1)),
+      "reasons_identical_across_realms" => same?(thread, &Authority.analyze(Thread, &1).reasons)
+    }
+  end
+
   defp writer_admin_before_revoke?(log, writer) do
     case revoke_op(log) do
       nil ->
@@ -372,6 +489,31 @@ defmodule Lattice.FaultScenario do
 
   defp writer_posts(log, writer) do
     for %Op{kind: :command, author: ^writer, body: {:post, _}} = op <- Map.values(Log.ops(log)),
+        do: op
+  end
+
+  # Exactly one post carrying `text`; zero or several is not this script.
+  defp with_post(log, text, fun) do
+    case for(%Op{kind: :command, body: {:post, [^text]}} = op <- Map.values(Log.ops(log)), do: op) do
+      [op] -> fun.(op)
+      _none_or_many -> false
+    end
+  end
+
+  defp agent_cap(log, pre_text), do: with_post(log, pre_text, & &1.cap)
+
+  defp honored?(log, op) do
+    analysis = Authority.analyze(Thread, log)
+    not MapSet.member?(analysis.quarantine, op.id) and not Map.has_key?(analysis.reasons, op.id)
+  end
+
+  defp reason(log, op), do: Map.get(Authority.analyze(Thread, log).reasons, op.id)
+
+  defp posted?(log, text), do: text in Lattice.state(Thread, log).posts
+
+  defp beacon_ops(log) do
+    for %Op{kind: :authority, body: body} = op <- Map.values(Log.ops(log)),
+        is_tuple(body) and tuple_size(body) > 0 and elem(body, 0) == :beacon,
         do: op
   end
 

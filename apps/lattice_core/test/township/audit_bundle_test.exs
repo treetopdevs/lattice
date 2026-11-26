@@ -48,6 +48,25 @@ defmodule Township.AuditBundleTest do
   end
 
   @tag :tmp_dir
+  test "a bundle over a log with an ill-formed grant names the omission and still verifies", %{
+    tmp_dir: dir
+  } do
+    sim = Sim.new(Matter, "replica:matter:omitted", ["clerk", "resident"], seed: "bundle-omitted")
+    {sim, _} = Sim.create_replica(sim, "clerk")
+    {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+    {sim, bad} = Sim.append(sim, "clerk", :authority, {:grant, %{good | roles: [:clerk]}})
+    log = sim |> Sim.sync_all() |> Sim.log("clerk")
+
+    assert {:ok, _} = AuditBundle.write(dir, log)
+
+    assert File.read!(Path.join(dir, "trust_graph.dot")) =~
+             "// omitted 1 ill-formed delegation op(s): #{bad.id}"
+
+    assert File.read!(Path.join(dir, "trust_graph.mermaid")) =~ "%% omitted 1"
+    assert :ok = AuditBundle.verify(dir)
+  end
+
+  @tag :tmp_dir
   test "authentic accepted history with rejected-signature evidence still verifies", %{
     tmp_dir: dir
   } do
@@ -80,6 +99,42 @@ defmodule Township.AuditBundleTest do
       File.write!(path, bytes)
       assert {:error, [_ | _]} = AuditBundle.verify(dir)
     end
+  end
+
+  @tag :tmp_dir
+  test "an oversized matter.log is refused before verification", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "bundle")
+    File.cp_r!(@tracked_dir, dir)
+    path = Path.join(dir, "matter.log")
+    limit = AuditBundle.max_matter_log_byte_size()
+    File.rm!(path)
+
+    File.open!(path, [:write, :binary], fn io ->
+      {:ok, _} = :file.position(io, limit)
+      :ok = IO.binwrite(io, "x")
+    end)
+
+    assert File.stat!(path).size == limit + 1
+    expected = {:error, ["matter.log exceeds #{limit} bytes"]}
+    assert AuditBundle.verify(dir) == expected
+    assert AuditBundle.load_verified(dir) == expected
+  end
+
+  @tag :tmp_dir
+  test "a compressed matter.log is refused before it is decoded", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "bundle")
+    File.cp_r!(@tracked_dir, dir)
+    path = Path.join(dir, "matter.log")
+    # A genuine dump, recompressed: valid content, but decoding would bypass the byte bound.
+    compressed =
+      path |> File.read!() |> :erlang.binary_to_term() |> :erlang.term_to_binary([:compressed])
+
+    assert <<131, 80, _::binary>> = compressed
+    File.write!(path, compressed)
+
+    expected = {:error, ["matter.log uses compressed term encoding"]}
+    assert AuditBundle.verify(dir) == expected
+    assert AuditBundle.load_verified(dir) == expected
   end
 
   test "fresh processes emit and independently verify the outsider audit bundle" do

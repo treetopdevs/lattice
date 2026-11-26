@@ -85,6 +85,9 @@ defmodule TownshipWeb.InstrumentLiveTest do
              "#roles-panel [data-holder='clerk'][data-fingerprint='xI19LiI0w767']"
            )
 
+    assert has_element?(view, "#roles-panel [data-role-chronology='clerk']")
+    assert has_element?(view, "#roles-panel [data-authority-observe]", "No accepted beacons.")
+
     assert has_element?(view, "#members-panel [data-member='clerk']")
     assert has_element?(view, "#members-panel [data-member='resident']")
     assert has_element?(view, "#members-panel [data-empty='denied-members']")
@@ -92,6 +95,7 @@ defmodule TownshipWeb.InstrumentLiveTest do
     assert has_element?(view, "#attest-panel [data-receipt-free='false']")
     assert has_element?(view, "#trust-graph-panel [data-trust-node]")
     assert has_element?(view, "#trust-graph-panel [data-trust-edge]")
+    refute has_element?(view, "#trust-graph-panel [data-trust-omitted]")
     assert has_element?(view, "#op-dag-panel [data-op-node]")
     assert has_element?(view, "#op-dag-panel [data-frontier]")
     assert has_element?(view, "#op-dag-panel .op-rail")
@@ -222,6 +226,98 @@ defmodule TownshipWeb.InstrumentLiveTest do
            )
 
     refute has_element?(view, "#roles-panel [data-audit-ledger]", "No quarantine events.")
+  end
+
+  test "roles panel shows lease status and the highest accepted beacon epoch", %{conn: conn} do
+    peer_log = lease_beacon_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:lease-beacon:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-lease-status='lapsed'][data-lease-expired='true']",
+             "expires after epoch 3"
+           )
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-lease-status='active'][data-lease-expired='false']",
+             "expires after epoch 9"
+           )
+
+    assert has_element?(
+             view,
+             "#roles-panel [data-beacon-max-epoch]",
+             "Highest accepted beacon epoch on this log: 5"
+           )
+
+    refute has_element?(view, "#roles-panel [data-authority-observe]", "No leased delegations.")
+  end
+
+  test "trust graph panel shows the omitted count", %{conn: conn} do
+    peer_log = omitted_grant_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:trust-omitted:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "#trust-graph-panel [data-trust-omitted]", "1 omitted")
+  end
+
+  # Row 325: admitted non-text Matter arguments reach the model as the marker.
+  test "malformed Matter text renders the marker instead of crashing the instrument", %{
+    conn: conn
+  } do
+    peer_log = malformed_text_log()
+
+    projection =
+      start_supervised!(
+        {CarrierProjection,
+         carrier: LiveCarrier,
+         connect_opts: [ops: Log.topo_ops(peer_log)],
+         replica: peer_log.replica,
+         peer_realm: "clerk",
+         pubsub: TownshipWeb.PubSub,
+         topic: "township:malformed-text:#{System.unique_integer([:positive])}",
+         schedule: :manual}
+      )
+
+    put_projection_config(projection)
+    {:ok, view, _html} = live(conn, "/township")
+
+    assert {:ok, {:fresh, _payload}} = CarrierProjection.refresh(projection)
+    assert has_element?(view, "[data-post]", "(malformed)")
+    assert has_element?(view, "h2", "(malformed)")
+    assert has_element?(view, ~s{[data-member="(malformed)"]})
+    assert render(view) =~ "data-replay"
+    assert Process.alive?(view.pid)
   end
 
   test "fresh carrier state prepares one unsigned participant post without changing the model", %{
@@ -1273,6 +1369,33 @@ defmodule TownshipWeb.InstrumentLiveTest do
     Sim.log(sim, "clerk")
   end
 
+  defp omitted_grant_log do
+    sim =
+      Sim.new(Matter, "replica:matter:trust-omitted", ["clerk", "resident"],
+        seed: "trust-omitted"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, good} = Sim.grant(sim, "clerk", "resident", ops: [:post], roles: [:clerk])
+    {sim, _bad} = Sim.append(sim, "clerk", :authority, {:grant, %{good | roles: [:clerk]}})
+    sim |> Sim.sync_all() |> Sim.log("clerk")
+  end
+
+  defp malformed_text_log do
+    sim =
+      Sim.new(Matter, "replica:matter:malformed-text", ["clerk", "resident"],
+        seed: "malformed-text"
+      )
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _grant} = Sim.grant(sim, "clerk", "resident", ops: [:post, :set_title, :admit])
+    sim = Sim.sync_all(sim)
+    {sim, _post} = Sim.command(sim, "resident", :post, [{:x, 1}])
+    {sim, _title} = Sim.command(sim, "resident", :set_title, [<<255>>])
+    {sim, _admit} = Sim.command(sim, "resident", :admit, [<<255>>])
+    sim |> Sim.sync_all() |> Sim.log("clerk")
+  end
+
   defp structural_quarantine_log do
     sim =
       Sim.new(
@@ -1289,6 +1412,17 @@ defmodule TownshipWeb.InstrumentLiveTest do
     sim = Sim.sync_all(sim)
 
     {Sim.log(sim, "clerk"), unauthorized_revoke.id}
+  end
+
+  defp lease_beacon_log do
+    sim =
+      Sim.new(Matter, "replica:matter:lease-beacon", ["clerk", "resident"], seed: "lease-beacon")
+
+    {sim, _genesis} = Sim.create_replica(sim, "clerk")
+    {sim, _lapsed} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    {sim, _active} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 9)
+    {sim, _beacon} = Sim.beacon(sim, "clerk", 5)
+    sim |> Sim.sync_all() |> Sim.log("clerk")
   end
 
   defp peer_status_logs do

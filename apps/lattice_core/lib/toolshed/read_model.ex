@@ -11,15 +11,43 @@ defmodule Toolshed.ReadModel do
   request list is the Q-06 dispute surface — a request is `resolved?` exactly
   when an honored `:custody_transfer` cites its id, so an unresolved or
   refused request stays visible and timestamped with no extra bookkeeping.
+
+  ## Display-safety contract (row 324)
+
+  Any realm can append an admitted `{:request, ref, payload}` `:inbox` op with
+  any Canonical-encodable terms: admission checks only the hash and signature,
+  and only honest `Lattice.Sim.request/4` authoring shapes them. So:
+
+    * `requests[].ref` is a text slot and is always a valid UTF-8
+      `String.t()`. A binary that passes `String.valid?/1` is copied verbatim.
+      Anything else (a non-binary term or invalid UTF-8) becomes the fixed
+      marker `"(malformed)"`, the same marker `Township.ReadModel` uses (row
+      325). The raw term stays in the log under the op id `requests[].op`.
+    * `requests[].payload` is not text. It stays the raw admitted term, which
+      honest clients make as `{cmd, args}`, and readers must `inspect/1` it
+      before display, as `Lattice.Graph.AuthorityBody` says for request and
+      command bodies. The inspected form is a display aid, truncated at the
+      default `inspect/1` limits, not a verbatim copy.
+
+  Non-claims: no length bound; no control-character or bidi filtering; a
+  member may use the literal ref `"(malformed)"`, so the marker is not proof
+  that a ref was malformed; `listing.description` and
+  `listing.condition_notes` are copied verbatim from Tool state and are not
+  covered yet; and the model as a whole is still not a JSON surface, because
+  `custody.holder` is a raw key and `payload` is a raw term.
   """
 
   alias Lattice.{Authority, Identity, Log, Op}
+  alias Lattice.Graph.AuthorityBody
   alias Toolshed.Tool
+
+  @malformed_text "(malformed)"
 
   @type request :: %{
           op: String.t(),
           author_fingerprint: String.t(),
           ref: String.t(),
+          # Raw, not text: inspect/1 before display (row 324).
           payload: term(),
           resolved?: boolean()
         }
@@ -68,14 +96,17 @@ defmodule Toolshed.ReadModel do
   end
 
   # The active loan: the latest honored leased grant to the current holder is
-  # the borrow Cap; its `expires_epoch` is the due-back caveat.
+  # the borrow Cap; its `expires_epoch` is the due-back caveat. Row 309: an
+  # admitted grant body is attacker-shaped, so only one the shared parser calls
+  # well formed (a complete Delegation struct) has its fields read.
   defp loan(log, analysis, borrower) do
     borrow_cap =
       log
       |> Log.topo_ops()
       |> Enum.reduce(nil, fn
-        %Op{id: id, kind: :authority, body: {:grant, delegation}}, acc ->
-          if delegation.audience == borrower and delegation.expires_epoch != nil and
+        %Op{id: id, kind: :authority, body: {:grant, delegation} = body}, acc ->
+          if match?({:grant, %{well_formed?: true}}, AuthorityBody.parse(body)) and
+               delegation.audience == borrower and delegation.expires_epoch != nil and
                not MapSet.member?(analysis.quarantine, id),
              do: delegation,
              else: acc
@@ -109,10 +140,15 @@ defmodule Toolshed.ReadModel do
       %{
         op: r.op,
         author_fingerprint: Identity.fingerprint(r.author),
-        ref: r.ref,
+        ref: display_text(r.ref),
         payload: r.payload,
         resolved?: MapSet.member?(resolved, r.op)
       }
     end)
   end
+
+  defp display_text(value) when is_binary(value),
+    do: if(String.valid?(value), do: value, else: @malformed_text)
+
+  defp display_text(_value), do: @malformed_text
 end

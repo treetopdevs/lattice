@@ -75,6 +75,59 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
       Store.timestamp?(found["verified_at"])
   end
 
+  @doc """
+  The ledger key for a binding map: the replacement op id for a binding derived by
+  `replacement/3`, otherwise the bootstrap op id. A bootstrap binding map carries no
+  `:binding_id` key, so every existing caller and artifact stays byte-identical.
+  """
+  @spec binding_id(map()) :: String.t()
+  def binding_id(binding), do: Map.get(binding, :binding_id, binding.bootstrap_id)
+
+  @doc """
+  Derive the binding a `replace_catalog_v1` claim installs over a bootstrap binding
+  (plan 316 PR 3).
+
+  Derivation only, not trust: this checks the claim's closed shape and that it names
+  the parent's bootstrap, Space and profile, with the bootstrap as its only parent at
+  generation 1 (a mismatched lineage is refused, never copied into consistency). Whether `op_id` is an accepted, authorized
+  replacement (generation relation, profile, lease, epoch, closed bindings) is the
+  PR 4 resolver's decision, and that resolver must supply both the op id and the
+  claim. No production caller exists in this PR. The parent must be a bootstrap
+  binding; the derived map has no `attested` evidence until its own ceremony runs.
+  """
+  @spec replacement(map(), term(), term()) :: {:ok, map()} | {:error, :malformed_binding}
+  def replacement(%{bootstrap_id: bootstrap, record: record} = parent, claim, op_id) do
+    with false <- Map.has_key?(parent, :binding_id),
+         {:ok, claim} <- TransportCatalog.normalize_replacement_claim(claim),
+         true <- claim.bootstrap == bootstrap and claim.space == record.space,
+         true <-
+           claim.profile_genesis == record.profile_genesis and
+             claim.profile_id == record.profile_id,
+         true <- claim.parents == [bootstrap] and claim.generation == 1,
+         true <- ContinuationCertificate.id?(op_id) and op_id != bootstrap do
+      {:ok,
+       %{
+         kind: :replacement,
+         bootstrap_id: bootstrap,
+         binding_id: op_id,
+         generation: claim.generation,
+         inventory_digest: claim.inventory_digest,
+         record: %{
+           record
+           | catalog_key: claim.new_catalog_key,
+             service_id: claim.new_service_id,
+             service_key: claim.new_service_key,
+             origin: claim.new_origin
+         },
+         realm: TransportCatalog.service_realm(claim.new_service_id)
+       }}
+    else
+      _ -> {:error, :malformed_binding}
+    end
+  end
+
+  def replacement(_parent, _claim, _op_id), do: {:error, :malformed_binding}
+
   @doc "The exact top-level keys of `binding.json`."
   @spec binding_keys() :: [String.t()]
   def binding_keys, do: @binding_keys
@@ -332,17 +385,41 @@ defmodule LatticeCarrierServer.Operator.CatalogCeremony.Binding do
   @spec honored_bootstrap(Log.t(), map()) ::
           {:ok, String.t()} | {:error, :binding_not_found | :binding_fork | :invalid_space_log}
   def honored_bootstrap(log, record) do
-    with {:ok, %{bootstraps: found}} <- CatalogBootstrap.observe(log) do
-      authored = Enum.filter(found, &authored_by_root?(log, &1))
+    case root_bootstraps(log) do
+      {:ok, []} -> {:error, :binding_not_found}
+      {:ok, [%{record: ^record, id: id}]} -> {:ok, id}
+      {:ok, [_one]} -> {:error, :binding_not_found}
+      {:ok, _many} -> {:error, :binding_fork}
+      :error -> {:error, :invalid_space_log}
+    end
+  end
 
-      case Enum.uniq_by(authored, & &1.id) do
-        [] -> {:error, :binding_not_found}
-        [%{record: ^record, id: id}] -> {:ok, id}
-        [_one] -> {:error, :binding_not_found}
-        _many -> {:error, :binding_fork}
-      end
-    else
-      _ -> {:error, :invalid_space_log}
+  @doc """
+  The record of the one honored root-authored bootstrap op `bootstrap_id`, read from the
+  Space log itself (row 360). A replacement binding's `record` is rewritten by
+  `replacement/3`, so a caller that needs the exact bootstrap record (the PR 4 resolver's
+  `bootstrap` input) takes it from here. The same rule as `honored_bootstrap/2`: never
+  chosen by arrival order, and a fork of root-authored bootstraps is refused.
+  """
+  @spec bootstrap_record(Log.t(), String.t()) ::
+          {:ok, map()} | {:error, :binding_not_found | :binding_fork | :invalid_space_log}
+  def bootstrap_record(log, bootstrap_id) do
+    case root_bootstraps(log) do
+      {:ok, [%{id: ^bootstrap_id, record: record}]} -> {:ok, record}
+      {:ok, [_ | [_ | _]]} -> {:error, :binding_fork}
+      {:ok, _none_or_other} -> {:error, :binding_not_found}
+      :error -> {:error, :invalid_space_log}
+    end
+  end
+
+  # Root-authored bootstrap observations, unique by op id.
+  defp root_bootstraps(log) do
+    case CatalogBootstrap.observe(log) do
+      {:ok, %{bootstraps: found}} ->
+        {:ok, found |> Enum.filter(&authored_by_root?(log, &1)) |> Enum.uniq_by(& &1.id)}
+
+      _ ->
+        :error
     end
   end
 

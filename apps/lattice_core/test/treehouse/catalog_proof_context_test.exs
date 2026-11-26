@@ -1,5 +1,5 @@
 defmodule Treehouse.CatalogProofContextTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: true, group: :node_subprocess_b
   alias Lattice.Carrier.Wire
   alias Lattice.{Log, Op}
   alias Treehouse.{CatalogCutoff, CatalogTrust, CatalogTrustVectors}

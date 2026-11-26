@@ -454,6 +454,56 @@
             </ol>
             <p :if={ledger_entries == []} class="field-label">No quarantine events.</p>
           </div>
+
+          <div class="audit-ledger" data-authority-observe>
+            <p class="field-label">Role history · honored acquisitions, oldest first</p>
+            <div
+              :for={
+                {role, entries} <-
+                  @model.roles.chronology |> Enum.reject(&(elem(&1, 1) == [])) |> Enum.sort()
+              }
+              data-role-history={role}
+            >
+              <p class="field-label">{role}</p>
+              <ol data-role-chronology={role}>
+                <li
+                  :for={entry <- entries}
+                  class="audit-event"
+                  data-acquisition={entry.op_id}
+                >
+                  <span>{entry.holder || "unknown key"}</span>
+                  <span>via</span>
+                  <code>{String.slice(entry.op_id, 0, 12)}</code>
+                  <code>{String.slice(entry.delegation_id, 0, 12)}</code>
+                </li>
+              </ol>
+            </div>
+
+            <p class="field-label">Beacons · accepted anywhere on this log</p>
+            <p :if={@model.roles.beacons.max_epoch} data-beacon-max-epoch>
+              Highest accepted beacon epoch on this log: {@model.roles.beacons.max_epoch}
+            </p>
+            <p :if={is_nil(@model.roles.beacons.max_epoch)} class="field-label">
+              No accepted beacons.
+            </p>
+
+            <p class="field-label">Leases · live-path view</p>
+            <ol>
+              <li
+                :for={lease <- @model.roles.leases}
+                class="audit-event"
+                data-lease={lease.delegation_id}
+                data-lease-status={lease.status}
+                data-lease-expired={to_string(lease.expired?)}
+              >
+                <code>{String.slice(lease.delegation_id, 0, 12)}</code>
+                <span>{lease.issuer || "unknown key"} → {lease.audience || "unknown key"}</span>
+                <span>expires after epoch {lease.expires_epoch}</span>
+                <span>{Atom.to_string(lease.status)}</span>
+              </li>
+            </ol>
+            <p :if={@model.roles.leases == []} class="field-label">No leased delegations.</p>
+          </div>
         </section>
 
         <section id="members-panel" class="panel panel--members">
@@ -520,7 +570,10 @@
               <h2 id="trust-graph-title">Who may act</h2>
             </div>
             <span class="metric">
-              {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants
+              {length(@model.trust_graph.nodes)} identities · {length(@model.trust_graph.edges)} grants<span
+                :if={@model.trust_graph.omitted != []}
+                data-trust-omitted
+              > · {length(@model.trust_graph.omitted)} omitted</span>
             </span>
           </header>
 

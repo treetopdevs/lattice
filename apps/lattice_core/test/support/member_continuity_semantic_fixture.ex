@@ -6,6 +6,19 @@ defmodule Treehouse.MemberContinuitySemanticFixture do
   alias Treehouse.{Invitation, Space}
   alias Treehouse.MemberContinuityCertificate, as: Certificate
 
+  # The committed semantic vectors keep the pre-plan-316 Space registry ceiling; the Sim default
+  # now also grants `replace_catalog_v1`.
+  @space_ceiling_v1 [
+    :create_space,
+    :create_thread,
+    :issue_invitation,
+    :revoke_invitation,
+    :admit_member,
+    :remove_member,
+    :catalog_bootstrap_v1,
+    :attest_member_key_v1
+  ]
+
   def founded(opts \\ []) do
     nonce = :crypto.hash(:sha256, "continuity-real-judge") |> Base.url_encode64(padding: false)
 
@@ -16,7 +29,7 @@ defmodule Treehouse.MemberContinuitySemanticFixture do
         ["root", "old", "new", "a", "b", "nominee"],
         seed: "continuity-real-judge"
       )
-      |> Sim.create_replica("root", opts)
+      |> Sim.create_replica("root", Keyword.put_new(opts, :ops, @space_ceiling_v1))
 
     root = Sim.identity(sim, "root")
     witnesses = Enum.map(["a", "b", "old"], &Sim.identity(sim, &1).pub) |> Enum.sort()

@@ -3,6 +3,7 @@ import {verifyEd25519} from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForCarrierTerm } from "./codec";
 import type { CarrierTerm, DecodedTerm } from "./carrier";
+import { compareUtf8 } from "./op";
 
 /** Pure signed record shapes. Valid signatures do not establish installed trust or authority. */
 export interface CatalogBootstrap {
@@ -58,6 +59,33 @@ export interface CatalogRotation {
   cutoffs: CatalogCutoff[];
 }
 export interface CatalogRotationEnvelope { rotation: CatalogRotation; oldSignature: string; newSignature: string; }
+export interface CatalogPriorCatalog { binding: string; catalog: string | null; }
+/** Closed `replace_catalog_v1` claim (lifecycle §3); structural shape only, not resolver trust. */
+export interface CatalogReplacementClaim {
+  version: 1;
+  product: "treehouse";
+  space: string;
+  bootstrap: string;
+  profileGenesis: string;
+  profileId: string;
+  parents: string[];
+  priorCatalogs: CatalogPriorCatalog[];
+  generation: number;
+  nonce: string;
+  newCatalogKey: string;
+  newServiceId: string;
+  newServiceKey: string;
+  newOrigin: string;
+  inventoryDigest: string;
+  cutoffs: CatalogCutoff[];
+  author: string;
+  cap: string;
+  holderEpoch: string;
+  deps: string[];
+  epoch: number;
+  epochBasis: string[];
+}
+export type CatalogReplacementPurpose = "catalog" | "service";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -65,6 +93,7 @@ const catalogDomain = "lattice-treehouse-transport-catalog-v1";
 const rotationDomain = "lattice-treehouse-catalog-rotation-v1";
 const possessionDomain = "lattice-treehouse-transport-possession-v1";
 const inventoryDomain = "lattice-treehouse-route-inventory-v1";
+const replacementClaimDomain = "lattice-treehouse-catalog-replacement-claim-v1";
 
 // These adapters only select existing CarrierTerm tags. Canonical encoding stays in codec.ts.
 interface ValueCodec<T> {
@@ -145,6 +174,19 @@ const rotationCodec = recordCodec<CatalogRotation>([
   ["generation", "generation", constrained(integerValue, (value) => value >= 1)], ["newCatalogKey", "new_catalog_key", keyValue],
   ["nonce", "nonce", idValue], ["inventoryDigest", "inventory_digest", idValue], ["cutoffs", "cutoffs", cutoffsCodec],
 ]);
+const sortedIds = (max: number) => constrained(listCodec(idValue), (values) => values.length >= 1 && values.length <= max && strictlySorted(values));
+const priorCatalogCodec = recordCodec<CatalogPriorCatalog>([["binding", "binding", idValue], ["catalog", "catalog", optionalId]]);
+const replacementClaimCodec = recordCodec<CatalogReplacementClaim>([
+  ["version", "version", versionValue], ["product", "product", productValue], ["space", "space", textValue],
+  ["bootstrap", "bootstrap", idValue], ["profileGenesis", "profile_genesis", idValue], ["profileId", "profile_id", idValue],
+  ["parents", "parents", sortedIds(16)],
+  ["priorCatalogs", "prior_catalogs", constrained(listCodec(priorCatalogCodec), (values) => values.length >= 1 && values.length <= 32 && strictlySortedPriors(values))],
+  ["generation", "generation", constrained(integerValue, (value) => value >= 1)], ["nonce", "nonce", idValue],
+  ["newCatalogKey", "new_catalog_key", keyValue], ["newServiceId", "new_service_id", idValue], ["newServiceKey", "new_service_key", keyValue],
+  ["newOrigin", "new_origin", originValue], ["inventoryDigest", "inventory_digest", idValue], ["cutoffs", "cutoffs", cutoffsCodec],
+  ["author", "author", keyValue], ["cap", "cap", idValue], ["holderEpoch", "holder_epoch", idValue],
+  ["deps", "deps", sortedIds(64)], ["epoch", "epoch", integerValue], ["epochBasis", "epoch_basis", sortedIds(64)],
+], (value) => value.newCatalogKey !== value.newServiceKey && priorsCoverParents(value.priorCatalogs, value.parents));
 const rotationEnvelopeCodec = recordCodec<CatalogRotationEnvelope>([
   ["rotation", "rotation", rotationCodec], ["oldSignature", "old_signature", signatureValue], ["newSignature", "new_signature", signatureValue],
 ]);
@@ -191,6 +233,37 @@ export function catalogRotationFromCarrierTerm(value: unknown): CatalogRotation 
 export function normalizeCatalogRotationEnvelope(value: unknown): CatalogRotationEnvelope | null { return rotationEnvelopeCodec.normalize(value) ?? null; }
 export function catalogRotationEnvelopeToCarrierTerm(value: unknown): CarrierTerm | null { return toTerm(rotationEnvelopeCodec, value); }
 export function catalogRotationEnvelopeFromCarrierTerm(value: unknown): CatalogRotationEnvelope | null { return rotationEnvelopeCodec.decode(value) ?? null; }
+
+export function normalizeCatalogReplacementClaim(value: unknown): CatalogReplacementClaim | null { return replacementClaimCodec.normalize(value) ?? null; }
+export function catalogReplacementClaimToCarrierTerm(value: unknown): CarrierTerm | null { return toTerm(replacementClaimCodec, value); }
+export function catalogReplacementClaimFromCarrierTerm(value: unknown): CatalogReplacementClaim | null {
+  try { return replacementClaimCodec.decode(value) ?? null; } catch { return null; }
+}
+/** A decoded command argument; never throws, so a malformed claim stays an application refusal. */
+export function catalogReplacementClaimFromDecodedTerm(value: unknown): CatalogReplacementClaim | null {
+  try {
+    const term = decodedToCarrierTerm(value, 16);
+    return term === null ? null : catalogReplacementClaimFromCarrierTerm(term);
+  } catch { return null; }
+}
+/** Pre-hash and debug bytes for vectors only; not a signing domain. */
+export function canonicalBytesForCatalogReplacementClaim(value: unknown): Uint8Array {
+  return domainBytes(replacementClaimDomain, requireTerm(replacementClaimCodec, value));
+}
+export function canonicalBytesForCatalogReplacementPossession(purpose: CatalogReplacementPurpose, value: unknown): Uint8Array {
+  if (purpose !== "catalog" && purpose !== "service") throw new TypeError("malformed possession purpose");
+  return canonicalBytesForCarrierTerm(["list", [textTerm(possessionDomain), ["atom", purpose], requireTerm(replacementClaimCodec, value)]]);
+}
+/** Both new-key possession signatures; key control only, never authority or custody. */
+export function verifyCatalogReplacementPossession(claim: unknown, catalogSignature: unknown, serviceSignature: unknown): boolean {
+  try {
+    const normalized = normalizeCatalogReplacementClaim(claim);
+    const catalog = canonicalBase64Bytes(catalogSignature, 64), service = canonicalBase64Bytes(serviceSignature, 64);
+    if (normalized === null || catalog === null || service === null) return false;
+    return verifyEd25519(catalog, canonicalBytesForCatalogReplacementPossession("catalog", normalized), canonicalBase64Bytes(normalized.newCatalogKey, 32)!) &&
+      verifyEd25519(service, canonicalBytesForCatalogReplacementPossession("service", normalized), canonicalBase64Bytes(normalized.newServiceKey, 32)!);
+  } catch { return false; }
+}
 
 export function canonicalBytesForTransportCatalog(value: unknown): Uint8Array { return domainBytes(catalogDomain, requireTerm(catalogCodec, value)); }
 export function transportCatalogId(value: unknown): string { return digest(canonicalBytesForTransportCatalog(value)); }
@@ -324,6 +397,55 @@ function strictlySorted(values: string[]): boolean {
     if ((difference || left.length - right.length) >= 0) return false;
   }
   return true;
+}
+// (binding, catalog) with null before any ID, matching Erlang term order of `nil` and binaries.
+function strictlySortedPriors(values: CatalogPriorCatalog[]): boolean {
+  for (let index = 1; index < values.length; index++) {
+    const left = values[index - 1]!, right = values[index]!;
+    const binding = compareUtf8(left.binding, right.binding);
+    if (binding > 0) return false;
+    if (binding === 0) {
+      if (right.catalog === null) return false;
+      if (left.catalog !== null && compareUtf8(left.catalog, right.catalog) >= 0) return false;
+    }
+  }
+  return true;
+}
+function priorsCoverParents(values: CatalogPriorCatalog[], parents: string[]): boolean {
+  const bindings = [...new Set(values.map((value) => value.binding))];
+  if (bindings.length !== parents.length || bindings.some((binding, index) => binding !== parents[index])) return false;
+  return bindings.every((binding) => {
+    const catalogs = values.filter((value) => value.binding === binding).map((value) => value.catalog);
+    return !catalogs.includes(null) || catalogs.length === 1;
+  });
+}
+// Decoded (lattice-client carrier) terms back to the CarrierTerm tags this codec reads. Other
+// decoded shapes (tuples, booleans, delegations, sentinels) are not claim values.
+function decodedToCarrierTerm(value: unknown, depth: number): CarrierTerm | null {
+  if (depth <= 0) return null;
+  if (value === null) return ["nil"];
+  if (typeof value === "number") return Number.isSafeInteger(value) ? ["int", value] : null;
+  if (typeof value !== "object" || Array.isArray(value)) return null;
+  const term = value as { type?: unknown; value?: unknown; bytes?: unknown; values?: unknown; pairs?: unknown };
+  if (term.type === "atom" && typeof term.value === "string") return ["atom", term.value];
+  if (term.type === "bin" && term.bytes instanceof Uint8Array) return ["bin", base64(term.bytes)];
+  if (term.type === "list" && Array.isArray(term.values)) {
+    const values: CarrierTerm[] = [];
+    for (const item of term.values) { const child = decodedToCarrierTerm(item, depth - 1); if (child === null) return null; values.push(child); }
+    return ["list", values];
+  }
+  if (term.type === "map" && Array.isArray(term.pairs)) {
+    const pairs: [CarrierTerm, CarrierTerm][] = [];
+    for (const pair of term.pairs) {
+      if (!Array.isArray(pair) || pair.length !== 2) return null;
+      const key = decodedToCarrierTerm(pair[0], depth - 1), item = decodedToCarrierTerm(pair[1], depth - 1);
+      if (key === null || item === null) return null;
+      // Duplicate pairs stay for the closed-map decoder to reject.
+      pairs.push([key, item]);
+    }
+    return ["map", pairs];
+  }
+  return null;
 }
 function canonicalOrigin(value: string): boolean {
   const match = /^wss:\/\/([a-z0-9.-]+)(?::([1-9][0-9]*))?$/.exec(value);

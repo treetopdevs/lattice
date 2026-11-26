@@ -1,0 +1,13 @@
+--- a/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
++++ b/apps/lattice_core/lib/treehouse/catalog_binding_graph.ex
+@@ -234,7 +234,9 @@
+   # not only the parents it cites (PR #221 round 1, finding 2).
+   defp escapable(input, info, parents, ids) do
+     rotations = input.rotations
+-    dead = closure(parents, info.nodes, MapSet.new())
++    # MUTANT m6: the escape closes only the cited parents, not their D-275 set.
++    _ = info.nodes
++    dead = MapSet.new(parents)
+ 
+     rot =
+       for id <- ids,

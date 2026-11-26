@@ -355,11 +355,26 @@ defmodule Treehouse.EnrollmentVectors do
 
   # --- Builder --------------------------------------------------------------
 
+  # Committed vectors keep the Space registry ceiling they were generated with, before plan 316
+  # added `replace_catalog_v1`; the Sim default follows the registry. Thread keeps the default.
+  @space_ceiling_v1 [
+    :create_space,
+    :create_thread,
+    :issue_invitation,
+    :revoke_invitation,
+    :admit_member,
+    :remove_member,
+    :catalog_bootstrap_v1,
+    :attest_member_key_v1
+  ]
+  defp pinned_ceiling(Treehouse.Space), do: [ops: @space_ceiling_v1]
+  defp pinned_ceiling(_module), do: []
+
   defp new(name), do: %{name: name, labels: [], sims: %{}, modules: %{}, steps: []}
 
   defp found(b, label, module, step_label) do
     sim = Sim.new(module, "treehouse:r13:#{b.name}:#{label}", @realms, seed: @seed)
-    {sim, genesis} = Sim.create_replica(sim, "founder")
+    {sim, genesis} = Sim.create_replica(sim, "founder", pinned_ceiling(module))
 
     b = %{
       b

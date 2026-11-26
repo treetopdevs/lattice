@@ -38,7 +38,7 @@ defmodule Lattice.Graph.ReplicaSnapshot do
   """
 
   alias Lattice.{Authority, Dag, Identity, Log, Op}
-  alias Lattice.Graph.Export
+  alias Lattice.Graph.{AuthorityBody, Export}
 
   @label_summary_width 32
 
@@ -163,24 +163,38 @@ defmodule Lattice.Graph.ReplicaSnapshot do
   defp label(op, _status, _reason),
     do: "#{short(op.id)} #{op.kind} #{summary(op.body)}"
 
-  defp summary({:genesis, _deleg, _policies}), do: "genesis"
-  defp summary({:grant, deleg}), do: "grant -> #{Identity.fingerprint(deleg.audience)}"
+  # Row 309: every body is parsed by the one total reader before rendering, so
+  # an admitted but ill-shaped field becomes a marker instead of a crash.
+  defp summary(body), do: body |> AuthorityBody.parse() |> render()
 
-  defp summary({:transfer, role, deleg, tick}),
-    do: "transfer #{inspect(role)} -> #{Identity.fingerprint(deleg.audience)} @t#{tick}"
+  defp render({:genesis, _dview}), do: "genesis"
+  defp render({:grant, dview}), do: "grant -> #{audience_fp(dview)}"
 
-  defp summary({:succeed, role, _deleg, {:witnessed, _certificate}}),
-    do: "succeed #{inspect(role)} via witnessed recovery"
+  defp render({:transfer, role, dview, tick}),
+    do: "transfer #{role_text(role)} -> #{audience_fp(dview)} @t#{tick_text(tick)}"
 
-  defp summary({:succeed, role, _deleg, tick}), do: "succeed #{inspect(role)} @t#{tick}"
-  defp summary({:heartbeat, role, tick}), do: "heartbeat #{inspect(role)} @t#{tick}"
-  defp summary({:revoke, deleg_id}), do: "revoke #{short(deleg_id)}"
-  defp summary({:request, ref, _payload}), do: "request #{inspect(ref)}"
+  defp render({:succeed, role, _dview, {:witnessed, _certificate}}),
+    do: "succeed #{role_text(role)} via witnessed recovery"
 
-  defp summary({cmd, args}) when is_atom(cmd) and is_list(args),
-    do: "#{inspect(cmd)} #{truncate(inspect(args))}"
+  defp render({:succeed, role, _dview, tick}),
+    do: "succeed #{role_text(role)} @t#{tick_text(tick)}"
 
-  defp summary(body), do: truncate(inspect(body))
+  defp render({:heartbeat, role, tick}), do: "heartbeat #{role_text(role)} @t#{tick_text(tick)}"
+  defp render({:revoke, {:ok, target}}), do: "revoke #{short(target)}"
+
+  defp render({:revoke, {:malformed, _target}}), do: "revoke (malformed)"
+  defp render({:request, ref}), do: "request #{inspect(ref)}"
+  defp render({:command, cmd, args}), do: "#{inspect(cmd)} #{truncate(inspect(args))}"
+  defp render({:other, body}), do: truncate(inspect(body))
+
+  defp audience_fp(%{audience: {:ok, pub}}), do: Identity.fingerprint(pub)
+  defp audience_fp(_dview), do: "(malformed)"
+
+  defp role_text({:name, raw, _text}), do: inspect(raw)
+  defp role_text({:malformed, raw}), do: inspect(raw)
+
+  defp tick_text({:tick, tick}), do: Integer.to_string(tick)
+  defp tick_text({:malformed, tick}), do: truncate(inspect(tick))
 
   defp truncate(text) do
     if String.length(text) > @label_summary_width,
