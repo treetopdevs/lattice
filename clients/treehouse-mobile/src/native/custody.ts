@@ -30,67 +30,46 @@ export class MemoryKeyStore implements KeyStore {
   }
 }
 
+/** The part of `expo-secure-store` (SDK 58) this store uses. */
+export interface SecureStoreModule {
+  getItemAsync(key: string): Promise<string | null>;
+  setItemAsync(key: string, value: string, options?: { keychainAccessible?: number }): Promise<void>;
+  deleteItemAsync(key: string): Promise<void>;
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: number;
+}
+
 /**
- * Hardware-backed device keystore via `expo-secure-store`
- * (iOS Keychain `WHEN_UNLOCKED_THIS_DEVICE_ONLY`, Android Keystore).
- * Falls back to `MemoryKeyStore` when running outside React Native (e.g. Node tests).
+ * Hardware-backed device keystore via `expo-secure-store` (iOS Keychain `WHEN_UNLOCKED_THIS_DEVICE_ONLY`,
+ * Android Keystore). No fallback (closing review, both reviewers): a module that cannot load, or a read or
+ * write that rejects (SDK 58 docs: getItemAsync "rejects if an error occurs while retrieving the value"; on
+ * iOS a locked Keychain is errSecInteractionNotAllowed), rejects here too. `getItemAsync` resolves null only
+ * when there is no entry (iOS: errSecItemNotFound). Node tests use `MemoryKeyStore` or inject the module.
  */
 export class ExpoSecureStoreKeyStore implements KeyStore {
-  private readonly fallback = new MemoryKeyStore();
-  private secureStorePromise: Promise<typeof import("expo-secure-store") | null> | null = null;
+  private module: Promise<SecureStoreModule> | null = null;
 
-  private async loadModule(): Promise<typeof import("expo-secure-store") | null> {
-    if (this.secureStorePromise) return this.secureStorePromise;
-    this.secureStorePromise = (async () => {
-      try {
-        const mod = await import("expo-secure-store");
-        if (typeof mod.getItemAsync === "function" && typeof mod.setItemAsync === "function") {
-          return mod;
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    })();
-    return this.secureStorePromise;
+  constructor(private readonly load: () => Promise<SecureStoreModule> = () => import("expo-secure-store")) {}
+
+  private secureStore(): Promise<SecureStoreModule> {
+    // A failed load is not cached, so a later launch step can try again.
+    this.module ??= this.load().catch((error: unknown) => {
+      this.module = null;
+      throw error;
+    });
+    return this.module;
   }
 
   async getItem(key: string): Promise<string | null> {
-    const mod = await this.loadModule();
-    if (!mod) return this.fallback.getItem(key);
-    try {
-      return await mod.getItemAsync(key);
-    } catch {
-      return this.fallback.getItem(key);
-    }
+    return (await this.secureStore()).getItemAsync(key);
   }
 
   async setItem(key: string, value: string): Promise<void> {
-    const mod = await this.loadModule();
-    if (!mod) {
-      await this.fallback.setItem(key, value);
-      return;
-    }
-    try {
-      await mod.setItemAsync(key, value, {
-        keychainAccessible: mod.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      });
-    } catch {
-      await this.fallback.setItem(key, value);
-    }
+    const mod = await this.secureStore();
+    await mod.setItemAsync(key, value, { keychainAccessible: mod.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
   }
 
   async deleteItem(key: string): Promise<void> {
-    const mod = await this.loadModule();
-    if (!mod) {
-      await this.fallback.deleteItem(key);
-      return;
-    }
-    try {
-      await mod.deleteItemAsync(key);
-    } catch {
-      await this.fallback.deleteItem(key);
-    }
+    await (await this.secureStore()).deleteItemAsync(key);
   }
 }
 
@@ -178,24 +157,40 @@ export function createIdentityFromSeedHex(
 
 const DEVICE_SEED_KEY = "treehouse_mobile_device_ed25519_seed_v1";
 
-export async function loadOrCreateDeviceIdentity(
-  keyStore: KeyStore,
-  realm = "mobile-device",
-): Promise<MobileIdentity> {
-  let seedHex = await keyStore.getItem(DEVICE_SEED_KEY);
-  if (!seedHex || !/^[0-9a-f]{64}$/i.test(seedHex)) {
-    const seed = new Uint8Array(32);
-    if (
-      typeof globalThis.crypto === "undefined" ||
-      typeof globalThis.crypto.getRandomValues !== "function"
-    ) {
-      throw new Error("crypto_getRandomValues_unavailable");
-    }
-    globalThis.crypto.getRandomValues(seed);
-    seedHex = bytesToHex(seed);
-    await keyStore.setItem(DEVICE_SEED_KEY, seedHex);
+/** The device key, or custody "unavailable" (03 KeyCustody; never "none" when the Keychain did not answer). */
+export type DeviceIdentityOutcome = { ok: true; identity: MobileIdentity; created: boolean } | { ok: false; reason: "key_unavailable" };
+
+const SEED_HEX = /^[0-9a-f]{64}$/i;
+const UNAVAILABLE = { ok: false, reason: "key_unavailable" } as const;
+
+/**
+ * Load this phone's key, or create one only when the Keychain positively answers that none exists (07 STOP 5:
+ * a key is never regenerated to recover from an error). A read that fails, a stored value that is not a seed
+ * (left as it is, never overwritten), a write that fails and a write that does not read back are all
+ * `key_unavailable`; no key that exists only in memory is ever returned.
+ */
+export async function loadOrCreateDeviceIdentity(keyStore: KeyStore, realm = "mobile-device"): Promise<DeviceIdentityOutcome> {
+  let stored: string | null;
+  try {
+    stored = await keyStore.getItem(DEVICE_SEED_KEY);
+  } catch {
+    return UNAVAILABLE;
   }
-  return createIdentityFromSeedHex(realm, seedHex, "keychain");
+  if (stored !== null) return SEED_HEX.test(stored) ? { ok: true, identity: createIdentityFromSeedHex(realm, stored, "keychain"), created: false } : UNAVAILABLE;
+  if (typeof globalThis.crypto === "undefined" || typeof globalThis.crypto.getRandomValues !== "function") {
+    throw new Error("crypto_getRandomValues_unavailable");
+  }
+  const seed = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(seed);
+  const seedHex = bytesToHex(seed);
+  try {
+    await keyStore.setItem(DEVICE_SEED_KEY, seedHex);
+    // Use the key only once it reads back from the Keychain.
+    if ((await keyStore.getItem(DEVICE_SEED_KEY)) !== seedHex) return UNAVAILABLE;
+  } catch {
+    return UNAVAILABLE;
+  }
+  return { ok: true, identity: createIdentityFromSeedHex(realm, seedHex, "keychain"), created: true };
 }
 
 export const strictCarrierVerifier: CarrierVerifier = {

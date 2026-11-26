@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { runSelfCheck } from "../../native/selfcheck";
-import type { SelfCheck } from "../../native/selfcheck";
 import { keyLines, relayRows, safetyLines } from "../../ui/group_view";
 import { RelayCard } from "../../ui/RelayCard";
 import { KeyCard, SafetyCard } from "../../ui/SafetyCard";
@@ -26,6 +24,10 @@ const replicaStoreCheck: typeof import("../../native/replica_store_device_check"
   ? require("../../native/replica_store_device_check")
   : null;
 type ReplicaStoreCheckResult = import("../../native/replica_store_device_check").DeviceCheckResult;
+// M0.1 simulator gate, the same way (closing review, Neon: a static import shipped its key-store probe, probe
+// database name and RFC 8032 test seed in the release bundle).
+const selfCheckModule: typeof import("../../native/selfcheck") | null = __DEV__ ? require("../../native/selfcheck") : null;
+type SelfCheck = import("../../native/selfcheck").SelfCheck;
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -158,7 +160,7 @@ export default function GroupScreen(): React.JSX.Element {
           />
         ) : null}
 
-        {__DEV__ ? (
+        {selfCheckModule ? (
           <Card c={c} title="Self-check">
             <Button
               c={c}
@@ -166,7 +168,7 @@ export default function GroupScreen(): React.JSX.Element {
               disabled={selfCheck === "running"}
               onPress={() => {
                 setSelfCheck("running");
-                runSelfCheck().then(setSelfCheck, () => setSelfCheck(null));
+                selfCheckModule.runSelfCheck().then(setSelfCheck, () => setSelfCheck(null));
               }}
             />
             {selfCheck === "running" ? (

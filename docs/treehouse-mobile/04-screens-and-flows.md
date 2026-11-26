@@ -262,7 +262,8 @@ ops, 8 MiB), Archive (moderator), Continue in a new thread (moderator and admin 
   admin to someone else beforehand is the only handoff. In dev builds using demo identities it
   adds that the demo keys are public, so anyone can post as them.
 - **My key.** Key check, where it is stored, and that it cannot be moved to another phone.
-- **Verify & audit.** Per replica: op count, frontier, relay generation, matches-relay, every
+- **Verify & audit.** Per replica: op count, frontier, relay generation, matches-relay (a retained
+  match reads "changed since the last comparison" while the route is not live or ops wait), every
   grant with its state (usable, revoked, lapsed), and every op that is not counted with its
   reason. Read-only. This is where protocol words are allowed.
 - **Export.** Save the held Space frames to a file (the existing D-31 export shape). As built

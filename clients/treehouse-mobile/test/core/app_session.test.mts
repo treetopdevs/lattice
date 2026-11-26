@@ -389,3 +389,118 @@ test("the app source has no merge path around the session and no M0 host or snap
 });
 
 void heads;
+
+/** Pull the thread, close, then damage one held Thread frame on disk with `damage` (a damaged file, not an app path). */
+async function damagedStore(t: { after(fn: () => void): void }, damage: (raw: NodeSqliteDb, victim: { id: string; sig: string }) => Promise<void>) {
+  const app = await load();
+  const group = await buildGroup({ members: 1 });
+  const member = group.members[0]!;
+  const relay = await startLocalRelay(group, [group.admin, member]);
+  t.after(() => relay.kill());
+  const root = dir(t);
+  const identity = mobile(member);
+  const { MemoryLocalDisk } = await import("../../src/local/local_store");
+  const localDisk = new MemoryLocalDisk();
+  const { deps: first } = await deps(root, null, localDisk);
+  const a = await app.openAppSession(first, { identity, routes: routesOf(group, relay) });
+  await until(() => (a.session.read().timelines[group.thread.replica]?.health.ops ?? 0) === group.thread.frames.length, "pulled");
+  await a.close();
+  const file = join(root, app.replicaStoreName(identity.publicKeyBase64, 0));
+  const raw = nodeSqliteDb(file);
+  await damage(raw, group.thread.frames[1]!);
+  raw.close();
+  return { app, group, relay, root, identity, localDisk, file };
+}
+
+test("a re-sync whose fresh store cannot open keeps the pointer and the failed session (Codex 2)", async (t) => {
+  // Closing review: the pointer was saved before the fresh database opened; openAppSession reports an open
+  // failure as history_invalid rather than throwing, so the rollback never ran and later launches opened the
+  // failed replacement.
+  const { app, group, relay, root, identity, localDisk } = await damagedStore(t, async (raw, victim) => {
+    const sig = victim.sig.startsWith("A") ? `B${victim.sig.slice(1)}` : `A${victim.sig.slice(1)}`;
+    const row = (await raw.getAllAsync<{ json: string }>("SELECT json FROM frame WHERE id = ?", victim.id))[0]!;
+    await raw.runAsync("UPDATE frame SET json = ? WHERE id = ?", JSON.stringify({ ...JSON.parse(row.json), sig }), victim.id);
+  });
+  const { deps: second } = await deps(root, null, localDisk);
+  const failing = { ...second, openReplicaDb: async (name: string) => (/_r1\.db$/.test(name) ? Promise.reject(new Error("disk_full")) : second.openReplicaDb(name)) };
+  const b = await app.openAppSession(failing, { identity, routes: routesOf(group, relay) });
+  t.after(() => b.close());
+  assert.equal(b.session.read().status.phase, "history_invalid");
+  await assert.rejects(b.resync(), /disk_full/);
+  assert.equal(app.epochFor(second.local, identity.publicKeyBase64), 0, "the pointer still names the old store");
+  const exported = await b.session.exportSpaceFrames();
+  assert.ok(exported.ok, `the failed session stays open: ${JSON.stringify(exported)}`);
+});
+
+test("one malformed row in a Thread still lets Export offer the intact Group (Codex 3)", async (t) => {
+  // Closing review: JSON.parse threw inside the load loop before any profile was published, so Export from
+  // the problem card answered no_space although every Space frame was intact. Nothing is rewritten.
+  const { app, group, relay, root, identity, localDisk, file } = await damagedStore(t, async (raw, victim) => {
+    await raw.runAsync("UPDATE frame SET json = ? WHERE id = ?", "{not json", victim.id);
+  });
+  const damaged = await dumpReplicaFile(file);
+  const { deps: second } = await deps(root, null, localDisk);
+  const b = await app.openAppSession(second, { identity, routes: routesOf(group, relay) });
+  t.after(() => b.close());
+  const status = b.session.read().status;
+  assert.equal(status.phase, "history_invalid");
+  assert.match(status.reason ?? "", /malformed_frame/);
+  assert.ok(b.session.read().link.routes.every((r) => r.connection === "idle"), "never online");
+  const exported = await b.session.exportSpaceFrames();
+  assert.ok(exported.ok, JSON.stringify(exported));
+  const doc = JSON.parse(exported.value.text) as { frames: { id: string }[] };
+  assert.deepEqual(doc.frames.map((f) => f.id), group.space.frames.map((f) => f.id).sort());
+  assert.deepEqual((await b.session.postMessage(group.thread.replica, "x")).ok, false);
+  assert.equal(await dumpReplicaFile(file), damaged, "the damaged store is not rewritten");
+});
+
+test("audit relay comparison against the local relay: Yes after a sync, not current after a local post (Codex 7, Neon 10)", async (t) => {
+  // Closing review: Verify kept "Matches relay: Yes" after a local post advanced the frontier, and a failed
+  // sync left the old match in place (shell-kit's forget() clears refusals only). The reference is the local
+  // BEAM relay's own advertised ids, read by a separate client.
+  const app = await load();
+  const group = await buildGroup({ members: 1 });
+  const member = group.members[0]!;
+  const relay = await startLocalRelay(group, [group.admin, member]);
+  t.after(() => relay.kill());
+  const identity = mobile(member);
+  const { deps: d } = await deps(dir(t), null);
+  const a = await app.openAppSession(d, { identity, routes: routesOf(group, relay) });
+  t.after(() => a.close());
+  const threadRoute = relay.routes.find((r) => r.replica === group.thread.replica)!;
+  const audited = () => a.session.read().audit.replicas.find((r) => r.replica === group.thread.replica)!;
+  await until(() => audited().opCount === group.thread.frames.length && audited().matchesRelay === true && audited().comparisonCurrent, "a completed sync");
+  assert.deepEqual(await relayIds(group.admin, threadRoute), group.thread.frames.map((f) => f.id).sort(), "the relay holds exactly what this phone holds");
+  assert.deepEqual(audited().frontier, heads(group.thread.frames));
+  assert.equal(audited().generation !== null, true);
+
+  assert.equal((await a.session.goOffline()).ok, true);
+  const posted = await a.session.postMessage(group.thread.replica, "after the comparison");
+  assert.ok(posted.ok);
+  assert.ok(!(await relayIds(group.admin, threadRoute)).includes(posted.value.id), "the relay does not hold the post");
+  assert.equal(audited().comparisonCurrent, false, "the last comparison no longer describes what this phone holds");
+  const { auditSections } = await import("../../src/ui/group_view");
+  const { audit: auditCopy } = await import("../../src/ui/strings");
+  const section = auditSections(a.session.read().audit, { spaceReplica: group.space.replica, threads: null, name: (k) => k }).find((s) => s.replica === group.thread.replica)!;
+  const matches = section.facts.find((f) => f.key === "matchesRelay")!;
+  // Offline, shell-kit's stopped link reports no result at all; either way the old "Yes" is gone.
+  assert.ok(([auditCopy.notCurrent, auditCopy.notCompared] as string[]).includes(matches.value), matches.value);
+  // A live route with this phone's post still waiting, or a reconnecting route, keeps shell-kit's old true:
+  // the projection says it is not current (shell-kit's RouteFeedState shape, as the link reports it).
+  const { projectAuditView } = await import("../../src/session/projections/audit_view");
+  const { viewReplica } = await import("../../src/session/projections/replica_view");
+  const view = viewReplica(group.thread.replica, "Treehouse.Thread", group.thread.frames);
+  const route = { replica: group.thread.replica, connection: "live" as const, pending: 0, acked: 0, generation: 3, matchesRelay: true, refused: [], submitStopped: null, message: "" };
+  const shown = (r: typeof route | (Omit<typeof route, "connection"> & { connection: "reconnecting" })) =>
+    auditSections(projectAuditView({ views: [view], feed: { configured: true, routes: [r] } }), { spaceReplica: null, threads: null, name: (k) => k })[0]!.facts.find((f) => f.key === "matchesRelay")!.value;
+  assert.equal(shown(route), auditCopy.yes);
+  assert.equal(shown({ ...route, pending: 1 }), auditCopy.notCurrent);
+  assert.equal(shown({ ...route, connection: "reconnecting" }), auditCopy.notCurrent);
+  // A "No" is never softened: a relay-refused op stays pending after a completed sync, and syncing would not
+  // clear a "changed since" line.
+  assert.equal(shown({ ...route, matchesRelay: false, pending: 1 }), auditCopy.no);
+
+  assert.equal((await a.session.goOnline()).ok, true);
+  await until(async () => (await relayIds(group.admin, threadRoute)).includes(posted.value.id), "the post on the relay");
+  await until(() => audited().comparisonCurrent && audited().matchesRelay === true, "compared again");
+});

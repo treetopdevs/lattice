@@ -7,7 +7,8 @@ import { createIdentityFromSeedHex, type MobileIdentity } from "../native/custod
 export const DEMO_ROLES = ["founder", "neighbor"] as const;
 export type DemoRole = (typeof DEMO_ROLES)[number];
 
-export const DEMO_ROLE_LABEL: Record<DemoRole, string> = { founder: "Founder", neighbor: "Neighbor" };
+// 01: the genesis key is "Started this group", never "Founder" (and "Admin" would go stale after a transfer).
+export const DEMO_ROLE_LABEL: Record<DemoRole, string> = { founder: "Started this group", neighbor: "Neighbor" };
 
 /** Demo bar and Group > Safety notice (04). */
 export const DEMO_KEYS_PUBLIC =

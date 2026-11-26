@@ -12,8 +12,10 @@ import type { ReplicaView } from "./replica_view";
 //   no_key             no key, nothing held
 //   key_only           a key, and no Space held (or a Space that neither admits nor invites this key)
 //   member             this key is the root, a role holder or an admitted member of the held Space
-//   removed            the Space's honored membership events remove this key and it is not a member now
-//   joining            the Space holds an honored, unrevoked invitation for this key, not yet admitted
+//   joining            the Space holds an honored, unrevoked invitation for this key, not yet admitted, that
+//                      sorts after this key's last honored removal (if any) in the judge's canonical order
+//   removed            an honored remove_member names this key, it is not a member now and no such later
+//                      invitation exists
 // A saved ceremony state replaces the joining inference when the enrollment ceremony lands (M2).
 
 export type SessionPhase = "no_key" | "key_only" | "joining" | "member" | "removed" | "identity_mismatch" | "history_invalid";
@@ -59,9 +61,17 @@ export function projectSessionStatus(inputs: SessionStatusInputs): SessionStatus
   const space = inputs.space;
   if (space === null) return status("key_only");
   if (groupMemberKeys(space).includes(key)) return status("member");
-  const events = Array.isArray(space.state.membership_events) ? (space.state.membership_events as { action?: unknown; recipient?: unknown }[]) : [];
-  if (events.some((e) => e.action === "remove" && e.recipient === key)) return status("removed");
+  // Removed, unless an honored, unrevoked invitation for this key comes after the last honored removal in the
+  // judge's canonical order (closing review, Neon: membership_events is append-only, so a re-invited key must
+  // not stay "removed"). The order is the judge's linear extension; an invitation causally after the removal
+  // always sorts after it, and a concurrent one is placed the same way on every phone. App display rule.
+  const at = new Map(space.order.map((id, i) => [id, i]));
+  const removals = honoredCommands(space, "remove_member").filter((op) => op.commandArgs?.[0] === key);
+  const removedAt = removals.length > 0 ? at.get(removals[removals.length - 1]!.id)! : -1;
   const revoked = new Set(Array.isArray(space.state.revoked_invitations) ? (space.state.revoked_invitations as unknown[]) : []);
-  const invited = honoredCommands(space, "issue_invitation").some((op) => op.commandArgs?.[0] === key && !revoked.has(op.id) && authorOf(op) !== key);
-  return status(invited ? "joining" : "key_only");
+  const invited = honoredCommands(space, "issue_invitation").some(
+    (op) => op.commandArgs?.[0] === key && !revoked.has(op.id) && authorOf(op) !== key && at.get(op.id)! > removedAt,
+  );
+  if (invited) return status("joining");
+  return status(removedAt >= 0 ? "removed" : "key_only");
 }

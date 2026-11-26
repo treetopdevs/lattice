@@ -53,8 +53,9 @@ export interface AppSession {
   /**
    * Re-sync from the relay into a fresh store (04, history_invalid; the caller has asked for confirmation).
    * The failed store is left as it is: nothing is deleted or rewritten. Rejects with `history_ok` otherwise.
-   * The fresh session opens before this one closes; on any failure this one stays open and the pointer is
-   * restored, so the caller keeps a usable (history_invalid) session.
+   * The fresh session opens (with verified history) before the pointer is saved and before this one closes;
+   * on any failure the pointer is unchanged and this one stays open, so the caller keeps a usable
+   * (history_invalid) session.
    */
   resync(): Promise<AppSession>;
   close(): Promise<void>;
@@ -93,9 +94,10 @@ export function epochFor(local: LocalStore, publicKeyBase64: string): number {
   return typeof epoch === "number" && Number.isSafeInteger(epoch) && epoch >= 0 ? epoch : 0;
 }
 
-export async function openAppSession(deps: AppSessionDeps, config: AppSessionConfig): Promise<AppSession> {
+export async function openAppSession(deps: AppSessionDeps, config: AppSessionConfig, atEpoch?: number): Promise<AppSession> {
   const { identity } = config;
-  const epoch = epochFor(deps.local, identity.publicKeyBase64);
+  // A re-sync opens its fresh store by epoch before the pointer names it (closing review, Codex).
+  const epoch = atEpoch ?? epochFor(deps.local, identity.publicKeyBase64);
   const storeName = replicaStoreName(identity.publicKeyBase64, epoch);
   // One handle per store: the session's open() opens the store again and must reuse it.
   let db: Promise<ReplicaDb> | null = null;
@@ -168,13 +170,20 @@ export async function openAppSession(deps: AppSessionDeps, config: AppSessionCon
     relayAddresses: relayOrigins(config.routes),
     async resync() {
       if (session.read().history.ok) throw new Error("history_ok");
-      const epochs = deps.local.setting("replicaStoreEpochs");
-      await deps.local.setSetting("replicaStoreEpochs", { ...epochs, [identity.publicKeyBase64]: epoch + 1 });
-      let fresh: AppSession;
+      // Open the fresh store first and save the pointer only once it opened with verified history. A fresh
+      // store that cannot open is history_invalid, not a throw, so it is checked here: on any failure the
+      // fresh session is closed, the pointer still names this store and this session stays open.
+      const fresh = await openAppSession(deps, config, epoch + 1);
+      const opened = fresh.session.read().history;
+      if (!opened.ok) {
+        await fresh.close();
+        throw new Error(opened.reason);
+      }
       try {
-        fresh = await openAppSession(deps, config);
+        const epochs = deps.local.setting("replicaStoreEpochs");
+        await deps.local.setSetting("replicaStoreEpochs", { ...epochs, [identity.publicKeyBase64]: epoch + 1 });
       } catch (error) {
-        await deps.local.setSetting("replicaStoreEpochs", epochs).catch(() => undefined);
+        await fresh.close();
         throw error;
       }
       // This session was history_invalid, so it never went online; closing it after the fresh one opened is safe.

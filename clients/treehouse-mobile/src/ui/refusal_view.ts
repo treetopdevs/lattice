@@ -19,9 +19,11 @@ export interface CannotPostInputs {
  * otherwise the judge's reason with who can fix it.
  */
 export function cannotPostLine({ postRefusal, phase, archived }: CannotPostInputs): string | null {
-  if (postRefusal === null) return null;
   if (archived || postRefusal === "archived thread") return threadCopy.archived;
+  // Removed from the group is enough on its own (closing review, Codex): a Thread grant whose revocation has
+  // not arrived yet must not bring the composer back after the removal notice.
   if (phase === "removed") return phaseCopy.removed;
+  if (postRefusal === null) return null;
   return cannotPostCopy[postRefusal];
 }
 

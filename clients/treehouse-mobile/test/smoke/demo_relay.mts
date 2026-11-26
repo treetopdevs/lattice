@@ -30,8 +30,11 @@ async function until(check: () => boolean, what: string, ms = 30_000): Promise<v
 async function run(): Promise<void> {
   // 1. KeyStore device identity round-trip.
   const keyStore = new MemoryKeyStore();
-  const device1 = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
-  const device2 = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
+  const loaded1 = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
+  const loaded2 = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
+  assert.ok(loaded1.ok && loaded2.ok, "the memory key store answers");
+  const device1 = loaded1.identity;
+  const device2 = loaded2.identity;
   assert.equal(device1.publicKeyBase64, device2.publicKeyBase64, "device identity must persist across loads");
   console.log(`KEYSTORE OK: device key ${device1.fingerprint} persisted`);
 

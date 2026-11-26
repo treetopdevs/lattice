@@ -74,8 +74,10 @@ export async function runCommand<R extends string>(
     return refuse("identity_unavailable");
   }
 
-  // 3. Pre-judge: refuse what the judge would quarantine, before it is saved.
-  const candidate = carrierOpsToSemanticOps([...frames, frame], {}, decoders);
+  // 3. Pre-judge: refuse what the judge would quarantine, before it is saved. It judges the frames held now,
+  // not the ones read before signing (closing review, Codex): a revoke merged while custody signed counts.
+  const heldNow = ctx.store.profile(step.replica)?.frames ?? frames;
+  const candidate = carrierOpsToSemanticOps([...heldNow, frame], {}, decoders);
   const verdict = materialize(schemaOf(step.product), candidate).quarantineReasons.get(frame.id);
   if (verdict !== undefined) return refuse(quarantineReason(verdict));
 

@@ -64,6 +64,11 @@ export function sheetFor(
   return items.length === 0 ? null : { message, items };
 }
 
+/** The pending confirmation if its action is still offered, else null (the sheet closes it). */
+export function confirmationLeft(confirming: ConfirmedItem | null, items: readonly SheetItem[]): ConfirmedItem | null {
+  return confirming !== null && items.includes(confirming) ? confirming : null;
+}
+
 /** 04: irreversible actions confirm once, naming what cannot be undone. Copy and Edit have no confirmation. */
 export function confirmationFor(item: SheetItem): { sentence: string; confirm: string } | null {
   if (item === "delete") return { sentence: actions.confirmDelete, confirm: actions.delete };

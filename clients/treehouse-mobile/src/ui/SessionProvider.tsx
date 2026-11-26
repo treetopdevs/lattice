@@ -222,6 +222,9 @@ export function SessionProvider({ boot, children }: { boot: Bootstrap; children:
         text: recovery.confirm,
         style: "destructive",
         onPress: () => {
+          // A reconnect or role switch while the alert was open replaced the session: this alert is stale
+          // and must not re-sync the old identity over the new one (closing review, Neon).
+          if (appRef.current !== current) return;
           const generation = ++connectGenRef.current;
           void (async () => {
             try {

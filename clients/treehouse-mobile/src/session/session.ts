@@ -33,7 +33,7 @@ import type {
 import type { Clock, FeedState, KeyCustody, RelayLink, ReplicaStore, RouteConfig, TreehouseProduct } from "./ports";
 import { createCachedLocalStore } from "../local/local_store";
 import type { Draft, LocalStore } from "../local/local_store";
-import { projectAbilities } from "./projections/abilities";
+import { projectAbilities, withoutCommands } from "./projections/abilities";
 import type { Abilities } from "./projections/abilities";
 import { projectAuditView } from "./projections/audit_view";
 import type { AuditView } from "./projections/audit_view";
@@ -222,9 +222,12 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
       const current = store.profile(replica);
       const product = productOf(replica);
       if (!current || !product) throw new Error("unknown_replica");
+      // Deduplicated within the pulled batch too (closing review, Neon), as the store's own mergeSync does: a
+      // repeated id must not make the candidate fail verifyHeld's unique-id check and stall the route.
       const ids = new Set(current.frames.map((f) => f.id));
+      const added = pulled.filter((f) => !ids.has(f.id) && (ids.add(f.id), true));
       const candidate = {
-        frames: [...current.frames, ...pulled.filter((f) => !ids.has(f.id))],
+        frames: [...current.frames, ...added],
         outbox: current.outbox,
         acked: [...new Set([...current.acked, ...acked])],
       };
@@ -333,14 +336,16 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
         }
     }
 
+    const status = projectSessionStatus({
+      custody: custodyStatus,
+      myKey,
+      history,
+      space,
+      held: held.map((r) => ({ replica: r.replica, profile: profiles[r.replica] })),
+    });
+    const abilities = projectAbilities({ views: heldViews, myKey });
     const next: ReadModels = {
-      status: projectSessionStatus({
-        custody: custodyStatus,
-        myKey,
-        history,
-        space,
-        held: held.map((r) => ({ replica: r.replica, profile: profiles[r.replica] })),
-      }),
+      status,
       group: projectGroupSummary({ space, myKey }),
       linkStatus: projectLinkStatus({
         feed: state,
@@ -350,7 +355,9 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
         lastSyncMs,
       }),
       threads: projectThreadList({ space, timelines, profiles, feed: state, petname: (key) => local.petname(key) }),
-      abilities: projectAbilities({ views: heldViews, myKey }),
+      // A key the group removed signs nothing (closing review, Codex), so no control offers a command, even
+      // where a Thread grant whose revocation has not arrived yet would still be honored.
+      abilities: status.phase === "removed" ? withoutCommands(abilities, "no_capability") : abilities,
       roster: projectRoster({
         space,
         threads: threadViews,
@@ -419,6 +426,8 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
     if (!history.ok) return Promise.resolve(refuse("history_invalid" as const));
     if (mismatched())
       return Promise.resolve(refuse(models.status.reason === "outbox_other_key" ? ("identity_mismatch" as const) : ("identity_unavailable" as const)));
+    // Removed from the group (SessionStatus): nothing is signed, whatever grant is still live here.
+    if (models.status.phase === "removed") return Promise.resolve(refuse("no_capability" as const));
     return run();
   };
   const whenOpen = <T, R extends string>(run: () => Promise<Outcome<T, R>>) =>

@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MessageView } from "../session/projections/thread_timeline";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { confirmationFor, sheetItemLabel } from "./message_sheet";
+import { confirmationFor, confirmationLeft, sheetItemLabel } from "./message_sheet";
 import type { ConfirmedItem, SheetItem } from "./message_sheet";
 import { actions, removedPlaceholder } from "./strings";
 import type { Palette } from "./theme";
@@ -37,6 +37,13 @@ export function MessageSheet({ open: live, colors: c, onClose, onEdit, onCopy, o
   useEffect(() => {
     if (shown) setConfirming(null);
   }, [messageId, shown]);
+  // A confirmation whose action was taken away while it was open (a remote archive, a revoked grant) closes
+  // back to the sheet rather than staying tappable (closing review, Neon). Not while that action is running.
+  const liveItems = live?.items.join(",") ?? "";
+  useEffect(() => {
+    if (live && confirming && !busy && confirmationLeft(confirming, live.items) === null) setConfirming(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveItems, confirming, busy]);
 
   const pick = (item: SheetItem) => {
     if (!open) return;

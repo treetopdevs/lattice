@@ -255,6 +255,8 @@ export const audit = {
   yes: "Yes",
   no: "No",
   notCompared: "Not compared yet",
+  /** The last comparison no longer describes this phone: a local change, or a sync that did not finish. */
+  notCurrent: "Changed since the last comparison. Sync to compare again.",
   grants: "Grants",
   noGrants: "No grants held.",
   grantState: {

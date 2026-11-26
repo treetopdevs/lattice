@@ -87,17 +87,34 @@ export class SqliteReplicaStore implements ReplicaStore {
       if (r.product !== "Treehouse.Space" && r.product !== "Treehouse.Thread") throw new Error(`unknown_product ${r.product}`);
       held.set(r.replica, { product: r.product, frames: [], outbox: [], acked: [], firstSeen: new Map(), nextSeq: 0 });
     }
+    // A row whose JSON does not parse makes its replica unreadable, not the whole store (closing review,
+    // Codex): the intact replicas are still published for reading, so the problem card's Export can offer an
+    // intact Group, while open() still rejects (history_invalid) and the store takes no writes.
+    const malformed = new Set<string>();
     for (const row of rows) {
       const entry = held.get(row.replica);
       if (!entry) throw new Error("frame_without_replica");
-      entry.frames.push(JSON.parse(row.json) as CarrierOpFrame);
+      let frame: CarrierOpFrame;
+      try {
+        frame = JSON.parse(row.json) as CarrierOpFrame;
+      } catch {
+        malformed.add(row.replica);
+        continue;
+      }
+      entry.frames.push(frame);
       if (row.authored === 1) entry.outbox.push(row.id);
       if (row.acked === 1) entry.acked.push(row.id);
       entry.firstSeen.set(row.id, Number(row.first_seen_ms));
       entry.nextSeq = Math.max(entry.nextSeq, Number(row.seq) + 1);
     }
-    this.db = db;
+    // A replica with an unreadable row is left out whole, never shown in part.
+    for (const replica of malformed) held.delete(replica);
     this.held = held;
+    if (malformed.size > 0) {
+      this.db = null;
+      throw new Error(`malformed_frame_json ${[...malformed][0]}`);
+    }
+    this.db = db;
   }
 
   replicas(): HeldReplica[] {

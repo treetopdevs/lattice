@@ -16,6 +16,16 @@ and later are outlined and get the same treatment when M1b is under way.
 
 - No change to `lattice-client`, `lattice-shell-kit`, the relay or any Elixir app. If a slice
   seems to need one, stop and write it up under Known gaps instead.
+  - **Scope exception (assumed under delegation; the operator has not confirmed it).** The M1b.5 to
+    M1b.7 review round (commit `af29e3a09`) added one additive export to lattice-client,
+    `treehouseDelegationStates` in `clients/lattice-client/src/treehouse_enrollment.ts` (the shared
+    query `memberCapability` and `liveTreehouseDelegations` already filter, now returned with its
+    revoked or lapsed reason), with its dist rebuilt and a lattice-client test. Why: two review
+    findings showed the audit and the cannot-post reason classifying grants in the app with their own
+    filters; the alternative was to keep that capability logic in the app, which the first STOP
+    condition forbids. No existing behaviour changed. This rule was not followed at the time: the
+    agent did not stop and ask first. If the operator rejects the exception, the export is reverted
+    and the two projections go back to Known gaps. No further upstream change is made under it.
 - No per-Thread keys, group creation, thread creation or rollover before M2 (they need G-2).
 - No notifications, background sync, media, reactions or E2EE (contract exclusions).
 - No lifting of the Tauri workflow into shell-kit (O-1 default).

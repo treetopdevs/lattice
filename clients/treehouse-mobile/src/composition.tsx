@@ -8,6 +8,7 @@ import { openExpoReplicaDb } from "./native/sqlite_replica_store";
 import { openExpoLocalStore } from "./local/sqlite_local_store";
 import type { LocalStore } from "./local/local_store";
 import { systemClock } from "./session/memory/clock";
+import { identityMismatchCopy } from "./ui/strings";
 import type { Bootstrap, Connected, DemoBarSlotProps } from "./ui/SessionProvider";
 
 // The composition root (M1a.7, was src/App.tsx): the real adapters, and the demo behind its fence. Only this
@@ -82,9 +83,11 @@ function demoBarSlot(modules: DemoModules): React.ComponentType<DemoBarSlotProps
 
 async function connect(origin: string, role: string): Promise<Connected> {
   if (!demo) {
-    // No demo: this phone's own key only. No route is known, so nothing dials (no group yet).
+    // No demo: this phone's own key only. No route is known, so nothing dials (no group yet). A device key store that
+    // does not answer (locked, or failing) is custody "unavailable": 04's line, never a new key (07 STOP 5).
     const own = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
-    return { identity: own, app: null, detail: null };
+    if (!own.ok) throw new Error(identityMismatchCopy.key_unavailable);
+    return { identity: own.identity, app: null, detail: null };
   }
   const { DEMO_ROLES } = demo.identities;
   const demoRole = (DEMO_ROLES as readonly string[]).includes(role) ? (role as (typeof DEMO_ROLES)[number]) : DEMO_ROLES[0];

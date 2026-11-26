@@ -132,3 +132,11 @@ export function projectAbilities(inputs: AbilitiesInputs): Abilities {
   }
   return { replicas };
 }
+
+/** Every command of every replica refused with `reason` (a session phase in which nothing is signed). */
+export function withoutCommands(abilities: Abilities, reason: AbilityRefusal): Abilities {
+  const replicas: Record<string, Record<string, Ability>> = {};
+  for (const [replica, commands] of Object.entries(abilities.replicas))
+    replicas[replica] = Object.fromEntries(Object.keys(commands).map((command) => [command, refused(reason)]));
+  return { replicas };
+}

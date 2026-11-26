@@ -95,7 +95,11 @@ export function auditSections(
         fact("ops", auditCopy.ops, String(r.opCount)),
         fact("frontier", auditCopy.frontier, r.frontier.length > 0 ? r.frontier.map(shortId).join(", ") : auditCopy.noFrontier),
         fact("generation", auditCopy.generation, r.generation === null ? auditCopy.notCompared : String(r.generation)),
-        fact("matchesRelay", auditCopy.matchesRelay, r.matchesRelay === null ? auditCopy.notCompared : r.matchesRelay ? auditCopy.yes : auditCopy.no),
+        fact(
+          "matchesRelay",
+          auditCopy.matchesRelay,
+          r.matchesRelay === null ? auditCopy.notCompared : !r.comparisonCurrent ? auditCopy.notCurrent : r.matchesRelay ? auditCopy.yes : auditCopy.no,
+        ),
       ],
       grants: r.grants.map((g) => {
         const stateLabel = auditCopy.grantState[g.state];

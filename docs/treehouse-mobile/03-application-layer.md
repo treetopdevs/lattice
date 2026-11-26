@@ -103,7 +103,10 @@ match in this order (M1a.4): Offline (sync off, nothing configured, or every rou
 refused this phone, Reconnecting, Live, Partly connected, Connecting.
 
 `· N waiting` is appended whenever the outbox has unacked ids. `matchesRelay` means "this
-phone holds what the relay advertises". It never means every member has it.
+phone holds what the relay advertises". It never means every member has it. Since the M1 closing
+round the AuditView also carries `comparisonCurrent`: a retained match is shown as "changed since
+the last comparison" while the route is not live or this phone has ops waiting (shell-kit keeps the
+last result across a failed sync); a non-match is always shown as such.
 
 ### Order, time and unread
 
@@ -199,9 +202,17 @@ Decisions recorded in the M1a.4-M1a.5 review fix round:
   signed commands refuse `identity_mismatch`; with the key missing or locked they refuse
   `identity_unavailable`; `goOnline` and `syncNow` refuse `identity_mismatch` for every reason.
   Custody `unavailable` is `identity_mismatch` (`key_unavailable`) even with nothing held, so a
-  locked key is never routed to key creation. A key that the held Space neither admits nor invites,
+  locked key is never routed to key creation. The Keychain adapter has no memory fallback (M1
+  closing round): a failed read, a stored value that is not a seed, or a write that fails or does
+  not read back is `key_unavailable`; a key is created only when the store answers that none exists,
+  and an existing entry is never overwritten. A key that the held Space neither admits nor invites,
   with no outbox of another key, stays `key_only`: the outbox keeps every authored id, so a key
   change on a phone that ever authored shows as `outbox_other_key`.
+- `removed` and `joining` (M1 closing round): a key with an honored, unrevoked invitation that sorts
+  after its last honored `remove_member` in the judge's canonical order is `joining`; otherwise an
+  honored removal makes it `removed`. In `removed` every Ability is refused and signed commands
+  refuse `no_capability` before signing, even while a Thread grant whose revocation has not arrived
+  is still live; the Thread screen shows the removal line instead of the composer.
 - `LocalStore` is a required session port. A caller with no persistent store passes an explicitly
   in-memory one (the M0 screen does until M1a.7).
 - `lastSyncMs` is stamped when every route is live and has compared with the relay, and either a

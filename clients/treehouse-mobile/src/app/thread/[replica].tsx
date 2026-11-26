@@ -163,7 +163,7 @@ export default function ThreadScreen(): React.JSX.Element {
       <MessageList timeline={timeline} nameOf={nameOf} colors={c} canOpenSheet={canOpenSheet} onOpenSheet={setSheetId} onCopy={copy} marks={marks} />
       {footer?.kind === "archived" ? (
         <ArchivedBanner bottomInset={bottomInset} colors={c} />
-      ) : timeline && (timeline.canPost || editing) ? (
+      ) : timeline && footer?.kind === "composer" && (timeline.canPost || editing) ? (
         <Composer
           key={replica}
           bottomInset={bottomInset}
