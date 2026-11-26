@@ -12,12 +12,12 @@
 // A rotation whose parent is the bootstrap, a retained rotation or another such rotation on the page goes to the trust
 // evaluator; any other decodable rotation is a sidecar candidate (row 526). A catalog bound to neither the bootstrap nor such
 // a rotation is replacement-bound and is kept in the sidecar, so a first catalog may arrive before its op or its rotation. A
-// held catalog whose binding becomes the trust evaluator's is handed back with that page (row 527); if the page is then
-// refused it is judged again without them and they are dropped. With a replace_catalog_v1 op held, the graph sees only the
+// held catalog whose binding becomes the trust evaluator's is handed back with that page (row 527); one it does not take
+// is tried alone, and dropped only once its binding is retained. With a replace_catalog_v1 op held, the graph sees only the
 // sidecar catalogs and rotations that reach a held op: one bound to an unheld id waits and cannot pin the client. Its reason
-// is trust_pending when a sidecar catalog or rotation waits, or a sidecar rotation's first catalog is not held, and nothing
-// else explains the result. A page that cannot be scanned is judged by the trust evaluator; an exception in the composed path
-// is a malformed_catalog reject that changes nothing.
+// is trust_pending when a sidecar catalog or rotation waits, or the first catalog of a sidecar rotation the graph keeps open
+// is not held, and nothing else explains the result. A page that cannot be scanned is judged by the trust evaluator; an
+// exception in the composed path is a malformed_catalog reject that changes nothing.
 //
 // Rotations under a replacement (row 526): after the trust evaluator accepts the page, each candidate must reach a
 // replace_catalog_v1 op in the retained Space history or a held sidecar rotation, possibly through other candidates; if any
@@ -128,13 +128,10 @@ export async function evaluateReplacementTrust(input: {
 }): Promise<ReplacementTrustResult> {
   const {installed, expected, incoming} = input;
   const {legacy, candidates, bound, revived} = split(installed, incoming);
-  const revivedSet = new Set(revived);
-  const catalogs = [...installed.extra.catalogs.filter((json) => !revivedSet.has(json)), ...bound];
   const judge = (page: TreehouseCatalogEvidencePage) =>
     evaluateTreehouseCatalogTrust({installed: installed.trust, expected, incoming: page});
-  // Row 527: held catalogs whose binding is now known go with this page; if it is refused, it is judged again without them.
-  let decision = await judge(revived.length === 0 ? legacy : {...legacy, catalogs: [...legacy.catalogs, ...revived]});
-  if (decision.kind === "reject" && revived.length > 0) decision = await judge(legacy);
+  const {decision, settled} = await revive(judge, legacy, revived);
+  const catalogs = [...installed.extra.catalogs.filter((json) => !settled.has(json)), ...bound];
   if (decision.kind === "reject") return decision;
   const heldRotations = installed.extra.rotations ?? [];
   const kept = classifyRotations(candidates, decision.next, heldRotations);
@@ -147,6 +144,52 @@ export async function evaluateReplacementTrust(input: {
   const ops = replaceIds(decision.next);
   if (ops.size === 0) return mirrored(installed, decision, extra, ops);
   try { return await composed(installed, decision, extra, ops); } catch { return recovery("malformed_catalog"); }
+}
+
+// Row 527: a held catalog whose binding is now known goes to the trust evaluator with this page. It is taken only when its
+// exact JSON is in the trust state the evaluator proposes: a decision that is not a reject can still have refused the page
+// under a block (retain_blocked keeps neither the page nor the catalog). When the page with every revived catalog is not taken
+// whole, the page is judged alone and the revived catalogs are tried one at a time, in sidecar order, to a fixpoint, so a
+// forged variant costs neither the authentic catalog nor the page's evidence and a held revision tried before its first
+// catalog is not lost. A catalog still not taken is dropped for good only when the decision retains its binding without
+// overflow triggers; otherwise it stays held. settled is every held catalog taken or dropped. The retries are trust
+// evaluations bounded only by the sidecar (row 355).
+async function revive(judge: (page: TreehouseCatalogEvidencePage) => Promise<TreehouseCatalogTrustDecision>,
+  legacy: TreehouseCatalogEvidencePage, revived: readonly string[]):
+  Promise<{decision: TreehouseCatalogTrustDecision; settled: Set<string>}> {
+  const withCatalogs = (jsons: readonly string[]) => ({...legacy, catalogs: [...legacy.catalogs, ...jsons]});
+  if (revived.length === 0) return {decision: await judge(legacy), settled: new Set()};
+  const all = await judge(withCatalogs(revived));
+  if (taken(all, revived)) return {decision: all, settled: new Set(revived)};
+  let decision = await judge(legacy);
+  const accepted: string[] = [];
+  let rest = [...revived];
+  for (;;) {
+    const left: string[] = [];
+    for (const json of rest) {
+      const trial = await judge(withCatalogs([...accepted, json]));
+      if (taken(trial, [...accepted, json])) { decision = trial; accepted.push(json); } else left.push(json);
+    }
+    const progress = left.length < rest.length;
+    rest = left;
+    if (rest.length === 0 || !progress) break;
+  }
+  return {decision, settled: new Set([...accepted, ...droppable(decision, rest)])};
+}
+
+function taken(decision: TreehouseCatalogTrustDecision, jsons: readonly string[]): boolean {
+  if (decision.kind === "reject") return false;
+  const retained = new Set(decision.next.catalogs.map((c) => c.json));
+  return jsons.every((json) => retained.has(json));
+}
+
+function droppable(decision: TreehouseCatalogTrustDecision, jsons: readonly string[]): string[] {
+  if (decision.kind === "reject" || (decision.next.blocked?.triggers.length ?? 0) > 0) return [];
+  const known = new Set([decision.next.review.bootstrapId, ...decision.next.rotations.map((r) => r.id)]);
+  return jsons.filter((json) => {
+    const envelope = decodeCatalog(json);
+    return envelope !== null && known.has(envelope.catalog.binding);
+  });
 }
 
 // The sidecar: catalogs always, rotations only when any are held, so a saved state, a view or a same() check from before row
@@ -196,13 +239,13 @@ async function composed(installed: InstalledReplacementTrust,
   const ready0 = readyCatalogs(extra.catalogs, new Set([...ops, ...rotations.admitted.keys()]), keys);
   const ready = ready0.ready;
   extra = putExtra(ready0.kept, rotations.kept);
-  // As the trust evaluator reports a retained rotation without its first catalog, an admitted sidecar rotation whose catalog is
-  // not held yet keeps the reason trust_pending.
-  const waiting = ready0.waiting + rotations.waiting + unbound(rotations.admitted, ready, trust);
   const owned = new Set([...ops, ...rotations.keptIds]);
   const input = await graphInput(installed, trust, ready, rotations.admitted);
   if (input === null) return recovery("trust_recovery_required");
   const result = await resolveCatalogBindingGraph(input);
+  // As the trust evaluator reports a retained rotation without its first catalog, an admitted sidecar rotation the graph keeps
+  // open whose catalog is not held keeps the reason trust_pending.
+  const waiting = ready0.waiting + rotations.waiting + unbound(result, rotations.admitted, ready, trust);
   const advanced = advanceCatalogBindingState(installed.binding, result);
   const routes = serve(result, advanced, installed);
   // A replace-shaped op engages composition only when the resolver treats it as a replacement node or as raw refusal
@@ -292,13 +335,18 @@ function readyRotations(jsons: readonly string[], ops: ReadonlySet<string>, keys
     keptIds: [...admitted.keys(), ...pending.map((p) => p.id)]};
 }
 
-function unbound(admitted: ReadonlyMap<string, unknown>, ready: readonly string[], trust: InstalledTreehouseCatalogTrustV1): number {
+// Only an admitted rotation the graph keeps open (a head that is not refused) waits for its first catalog; one closed out,
+// refused or not a node explains nothing. An error result has its own reason.
+function unbound(result: Awaited<ReturnType<typeof resolveCatalogBindingGraph>>, admitted: ReadonlyMap<string, unknown>,
+  ready: readonly string[], trust: InstalledTreehouseCatalogTrustV1): number {
+  if (!result.ok) return 0;
+  const graph = result.graph, heads = new Set(graph.heads);
   const bindings = new Set<string>();
   for (const json of [...ready, ...trust.catalogs.map((c) => c.json)]) {
     const envelope = decodeCatalog(json);
     if (envelope !== null) bindings.add(envelope.catalog.binding);
   }
-  return [...admitted.keys()].filter((id) => !bindings.has(id)).length;
+  return [...admitted.keys()].filter((id) => heads.has(id) && !bindings.has(id) && graph.nodes.get(id)?.refused !== true).length;
 }
 
 // Row 526: after the trust evaluator, each candidate rotation (one whose parent it does not know) must reach a replacement op in
@@ -313,10 +361,11 @@ function classifyRotations(candidates: readonly Candidate[], trust: InstalledTre
   }
   let rest = [...candidates];
   for (;;) {
-    const inReach = rest.filter((c) => reachable.has(c.parent));
-    if (inReach.length === 0) break;
+    const inReach = new Set(rest.filter((c) => reachable.has(c.parent)));
+    if (inReach.size === 0) break;
     for (const c of inReach) reachable.add(c.id);
-    rest = rest.filter((c) => !reachable.has(c.parent));
+    // Remove what was admitted, not what is reachable now: the next layer's parents just became reachable.
+    rest = rest.filter((c) => !inReach.has(c));
     if (rest.length === 0) break;
   }
   return rest.length === 0 ? candidates.map((c) => c.json) : null;
@@ -448,10 +497,10 @@ function split(installed: InstalledReplacementTrust, incoming: TreehouseCatalogE
       if (envelope !== null) rest.push({json, id: catalogRotationId(envelope), parent: envelope.rotation.parent});
     }
     for (;;) {
-      const legacy = rest.filter((c) => known.has(c.parent));
-      if (legacy.length === 0) break;
+      const legacy = new Set(rest.filter((c) => known.has(c.parent)));
+      if (legacy.size === 0) break;
       for (const c of legacy) known.add(c.id);
-      rest = rest.filter((c) => !known.has(c.parent));
+      rest = rest.filter((c) => !legacy.has(c));
     }
     const candidateJsons = new Set(rest.map((c) => c.json));
     const rotations = incoming.rotations.filter((json) => !candidateJsons.has(json));

@@ -22,16 +22,17 @@ defmodule Treehouse.CatalogReplacementTrust do
   rotation is a candidate for the sidecar (row 526). A catalog whose binding is CatalogTrust's
   goes to it; any other is replacement-bound and kept in the sidecar (so a first catalog may
   arrive before its op or its rotation). A held catalog whose binding becomes CatalogTrust's is
-  handed back to it with that page (row 527); if the page is then refused, it is judged again
-  without them and they are dropped. CatalogTrust's `:reject` passes through. With no
+  handed back to it with that page (row 527); one it does not take is tried alone, and dropped only
+  once its binding is retained. CatalogTrust's `:reject` passes through. With no
   `replace_catalog_v1` op in the Space history the `CatalogTrust` decision is returned (as
   `trust_decision`) with the watermark mirrored, so a Space without a replacement behaves as
   before. With one, the graph decides what is accepted and served, over the sidecar catalogs and
   rotations that reach a held replacement op only: one bound to an unheld id waits in the
   sidecar and cannot pin the client. The result is `%{kind, reason, refused, next, routes,
   served_origin}`; `next` is the state to persist and `routes` is what may be served now (none
-  while frozen). `reason` is `:trust_pending` when a sidecar catalog or rotation is waiting, or a
-  sidecar rotation's first catalog is not held, and nothing else explains the result.
+  while frozen). `reason` is `:trust_pending` when a sidecar catalog or rotation is waiting, or the
+  first catalog of a sidecar rotation the graph keeps open is not held, and nothing else explains
+  the result.
 
   A page that cannot be scanned is judged by `CatalogTrust`; an exception in the composed path
   is a `malformed_catalog` reject that changes nothing.
@@ -168,22 +169,11 @@ defmodule Treehouse.CatalogReplacementTrust do
         incoming: incoming
       }) do
     {legacy, candidates, bound, revived} = split(installed, incoming)
-    revived_set = MapSet.new(revived)
-    catalogs = Enum.reject(held, &MapSet.member?(revived_set, &1)) ++ bound
     trust_input = fn page -> %{installed: installed.trust, expected: expected, incoming: page} end
-
-    # Row 527: a held catalog whose binding is now known goes to CatalogTrust with this page. If
-    # the page is then refused, it is judged again without them; a revived catalog that made an
-    # otherwise acceptable page fail is dropped for good.
-    decision =
-      if revived == [] do
-        CatalogTrust.evaluate(trust_input.(legacy))
-      else
-        case CatalogTrust.evaluate(trust_input.(%{legacy | catalogs: legacy.catalogs ++ revived})) do
-          %{kind: :reject} -> CatalogTrust.evaluate(trust_input.(legacy))
-          decision -> decision
-        end
-      end
+    judge = &CatalogTrust.evaluate(trust_input.(&1))
+    {decision, settled} = revive(judge, legacy, revived)
+    settled = MapSet.new(settled)
+    catalogs = Enum.reject(held, &MapSet.member?(settled, &1)) ++ bound
 
     case decision do
       %{next: trust} ->
@@ -208,6 +198,70 @@ defmodule Treehouse.CatalogReplacementTrust do
 
   # Anything else is not this module's input; CatalogTrust refuses it as it always has.
   def evaluate(input), do: CatalogTrust.evaluate(input)
+
+  # Row 527: a held catalog whose binding is now known goes to CatalogTrust with this page. It is
+  # taken only when its exact JSON is in the trust state CatalogTrust proposes: a decision that is
+  # not a reject can still have refused the page under a block (`:retain_blocked` keeps neither
+  # the page nor the catalog). When the page with every revived catalog is not taken whole, the
+  # page is judged alone and the revived catalogs are tried one at a time, in sidecar order, to a
+  # fixpoint, so a forged variant costs neither the authentic catalog nor the page's evidence and
+  # a held revision tried before its first catalog is not lost. A catalog still not taken is
+  # dropped for good only when the decision retains its binding without overflow triggers;
+  # otherwise it stays held. Returns the decision and the held catalogs it settled (taken or
+  # dropped). The retries are CatalogTrust evaluations bounded only by the sidecar (row 355).
+  defp revive(judge, legacy, []), do: {judge.(legacy), []}
+
+  defp revive(judge, legacy, revived) do
+    all = judge.(with_catalogs(legacy, revived))
+
+    if taken?(all, revived) do
+      {all, revived}
+    else
+      {decision, taken} = revive_each(judge, legacy, judge.(legacy), [], revived)
+      {decision, taken ++ droppable(decision, revived -- taken)}
+    end
+  end
+
+  defp revive_each(judge, legacy, decision, taken, rest) do
+    {decision, taken, left} =
+      Enum.reduce(rest, {decision, taken, []}, fn json, {decision, taken, left} ->
+        trial = judge.(with_catalogs(legacy, taken ++ [json]))
+
+        if taken?(trial, taken ++ [json]),
+          do: {trial, taken ++ [json], left},
+          else: {decision, taken, left ++ [json]}
+      end)
+
+    if left != [] and length(left) < length(rest),
+      do: revive_each(judge, legacy, decision, taken, left),
+      else: {decision, taken}
+  end
+
+  defp with_catalogs(page, jsons), do: %{page | catalogs: page.catalogs ++ jsons}
+
+  defp taken?(%{kind: kind, next: %{catalogs: records}}, jsons) when kind != :reject do
+    retained = MapSet.new(records, & &1.json)
+    Enum.all?(jsons, &MapSet.member?(retained, &1))
+  end
+
+  defp taken?(_decision, _jsons), do: false
+
+  defp droppable(%{kind: kind, next: trust}, jsons) when kind != :reject do
+    if Map.get(trust.blocked || %{}, :triggers, []) == [] do
+      known = MapSet.new([trust.review.bootstrap_id | Enum.map(trust.rotations, & &1.id)])
+
+      Enum.filter(jsons, fn json ->
+        case TransportCatalog.decode_catalog_json(json) do
+          {:ok, %{catalog: %{binding: binding}}} -> MapSet.member?(known, binding)
+          _ -> false
+        end
+      end)
+    else
+      []
+    end
+  end
+
+  defp droppable(_decision, _jsons), do: []
 
   defp orphaned(input) do
     case CatalogTrust.evaluate(input) do
@@ -294,14 +348,14 @@ defmodule Treehouse.CatalogReplacementTrust do
     keys = Map.merge(keys, rotations.keys)
     {ready, waiting, kept} = ready(extra.catalogs, ops ++ Map.keys(rotations.admitted), keys)
     extra = put_extra(kept, rotations.kept)
-    # As CatalogTrust reports a retained rotation without its first catalog, an admitted sidecar
-    # rotation whose catalog is not held yet keeps the reason `trust_pending`.
-    waiting = waiting + rotations.waiting + unbound(rotations.admitted, ready, trust)
     owned = ops ++ rotations.kept_ids
 
     case graph_input(installed, trust, {ready, rotations.admitted}, {logs, space}) do
       {:ok, input} ->
         result = CatalogBindingGraph.resolve(input)
+        # As CatalogTrust reports a retained rotation without its first catalog, an admitted
+        # sidecar rotation the graph keeps open whose catalog is not held keeps `trust_pending`.
+        waiting = waiting + rotations.waiting + unbound(result, rotations.admitted, ready, trust)
         advanced = CatalogBindingGraph.advance(installed.binding, result)
         routes = serve(result, advanced, installed)
 
@@ -585,13 +639,13 @@ defmodule Treehouse.CatalogReplacementTrust do
       end
 
     {admitted, waiting} = admit_rotations(pending, held, keys, %{})
-    kept = Map.values(admitted) ++ waiting
+    kept = Enum.map(Map.values(admitted), &elem(&1, 0)) ++ waiting
 
     %{
       admitted: Map.new(admitted, fn {id, {_json, envelope}} -> {id, envelope} end),
       keys: Map.new(admitted, fn {id, {_json, e}} -> {id, e.rotation.new_catalog_key} end),
       waiting: length(waiting),
-      kept: Enum.map(kept, &elem(&1, 0)),
+      kept: kept,
       kept_ids: Map.keys(admitted) ++ Enum.map(waiting, &rotation_json_id/1)
     }
   end
@@ -630,15 +684,27 @@ defmodule Treehouse.CatalogReplacementTrust do
       else: {next, Enum.map(waiting, fn {json, _id, _e} -> json end)}
   end
 
-  defp unbound(admitted, ready, trust) do
+  # Only an admitted rotation the graph keeps open (a head that is not refused) waits for its first
+  # catalog; one closed out, refused or not a node explains nothing. An error result has its own
+  # reason.
+  defp unbound({:ok, graph}, admitted, ready, trust) do
     bindings =
       for json <- ready ++ Enum.map(trust.catalogs, & &1.json),
           {:ok, %{catalog: %{binding: binding}}} <- [TransportCatalog.decode_catalog_json(json)],
           into: MapSet.new(),
           do: binding
 
-    admitted |> Map.keys() |> Enum.count(&(not MapSet.member?(bindings, &1)))
+    heads = MapSet.new(graph.heads)
+
+    admitted
+    |> Map.keys()
+    |> Enum.count(fn id ->
+      MapSet.member?(heads, id) and not MapSet.member?(bindings, id) and
+        not graph.nodes[id].refused?
+    end)
   end
+
+  defp unbound(_error, _admitted, _ready, _trust), do: 0
 
   defp rotation_json_id(json) do
     {:ok, envelope} = decode_rotation(json)

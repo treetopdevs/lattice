@@ -255,6 +255,7 @@ defmodule Treehouse.CatalogReplacementWorld do
       "urls" => result.routes |> Enum.map(& &1.url) |> Enum.sort(),
       "frozen" => next.binding.frozen,
       "sidecar" => length(next.extra.catalogs),
+      "sidecar_rotations" => length(Map.get(next.extra, :rotations, [])),
       "old_key_used" => Enum.any?(next.extra.catalogs, &signed_by?(&1, catalog_key))
     }
   end

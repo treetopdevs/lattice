@@ -29,6 +29,7 @@ function view(result) {
         accepted: accepted === null ? null : `${label(accepted.binding)}/${label(accepted.catalog)}`,
         origin: result.servedOrigin, routes: result.routes.length, urls: result.routes.map((r) => r.url).sort(compareUtf8),
         frozen: result.next.binding.frozen, sidecar: result.next.extra.catalogs.length,
+        sidecar_rotations: (result.next.extra.rotations ?? []).length,
         old_key_used: result.next.extra.catalogs.some((json) => signedBy(json, bootstrap.record.catalogKey)),
     };
 }
