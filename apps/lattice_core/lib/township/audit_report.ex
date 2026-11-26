@@ -20,7 +20,8 @@ defmodule Township.AuditReport do
       the list does not establish elapsed time or that any holder was inactive.
     * **Beacons** reports the highest accepted beacon epoch across the whole log, not
       per causal branch and not the epoch any one operation observed. A beacon is a
-      root-signed logical tick, not a clock.
+      logical tick accepted under the replica's beacon policy, not a clock; the
+      section does not say who signed a beacon.
     * **Leases** shows the live-path `expired?` check next to the delegation status;
       neither is a wall-clock statement.
     * **Election evidence** states that a `township-audit-bundle-v1` bundle carries no
@@ -47,7 +48,7 @@ defmodule Township.AuditReport do
   @verified_banner "VERIFIED: authenticity and projection consistency, not completeness"
   @attestation_sentence "The legacy attestation stub is not receipt-free and makes no coercion-resistance claim."
   @chronology_caption "Honored role acquisitions in this log, oldest first, as judged by one analysis pass. Author-asserted ticks are untrusted (ADR 0004) and are not shown; this list does not establish elapsed time or that any holder was inactive."
-  @beacon_caption "Global to the log, not per causal branch; it is not the epoch any one operation observed. A beacon is a root-signed logical tick, not a clock. Rejected beacons appear in the authority ledger."
+  @beacon_caption "Global to the log, not per causal branch; it is not the epoch any one operation observed. A beacon is a logical tick accepted under the replica's beacon policy, not a clock. Rejected beacons appear in the authority ledger."
   @lease_caption "expired? is the live-path check against beacons accepted anywhere on this log; status is the delegation verdict, so a revoked or invalid chain reports that status even when it has also lapsed."
   @election_intro "This audit bundle (township-audit-bundle-v1) carries no election board, election spec, projection or close evidence. The VERIFIED banner covers matter.log only. No election phase, result or close is shown, and none can be derived from this bundle."
   @link_caption "The report holds no election spec, so it cannot run Township.Election.verify_link/3; a row is the authority verdict on a command in this log, not a verified election link."

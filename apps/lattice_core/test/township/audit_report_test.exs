@@ -496,7 +496,11 @@ defmodule Township.AuditReportTest do
 
       beacons = section(html, "Beacons")
       assert beacons =~ "Highest accepted beacon epoch on this log: 5"
-      assert beacons =~ "A beacon is a root-signed logical tick, not a clock."
+
+      assert beacons =~
+               "A beacon is a logical tick accepted under the replica&#39;s beacon policy"
+
+      refute beacons =~ "root-signed"
 
       ids =
         ~r{<tr><td>([^<]*)</td><td>(\d+)</td></tr>}
@@ -510,6 +514,32 @@ defmodule Township.AuditReportTest do
       ledger = section(html, "Authority ledger")
       assert ledger =~ ~r/#{info.stale}<\/td><td>stale_beacon:/
       assert ledger =~ ~r/#{info.non_root}<\/td><td>unauthorized_beacon:/
+    end
+
+    test "a witness-certified beacon is listed without calling it root-signed", %{
+      tmp_dir: tmp
+    } do
+      dir = Path.join(tmp, "bundle")
+      sim = Sim.new(Matter, "replica:matter:report-witnessed", ["clerk", "w0", "w1"])
+
+      policy = %{mode: :witnessed, version: 1, witnesses: ["w0", "w1"], threshold: 2}
+
+      {sim, _} =
+        Sim.create_replica(sim, "clerk",
+          policies: %{__beacon__: Map.put(policy, :max_epoch_step, 10)}
+        )
+
+      {sim, beacon} = Sim.beacon(Sim.sync_all(sim), "w0", 4, witnesses: ["w0", "w1"])
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+      refute beacon.author == Sim.identity(sim, "clerk").pub
+      assert {:ok, _} = AuditBundle.write(dir, log)
+
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+      beacons = section(html, "Beacons")
+      assert beacons =~ "Highest accepted beacon epoch on this log: 4"
+      assert beacons =~ "<tr><td>#{beacon.id}</td><td>4</td></tr>"
+      assert beacons =~ "accepted under the replica&#39;s beacon policy, not a clock."
+      refute beacons =~ "root-signed"
     end
 
     test "leases render the read model's lease view sorted by delegation", %{tmp_dir: tmp} do
