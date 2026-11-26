@@ -48,6 +48,16 @@ export declare function memberCapability(frames: readonly CarrierOpFrame[], publ
 }): CarrierDelegation | null;
 /** Delegations an op authored at the current frontier of `replica` can cite: honored, unrevoked and unexpired. */
 export declare function liveTreehouseDelegations(product: TreehouseProduct, frames: readonly CarrierOpFrame[], replica: string): CarrierDelegation[];
+/**
+ * Every delegation the judge honors in `replica` (validated and introduced by an honored frame), each once,
+ * with the reason an op authored now could not cite it, or null when it is usable. A delegation absent from
+ * this list was never honored (invalid, or introduced only by a quarantined frame). `liveTreehouseDelegations`
+ * is the null-refusal subset.
+ */
+export declare function treehouseDelegationStates(product: TreehouseProduct, frames: readonly CarrierOpFrame[], replica: string): {
+    delegation: CarrierDelegation;
+    refusal: "revoked_capability" | "lease_expired" | null;
+}[];
 export type TreehouseInvitationReview = {
     ok: true;
     invitationId: string;

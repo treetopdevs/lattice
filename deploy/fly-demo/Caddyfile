@@ -1,0 +1,82 @@
+{
+  auto_https off
+  admin off
+}
+
+:8080 {
+  # Carrier health probes
+  handle /livez {
+    reverse_proxy 127.0.0.1:4200
+  }
+  handle /readyz {
+    reverse_proxy 127.0.0.1:4200
+  }
+
+  # Carrier WebSocket routes (Fly edge terminates TLS -> wss://<app>.fly.dev/ws/<name>)
+  handle /ws/treehouse_space {
+    rewrite * /carrier
+    reverse_proxy 127.0.0.1:4201
+  }
+  handle /ws/treehouse_thread {
+    rewrite * /carrier
+    reverse_proxy 127.0.0.1:4202
+  }
+  handle /ws/township_matter {
+    rewrite * /carrier
+    reverse_proxy 127.0.0.1:4203
+  }
+  handle /ws/toolshed_shed {
+    rewrite * /carrier
+    reverse_proxy 127.0.0.1:4204
+  }
+  handle /ws/toolshed_tool {
+    rewrite * /carrier
+    reverse_proxy 127.0.0.1:4205
+  }
+
+  # Township Phoenix LiveView + Vue causal replay island
+  handle /township* {
+    reverse_proxy 127.0.0.1:4120
+  }
+  handle /live* {
+    reverse_proxy 127.0.0.1:4120
+  }
+  handle /assets* {
+    reverse_proxy 127.0.0.1:4120
+  }
+
+  # Public demo endpoints manifest + demo testbed role seeds
+  handle /demo-endpoints.json {
+    header Cache-Control "no-store"
+    root * /data/demo_ecosystem
+    file_server
+  }
+  handle /demo-seed/founder {
+    header Cache-Control "no-store"
+    header Content-Type "application/json"
+    rewrite * /founder.json
+    root * /data/demo_ecosystem/public_seeds
+    file_server
+  }
+  handle /demo-seed/neighbor {
+    header Cache-Control "no-store"
+    header Content-Type "application/json"
+    rewrite * /neighbor.json
+    root * /data/demo_ecosystem/public_seeds
+    file_server
+  }
+  handle /demo-seed/observer {
+    header Cache-Control "no-store"
+    header Content-Type "application/json"
+    rewrite * /observer.json
+    root * /data/demo_ecosystem/public_seeds
+    file_server
+  }
+
+  # Browser Starter static SPA (Treehouse + Township + Toolshed)
+  handle {
+    root * /app/web
+    try_files {path} /index.html
+    file_server
+  }
+}

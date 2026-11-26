@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { acceptTreehouseInvitation, authorCarrierOp, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, liveTreehouseDelegations, memberCapability, observeTreehouse, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, treehouseCommandFields, treehouseCommandRoles, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
+import { acceptTreehouseInvitation, authorCarrierOp, authorTownshipDelegation, authorTownshipRevocation, carrierDelegationsFromFrames, authorTownshipGenesis, authorTreehouseCommand, authorTreehouseAdmitAndGrant, authorTreehouseIssueInvitation, carrierOpsToSemanticOps, decodeTreehouseAcceptance, decodeTreehouseJoinRequest, decodeTreehouseOffer, encodeTreehouseAcceptance, encodeTreehouseJoinRequest, encodeTreehouseOffer, liveTreehouseDelegations, memberCapability, observeTreehouse, treehouseDelegationStates, reviewTreehouseInvitation, signTreehouseAcceptance, treehouseCommandDecoders, treehouseCommandFields, treehouseCommandRoles, TREEHOUSE_LITE_THREAD_CAP, TREEHOUSE_OFFER_MAX_CHARS, } from "../src/index";
 import { frontier } from "../src/sync";
 const here = dirname(fileURLToPath(import.meta.url));
 const scenarios = JSON.parse(readFileSync(join(here, "vectors", "treehouse_enrollment", "enrollment.json"), "utf8"));
@@ -428,6 +428,9 @@ async function founderWorld(threadCount, archive = []) {
     const revokedFrames = [...grantedFrames, revoke];
     assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", revokedFrames)).quarantineReasons.has(revokedGrant.frame.id), false);
     assert.equal(memberCapability(revokedFrames, joinerPub, revokedGrant.replica, { command: "post", product: "Treehouse.Thread" }), null);
+    const stateOf = (frames, replica, id) => treehouseDelegationStates("Treehouse.Thread", frames, replica).filter(({ delegation }) => delegation.id === id).map(({ refusal }) => refusal);
+    assert.deepEqual(stateOf(grantedFrames, revokedGrant.replica, revokedGrant.delegation.id), [null], "listed once, usable before the revoke");
+    assert.deepEqual(stateOf(revokedFrames, revokedGrant.replica, revokedGrant.delegation.id), ["revoked_capability"]);
     const stalePost = await authorTreehouseCommand({ product: "Treehouse.Thread", replica: revokedGrant.replica, deps: frontier(opsOf("Treehouse.Thread", revokedFrames)),
         signer: joinerSigner, capId: revokedGrant.delegation.id, command: { command: "post", text: "late" } });
     assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", [...revokedFrames, stalePost])).quarantineReasons.get(stalePost.id), "revoked_capability");
@@ -460,6 +463,8 @@ async function founderWorld(threadCount, archive = []) {
     assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", lapsedFrames)).quarantineReasons.has(beacon.id), false, "the beacon is valid");
     assert.equal(memberCapability(lapsedFrames, leaseHolder.publicKey, leaseThread, { command: "post", product: "Treehouse.Thread" }), null);
     assert.equal(liveTreehouseDelegations("Treehouse.Thread", lapsedFrames, leaseThread).some((delegation) => delegation.id === leasedId), false);
+    assert.deepEqual(stateOf(leasedFrames, leaseThread, leasedId), [null]);
+    assert.deepEqual(stateOf(lapsedFrames, leaseThread, leasedId), ["lease_expired"]);
     const latePost = await authorTreehouseCommand({ product: "Treehouse.Thread", replica: leaseThread, deps: frontier(opsOf("Treehouse.Thread", lapsedFrames)),
         signer: leaseHolder, capId: leasedId, command: { command: "post", text: "late" } });
     assert.equal(observeTreehouse("Treehouse.Thread", opsOf("Treehouse.Thread", [...lapsedFrames, latePost])).quarantineReasons.get(latePost.id), "lease_expired");

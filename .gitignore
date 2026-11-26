@@ -16,6 +16,10 @@
 /clients/township-tauri-shell/src-tauri/target/
 /clients/lattice-browser-starter/node_modules/
 /clients/lattice-browser-starter/dist/
+/clients/treehouse-mobile/node_modules/
+/clients/treehouse-mobile/.expo/
+/clients/treehouse-mobile/ios/
+/clients/treehouse-mobile/android/
 /output/playwright/
 /output/flagship/
 /output/liveops/
