@@ -4766,6 +4766,24 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>Operator instruction. The scope (all open non-draft PRs, so PRs #237 and #238 as well as this run's slices) is the coordinator's reading of "prs to merge".</dd>
 <dt>Status</dt><dd>Operator instruction (2026-11-26); the scope reading is assumed under delegation, reversible.</dd>
 </dl></section>
+<section id="d957"><h2><span>D-957</span> Rows 521 and 523: compressed matter.log is refused in AuditBundle, not in Lattice.Log</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 521 and 523 slice (branch claude/521-523-report-write-and-bundle-bounds, PR <a href="https://github.com/treetopdevs/lattice/pull/240">#240</a>)</dd>
+<dt>Decision</dt><dd><code>Township.AuditBundle</code> refuses a <code>matter.log</code> in compressed term encoding before decoding. <code>Lattice.Log.restore_verified_bytes/1</code> is unchanged.</dd>
+<dt>Reason</dt><dd>An existing substrate test pins that <code>restore_verified_bytes/1</code> accepts compressed dumps. Refusing at the Township caller fails closed for the untrusted bundle path without changing a substrate contract. Row 592 asks whether Log should refuse it for every bounded caller.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d958"><h2><span>D-958</span> Row 521: containment check and write path for --out</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 521 and 523 slice (branch claude/521-523-report-write-and-bundle-bounds, PR <a href="https://github.com/treetopdevs/lattice/pull/240">#240</a>)</dd>
+<dt>Decision</dt><dd>The Township report task refuses when either the fully resolved <code>--out</code> or the write path (resolved parent plus leaf name) is inside the bundle. It writes to the leaf and replaces any link there. The temporary file is <code>.report-&lt;16 hex&gt;.tmp</code>, independent of the destination name.</dd>
+<dt>Reason</dt><dd>A leaf link into the bundle is still refused, and a leaf link to an outside file is replaced instead of written through. This matches the election task. A fixed short temporary name keeps long valid basenames working.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d959"><h2><span>D-959</span> Rows 521 and 523 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 521 and 523 slice (branch claude/521-523-report-write-and-bundle-bounds, PR <a href="https://github.com/treetopdevs/lattice/pull/240">#240</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high found three P3. Gemini 4 Neon medium found three P2 and one P3 (symlink at <code>--out</code> followed; task tests passed with the write reverted; compressed log past the bound; long basenames). All three P2 were reproduced and fixed. Round 2: Gemini PASS, Codex one P3 (an <code>--out</code> path near <code>PATH_MAX</code>), filed in row 591. Follow-up rows 590 to 593.</dd>
+<dt>Reason</dt><dd>The last round has no P1 or P2. The first Gemini run returned nothing because headless mode cannot run shell commands; the helper now gives it a saved diff, and the review was rerun before the PR opened.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
