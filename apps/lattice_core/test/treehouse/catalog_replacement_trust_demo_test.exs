@@ -22,7 +22,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     w = W.build()
     base = w.base
     old_key = base.record.catalog_key
-    labels = w.labels
+    r = rotation_world(w)
+    labels = Map.merge(w.labels, r.labels)
 
     log_r1 = W.with_ops(base, [w.r1])
     log_rn = W.with_ops(base, [w.rn.op])
@@ -97,6 +98,43 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     runs = [
       {"admin", [{"1 install C0", page_c0, true}, {"2 admin R1 + K1", page_r1, true}]},
       {"nonadmin", [{"install C0", page_c0, false}, {"3 non-admin Rn", page_rn, true}]},
+      # Row 526: a rotation of the replacement R1 to a new catalog key, and its first catalog K2.
+      {"rotation",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"4 R1 rotates to T2", r.page_t2k2, true},
+         {"T2 + K2 again", r.page_t2k2, false}
+       ]},
+      # Row 527: a catalog CT held before its legacy rotation T arrives.
+      {"ct_first",
+       [
+         {"install C0", page_c0, false},
+         {"CT", W.page(catalogs: [r.ct]), false},
+         {"5 CT before its T", r.page_t, true}
+       ]},
+      {"k2_first",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"K2", W.page(catalogs: [r.k2]), false},
+         {"T2", W.page(rotations: [r.t2.envelope], proofs: [w.proof]), false}
+       ]},
+      {"rotation_bad_sig",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"forged T2", W.page(rotations: [r.forged_t2]), false},
+         {"T2 + K2", r.page_t2k2, false}
+       ]},
+      {"rotation_wrong_arity",
+       [{"install C0", page_c0, false}, {"one-argument op + K + rotation", r.page_arity, false}]},
+      {"junk_before_t",
+       [
+         {"install C0", page_c0, false},
+         {"junk catalog under T", W.page(catalogs: [r.junk_t]), false},
+         {"T", r.page_t, false}
+       ]},
       {"k1_first",
        [
          {"install C0", page_c0, false},
@@ -138,8 +176,25 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     assert Enum.map(printed, &elem(&1, 0)) == [
              "1 install C0",
              "2 admin R1 + K1",
-             "3 non-admin Rn"
+             "3 non-admin Rn",
+             "4 R1 rotates to T2",
+             "5 CT before its T"
            ]
+
+    # Rows 526 and 527 on BEAM before TS must agree.
+    assert [_, _, %{"accepted" => "T2/K2", "origin" => "wss://r1-relay.invalid"} = t2, again] =
+             beam_views["rotation"]
+
+    assert {t2["routes"], again["kind"]} == {1, "unchanged"}
+    assert List.last(beam_views["k2_first"]) == Map.put(t2, "kind", "propose")
+    assert List.last(beam_views["rotation_bad_sig"])["accepted"] == "T2/K2"
+    assert [_, %{"accepted" => "B/C0", "sidecar" => 0}] = beam_views["rotation_wrong_arity"]
+
+    assert [_, %{"accepted" => "B/C0", "sidecar" => 1}, %{"accepted" => "T/CT", "sidecar" => 0}] =
+             beam_views["ct_first"]
+
+    assert [_, %{"sidecar" => 1}, %{"accepted" => "B/C0", "sidecar" => 0}] =
+             beam_views["junk_before_t"]
 
     # The order, repeat and freeze runs, asserted on BEAM before TS must agree.
     assert [_, %{"accepted" => "B/C0"}, %{"accepted" => "R1/K1", "frozen" => false}] =
@@ -345,6 +400,52 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         ]
       }
     ]
+  end
+
+  # Rows 526 and 527: T2 rotates R1 (from K1, signed by K1's key) and K2 is its first catalog; T
+  # rotates the bootstrap (from C0, signed by the base catalog key) and CT is its first catalog.
+  defp rotation_world(w) do
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    base = w.base
+    t2 = W.rotation(w, %{id: w.r1.id, generation: 1}, w.k1, w.new_catalog, "demo-t2")
+    k2 = F.catalog(base, t2.id, 0, nil, t2.key, w.k1.catalog.entries)
+    t = W.rotation(w, %{id: base.boot.id, generation: 0}, w.c0, base.catalog, "demo-t")
+    ct = F.catalog(base, t.id, 0, nil, t.key, w.c0.catalog.entries)
+    junk_key = Lattice.Identity.from_seed("junk", "r527-demo-junk")
+    junk_t = F.catalog(base, t.id, 0, nil, junk_key, w.c0.catalog.entries)
+
+    one = F.replacement(base, base.log, "r526-demo-one")
+
+    op =
+      Lattice.Op.new(
+        base.admin,
+        base.replica,
+        Lattice.Log.frontier(base.log),
+        :command,
+        {:replace_catalog_v1, [one.claim]},
+        cap: base.delegation.id
+      )
+
+    k_one = F.catalog(base, op.id, 0, nil, one.catalog_key, one.entries)
+    t_one = W.rotation(w, %{id: op.id, generation: 1}, k_one, one.catalog_key, "demo-one")
+
+    %{
+      t2: t2,
+      k2: k2,
+      ct: ct,
+      junk_t: junk_t,
+      forged_t2: %{t2.envelope | new_signature: <<7, 0::size(504)>>},
+      page_t2k2: W.page(rotations: [t2.envelope], catalogs: [k2], proofs: [w.proof]),
+      page_t: W.page(rotations: [t.envelope], proofs: [w.proof]),
+      page_arity:
+        W.page(
+          logs: [W.with_ops(base, [op])],
+          proofs: [w.proof],
+          catalogs: [k_one],
+          rotations: [t_one.envelope]
+        ),
+      labels: %{t2.id => "T2", F.cid(k2) => "K2", t.id => "T", F.cid(ct) => "CT"}
+    }
   end
 
   defp fixture_install(f) do
