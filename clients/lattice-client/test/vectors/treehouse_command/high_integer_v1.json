@@ -4125,6 +4125,98 @@
     },
     {
       "frame": {
+        "author": "ydIHs7j1tIRf2BYPIoeSHtDdxON1+iXCvLIvXkQOPOE=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "replace_catalog_v1"
+            ],
+            [
+              "list",
+              [
+                [
+                  "int",
+                  "9007199254740992"
+                ],
+                [
+                  "int",
+                  "9007199254740992"
+                ],
+                [
+                  "int",
+                  "9007199254740992"
+                ]
+              ]
+            ]
+          ]
+        ],
+        "cap": [
+          "bin",
+          "S1R4eUV3OG5VS1lLUWtidVg3WDdGZGhmd2VJLUJNZkhWODhOY29Ra1BQNA=="
+        ],
+        "deps": [
+          "RkDq9Jlcr-R711p2cbd6bgfIAojAfgZSxnE3u1d99vA"
+        ],
+        "id": "Jtwf4mBeWCcOYcQjZB-vhwGPP1X6LvO_miOdn4-l5Bg",
+        "kind": "command",
+        "replica": "replica:treehouse:space:CQc0NHKK3i4Cup9XSHquQbwIyPAaBlto_VtzoOuvD08#authority:bounded-continuation-v1#root:3whsu_X2QkcvO_-46IgSABz3n0iibN63hcUR6CeXF6k",
+        "sig": "VEU0VZRnC79/Ra3bQ/0tl/czWSt9kGqXYGw9Znzw5cecxVHiLGa7H2dIcFa3KqcJY25CCQ3AgYEvRCsNoESkAw==",
+        "v": 1
+      },
+      "name": "replace_catalog_v1-high",
+      "product": "Treehouse.Space",
+      "reason": "operation_not_granted"
+    },
+    {
+      "frame": {
+        "author": "ydIHs7j1tIRf2BYPIoeSHtDdxON1+iXCvLIvXkQOPOE=",
+        "body": [
+          "tuple",
+          [
+            [
+              "atom",
+              "replace_catalog_v1"
+            ],
+            [
+              "list",
+              [
+                [
+                  "int",
+                  1
+                ],
+                [
+                  "int",
+                  1
+                ],
+                [
+                  "int",
+                  1
+                ]
+              ]
+            ]
+          ]
+        ],
+        "cap": [
+          "bin",
+          "S1R4eUV3OG5VS1lLUWtidVg3WDdGZGhmd2VJLUJNZkhWODhOY29Ra1BQNA=="
+        ],
+        "deps": [
+          "RkDq9Jlcr-R711p2cbd6bgfIAojAfgZSxnE3u1d99vA"
+        ],
+        "id": "fmKZKuWAS5gqWiqWiXl70iCUTfKFJ2Wd3NQyF_oETPQ",
+        "kind": "command",
+        "replica": "replica:treehouse:space:CQc0NHKK3i4Cup9XSHquQbwIyPAaBlto_VtzoOuvD08#authority:bounded-continuation-v1#root:3whsu_X2QkcvO_-46IgSABz3n0iibN63hcUR6CeXF6k",
+        "sig": "8CJfoPNXHRNp2H06Ncvf8mA8kShxglR+pfQMi9IMK3Ys+SvRze7HgoQa5Iy9zjkuWPckwpZTnYHleSyUGFvEBw==",
+        "v": 1
+      },
+      "name": "replace_catalog_v1-safe",
+      "product": "Treehouse.Space",
+      "reason": "operation_not_granted"
+    },
+    {
+      "frame": {
         "author": "ygAchc/nXB7nKK3L2ODMqTPuYG8wS3SbT2Mi5XKXamw=",
         "body": [
           "tuple",

@@ -5,7 +5,7 @@ defmodule Treehouse.CommandHighIntegerTest do
 
   alias Lattice.Carrier.Wire
   alias Lattice.Log
-  alias Treehouse.{CommandHighIntegerVectors, Space, Thread}
+  alias Treehouse.{CommandHighIntegerVectors, MemberContinuity, Space, Thread}
 
   @vector Path.expand(
             "../../../../clients/lattice-client/test/vectors/treehouse_command/high_integer_v1.json",
@@ -32,6 +32,7 @@ defmodule Treehouse.CommandHighIntegerTest do
     "attest-possession-high" => "application_invalid_continuity",
     "attest-vouch-high" => "application_invalid_continuity",
     "attest-vouch-signature-high" => "application_invalid_continuity",
+    "replace_catalog_v1-high" => "operation_not_granted",
     "thread-post-high" => "malformed_command",
     "thread-post-max-high" => "malformed_command",
     "thread-create_thread-high" => "malformed_command",
@@ -73,6 +74,17 @@ defmodule Treehouse.CommandHighIntegerTest do
     for {name, c} <- high do
       assert high_integer?(c["frame"]["body"]), name
       refute high_integer?(Enum.find(v["cases"], &(&1["name"] == safe(name)))["frame"]["body"])
+    end
+  end
+
+  test "a whole Space history with one high case decodes and observes, quarantining that op",
+       %{vector: v} do
+    for c <- v["cases"], c["product"] == "Treehouse.Space" do
+      assert {:ok, ops} = Wire.decode_ops(v["space"]["frames"] ++ [c["frame"]]), c["name"]
+      log = Enum.reduce(ops, Log.new(v["space"]["replica"]), &Log.append!(&2, &1))
+      assert {:ok, %{quarantine: quarantine}} = MemberContinuity.observe(log), c["name"]
+      found = Enum.find(quarantine, &(&1.op_id == c["frame"]["id"]))
+      assert (found && to_string(found.reason)) == c["reason"], c["name"]
     end
   end
 

@@ -1,6 +1,7 @@
 // Row 336: wire uint64s above 2^53 - 1 in Treehouse Space and Thread command arguments get BEAM's
 // Authority reason from the semantic judge, through both src and the committed package entry.
-// Frame readers keep refusing them (row 212 fail-closed), and the numeric form refuses everywhere.
+// Frame admission accepts them in every command's arguments, as BEAM Wire.decode_ops does, so an
+// authenticated history holding one quarantines only that op; the numeric form refuses everywhere.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -23,13 +24,23 @@ for (const [label, load] of runtimes) {
             assert.equal(api.observeTreehouse(c.product, ops).quarantineReasons.get(c.frame.id) ?? null, c.reason, c.name);
         }
     });
-    test(`${label}: frame readers refuse every high case and return safe controls unchanged`, async () => {
+    test(`${label}: frame readers return every case frame unchanged, high or safe`, async () => {
         const api = await load();
-        for (const c of vector.cases) {
-            if (c.name.endsWith("-high"))
-                assert.throws(() => api.decodeCarrierOpFrame(c.frame), /malformed carrier op/, c.name);
-            else
-                assert.deepEqual(api.decodeCarrierOpFrame(c.frame), c.frame, c.name);
+        for (const c of vector.cases)
+            assert.deepEqual(api.decodeCarrierOpFrame(c.frame), c.frame, c.name);
+    });
+    test(`${label}: authenticated Space entry points quarantine only the case op, as BEAM observe does`, async () => {
+        const api = await load();
+        const space = vector.cases.filter((c) => c.product === "Treehouse.Space");
+        assert.ok(space.some((c) => c.name === "attest-claim-epoch-high") && space.some((c) => c.name === "replace_catalog_v1-high"));
+        for (const c of space) {
+            const frames = [...vector.space.frames, c.frame];
+            const observed = await api.observeMemberContinuityFromFrames({ replica: vector.space.replica, frames });
+            assert.equal(observed.ok, true, c.name);
+            if (!observed.ok)
+                continue;
+            assert.equal(observed.quarantine.find((item) => item.opId === c.frame.id)?.reason ?? null, c.reason, c.name);
+            assert.equal((await api.treehouseCatalogBootstrapsFromFrames({ replica: vector.space.replica, frames })).ok, true, c.name);
         }
     });
     test(`${label}: without an injected decoder map high cases stay malformed_term`, async () => {

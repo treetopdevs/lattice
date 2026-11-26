@@ -86,7 +86,9 @@ defmodule Treehouse.CommandHighIntegerVectors do
         {"catalog_bootstrap_v1", :catalog_bootstrap_v1, &[&1]},
         {"space-post-unknown", :post, &[&1]},
         {"create_space-arity", :create_space, &[&1, &1]}
-      ]) ++ attest_cases(s)
+      ]) ++
+        attest_cases(s) ++
+        pairs(s, [{"replace_catalog_v1", :replace_catalog_v1, &[&1, &1, &1]}])
 
     thread =
       pairs(t, [

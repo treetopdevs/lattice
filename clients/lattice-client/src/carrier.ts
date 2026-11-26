@@ -372,9 +372,10 @@ const carrierSessionVersion = 2;
 
 /**
  * One command's argument decoder. A decoder in an injected `CommandDecoderMap` may receive
- * `{type: "opaque_high_integer"}` anywhere in its arguments (a wire uint64 above
- * MAX_SAFE_INTEGER) and must refuse it like any other wrongly typed value (row 336). The
- * built-in tables, used when no map is injected, never receive it.
+ * `{type: "opaque_high_integer"}` anywhere in its argument list (a wire uint64 above
+ * MAX_SAFE_INTEGER, which frame admission accepts in every command's argument list) and must
+ * refuse it like any other wrongly typed value (row 336). The built-in tables, used when no map
+ * is injected, never receive it.
  */
 export interface CommandDecoder {
   arity: number;
@@ -1632,13 +1633,14 @@ function decodeCarrierBody(op: CarrierOpFrame, opaqueCommandArguments = false): 
         {type: "legacy_beacon_epoch", decimal: epoch[1]}]};
     }
   }
-  // Row 336: with an injected product decoder map every command argument list (and, as before,
-  // replace_catalog_v1's on any path) keeps wire uint64s above MAX_SAFE_INTEGER as opaque sentinels,
-  // so the product decoder refuses them with BEAM's Authority reason instead of `malformed_term`.
-  // Frame assertion passes no flag, so frame admission is unchanged (row 212 fail-closed readers).
-  if (op.kind === "command" && body[0] === "tuple" && body.length === 2 && Array.isArray(body[1]) &&
-      body[1].length === 2 && body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
-      (opaqueCommandArguments || body[1][0][1] === "replace_catalog_v1") && body[1][1]?.[0] === "list") {
+  // Row 336, one rule for every command name: frame assertion and an injected product decoder map
+  // decode a `{name, [arguments]}` argument list in the opaque context, so a wire uint64 above
+  // MAX_SAFE_INTEGER is admitted like BEAM Wire.decode_ops and the product decoder refuses it with
+  // BEAM's Authority reason. Without a map the built-in tables decode strictly and never see the
+  // sentinel (`malformed_term`). Non-list arguments, caps and other positions stay strict (row 212).
+  if (opaqueCommandArguments && op.kind === "command" && body[0] === "tuple" && body.length === 2 &&
+      Array.isArray(body[1]) && body[1].length === 2 && body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
+      body[1][1]?.[0] === "list") {
     return { type: "tuple", values: [decodeCarrierTerm(body[1][0], "strict", inner),
       decodeCarrierTerm(body[1][1], "opaque_integer", inner)] };
   }
@@ -1983,7 +1985,7 @@ function assertCarrierOpFrame(
     base64ToBytes(carrierFrame.author);
     base64ToBytes(carrierFrame.sig);
     if (validateTerms) {
-      decodeCarrierBody(carrierFrame);
+      decodeCarrierBody(carrierFrame, true);
       decodeCarrierTerm(carrierFrame.cap);
     }
   } catch {

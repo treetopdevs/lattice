@@ -207,9 +207,10 @@ export interface Payload {
 }
 /**
  * One command's argument decoder. A decoder in an injected `CommandDecoderMap` may receive
- * `{type: "opaque_high_integer"}` anywhere in its arguments (a wire uint64 above
- * MAX_SAFE_INTEGER) and must refuse it like any other wrongly typed value (row 336). The
- * built-in tables, used when no map is injected, never receive it.
+ * `{type: "opaque_high_integer"}` anywhere in its argument list (a wire uint64 above
+ * MAX_SAFE_INTEGER, which frame admission accepts in every command's argument list) and must
+ * refuse it like any other wrongly typed value (row 336). The built-in tables, used when no map
+ * is injected, never receive it.
  */
 export interface CommandDecoder {
     arity: number;
