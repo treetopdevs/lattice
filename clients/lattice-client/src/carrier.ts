@@ -370,6 +370,12 @@ const tupleTag = 60_001;
 const carrierOpWireVersion = 1;
 const carrierSessionVersion = 2;
 
+/**
+ * One command's argument decoder. A decoder in an injected `CommandDecoderMap` may receive
+ * `{type: "opaque_high_integer"}` anywhere in its arguments (a wire uint64 above
+ * MAX_SAFE_INTEGER) and must refuse it like any other wrongly typed value (row 336). The
+ * built-in tables, used when no map is injected, never receive it.
+ */
 export interface CommandDecoder {
   arity: number;
   decode: (
@@ -1484,7 +1490,7 @@ export function carrierOpToSemanticOp(
   let structuralError: "malformed_term" | undefined;
   let authorityInputReason: Op["authorityInputReason"];
   try {
-    const body = decodeCarrierBody(op);
+    const body = decodeCarrierBody(op, commandDecoders !== undefined);
     try {
       payload = payloadFromBody(op.kind, body, realmByPubkey, op.body, op.replica, commandDecoders);
     } catch (error) {
@@ -1610,7 +1616,7 @@ function canonicalTuple(values: unknown[]): Uint8Array {
 // Invalid reserved metadata stays local to the policy/certificate on BEAM.
 // Context preserves the raw frame. Only exact two-field legacy beacons retain
 // high uint64 epochs as decimal evidence; witnessed body/claim epochs stay safe integers.
-function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
+function decodeCarrierBody(op: CarrierOpFrame, opaqueCommandArguments = false): DecodedTerm {
   const body = op.body;
   // This function splits the body tuple (and genesis policy map) by hand, so it spends the
   // levels those containers would have spent in a recursive decode of the same body.
@@ -1626,11 +1632,13 @@ function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
         {type: "legacy_beacon_epoch", decimal: epoch[1]}]};
     }
   }
-  // replace_catalog_v1 arguments keep wire uint64s above MAX_SAFE_INTEGER as opaque sentinels, so
-  // its decoder refuses them as `application_invalid_catalog` like BEAM instead of `malformed_term`.
+  // Row 336: with an injected product decoder map every command argument list (and, as before,
+  // replace_catalog_v1's on any path) keeps wire uint64s above MAX_SAFE_INTEGER as opaque sentinels,
+  // so the product decoder refuses them with BEAM's Authority reason instead of `malformed_term`.
+  // Frame assertion passes no flag, so frame admission is unchanged (row 212 fail-closed readers).
   if (op.kind === "command" && body[0] === "tuple" && body.length === 2 && Array.isArray(body[1]) &&
       body[1].length === 2 && body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
-      body[1][0][1] === "replace_catalog_v1" && body[1][1]?.[0] === "list") {
+      (opaqueCommandArguments || body[1][0][1] === "replace_catalog_v1") && body[1][1]?.[0] === "list") {
     return { type: "tuple", values: [decodeCarrierTerm(body[1][0], "strict", inner),
       decodeCarrierTerm(body[1][1], "opaque_integer", inner)] };
   }

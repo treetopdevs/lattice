@@ -205,6 +205,12 @@ export interface Payload {
     authority?: AuthorityEvidence;
     consent?: Omit<CustodyConsentEvidence, "authorPub">;
 }
+/**
+ * One command's argument decoder. A decoder in an injected `CommandDecoderMap` may receive
+ * `{type: "opaque_high_integer"}` anywhere in its arguments (a wire uint64 above
+ * MAX_SAFE_INTEGER) and must refuse it like any other wrongly typed value (row 336). The
+ * built-in tables, used when no map is injected, never receive it.
+ */
 export interface CommandDecoder {
     arity: number;
     decode: (args: DecodedTerm[], realmByPubkey: Record<string, string>) => Payload;
