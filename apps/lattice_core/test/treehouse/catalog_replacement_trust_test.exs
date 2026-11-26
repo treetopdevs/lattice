@@ -1486,6 +1486,17 @@ defmodule Treehouse.CatalogReplacementTrustTest do
       assert done.next.extra.catalogs == []
     end
 
+    test "a held revision and a forged variant: the retries still reach the revision", c do
+      %{w: w, t: t, ct: ct, junk: junk} = c
+      ct1 = F.catalog(w.base, t.id, 1, F.cid(ct), t.key, ct.catalog.entries)
+      labels = Map.put(c.labels, F.cid(ct1), "CT1")
+      held = W.evaluate(c.d1.next, W.page(catalogs: [ct, ct1, junk]))
+      assert length(held.next.extra.catalogs) == 3
+      done = W.evaluate(held.next, W.page(rotations: [t.envelope], proofs: [w.proof]))
+      assert W.view(done, labels, c.old)["accepted"] == "T/CT1"
+      assert done.next.extra.catalogs == []
+    end
+
     test "a held junk catalog under a block does not drop the page's evidence", c do
       %{w: w, t: t, junk: junk} = c
       base = w.base

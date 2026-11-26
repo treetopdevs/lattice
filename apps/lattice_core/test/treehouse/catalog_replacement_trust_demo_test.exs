@@ -156,6 +156,12 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
          {"CT + junk under T", W.page(catalogs: [r.ct, r.junk_t]), false},
          {"T", r.page_t, false}
        ]},
+      {"forged_held_chain",
+       [
+         {"install C0", page_c0, false},
+         {"CT + CT1 + junk", W.page(catalogs: [r.ct, r.ct1, r.junk_t]), false},
+         {"T", r.page_t, false}
+       ]},
       {"closed_unbound",
        [
          {"install C0", page_c0, false},
@@ -253,6 +259,7 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
              List.last(beam_views["forged_parent_child"])
 
     assert %{"accepted" => "T/CT", "sidecar" => 0} = List.last(beam_views["forged_held"])
+    assert %{"accepted" => "T/CT1", "sidecar" => 0} = List.last(beam_views["forged_held_chain"])
     assert %{"accepted" => "R2/K2r", "reason" => nil} = List.last(beam_views["closed_unbound"])
     [_, rn, tn] = beam_views["nonadmin_unbound"]
     assert tn["reason"] == rn["reason"]
@@ -525,6 +532,7 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     k3 = F.catalog(base, t3.id, 0, nil, t3.key, k2.catalog.entries)
     t4 = W.rotation(w, %{id: t3.id, generation: 3}, k3, t3.key, "demo-t4")
     k4 = F.catalog(base, t4.id, 0, nil, t4.key, k3.catalog.entries)
+    ct1 = F.catalog(base, t.id, 1, F.cid(ct), t.key, ct.catalog.entries)
     tt = W.rotation(w, %{id: t.id, generation: 1}, ct, t.key, "demo-tt")
     ctt = F.catalog(base, tt.id, 0, nil, tt.key, ct.catalog.entries)
     forged = %{t2.envelope | new_signature: <<7, 0::size(504)>>}
@@ -550,6 +558,7 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
 
     %{
       u: u,
+      ct1: ct1,
       tr: tr,
       tn: tn,
       page_three:
@@ -567,7 +576,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         tt.id => "TT",
         F.cid(ctt) => "CTT",
         r2.id => "R2",
-        F.cid(k2r) => "K2r"
+        F.cid(k2r) => "K2r",
+        F.cid(ct1) => "CT1"
       }
     }
   end
