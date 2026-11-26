@@ -4844,6 +4844,12 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The operator's request for the next meaningful slices is general and does not name an exception to rule 10. Parking the open PR is reversible; reverting the merged hardening would remove a symlink overwrite fix and a read bound for no gain.</dd>
 <dt>Status</dt><dd>Coordinator correction (2026-11-26). The exception for PR #242 is an open operator question.</dd>
 </dl></section>
+<section id="d970"><h2><span>D-970</span> Rows 526 and 527: parked after three review rounds (rule 3)</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 526 and 527 slice (branch claude/526-527-replacement-rotation-liveness, draft PR <a href="https://github.com/treetopdevs/lattice/pull/244">#244</a>)</dd>
+<dt>Decision</dt><dd>The slice is not offered for merge. It is kept as a draft PR and both rows are PARKED. Round 1 found seven P1 or P2 items, round 2 found an orphan rotation turning a security block into a reject, and round 3 found three more P1 items (a revival cap serving one side of a held fork, the orphan fallback discarding a new fork block, a held forged catalog downgrading <code>control_history_limit</code>). Each was fixed, and the round 3 fixes have no confirming review. The operator chooses between: wait for row 381 (PR 4c), which deletes the sidecar; redesign revival so held evidence is judged only as one whole set; or keep investing in review rounds.</dd>
+<dt>Reason</dt><dd>Every round found a new way for a subset of held evidence to hide a block the whole set would raise. That is a property of the revival design, not of single cases, and rule 3 makes a third round on one class a design question. The same pattern cost about 8M tokens on PR #221. Parking is fail-closed: main keeps today's behaviour, where these catalogs stay pending.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible. The choice between the three options is an open operator question.</dd>
+</dl></section>
 </main>
 </body>
 </html>
