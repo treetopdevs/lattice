@@ -4838,6 +4838,12 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>Working-policy rule 3: a third round on one class of finding is a design question, not another repair. This was the fourth round, each fix restarted hosted checks and drew a new finding of the same kind, and none of them is a fault in the resolver or in shipped code. The property already found no counterexample over real histories.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
 </dl></section>
+<section id="d969"><h2><span>D-969</span> Correction: the slice selection missed the Township freeze (rule 10)</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator, after the Codex review of the ledger PR <a href="https://github.com/treetopdevs/lattice/pull/243">#243</a></dd>
+<dt>Decision</dt><dd>The selection rule in D-953 did not check working-policy rule 10 (Township and Toolshed get no new work and their rows stay frozen until R26). Two Township slices were chosen in error. Rows 521 and 523 (PR #240) were already merged; they harden code that was merged on 2026-11-17 and add no feature, and they are left in place. Rows 401 and 402 (PR #242) add report features to the frozen product; the PR is converted to draft so the merge monitor skips it, and it waits for the operator to grant an exception or close it. From here the selection rule also excludes every Township and Toolshed row. The Township follow-up rows filed in this run (590 to 593, 599 to 601) stay recorded as frozen with the rest.</dd>
+<dt>Reason</dt><dd>The operator's request for the next meaningful slices is general and does not name an exception to rule 10. Parking the open PR is reversible; reverting the merged hardening would remove a symlink overwrite fix and a read bound for no gain.</dd>
+<dt>Status</dt><dd>Coordinator correction (2026-11-26). The exception for PR #242 is an open operator question.</dd>
+</dl></section>
 </main>
 </body>
 </html>
