@@ -505,6 +505,45 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     bare = step.("s1", graph.(%{decision: %{block: nil, reason: :wrong_catalog_scope}}))
     assert [{:d279, _}] = M.check_d279(world, [ok, bare])
 
+    # A union-level refusal must be what the union derives for its head: without a block, or
+    # with a block on a head the union does not refuse (or does not report pending), it is a
+    # spurious refusal of a held watermark. On a head the union refuses it is neutral.
+    refusal = fn reason, block, nodes ->
+      step.(
+        "s1",
+        graph.(%{nodes: nodes, decision: %{block: block, reason: reason, head: "r"}})
+      )
+    end
+
+    car = :catalog_authority_refused
+    car_block = %{reason: car, ids: ["r"], freeze: false}
+    ri_block = %{reason: :recovery_incomplete, ids: ["r"], freeze: false}
+
+    assert [{:d279, _}] =
+             M.check_d279(world, [ok, refusal.(car, nil, %{"r" => %{refused?: false}})])
+
+    assert [{:d279, _}] =
+             M.check_d279(world, [ok, refusal.(car, car_block, %{"r" => %{refused?: false}})])
+
+    assert [{:d279, _}] =
+             M.check_d279(world, [
+               ok,
+               refusal.(:recovery_incomplete, ri_block, %{"r" => %{refused?: false, pending: []}})
+             ])
+
+    assert M.check_d279(world, [ok, refusal.(car, car_block, %{"r" => %{refused?: true}})]) == []
+
+    assert M.check_d279(world, [
+             ok,
+             refusal.(:recovery_incomplete, ri_block, %{"r" => %{refused?: false, pending: ["c"]}})
+           ]) == []
+
+    assert M.check_d279(world, [
+             ok,
+             refusal.(:catalog_rollback, nil, %{"r" => %{refused?: false}})
+           ]) ==
+             []
+
     # A trust_pending step: its complete part obeys the freeze rule even when the pending ids
     # name nothing held, and a settled id (accepted or refused) the union reports pending again
     # is a d3 regression even though the part graph drops it.

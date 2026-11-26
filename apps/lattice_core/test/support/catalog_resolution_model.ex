@@ -539,7 +539,9 @@ defmodule Treehouse.CatalogResolutionModel do
     * d4 (regression guard; `decide/5` and `sole/5` make it true by construction on main): while
       a watermark is held, a freezing block is only `authority_changed` or `catalog_fork` (in
       every full graph and every `trust_pending` step's complete part), the public
-      `decision.reason` equals its block's reason and is never intrinsic, and an error naming a
+      `decision.reason` equals its block's reason, is never intrinsic and, when union-level, is
+      what the full union derives for its head (`refused?` for `catalog_authority_refused`,
+      pending cutoffs for `recovery_incomplete`, only `catalog_rollback` unblocked), and an error naming a
       previously accepted id is only `control_history_limit` or `trust_pending`. A non-freezing block or reason
       (`catalog_rollback`, a union `catalog_authority_refused`, `recovery_incomplete`) is about
       another head and is neutral, as is the D-275 per-id `closed_out` reclassification.
@@ -768,12 +770,43 @@ defmodule Treehouse.CatalogResolutionModel do
         reason not in @public_ok ->
           [{:d279, "the held watermark's decision reason is #{reason} at #{step.label}"}]
 
+        not union_derived?(g, d, block, reason) ->
+          [
+            {:d279,
+             "decision reason #{inspect(reason)} is not derived for its head on the union at #{step.label}"}
+          ]
+
         true ->
           []
       end
 
     freeze ++ public
   end
+
+  # `sole/5`'s union-level reasons, each against its head on the full union: an unblocked
+  # decision carries only `nil` or `catalog_rollback`, `catalog_authority_refused` needs its head
+  # `refused?` and `recovery_incomplete` its head with pending cutoffs (fail-closed otherwise).
+  defp union_derived?(_g, _d, nil, reason), do: reason in [nil, :catalog_rollback]
+
+  defp union_derived?(g, d, block, reason)
+       when reason in [:catalog_authority_refused, :recovery_incomplete] do
+    heads =
+      case Map.get(d, :head) do
+        nil -> Map.get(block, :ids, [])
+        h -> [h]
+      end
+
+    node = fn h -> get_in(g, [:nodes, h]) || %{} end
+
+    heads != [] and
+      Enum.all?(heads, fn h ->
+        if reason == :catalog_authority_refused,
+          do: Map.get(node.(h), :refused?, false) == true,
+          else: Map.get(node.(h), :pending, []) != []
+      end)
+  end
+
+  defp union_derived?(_g, _d, _block, _reason), do: true
 
   # d3 across a trust_pending step: the full union reports these ids pending, and the part graph
   # drops them, so an id with a settled (non-pending) verdict here has returned to pending.
