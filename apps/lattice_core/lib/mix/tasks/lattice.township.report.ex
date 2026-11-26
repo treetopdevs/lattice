@@ -9,6 +9,9 @@ defmodule Mix.Tasks.Lattice.Township.Report do
   verifiable file set. The file is always written; a bundle that fails verification
   gets a NOT VERIFIED report and a non-zero exit.
 
+  A verified report includes the role chronology, beacons, leases and election-evidence
+  sections (rows 401 and 402); see `Township.AuditReport` for what each does not claim.
+
   The report is written to a new temporary file in the destination directory and
   renamed over `--out` (`Township.ReportFile`), so a link at `--out`, including one
   swapped in after the containment check, is replaced and never written through.

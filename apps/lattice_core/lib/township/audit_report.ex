@@ -8,16 +8,50 @@ defmodule Township.AuditReport do
   not completeness. A failed verification renders only a NOT VERIFIED banner and the
   verbatim error list, with no state, holders or graph.
 
+  Sections, in order: matter state, current holders, authority ledger, role chronology,
+  beacons, leases, attestation, election evidence (followed by the embedded research
+  security manifest), trust graph and op-DAG summary. The failed page carries none of
+  them.
+
+  Non-claims of the newer sections:
+
+    * **Role chronology** lists honored role acquisitions oldest first, as judged by one
+      analysis pass. Author-asserted ticks are untrusted (ADR 0004) and are never shown;
+      the list does not establish elapsed time or that any holder was inactive.
+    * **Beacons** reports the highest accepted beacon epoch across the whole log, not
+      per causal branch and not the epoch any one operation observed. A beacon is a
+      root-signed logical tick, not a clock.
+    * **Leases** shows the live-path `expired?` check next to the delegation status;
+      neither is a wall-clock statement.
+    * **Election evidence** states that a `township-audit-bundle-v1` bundle carries no
+      election board, spec, projection or close evidence. It lists the `link_election`
+      commands in the accepted log with their authority verdict only: without a spec the
+      report cannot run `Township.Election.verify_link/3`, so a row is not a verified
+      election link. No election phase, result, close, receipt-freeness or coercion
+      resistance is shown or claimed.
+
   The page has one inline stylesheet, no script and no URLs. Every interpolated value
-  passes through one private `escape/1`.
+  passes through one private `escape/1`, apart from the embedded
+  `Township.Election.Report.security_manifest_html/0` fragment. That fragment holds only
+  values `Township.Election.Report` owns and is escaped by that module's own D-793
+  escaper, which leaves `'` alone; it is safe here only because every attribute on this
+  page is double-quoted and no caller data reaches the fragment. Do not feed caller data
+  into it.
   """
 
   alias Lattice.Graph.Export
   alias Lattice.Log
   alias Township.{AuditBundle, ReadModel}
+  alias Township.Election.{Report, SecurityProfile}
 
   @verified_banner "VERIFIED: authenticity and projection consistency, not completeness"
   @attestation_sentence "The legacy attestation stub is not receipt-free and makes no coercion-resistance claim."
+  @chronology_caption "Honored role acquisitions in this log, oldest first, as judged by one analysis pass. Author-asserted ticks are untrusted (ADR 0004) and are not shown; this list does not establish elapsed time or that any holder was inactive."
+  @beacon_caption "Global to the log, not per causal branch; it is not the epoch any one operation observed. A beacon is a root-signed logical tick, not a clock. Rejected beacons appear in the authority ledger."
+  @lease_caption "expired? is the live-path check against beacons accepted anywhere on this log; status is the delegation verdict, so a revoked or invalid chain reports that status even when it has also lapsed."
+  @election_intro "This audit bundle (township-audit-bundle-v1) carries no election board, election spec, projection or close evidence. The VERIFIED banner covers matter.log only. No election phase, result or close is shown, and none can be derived from this bundle."
+  @link_caption "The report holds no election spec, so it cannot run Township.Election.verify_link/3; a row is the authority verdict on a command in this log, not a verified election link."
+  @unknown_key "unknown key"
 
   @gloss %{
     not_holder:
@@ -102,7 +136,11 @@ defmodule Township.AuditReport do
       matter_section(model, snapshot.labels),
       holders_section(model.roles.holders, snapshot.labels),
       ledger_section(model, structural),
+      chronology_section(model.roles.chronology, snapshot.labels),
+      beacons_section(model.roles.beacons),
+      leases_section(model.roles.leases, snapshot.labels),
       attestation_section(model.attest),
+      election_section(snapshot, model),
       graph_section(model.trust_graph),
       dag_section(snapshot.log, model.roles.quarantine, structural)
     ]
@@ -119,7 +157,7 @@ defmodule Township.AuditReport do
       "</dl>\n<h3>Posts</h3>\n",
       list(t.posts),
       "<h3>Members</h3>\n",
-      list(Enum.map(model.members.current, &label(&1, labels)))
+      list(Enum.map(model.members.current, &key_label(&1, labels)))
     ]
   end
 
@@ -127,7 +165,7 @@ defmodule Township.AuditReport do
     rows =
       holders
       |> Enum.sort_by(fn {role, _fp} -> to_string(role) end)
-      |> Enum.map(fn {role, fp} -> [to_string(role), label(fp, labels), fp] end)
+      |> Enum.map(fn {role, fp} -> [to_string(role), key_label(fp, labels), fp || ""] end)
 
     ["<h2>Current holders</h2>\n", table(["Role", "Label", "Fingerprint"], rows)]
   end
@@ -182,6 +220,145 @@ defmodule Township.AuditReport do
       "</p>\n"
     ]
   end
+
+  defp chronology_section(chronology, labels) do
+    roles =
+      chronology
+      |> Enum.reject(fn {_role, acquisitions} -> acquisitions == [] end)
+      |> Enum.sort_by(fn {role, _} -> to_string(role) end)
+      |> Enum.map(fn {role, acquisitions} ->
+        rows =
+          acquisitions
+          |> Enum.with_index(1)
+          |> Enum.map(fn {a, n} ->
+            [n, key_label(a.holder, labels), a.op_id, a.delegation_id]
+          end)
+
+        [
+          "<h3>",
+          escape(to_string(role)),
+          "</h3>\n",
+          table(["#", "Holder", "Acquisition op", "Delegation"], rows)
+        ]
+      end)
+
+    [
+      "<h2>Role chronology</h2>\n<p>",
+      escape(@chronology_caption),
+      "</p>\n",
+      if(roles == [], do: ["<p><em>none</em></p>\n"], else: roles)
+    ]
+  end
+
+  defp beacons_section(%{valid: valid, max_epoch: max_epoch}) do
+    headline =
+      case max_epoch do
+        nil -> "No accepted beacons."
+        n -> "Highest accepted beacon epoch on this log: #{n}"
+      end
+
+    [
+      "<h2>Beacons</h2>\n<p>",
+      escape(headline),
+      "</p>\n",
+      if(valid == [],
+        do: [],
+        else: table(["Op", "Epoch"], Enum.map(valid, fn b -> [b.op_id, b.epoch] end))
+      ),
+      "<p>",
+      escape(@beacon_caption),
+      "</p>\n"
+    ]
+  end
+
+  defp leases_section([], _labels),
+    do: ["<h2>Leases</h2>\n<p>", escape("No leased delegations."), "</p>\n"]
+
+  defp leases_section(leases, labels) do
+    rows =
+      leases
+      |> Enum.sort_by(& &1.delegation_id)
+      |> Enum.map(fn l ->
+        [
+          l.delegation_id,
+          key_label(l.issuer, labels),
+          key_label(l.audience, labels),
+          l.expires_epoch,
+          l.expired?,
+          l.status
+        ]
+      end)
+
+    headers = [
+      "Delegation",
+      "Issuer",
+      "Audience",
+      "Expires after epoch",
+      "expired? (live-path)",
+      "Status"
+    ]
+
+    [
+      "<h2>Leases</h2>\n",
+      table(headers, rows),
+      "<p>",
+      escape(@lease_caption),
+      "</p>\n"
+    ]
+  end
+
+  defp election_section(snapshot, model) do
+    rows =
+      snapshot.log
+      |> Log.topo_ops()
+      |> Enum.filter(&match?(%{kind: :command, body: {:link_election, _}}, &1))
+      |> Enum.sort_by(& &1.id)
+      |> Enum.map(fn %{body: {:link_election, args}} = op ->
+        [
+          op.id,
+          key_label(author_fingerprint(op.author), snapshot.labels),
+          spec_digest_arg(args),
+          link_verdict(Map.get(model.roles.reasons, op.id))
+        ]
+      end)
+
+    links =
+      case rows do
+        [] ->
+          ["<p>", escape("No link_election command in this matter log."), "</p>\n"]
+
+        rows ->
+          [
+            table(["Op", "Author", "spec_digest argument", "Authority verdict"], rows),
+            "<p>",
+            escape(@link_caption),
+            "</p>\n"
+          ]
+      end
+
+    [
+      "<h2>Election evidence</h2>\n<p>",
+      escape(@election_intro),
+      "</p>\n<h3>link_election commands in matter.log</h3>\n",
+      links,
+      "<dl>\n",
+      kv("Research manifest claim_set_id", SecurityProfile.claim_set_id()),
+      "</dl>\n",
+      Report.security_manifest_html()
+    ]
+  end
+
+  # A well-formed command carries one argument; anything else is shown whole.
+  defp spec_digest_arg([digest]), do: digest
+  defp spec_digest_arg(args), do: args
+
+  defp link_verdict(nil), do: "honored in this log"
+  defp link_verdict(reason), do: reason_text(reason)
+
+  defp author_fingerprint(pub) when is_binary(pub) and byte_size(pub) == 32,
+    do: Lattice.Identity.fingerprint(pub)
+
+  defp author_fingerprint(_pub), do: nil
 
   defp graph_section(graph) do
     dot = Export.export(graph, :dot) <> "\n"
@@ -239,6 +416,9 @@ defmodule Township.AuditReport do
 
   defp role_text(nil), do: ""
   defp role_text(role), do: to_string(role)
+
+  defp key_label(nil, _labels), do: @unknown_key
+  defp key_label(fp, labels), do: label(fp, labels)
 
   defp label(fp, labels) do
     case Map.fetch(labels, fp) do
@@ -309,6 +489,7 @@ defmodule Township.AuditReport do
     .banner.ok{color:var(--ok);background:var(--okbg);border-color:var(--ok)}
     .banner.bad{color:var(--bad);background:var(--badbg);border-color:var(--bad)}
     .scroll{overflow-x:auto}
+    .honesty{border:1px solid var(--line);padding:.75rem 1rem;font-weight:600}
     table{border-collapse:collapse;width:100%}
     th,td{border:1px solid var(--line);padding:.25rem .5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}
     dt{color:var(--muted);margin-top:.5rem}
