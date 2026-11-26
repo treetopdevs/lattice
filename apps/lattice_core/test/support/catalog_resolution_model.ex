@@ -537,6 +537,11 @@ defmodule Treehouse.CatalogResolutionModel do
       full graph or among a `trust_pending` step's pending ids (which its part graph drops). A
       change from one refusing verdict to another (an early refutation from a partial closure
       re-ranked on the complete one) is not a violation (`d279_stats/2`, `:bad_reason_drift`).
+      Row 598, the one evidence-loss exclusion: on a step whose union lacks the catalog `W.run/3`
+      dropped (`step.lost`), a return to `:pending` is neutral only when the id depends on that
+      catalog by bytes (`depends_on?/3`) and the same step with only it restored (`unlost/2`)
+      gives the id its remembered verdict (or another refusing one), or is exactly
+      `control_history_limit` (a no-loss run reads no graph on that step; d4 allows that error).
     * d4 (regression guard; `decide/5` and `sole/5` make it true by construction on main): while
       a watermark is held, a freezing block is only `authority_changed` or `catalog_fork` (in
       every full graph and every `trust_pending` step's complete part), the public
@@ -578,6 +583,10 @@ defmodule Treehouse.CatalogResolutionModel do
   Exercise counters for `check_d279/2` over one run (printed with `R321_STATS=1`). Only
   replacement candidates and their catalogs count as "accepted" here, so the bootstrap watermark
   every run starts from cannot make a counter fire on its own.
+  `:loss_neutral_pending` (row 598) counts a step where the evidence-loss exclusion fired, and
+  `:loss_limit_neutral_pending` one where it fired because the restored step is
+  `control_history_limit`, `:honest_rotation_watermark` (row 594) one judged under an honest-key
+  rotation as the watermark, and `:honest_rotation_accepted` one that makes one the watermark.
   """
   def d279_stats(world, steps) do
     steps = annotate(world, steps)
@@ -585,19 +594,117 @@ defmodule Treehouse.CatalogResolutionModel do
 
     {stats, _} =
       Enum.reduce(steps, {[], %{verdict: %{}, accepted: MapSet.new()}}, fn step, {acc, seen} ->
+        seen0 = seen
+
         {s_graphs, seen} =
           Enum.reduce(graphs(step), {[], seen}, fn {g, _} = gk, {s, seen} ->
             {s ++ stats_graph(g, seen, repl), elem(d279_graph(world, step, gk, seen), 1)}
           end)
 
-        {acc ++ s_graphs ++ stats_step(step, repl), seen}
+        {acc ++
+           s_graphs ++
+           stats_step(step, repl) ++
+           stats_loss(world, step, seen0) ++
+           stats_rotation(world, step), seen}
       end)
 
     Enum.uniq(stats)
   end
 
-  defp annotate(world, steps),
-    do: Enum.map(steps, &Map.put_new_lazy(&1, :part, fn -> complete_part(world, &1) end))
+  defp annotate(world, steps) do
+    Enum.map(steps, fn step ->
+      step
+      |> Map.put_new_lazy(:part, fn -> complete_part(world, step) end)
+      |> Map.put_new_lazy(:unlost, fn -> unlost(world, step) end)
+    end)
+  end
+
+  @doc """
+  Row 598, evidence loss (C6): for a step whose union lacks the catalog `W.run/3` dropped
+  (`step.lost`), the same step resolved from the same persisted state with only that catalog
+  restored, as `{result, part}` (`part` is that result's complete part when it is
+  `trust_pending`); `nil` for any other step. D-279 is stated over growing evidence: a verdict
+  reads its artifact's bytes and causal ancestry, so an id whose ancestry includes the lost
+  catalog legitimately pends again. `check_d279/2` treats such a return to pending as neutral
+  only when the id depends on the lost catalog (`depends_on?/3`) and this counterfactual gives
+  it its remembered verdict, or is exactly `control_history_limit` (a no-loss run reads no graph
+  on that step, and d4 allows that error for an accepted id).
+  """
+  def unlost(world, %{lost: lost} = step) when is_binary(lost) do
+    ev = %{
+      step.delivered
+      | catalogs: Map.put(step.delivered.catalogs, lost, world.catalogs[lost].env)
+    }
+
+    {result, _} = Treehouse.CatalogResolutionWorld.deliver(world, step.prev, ev)
+    {result, complete_part(world, %{step | result: result, delivered: ev})}
+  end
+
+  def unlost(_world, _step), do: nil
+
+  # The id pends only because its ancestry lost a catalog: the lost catalog is one it depends on
+  # (bytes), and the same step with that catalog restored gives it the verdict remembered for it
+  # (a refusing reason may drift, as d3 allows), or the restored step is exactly
+  # `control_history_limit`, on which a no-loss run judges no verdict (d4 allows that error).
+  defp loss_caused?(world, step, id, prev), do: loss_kind(world, step, id, prev) != nil
+
+  defp loss_kind(world, step, id, prev) do
+    lost = Map.get(step, :lost)
+
+    if is_binary(lost) and depends_on?(world, id, lost),
+      do: restored_kind(Map.get(step, :unlost), id, prev),
+      else: nil
+  end
+
+  defp restored_kind({{:error, :control_history_limit, _}, _}, _id, _prev), do: :limit
+
+  defp restored_kind(unlost, id, prev) do
+    graph =
+      case unlost do
+        {{:ok, g}, _} -> g
+        {{:error, :trust_pending, _}, {:ok, g}} -> g
+        _ -> nil
+      end
+
+    restored = graph && Map.get(graph.verdicts, id)
+
+    if graph != nil and (restored == prev or (rejecting?(prev) and rejecting?(restored))),
+      do: :verdict,
+      else: nil
+  end
+
+  @doc """
+  Row 598: does `id` (a catalog, rotation or replacement) depend on catalog `cid` by bytes: `cid`
+  itself, its `previous` chain, its binding, a rotation's prior catalog, a replacement's cited
+  prior catalogs, and each parent binding, transitively.
+  """
+  def depends_on?(world, id, cid),
+    do: MapSet.member?(catalog_deps(world, [id], MapSet.new()), cid)
+
+  defp catalog_deps(_world, [], acc), do: acc
+
+  defp catalog_deps(world, [id | rest], acc) do
+    if id == nil or MapSet.member?(acc, id) do
+      catalog_deps(world, rest, acc)
+    else
+      next =
+        case {world.catalogs[id], world.bindings[id]} do
+          {%{previous: prev, binding: b}, _} ->
+            [prev, b]
+
+          {_, %{kind: :rotation, prior_catalog: p, parents: ps}} ->
+            [p | ps]
+
+          {_, %{kind: :replacement, prior_catalogs: ps, parents: pp}} ->
+            Enum.map(ps, & &1.catalog) ++ pp
+
+          _ ->
+            []
+        end
+
+      catalog_deps(world, next ++ rest, MapSet.put(acc, id))
+    end
+  end
 
   defp graphs(%{result: {:ok, g}}), do: [{g, :full}]
   defp graphs(%{part: {:ok, g}}), do: [{g, :part}]
@@ -670,6 +777,9 @@ defmodule Treehouse.CatalogResolutionModel do
 
   defp verdict_moves(world, step, id, prev, now) do
     cond do
+      now == :pending and loss_caused?(world, step, id, prev) ->
+        []
+
       accepting?(prev) ->
         [
           {:d279,
@@ -836,10 +946,47 @@ defmodule Treehouse.CatalogResolutionModel do
     for id <- ids,
         v <- [Map.get(seen.verdict, id)],
         v not in [nil, :pending],
+        not loss_caused?(world, step, id, v),
         do: {:d279, "#{label(world, id)} #{inspect(v)} returned to pending at #{step.label}"}
   end
 
   defp d3_pending(_world, _step, _seen), do: []
+
+  # Row 598: a settled id pends again only because the run dropped a catalog its ancestry needs;
+  # `:loss_limit_neutral_pending` when the restored step is `control_history_limit`.
+  defp stats_loss(world, step, seen) do
+    pending =
+      case step.result do
+        {:ok, g} -> for {id, :pending} <- g.verdicts, do: id
+        {:error, :trust_pending, %{ids: ids}} -> ids
+        _ -> []
+      end
+
+    kinds =
+      for id <- pending,
+          v <- [Map.get(seen.verdict, id)],
+          v not in [nil, :pending],
+          k <- [loss_kind(world, step, id, v)],
+          k != nil,
+          uniq: true,
+          do: k
+
+    for k <- kinds,
+        do: if(k == :limit, do: :loss_limit_neutral_pending, else: :loss_neutral_pending)
+  end
+
+  # Row 594: `:honest_rotation_watermark` when the step is judged under an honest-key rotation as
+  # the watermark (its `prev`), `:honest_rotation_accepted` when the step makes one the watermark
+  # (its `next`; often the run's last delivery, so nothing is judged under it).
+  defp stats_rotation(world, step) do
+    honest? = fn
+      %{accepted: %{binding: b}} -> match?(%{kind: :rotation, honest: true}, world.bindings[b])
+      _ -> false
+    end
+
+    if(honest?.(Map.get(step, :prev)), do: [:honest_rotation_watermark], else: []) ++
+      if honest?.(Map.get(step, :next)), do: [:honest_rotation_accepted], else: []
+  end
 
   # Replacement candidates (honest or not) and the catalogs under them.
   defp replacement_ids(world) do
