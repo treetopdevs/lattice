@@ -462,6 +462,15 @@ defmodule Treehouse.CatalogResolutionModel do
   @accepting [:node, :ok]
   @intrinsic_or_core @intrinsic ++ [:catalog_authority_refused]
   @freeze_ok [:authority_changed, :catalog_fork]
+  # Every reason `decide/5` and `sole/5` give a decision; never an intrinsic one.
+  @public_ok [
+    nil,
+    :authority_changed,
+    :catalog_fork,
+    :catalog_rollback,
+    :catalog_authority_refused,
+    :recovery_incomplete
+  ]
 
   @part_tries 8
 
@@ -523,13 +532,15 @@ defmodule Treehouse.CatalogResolutionModel do
       binding node, `refused?` on the full union, or that binding a closed-out rotation).
     * d2 ("and back"): an id whose verdict was ever `{:bad, _}`, `{:refused, _}` or `:bad_chain`
       is never later accepting and never the watermark.
-    * d3: `:pending` only resolves forward; a held non-pending id never returns to `:pending`. A
+    * d3: `:pending` only resolves forward; a held non-pending id never returns to `:pending`, in a
+      full graph or among a `trust_pending` step's pending ids (which its part graph drops). A
       change from one refusing verdict to another (an early refutation from a partial closure
       re-ranked on the complete one) is not a violation (`d279_stats/2`, `:bad_reason_drift`).
     * d4 (regression guard; `decide/5` and `sole/5` make it true by construction on main): while
-      a watermark is held, a freezing block is only `authority_changed` or `catalog_fork`, and an
-      error naming a previously accepted id is only `control_history_limit` or `trust_pending`
-      (whose complete part obeys the same rule). A non-freezing block or reason
+      a watermark is held, a freezing block is only `authority_changed` or `catalog_fork` (in
+      every full graph and every `trust_pending` step's complete part), the public
+      `decision.reason` equals its block's reason and is never intrinsic, and an error naming a
+      previously accepted id is only `control_history_limit` or `trust_pending`. A non-freezing block or reason
       (`catalog_rollback`, a union `catalog_authority_refused`, `recovery_incomplete`) is about
       another head and is neutral, as is the D-275 per-id `closed_out` reclassification.
 
@@ -541,6 +552,8 @@ defmodule Treehouse.CatalogResolutionModel do
 
     {violations, _} =
       Enum.reduce(steps, {[], %{verdict: %{}, accepted: MapSet.new()}}, fn step, {acc, seen} ->
+        v_pending = d3_pending(world, step, seen)
+
         {v_graphs, seen} =
           Enum.reduce(graphs(step), {[], seen}, fn gk, {v, seen} ->
             {v2, seen} = d279_graph(world, step, gk, seen)
@@ -549,6 +562,7 @@ defmodule Treehouse.CatalogResolutionModel do
 
         {acc ++
            lemma(world, step) ++
+           v_pending ++
            v_graphs ++
            d279_watermark(world, step, seen) ++
            d4(world, step, seen), seen}
@@ -705,26 +719,21 @@ defmodule Treehouse.CatalogResolutionModel do
 
   defp d4(world, %{result: {:ok, g}} = step, _seen), do: freeze_rule(world, step, g)
 
-  defp d4(world, %{result: {:error, r, d}} = step, seen) do
+  # A trust_pending step's complete part obeys the freeze rule whatever its pending ids name.
+  defp d4(world, %{result: {:error, :trust_pending, _}} = step, _seen) do
+    case Map.get(step, :part) do
+      {:ok, g} -> freeze_rule(world, step, g)
+      _ -> []
+    end
+  end
+
+  defp d4(_world, %{result: {:error, r, d}} = step, seen) do
     held = held_accepted(step, seen)
     names? = Enum.any?(Map.get(d, :ids, []), &MapSet.member?(held, &1))
 
-    cond do
-      not names? ->
-        []
-
-      r == :trust_pending ->
-        case Map.get(step, :part) do
-          {:ok, g} -> freeze_rule(world, step, g)
-          _ -> []
-        end
-
-      r == :control_history_limit ->
-        []
-
-      true ->
-        [{:d279, "error #{r} names a previously accepted id at #{step.label}"}]
-    end
+    if names? and r != :control_history_limit,
+      do: [{:d279, "error #{r} names a previously accepted id at #{step.label}"}],
+      else: []
   end
 
   defp d4(_world, _step, _seen), do: []
@@ -732,15 +741,50 @@ defmodule Treehouse.CatalogResolutionModel do
   defp held_accepted(%{prev: %{accepted: a}}, seen),
     do: seen.accepted |> MapSet.put(a.binding) |> MapSet.put(a.catalog)
 
+  # The public decision too (the composed evaluator reads `decision.reason`): a block's reason is
+  # the decision's reason, and an unblocked decision carries no reason but a union-level one.
   defp freeze_rule(_world, step, g) do
-    case get_in(g, [:decision, :block]) do
-      %{freeze: true, reason: r} when r not in @freeze_ok ->
-        [{:d279, "the accepted watermark freezes with #{r} at #{step.label}"}]
+    d = Map.get(g, :decision, %{})
+    block = Map.get(d, :block)
+    reason = Map.get(d, :reason)
 
-      _ ->
-        []
-    end
+    freeze =
+      case block do
+        %{freeze: true, reason: r} when r not in @freeze_ok ->
+          [{:d279, "the accepted watermark freezes with #{r} at #{step.label}"}]
+
+        _ ->
+          []
+      end
+
+    public =
+      cond do
+        block != nil and block.reason != reason ->
+          [
+            {:d279,
+             "decision reason #{inspect(reason)} differs from its block's #{block.reason} at #{step.label}"}
+          ]
+
+        reason not in @public_ok ->
+          [{:d279, "the held watermark's decision reason is #{reason} at #{step.label}"}]
+
+        true ->
+          []
+      end
+
+    freeze ++ public
   end
+
+  # d3 across a trust_pending step: the full union reports these ids pending, and the part graph
+  # drops them, so an id with a settled (non-pending) verdict here has returned to pending.
+  defp d3_pending(world, %{result: {:error, :trust_pending, %{ids: ids}}} = step, seen) do
+    for id <- ids,
+        v <- [Map.get(seen.verdict, id)],
+        v not in [nil, :pending],
+        do: {:d279, "#{label(world, id)} #{inspect(v)} returned to pending at #{step.label}"}
+  end
+
+  defp d3_pending(_world, _step, _seen), do: []
 
   # Replacement candidates (honest or not) and the catalogs under them.
   defp replacement_ids(world) do

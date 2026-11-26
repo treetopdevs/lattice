@@ -406,6 +406,7 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
 
     assert [g | _] = later, "no later freeze\n#{trace(w, steps)}"
     assert g.decision.block.reason == :authority_changed
+    assert g.decision.reason == :authority_changed
     assert g.nodes[r].refused? == true
     assert g.verdicts[r] == :node
     refute Map.has_key?(g.raw_evidence, r)
@@ -459,7 +460,10 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
       step.(
         "s1",
         graph.(%{
-          decision: %{block: %{reason: :catalog_rollback, ids: [], freeze: true}, reason: nil}
+          decision: %{
+            block: %{reason: :catalog_rollback, ids: [], freeze: true},
+            reason: :catalog_rollback
+          }
         })
       )
 
@@ -482,6 +486,56 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
       )
 
     assert M.check_d279(world, [ok, union]) == []
+
+    # The public decision reason is checked too: one that differs from its block's reason, or an
+    # intrinsic reason without a block, while a watermark is held.
+    mismatch =
+      step.(
+        "s1",
+        graph.(%{
+          decision: %{
+            block: %{reason: :authority_changed, ids: [], freeze: true},
+            reason: :wrong_catalog_scope
+          }
+        })
+      )
+
+    assert [{:d279, _} | _] = M.check_d279(world, [ok, mismatch])
+
+    bare = step.("s1", graph.(%{decision: %{block: nil, reason: :wrong_catalog_scope}}))
+    assert [{:d279, _}] = M.check_d279(world, [ok, bare])
+
+    # A trust_pending step: its complete part obeys the freeze rule even when the pending ids
+    # name nothing held, and a settled id (accepted or refused) the union reports pending again
+    # is a d3 regression even though the part graph drops it.
+    pending_step = fn ids, part_graph ->
+      %{
+        step.("s1", nil)
+        | result: {:error, :trust_pending, %{ids: ids, freeze: false, serving: nil}}
+      }
+      |> Map.put(:part, {:ok, part_graph})
+    end
+
+    frozen_part =
+      pending_step.(
+        ["p_new"],
+        graph.(%{
+          decision: %{
+            block: %{reason: :catalog_rollback, ids: [], freeze: true},
+            reason: :catalog_rollback
+          }
+        })
+      )
+
+    assert [{:d279, _}] = M.check_d279(world, [ok, frozen_part])
+
+    regressed = pending_step.(["r"], graph.(%{verdicts: %{}, nodes: %{}}))
+    assert [{:d279, _}] = M.check_d279(world, [ok, regressed])
+    assert [{:d279, _}] = M.check_d279(world, [bad, regressed])
+
+    # A fresh id pending, with a part that does not freeze, is neutral.
+    fresh = pending_step.(["p_new"], graph.(%{}))
+    assert M.check_d279(world, [ok, fresh]) == []
   end
 
   # --- liveness and order ---------------------------------------------------------------------
