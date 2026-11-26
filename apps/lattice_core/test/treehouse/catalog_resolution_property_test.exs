@@ -13,8 +13,11 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
   intrinsic verdict of every rotation, candidate and catalog in each graph and in each
   trust_pending step's recomputed complete part, never later raw, intrinsically refused or back to
   pending, only union-reclassified, with a freeze of a held watermark only `authority_changed` or
-  `catalog_fork`; half its histories come from the freeze script, its exercise and non-vacuity
-  tests run in the default suite, and `R321_STATS=1` prints its counters), O (order independence after the honest
+  `catalog_fork`; half its histories come from the freeze script and a third from honest-key
+  rotations (row 594), about half lose the watermark catalog at one step (row 598: a settled id
+  may pend again only when it depends on the lost catalog and restoring it gives back its
+  verdict), its exercise and non-vacuity tests run in the default suite, and `R321_STATS=1`
+  prints its counters, `loss_neutral_pending` and `honest_rotation_watermark` among them), O (order independence after the honest
   resolution) and LW (L with one permanently withheld Space frame, a contract non-claim, run
   only to report). Tagged `@tag :pr221_open` and excluded from the default suite: LW (lifecycle
   section 4 and C14 make no liveness claim against withheld unknown Space ops), L, O, OM and LM,
@@ -245,6 +248,29 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     end
   end
 
+  # Row 594: honest-key rotations of a current head, mixed with replacements, authority events
+  # and adversary artifacts, so D-279 is judged over legitimate rotations too.
+  defp rotation_script do
+    gen all(
+          pre <- list_of(one_of([adv_catalog(), constant({:replace, 30})]), max_length: 2),
+          k <- integer(0..1),
+          post <-
+            list_of(
+              one_of([
+                map(integer(0..1), &{:rotate, &1}),
+                map(integer(0..3), &{:revoke, &1}),
+                map(integer(0..3), &{:beacon, &1}),
+                constant({:replace, 30}),
+                adv_catalog(),
+                adv_rotation()
+              ]),
+              max_length: 4
+            )
+        ) do
+      pre ++ [{:rotate, k}] ++ post
+    end
+  end
+
   # An honest replacement, an old-key rotation of it and a catalog under that rotation, plus
   # noise, so a rotation's inherited cutoff obligation (S3, D-A15 reading) is reachable.
   defp cutoff_script do
@@ -355,12 +381,16 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
              } do
       # Row 321: half the histories come from freeze_script/0 (an accepted replacement, then
       # authority events), so an accepted candidate's later freeze is generated, not only scripted.
+      # Rows 598 + 594: a third come from rotation_script/0 (honest-key rotations), and about
+      # half drop the watermark catalog at a generated step (evidence loss, C6).
       check all(
-              actions <- one_of([script(), freeze_script()]),
+              actions <- frequency([{1, script()}, {3, freeze_script()}, {2, rotation_script()}]),
               p <- picks(),
+              lose <- one_of([constant(nil), integer(0..12)]),
               max_runs: runs(@mode, 60)
             ) do
-        {w, steps} = history(base, actions, p)
+        w = W.apply_script(base, actions)
+        steps = W.run(w, W.order(w.items, p), lose_watermark_at: lose)
         v = M.check_monotone(w, steps)
 
         # Row 321: every intrinsic verdict, complete parts of trust_pending steps included. Both
@@ -412,6 +442,77 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     refute Map.has_key?(g.raw_evidence, r)
     assert M.check_d279(w, steps) == []
     assert M.check_monotone(w, steps) == []
+  end
+
+  # Row 594, exercise: an honest-key rotation h2 of the accepted replacement R1 becomes the
+  # watermark; a root revoke on an older frontier then freezes it with authority_changed only.
+  test "M exercise: an accepted honest-key rotation later yields only authority_changed", %{
+    base: base
+  } do
+    w = W.apply_script(base, [{:replace, 30}, {:rotate, 0}, {:revoke, 1}])
+    steps = W.run(w, w.items)
+    [h] = for {id, %{kind: :rotation, honest: true}} <- w.bindings, do: id
+
+    assert Enum.any?(steps, &match?(%{next: %{accepted: %{binding: ^h}}}, &1)),
+           "h2 never became the watermark\n#{trace(w, steps)}"
+
+    assert %{result: {:ok, g}, next: %{frozen: true}} = List.last(steps)
+    assert g.decision.reason == :authority_changed
+    assert g.verdicts[h] == :node
+    assert M.check_d279(w, steps) == []
+    assert M.check_monotone(w, steps) == []
+    assert :honest_rotation_watermark in M.d279_stats(w, steps)
+  end
+
+  # Row 598, exercise: the run drops the bootstrap catalog c0 (the watermark) at step 2. R1 cites
+  # c0, so R1 and K1 pend again: neutral, because the same step with c0 restored settles them.
+  test "M exercise: evidence loss pends an accepted id again only through its lost ancestry", %{
+    base: base
+  } do
+    w = W.apply_script(base, [{:replace, 30}, {:revoke, 2}])
+
+    # Losing K1 itself (step 4) freezes with authority_changed and pends nothing.
+    steps4 = W.run(w, w.items, lose_watermark_at: 4)
+
+    assert %{next: %{frozen: true}, result: {:ok, %{decision: %{reason: :authority_changed}}}} =
+             List.last(steps4)
+
+    assert M.check_d279(w, steps4) == []
+
+    for lose <- [2] do
+      steps = W.run(w, w.items, lose_watermark_at: lose)
+      assert Enum.any?(steps, &is_binary(Map.get(&1, :lost)))
+      assert M.check_d279(w, steps) == [], trace(w, steps)
+      assert :loss_neutral_pending in M.d279_stats(w, steps), trace(w, steps)
+      # Without the counterfactual the same history is the row 598 report.
+      blind = Enum.map(steps, &Map.put(&1, :unlost, nil))
+      assert [_ | _] = M.check_d279(w, blind)
+    end
+
+    # Soak seed 21 (R389_RUNS=200): honest rotations h1 of B and h2 of h1, adversary rotations t3
+    # of h1 and t4 of B, and c0 lost at step 1. h1 rotates over c0, so it pends from then on; at
+    # K-h1 the same step with c0 restored is control_history_limit (as it is with no loss at all),
+    # which judges no verdict, so the return to pending is neutral.
+    w =
+      W.apply_script(base, [
+        {:rotate, 1},
+        {:rotate, 0},
+        {:adv_rotation, 1, 2, false, true, false},
+        {:adv_rotation, 4, 4, false, true, false},
+        {:revoke, 0}
+      ])
+
+    picks =
+      [0, 31, 37, 47, 25, 50, 52, 25, 56, 30, 29, 16, 34, 16, 35, 27, 7, 53, 52, 9] ++
+        [45, 18, 46, 0, 41, 50, 29, 7, 11, 55, 32, 18, 22, 39, 53, 60, 47, 28, 59, 37]
+
+    order = W.order(w.items, picks)
+    clean = W.run(w, order)
+    assert {:error, :control_history_limit, _} = List.last(clean).result
+    assert M.check_d279(w, clean) == []
+    steps = W.run(w, order, lose_watermark_at: 1)
+    assert M.check_d279(w, steps) == [], trace(w, steps)
+    assert :loss_limit_neutral_pending in M.d279_stats(w, steps), trace(w, steps)
   end
 
   # Row 321, the checker is not vacuous: synthetic steps (W.run's shape) with one defect each.
@@ -602,6 +703,61 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     # A fresh id pending, with a part that does not freeze, is neutral.
     fresh = pending_step.(["p_new"], graph.(%{}))
     assert M.check_d279(world, [ok, fresh]) == []
+
+    # Row 598: after evidence loss a settled id may pend again only when it depends on the lost
+    # catalog and the same step with that catalog restored gives it its remembered verdict.
+    dep_world = %{
+      world
+      | bindings: %{
+          "r" => %{
+            label: "r",
+            kind: :replacement,
+            parents: [],
+            prior_catalogs: [%{binding: "b", catalog: "k"}]
+          }
+        }
+    }
+
+    lossy = fn s, unlost_graph ->
+      s |> Map.put(:lost, "k") |> Map.put(:unlost, {{:ok, unlost_graph}, nil})
+    end
+
+    assert M.check_d279(dep_world, [ok, lossy.(pending, graph.(%{}))]) == []
+    assert M.check_d279(dep_world, [ok, lossy.(regressed, graph.(%{}))]) == []
+    # Still pending with the catalog restored, restored to another verdict, or a lost catalog
+    # the id does not depend on: each is still a regression.
+    assert [{:d279, _}] =
+             M.check_d279(dep_world, [
+               ok,
+               lossy.(pending, graph.(%{verdicts: %{"r" => :pending}}))
+             ])
+
+    assert [{:d279, _}] =
+             M.check_d279(dep_world, [ok, lossy.(pending, graph.(%{verdicts: %{"r" => :ok}}))])
+
+    assert [{:d279, _}] = M.check_d279(world, [ok, lossy.(pending, graph.(%{}))])
+    assert [{:d279, _}] = M.check_d279(world, [ok, lossy.(regressed, graph.(%{}))])
+
+    # A neutral pending step keeps the remembered verdict, so a later settlement to another
+    # verdict is still a move away from it.
+    neutral = lossy.(pending, graph.(%{}))
+    resettled = step.("s2", graph.(%{verdicts: %{"r" => :ok}}))
+    assert [{:d279, _}] = M.check_d279(dep_world, [ok, neutral, resettled])
+    refuted = step.("s2", graph.(%{verdicts: %{"r" => {:bad, :invalid_possession}}}))
+    assert [{:d279, _}] = M.check_d279(dep_world, [ok, neutral, refuted])
+
+    # A restored step that is exactly control_history_limit judges no verdict (d4 allows that
+    # error), so a dependent id pending under the loss is neutral; any other restored error, or
+    # a lost catalog the id does not depend on, is still a regression.
+    limited = fn s, reason ->
+      s |> Map.put(:lost, "k") |> Map.put(:unlost, {{:error, reason, %{ids: []}}, nil})
+    end
+
+    for s <- [pending, regressed] do
+      assert M.check_d279(dep_world, [ok, limited.(s, :control_history_limit)]) == []
+      assert [{:d279, _}] = M.check_d279(world, [ok, limited.(s, :control_history_limit)])
+      assert [{:d279, _}] = M.check_d279(dep_world, [ok, limited.(s, :catalog_rollback)])
+    end
   end
 
   # --- liveness and order ---------------------------------------------------------------------
