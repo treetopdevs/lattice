@@ -4724,6 +4724,42 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Decision</dt><dd>Round 1: verdict CHANGES, one P2, no P3. An unaccepted intermediate catalog could overwrite a reserved watermark route. Fixed in D-930 and shown with a new shared S12r scenario in both runtimes. Its residual (is such a chain promotable at all, and does <code>mirror/4</code> have the same overwrite) is row 570, an unverified audit item. Round 2: verdict CHANGES, one P2, no P3. Successive replacements on one page dropped an intermediate route. Fixed in D-931 and shown with the S12s pair in both runtimes; removing the fill makes the S12s, S1, S8, S14 and S17b properties fail. No round 3 ran, so the round 2 fix is not confirmed by a later review.</dd>
 <dt>Reason</dt><dd>The last round reported a P2, so the review is not clean until a later round confirms the D-931 fix. No resolver decision, wire atom, quarantine reason or committed wire byte changed; the vectors only gained steps and stored routes.</dd>
 </dl></section>
+<section id="d950"><h2><span>D-950</span> Run policy for the 2026-11-26 backlog run</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Each slice runs as one workflow (plan check, implement, review, close) in its own worktree branched from freshly fetched <code>origin/main</code> (<code>915cba5bc</code> at the start). At most three slice PRs are open at once and their files do not overlap. The coordinator opens the PRs. Nothing is merged without the operator.</dd>
+<dt>Reason</dt><dd>The operator asked for the next meaningful slices from the latest tip with working code at all times. No merge grant was given for this run.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d951"><h2><span>D-951</span> Two reviewers per slice: Codex Sol 6.1 high and Antigravity Gemini 4 Neon medium</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Both reviewers read the same diff in parallel, read-only, for up to two rounds. P1 and P2 findings are reproduced and fixed or rejected with a reason. If the last round still found a P1 or P2, the PR says no later round confirmed the fix.</dd>
+<dt>Reason</dt><dd>The operator named both reviewers and these effort levels. Two independent reviewers also meet working-policy rule 3 for the paths that need a second review.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d952"><h2><span>D-952</span> Ledger files are edited on one coordinator branch only</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Slice branches do not edit <code>plans/README.md</code> or this file. Each slice returns its decisions and follow-up rows as data, and the coordinator records them here from D-950 and from row 590.</dd>
+<dt>Reason</dt><dd>In the 2026-11-17 run these two files conflicted between every pair of slice PRs.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d953"><h2><span>D-953</span> Slice selection rule and first two slices</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>A row is eligible when its dependencies are merged on main, it needs no edit to <code>catalog_trust.ex</code>, <code>treehouse_catalog_trust.ts</code> or native <code>catalog_eval</code>, it is not parked and needs no absent operator input, and it is size S or M with a runnable result. P1 comes before P2. First slices: rows 521 and 523 together (report writers and bundle read bound), and row 321 (resolver monotonicity property, tests only). Held back: 381, 396, 245, 255, 256, 261, 262, 267, 269 (blocked or protected files) and 392, 393 (need a design pass).</dd>
+<dt>Reason</dt><dd>A small first slice proves the two-reviewer pipeline. Row 321 is the only eligible P1.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d954"><h2><span>D-954</span> Main was red at the start: treated as network faults and rerun</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Flagship run 44436443252 on <code>915cba5bc</code> failed in three jobs. The logs show an apt install that timed out after 15 minutes and Gradle failing to fetch Kotlin 2.0.21 artifacts. The failed jobs were rerun. If the rerun fails the same way, fixing main becomes the next slice.</dd>
+<dt>Reason</dt><dd>None of the three failures is in code that PR #236 changed, and the previous main commit was green.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d955"><h2><span>D-955</span> Plan 296 (Treehouse mobile, PR #239) is a separate track</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>This run does not touch <code>clients/treehouse-mobile</code>, the main checkout or PR #239. The M1 exit run posts to the shared public thread and still needs the operator.</dd>
+<dt>Reason</dt><dd>Another session owns that branch, and the public post is not covered by the delegation.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
