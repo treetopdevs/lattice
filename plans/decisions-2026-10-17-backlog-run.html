@@ -4784,6 +4784,30 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The last round has no P1 or P2. The first Gemini run returned nothing because headless mode cannot run shell commands; the helper now gives it a saved diff, and the review was rerun before the PR opened.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
 </dl></section>
+<section id="d960"><h2><span>D-960</span> Row 321: scope and layer of the D-279 property</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd>The property extends the existing property M in <code>catalog_resolution_property_test.exs</code> and drives <code>Treehouse.CatalogBindingGraph.resolve/1</code> and <code>advance/2</code> through the existing world generator, with state persisted between calls. No library file is edited. An accepted candidate is any id whose intrinsic verdict is <code>:node</code> or <code>:ok</code>, plus the persisted watermark ids. Row 321 owns the D-279 property, so that clause leaves row 380.</dd>
+<dt>Reason</dt><dd>The property already existed in part. Extending it keeps default-suite cost flat and avoids a second generator.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d961"><h2><span>D-961</span> Row 321: what counts as a violation</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd><code>catalog_authority_refused</code> is a violation unless it is derived from the full union (every head refused on the union). While a watermark is held, the public decision reason must be one of nil, <code>authority_changed</code>, <code>catalog_fork</code>, <code>catalog_rollback</code>, <code>catalog_authority_refused</code> or <code>recovery_incomplete</code>, and anything else fails closed. A settled id that returns to pending is a regression. A <code>trust_pending</code> step is neutral, and its complete part is recomputed test-side and judged by the same rules. Drift from one refused reason to another is counted, not asserted.</dd>
+<dt>Reason</dt><dd>These follow the row text and the resolver's own derivation. Each rule has a synthetic case that fails without it, and mutant m11 (step 4 re-judged on the union) is killed.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d962"><h2><span>D-962</span> Row 321: stated exercise gaps</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd>Rotations in the generator are adversary-only, and the fork-after-accept, head-limit-after-accept and bad-reason-drift counters stayed at or near zero in the deep runs. These are filed as rows 594 and 596, not fixed here. A new tag <code>:r321_open</code> is reserved for a repro of any new-class counterexample. None is known.</dd>
+<dt>Reason</dt><dd>Widening the generator is a separate change with its own review. Saying what the property does not reach keeps the claim at the tier that ran.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d963"><h2><span>D-963</span> Row 321 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high and Gemini 4 Neon medium both asked for changes, three P1 or P2 in total (the checker ignored the decision reason, skipped <code>trust_pending</code> steps, and missed a settled id returning to pending). All were reproduced red and fixed. Round 2: Gemini PASS, Codex one P2 (a public <code>catalog_authority_refused</code> bypassed the checks). It was fixed with a union-derivation check and red and neutral cases.</dd>
+<dt>Reason</dt><dd>The last round found a P2 and no later round confirmed the fix; only local tests confirm it. The PR says so. The slice is tests only, and no counterexample to the resolver was found.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
