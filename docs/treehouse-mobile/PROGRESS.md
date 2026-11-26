@@ -26,10 +26,10 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | | |
 |---|---|
 | As of | 2026-11-25 |
-| Milestone | M1a.7 done at Simulator: the app runs on Expo Router (Threads, People, Group tabs and a pushed thread screen) over `TreehouseSession` with `SqliteReplicaStore` and the SQLite LocalStore, and background/foreground drive the link. M0.1, M1a.1 and M1a.2 now have their post, force-quit and relaunch run against a loopback relay. M1a.3 to M1a.6 at Core (M1a.4 and M1a.5 now on screen as placeholders); M1a.8 CI job written, never run |
+| Milestone | M1b.1 to M1b.4 done at Simulator: a real Threads tab (rows, unread counts, link pill), a real thread screen (bubbles, delivery marks, composer with saved drafts), edit and delete from a long-press sheet, and arrived-later captions with an unread divider, each scenario run against a loopback relay with a Node second participant. M1a complete (M1a.8 CI job written, never run). M1b.5 to M1b.7 todo |
 | Highest evidence tier reached | Simulator |
-| Works today | On the iPhone 17 Pro simulator (iOS 26.5) with the dev build pointed at a loopback relay (`EXPO_PUBLIC_TREEHOUSE_DEMO_ORIGIN=http://127.0.0.1:4100`, never the public relay): the app launches into the tabs; Threads lists the thread and pushes `thread/[replica]` (a colon-bearing replica id survives as a route param); a post goes "On relay" and the relay's own ids grow; backgrounding closes the app's relay sockets and foregrounding reopens them and posts again; after force-quit and relaunch both posts are present and still on the relay; self-check passes (custody, sqlite row round-trip, crypto); the `SqliteReplicaStore` check passes 6/6 on expo-sqlite; the Group tab shows the trust card, the loopback origin and the demo-keys notice. Seen in stage 1 but with no surviving screenshot: the offline-saved post surviving a relaunch, the history_invalid notice after a tampered frame, the D-31 export share sheet and re-sync into a fresh `_r1` store. Core: carry-over of the M0 snapshot outbox (a failed carry-over is history_invalid), the M1a.7 review fixes (not yet on a device), gated merges only through the session, lifecycle binding, `useReadModel` over `useSyncExternalStore`, the read models against Sim vectors and the judge, the command pipeline, the demo fence (release bundle holds no demo strings) |
-| Does not work today | screens are placeholders that print read models as text (real UI is M1b); only post ran as a command on a simulator; edit, delete, archive, people management and invitations have no UI; carry-over never ran on a device; foreground sync of ops authored elsewhere while backgrounded not exercised; building the judged view costs about 5 s at 4,000 ops in Node (quadratic, Hermes not measured); a phone's own key on the relay (G-1); the CI job has never executed; lint is not configured |
+| Works today | On the iPhone 17 Pro simulator (iOS 26.5) with the dev build pointed at a loopback relay (`EXPO_PUBLIC_TREEHOUSE_DEMO_ORIGIN=http://127.0.0.1:4100`, never the public relay): the app launches into the tabs; Threads lists the thread and pushes `thread/[replica]` (a colon-bearing replica id survives as a route param); a post goes "On relay" and the relay's own ids grow; backgrounding closes the app's relay sockets and foregrounding reopens them and posts again; after force-quit and relaunch both posts are present and still on the relay; self-check passes (custody, sqlite row round-trip, crypto); the `SqliteReplicaStore` check passes 6/6 on expo-sqlite; the Group tab shows the trust card, the loopback origin and the demo-keys notice. Since M1b.1 to M1b.4 (durable screenshots in `docs/treehouse-mobile/evidence/`): a second participant's post raises a row's unread count with no manual sync and opening the thread clears it; three posts made with sync paused show "Saved on this phone", survive a force-relaunch with the draft, and go "On relay" on resume; edit shows "edited" with the draft kept, delete shows the placeholder, a moderator Remove shows its placeholder; a post from the other participant while this phone was paused sorts above this phone's later posts with "Arrived later", is counted on the Threads row and sits under an "N unread" divider; screens show names as You, petname or key check, never the realm; dark mode and large or accessibility text sizes were checked on the Threads tab and the thread screen, with the exceptions listed under Known gaps ("Not seen on a device"). After the review round, a 14-message backlog plus three new posts opened under a "3 unread" divider with no false "Arrived later" caption and the row cleared on return (`docs/treehouse-mobile/evidence/m1b_review_divider_no_false_caption.png`). Seen in stage 1 but with no surviving screenshot: the history_invalid notice after a tampered frame, the D-31 export share sheet and re-sync into a fresh `_r1` store. Core: carry-over of the M0 snapshot outbox (a failed carry-over is history_invalid), the M1a.7 review fixes (not yet on a device), gated merges only through the session, lifecycle binding, `useReadModel` over `useSyncExternalStore`, the read models against Sim vectors and the judge, the command pipeline, the demo fence (release bundle holds no demo strings) |
+| Does not work today | People and Group tabs are still placeholders (M1b.7, M2); refusal states, archived thread and the audit screen have no UI (M1b.5 to M1b.7); Copy text is missing from the message sheet and counted bubbles are no longer selectable (regression, M1b.5); archive, people management and invitations have no UI; VoiceOver itself never ran (only the accessibility tree was read); carry-over never ran on a device; foreground sync of ops authored elsewhere while backgrounded not exercised; building the judged view costs about 5 s at 4,000 ops in Node (quadratic, Hermes not measured); a phone's own key on the relay (G-1); the CI job has never executed; lint is not configured |
 
 ## Status board
 
@@ -44,12 +44,16 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | M1a.1 ports, session and post tracer | done | Simulator | 9 named tests in the Core suite. Post and relaunch now ran through the app on a loopback relay (`m1a7s3_05_posted_on_relay.png`, `m1a7s3_09_relaunch_thread_posts_on_relay.png`) |
 | M1a.2 SQLite replica store | done (carry-over Core only) | Simulator | wired into the app at M1a.7; contract 6/6 on expo-sqlite (`/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/m1a7s3_11_replica_store_check.png`); posts survive force-quit and relaunch (`m1a7s3_09_relaunch_thread_posts_on_relay.png`). Verify-on-open, gated merge and carry-over: Core (`app_session.test.mts`); history_invalid and re-sync were seen in stage 1 but those screenshots no longer exist. The M1a.2 RED-control screenshot no longer exists |
 | M1a.3 local store | done | Core | `local_store.test.mts` (memory and node:sqlite), including the `replicaStoreEpochs` setting across a reopen. `openExpoLocalStore` runs in the app since M1a.7 and a sync-off setting survived a relaunch in stage 1, but that screenshot no longer exists |
-| M1a.4 read models | done (on screen as placeholders; 150 ms budget met by the projection only) | Core | 11 named tests plus more in the Core suite; Sim vectors and real-signed judge authoring as references; 4,000-op projection about 9 ms, a whole replica change about 4.7 s (150 ms budget unmet there). The tab screens print status, group, link, threads, roster and the timeline (seen in `m1a7s3_01` to `_04`), launch evidence only, not checked against a reference on device |
-| M1a.5 command pipeline | done | Core | 9 named tests plus extra checks in the Core suite. On the simulator only post ran (through the session's command path, `m1a7s3_05`, `_07`); no other command has UI |
+| M1a.4 read models | done (Threads and thread screen on screen since M1b.1 to M1b.4; People and Group still placeholders; 150 ms budget met by the projection only) | Core | 11 named tests plus more in the Core suite; Sim vectors and real-signed judge authoring as references; 4,000-op projection about 9 ms, a whole replica change about 4.7 s (150 ms budget unmet there). The tab screens print status, group, link, threads, roster and the timeline (seen in `m1a7s3_01` to `_04`), launch evidence only, not checked against a reference on device |
+| M1a.5 command pipeline | done | Core | 9 named tests plus extra checks in the Core suite. On the simulator post ran at M1a.7 (`m1a7s3_05`, `_07`); since M1b.3 edit, delete and moderator remove ran through the session's command path (`docs/treehouse-mobile/evidence/m1b3_edited_draft_kept.png`, `docs/treehouse-mobile/evidence/m1b3_deleted_placeholder.png`); tier stays Core because the pipeline's refusal paths ran only in Core |
 | M1a.6 demo bootstrap fenced | done | Core | `demo_fence.test.mts` (refused and admitted against the local relay); release `expo export --platform ios` at M1a.7 close holds 0 `lattice-demo-wss`, 0 `EXPO_PUBLIC_TREEHOUSE_DEMO_ORIGIN`, 0 `DEMO_KEYS_PUBLIC`, 0 dev-check strings, 0 `demo-endpoints.json`. The demo bar is on the Group tab; its role switcher was not exercised |
 | M1a.7 navigation and lifecycle | done | Simulator | Core 127/127, `tsc` 0. iPhone 17 Pro, iOS 26.5, loopback relay: tabs (`m1a7s3_01_threads_tab.png`, `_02_people_tab.png`, `_03_group_tab.png`), pushed thread (`_04_thread_pushed.png`), post on relay (`_05`), background closes the app's relay sockets and foreground reopens them and a new post reaches the relay (`_06`, `_07`, socket counts in `m1a7s3_evidence.txt`), force-quit relaunch (`_08`, `_09`), dev checks (`_10`, `_11`), all under `/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/`. Deviations: disconnect shown by `lsof` on the app process, not a relay log (the fixture logs no connections); foreground pull of ops authored elsewhere not run; lint not run (no ESLint config) |
 | M1a.8 CI job | doing (never run) | - | `treehouse_mobile` job in `flagship.yml`; actionlint adds no findings; steps dry-run on macOS only. Needs the first hosted run |
-| M1b.1 to M1b.7 chat loop | todo | - | |
+| M1b.1 Threads tab | done | Simulator | `threads_tab.test.mts` (9 plus 1 review test; RED 9/9). iPhone 17 Pro, iOS 26.5, loopback relay, second participant `test/support/second_participant.mts` as neighbor: row went to unread with no manual sync (`docs/treehouse-mobile/evidence/m1b1_unread_raised.png`), opening the thread cleared it (`docs/treehouse-mobile/evidence/m1b1_unread_cleared.png`); pause sync then resume delivered as "1 unread". Archived section (now a toggle row heading its rows, review fix), the link pill before a Space is pulled, waiting-to-send and "Not connected" marks: Core only. Unread badge not seen at accessibility sizes |
+| M1b.2 Thread screen | done (some parts Core only) | Simulator | `thread_screen.test.mts` (8; RED 8/8). Three posts saved while paused, force-relaunch kept them and the draft (`docs/treehouse-mobile/evidence/m1b2_relaunch_saved_draft.png`), resume took relay ids 4 to 7 and all marks "On relay" (`docs/treehouse-mobile/evidence/m1b2_resumed_on_relay.png`); keyboard offset fixed on device; a posted draft did not come back after relaunch. identity_mismatch branch, failed-save retry (including the review fix: a pause-save that fails is retried by the next flush), input lock while posting, the hidden mark text and the per-replica Composer key: Core only |
+| M1b.3 Edit and delete | done (Copy regressed) | Simulator | `message_sheet.test.mts` (6; RED 6/6). Edit kept the draft (`docs/treehouse-mobile/evidence/m1b3_edited_draft_kept.png`), delete showed the placeholder (`docs/treehouse-mobile/evidence/m1b3_deleted_placeholder.png`); during the device run `second_participant.mts --show` printed edited, then deleted, then removed (relay ops 4, 5, 6, 8), but that `--show` ran the app's own `projectThreadTimeline`, so it is not an independent cross-device check and no such check is claimed; the relay op counts show only that the frames were accepted. After review `--show` prints lattice-client's `observeTreehouse` posts instead (rerun once on a plain backlog, not on an edit). Edit and tombstone outcomes are Core-tested in `edit_message`, `delete_message` and `remove_message`. Copy and Details left out; moderator sheet close is now blocked while a delete or remove runs (Core only) |
+| M1b.4 Arrived later, unread | done | Simulator | `arrived_later.test.mts` (6; RED 5/6, the sixth is a guard), partition and heal judged by `judgeTreehouseFrames`. Late post counted on the row (`docs/treehouse-mobile/evidence/m1b4_counted.png`) and shown under "1 unread" with "Arrived later" between this phone's posts (`docs/treehouse-mobile/evidence/m1b4_divider_caption.png`). Late post while the thread is open: Core only. Caption not seen at accessibility-extra-large |
+| M1b.5 to M1b.7 refusal, archive, Group tab | todo | - | |
 | M2.0 public demo relay access for device keys | blocked (G-1) | - | |
 | M2.1 to M2.5 people and invitations | todo | - | testable against a local relay without M2.0 |
 | M3 polish and first phones | todo | - | |
@@ -62,22 +66,19 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | G-1 relay admits only manifest realms | a self-made key cannot connect (confirmed 2026-11-25); join flow cannot complete | 05 |
 | Mobile custody holds one key | cannot create bounded Threads or grant them to new members | M1a.1, O-11 |
 | G-2 no self-service replica provisioning | no Start a group, New thread or rollover | 05 |
-| Simulator evidence lives in a clearable scratchpad | the session scratchpad was emptied once between M1a.7 stages, losing every `m01_*`, `m1a2_*`, `m1a5_*` and `m1a7s1_*` screenshot; rows now cite only `m1a7s3_*` files, which can be lost the same way | M3 |
-| Recovery path seen once, evidence gone | history_invalid after a tampered frame, the D-31 export share sheet, re-sync into `_r1` and the offline-saved post surviving relaunch were seen on the simulator in M1a.7 stage 1 only; screenshots no longer exist, so these claim Core (`app_session.test.mts`) | M1b |
+| Simulator evidence lives in a clearable scratchpad | the session scratchpad was emptied once between M1a.7 stages, losing every `m01_*`, `m1a2_*`, `m1a5_*` and `m1a7s1_*` screenshot; the M0 and M1a rows cite only `m1a7s3_*` files, which can be lost the same way; M1b rows cite durable copies in `docs/treehouse-mobile/evidence/` | M3 |
+| Recovery path seen once, evidence gone | history_invalid after a tampered frame, the D-31 export share sheet and re-sync into `_r1` were seen on the simulator in M1a.7 stage 1 only (the offline-saved post surviving relaunch has durable evidence since M1b.2); screenshots no longer exist, so these claim Core (`app_session.test.mts`) | M1b |
 | Carry-over never ran on a device | the loopback keys have no M0 snapshot; `carryOverLegacyProfiles` is Core only | M3 |
 | Review fixes not run on a device | the M1a.7 fix round (lifecycle reconcile, blocking carry-over, re-sync order, adoption notice, export guard, removed placeholder) is Core only; the stage 3 screenshots predate it | M1b |
 | A failed carry-over left behind by re-sync | after a confirmed re-sync the fresh store skips the M0 snapshot, so unsent M0 posts that failed their check stay only in the untouched M0 file | 04 |
 | ReplicaDb handles never closed | `openAppSession` opens one expo-sqlite handle per store and `close()`/`resync()` do not close it; repeated role switches or re-syncs leak handles | M1b |
-| Realm shown on screen | `SessionBanner`, `group.tsx` and `displayName` show the transport realm; 01 says realm is not shown; replace with petnames and fingerprints | M1b |
 | Dev detail line after re-sync | the demo bar's "store N" keeps the old epoch until relaunch (dev only) | M1b |
 | Carry-over re-verifies on every launch | idempotent, but re-verifies the whole store on top of the session's own verify-on-open; cost not measured | M1b |
 | Unsent posts in a failed store | re-sync opens a fresh store; unsent posts in the failed one are neither re-sent nor exported (D-31 covers the Space only). The confirmation copy says so | 04 |
 | Export is a share sheet | RN `Share.share` with the D-31 JSON text; iOS offers "Save to Files", not a direct file write as 04 says | 04 |
-| Docs 03 and 04 lag M1a.7 decisions | not yet recorded: share-sheet export, `replicaStoreEpochs` per public key and `_r<N>` store files, `ExportRefusal` (`no_space`, `export_failed`), self-check `backend: sqlite \| none`, `session.foreground()`/`background()` not writing `syncEnabled`, `src/composition.tsx` as composition root, a failed carry-over as history_invalid (`SessionPorts.blockedHistory`, reason `carry_over: ...`) and carried at epoch 0 only, `AppSession.adoptFailed`, the lifecycle `reconcile()` on install | 03, 04 |
 | Entry stays `index.ts` | 07 says point the entry at `expo-router/entry`; `main` stays `index.ts`, which installs the polyfills and then imports `expo-router/entry` (the SDK 58 custom-entry variant) | 07 |
-| Foreground sync of remote ops not exercised | the simulator proof is reconnect plus a new post; ops authored elsewhere while backgrounded were not injected | M1b |
+| Foreground sync of remote ops not exercised | the simulator proof is reconnect plus a new post; ops authored elsewhere while backgrounded were not injected. M1b.1 and M1b.4 showed pull of the other participant's ops after Pause sync and Turn sync on, not after backgrounding | M1b |
 | Disconnect evidence is `lsof`, not a relay log | the loopback fixture has no connection log | M1a.8 |
-| Composer keyboard offset | `keyboardVerticalOffset={90}` on the placeholder composer no longer fits the opaque header; the keyboard partly covers it | M1b.2 |
 | Require-cycle warning toast at launch | lattice-client require cycles (treehouse.js and treehouse_member_continuity.js; carrier.js and authority.js) show "Open debugger to view warnings" in dev | lattice-client |
 | Lint not configured | AGENTS.md asks for lint; there is no ESLint config or script, and `expo lint` would install one. Not run | M3 |
 | `loopback_demo` connect-timeout flake | "carrier connect timeout" once just after a machine restart, then passed repeatedly | M1a.8 |
@@ -86,7 +87,6 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | Hermes has no WebCrypto | `src/polyfills_crypto.ts` installs SHA-256 only for `crypto.subtle.digest`; `lattice-client/src/treehouse_offline_enrollment.ts:28` calls `crypto.subtle` unguarded, so any other algorithm throws on a phone | M2 |
 | Ability probes the judge with a synthetic op | `abilities.ts` asks `treehouseCommandOpStatus` about a probe op targeting a probe post of this key's own; an exported per-command policy query in lattice-client would be cleaner | lattice-client |
 | 4,000-op ceiling headroom | the whole-change ceiling (15 s) is about 3x the 4.7 s measured on this Mac; the Linux CI job has never run | M1a.8 |
-| identity_mismatch copy has one line | `phaseCopy.identity_mismatch` says the key "doesn't match the saved group" even for a locked key with nothing held (`key_unavailable`); the screen should branch on `reason` | M1b |
 | Pipeline signs before the pre-judge | a former role holder (`not_holder`) or a command on an archived Thread is signed, then refused by the pre-judge and discarded; with a biometric Keychain this would prompt for a signature that is thrown away | M1b |
 | Winning edit id grouped in the app | `thread_timeline.ts` groups honored edit effects by root to ask lattice-client's `lww` for the winning edit id, because `causalListEntries` returns the winning value but not its op id | lattice-client |
 | Read model limits | `relay_refused` lasts for the last sync only (O-6); removal-pending and relay access are known only for this phone's own key; audit grants show only live or not_live; "joining" is inferred from an honored, unrevoked invitation; `lastSyncMs` is a session stamp; a key the held Space neither admits nor invites, with no other key's outbox, is `key_only` | M1b, M2 |
@@ -97,20 +97,189 @@ Status values: `todo`, `doing`, `done`, `blocked (reason)`.
 | Local relay fixture borrows a Tauri shell script | `test/support/local_relay.ts` runs `clients/treehouse-tauri-shell/test/support/treehouse_enrollment_fixture.exs` by path to create empty logs | M1a.8 |
 | `test:smoke` never rerun | rewritten onto the app session in M1a.7; typechecked only, both with and without `DEMO_WSS_WRITE=1` | M1a.0 |
 | Plan 180 orders iOS after E1 | plan index does not yet say 296 is a parallel track | O-7 |
+| Copy text missing; counted bubbles not selectable (M1b.3 regression) | Copy needs `expo-clipboard` and a dev-build rebuild, so it is not in the message sheet; bubbles that open a sheet lost text selection because iOS drew its Copy callout over the sheet, so a moderator (the demo founder) cannot copy any counted message. Details is also left out (no Message details screen) | M1b.5 |
+| Navigator header clips at accessibility sizes | Threads draws its own header; People, Group and the pushed thread screen still use the navigator header, which clipped "Threads" before M1b.1; People, Group and the thread header were not checked | M3 |
+| "Today" can go stale across midnight | day separators are computed when the timeline changes | M1b |
+| Unread divider not scrolled to, taken once per open | the list does not scroll to the divider, so with more unread than one screen it can sit out of view; it is not retaken after background and foreground while the screen stays open | M1b |
+| Second participant is a Node script | `test/support/second_participant.mts` posts (and with `--show` prints lattice-client's `observeTreehouse` posts since the review round; during the M1b.3 device run it printed the app's own `projectThreadTimeline`, so that run is not an independent check) over the loopback relay; the plan's browser starter needs the public demo relay and was not used. M1's exit check still repeats M1b.2 against the public relay with the browser starter | M1 exit |
+| Read marker marks the whole timeline on open | the thread screen marks every counted id, including rows the virtualized list never put on screen, so a backlog longer than one screen loses its unread cue (01 says "ids this phone has shown"; Codex review). Marking only viewable rows was tried in the review round and withdrawn: the positional "Arrived later" rule then captioned older backlog rows that were simply not yet scrolled to (`docs/treehouse-mobile/evidence/m1b_review_viewport_marking_withdrawn.png`). Needs, together: an arrival-based "Arrived later" rule in `thread_timeline.ts`, viewport marking, and scrolling to the divider | M1b |
+| Removed member's petname on the thread screen | the thread screen resolves petnames from the Roster, which omits removed members, so their retained messages show a key check while the Threads row (LocalStore petname) shows the petname. Needs a petname read model or a per-message petname in the projection | M2 |
+| VoiceOver never run | M1b.1 to M1b.4 read the accessibility tree only; Android not run | M3 |
+| Cleanup stopped the relay fixture by pattern | M1b.2 ran `pkill -f pilot_node.exs`, which would also stop another session's fixture; later runs should stop the loopback server's own child | M1a.8 |
+| Not seen on a device | review-round fixes: archived toggle row, the pill before a Space is pulled, failed pause-save retry, per-replica Composer key, sheet close blocked while busy, "You" without "(you)" on People (seen once in the accessibility tree); archived section, waiting-to-send and "Not connected" row marks, and the unread badge at accessibility sizes (M1b.1); identity_mismatch branch, failed-save retry, input lock while posting (M1b.2); a late post arriving while the thread is open and the caption at accessibility-extra-large (M1b.4) | M1b |
 
 ## Next up
 
 Follow the build order in [07-implementation-plan.md](07-implementation-plan.md):
 
 1. M1a.8: push the junctures and get the `treehouse_mobile` job green on Linux.
-2. M1b chat loop screens per 07, starting with the composer (fix the keyboard offset) and the identity_mismatch branch on `reason`.
-3. Record the M1a.7 decisions in docs 03 and 04 (see Known gaps).
-4. Re-run the recovery path (history_invalid, export, re-sync) and an offline post with sync off on the simulator, keeping screenshots somewhere durable; inject ops from a second identity while backgrounded to show foreground pull.
-5. Ask for a lattice-client change that makes the judged view incremental, and measure `replica_view` on Hermes.
+2. M1b.5 refusal states (`CannotPostBar`, `NotCountedBubble`), adding `expo-clipboard` with one dev-build rebuild so the sheet gets Copy text back; then M1b.6 archived thread and M1b.7 Group tab.
+3. Re-run the recovery path (history_invalid, export, re-sync) on the simulator, keeping screenshots in `docs/treehouse-mobile/evidence/`; inject ops from a second identity while backgrounded to show foreground pull.
+4. Ask for a lattice-client change that makes the judged view incremental, and measure `replica_view` on Hermes.
 
 ## Log
 
 Newest first.
+
+### 2026-11-25 · feat(treehouse-mobile): M1b.1 to M1b.4 threads tab, thread screen, edit and delete, arrived-later and unread
+
+Four slices run one after another in this checkout. All simulator runs: iPhone 17 Pro, iOS 26.5,
+the existing dev build (no native module added, no rebuild), loopback relay
+`http://127.0.0.1:4100` through `test/support/loopback_demo_server.mts`, Metro with
+`EXPO_PUBLIC_TREEHOUSE_DEMO_ORIGIN` pointing at it, never the public relay. The app ran as the
+demo founder. The second participant in every scenario is the new Node script
+`test/support/second_participant.mts` (posts as a demo role; `--show` prints the role's view;
+loopback origins only; fetches the seed the way the app does and never prints it). The plan's
+browser starter was not used because it needs the public demo relay. Durable screenshots are in
+`docs/treehouse-mobile/evidence/`; the rest are in the clearable session scratchpad
+`/private/tmp/claude-501/-Users-nicholas-develop-lattice/7ca0f07f-6bd2-42cc-82d3-4b6ed54121d7/scratchpad/`.
+Metro and the loopback server were stopped after each slice.
+
+- **M1b.1 Threads tab (Simulator).**
+  - `src/app/(tabs)/threads.tsx` is one virtualized FlatList of the new `ThreadRow` and
+    `LinkPill`. The tab draws its own header (Group name plus pill, safe-area top inset) because
+    the navigator header clipped at accessibility sizes. The pill opens the Group tab (no Relay
+    screen yet). Rows say every state in words ("N unread", "N waiting to send", "Not
+    connected") with one screen-reader label per row. Archived threads sit behind a collapsed
+    "Archived threads (N)" toggle (a footer at first; a list row heading the archived rows after review). New thread and the slots-full line are hidden for all of M1
+    (G-2; `create_thread` is never allowed).
+  - Projection (`thread_list.ts`, Core tested): `last.authorPetname` from the session's
+    `local.petname`; `routeNotConnected` only when some route is live and this thread's is not.
+    Pure helpers in `src/ui/thread_rows.ts`.
+  - Realm no longer shown (01): `displayName` gives You, petname, then "Key check
+    <fingerprint>"; `SessionBanner` and `group.tsx` show the key check; `Connected.names` removed
+    from SessionProvider and composition (`demoRealmByPubkey` stays in `src/demo/manifest.ts`).
+  - Dark mode: the root layout wraps the Stack in expo-router's `ThemeProvider` with the app
+    palette; the tab bar and headers stayed light before.
+  - Docs 03 and 04 record the M1a.7 decisions and the M1b.1 decisions.
+  - Tests: `test/core/threads_tab.test.mts` (9). RED 9/9 (missing `src/ui/thread_rows`,
+    `routeNotConnected` undefined, `authorPetname` undefined, realm rendered in `group.tsx`).
+  - Simulator: the neighbor posted and the row went to "2 unread" with no manual sync or
+    relaunch; opening the thread and going back cleared it; repeated on the final layout as "1
+    unread" then cleared (`docs/treehouse-mobile/evidence/m1b1_unread_raised.png`,
+    `docs/treehouse-mobile/evidence/m1b1_unread_cleared.png`). With sync paused the pill said
+    Offline and a neighbor post did not arrive; after "Turn sync on" it arrived as "1 unread"
+    (pull after pause, not after backgrounding). Dark mode at accessibility-extra-large
+    (`m1b1_05_dark_large_text_offline.png`, `m1b1_06_dark_resumed_unread.png`, scratchpad).
+  - Not seen on a device: archived section, waiting-to-send and "Not connected" marks; the
+    unread badge at accessibility sizes.
+- **M1b.2 Thread screen (Simulator for the scenario; some parts Core only).**
+  - `thread/[replica].tsx` renders `MessageList`, an inverted virtualized FlatList of `Bubble`,
+    with author runs and day separators by first-seen time ("Today", "Yesterday", or a local
+    date). `DeliveryMark` is a glyph and words: ◷ Saved on this phone / Sending, ✓ On relay,
+    ⚠ Relay did not accept, ⚠ Relay is not accepting messages; no second check. Each bubble has
+    one label that says every state. Author names use Roster petnames, never the realm.
+  - `Composer` saves the draft through `session.saveDraft` after a 400 ms pause, on blur and on
+    unmount; fills from the stored draft once, never over typed text; clears it after an
+    accepted post; retries a failed save; locks input while a post runs; send needs text and
+    `canPost`. `keyboardVerticalOffset` is `useHeaderHeight()` minus the bottom inset (replaces
+    the fixed 90).
+  - New `ReadModels.drafts`, separate from timelines so a draft save never rebuilds one (a test
+    asserts this). identity_mismatch problem card branches on `reason` (`key_unavailable`,
+    `key_missing`, `outbox_other_key`) through `src/ui/problem_copy.ts` and never offers reset.
+  - Tests: `test/core/thread_screen.test.mts` (8). RED 8/8 (`ERR_MODULE_NOT_FOUND` for
+    `src/ui/thread_view` and `problem_copy`; `undefined !== {}` for `drafts`; no `<MessageList`).
+  - Simulator: neighbor posted (relay ids 4); sync paused; three posts each "◷ Saved on this
+    phone", pill "Offline · 3 waiting", relay still 4; composer flush on the keyboard
+    (`m1b2_03_three_saved_keyboard.png`, scratchpad); typed a draft, force-relaunched: posts still
+    saved, sync still paused, draft in the composer
+    (`docs/treehouse-mobile/evidence/m1b2_relaunch_saved_draft.png`); sync on: relay 4 to 7, pill
+    Live, all three "✓ On relay", draft kept
+    (`docs/treehouse-mobile/evidence/m1b2_resumed_on_relay.png`); posting the draft took relay to
+    8 and after another relaunch the composer was empty. Dark mode and accessibility-large type
+    did not clip (`m1b2_06_dark.png`, `m1b2_07_dark_large_type.png`, scratchpad).
+  - Core only: the identity_mismatch branch; failed-save retry, the input lock and the hidden
+    mark text (made after the device run).
+  - Cleanup used `pkill -f pilot_node.exs` by pattern (would also stop another session's
+    fixture; nothing matched afterwards).
+- **M1b.3 Edit and delete (Simulator; Copy regressed).**
+  - New `MessageSheet` and `ConfirmDialog` share one RN `Modal` whose content switches, so iOS
+    never presents two at once. Item rules live in pure `src/ui/message_sheet.ts`, combining the
+    Abilities read model (`author_edit`, `author_tombstone`, `moderator_tombstone`) with the
+    timeline's mine, standing and removed facts; a removed or not-counted message offers
+    nothing; a moderator's own message offers Delete, not Remove. The sheet holds only an id and
+    closes when its message is removed elsewhere or the thread archives.
+  - Composer edit mode ("Editing message", Cancel, Save): the saved draft is flushed first and
+    comes back unchanged; edit keystrokes are never saved as the draft. The bubble declares
+    "Message actions" as an accessibility action with a hint; the backdrop is hidden from screen
+    readers.
+  - Tests: `test/core/message_sheet.test.mts` (6), checked against real fixture sessions with the
+    judge as reference. RED 6/6 (`ERR_MODULE_NOT_FOUND`).
+  - Simulator: posted "Meet at the shed at six" with "half a draft" in the composer; Edit to
+    "...seven" showed "edited" with the draft restored
+    (`docs/treehouse-mobile/evidence/m1b3_edited_draft_kept.png`); Delete showed 04's
+    confirmation and then "Message deleted · On relay"
+    (`docs/treehouse-mobile/evidence/m1b3_deleted_placeholder.png`). `second_participant.mts
+    --show neighbor` printed posted (4 ops), edited (5), `[Message deleted]` (6). A moderator
+    Remove in dark mode left `[Removed by moderator]` on both sides (8). Edit then Cancel left the
+    message unchanged. At the largest text size the sheet fits and the confirmation scrolls in its
+    card. Fixed during the run: confirmation text colour in dark mode, confirmation ScrollView
+    clipping.
+  - Limits: the other side is a Node script printing the app's own projection; the relay op
+    counts are the independent fact. Modal close fade not checked frame by frame.
+  - Regression: Copy is not in the sheet (needs `expo-clipboard` and a rebuild) and bubbles that
+    open a sheet are no longer selectable, so a moderator cannot copy any counted message.
+    Details left out (no details screen). Both go to M1b.5.
+- **M1b.4 Arrived later and unread by id (Simulator).**
+  - New `UnreadDivider` ("N unread", read as "N unread from here") and `ArrivedLateCaption`
+    ("↑ Arrived later", hidden from the screen reader because the bubble label says it).
+  - Projection (`thread_timeline.ts`, Core tested): new `ThreadTimeline.unmarked`, the counted
+    messages, own included, not in the read marker. The screen marks `unmarked`, so a post that
+    arrives while this phone is paused can be arrived later relative to its own posts. Own
+    history held with an empty read marker (reinstall, re-sync, role switch) still marks nothing
+    arrived later (guard test). `unreadIdsOf` removed from `thread_rows.ts`.
+  - `createOpenMarks` in `src/ui/thread_view.ts` holds the divider (taken once per open, above
+    the first unread id, count at open) and the arrived-later ids (only grow while open) from
+    the timeline seen before the read-marker write; both reset when another replica opens.
+    Decisions recorded in 03 and 04.
+  - Tests: `test/core/arrived_later.test.mts` (6), including a partition and heal over
+    `createFakeFeed` with `judgeTreehouseFrames` as the order reference. RED 5/6 (`unmarked`
+    missing, `createOpenMarks is not a function`, `thread.unreadDivider is not a function`, two
+    assertions); the empty-marker guard passed before and after. Earlier slices' tests were
+    adjusted for `unmarked` (`thread_screen`, `message_sheet`, `threads_tab`); no test was removed.
+  - Simulator: neighbor posted "Before the pause"; the app opened the thread; Pause sync; the app
+    posted "Mine one", "Mine two", "Mine three" (Offline · 3 waiting); the neighbor posted "While
+    you were paused" at the relay heads; Turn sync on. The row said "1 unread"
+    (`docs/treehouse-mobile/evidence/m1b4_counted.png`); the thread showed the "1 unread" divider
+    above the late post, between "Mine one" and "Mine two" with "↑ Arrived later", still there
+    after the read-marker write (`docs/treehouse-mobile/evidence/m1b4_divider_caption.png`). Dark
+    mode and accessibility-extra-large divider (`m1b4_03_dark.png`,
+    `m1b4_05_dark_axl_divider.png`, scratchpad).
+  - Not run: the caption at accessibility-extra-large; a late post arriving while the thread is
+    open (Core only). The list does not scroll to the divider.
+- **Integrated gate before review** (from `clients/treehouse-mobile`, Node 22): `tsc --noEmit` exit 0; Core
+  162/162 pass, 0 fail (includes the four slice gates); `scripts/check_treehouse_mobile_progress.sh`
+  on the staged change. No cross-slice fixes were needed.
+- **Not run:** VoiceOver itself (accessibility tree only), Android, lint (not configured), the
+  CI job, the public demo relay.
+- **Tier:** Simulator for M1b.1 to M1b.4 scenarios, with the Core-only parts named above.
+- **Independent review (one round).** Codex (run on `gpt-6.1-sol` high, the user's standing
+  model, not the 6.2 the workflow named) reported 5 findings and Antigravity Neon (medium) 9.
+  Three were reported by both (self-comparing second participant, missing Copy, removed-member
+  petname), counted once each: 11 distinct findings. Accepted 11, rejected 0. Fixed 8:
+  - a pause-save that fails is kept and retried by the next flush, including one still in flight
+    at unmount (`createDraftSaver`; new assertions in `thread_screen.test.mts`, RED against the
+    old saver: test 6 failed);
+  - `second_participant.mts --show` prints lattice-client's `observeTreehouse` posts, not the
+    app's projection, and PROGRESS no longer claims an independent cross-device check for M1b.3;
+  - the archived toggle is a list row heading the archived rows (`threadsTabRows`, Core test);
+  - the link pill shows before a Space is pulled; `Composer` is keyed by replica; the message
+    sheet ignores Android Back and VoiceOver escape while a delete or remove runs; People no
+    longer says "You (you)"; the `message_sheet.ts` comment no longer claims selectable text;
+    PROGRESS overclaims on accessibility sizes reworded.
+  Deferred 3 (Known gaps): whole-timeline read marking (M1b; viewport marking was implemented,
+  seen on the simulator to caption backlog rows "Arrived later" falsely, and withdrawn:
+  `docs/treehouse-mobile/evidence/m1b_review_viewport_marking_withdrawn.png`), Copy text
+  (M1b.5), removed-member petname (M2).
+  - Simulator after the fixes (iPhone 17 Pro, iOS 26.5, loopback relay, same dev build, servers
+    stopped by PID afterwards with no `pilot_node` left): 14 then 3 neighbor posts; the row said
+    "3 unread", the thread showed the "3 unread" divider with no false caption
+    (`docs/treehouse-mobile/evidence/m1b_review_divider_no_false_caption.png`), the row cleared
+    on return; People showed "You" alone; `--show` printed 17 live posts. The other fixes are
+    Core only.
+  - Gate after the fixes: `tsc --noEmit` exit 0; Core 163/163 pass, 0 fail (slice gates
+    threads_tab 10, thread_screen 8, message_sheet 6, arrived_later 6); progress check on the
+    staged change.
 
 ### 2026-11-25 · feat(treehouse-mobile): M1a.7 navigation, lifecycle and SQLite-backed session
 

@@ -52,8 +52,9 @@ screen re-renders only when its slice changes (in React: `useSyncExternalStore`)
 | `SessionStatus` | `phase`: `no_key` \| `key_only` \| `joining` \| `member` \| `removed` \| `identity_mismatch` \| `history_invalid` | custody, store, Space view |
 | `GroupSummary` | name, member count, my role, thread slots used and total, initialization | Space ops |
 | `LinkStatus` | overall state, per-route state, total waiting to send, last successful sync (local time) | feed state |
-| `ThreadList` | per thread: title, archived, last message preview and author, unread count, waiting count, link state | Space + Thread ops, read markers, feed state |
-| `ThreadTimeline` | ordered `MessageView[]`, archived flag, thread health (ops, bytes vs rollover thresholds) | Thread ops, store, feed state, local facts |
+| `ThreadList` | per thread: title, archived, last message preview and author (with the author's petname, M1b.1), unread count, waiting count, link state, route-not-connected mark (M1b.1) | Space + Thread ops, read markers, petnames, feed state |
+| `ThreadTimeline` | ordered `MessageView[]`, archived flag, unread count, `unmarked` ids to mark as shown (M1b.4), thread health (ops, bytes vs rollover thresholds) | Thread ops, store, feed state, local facts |
+| `Drafts` (M1b.2) | per held thread with a saved draft: its `Draft` (text, optional edit target) | LocalStore drafts |
 | `MessageView` | id, lineage ref, author contact, text, edited flag, removed (`by_author` \| `by_moderator` \| none), mine, `delivery`, `standing`, first-seen time, arrived-late flag | all three kinds |
 | `Roster` | per member: contact, role, is-root, relay access state if known, removal pending | Space ops, contacts |
 | `Abilities` | per command: `{allowed: true}` or `{allowed: false, reason}` | judge, custody |
@@ -279,6 +280,69 @@ Facts that constrain the UX (measured 2026-11-25 with the real encoders):
 | Network lost | feed reports `reconnecting`; commands still save locally |
 | Verify failure on launch | `history_invalid`; offer export of held frames; never auto-delete |
 | Key missing with history present | `identity_mismatch`; never auto-create a key |
+
+### Decisions recorded at M1a.7
+
+- **Composition root.** `src/composition.tsx` wires the real adapters and is the only file that
+  reaches `src/demo`. `index.ts` stays the entry (`main`): it installs the polyfills and then
+  imports `expo-router/entry`, the SDK 58 custom-entry form.
+- **Store files.** `LocalStore` setting `replicaStoreEpochs` holds one epoch per public key; the
+  replica store for epoch 0 keeps M1a.2's file name, and epoch N > 0 adds the suffix `_r<N>`
+  (`replicaStoreName`). A confirmed re-sync records epoch N+1 and opens that file; it never
+  touches the failed one.
+- **Carry-over.** The M0 snapshot outbox is carried into the epoch-0 store only. A carry-over that
+  fails its check blocks the session as `history_invalid` through `SessionPorts.blockedHistory`,
+  with reason `carry_over: ...`. Replicas that fail adoption are listed in
+  `AppSession.adoptFailed` and shown as a notice.
+- **Lifecycle.** `session.foreground()` and `background()` start and stop the feed and never write
+  the person's `syncEnabled` setting. Installing a new session calls the lifecycle `reconcile()`,
+  so a session that opened while the app was in the background does not keep its sockets.
+- **Export.** `exportSpaceFrames()` returns the D-31 JSON text or `ExportRefusal`
+  (`no_space`, `export_failed`); the app hands it to the share sheet (see 04, Group tab).
+- **Self-check.** The dev self-check reports `backend: sqlite | none`; no memory fallback exists.
+
+### Decisions recorded at M1b.1
+
+- `ThreadListItem.last.authorPetname` carries the author's petname, so screens only format names:
+  "You" for this phone's key, else the petname, else "Key check" and the fingerprint. The
+  transport realm is never shown (01), and the demo bootstrap no longer passes realm names.
+- `ThreadListItem.routeNotConnected` is 04's quiet mark: some route is live but this thread's
+  route is not live (or none is configured). With the link off or every route idle the pill
+  already says Offline, so no row is marked.
+- The read marker is written by the thread screen: while it is open it marks every id the
+  timeline reports as unread, so the Threads tab count clears on open. The unread divider (M1b.4)
+  must take the first unread id before that write. (Since M1b.4 it marks `unmarked`, which adds my
+  own messages; see below.)
+
+### Decisions recorded at M1b.2
+
+- `ReadModels.drafts` holds the saved draft per held thread. It is its own field, not part of
+  `ThreadTimeline`, so saving a draft never rebuilds a timeline. The thread screen's composer
+  keeps keystrokes in component state, saves through `saveDraft` after a 400 ms pause and when
+  the input loses focus or the screen closes, fills itself from the stored draft once (never over
+  typed text), and clears the draft after a post the session accepts. A save that fails is not
+  remembered as saved, so it is written again. Edit drafts (`editOf`) are not written yet (M1b.3).
+- `SessionStatus.reason` stays `string | null`; for `identity_mismatch` its values are listed as
+  `IDENTITY_MISMATCH_REASONS` (`key_unavailable`, `key_missing`, `outbox_other_key`), and the copy
+  is keyed by that closed list. The problem card says which in words and no longer prints the code
+  (an unknown reason falls back to the phase line). `history_invalid` keeps its reason code.
+- Message author names on the thread screen come from the `Roster`'s petnames through the same
+  "You", petname, key check rule as M1b.1.
+
+### Decisions recorded at M1b.4
+
+- The read marker holds every id the thread screen has shown, my own messages included (01: "the
+  set of message ids this phone has shown"). `ThreadTimeline.unmarked` lists the counted messages
+  (placeholders included, my not-counted posts excluded) whose ids are not in the marker, in
+  timeline order, and the screen marks exactly those. Without this, a post that arrives after I
+  posted while paused has only my own messages below it and would never be `arrivedLate`.
+- `arrivedLate` still needs an id in the read marker below it, so my own history held under an
+  empty marker (reinstall, re-sync into `_r<N>`, demo role switch) marks nothing arrived later.
+- Writing the marker clears `unread`, and with it `arrivedLate`, on the next timeline. So the
+  screen holds both from the timeline it saw before that write (`createOpenMarks` in
+  `src/ui/thread_view.ts`): the unread divider is taken once, above the first unread id with the
+  count on open, and does not move; the arrived-later ids only grow while the screen is open, so a
+  post arriving late while it is open is captioned too. Both reset when the screen opens again.
 
 ## Testing by tier
 

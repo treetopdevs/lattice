@@ -4,7 +4,7 @@ import { runSelfCheck } from "../../native/selfcheck";
 import type { SelfCheck } from "../../native/selfcheck";
 import { SessionBanner } from "../../ui/SessionBanner";
 import { useSession } from "../../ui/SessionProvider";
-import { linkPillLabel, recovery, refusalCopy, relay as relayCopy } from "../../ui/strings";
+import { linkPillLabel, recovery, refusalCopy, relay as relayCopy, threadsTab } from "../../ui/strings";
 import { HOSTING_SENTENCE, NO_RELAY_ACCESS, relayAccess } from "../../ui/trust_card";
 import { usePalette } from "../../ui/theme";
 import type { Palette } from "../../ui/theme";
@@ -103,7 +103,7 @@ export default function GroupScreen(): React.JSX.Element {
 
         <Card c={c} title="Key">
           <Text style={[styles.mono, { color: c.muted }]}>
-            {identity ? `${identity.realm} · ${identity.fingerprint} (${identity.source})` : "-"}
+            {identity ? `${threadsTab.keyCheck(identity.fingerprint)} (${identity.source})` : "-"}
           </Text>
         </Card>
 

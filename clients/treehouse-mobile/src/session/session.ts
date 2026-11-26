@@ -72,6 +72,11 @@ export interface ReadModels {
   audit: AuditView;
   /** One timeline per held Thread replica. An unchanged thread keeps the identical object. */
   timelines: Readonly<Record<string, ThreadTimeline>>;
+  /**
+   * The saved composer draft per held Thread (LocalStore, M1b.2), only where one exists. Separate from the
+   * timelines, so saving a draft never rebuilds a timeline.
+   */
+  drafts: Readonly<Record<string, Draft>>;
   /** shell-kit's raw feed state, for the adapters that still read it directly. */
   link: FeedState;
   /**
@@ -310,6 +315,12 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
       Object.keys(previous.timelines).length === threadViews.length &&
       threadViews.every((v) => previous.timelines[v.replica] === timelines[v.replica]);
 
+    const drafts: Record<string, Draft> = {};
+    for (const view of threadViews) {
+      const draft = local.draft(view.replica);
+      if (draft) drafts[view.replica] = draft;
+    }
+
     let waiting = 0;
     const spaceWaiting = new Set<string>();
     for (const r of held) {
@@ -338,7 +349,7 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
         waiting,
         lastSyncMs,
       }),
-      threads: projectThreadList({ space, timelines, profiles, feed: state }),
+      threads: projectThreadList({ space, timelines, profiles, feed: state, petname: (key) => local.petname(key) }),
       abilities: projectAbilities({ views: heldViews, myKey }),
       roster: projectRoster({
         space,
@@ -350,6 +361,7 @@ export function createTreehouseSession(ports: SessionPorts): TreehouseSession {
       }),
       audit: projectAuditView({ views: heldViews, feed: state }),
       timelines: sameTimelines ? previous!.timelines : timelines,
+      drafts,
       link: state,
       history,
     };

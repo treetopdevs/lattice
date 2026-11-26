@@ -7,7 +7,7 @@ import type { MobileIdentity } from "../native/custody";
 import { bindLifecycle } from "../native/lifecycle";
 import type { LifecycleBinding } from "../native/lifecycle";
 import type { TreehouseSession } from "../session/session";
-import { recovery, refusalCopy } from "./strings";
+import { recovery, refusalCopy, threadsTab } from "./strings";
 import { HISTORY_INVALID } from "./trust_card";
 import type { Palette } from "./theme";
 
@@ -21,8 +21,6 @@ export interface Connected {
   identity: MobileIdentity;
   /** Null when there is no group to open (a build without the demo has no routes yet). */
   app: AppSession | null;
-  /** Display names by public key that the bootstrap knows (the demo participants' realms). */
-  names: Readonly<Record<string, string>>;
   /** One dev line about the routes, or null. */
   detail: string | null;
 }
@@ -69,7 +67,7 @@ export interface SessionContextValue {
   error: string | null;
   notice: string | null;
   setError(text: string | null): void;
-  /** Me, a petname, a bootstrap name, or the key fingerprint. */
+  /** "You", a petname, or the key check (01: the transport realm is never shown). */
   displayName(pubkey: string, petname?: string | null): string;
   /** 04 recovery: save the held Space frames to a file (share sheet). Offered in every phase. */
   exportHeld(): Promise<void>;
@@ -88,7 +86,6 @@ export function SessionProvider({ boot, children }: { boot: Bootstrap; children:
   const lifecycleRef = useRef<LifecycleBinding | null>(null);
   const [app, setApp] = useState<AppSession | null>(null);
   const [identity, setIdentity] = useState<MobileIdentity | null>(null);
-  const [names, setNames] = useState<Readonly<Record<string, string>>>({});
   const [detail, setDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(boot.demo?.initialError ?? null);
@@ -141,7 +138,6 @@ export function SessionProvider({ boot, children }: { boot: Bootstrap; children:
           return;
         }
         setIdentity(connected.identity);
-        setNames(connected.names);
         setDetail(connected.detail);
         await install(connected.app);
       } catch (err) {
@@ -222,10 +218,10 @@ export function SessionProvider({ boot, children }: { boot: Bootstrap; children:
 
   const displayName = useCallback(
     (pubkey: string, petname?: string | null) => {
-      if (identity && pubkey === identity.publicKeyBase64) return identity.realm;
-      return petname || names[pubkey] || pubkeyFingerprint(pubkey);
+      if (identity && pubkey === identity.publicKeyBase64) return threadsTab.you;
+      return petname || threadsTab.keyCheck(pubkeyFingerprint(pubkey));
     },
-    [identity, names],
+    [identity],
   );
 
   const demo = useMemo<DemoControls | null>(

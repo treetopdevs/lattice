@@ -18,6 +18,10 @@ import type { ReplicaView } from "./replica_view";
 
 export type SessionPhase = "no_key" | "key_only" | "joining" | "member" | "removed" | "identity_mismatch" | "history_invalid";
 
+/** Why the phase is identity_mismatch (M1b.2: the problem screen says which). */
+export const IDENTITY_MISMATCH_REASONS = ["key_unavailable", "key_missing", "outbox_other_key"] as const;
+export type IdentityMismatchReason = (typeof IDENTITY_MISMATCH_REASONS)[number];
+
 export interface SessionStatus {
   phase: SessionPhase;
   /** history_invalid: the verify or open failure; identity_mismatch: why. Null otherwise. */
@@ -36,7 +40,7 @@ export interface SessionStatusInputs {
   held: readonly { replica: string; profile: HeldProfile | undefined }[];
 }
 
-const status = (phase: SessionPhase, reason: string | null = null, replica: string | null = null): SessionStatus => ({ phase, reason, replica });
+const status = (phase: SessionPhase, reason: IdentityMismatchReason | string | null = null, replica: string | null = null): SessionStatus => ({ phase, reason, replica });
 
 export function projectSessionStatus(inputs: SessionStatusInputs): SessionStatus {
   if (!inputs.history.ok) return status("history_invalid", inputs.history.reason, inputs.history.replica);

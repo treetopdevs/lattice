@@ -84,7 +84,7 @@ async function connect(origin: string, role: string): Promise<Connected> {
   if (!demo) {
     // No demo: this phone's own key only. No route is known, so nothing dials (no group yet).
     const own = await loadOrCreateDeviceIdentity(keyStore, "mobile-device");
-    return { identity: own, app: null, names: {}, detail: null };
+    return { identity: own, app: null, detail: null };
   }
   const { DEMO_ROLES } = demo.identities;
   const demoRole = (DEMO_ROLES as readonly string[]).includes(role) ? (role as (typeof DEMO_ROLES)[number]) : DEMO_ROLES[0];
@@ -95,7 +95,6 @@ async function connect(origin: string, role: string): Promise<Connected> {
   return {
     identity,
     app,
-    names: demo.manifest.demoRealmByPubkey(manifest),
     detail: `Mode: ${manifest.mode} · Routes: ${routesOf(manifest).length}${__DEV__ ? ` · store ${app.epoch}` : ""}`,
   };
 }

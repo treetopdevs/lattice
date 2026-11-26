@@ -18,6 +18,9 @@ import type { ReplicaView } from "./replica_view";
 //   other people's appear only in the audit view.
 // - Unread is "not mine, counted, not removed, id not in the read set". arrivedLate is positional: unread
 //   and sorted above a message that is in the read set. LocalStore holds read ids only, not a viewed time.
+// - M1b.4: the read marker is "ids this phone has shown" (01), so the screen marks my own messages too
+//   (`unmarked`). A late post that sorts above my own posts is then arrived later, while my own history
+//   held under an empty marker (reinstall, re-sync, role switch) still marks nothing arrived later.
 
 /** Applies only to my own messages (03, "Message state: two axes"). */
 export type Delivery = "saved" | "sending" | "on_relay" | "relay_refused" | "stopped";
@@ -66,6 +69,11 @@ export interface ThreadTimeline {
   messages: MessageView[];
   canPost: boolean;
   unreadCount: number;
+  /**
+   * Counted messages (mine included, placeholders included) whose ids are not in the read marker, in
+   * timeline order: what the thread screen marks as shown (M1b.4).
+   */
+  unmarked: string[];
   health: ThreadHealth;
 }
 
@@ -216,6 +224,7 @@ export function projectThreadTimeline(inputs: ThreadTimelineInputs): ThreadTimel
     messages,
     canPost: abilityOf(view, inputs.myKey, "post").allowed,
     unreadCount: messages.filter((m) => m.unread).length,
+    unmarked: messages.filter((m) => m.standing === "honored" && !readIds.has(m.id)).map((m) => m.id),
     health: { ops: frames.length, bytes },
   };
 }

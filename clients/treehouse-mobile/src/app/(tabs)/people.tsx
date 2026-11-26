@@ -20,8 +20,8 @@ export default function PeopleScreen(): React.JSX.Element {
         {(roster?.members ?? []).map((m) => (
           <View key={m.pubkey} style={[styles.row, { backgroundColor: c.surface, borderColor: c.border }]}>
             <Text style={[styles.title, { color: c.text }]}>
+              {/* displayName already says "You" for this phone's key, so no "(you)" suffix. */}
               {displayName(m.pubkey, m.petname)}
-              {m.isMe ? ` (${peopleCopy.you})` : ""}
             </Text>
             <Text style={{ color: c.muted }}>
               {[...m.roles, m.isRoot ? peopleCopy.startedGroup : null].filter(Boolean).join(" · ")}

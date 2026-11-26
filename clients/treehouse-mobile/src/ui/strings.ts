@@ -1,7 +1,7 @@
 import type { AnyCommandRefusal } from "../session/outcomes";
 import type { AbilityRefusal } from "../session/projections/abilities";
 import type { LinkPill } from "../session/projections/link_status";
-import type { SessionPhase } from "../session/projections/session_status";
+import type { IdentityMismatchReason, SessionPhase } from "../session/projections/session_status";
 import type { Delivery, Removed } from "../session/projections/thread_timeline";
 
 // All user-facing text (07 M1a.5), as typed constants. Pure: no react, react-native or expo, so Node tests
@@ -81,6 +81,38 @@ export const thread = {
   // 04 says "Archived. Read only."; 01 never uses "read", so the banner says what it means instead.
   archived: "Archived. No new messages.",
   slotsFull: "This group has used all 12 threads.",
+  /** Day separators (M1b.2), from first-seen time on this phone. */
+  today: "Today",
+  yesterday: "Yesterday",
+  /** The composer while a post is being signed and saved. */
+  posting: "Posting",
+  /** Screen-reader name for the message list. */
+  messages: (title: string | number) => `Messages in ${title}`,
+  composerLabel: "Message text",
+  /** The unread divider (M1b.4): above the first unread id when the thread opened, with the count then. */
+  unreadDivider: (count: number) => `${count} unread`,
+  unreadDividerLabel: (count: number) => `${count} unread from here`,
+} as const;
+
+/** The Threads tab (04, M1b.1). Every row and pill state has words, so colour is never the only signal. */
+export const threadsTab = {
+  /** This phone's own key, wherever a name is shown. */
+  you: "You",
+  /** A key with no name on this phone (01: "Key check" is the fingerprint). */
+  keyCheck: (fingerprint: string | number) => `Key check ${fingerprint}`,
+  preview: (name: string | number, text: string | number) => `${name}: ${text}`,
+  unread: (count: number) => `${count} unread`,
+  waiting: (count: number) => `${count} waiting to send`,
+  routeNotConnected: "Not connected",
+  archivedMark: "Archived",
+  archivedSection: (count: number) => `Archived threads (${count})`,
+  showArchived: "Show archived threads",
+  hideArchived: "Hide archived threads",
+  openThread: (title: string | number) => `Open ${title}`,
+  pillLabel: (label: string | number) => `Connection: ${label}`,
+  pillHint: "Shows the relay details on the Group tab",
+  /** The Group name row when no Space is held yet. */
+  noGroupName: "Group",
 } as const;
 
 /** Long-press sheet items and their confirmations (04). */
@@ -95,6 +127,18 @@ export const actions = {
     "Delete this message for the group? This can't be undone. Copies already synced stay in the group's signed history.",
   confirmRemove:
     "Remove this message for the group? This can't be undone. Copies already synced stay in the group's signed history.",
+  /** The confirmation's button for a moderator remove (04: same sentence, "Remove"). */
+  removeConfirm: "Remove",
+  cancel: "Cancel",
+  /** M1b.3: the sheet's title and the bubble's screen-reader action that opens it. */
+  sheetTitle: "Message",
+  openSheet: "Message actions",
+  openSheetHint: "Opens what you can do with this message",
+  /** The composer while it edits one of my messages. */
+  editing: "Editing message",
+  saveEdit: "Save",
+  savingEdit: "Saving",
+  editLabel: "Edited message text",
 } as const;
 
 /** Relay section of the Group tab (04). */
@@ -138,6 +182,16 @@ export const phaseCopy: Record<SessionPhase, string> = {
   removed: "You've been removed from this group. What's on this phone stays readable.",
   identity_mismatch: "The key on this phone doesn't match the saved group.",
   history_invalid: HISTORY_INVALID,
+};
+
+/**
+ * The identity_mismatch problem line by reason (04 Problem screens, M1b.2). Each says what is true on this
+ * phone; none offers a reset, since the app never replaces a key or deletes held history on its own.
+ */
+export const identityMismatchCopy: Record<IdentityMismatchReason, string> = {
+  key_unavailable: "This phone's key can't be opened right now. Unlock the phone and open Treehouse again.",
+  key_missing: "This phone holds a saved group but not the key that goes with it.",
+  outbox_other_key: phaseCopy.identity_mismatch,
 };
 
 /** Every refusal any command or ability can give. */

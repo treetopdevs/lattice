@@ -3,13 +3,15 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSession } from "./SessionProvider";
 import { usePalette } from "./theme";
 import { useReadModel } from "./useReadModel";
-import { linkPillLabel, phaseCopy, recovery, waitingSuffix } from "./strings";
+import { problemTitle } from "./problem_copy";
+import { linkPillLabel, recovery, threadsTab, waitingSuffix } from "./strings";
 import { NO_GROUP_YET, NO_RELAY_ACCESS, relayAccess } from "./trust_card";
 
 // The banners every placeholder screen shows (M1a.7): the link pill, the connect error and notice, and the
-// problem card with 04's recovery offers. Real layout is M1b.
+// problem card with 04's recovery offers. Real layout is M1b. `compact` (M1b.1) leaves out the pill row, for
+// screens that show the pill in their own header. The key is shown by its key check, never its realm (01).
 
-export function SessionBanner(): React.JSX.Element {
+export function SessionBanner({ compact = false }: { compact?: boolean }): React.JSX.Element {
   const c = usePalette();
   const { session, loading, error, notice, exportHeld, confirmResync, demo, identity } = useSession();
   const status = useReadModel((m) => m.status);
@@ -29,21 +31,24 @@ export function SessionBanner(): React.JSX.Element {
 
   return (
     <View>
-      <View style={[styles.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-        <Text testID="link-pill" style={[styles.pill, { color: linkStatus?.pill === "live" ? c.live : c.warn }]}>
-          {pill}
-        </Text>
-        <Text style={[styles.muted, { color: c.muted }]} numberOfLines={1}>
-          {identity ? `${identity.realm} · ${identity.fingerprint}` : ""}
-        </Text>
-      </View>
+      {compact ? null : (
+        <View style={[styles.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <Text testID="link-pill" style={[styles.pill, { color: linkStatus?.pill === "live" ? c.live : c.warn }]}>
+            {pill}
+          </Text>
+          <Text style={[styles.muted, { color: c.muted }]} numberOfLines={1}>
+            {identity ? threadsTab.keyCheck(identity.fingerprint) : ""}
+          </Text>
+        </View>
+      )}
       {access === "no_relay_access" ? <Text testID="no-relay-access" style={[styles.banner, { backgroundColor: c.error }]}>{NO_RELAY_ACCESS}</Text> : null}
       {error && access !== "no_relay_access" ? <Text style={[styles.banner, { backgroundColor: c.error }]}>{error}</Text> : null}
       {notice ? <Text style={[styles.banner, { backgroundColor: c.warn }]}>{notice}</Text> : null}
       {problem && status ? (
         <View testID="problem" style={[styles.card, { backgroundColor: c.surface, borderColor: c.error }]}>
-          <Text style={[styles.title, { color: c.text }]}>{phaseCopy[status.phase]}</Text>
-          {status.reason ? (
+          <Text style={[styles.title, { color: c.text }]}>{problemTitle(status)}</Text>
+          {/* identity_mismatch says its reason in words (M1b.2); history_invalid keeps its reason code (04). */}
+          {status.reason && phase === "history_invalid" ? (
             <Text style={[styles.muted, { color: c.muted }]}>
               {status.reason}
               {status.replica ? ` · ${status.replica}` : ""}

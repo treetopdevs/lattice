@@ -112,6 +112,16 @@ Entry: People → Invite. Hidden unless `Abilities.issue_invitation` is allowed.
 | Slots full | New thread disabled: "This group has used all 12 threads." |
 | Thread route not connected | a quiet mark on that row; the thread still opens |
 
+M1b.1 as built: the Group name and the pill are the tab's own header (it grows with dynamic
+type); the pill opens the Group tab, where the Relay section lives, until a Relay screen exists.
+Each row says its states in words (for example "2 unread", "1 waiting to send", "Not connected"),
+and the screen reader hears the whole row. Archived threads sit behind a collapsed "Archived
+threads (N)" toggle row in the same list, after the active rows and heading the archived
+rows while open (review fix; it was a footer below them). The pill shows from the first
+render, before a Space is pulled, so Relay details are always one tap away. New thread and the slots-full line are not shown in M1:
+creating a thread needs G-2 and per-Thread keys, so `create_thread` is never allowed yet.
+Authors are named "You", by petname, or by key check; never by realm.
+
 ## Thread screen
 
 **Reads** `ThreadTimeline`, `Abilities`, draft. **Commands** post, edit, delete, remove (as
@@ -147,6 +157,44 @@ Long-press sheet (items appear only when allowed):
 | Relay did not accept | warning mark; details give the relay's reason; "Try again" runs sync |
 | Thread near rollover threshold | moderator sees a one-line prompt to continue in a new thread |
 | Concurrent edit lost | the winning text is shown; no error, since both edits are valid history |
+
+M1b.2 as built: an inverted, virtualized list (newest at the bottom) of bubbles in canonical
+order. The author's name heads each run of consecutive messages from one key. A day separator
+("Today", "Yesterday", else a short local date) goes before a message whose first-seen day differs
+from the current one along canonical order; a message with no first-seen time stays in the current
+day, so a day can appear twice. Each of my messages shows its mark as a glyph and words: ◷ "Saved
+on this phone" or "Sending", ✓ "On relay", ⚠ "Relay did not accept", and ⚠ "Relay is not
+accepting messages" for a stopped submit route. Each bubble carries one accessibility label that
+says author, text and every state (seen top to bottom in the simulator's accessibility tree;
+VoiceOver itself not run); the mark's own text node is hidden from screen readers. The composer sits on the keyboard (offset from the real stack header
+height and the home-indicator inset). The long-press sheet, unread divider, cannot-post bar and
+archived banner come with M1b.3 to M1b.6; until then a one-line notice replaces the composer.
+
+M1b.3 as built: a long-press on a bubble opens the sheet only when it has an item; the items come
+from the `Abilities` read model (`author_edit`, `author_tombstone`, `moderator_tombstone`, which
+already carry the archive rule) and the message's own facts (mine, counted, not removed), in
+`src/ui/message_sheet.ts`. A removed or not-counted message offers nothing; a moderator's own
+message offers Delete, not Remove. The sheet and its confirmation are one RN `Modal` whose content
+switches, so the stack header is covered and iOS never presents a second modal mid-dismiss. The
+sheet holds a message id and is re-read from the timeline, so it closes when the message is
+removed elsewhere or the thread is archived. Edit puts the message's text in the composer under an
+"Editing message" bar with Cancel and Save; the saved draft is flushed first and comes back
+unchanged after Save or Cancel, and edit keystrokes are never saved as a draft. The bubble declares
+the sheet as its accessibility action ("Message actions", `activate` on iOS, `longpress` on
+Android) with a hint, and the backdrop is hidden from screen readers; VoiceOver itself was not run.
+Not yet in the sheet: Copy (needs a
+clipboard module the dev build lacks; bubbles without sheet items stay selectable, bubbles with
+them are not, because iOS would show the selection callout over the sheet) and Details (no Message
+details screen yet). At the largest text size the confirmation sentence scrolls inside the card.
+
+M1b.4 as built: on open, a divider with its count ("3 unread", read out as "3 unread from here")
+sits above the first unread id, after that message's day separator, and ends an author run. It
+stays where it was while the screen is open, although the screen marks what it shows at once; it
+is gone on the next open. A message the timeline calls arrived later carries "↑ Arrived later" as
+its own caption, in words, and the bubble's screen-reader label says it too; the caption stays
+while the screen is open. The Threads tab counts an arrived-later message as unread like any
+other. The list does not scroll to the divider: with more unread than fit, the divider can sit
+above the first screen.
 
 **Message details.** Author name and key check, first-seen time labelled as "first on this
 phone", delivery, standing, edit history count, and "Verify" which opens the op in Verify.
@@ -193,15 +241,22 @@ ops, 8 MiB), Archive (moderator), Continue in a new thread (moderator and admin 
 - **Verify & audit.** Per replica: op count, frontier, relay generation, matches-relay, every
   grant with its state (usable, revoked, lapsed), and every op that is not counted with its
   reason. Read-only. This is where protocol words are allowed.
-- **Export.** Save the held Space frames to a file (the existing D-31 export shape).
+- **Export.** Save the held Space frames to a file (the existing D-31 export shape). As built
+  (M1a.7) this is the system share sheet with the D-31 JSON text; on iOS "Save to Files" writes
+  the file. A refusal names `no_space` or `export_failed` with one line of copy.
 
 ## Problem screens
 
 | `SessionStatus` | Says | Offers |
 |---|---|---|
-| `identity_mismatch` | "The key on this phone doesn't match the saved group." | Export, contact admin. Never "reset". |
+| `identity_mismatch` | by reason (M1b.2): `outbox_other_key` "The key on this phone doesn't match the saved group."; `key_unavailable` "This phone's key can't be opened right now. Unlock the phone and open Treehouse again."; `key_missing` "This phone holds a saved group but not the key that goes with it." | Export, contact admin. Never "reset". |
 | `history_invalid` | "Saved group data failed its check." with the reason code | Export, re-sync from relay into a fresh store after confirmation |
 | `removed` | as above | Export |
+
+As built at M1a.7, the re-sync confirmation says that posts in the failed store that never
+reached the relay are not sent and are not in the saved file, and a failed carry-over of the
+earlier version's data is shown as `history_invalid` with reason `carry_over: ...`; that data
+stays on the phone untouched.
 
 ## Accessibility and platform notes
 
