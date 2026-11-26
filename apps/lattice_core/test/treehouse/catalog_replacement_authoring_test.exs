@@ -1125,7 +1125,8 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     assert {:error, :invalid_catalog_transition} = prepare.(full)
     assert {:error, :control_history_limit} = prepare.([first | full])
 
-    # A prepared attempt whose evidence moved over budget is cancelled before any signature.
+    # Evidence changed after preparation never signs; author/4 reports any failed re-derivation
+    # as stale_verified_state, so this pins the cancellation, not the budget reason.
     attempt = prepared(f)
     moved = %{attempt | request: %{attempt.request | catalogs: [first, over]}}
 
