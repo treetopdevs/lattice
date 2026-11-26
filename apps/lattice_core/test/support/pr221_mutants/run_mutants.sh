@@ -24,7 +24,8 @@
 #   m8_floor_no_memo                 NOT RUN (stopped mid-run; over the 10 minute budget)
 #   m9_entry_facts_ignored           NOT RUN
 #   m10_entry_quarantine_incomplete  NOT RUN
-#   m11_step4_rejudged_on_union      KILLED (row 321; runs 60, seed 1, R389_MUTANT_TESTS set to
+#   m11_step4_rejudged_on_union      KILLED (row 321, on head 664ef239d over lib 915cba5bc, not
+#                                    d60d50c45; runs 60, seed 1, R389_MUTANT_TESTS set to
 #                                    catalog_resolution_property_test.exs only, about 5 minutes):
 #                                    M (its d279 check names the accepted candidate as raw
 #                                    evidence), M exercise, S1, S1F and S2
