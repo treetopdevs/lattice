@@ -201,6 +201,8 @@ defmodule Township.AuditReportTest do
     ReportTask.run(["--dir", dir, "--out", out])
     assert File.exists?(out)
     assert File.read!(out) =~ "VERIFIED"
+    assert File.read!(out) == elem(AuditReport.render(dir), 1)
+    assert File.ls!(Path.dirname(out)) == ["report.html"]
     assert_received {:mix_shell, :info, [msg]}
     assert msg =~ "(VERIFIED)"
     assert :ok = AuditBundle.verify(dir)

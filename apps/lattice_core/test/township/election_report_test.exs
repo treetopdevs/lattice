@@ -267,6 +267,7 @@ defmodule Township.ElectionReportTest do
       assert html =~ ctx.projection.election_id
       assert html =~ Report.honesty_sentence()
       refute html =~ "Close evidence"
+      assert File.ls!(Path.dirname(out)) == ["report.html"]
       assert_received {:mix_shell, :info, ["Election evidence report written: " <> ^out]}
       assert_received {:mix_shell, :info, ["projection verified by offline replay"]}
 

@@ -8,6 +8,10 @@ defmodule Mix.Tasks.Lattice.Township.Report do
   inside the bundle directory is refused, since it would corrupt the bundle's exact
   verifiable file set. The file is always written; a bundle that fails verification
   gets a NOT VERIFIED report and a non-zero exit.
+
+  The report is written to a new temporary file in the destination directory and
+  renamed over `--out` (`Township.ReportFile`), so a link swapped in at `--out` after
+  the containment check is replaced and never written through.
   """
 
   use Mix.Task
@@ -100,16 +104,26 @@ defmodule Mix.Tasks.Lattice.Township.Report do
 
     case AuditReport.render(dir) do
       {:ok, html, :verified} ->
-        File.write!(out, html)
+        write_report!(out, html)
         Mix.shell().info("Township audit report written: #{out} (VERIFIED)")
 
       {:failed, html, errors} ->
-        File.write!(out, html)
+        write_report!(out, html)
 
         Mix.raise(
           "Township audit bundle verification failed (report written to #{out}):\n- " <>
             Enum.join(errors, "\n- ")
         )
+    end
+  end
+
+  defp write_report!(out, html) do
+    case Township.ReportFile.write(out, html) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Mix.raise("could not write report #{out}: #{:file.format_error(reason)}")
     end
   end
 end
