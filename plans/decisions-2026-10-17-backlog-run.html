@@ -4808,6 +4808,30 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The last round found a P2 and no later round confirmed the fix; only local tests confirm it. The PR says so. The slice is tests only, and no counterexample to the resolver was found.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
 </dl></section>
+<section id="d964"><h2><span>D-964</span> Row 321: hosted bot findings on the checker</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>), hosted bot review</dd>
+<dt>Decision</dt><dd>CodeRabbit (two Minor) and the Codex bot (one P2) each found a shape the checker let through: a refusal block that does not name the decision head, <code>recovery_incomplete</code> on a refused head, and a settled id that disappears from a later full graph's verdicts while still held. All three were right against the resolver's own derivation and were fixed in <code>79dfceba7</code> and <code>88122d2c2</code>, each with a case that fails on the old checker. Part graphs and evidence loss stay excluded from the disappearing-id rule.</dd>
+<dt>Reason</dt><dd>The real-history properties stayed green after each tightening, so the resolver does not produce these shapes. A probe during the fix found that with evidence loss the existing check reports an accepted replacement returning to pending; property M never generates evidence loss, so this is filed as row 598 and not judged here.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d965"><h2><span>D-965</span> Rows 401 and 402: the election section adds no new source</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 401 and 402 slice (branch claude/401-402-audit-report-sections, PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a>)</dd>
+<dt>Decision</dt><dd>Both rows ship in one PR with no bundle-format change. The election section lists the <code>link_election</code> commands in the verified log with author and authority verdict, embeds the existing security manifest through one shared function on <code>Township.Election.Report</code>, and says the v1 audit bundle carries no board, spec, projection or close evidence. It computes no election id, phase or result. No <code>--election-bundle</code> option is added.</dd>
+<dt>Reason</dt><dd>The audit bundle holds only the Matter log. Showing more would need a bundle-format change or a second input, which are filed as rows 599 and 600. Every manifest scope stays not claimed.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d966"><h2><span>D-966</span> Row 402: wording of the chronology, beacon and lease sections</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 401 and 402 slice (branch claude/401-402-audit-report-sections, PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a>)</dd>
+<dt>Decision</dt><dd>The chronology shows holder, acquisition op and delegation only, with no tick, acquisition kind or succession policy, and says it does not establish elapsed time or inactivity. The beacon section says the epoch is global to the log and that a beacon is a logical tick accepted under the replica's beacon policy, not a clock; it does not say who signed a beacon. Leases show both the live-path expiry flag and the read-model status. A vacant role shows as "none (vacant)"; an unknown key elsewhere shows as "unknown key".</dd>
+<dt>Reason</dt><dd>Ticks are author-asserted and untrusted (ADR 0004). "Root-signed" was dropped from the beacon caption because witnessed beacons exist. <code>ReadModel</code>, <code>AuditBundle</code>, <code>audit.json</code> and the Authority modules are unchanged; row 501 narrows to its <code>audit.json</code> half.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d967"><h2><span>D-967</span> Rows 401 and 402 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 401 and 402 slice (branch claude/401-402-audit-report-sections, PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high and Gemini 4 Neon medium both asked for changes: one P2 (a vacant role shown as "unknown key") and three P3. All fixed. Round 2: Gemini PASS, Codex one P3 (pin a digest of the whole document), declined because exact-string tests already cover byte stability.</dd>
+<dt>Reason</dt><dd>The last round has no P1 or P2. The tracked demo bundle has no beacon, lease or election link, so the filled tables are shown only by Sim-built tests; row 601 asks for a fixture bundle.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
