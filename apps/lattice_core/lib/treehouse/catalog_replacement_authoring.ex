@@ -29,18 +29,24 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   not touch retained-client trust, which waits on 4c. Catalog entry facts are judged by the
   resolver against the frozen Space log and the request's `replica_logs` (row 390, repair (c));
   CatalogTrust's own entry-proof refusals and frozen diagnostics stay with 4c (row 354).
+
+  Retained evidence over CatalogTrust's artifact budgets refuses as `control_history_limit`
+  before the resolver runs (rows 355, 525): more than 1,024 artifacts, one artifact's JSON over
+  131,072 bytes, or more than 16 MiB in total (`Treehouse.CatalogArtifactBudget`). Sizes are the
+  compact canonical JSON of each distinct envelope, the length the operator distribution emits.
+  Non-claim: that is a lower bound, so a copy padded with whitespace by a distributor may still
+  exceed a verifier's budget; the retained-client sidecar budget is not checked here.
   """
 
   alias Lattice.{Authority, Dag, Identity, Log, Op}
   alias Lattice.Carrier.Wire
-  alias Treehouse.{CatalogBindingGraph, CatalogBootstrap, CatalogCutoff}
+  alias Treehouse.{CatalogArtifactBudget, CatalogBindingGraph, CatalogBootstrap, CatalogCutoff}
   alias Treehouse.{CatalogReplacementAuthority, MemberContinuityAuthoring, Space}
   alias Treehouse.TransportCatalog
 
   @request_fields ~w(author nonce parents prior_catalogs generation new_catalog_key new_service_id new_service_key new_origin entries replica_logs rotations catalogs)a
   @attempt_fields ~w(attempt_id request claim claim_bytes catalog_possession_bytes service_possession_bytes author cap frozen_frontier)a
   @zero <<0::512>>
-  @max_artifacts 1_024
 
   @spec prepare(Log.t(), map(), map()) :: {:ok, map()} | {:error, atom()}
   def prepare(log, request, journal) do
@@ -293,6 +299,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     with :ok <- artifact_budget(request),
          {:ok, rotations} <- rotation_envelopes(log, request.rotations, bootstrap),
          {:ok, catalogs} <- catalog_envelopes(log, request.catalogs, bootstrap),
+         :ok <- byte_budget(rotations, catalogs),
          {:ok, graph} <- graph(log, bootstrap, {rotations, catalogs, request.replica_logs}, claim),
          :ok <- retained_refusals(graph) do
       CatalogBindingGraph.cover_claim(graph, claim, request.entries)
@@ -358,13 +365,22 @@ defmodule Treehouse.CatalogReplacementAuthoring do
     end
   end
 
-  # `CatalogTrust` refuses more than @max_artifacts retained artifacts as
-  # `control_history_limit`. Its per-artifact and total JSON byte budgets are not mirrored
-  # here (row 355): the preflight receives normalized maps, not the artifact JSON.
+  # `CatalogTrust` refuses retained evidence as `control_history_limit` over its artifact count,
+  # per-artifact JSON bytes or total JSON bytes (rows 355, 525). The raw count is checked first,
+  # before any normalization; the byte budgets are checked on the de-duplicated envelopes (the
+  # verifier stores one record per id), measured as compact canonical JSON. That is a lower
+  # bound: a distributor that pads the JSON can still exceed a verifier's budget.
   defp artifact_budget(request) do
-    if length(request.catalogs) + length(request.rotations) > @max_artifacts,
-      do: {:error, :control_history_limit},
-      else: :ok
+    if length(request.catalogs) + length(request.rotations) >
+         CatalogArtifactBudget.max_artifacts(),
+       do: {:error, :control_history_limit},
+       else: :ok
+  end
+
+  defp byte_budget(rotations, catalogs) do
+    (Map.values(rotations) ++ Map.values(catalogs))
+    |> Enum.map(&CatalogArtifactBudget.artifact_json_bytes/1)
+    |> CatalogArtifactBudget.check()
   end
 
   defp rotation_envelopes(log, rotations, bootstrap) do

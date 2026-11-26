@@ -1054,6 +1054,87 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
              )
   end
 
+  # Rows 355, 525: a catalog of exactly `target` compact JSON bytes. The last entry's replica
+  # carries `label` plus padding (base64 moves the length in steps of 4) and the revision's
+  # digit count supplies the remainder; padding the last entry keeps the replica order.
+  defp sized_catalog(f, label, target) do
+    {revision, pad} = size_for(f, label, target)
+    signed_padded(f, label, revision, pad)
+  end
+
+  defp size_for(f, label, target) do
+    Enum.find_value([1, 10, 100, 1_000], fn revision ->
+      estimate = div((target - budget_bytes(padded(f, label, revision, 0))) * 3, 4) - 6
+
+      pad =
+        Stream.iterate(max(estimate, 0), &(&1 + 1))
+        |> Enum.find(&(budget_bytes(padded(f, label, revision, &1)) >= target))
+
+      if budget_bytes(padded(f, label, revision, pad)) == target, do: {revision, pad}
+    end)
+  end
+
+  defp signed_padded(f, label, revision, pad) do
+    %{catalog: catalog} = padded(f, label, revision, pad)
+
+    %{
+      catalog: catalog,
+      signature: Identity.sign(f.catalog, TransportCatalog.catalog_bytes(catalog))
+    }
+  end
+
+  defp padded(f, label, revision, pad) do
+    {last, rest} = f |> bound_entries() |> List.pop_at(-1)
+    replica = last.replica <> label <> String.duplicate("x", pad)
+
+    %{
+      catalog(
+        f,
+        f.bootstrap.id,
+        revision,
+        id("budget-previous"),
+        rest ++ [%{last | replica: replica}]
+      )
+      | signature: <<0::512>>
+    }
+  end
+
+  defp budget_bytes(envelope), do: Treehouse.CatalogArtifactBudget.artifact_json_bytes(envelope)
+
+  test "retained evidence over CatalogTrust's JSON byte budgets is refused before signing (rows 355, 525)" do
+    f = fixture()
+    first = catalog(f, f.bootstrap.id, 0, nil)
+    prepare = &Space.prepare_replace_catalog(f.space_log, request(f, %{catalogs: &1}), %{})
+
+    over = sized_catalog(f, "-over", 131_073)
+    exact = sized_catalog(f, "-exact", 131_072)
+    assert budget_bytes(over) == 131_073 and budget_bytes(exact) == 131_072
+    assert {:error, :control_history_limit} = prepare.([first, over])
+    # At the limit the budget passes and the resolver judges the padded catalog instead.
+    assert {:error, :invalid_catalog_transition} = prepare.([first, exact])
+
+    # 128 distinct catalogs at the per-artifact limit total exactly 16 MiB.
+    {revision, pad} = size_for(f, "-000", 131_072)
+
+    full =
+      for i <- 0..127,
+          do: signed_padded(f, "-" <> String.pad_leading("#{i}", 3, "0"), revision, pad)
+
+    assert Enum.sum(Enum.map(full, &budget_bytes/1)) == 16 * 1_024 * 1_024
+    assert length(Enum.uniq_by(full, &TransportCatalog.catalog_id(&1.catalog))) == 128
+    assert {:error, :invalid_catalog_transition} = prepare.(full)
+    assert {:error, :control_history_limit} = prepare.([first | full])
+
+    # A prepared attempt whose evidence moved over budget is cancelled before any signature.
+    attempt = prepared(f)
+    moved = %{attempt | request: %{attempt.request | catalogs: [first, over]}}
+
+    assert {:error, :stale_verified_state, %{status: :cancelled}} =
+             Space.author_replace_catalog(op_signer(f), f.space_log, moved, possess(f, moved))
+
+    refute_received {:signed, :op}
+  end
+
   # Review round 7: plan 316 §3 step 4 acquisition predicates and the current profile pin.
   test "an acquisition Stage B would refuse is never signed over" do
     f = fixture()
