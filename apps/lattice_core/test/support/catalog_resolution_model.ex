@@ -525,6 +525,7 @@ defmodule Treehouse.CatalogResolutionModel do
   replacement candidate or catalog only moves forward. Graphs read are every `{:ok, g}` step and,
   for a `trust_pending` step, its recomputed complete part (`complete_part/2`). In a part graph
   a `:pending` verdict is skipped (the part may pend a descendant of an artifact it dropped).
+  A full graph must also carry a verdict for every settled id the step's union still holds.
 
     * d1: an id whose verdict was ever `:node` or `:ok` keeps that verdict in every later graph
       that holds it, is never raw evidence, and is never refused with an intrinsic reason or a
@@ -624,6 +625,19 @@ defmodule Treehouse.CatalogResolutionModel do
           into: %{},
           do: {id, v}
 
+    # A full graph judges every held artifact, so a settled id still delivered must keep a
+    # verdict (a part graph drops pending ids and their dependents; evidence loss drops a
+    # catalog from the union, so it is no longer held).
+    missing =
+      for {id, prev} <- seen.verdict,
+          kind == :full,
+          prev != :pending,
+          held?(step.delivered, id),
+          not Map.has_key?(verdicts, id),
+          do:
+            {:d279,
+             "#{label(world, id)} #{inspect(prev)} has no verdict while held at #{step.label}"}
+
     {v, seen} =
       Enum.reduce(verdicts, {[], seen}, fn {id, now}, {v, seen} ->
         {v ++ verdict_moves(world, step, id, Map.get(seen.verdict, id), now),
@@ -636,8 +650,13 @@ defmodule Treehouse.CatalogResolutionModel do
           MapSet.union(seen.accepted, MapSet.new(for {id, x} <- verdicts, accepting?(x), do: id))
     }
 
-    {v ++ d1_raw_refused(world, step, g, seen), seen}
+    {missing ++ v ++ d1_raw_refused(world, step, g, seen), seen}
   end
+
+  defp held?(%{} = ev, id),
+    do: Enum.any?([:rotations, :catalogs, :ops], &Map.has_key?(Map.get(ev, &1, %{}), id))
+
+  defp held?(_ev, _id), do: false
 
   # The verdict to remember: the first non-pending one (a later drift between refusing reasons
   # keeps the first, so `d2` and `d1` read the earliest fixed verdict).

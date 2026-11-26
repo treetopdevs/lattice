@@ -475,6 +475,14 @@ defmodule Treehouse.CatalogResolutionPropertyTest do
     pending = step.("s1", graph.(%{verdicts: %{"r" => :pending}}))
     assert [{:d279, _}] = M.check_d279(world, [ok, pending])
 
+    # A settled id still held whose verdict disappears from a later full graph; once the union
+    # no longer holds it (evidence loss), its absence is neutral.
+    held = %{rotations: %{"r" => nil}, catalogs: %{}, ops: %{}}
+    omitted = %{step.("s1", graph.(%{verdicts: %{}})) | delivered: held}
+    assert [{:d279, _}] = M.check_d279(world, [ok, omitted])
+    assert [{:d279, _}] = M.check_d279(world, [bad, omitted])
+    assert M.check_d279(world, [ok, %{omitted | delivered: %{held | rotations: %{}}}]) == []
+
     # A union-derived catalog_authority_refused on a refused node is neutral.
     union =
       step.(
