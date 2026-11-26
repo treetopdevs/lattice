@@ -13,6 +13,13 @@ defmodule LatticeCarrierServer.Operator.CatalogArtifactBudgetCanonicalTest do
             __DIR__
           )
 
+  # Wire.decode_value/1 admits only existing atoms; loading TransportCatalog creates the
+  # envelope field atoms, so the vector decodes whichever test runs first.
+  setup_all do
+    Code.ensure_loaded!(Treehouse.TransportCatalog)
+    :ok
+  end
+
   test "PublicHistory.canonical of each vector envelope measures its recorded bytes" do
     envelopes = (@vector |> File.read!() |> Jason.decode!())["envelopes"]
     assert length(envelopes) == 3

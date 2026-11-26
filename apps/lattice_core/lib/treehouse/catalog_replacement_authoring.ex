@@ -378,9 +378,7 @@ defmodule Treehouse.CatalogReplacementAuthoring do
   end
 
   defp byte_budget(rotations, catalogs) do
-    (Map.values(rotations) ++ Map.values(catalogs))
-    |> Enum.map(&CatalogArtifactBudget.artifact_json_bytes/1)
-    |> CatalogArtifactBudget.check()
+    CatalogArtifactBudget.check_envelopes(Map.values(rotations) ++ Map.values(catalogs))
   end
 
   defp rotation_envelopes(log, rotations, bootstrap) do

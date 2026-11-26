@@ -8,7 +8,13 @@ defmodule Treehouse.CatalogArtifactBudgetTest do
 
   @client Path.expand("../../../../clients/lattice-client", __DIR__)
   @vector Path.join(@client, "test/vectors/catalog/artifact_budget_v1.json")
-  @catalog_trust Path.expand("../../lib/treehouse/catalog_trust.ex", __DIR__)
+
+  # Wire.decode_value/1 admits only existing atoms; loading TransportCatalog creates the
+  # envelope field atoms, so the vector decodes whichever test runs first.
+  setup_all do
+    Code.ensure_loaded!(Treehouse.TransportCatalog)
+    :ok
+  end
 
   test "BEAM-written artifact_budget_v1.json equals regeneration" do
     assert File.read!(@vector) ==
@@ -66,16 +72,48 @@ defmodule Treehouse.CatalogArtifactBudgetTest do
     assert {:error, :malformed_catalog} = TransportCatalog.decode_catalog_json(exact)
   end
 
-  test "CatalogTrust's budget literals are the mirrored ones" do
-    source = File.read!(@catalog_trust)
-    message = "CatalogTrust budgets changed: update Treehouse.CatalogArtifactBudget"
+  test "a size list fails closed unless every size is a non-negative integer" do
+    max = CatalogArtifactBudget.max_artifact_bytes()
+    full = List.duplicate(max, 128)
 
-    for literal <- [
-          "@max_artifacts 1_024",
-          "@max_artifact_bytes 131_072",
-          "@max_total_bytes 16 * 1_024 * 1_024"
+    for sizes <- [
+          [:bad],
+          [1.0],
+          [-1],
+          [-max | full],
+          full ++ [nil],
+          :not_a_list
         ] do
-      assert String.contains?(source, literal), message
+      assert CatalogArtifactBudget.check(sizes) == {:error, :control_history_limit},
+             inspect(sizes, limit: 3)
     end
+
+    assert CatalogArtifactBudget.check(full) == :ok
+  end
+
+  test "an envelope that does not normalize measures over the per-artifact limit" do
+    over = CatalogArtifactBudget.max_artifact_bytes() + 1
+    vector = @vector |> File.read!() |> Jason.decode!()
+
+    [catalog, rotation | _] =
+      for e <- vector["envelopes"], do: elem(Wire.decode_value(e["term"]), 1)
+
+    for envelope <- [
+          %{catalog: nil},
+          %{catalog: 1.0},
+          %{catalog: catalog.catalog, signature: make_ref()},
+          %{catalog | signature: <<0::8>>},
+          Map.put(catalog, :extra, 1),
+          %{rotation | old_signature: self()},
+          %{rotation | rotation: %{rotation.rotation | version: -1}},
+          nil
+        ] do
+      assert CatalogArtifactBudget.artifact_json_bytes(envelope) == over
+    end
+
+    assert CatalogArtifactBudget.check_envelopes([%{catalog: nil}]) ==
+             {:error, :control_history_limit}
+
+    assert CatalogArtifactBudget.check_envelopes([catalog, rotation]) == :ok
   end
 end

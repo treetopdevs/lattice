@@ -1125,6 +1125,14 @@ defmodule Treehouse.CatalogReplacementAuthoringTest do
     assert {:error, :invalid_catalog_transition} = prepare.(full)
     assert {:error, :control_history_limit} = prepare.([first | full])
 
+    # Retained rotations count too: one valid rotation takes the 16 MiB of catalogs over.
+    next = Identity.from_seed("catalog", "r525-budget-rotation")
+    {_t, rotated} = rotation(f, f.bootstrap.id, 1, f.catalog, next, "budget")
+    with_rotation = request(f, %{catalogs: full, rotations: [rotated]})
+
+    assert {:error, :control_history_limit} =
+             Space.prepare_replace_catalog(f.space_log, with_rotation, %{})
+
     # Evidence changed after preparation never signs; author/4 reports any failed re-derivation
     # as stale_verified_state, so this pins the cancellation, not the budget reason.
     attempt = prepared(f)
