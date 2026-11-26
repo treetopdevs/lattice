@@ -1,8 +1,9 @@
 import type { AnyCommandRefusal } from "../session/outcomes";
 import type { AbilityRefusal } from "../session/projections/abilities";
-import type { LinkPill } from "../session/projections/link_status";
+import type { LinkPill, LinkRouteStatus } from "../session/projections/link_status";
 import type { IdentityMismatchReason, SessionPhase } from "../session/projections/session_status";
-import type { Delivery, Removed } from "../session/projections/thread_timeline";
+import type { GrantState } from "../session/projections/audit_view";
+import type { Delivery, PostRefusalReason, Removed } from "../session/projections/thread_timeline";
 
 // All user-facing text (07 M1a.5), as typed constants. Pure: no react, react-native or expo, so Node tests
 // scan the same values the screens render. Every Record below is keyed by a closed union from the session,
@@ -60,6 +61,11 @@ export const message = {
   notCounted: "Not counted",
   firstSeen: "First on this phone",
   copyText: "Copy text",
+  /** M1b.5: the not-counted bubble's Copy text, as a button and as the bubble's screen-reader action. */
+  copyTextHint: "Copies the text so you can post it again",
+  /** Said by the screen reader after a copy. */
+  copied: "Copied",
+  copyFailed: "Could not copy the text. Try again.",
   tryAgain: "Try again",
 } as const;
 
@@ -115,6 +121,29 @@ export const threadsTab = {
   noGroupName: "Group",
 } as const;
 
+/**
+ * Thread info (04, M1b.6): counts and size against the rollover limits, and Archive for the moderator. 01:
+ * Archive closes a thread to new messages, edits and deletes, with no unarchive, so the confirmation says so.
+ */
+export const threadInfo = {
+  screenTitle: "Thread info",
+  /** The thread screen's header button. */
+  open: "Info",
+  openLabel: "Thread info",
+  openHint: "Shows this thread's size, and Archive for the moderator",
+  messages: "Messages",
+  ops: "Signed entries",
+  size: "Size",
+  ofLimit: (value: string | number, limit: string | number) => `${value} of ${limit}`,
+  row: (label: string | number, value: string | number) => `${label}: ${value}`,
+  limitsNote: "Near either limit, a thread is continued in a new thread. This app can't do that yet.",
+  archive: "Archive thread",
+  archiveHint: "Archives this thread: no new messages, edits or deletes for anyone. Asks first.",
+  confirmArchive:
+    "Archive this thread for the group? No one can post, edit or delete messages in it again. This can't be undone. Its messages stay in the thread.",
+  archiveConfirm: "Archive",
+} as const;
+
 /** Long-press sheet items and their confirmations (04). */
 export const actions = {
   copy: "Copy",
@@ -143,9 +172,104 @@ export const actions = {
 
 /** Relay section of the Group tab (04). */
 export const relay = {
+  title: "Relay",
   syncNow: "Sync now",
   pauseSync: "Pause sync",
   resumeSync: "Turn sync on",
+  pauseSyncHint: "While on, this phone keeps new messages here and does not contact the relay",
+  address: "Relay address",
+  noAddress: "No relay set up on this phone",
+  /** The Space's own route, listed before the threads. */
+  groupRoute: "Group",
+  waitingTotal: (count: number) => `${count} waiting to send`,
+  nothingWaiting: "Nothing waiting to send",
+  lastSync: (time: string | number) => `Last synced ${time}`,
+  /** One route's connection, in words (03: per-route state). */
+  connection: {
+    idle: "Not connecting",
+    connecting: "Connecting",
+    live: "Connected",
+    reconnecting: "Reconnecting",
+    refused: "Relay refused this phone",
+  } satisfies Record<LinkRouteStatus["connection"], string>,
+  row: (label: string | number, connection: string | number, waiting: number) =>
+    waiting > 0 ? `${label}: ${connection} · ${waiting} waiting` : `${label}: ${connection}`,
+} as const;
+
+/**
+ * The Safety card (04 Group tab): what is and is not protected, in plain lines. It claims no encryption, no
+ * removal from other phones and no availability. For a lost admin phone it says only what Plan 178 says
+ * (Founder loss): not survived today, and handing admin over beforehand is the only handoff.
+ */
+export const safety = {
+  title: "Safety",
+  relayOperator: "Everything in this group is readable by the relay operator, who can also take the relay offline.",
+  phoneLost: "There is no recovery if this phone is lost. Its key can't be brought back.",
+  adminLost:
+    "If the admin's phone is lost, the group does not survive that today. Handing admin to someone else beforehand is the only handoff.",
+  textOnly: "Text only. No photos, files or voice.",
+  history: "Delete and Remove take a message out of view for the group. Copies already synced stay in its signed history.",
+} as const;
+
+/** The My key card (04 Group tab): key check, where the key is kept, and that it stays on this phone. */
+export const myKey = {
+  title: "My key",
+  keychain: "Kept in this phone's Keychain.",
+  demoSeed: "A test key this build loaded. It is not kept in the Keychain.",
+  notMovable: "It can't be moved to another phone.",
+} as const;
+
+/** The Group tab's summary card (04 GroupSummary): counts and this key's roles, in words. */
+export const groupTab = {
+  noGroup: "No group on this phone yet.",
+  members: (count: number) => (count === 1 ? "1 member" : `${count} members`),
+  threads: (used: number, total: number) => `${used} of ${total} threads`,
+  roles: (roles: string | number) => `You are ${roles}`,
+  noRole: "You hold no role here",
+  role: { admin: "admin", moderator: "moderator", member: "a member" },
+  exportTitle: "Export",
+  exportHint: "Writes this phone's copy of the group's signed history to a file, then opens the share sheet",
+} as const;
+
+/** Export on the Group tab (04): the D-31 file. */
+export const exportFile = {
+  saved: (name: string | number) => `Saved as ${name}`,
+  writeFailed: "Could not save the file on this phone, so the share sheet has the text instead.",
+} as const;
+
+/**
+ * Verify & audit (04 Group tab): per replica, read-only. This is the one screen where protocol words are allowed,
+ * so reasons are the judge's raw codes and the facts use the protocol's names.
+ */
+export const audit = {
+  screenTitle: "Verify & audit",
+  open: "Verify & audit",
+  openHint: "Shows every signed entry count, grant and entry that does not count, per thread",
+  intro: "Nothing on this screen can be changed. Protocol terms are used here.",
+  groupSection: "Group",
+  ops: "Signed entries (ops)",
+  frontier: "Frontier",
+  noFrontier: "None",
+  generation: "Relay generation",
+  matchesRelay: "Matches relay",
+  yes: "Yes",
+  no: "No",
+  notCompared: "Not compared yet",
+  grants: "Grants",
+  noGrants: "No grants held.",
+  grantState: {
+    usable: "usable",
+    revoked: "revoked",
+    lapsed: "lapsed",
+    not_usable: "not usable",
+  } satisfies Record<GrantState, string>,
+  grantLine: (who: string | number, ops: string | number, state: string | number) => `${who} · ${ops} · ${state}`,
+  roles: (roles: string | number) => `roles ${roles}`,
+  notCounted: "Not counted",
+  allCounted: "Every entry counts.",
+  notCountedLine: (id: string | number, reason: string | number) => `${id} · ${reason}`,
+  fact: (label: string | number, value: string | number) => `${label}: ${value}`,
+  empty: "No group data on this phone yet.",
 } as const;
 
 /** People tab (04). */
@@ -192,6 +316,19 @@ export const identityMismatchCopy: Record<IdentityMismatchReason, string> = {
   key_unavailable: "This phone's key can't be opened right now. Unlock the phone and open Treehouse again.",
   key_missing: "This phone holds a saved group but not the key that goes with it.",
   outbox_other_key: phaseCopy.identity_mismatch,
+};
+
+/**
+ * The cannot-post bar (04 Thread screen, M1b.5): replaces the composer with the reason and who can fix it.
+ * One line per reason the timeline gives for `post`; a reason without a line fails `tsc`.
+ */
+export const cannotPostCopy: Record<PostRefusalReason, string> = {
+  revoked_capability: "The admin took back posting in this thread from you. Only the admin can give it back.",
+  lease_expired: "Your posting in this thread didn't renew in time. Ask the admin to renew it.",
+  no_capability: "You were not given posting in this thread. Ask the admin.",
+  not_holder: "Posting here needs a role that has moved to someone else. Ask the admin.",
+  identity_unavailable: "This phone's key can't be opened right now. Unlock the phone and open Treehouse again.",
+  "archived thread": thread.archived,
 };
 
 /** Every refusal any command or ability can give. */

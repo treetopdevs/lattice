@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text } from "react-native";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ArchivedBanner } from "../../ui/ArchivedBanner";
+import { CannotPostBar } from "../../ui/CannotPostBar";
+import { copyText } from "../../ui/clipboard";
 import { Composer } from "../../ui/Composer";
 import { MessageList } from "../../ui/MessageList";
 import { MessageSheet } from "../../ui/MessageSheet";
 import { sheetFor, sheetItems } from "../../ui/message_sheet";
 import { createOpenMarks } from "../../ui/thread_view";
-import type { SheetItem } from "../../ui/message_sheet";
+import type { ConfirmedItem } from "../../ui/message_sheet";
+import { threadFooter } from "../../ui/refusal_view";
 import type { MessageLineage, MessageView } from "../../session/projections/thread_timeline";
 import { SessionBanner } from "../../ui/SessionBanner";
 import { useSession } from "../../ui/SessionProvider";
-import { refusalCopy, thread as threadCopy } from "../../ui/strings";
+import { message as messageCopy, refusalCopy, thread as threadCopy, threadInfo as infoCopy } from "../../ui/strings";
 import { usePalette } from "../../ui/theme";
 import { useReadModel } from "../../ui/useReadModel";
 
@@ -21,8 +25,10 @@ import { useReadModel } from "../../ui/useReadModel";
 // M1b.3: a long-press opens the message sheet (Edit, Delete, Remove as moderator, as the Abilities read model
 // allows); Edit puts the composer in edit mode and Delete and Remove confirm first. M1b.4: an unread divider
 // above the first unread id on open and an "Arrived later" caption, both held for as long as the screen is
-// open. The cannot-post bar and archived banner are M1b.5 and M1b.6; until then the composer is replaced by
-// one line when posting is not allowed.
+// open. M1b.5: when this key cannot post, the CannotPostBar replaces the composer with the judge's reason
+// and who can fix it; a not-counted message of mine shows its reason and Copy text; the sheet offers Copy for
+// every message with text. M1b.6: an archived thread shows the ArchivedBanner in place of the composer, for the
+// moderator too; the header's Info button opens Thread info (counts, size, Archive for the moderator).
 
 export default function ThreadScreen(): React.JSX.Element {
   const c = usePalette();
@@ -38,6 +44,8 @@ export default function ThreadScreen(): React.JSX.Element {
   const stored = useReadModel((m) => m.drafts[replica]?.text ?? null, [replica]);
   const members = useReadModel((m) => m.roster.members, []);
   const abilities = useReadModel((m) => m.abilities.replicas[replica], [replica]) ?? undefined;
+  // Null before the session opens; only "removed" changes the line.
+  const phase = useReadModel((m) => m.status.phase, []) ?? "member";
 
   // The sheet holds a message id and is re-read from the current timeline, so it closes when the message is
   // deleted elsewhere or the thread is archived while it is open. The same goes for an edit in progress.
@@ -110,7 +118,7 @@ export default function ThreadScreen(): React.JSX.Element {
     [session, replica, editable, setError],
   );
   const confirmed = useCallback(
-    async (item: Exclude<SheetItem, "edit">, message: MessageView) => {
+    async (item: ConfirmedItem, message: MessageView) => {
       if (!session) return;
       setError(null);
       const outcome =
@@ -120,16 +128,42 @@ export default function ThreadScreen(): React.JSX.Element {
     [session, replica, setError],
   );
 
+  const copy = useCallback((text: string) => void copyText(text).catch(() => setError(messageCopy.copyFailed)), [setError]);
+  const footer = timeline ? threadFooter({ timeline, phase }) : null;
+  const openInfo = useCallback(() => router.push({ pathname: "/thread-info/[replica]", params: { replica } }), [replica]);
+  const headerRight = useCallback(
+    () =>
+      timeline ? (
+        <Pressable
+          testID="thread-info-button"
+          accessibilityRole="button"
+          accessibilityLabel={infoCopy.openLabel}
+          accessibilityHint={infoCopy.openHint}
+          hitSlop={8}
+          onPress={openInfo}
+        >
+          {/* Capped like the system's own bar buttons: at accessibility sizes an uncapped label crowds the title
+              out of the header (seen on the simulator); the button's accessibility label is the full name. */}
+          <Text maxFontSizeMultiplier={1.5} style={{ color: c.accent, fontSize: 17 }}>
+            {infoCopy.open}
+          </Text>
+        </Pressable>
+      ) : null,
+    [timeline, openInfo, c.accent],
+  );
+
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: c.bg }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={headerHeight - bottomInset}
     >
-      <Stack.Screen options={{ title: timeline ? `# ${timeline.title}` : threadCopy.screenTitle }} />
+      <Stack.Screen options={{ title: timeline ? `# ${timeline.title}` : threadCopy.screenTitle, headerRight }} />
       <SessionBanner />
-      <MessageList timeline={timeline} nameOf={nameOf} colors={c} canOpenSheet={canOpenSheet} onOpenSheet={setSheetId} marks={marks} />
-      {timeline && (timeline.canPost || editing) ? (
+      <MessageList timeline={timeline} nameOf={nameOf} colors={c} canOpenSheet={canOpenSheet} onOpenSheet={setSheetId} onCopy={copy} marks={marks} />
+      {footer?.kind === "archived" ? (
+        <ArchivedBanner bottomInset={bottomInset} colors={c} />
+      ) : timeline && (timeline.canPost || editing) ? (
         <Composer
           key={replica}
           bottomInset={bottomInset}
@@ -143,15 +177,14 @@ export default function ThreadScreen(): React.JSX.Element {
           onEndEdit={() => setEditing(null)}
         />
       ) : (
-        <View style={[styles.cannot, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: 14 + bottomInset }]}>
-          <Text style={{ color: c.muted }}>{timeline?.archived ? threadCopy.archived : threadCopy.cannotPost}</Text>
-        </View>
+        <CannotPostBar line={footer?.kind === "cannot_post" ? footer.line : threadCopy.cannotPost} bottomInset={bottomInset} colors={c} />
       )}
       <MessageSheet
         open={sheet}
         colors={c}
         onClose={() => setSheetId(null)}
         onEdit={(m) => setEditing({ id: m.id, ref: m.ref, text: m.text })}
+        onCopy={(m) => copy(m.text)}
         onConfirmed={confirmed}
       />
     </KeyboardAvoidingView>
@@ -160,5 +193,4 @@ export default function ThreadScreen(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  cannot: { padding: 14, borderTopWidth: StyleSheet.hairlineWidth },
 });

@@ -3,7 +3,8 @@ import type { Op } from "@treetopdevs/lattice-client";
 import type { HeldProfile, RouteFeedState } from "@treetopdevs/lattice-shell-kit/sync";
 import { quarantineReason } from "../outcomes";
 import type { QuarantineReason } from "../outcomes";
-import { abilityOf } from "./abilities";
+import { abilityOf, grantRefusal } from "./abilities";
+import type { AbilityRefusal } from "./abilities";
 import { authorOf, honoredCommands, viewReplica } from "./replica_view";
 import type { ReplicaView } from "./replica_view";
 
@@ -56,10 +57,27 @@ export interface MessageView {
   arrivedLate: boolean;
 }
 
+/**
+ * Why this key cannot post here now (M1b.5): the Abilities reason for `post`, with `no_capability` refined
+ * to the judge's frontier verdict on this key's own grant when one was revoked or has lapsed.
+ */
+export type PostRefusalReason = AbilityRefusal | "revoked_capability" | "lease_expired";
+
+/**
+ * The rollover thresholds (04 Thread info: 4,000 ops, 8 MiB). Policy, not protocol (05: "thresholds are
+ * policy"); held here so every screen shows the same limits. Continue in a new thread arrives with G-2.
+ */
+export const ROLLOVER_OPS = 4000;
+export const ROLLOVER_BYTES = 8 * 1024 * 1024;
+
 export interface ThreadHealth {
   ops: number;
-  /** Serialized size of the held frames, for the rollover thresholds that arrive with M2. */
+  /** Serialized size of the held frames, against `bytesLimit`. */
   bytes: number;
+  /** M1b.6: the counted messages still shown with text (not removed): lattice-client's live posts. */
+  messages: number;
+  opsLimit: number;
+  bytesLimit: number;
 }
 
 export interface ThreadTimeline {
@@ -68,6 +86,8 @@ export interface ThreadTimeline {
   archived: boolean;
   messages: MessageView[];
   canPost: boolean;
+  /** Null when `canPost`; else why not (M1b.5 cannot-post bar). */
+  postRefusal: PostRefusalReason | null;
   unreadCount: number;
   /**
    * Counted messages (mine included, placeholders included) whose ids are not in the read marker, in
@@ -217,14 +237,28 @@ export function projectThreadTimeline(inputs: ThreadTimelineInputs): ThreadTimel
   let bytes = 0;
   for (const frame of frames) bytes += JSON.stringify(frame).length;
 
+  const post = abilityOf(view, inputs.myKey, "post");
+  const postRefusal: PostRefusalReason | null = post.allowed
+    ? null
+    : post.reason === "no_capability"
+      ? (grantRefusal(view, inputs.myKey, "post") ?? "no_capability")
+      : post.reason;
+
   return {
     replica: inputs.replica,
     title: String(view.state.title ?? ""),
     archived,
     messages,
-    canPost: abilityOf(view, inputs.myKey, "post").allowed,
+    canPost: post.allowed,
+    postRefusal,
     unreadCount: messages.filter((m) => m.unread).length,
     unmarked: messages.filter((m) => m.standing === "honored" && !readIds.has(m.id)).map((m) => m.id),
-    health: { ops: frames.length, bytes },
+    health: {
+      ops: frames.length,
+      bytes,
+      messages: messages.filter((m) => m.standing === "honored" && m.removed === null).length,
+      opsLimit: ROLLOVER_OPS,
+      bytesLimit: ROLLOVER_BYTES,
+    },
   };
 }

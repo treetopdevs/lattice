@@ -27,11 +27,11 @@ test("audit view lists every quarantined op with Sim's reason, and the grants an
     assert.equal(entry.generation, 7);
     assert.equal(entry.matchesRelay, true);
     assert.ok(entry.grants.length > 0, `${name}: grants listed`);
-    for (const grant of entry.grants) assert.ok(["live", "not_live"].includes(grant.state));
+    for (const grant of entry.grants) assert.ok(["usable", "revoked", "lapsed", "not_usable"].includes(grant.state));
   }
 });
 
-test("audit view marks a revoked grant not live", async () => {
+test("audit view marks a revoked grant revoked (M1b.7; was not_live)", async () => {
   const { viewReplica } = await import("../../src/session/projections/replica_view");
   const { projectAuditView } = await import("../../src/session/projections/audit_view");
   const { buildGroup, heads } = await import("../support/group_fixture");
@@ -46,7 +46,7 @@ test("audit view marks a revoked grant not live", async () => {
     feed: { configured: false, routes: [] },
   });
   const entry = audit.replicas[0]!;
-  assert.equal(entry.grants.find((g) => g.id === grant.id)?.state, "not_live");
+  assert.equal(entry.grants.find((g) => g.id === grant.id)?.state, "revoked");
   assert.equal(entry.generation, null);
   assert.equal(entry.matchesRelay, null);
 });

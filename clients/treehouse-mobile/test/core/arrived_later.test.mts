@@ -33,9 +33,10 @@ const timelineOf = (messages: Message[], over: Partial<Timeline> = {}): Timeline
   archived: false,
   messages,
   canPost: true,
+  postRefusal: null,
   unreadCount: messages.filter((m) => m.unread).length,
   unmarked: messages.filter((m) => m.unread).map((m) => m.id),
-  health: { ops: messages.length, bytes: 0 },
+  health: { ops: messages.length, bytes: 0, messages: 0, opsLimit: 4000, bytesLimit: 8 * 1024 * 1024 },
   ...over,
 });
 const nameOf = (pubkey: string) => (pubkey === "me" ? "You" : `Key check ${pubkey}`);

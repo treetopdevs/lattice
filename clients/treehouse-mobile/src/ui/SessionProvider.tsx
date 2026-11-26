@@ -1,13 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Alert, AppState, Share } from "react-native";
+import { Alert, AppState, Platform, Share } from "react-native";
 import type { AppSession } from "../native/app_session";
 import { pubkeyFingerprint } from "../native/custody";
 import type { MobileIdentity } from "../native/custody";
+import { writeExportFile } from "../native/export_file";
 import { bindLifecycle } from "../native/lifecycle";
 import type { LifecycleBinding } from "../native/lifecycle";
 import type { TreehouseSession } from "../session/session";
-import { recovery, refusalCopy, threadsTab } from "./strings";
+import { exportFile, recovery, refusalCopy, threadsTab } from "./strings";
 import { HISTORY_INVALID } from "./trust_card";
 import type { Palette } from "./theme";
 
@@ -44,6 +45,8 @@ export interface Bootstrap {
     initialError: string | null;
     defaultRole: string;
     Bar: ComponentType<DemoBarSlotProps>;
+    /** The Safety card's demo line (04: the demo keys are public), from the demo fence. */
+    safetyNote: string;
   } | null;
   connect(origin: string, role: string): Promise<Connected>;
 }
@@ -56,6 +59,7 @@ export interface DemoControls {
   setOriginDraft(text: string): void;
   reconnect(): void;
   Bar: ComponentType<DemoBarSlotProps>;
+  safetyNote: string;
 }
 
 export interface SessionContextValue {
@@ -69,8 +73,12 @@ export interface SessionContextValue {
   setError(text: string | null): void;
   /** "You", a petname, or the key check (01: the transport realm is never shown). */
   displayName(pubkey: string, petname?: string | null): string;
-  /** 04 recovery: save the held Space frames to a file (share sheet). Offered in every phase. */
-  exportHeld(): Promise<void>;
+  /**
+   * 04 recovery and Group tab Export: write the held Space frames to a file and share that file (M1b.7). Offered
+   * in every phase. Resolves to the file name written, or null when nothing was written (a refusal, or a failed
+   * write, after which the D-31 text is shared instead so the export is never lost).
+   */
+  exportHeld(): Promise<string | null>;
   /** 04 recovery: re-sync from the relay into a fresh store, after confirmation. history_invalid only. */
   confirmResync(): void;
   demo: DemoControls | null;
@@ -174,18 +182,34 @@ export function SessionProvider({ boot, children }: { boot: Bootstrap; children:
     };
   }, []);
 
-  const exportHeld = useCallback(async () => {
+  const exportHeld = useCallback(async (): Promise<string | null> => {
     const session = appRef.current?.session;
-    if (!session) return;
+    if (!session) return null;
     try {
       const exported = await session.exportSpaceFrames();
       if (!exported.ok) {
         setError(refusalCopy[exported.reason]);
-        return;
+        return null;
       }
+      let written: { uri: string } | null = null;
+      try {
+        written = await writeExportFile(exported.value.fileName, exported.value.text);
+      } catch {
+        written = null;
+      }
+      if (written) {
+        // Share's `url` is iOS only (reactnative.dev/docs/share); Android shares the same text as `message`.
+        const content = Platform.OS === "ios" ? { url: written.uri, title: exported.value.fileName } : { message: exported.value.text, title: exported.value.fileName };
+        await Share.share(content, { subject: recovery.exportTitle });
+        return exported.value.fileName;
+      }
+      // The file could not be written: say so, then share the same D-31 text so the export is not lost.
+      setError(exportFile.writeFailed);
       await Share.share({ message: exported.value.text, title: exported.value.fileName }, { subject: recovery.exportTitle });
+      return null;
     } catch (err) {
       setError(errorText(err));
+      return null;
     }
   }, []);
 
@@ -238,6 +262,7 @@ export function SessionProvider({ boot, children }: { boot: Bootstrap; children:
               setAttempt((n) => n + 1);
             },
             Bar: boot.demo.Bar,
+            safetyNote: boot.demo.safetyNote,
           }
         : null,
     [boot, origin, role, originDraft],

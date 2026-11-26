@@ -25,6 +25,11 @@ export interface LinkStatus {
   waiting: number;
   /** Local time of the last successful sync, stamped by the session; null before one. */
   lastSyncMs: number | null;
+  /**
+   * The person's sync setting (M1b.7): false after Pause sync. The Offline pill also covers an idle or
+   * unconfigured link, so the Group tab's switch reads this, not the pill.
+   */
+  syncEnabled: boolean;
 }
 
 export interface LinkStatusInputs {
@@ -37,7 +42,7 @@ export interface LinkStatusInputs {
 
 export function projectLinkStatus(inputs: LinkStatusInputs): LinkStatus {
   const routes = inputs.feed.routes.map((r) => ({ replica: r.replica, connection: r.connection, waiting: r.pending }));
-  return { pill: pill(inputs), routes, waiting: inputs.waiting, lastSyncMs: inputs.lastSyncMs };
+  return { pill: pill(inputs), routes, waiting: inputs.waiting, lastSyncMs: inputs.lastSyncMs, syncEnabled: inputs.syncEnabled };
 }
 
 function pill(inputs: LinkStatusInputs): LinkPill {

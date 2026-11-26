@@ -7,7 +7,8 @@ import type { Palette } from "./theme";
 import type { TimelineItem } from "./thread_view";
 
 // One message (04 Thread screen, M1b.2). Mine sit on the right with their delivery mark; the author's name
-// heads a run of consecutive messages. Edited, arrived later and not counted are words, never colour alone.
+// heads a run of consecutive messages. Edited and arrived later are words, never colour alone. A message of
+// mine the judge does not count is drawn by NotCountedBubble instead (M1b.5).
 // M1b.4: arrived later is its own caption (ArrivedLateCaption) and comes from the item, which holds it for as
 // long as the screen is open, not from the message, whose flag clears once the read marker is written.
 // No fixed heights, so dynamic type grows the bubble instead of clipping it.
@@ -30,10 +31,8 @@ const SHEET_ACTIONS = [
 
 export const Bubble = memo(function Bubble({ item, colors: c, onOpenSheet }: Props): React.JSX.Element {
   const m = item.message;
-  const notCounted = m.standing === "not_counted";
   const captions: string[] = [];
   if (m.edited) captions.push(messageCopy.edited);
-  if (notCounted) captions.push(messageCopy.notCounted);
   return (
     <Pressable
       testID={`bubble-${m.id}`}
@@ -49,14 +48,15 @@ export const Bubble = memo(function Bubble({ item, colors: c, onOpenSheet }: Pro
       <View
         style={[
           styles.bubble,
-          { backgroundColor: m.mine ? c.surfaceAlt : c.surface, borderColor: c.border, opacity: notCounted ? 0.6 : 1 },
+          { backgroundColor: m.mine ? c.surfaceAlt : c.surface, borderColor: c.border },
         ]}
       >
         {m.removed ? (
           <Text style={[styles.placeholder, { color: c.muted }]}>{removedPlaceholder[m.removed]}</Text>
         ) : (
           // Selectable only when a long-press does not open the sheet: on iOS both would fire, and the text
-          // selection's Copy callout would float over the sheet. The sheet's own Copy needs a clipboard module.
+          // selection's Copy callout would float over the sheet. Since M1b.5 the sheet offers Copy for every
+          // message with text, so in practice no bubble is selectable.
           <Text style={[styles.text, { color: c.text }]} selectable={!onOpenSheet}>
             {m.text}
           </Text>

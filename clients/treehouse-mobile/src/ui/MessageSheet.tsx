@@ -4,12 +4,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MessageView } from "../session/projections/thread_timeline";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { confirmationFor, sheetItemLabel } from "./message_sheet";
-import type { SheetItem } from "./message_sheet";
+import type { ConfirmedItem, SheetItem } from "./message_sheet";
 import { actions, removedPlaceholder } from "./strings";
 import type { Palette } from "./theme";
 
 // The long-press sheet (04, M1b.3): one Modal over the whole screen (the stack header too), whose content is
-// either the sheet's items or, for Delete and Remove, the confirmation. `open` is re-read from the current
+// either the sheet's items (Copy, Edit, Delete, Remove as moderator) or, for Delete and Remove, the confirmation. `open` is re-read from the current
 // timeline by the screen on every change (sheetFor), so a message deleted elsewhere closes the sheet.
 
 interface Props {
@@ -17,17 +17,19 @@ interface Props {
   colors: Palette;
   onClose(): void;
   onEdit(message: MessageView): void;
+  /** M1b.5: copies the message's text; the sheet closes at once. */
+  onCopy(message: MessageView): void;
   /** Runs a confirmed delete or remove; resolves when the session has answered. */
-  onConfirmed(item: Exclude<SheetItem, "edit">, message: MessageView): Promise<void>;
+  onConfirmed(item: ConfirmedItem, message: MessageView): Promise<void>;
 }
 
-export function MessageSheet({ open: live, colors: c, onClose, onEdit, onConfirmed }: Props): React.JSX.Element {
+export function MessageSheet({ open: live, colors: c, onClose, onEdit, onCopy, onConfirmed }: Props): React.JSX.Element {
   const bottom = useSafeAreaInsets().bottom;
   // The Modal fades out after `live` goes null; the last sheet stays drawn for the fade instead of an empty card.
   const last = useRef(live);
   if (live) last.current = live;
   const open = live ?? last.current;
-  const [confirming, setConfirming] = useState<Exclude<SheetItem, "edit"> | null>(null);
+  const [confirming, setConfirming] = useState<ConfirmedItem | null>(null);
   const [busy, setBusy] = useState(false);
   const messageId = open?.message.id ?? null;
   // A fresh open (or another message) starts at the sheet, never at a confirmation left from last time.
@@ -38,6 +40,11 @@ export function MessageSheet({ open: live, colors: c, onClose, onEdit, onConfirm
 
   const pick = (item: SheetItem) => {
     if (!open) return;
+    if (item === "copy") {
+      onCopy(open.message);
+      onClose();
+      return;
+    }
     if (item === "edit") {
       onEdit(open.message);
       onClose();
@@ -99,7 +106,7 @@ export function MessageSheet({ open: live, colors: c, onClose, onEdit, onConfirm
                   onPress={() => pick(item)}
                   style={({ pressed }) => [styles.item, { borderTopColor: c.border, opacity: pressed ? 0.6 : 1 }]}
                 >
-                  <Text style={[styles.itemText, { color: item === "edit" ? c.text : c.error }]}>{sheetItemLabel[item]}</Text>
+                  <Text style={[styles.itemText, { color: item === "copy" || item === "edit" ? c.text : c.error }]}>{sheetItemLabel[item]}</Text>
                 </Pressable>
               ))}
               <Pressable

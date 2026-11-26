@@ -4,7 +4,7 @@ import type { ReplicaView } from "./replica_view";
 
 // Abilities (03): per held replica, per command, whether this key could author it now. Composed only from
 // synchronous lattice-client outputs, the way the Tauri shell's snapshot composes them:
-//   - a live delegation (liveTreehouseDelegations) whose audience is this key, whose ops include the
+//   - a live delegation (view.live: liveTreehouseDelegations' subset of treehouseDelegationStates) whose audience is this key, whose ops include the
 //     command and whose roles carry every role the command's fields are gated by (treehouseCommandRoles);
 //   - for each such role, the judge's materialized holder field naming this key (a role transferred away
 //     leaves the old delegation live, but the judge then refuses it as not_holder);
@@ -101,6 +101,26 @@ export function abilityOf(view: ReplicaView, myKey: string | null, command: stri
   const policy = policyRefusal(view, myKey, command);
   if (policy !== null) return refused(policy);
   return ALLOWED;
+}
+
+/**
+ * M1b.5: why this key's grants for `command` cannot be cited now, when no live grant permits it. The
+ * candidates are the delegations the judge honors in this replica (lattice-client's treehouseDelegationStates,
+ * the same query liveTreehouseDelegations filters) whose audience is this key and which carry the command and
+ * its roles; each carries lattice-client's frontier verdict (revoked or lapsed). A revoke anywhere wins over a
+ * lapse. Null when no such grant exists (never given, or never honored) or none is refused (the Ability's own
+ * reason stands). Kept apart from `Ability`, whose `no_capability` a Core test pins to memberCapability.
+ */
+export function grantRefusal(view: ReplicaView, myKey: string | null, command: string): "revoked_capability" | "lease_expired" | null {
+  if (myKey === null) return null;
+  const roles = treehouseCommandRoles(view.product, command);
+  let lapsed = false;
+  for (const { delegation: d, refusal } of view.delegationStates.values()) {
+    if (d.audience !== myKey || !d.ops.includes(command) || !roles.every((role) => d.roles.includes(role))) continue;
+    if (refusal === "revoked_capability") return refusal;
+    if (refusal === "lease_expired") lapsed = true;
+  }
+  return lapsed ? "lease_expired" : null;
 }
 
 export function projectAbilities(inputs: AbilitiesInputs): Abilities {

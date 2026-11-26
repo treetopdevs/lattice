@@ -8,13 +8,18 @@ import type { DraftSaver } from "./thread_view";
 // answer (the judge's per-command verdict for this key, including the archive rule); whether a message is
 // mine, counted or removed is ThreadTimeline's. These helpers only combine the two.
 //
-// Copy and Details are not in the sheet yet: Copy needs a clipboard module the dev build does not have, and a
-// bubble that opens this sheet is not selectable (iOS would float its Copy callout over the sheet), so its
-// text cannot be copied until M1b.5. No Message details screen exists. Both are recorded in PROGRESS.
+// M1b.5: Copy is in the sheet for every message with text (counted or not), so every such bubble opens the
+// sheet and none is selectable (iOS would float its own Copy callout over the sheet). The screen does the
+// copying (src/ui/clipboard.ts); this module only says Copy is offered. Details is not in the sheet: no
+// Message details screen exists yet (PROGRESS).
 
-export type SheetItem = "edit" | "delete" | "remove";
+export type SheetItem = "copy" | "edit" | "delete" | "remove";
+
+/** The items that confirm first and then run a signed command. */
+export type ConfirmedItem = Exclude<SheetItem, "copy" | "edit">;
 
 export const sheetItemLabel: Record<SheetItem, string> = {
+  copy: actions.copy,
   edit: actions.edit,
   delete: actions.delete,
   remove: actions.remove,
@@ -25,24 +30,28 @@ type Abilities = Readonly<Record<string, Ability>> | undefined;
 const allowed = (abilities: Abilities, command: string) => abilities?.[command]?.allowed === true;
 
 /**
- * 04: Edit and Delete for my honored message (the abilities say whether the thread still takes them);
- * Remove as moderator for others' messages when this key may remove. A removed or not-counted message
- * offers nothing: the judge would refuse it as already tombstoned or quarantined target.
+ * 04: Copy for any message with text (a placeholder has none). Edit and Delete for my honored message (the
+ * abilities say whether the thread still takes them); Remove as moderator for others' messages when this key
+ * may remove. A not-counted message offers only Copy, so it can be posted again: the judge would refuse a
+ * change to it as a quarantined target, and a removed one as already tombstoned.
  */
 export function sheetItems(m: MessageView, abilities: Abilities): SheetItem[] {
-  if (m.removed !== null || m.standing !== "honored") return [];
+  if (m.removed !== null) return [];
+  const items: SheetItem[] = m.text !== "" ? ["copy"] : [];
+  if (m.standing !== "honored") return items;
   if (m.mine) {
-    const items: SheetItem[] = [];
     if (allowed(abilities, "author_edit")) items.push("edit");
     if (allowed(abilities, "author_tombstone")) items.push("delete");
     return items;
   }
-  return allowed(abilities, "moderator_tombstone") ? ["remove"] : [];
+  if (allowed(abilities, "moderator_tombstone")) items.push("remove");
+  return items;
 }
 
 /**
  * The open sheet, re-read from the current timeline by message id: the latest ref and text, and null when
- * the message is gone or no item is left (deleted elsewhere, thread archived), so the sheet closes.
+ * the message is gone or no item is left (deleted or removed elsewhere), so the sheet closes. Since M1b.5 an
+ * archived thread leaves Copy, so the sheet stays open with Copy only.
  */
 export function sheetFor(
   timeline: ThreadTimeline | null,
@@ -55,7 +64,7 @@ export function sheetFor(
   return items.length === 0 ? null : { message, items };
 }
 
-/** 04: irreversible actions confirm once, naming what cannot be undone. Edit has no confirmation. */
+/** 04: irreversible actions confirm once, naming what cannot be undone. Copy and Edit have no confirmation. */
 export function confirmationFor(item: SheetItem): { sentence: string; confirm: string } | null {
   if (item === "delete") return { sentence: actions.confirmDelete, confirm: actions.delete };
   if (item === "remove") return { sentence: actions.confirmRemove, confirm: actions.removeConfirm };

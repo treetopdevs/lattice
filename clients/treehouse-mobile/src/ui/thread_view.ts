@@ -1,4 +1,5 @@
 import type { Delivery, MessageView, ThreadTimeline } from "../session/projections/thread_timeline";
+import { notCountedLine } from "./refusal_view";
 import { deliveryLabel, message as messageCopy, removedPlaceholder, thread as threadCopy } from "./strings";
 
 // Presentation helpers for the Thread screen (M1b.2). Pure: no react, react-native or expo, so Core tests run
@@ -85,9 +86,13 @@ export function bubbleLabel(m: MessageView, authorName: string, arrivedLate: boo
     m.edited ? messageCopy.edited : null,
     arrivedLate ? messageCopy.arrivedLate : null,
     m.standing === "not_counted" ? messageCopy.notCounted : null,
+    // M1b.5: the judge's reason, as the not-counted bubble shows it.
+    notCountedLine(m),
     m.delivery ? deliveryLabel[m.delivery] : null,
   ]
     .filter((part): part is string => part !== null && part !== "")
+    // A part that ends its own sentence (the not-counted reason) is not given a second full stop.
+    .map((part, i, parts) => (i < parts.length - 1 && part.endsWith(".") ? part.slice(0, -1) : part))
     .join(". ");
 }
 

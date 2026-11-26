@@ -221,6 +221,21 @@ export function liveTreehouseDelegations(product, frames, replica) {
     return honoredDelegations(product, frames, replica).filter(({ refusal }) => refusal === null).map(({ delegation }) => delegation);
 }
 /**
+ * Every delegation the judge honors in `replica` (validated and introduced by an honored frame), each once,
+ * with the reason an op authored now could not cite it, or null when it is usable. A delegation absent from
+ * this list was never honored (invalid, or introduced only by a quarantined frame). `liveTreehouseDelegations`
+ * is the null-refusal subset.
+ */
+export function treehouseDelegationStates(product, frames, replica) {
+    const seen = new Set();
+    return honoredDelegations(product, frames, replica).filter(({ delegation }) => {
+        if (seen.has(delegation.id))
+            return false;
+        seen.add(delegation.id);
+        return true;
+    });
+}
+/**
  * Delegations the reducer's own authority projection validated, each introduced by an honored frame of
  * `replica`, with the reason an op authored now could not cite it (`revoked_capability` or `lease_expired`),
  * or null when it is usable. A delegation-shaped term nested elsewhere in a frame body is not authority

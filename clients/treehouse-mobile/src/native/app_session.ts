@@ -46,6 +46,11 @@ export interface AppSession {
   epoch: number;
   storeName: string;
   /**
+   * The relay addresses this session dials (M1b.7, Group tab Relay card): each configured route's origin,
+   * once. Configuration, not a protocol fact, so it is owned here, where the routes are known.
+   */
+  relayAddresses: string[];
+  /**
    * Re-sync from the relay into a fresh store (04, history_invalid; the caller has asked for confirmation).
    * The failed store is left as it is: nothing is deleted or rewritten. Rejects with `history_ok` otherwise.
    * The fresh session opens before this one closes; on any failure this one stays open and the pointer is
@@ -53,6 +58,12 @@ export interface AppSession {
    */
   resync(): Promise<AppSession>;
   close(): Promise<void>;
+}
+
+/** The distinct `scheme://host[:port]` of each route URL, in route order. Path and query are dropped. */
+export function relayOrigins(routes: readonly { url: string }[]): string[] {
+  const origins = routes.map((r) => /^[a-z][a-z0-9+.-]*:\/\/[^/?#]+/i.exec(r.url)?.[0] ?? r.url);
+  return [...new Set(origins)];
 }
 
 /** KeyCustody over an already-loaded identity (a demo seed or the Keychain device key). */
@@ -154,6 +165,7 @@ export async function openAppSession(deps: AppSessionDeps, config: AppSessionCon
     adoptFailed,
     epoch,
     storeName,
+    relayAddresses: relayOrigins(config.routes),
     async resync() {
       if (session.read().history.ok) throw new Error("history_ok");
       const epochs = deps.local.setting("replicaStoreEpochs");

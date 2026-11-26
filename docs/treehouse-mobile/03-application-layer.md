@@ -53,7 +53,7 @@ screen re-renders only when its slice changes (in React: `useSyncExternalStore`)
 | `GroupSummary` | name, member count, my role, thread slots used and total, initialization | Space ops |
 | `LinkStatus` | overall state, per-route state, total waiting to send, last successful sync (local time) | feed state |
 | `ThreadList` | per thread: title, archived, last message preview and author (with the author's petname, M1b.1), unread count, waiting count, link state, route-not-connected mark (M1b.1) | Space + Thread ops, read markers, petnames, feed state |
-| `ThreadTimeline` | ordered `MessageView[]`, archived flag, unread count, `unmarked` ids to mark as shown (M1b.4), thread health (ops, bytes vs rollover thresholds) | Thread ops, store, feed state, local facts |
+| `ThreadTimeline` | ordered `MessageView[]`, archived flag, unread count, `unmarked` ids to mark as shown (M1b.4), thread health (ops, bytes, counted messages, and the rollover limits `ROLLOVER_OPS` 4,000 and `ROLLOVER_BYTES` 8 MiB, M1b.6) | Thread ops, store, feed state, local facts |
 | `Drafts` (M1b.2) | per held thread with a saved draft: its `Draft` (text, optional edit target) | LocalStore drafts |
 | `MessageView` | id, lineage ref, author contact, text, edited flag, removed (`by_author` \| `by_moderator` \| none), mine, `delivery`, `standing`, first-seen time, arrived-late flag | all three kinds |
 | `Roster` | per member: contact, role, is-root, relay access state if known, removal pending | Space ops, contacts |
@@ -343,6 +343,60 @@ Facts that constrain the UX (measured 2026-11-25 with the real encoders):
   `src/ui/thread_view.ts`): the unread divider is taken once, above the first unread id with the
   count on open, and does not move; the arrived-later ids only grow while the screen is open, so a
   post arriving late while it is open is captioned too. Both reset when the screen opens again.
+
+### Decisions recorded at M1b.5
+
+- `ThreadTimeline.postRefusal` says why this key cannot post now (null when it can). It is the
+  Abilities reason for `post`; a `no_capability` is refined by `grantRefusal` in
+  `projections/abilities.ts`. Since the M1b.5 to M1b.7 review round it reads
+  `ReplicaView.delegationStates`, lattice-client's `treehouseDelegationStates` (every delegation the
+  judge honors, with its frontier refusal; `liveTreehouseDelegations` is its null-refusal subset,
+  and `ReplicaView.live` is derived from it). Over this key's honored grants that carry `post` and its
+  roles: `revoked_capability` if any is revoked, else `lease_expired` if any lapsed, else
+  `no_capability` (never given, or never honored). `Ability` itself is unchanged; the app filters no
+  delegation records of its own. A Core test checks that the bar's reason equals the judge's
+  quarantine reason on a post signed before the revoke arrived, and a review-round test covers a
+  lapsed lease (root beacon past its epoch) and a forged grant under a revoked parent against posts
+  the judge refuses.
+- Removed from the group is SessionStatus's phase, not a timeline fact: the screen combines it with
+  `postRefusal` in the pure `src/ui/refusal_view.ts` (`cannotPostLine`). An archived thread says so
+  first, removed comes next, then the reason's line.
+- Copy is a sheet item for every message with text, a not-counted one included; the copying itself
+  is UI (`src/ui/clipboard.ts`, expo-clipboard), not a session command.
+
+M1b.6 decisions (archived thread, Thread info):
+
+- `ThreadHealth` gains `messages` (counted and not removed, which equals lattice-client's live posts;
+  a Core test compares it with the Sim archive vector) and `opsLimit`/`bytesLimit`, the rollover
+  limits from 04. The limits are policy, not protocol (05), and are owned by
+  `thread_timeline.ts` (`ROLLOVER_OPS`, `ROLLOVER_BYTES`) so every screen shows the same values.
+- What replaces the composer is `threadFooter` in `src/ui/refusal_view.ts`: the archived banner
+  when the judge's `archived` flag is set (or `post` is refused as `archived thread`), before
+  removal or any grant reason; otherwise M1b.5's line; otherwise the composer.
+- Archive is offered when the Abilities answer for `archive_thread` allows it and the thread is not
+  archived (`src/ui/thread_info.ts`). The judge still allows a second `archive_thread` once a thread
+  is archived (a Core test pins this), so the screen hides the item instead of the judge refusing it.
+- There is no successor in M1: the Thread replica has no successor field and rollover needs G-2.
+
+M1b.7 decisions (Group tab, Verify & audit, export):
+
+- `AuditGrant.state` is `usable` | `revoked` | `lapsed` | `not_usable` (was `live` | `not_live`), read
+  from `ReplicaView.delegationStates` (lattice-client's `treehouseDelegationStates`): no refusal is
+  `usable`, `revoked_capability` is `revoked`, `lease_expired` is `lapsed`, and a delegation the judge
+  never honored (absent there: an invalid record, or one introduced only by a refused frame) is
+  `not_usable`, whatever its parent's fate. One lattice-client query per replica view serves both the
+  audit and `grantRefusal`; neither builds its own `authoritySecurity` any more.
+- `LinkStatus.syncEnabled` carries the person's sync setting. The Pause sync switch reads it, because the
+  Offline pill is also shown for an idle or unconfigured link.
+- The relay address is owned by `AppSession.relayAddresses` (`relayOrigins` over the configured route URLs:
+  each `scheme://host:port` once). It is configuration known where the routes are configured, not a protocol
+  fact, so the `RelayLink` port and `LinkStatus` do not carry it.
+- Export writes a file: `exportSpaceFrames()` is unchanged; the app writes its D-31 text to
+  `Paths.document/<suggested name>` with expo-file-system (`src/native/export_file.ts`) and shares the file URL.
+  If the write fails, the text itself is shared as before, so the export offer never disappears. Writing
+  replaces an earlier export of the same name; held frames are never touched.
+- The Safety card's demo line comes from `src/demo` through the composition root (`Bootstrap.demo.safetyNote`),
+  so it stays out of a release bundle.
 
 ## Testing by tier
 

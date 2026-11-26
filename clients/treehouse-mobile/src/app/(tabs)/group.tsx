@@ -1,18 +1,24 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { runSelfCheck } from "../../native/selfcheck";
 import type { SelfCheck } from "../../native/selfcheck";
+import { keyLines, relayRows, safetyLines } from "../../ui/group_view";
+import { RelayCard } from "../../ui/RelayCard";
+import { KeyCard, SafetyCard } from "../../ui/SafetyCard";
 import { SessionBanner } from "../../ui/SessionBanner";
 import { useSession } from "../../ui/SessionProvider";
-import { linkPillLabel, recovery, refusalCopy, relay as relayCopy, threadsTab } from "../../ui/strings";
-import { HOSTING_SENTENCE, NO_RELAY_ACCESS, relayAccess } from "../../ui/trust_card";
+import { audit as auditCopy, exportFile, groupTab, recovery, refusalCopy, threadsTab } from "../../ui/strings";
+import { HOSTING_SENTENCE, relayAccess } from "../../ui/trust_card";
 import { usePalette } from "../../ui/theme";
 import type { Palette } from "../../ui/theme";
 import { useReadModel } from "../../ui/useReadModel";
 
-// Group tab placeholder (M1a.7): the group summary, the relay section with the trust card, recovery, the demo
-// bar, and the dev-only Self-check and Replica store check cards (the M0.1 and M1a.2 simulator gates). The
-// designed tab is M1b.7.
+// Group tab (04, M1b.7): the group summary, Relay (the approved HOSTING_SENTENCE, relay address, connection per
+// thread, waiting, Sync now, Pause sync), Safety, My key, a link to Verify & audit, and Export, which writes the
+// held Space frames to a file and shares it. Every value is a read model's, worded by src/ui/group_view.ts.
+// Below them sit the demo bar and the dev-only Self-check and Replica store check cards (the M0.1 and M1a.2
+// simulator gates).
 
 // M1a.2 simulator gate: the ReplicaStore contract against expo-sqlite. Dev builds only; a release bundle
 // never requires the module (Metro folds __DEV__).
@@ -48,18 +54,26 @@ function Button({ c, label, onPress, disabled }: { c: Palette; label: string; on
 
 export default function GroupScreen(): React.JSX.Element {
   const c = usePalette();
-  const { session, identity, detail, demo, setError, exportHeld } = useSession();
+  const router = useRouter();
+  const { session, app, identity, detail, demo, setError, exportHeld } = useSession();
   const group = useReadModel((m) => m.group);
   const linkStatus = useReadModel((m) => m.linkStatus);
+  const threads = useReadModel((m) => m.threads);
   const feed = useReadModel((m) => m.link);
   const [selfCheck, setSelfCheck] = useState<SelfCheck | "running" | null>(null);
   const [storeCheck, setStoreCheck] = useState<ReplicaStoreCheckResult | "running" | string | null>(null);
+  const [exported, setExported] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  // The saved-file line belongs to the key that exported it; a role switch or re-sync starts without it.
+  useEffect(() => setExported(null), [session]);
   const access = feed ? relayAccess(feed, group?.replica ?? null) : null;
+  const rows = useMemo(() => (linkStatus ? relayRows(linkStatus, threads, group?.replica ?? null) : []), [linkStatus, threads, group]);
+  const safety = useMemo(() => safetyLines(demo?.safetyNote ?? null), [demo?.safetyNote]);
 
-  const toggleSync = async () => {
-    if (!session || !linkStatus) return;
+  const setPaused = async (paused: boolean) => {
+    if (!session) return;
     setError(null);
-    const outcome = linkStatus.pill === "offline" ? await session.goOnline() : await session.goOffline();
+    const outcome = paused ? await session.goOffline() : await session.goOnline();
     if (!outcome.ok) setError(refusalCopy[outcome.reason]);
   };
   const syncNow = async () => {
@@ -67,44 +81,69 @@ export default function GroupScreen(): React.JSX.Element {
     const outcome = await session.syncNow();
     if (!outcome.ok) setError(refusalCopy[outcome.reason]);
   };
+  const runExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      setExported(await exportHeld());
+    } finally {
+      setExporting(false);
+    }
+  };
+  const summary = group
+    ? [
+        groupTab.members(group.memberCount),
+        groupTab.threads(group.threadSlots.used, group.threadSlots.total),
+        group.myRoles.length > 0 ? groupTab.roles(group.myRoles.map((r) => groupTab.role[r]).join(", ")) : groupTab.noRole,
+      ].join(" · ")
+    : groupTab.noGroup;
 
   return (
     <View style={[styles.root, { backgroundColor: c.bg }]}>
       <SessionBanner />
       <ScrollView contentContainerStyle={styles.list}>
-        <Card c={c} title={group?.name || "Group"}>
-          <Text testID="group-summary" style={[styles.mono, { color: c.muted }]}>
-            {group
-              ? `members ${group.memberCount} · threads ${group.threadSlots.used}/${group.threadSlots.total} · my roles ${group.myRoles.join(", ") || "none"}`
-              : "no group"}
+        <Card c={c} title={group?.name || threadsTab.noGroupName}>
+          <Text testID="group-summary" style={[styles.body, { color: c.muted }]}>
+            {summary}
           </Text>
         </Card>
 
-        <Card c={c} title="Relay">
-          <Text testID="trust-card" style={{ color: c.muted, lineHeight: 19 }}>
-            {HOSTING_SENTENCE}
-          </Text>
-          {access === "no_relay_access" ? <Text style={{ color: c.error, marginTop: 8 }}>{NO_RELAY_ACCESS}</Text> : null}
-          {demo ? (
-            <Text testID="relay-origin" style={[styles.mono, { color: c.text, marginTop: 8 }]}>
-              {demo.origin || "no relay"}
+        <RelayCard
+          colors={c}
+          hosting={HOSTING_SENTENCE}
+          link={linkStatus}
+          rows={rows}
+          addresses={app?.relayAddresses ?? []}
+          noRelayAccess={access === "no_relay_access"}
+          disabled={!session}
+          onPauseChange={(paused) => void setPaused(paused)}
+          onSyncNow={() => void syncNow()}
+          onOpenAudit={() => router.push("/audit")}
+          auditLabel={auditCopy.open}
+          auditHint={auditCopy.openHint}
+        />
+
+        <SafetyCard colors={c} lines={safety} />
+
+        {identity ? <KeyCard colors={c} lines={keyLines(identity, threadsTab.keyCheck)} /> : null}
+
+        <Card c={c} title={groupTab.exportTitle}>
+          <Pressable
+            testID="export-file"
+            accessibilityRole="button"
+            accessibilityLabel={recovery.export}
+            accessibilityHint={groupTab.exportHint}
+            disabled={!session || exporting}
+            onPress={() => void runExport()}
+            style={[styles.button, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+          >
+            <Text style={[styles.buttonText, { color: c.text }]}>{recovery.export}</Text>
+          </Pressable>
+          {exported ? (
+            <Text testID="export-saved" accessibilityLiveRegion="polite" selectable style={[styles.mono, { color: c.muted }]}>
+              {exportFile.saved(exported)}
             </Text>
           ) : null}
-          <Text testID="link-state" style={[styles.mono, { color: c.muted, marginTop: 8 }]}>
-            {linkStatus ? linkPillLabel[linkStatus.pill] : "-"}
-            {(linkStatus?.routes ?? []).map((r) => `\n${r.connection} · waiting ${r.waiting} · ${r.replica.slice(0, 40)}`).join("")}
-          </Text>
-          <View style={styles.actions}>
-            <Button c={c} label={linkStatus?.pill === "offline" ? relayCopy.resumeSync : relayCopy.pauseSync} onPress={() => void toggleSync()} disabled={!session} />
-            <Button c={c} label={relayCopy.syncNow} onPress={() => void syncNow()} disabled={!session} />
-          </View>
-          <Button c={c} label={recovery.export} onPress={() => void exportHeld()} disabled={!session} />
-        </Card>
-
-        <Card c={c} title="Key">
-          <Text style={[styles.mono, { color: c.muted }]}>
-            {identity ? `${threadsTab.keyCheck(identity.fingerprint)} (${identity.source})` : "-"}
-          </Text>
         </Card>
 
         {demo ? (
@@ -184,6 +223,8 @@ export default function GroupScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   list: { padding: 12, gap: 12 },
+  body: { fontSize: 15, lineHeight: 21 },
+  buttonText: { fontSize: 15, fontWeight: "600" },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 8 },
   cardTitle: { fontSize: 15, fontWeight: "700" },
   actions: { flexDirection: "row", gap: 8 },

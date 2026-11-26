@@ -82,7 +82,7 @@ test("a row names the last author and says unread, waiting and not connected in 
 test("the link pill has a text label, a tone and a hint for every state", async () => {
   const { linkPillView } = await import("../../src/ui/thread_rows");
   const { linkPillLabel, threadsTab, waitingSuffix } = await import("../../src/ui/strings");
-  const status = (pill: import("../../src/session/projections/link_status").LinkPill, waiting = 0) => ({ pill, routes: [], waiting, lastSyncMs: null });
+  const status = (pill: import("../../src/session/projections/link_status").LinkPill, waiting = 0) => ({ pill, routes: [], waiting, lastSyncMs: null, syncEnabled: pill !== "offline" });
 
   assert.deepEqual(linkPillView(null), { label: linkPillLabel.connecting, tone: "muted", accessibilityLabel: threadsTab.pillLabel(linkPillLabel.connecting) });
   const live = linkPillView(status("live"));

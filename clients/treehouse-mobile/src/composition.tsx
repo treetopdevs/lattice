@@ -108,6 +108,7 @@ export const bootstrap: Bootstrap = {
           initialError: start.error,
           defaultRole: demo.identities.DEMO_ROLES[0],
           Bar: demoBarSlot(demo),
+          safetyNote: demo.identities.DEMO_KEYS_PUBLIC,
         };
       })()
     : null,

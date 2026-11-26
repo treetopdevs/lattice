@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import type { MessageView, ThreadTimeline } from "../session/projections/thread_timeline";
 import { Bubble } from "./Bubble";
+import { NotCountedBubble } from "./NotCountedBubble";
 import { thread as threadCopy } from "./strings";
 import { UnreadDivider } from "./UnreadDivider";
 import type { Palette } from "./theme";
@@ -20,11 +21,13 @@ interface Props {
   /** M1b.3: whether the long-press sheet has items for a message, and how to open it. */
   canOpenSheet(message: MessageView): boolean;
   onOpenSheet(id: string): void;
+  /** M1b.5: Copy text on a not-counted message of mine. */
+  onCopy(text: string): void;
   /** M1b.4: the unread divider and arrived-later ids the screen holds while open. */
   marks: OpenMarks;
 }
 
-export function MessageList({ timeline, nameOf, colors: c, canOpenSheet, onOpenSheet, marks }: Props): React.JSX.Element {
+export function MessageList({ timeline, nameOf, colors: c, canOpenSheet, onOpenSheet, onCopy, marks }: Props): React.JSX.Element {
   const items = useMemo(() => timelineItems(timeline, nameOf, localDay(Date.now()), marks).reverse(), [timeline, nameOf, marks]);
   const renderItem = useCallback(
     ({ item }: { item: TimelineItem }) =>
@@ -34,10 +37,12 @@ export function MessageList({ timeline, nameOf, colors: c, canOpenSheet, onOpenS
         <Text style={[styles.day, { color: c.muted }]} accessibilityRole="header">
           {item.label}
         </Text>
+      ) : item.message.standing === "not_counted" ? (
+        <NotCountedBubble item={item} colors={c} onCopy={onCopy} onOpenSheet={canOpenSheet(item.message) ? onOpenSheet : undefined} />
       ) : (
         <Bubble item={item} colors={c} onOpenSheet={canOpenSheet(item.message) ? onOpenSheet : undefined} />
       ),
-    [c, canOpenSheet, onOpenSheet],
+    [c, canOpenSheet, onOpenSheet, onCopy],
   );
 
   if (!timeline || timeline.messages.length === 0)

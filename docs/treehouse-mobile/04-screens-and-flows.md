@@ -182,10 +182,8 @@ removed elsewhere or the thread is archived. Edit puts the message's text in the
 unchanged after Save or Cancel, and edit keystrokes are never saved as a draft. The bubble declares
 the sheet as its accessibility action ("Message actions", `activate` on iOS, `longpress` on
 Android) with a hint, and the backdrop is hidden from screen readers; VoiceOver itself was not run.
-Not yet in the sheet: Copy (needs a
-clipboard module the dev build lacks; bubbles without sheet items stay selectable, bubbles with
-them are not, because iOS would show the selection callout over the sheet) and Details (no Message
-details screen yet). At the largest text size the confirmation sentence scrolls inside the card.
+Not yet in the sheet at M1b.3: Copy (added at M1b.5)
+and Details (no Message details screen yet). At the largest text size the confirmation sentence scrolls inside the card.
 
 M1b.4 as built: on open, a divider with its count ("3 unread", read out as "3 unread from here")
 sits above the first unread id, after that message's day separator, and ends an author run. It
@@ -195,6 +193,32 @@ its own caption, in words, and the bubble's screen-reader label says it too; the
 while the screen is open. The Threads tab counts an arrived-later message as unread like any
 other. The list does not scroll to the divider: with more unread than fit, the divider can sit
 above the first screen.
+
+M1b.5 as built: when this key cannot post, a bar replaces the composer with one line that gives the
+reason and who can fix it: "The admin took back posting in this thread from you. Only the admin can
+give it back." for a revoked grant, a renew line for a lapsed one, "You were not given posting in this
+thread. Ask the admin." for none, the removed line when the group removed this key, and the
+archived line until M1b.6's banner. A message of mine the judge does not count is a dashed,
+muted bubble (not reduced opacity, so its text keeps its contrast in both themes) with "Not
+counted", the judge's reason, and a "Copy text" button beside it; Copy text is also a named
+accessibility action on the bubble, whose label includes the reason. The long-press sheet now
+offers Copy first for every message with text (Copy only on a not-counted message, or once the
+thread no longer takes changes from this key), so no bubble is selectable; the screen reader hears
+"Copied". Details is still not in the sheet (no Message details screen).
+
+M1b.6 as built: in an archived thread a banner, "Archived. No new messages.", replaces the composer for
+every key, the moderator included, and comes before any reason about this key (removed, revoked); it
+appears while the screen is open as soon as the archive arrives. There is no successor link: rollover
+needs G-2 and the Thread replica records no successor, so nothing in M1 names one. The thread screen's
+header has an "Info" button (screen-reader name "Thread info") that pushes Thread info: the title, the
+"Archived. No new messages." line when archived, Messages (counted, not removed), Signed entries against
+4,000 and Size against 8 MB (8 MiB, shown as MB), and a note that a thread near either limit is continued
+in a new thread, which this app can't do yet. Archive thread is shown only to a key whose Abilities allow
+`archive_thread` and only while the thread is not archived (the judge would honor a second archive; 01 has
+no unarchive). It confirms first: "Archive this thread for the group? No one can post, edit or delete
+messages in it again. This can't be undone. Its messages stay in the thread." Continue in a new thread and
+the near-threshold prompt are not shown (G-2). The screen scrolls, so accessibility sizes do not clip. The
+Info label is capped at 1.5x text size so it does not push the title out of the header.
 
 **Message details.** Author name and key check, first-seen time labelled as "first on this
 phone", delivery, standing, edit history count, and "Verify" which opens the op in Verify.
@@ -242,8 +266,18 @@ ops, 8 MiB), Archive (moderator), Continue in a new thread (moderator and admin 
   grant with its state (usable, revoked, lapsed), and every op that is not counted with its
   reason. Read-only. This is where protocol words are allowed.
 - **Export.** Save the held Space frames to a file (the existing D-31 export shape). As built
-  (M1a.7) this is the system share sheet with the D-31 JSON text; on iOS "Save to Files" writes
-  the file. A refusal names `no_space` or `export_failed` with one line of copy.
+  (M1b.7) the app writes the file into its own documents directory under lattice-client's suggested
+  name, says "Saved as {name}", and opens the share sheet on the file so iOS offers "Save to Files".
+  If the write fails it shares the D-31 text instead (the M1a.7 behaviour). A refusal names
+  `no_space` or `export_failed` with one line of copy.
+
+As built at M1b.7: Verify & audit is a pushed screen from the Relay card. Grant states are worded
+usable, revoked, lapsed or "not usable" (a grant neither live nor revoked nor lapsed); facts with
+no relay result yet say "Not compared yet". The Pause sync switch follows the person's setting, not
+the pill. Safety lists: readable by the relay operator; no recovery if this phone is lost; the
+lost-admin line in Plan 178's terms; text only; Delete and Remove leave synced copies in the signed
+history; and, in dev builds, the demo-keys line. My key says whether the key is in the Keychain or
+is a test key the build loaded, and that it cannot be moved to another phone.
 
 ## Problem screens
 

@@ -1,4 +1,4 @@
-import { carrierOpsToSemanticOps, liveTreehouseDelegations, observeTreehouse, treehouseCommandDecoders } from "@treetopdevs/lattice-client";
+import { carrierOpsToSemanticOps, observeTreehouse, treehouseCommandDecoders, treehouseDelegationStates } from "@treetopdevs/lattice-client";
 import type { CarrierDelegation, CarrierOpFrame, Op, TreehouseProduct } from "@treetopdevs/lattice-client";
 
 // One decoded and judged replica, shared by every projection (03: recomputed once per change of its
@@ -25,12 +25,19 @@ export interface ReplicaView {
    * lattice-client derives it with a second materialize and a timeline does not need it.
    */
   readonly live: readonly CarrierDelegation[];
+  /**
+   * Every delegation the judge honors here, once each, with lattice-client's reason an op authored now could
+   * not cite it (null when usable; `live` is that subset). A delegation absent here was never honored.
+   */
+  readonly delegationStates: ReadonlyMap<string, { delegation: CarrierDelegation; refusal: "revoked_capability" | "lease_expired" | null }>;
 }
 
 export function viewReplica(replica: string, product: TreehouseProduct, frames: readonly CarrierOpFrame[]): ReplicaView {
   const ops = carrierOpsToSemanticOps([...frames], {}, treehouseCommandDecoders(product));
   const observed = observeTreehouse(product, ops);
   let live: readonly CarrierDelegation[] | null = null;
+  let states: ReplicaView["delegationStates"] | null = null;
+  const delegationStates = () => (states ??= new Map(treehouseDelegationStates(product, frames, replica).map((s) => [s.delegation.id, s])));
   return {
     replica,
     product,
@@ -42,8 +49,11 @@ export function viewReplica(replica: string, product: TreehouseProduct, frames: 
     order: observed.order,
     posts: observed.posts,
     get live() {
-      live ??= liveTreehouseDelegations(product, frames, replica);
+      live ??= [...delegationStates().values()].filter((s) => s.refusal === null).map((s) => s.delegation);
       return live;
+    },
+    get delegationStates() {
+      return delegationStates();
     },
   };
 }
