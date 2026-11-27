@@ -74,16 +74,6 @@ export function createIdentityFromSeedHex(realm: string, seedHex: string): DemoI
   };
 }
 
-export function generateEphemeralIdentity(realm: string): DemoIdentity {
-  const seed = new Uint8Array(32);
-  if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.getRandomValues === "function") {
-    globalThis.crypto.getRandomValues(seed);
-  } else {
-    throw new Error("crypto_unavailable");
-  }
-  return createIdentityFromSeedHex(realm, bytesToHex(seed));
-}
-
 export const strictCarrierVerifier: CarrierVerifier = {
   verify(pubkey: Uint8Array, bytes: Uint8Array, signature: Uint8Array): boolean {
     return verifyEd25519(signature, bytes, pubkey);
@@ -111,6 +101,13 @@ export interface DemoStorage {
   load(namespace: string): Promise<PersistedDemoSnapshot>;
   save(snapshot: PersistedDemoSnapshot): Promise<void>;
   clear(namespace: string): Promise<void>;
+  /**
+   * Claim sole ownership of `namespace` for this page and return its release, or throw
+   * `namespace_in_use` when another tab holds it. `save` replaces the whole stored record, so two
+   * tabs writing one namespace would overwrite each other's frames and outbox entries.
+   * Optional: a store that is private to its page has nothing to claim.
+   */
+  claim?(namespace: string): Promise<() => void>;
 }
 
 export function emptySnapshot(namespace: string): PersistedDemoSnapshot {
@@ -157,6 +154,7 @@ export class MemoryDemoStorage implements DemoStorage {
 
 const DB_NAME = "lattice_browser_starter_demo_v1";
 const STORE_NAME = "snapshots";
+const CLAIM_WAIT_MS = 2_000;
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -172,58 +170,103 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
+/** Settle on the transaction's own outcome: a request can succeed and its commit still abort. */
+function settled(tx: IDBTransaction, failure: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error(failure));
+    tx.onabort = () => reject(tx.error ?? new Error(failure));
+  });
+}
+
 export class IndexedDbDemoStorage implements DemoStorage {
   private readonly fallback = new MemoryDemoStorage();
+  /** Decided once, on the first open: a store that changed kind mid-session would hide what it held. */
+  private mode: Promise<"indexeddb" | "memory"> | null = null;
 
-  private hasIndexedDb(): boolean {
-    return typeof indexedDB !== "undefined";
+  /** `memory` when IndexedDB is absent or cannot be opened (blocked by policy, private context). */
+  storageMode(): Promise<"indexeddb" | "memory"> {
+    this.mode ??= (async () => {
+      if (typeof indexedDB === "undefined") return "memory";
+      try {
+        (await openDb()).close();
+        return "indexeddb";
+      } catch (error) {
+        console.warn("IndexedDB is unavailable; demo custody is in memory for this page only.", error);
+        return "memory";
+      }
+    })();
+    return this.mode;
   }
 
   async load(namespace: string): Promise<PersistedDemoSnapshot> {
-    if (!this.hasIndexedDb()) return this.fallback.load(namespace);
+    if ((await this.storageMode()) === "memory") return this.fallback.load(namespace);
     const db = await openDb();
     try {
-      return await new Promise<PersistedDemoSnapshot>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readonly");
-        const req = tx.objectStore(STORE_NAME).get(namespace);
-        req.onsuccess = () => {
-          const result = req.result as PersistedDemoSnapshot | undefined;
-          resolve(result && result.version === 1 ? result : emptySnapshot(namespace));
-        };
-        req.onerror = () => reject(req.error ?? new Error("indexeddb_read_failed"));
-      });
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const req = tx.objectStore(STORE_NAME).get(namespace);
+      await settled(tx, "indexeddb_read_failed");
+      const result = req.result as PersistedDemoSnapshot | undefined;
+      return result && result.version === 1 ? result : emptySnapshot(namespace);
     } finally {
       db.close();
     }
   }
 
   async save(snapshot: PersistedDemoSnapshot): Promise<void> {
-    if (!this.hasIndexedDb()) return this.fallback.save(snapshot);
+    if ((await this.storageMode()) === "memory") return this.fallback.save(snapshot);
     const db = await openDb();
     try {
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).put(snapshot);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error ?? new Error("indexeddb_write_failed"));
-      });
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put(snapshot);
+      await settled(tx, "indexeddb_write_failed");
     } finally {
       db.close();
     }
   }
 
   async clear(namespace: string): Promise<void> {
-    if (!this.hasIndexedDb()) return this.fallback.clear(namespace);
+    if ((await this.storageMode()) === "memory") return this.fallback.clear(namespace);
     const db = await openDb();
     try {
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).delete(namespace);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error ?? new Error("indexeddb_delete_failed"));
-      });
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).delete(namespace);
+      await settled(tx, "indexeddb_delete_failed");
     } finally {
       db.close();
     }
+  }
+
+  /**
+   * One owner tab per namespace, held as a Web Lock for as long as the page uses the namespace. The
+   * wait covers a reload, where the previous document releases its lock as it unloads. Without Web
+   * Locks, or in memory mode, there is nothing shared to guard and the claim is a no-op.
+   */
+  async claim(namespace: string): Promise<() => void> {
+    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+    if (locks === undefined || (await this.storageMode()) === "memory") return () => {};
+    const waiting = new AbortController();
+    const timer = setTimeout(() => waiting.abort(), CLAIM_WAIT_MS);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await new Promise<void>((granted, refused) => {
+        locks
+          .request(`${DB_NAME}:${namespace}`, { signal: waiting.signal }, () => {
+            granted();
+            return held;
+          })
+          .catch(refused);
+      });
+    } catch {
+      throw new Error(
+        "namespace_in_use: this identity is already open in another tab; close it or pick another identity",
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    return release;
   }
 }

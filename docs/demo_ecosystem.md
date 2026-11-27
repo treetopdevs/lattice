@@ -30,6 +30,12 @@ Then open:
 - **Tab 2 (Neighbor — member / resident / borrower):** `http://127.0.0.1:5180/?role=neighbor`
 - **Tab 3 (Township Phoenix LiveView + Vue Causal Replay):** `http://localhost:4120/township`
 
+The launcher prints these addresses only once the browser starter and the LiveView answer, and it stops all three services if any one of them exits. It does not move to another port when one is taken; pass `--web-port` or `--liveview-port` instead.
+
+Each identity can be open in one tab at a time: a second tab for the same role reports `namespace_in_use`, because both would write the same stored profile. The launchers run `$MIX` when set, else the asdf shim when present, else `mix` on `PATH`.
+
+The fixture directory records the relay base port it was prepared for. To move the relay, pass `--reset --base-port <port>` to `scripts/demo_ecosystem_relay.sh` (this discards the demo logs); a different `--base-port` without `--reset` is refused.
+
 ### Optional: Connect the Native Treehouse Desktop App
 
 While the relay is running, launch a Treehouse desktop demo instance wired to the exact same `founder` or `neighbor` identity and routes:
@@ -41,6 +47,8 @@ scripts/demo_ecosystem_treehouse.sh neighbor
 ```
 
 Paste the printed `treehouse-routes-<role>.json` into Treehouse's Enrollment panel to interoperate live with the browser tabs.
+
+This launcher is macOS-only (it builds and runs the `.app` bundle). It rebuilds the dev-trace variant whenever the bundle on disk is not the one it built, since every Treehouse build variant writes to the same bundle path.
 
 ---
 

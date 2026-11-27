@@ -22,22 +22,51 @@ alias Treehouse.{Invitation, Space}
 defmodule DemoEcosystemPrepare do
   @default_dir "output/demo_ecosystem"
   @default_base_port 4200
+  @marker ".prepared.json"
+  @fixture_entries ["manifest.json", "demo-endpoints.json", "identities", "logs"]
 
   def run(argv) do
     opts = parse_args(argv)
     dir = Path.expand(opts.dir)
-    manifest_path = Path.join(dir, "manifest.json")
-    endpoints_path = Path.join(dir, "demo-endpoints.json")
 
     if opts.reset and File.exists?(dir) do
       File.rm_rf!(dir)
     end
 
-    if File.exists?(manifest_path) and File.exists?(endpoints_path) do
-      IO.puts("Demo ecosystem already prepared at #{dir} (pass --reset to regenerate).")
-      :ok
+    case prepared_base_port(dir) do
+      {:ok, prepared_port} when opts.base_port in [nil, prepared_port] ->
+        IO.puts("Demo ecosystem already prepared at #{dir} (pass --reset to regenerate).")
+        :ok
+
+      {:ok, prepared_port} ->
+        Mix.raise(
+          "#{dir} is prepared for base port #{prepared_port}, not #{opts.base_port}. " <>
+            "Pass --reset with --base-port #{opts.base_port} to regenerate it " <>
+            "(this discards the demo logs), or use another --dir."
+        )
+
+      :incomplete ->
+        Mix.raise(
+          "#{dir} holds demo fixture files but no completion marker: an earlier prepare " <>
+            "did not finish, or it predates the marker. Pass --reset to regenerate it."
+        )
+
+      :absent ->
+        prepare_fresh(dir, opts.base_port || @default_base_port)
+    end
+  end
+
+  # The marker is written last, after every output, so its presence means the fixture is whole.
+  # It records the base port because the relay manifest and every route file embed it.
+  defp prepared_base_port(dir) do
+    with {:ok, json} <- File.read(Path.join(dir, @marker)),
+         {:ok, %{"base_port" => port}} when is_integer(port) <- Jason.decode(json) do
+      {:ok, port}
     else
-      prepare_fresh(dir, opts.base_port)
+      _ ->
+        if Enum.any?(@fixture_entries, &File.exists?(Path.join(dir, &1))),
+          do: :incomplete,
+          else: :absent
     end
   end
 
@@ -54,7 +83,7 @@ defmodule DemoEcosystemPrepare do
     %{
       dir: Keyword.get(parsed, :dir, System.get_env("DEMO_ECOSYSTEM_DIR") || @default_dir),
       reset: Keyword.get(parsed, :reset, false),
-      base_port: Keyword.get(parsed, :base_port, @default_base_port)
+      base_port: Keyword.get(parsed, :base_port)
     }
   end
 
@@ -258,6 +287,8 @@ defmodule DemoEcosystemPrepare do
 
       File.chmod!(path, 0o644)
     end
+
+    File.write!(Path.join(dir, @marker), Jason.encode!(%{"base_port" => base_port}) <> "\n")
 
     IO.puts("Prepared unified demo ecosystem in #{dir}")
     IO.puts("  manifest:  #{manifest_path}")

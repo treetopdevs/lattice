@@ -8,12 +8,20 @@ set -euo pipefail
 # Usage:
 #   scripts/demo_ecosystem_treehouse.sh [founder|neighbor] [--build-only] [--dir <path>]
 #
+# macOS only: the dev-trace variant is built and launched as a `.app` bundle.
+#
 # Security / honesty note:
 #   Assisted local demo profile using static routes (EnrollmentPanel) and
 #   deterministic dev-trace seeds. Ordinary production builds stay untouched.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "scripts/demo_ecosystem_treehouse.sh is macOS-only: it builds and launches the Treehouse .app bundle." >&2
+  echo "The browser starter (scripts/demo_ecosystem_up.sh) covers Treehouse on other platforms." >&2
+  exit 1
+fi
 
 ROLE="founder"
 BUILD_ONLY=0
@@ -57,12 +65,27 @@ fi
 mkdir -p "$DATA_DIR"
 chmod 700 "$DATA_DIR"
 
-APP_BIN="$ROOT_DIR/clients/treehouse-tauri-shell/src-tauri/target/release/bundle/macos/Treehouse.app/Contents/MacOS/treehouse-tauri-shell"
+BUNDLE_DIR="$ROOT_DIR/clients/treehouse-tauri-shell/src-tauri/target/release/bundle/macos"
+APP_BIN="$BUNDLE_DIR/Treehouse.app/Contents/MacOS/treehouse-tauri-shell"
+# Every Treehouse build variant writes to this one bundle path, so an executable there says nothing
+# about which variant it is. The stamp records the hash of the binary this script's dev-trace build
+# produced; any other build replaces the binary and no longer matches it.
+STAMP="$BUNDLE_DIR/Treehouse.dev-trace.sha256"
 
-if [[ "$BUILD_ONLY" -eq 1 || ! -x "$APP_BIN" ]]; then
+binary_hash() {
+  shasum -a 256 "$APP_BIN" | cut -d' ' -f1
+}
+
+is_dev_trace_build() {
+  [[ -x "$APP_BIN" && -f "$STAMP" && "$(binary_hash)" == "$(cat "$STAMP")" ]]
+}
+
+if [[ "$BUILD_ONLY" -eq 1 ]] || ! is_dev_trace_build; then
   echo "Building Treehouse desktop demo variant (enrollment + dev-trace)..."
+  rm -f "$STAMP"
   npm --prefix clients/lattice-client run build
   npm --prefix clients/treehouse-tauri-shell run tauri:build:dev-trace
+  binary_hash > "$STAMP"
 fi
 
 if [[ "$BUILD_ONLY" -eq 1 ]]; then

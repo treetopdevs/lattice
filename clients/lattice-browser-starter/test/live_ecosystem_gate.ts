@@ -384,8 +384,10 @@ try {
   await founderHost.appendLocalFrame(toolEp.replica, dualTransfer);
 
   const rootCap = pickRootDelegationId(
+    "Toolshed.Tool",
     founderHost.getFrames(toolEp.replica),
     founder.publicKeyBase64,
+    realmByPubkey,
   );
   assert.ok(rootCap, "tool root cap");
   await founderHost.appendLocalFrame(
@@ -468,10 +470,10 @@ try {
   }, "neighbor observes tool returned home");
 
   // ── 4. Cross-runtime BEAM Oracle Verification on persisted relay logs ──────
-  const beamEnv = {
-    ...process.env,
-    PATH: `${process.env.HOME}/.asdf/installs/erlang/28.3.1/bin:${process.env.HOME}/.asdf/installs/elixir/1.19.5-otp-28/bin:${process.env.PATH ?? ""}`,
-  };
+  // Same resolution as scripts/demo_ecosystem_env.sh: $MIX, else the asdf shim when this machine
+  // has one, else whatever `mix` is on PATH.
+  const asdfMix = path.join(process.env.HOME ?? "", ".asdf/shims/mix");
+  const mix = process.env.MIX || (fs.existsSync(asdfMix) ? asdfMix : "mix");
   const elixirCheck = `
     Enum.each([Treehouse.Space, Treehouse.Thread, Township.Matter, Toolshed.Shed, Toolshed.Tool], &Code.ensure_loaded!/1)
 
@@ -491,11 +493,10 @@ try {
 
     IO.puts("BEAM_ORACLE_VERIFIED")
   `;
-  const beamOut = execFileSync(
-    `${process.env.HOME}/.asdf/shims/mix`,
-    ["run", "--no-compile", "-e", elixirCheck],
-    { cwd: REPO_ROOT, env: beamEnv, encoding: "utf8" },
-  );
+  const beamOut = execFileSync(mix, ["run", "--no-compile", "-e", elixirCheck], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
   assert.ok(beamOut.includes("BEAM_ORACLE_VERIFIED"), `BEAM oracle output: ${beamOut}`);
 
   console.log(

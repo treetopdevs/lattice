@@ -54,7 +54,34 @@ cleanup() {
   [[ -n "$RELAY_PID" ]] && kill "$RELAY_PID" 2>/dev/null || true
   rm -f "$RELAY_IN" "$RELAY_OUT"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+# The supervising loop below is not interrupted by a signal the way a bare `wait` is, so exit here
+# and let the EXIT trap stop the services.
+trap 'exit 130' INT TERM
+
+# Name the first required service that is no longer running, if any.
+exited_service() {
+  if ! kill -0 "$RELAY_PID" 2>/dev/null; then echo "relay"; return 0; fi
+  if [[ -n "$LV_PID" ]] && ! kill -0 "$LV_PID" 2>/dev/null; then echo "Township LiveView"; return 0; fi
+  if [[ -n "$WEB_PID" ]] && ! kill -0 "$WEB_PID" 2>/dev/null; then echo "browser starter"; return 0; fi
+  return 1
+}
+
+# Wait until <url> answers, failing as soon as any required service has exited.
+wait_until_serving() {
+  local label="$1" url="$2" deadline=$((SECONDS + $3)) gone
+  until curl --silent --fail --output /dev/null --max-time 2 "$url"; do
+    if gone="$(exited_service)"; then
+      echo "The $gone process exited before $label was ready; see its output above." >&2
+      exit 1
+    fi
+    if (( SECONDS >= deadline )); then
+      echo "$label did not answer at $url within $3 seconds." >&2
+      exit 1
+    fi
+    sleep 1
+  done
+}
 
 scripts/demo_ecosystem_relay.sh ${RESET_ARG[@]+"${RESET_ARG[@]}"} < "$RELAY_IN" > "$RELAY_OUT" 2>&1 &
 RELAY_PID=$!
@@ -80,8 +107,13 @@ fi
 scripts/demo_ecosystem_township_live.sh "$LIVEVIEW_PORT" &
 LV_PID=$!
 
-npm --prefix clients/lattice-browser-starter run dev -- --port "$WEB_PORT" &
+# --strictPort: the URL printed below must be the one the starter listens on.
+npm --prefix clients/lattice-browser-starter run dev -- --port "$WEB_PORT" --strictPort &
 WEB_PID=$!
+
+# The first LiveView start may compile, so it gets the longer wait.
+wait_until_serving "Browser starter" "http://127.0.0.1:${WEB_PORT}/" 60
+wait_until_serving "Township LiveView" "http://127.0.0.1:${LIVEVIEW_PORT}/township" 300
 
 echo ""
 echo "============================================================================"
@@ -96,4 +128,12 @@ echo "==========================================================================
 echo "Press Ctrl-C to stop all services."
 echo ""
 
-wait
+# Supervise: the demo needs all three, so one of them exiting stops the rest (macOS ships bash 3.2,
+# which has no `wait -n`).
+while true; do
+  if gone="$(exited_service)"; then
+    echo "The $gone process exited; stopping the demo ecosystem." >&2
+    exit 1
+  fi
+  sleep 1
+done

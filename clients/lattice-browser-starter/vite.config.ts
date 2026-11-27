@@ -4,10 +4,10 @@ import { defineConfig, type Plugin } from "vite";
 import vue from "@vitejs/plugin-vue";
 
 function demoEcosystemPlugin(): Plugin {
-  const demoDir = path.resolve(
-    import.meta.dirname,
-    process.env.DEMO_ECOSYSTEM_DIR || "../../output/demo_ecosystem",
-  );
+  // A relative DEMO_ECOSYSTEM_DIR is relative to the repository root, as it is for the relay and
+  // Township launchers, so one value names one fixture directory for all of them.
+  const repoRoot = path.resolve(import.meta.dirname, "../..");
+  const demoDir = path.resolve(repoRoot, process.env.DEMO_ECOSYSTEM_DIR || "output/demo_ecosystem");
 
   const serve = (
     req: { url?: string },
@@ -85,6 +85,8 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5180,
-    strictPort: false,
+    // The launcher prints this port; moving to the next free one would send people to whatever
+    // already holds it.
+    strictPort: true,
   },
 });

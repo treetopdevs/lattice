@@ -10,8 +10,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-export PATH="$HOME/.asdf/installs/erlang/28.3.1/bin:$HOME/.asdf/installs/elixir/1.19.5-otp-28/bin:$PATH"
-MIX="$HOME/.asdf/shims/mix"
+# shellcheck source=scripts/demo_ecosystem_env.sh
+source "$ROOT_DIR/scripts/demo_ecosystem_env.sh"
 
 PORT="${1:-4120}"
 DEMO_DIR="${2:-${DEMO_ECOSYSTEM_DIR:-output/demo_ecosystem}}"

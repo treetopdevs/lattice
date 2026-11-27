@@ -2,11 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import type { CarrierOpFrame } from "@treetopdevs/lattice-client";
 import type { FeedState } from "@treetopdevs/lattice-shell-kit/sync";
-import {
-  createIdentityFromSeedHex,
-  generateEphemeralIdentity,
-  type DemoIdentity,
-} from "./lib/custody";
+import { createIdentityFromSeedHex, type DemoIdentity } from "./lib/custody";
 import {
   BrowserEcosystemHost,
   type DemoEndpoint,
@@ -18,7 +14,7 @@ import ToolshedApp from "./components/ToolshedApp.vue";
 import DagInspector from "./components/DagInspector.vue";
 
 type AppTab = "treehouse" | "township" | "toolshed";
-type DemoRole = "founder" | "neighbor" | "observer" | "ephemeral";
+type DemoRole = "founder" | "neighbor" | "observer";
 
 const initialRole = (() => {
   const param = new URLSearchParams(window.location.search).get("role");
@@ -28,6 +24,8 @@ const initialRole = (() => {
 
 const activeTab = ref<AppTab>("treehouse");
 const selectedRole = ref<DemoRole>(initialRole);
+/** The role whose identity the host is configured with; the select snaps back to it when a switch fails. */
+let activeRole: DemoRole | null = null;
 const manifest = shallowRef<DemoEndpointsManifest | null>(null);
 const identity = shallowRef<DemoIdentity | null>(null);
 const feedState = shallowRef<FeedState>({ configured: false, routes: [] });
@@ -84,28 +82,27 @@ async function connectAsRole(role: DemoRole) {
       );
     }
     const data = (await epRes.json()) as DemoEndpointsManifest;
-    manifest.value = data;
 
-    let id: DemoIdentity;
-    if (role === "ephemeral") {
-      id = generateEphemeralIdentity("demo-guest");
-    } else {
-      const seedRes = await fetch(`/demo-seed/${role}`, { cache: "no-store" });
-      if (!seedRes.ok) {
-        throw new Error(`Could not load local dev seed for role "${role}".`);
-      }
-      const seedData = (await seedRes.json()) as { realm: string; seedHex: string };
-      id = createIdentityFromSeedHex(seedData.realm, seedData.seedHex);
+    const seedRes = await fetch(`/demo-seed/${role}`, { cache: "no-store" });
+    if (!seedRes.ok) {
+      throw new Error(`Could not load local dev seed for role "${role}".`);
     }
-    identity.value = id;
+    const seedData = (await seedRes.json()) as { realm: string; seedHex: string };
+    const id = createIdentityFromSeedHex(seedData.realm, seedData.seedHex);
 
+    // Published only once the host holds this identity: the product panels sign with what they are
+    // given, and a failed switch leaves the host on the previous identity and profile.
     await host.configure(data.endpoints, id, `${id.realm}:${id.fingerprint}`);
+    manifest.value = data;
+    identity.value = id;
+    activeRole = role;
     await host.goOnline();
-    refreshSnapshots();
   } catch (err) {
     bootError.value = err instanceof Error ? err.message : String(err);
+    if (activeRole !== null) selectedRole.value = activeRole;
   } finally {
     loading.value = false;
+    refreshSnapshots();
   }
 }
 
@@ -145,10 +142,13 @@ async function resetLocalCache() {
   refreshSnapshots();
 }
 
-async function handleAppendFrame(replica: string, frame: CarrierOpFrame) {
-  await host.appendLocalFrame(replica, frame);
+async function handleAppendFrames(replica: string, frames: CarrierOpFrame[]) {
+  await host.appendLocalFrames(replica, frames);
   refreshSnapshots();
 }
+
+const handleAppendFrame = (replica: string, frame: CarrierOpFrame) =>
+  handleAppendFrames(replica, [frame]);
 
 onMounted(() => {
   void connectAsRole(selectedRole.value);
@@ -192,7 +192,6 @@ onBeforeUnmount(() => {
             <option value="founder">demo-founder (root/clerk/steward)</option>
             <option value="neighbor">demo-neighbor (member/borrower)</option>
             <option value="observer">demo-observer (read-only)</option>
-            <option value="ephemeral">ephemeral browser key</option>
           </select>
         </label>
 
@@ -291,6 +290,7 @@ onBeforeUnmount(() => {
       :identity="identity"
       :realm-by-pubkey="realmByPubkey"
       :on-append-frame="handleAppendFrame"
+      :on-append-frames="handleAppendFrames"
     />
 
     <DagInspector

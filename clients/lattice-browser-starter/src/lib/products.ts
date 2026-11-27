@@ -577,6 +577,41 @@ export function frontierIds(frames: CarrierOpFrame[]): string[] {
   return frontier(ops);
 }
 
+/**
+ * Delegations the authority projection validated, each from an honored authority frame that
+ * introduced it, in canonical op order (a function of the op set, not of the order frames arrived
+ * in). A delegation-shaped term nested anywhere else in a frame body is not authority evidence and
+ * never appears, so a participant cannot plant a capability for someone else to cite.
+ */
+function honoredDelegations(
+  product: DemoProduct,
+  frames: CarrierOpFrame[],
+  realmByPubkey: Record<string, string>,
+): { entries: { delegation: CarrierDelegation; op: Op }[]; analysis: AuthorityAnalysis } {
+  const ops = framesToOps(product, frames, realmByPubkey);
+  const schema = schemaForProduct(product);
+  const quarantined = materialize(schema, ops).quarantineReasons;
+  const { orderedOps, analysis } = runAuthority(schema, ops);
+  const frameById = new Map(frames.map((frame) => [frame.id, frame]));
+  const entries: { delegation: CarrierDelegation; op: Op }[] = [];
+  for (const op of orderedOps) {
+    const frame = frameById.get(op.id);
+    if (op.kind !== "authority" || quarantined.has(op.id) || frame === undefined) continue;
+    for (const delegation of carrierDelegationsFromFrames([frame])) {
+      const record = analysis.security.delegations.get(delegation.id);
+      if (
+        delegation.replica === frame.replica &&
+        record?.delegation != null &&
+        record.validation.valid &&
+        record.introductionOpIds.includes(frame.id)
+      ) {
+        entries.push({ delegation, op });
+      }
+    }
+  }
+  return { entries, analysis };
+}
+
 /** Pick the best currently valid delegation id authorizing `commandName` for `pubkeyBase64`. */
 export function pickCapabilityForCommand(
   product: DemoProduct,
@@ -585,20 +620,15 @@ export function pickCapabilityForCommand(
   commandName: string,
   realmByPubkey: Record<string, string>,
 ): string | null {
-  const ops = framesToOps(product, frames, realmByPubkey);
-  const schema = schemaForProduct(product);
-  const { analysis } = runAuthority(schema, ops);
-  const delegations = carrierDelegationsFromFrames(frames);
+  const { entries, analysis } = honoredDelegations(product, frames, realmByPubkey);
   const revoked = effectiveRevokedIds(analysis);
   const epoch = currentBeaconEpoch(analysis);
 
   let chosen: CarrierDelegation | null = null;
-  for (const d of delegations) {
+  for (const { delegation: d } of entries) {
     if (d.audience !== pubkeyBase64) continue;
     if (!d.ops.includes(commandName)) continue;
     if (revoked.has(d.id)) continue;
-    const record = analysis.security.delegations.get(d.id);
-    if (record && !record.validation.valid) continue;
     if (d.expires_epoch !== undefined && epoch !== null && epoch > d.expires_epoch) {
       continue;
     }
@@ -609,12 +639,15 @@ export function pickCapabilityForCommand(
 
 /** Pick the caller's root/genesis delegation id (useful for issuing child grants). */
 export function pickRootDelegationId(
+  product: DemoProduct,
   frames: CarrierOpFrame[],
   pubkeyBase64: string,
+  realmByPubkey: Record<string, string>,
 ): string | null {
-  const delegations = carrierDelegationsFromFrames(frames);
-  const root = delegations.find((d) => d.parent_id === null && d.audience === pubkeyBase64);
-  return root?.id ?? null;
+  const root = honoredDelegations(product, frames, realmByPubkey).entries.find(
+    ({ delegation }) => delegation.parent_id === null && delegation.audience === pubkeyBase64,
+  );
+  return root?.delegation.id ?? null;
 }
 
 export interface TownshipMatterView {
@@ -805,16 +838,16 @@ export function observeToolshedTool(
     typeof projection.state.holder === "string" ? projection.state.holder : null;
   const available = holder === null || holder === homeHolder;
 
-  // Derive active loan from latest honored leased grant to the current borrower.
+  // The active loan mirrors `Toolshed.ReadModel.observe/1`: fold the honored grants in canonical op
+  // order and keep the last leased one to the current holder. The order comes from the op set, so
+  // replicas that received the same leases in different frame orders agree on the due epoch.
   let loan: ToolshedToolView["loan"] = null;
   if (!available && holderPubkey) {
-    const delegations = carrierDelegationsFromFrames(frames);
     let borrowCap: CarrierDelegation | null = null;
-    for (const d of delegations) {
-      if (d.audience !== holderPubkey || d.expires_epoch === undefined) continue;
-      const rec = analysis.security.delegations.get(d.id);
-      if (rec && !rec.validation.valid) continue;
-      borrowCap = d;
+    for (const { delegation, op } of honoredDelegations("Toolshed.Tool", frames, realmByPubkey).entries) {
+      if (op.authority?.type !== "grant") continue;
+      if (delegation.audience !== holderPubkey || delegation.expires_epoch === undefined) continue;
+      borrowCap = delegation;
     }
     const dueEpoch = borrowCap?.expires_epoch ?? null;
     const overdue = dueEpoch !== null && epoch !== null && epoch > dueEpoch;

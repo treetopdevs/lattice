@@ -25,6 +25,8 @@ const props = defineProps<{
   identity: DemoIdentity | null;
   realmByPubkey: Record<string, string>;
   onAppendFrame: (replica: string, frame: CarrierOpFrame) => Promise<void>;
+  /** Stores several frames in one write, so they are durable together or not at all. */
+  onAppendFrames: (replica: string, frames: CarrierOpFrame[]) => Promise<void>;
 }>();
 
 const newNeighbor = ref("");
@@ -196,6 +198,19 @@ async function completeBorrowTransfer(requestOpId: string, borrowerPubkey: strin
       ? "Authored unconsented custody_transfer (check ADR 0007 missing_consent quarantine)."
       : `Completed dual-signed handoff with leased borrow cap (due epoch ${dueEpoch.value}).`,
     async () => {
+      // Both frames are authored before either is stored, and stored in one write: a transfer
+      // without its lease would resolve the request and leave no way to issue the lease.
+      const rootCapId = unconsented
+        ? null
+        : pickRootDelegationId(
+            "Toolshed.Tool",
+            props.toolFrames,
+            props.identity!.publicKeyBase64,
+            props.realmByPubkey,
+          );
+      if (!unconsented && rootCapId === null) {
+        throw new Error("No root capability held for this tool: the borrow lease cannot be issued.");
+      }
       const transferFrame = await authorToolshedToolCommand({
         replica: props.toolEndpoint!.replica,
         deps: frontierIds(props.toolFrames),
@@ -208,23 +223,20 @@ async function completeBorrowTransfer(requestOpId: string, borrowerPubkey: strin
           consentSigBase64: sig,
         },
       });
-      await props.onAppendFrame(props.toolEndpoint!.replica, transferFrame);
-
-      if (!unconsented) {
-        const rootCapId = pickRootDelegationId(props.toolFrames, props.identity!.publicKeyBase64);
-        if (rootCapId) {
-          const leaseFrame = await authorToolshedBorrowGrant({
-            replica: props.toolEndpoint!.replica,
-            deps: [transferFrame.id],
-            parentDelegationId: rootCapId,
-            borrowerPubkeyBase64: borrowerPubkey,
-            expiresEpoch: dueEpoch.value,
-            signer: props.identity!.signer,
-          });
-          await props.onAppendFrame(props.toolEndpoint!.replica, leaseFrame);
-        }
-        consentInput.value = "";
+      if (rootCapId === null) {
+        await props.onAppendFrame(props.toolEndpoint!.replica, transferFrame);
+        return;
       }
+      const leaseFrame = await authorToolshedBorrowGrant({
+        replica: props.toolEndpoint!.replica,
+        deps: [transferFrame.id],
+        parentDelegationId: rootCapId,
+        borrowerPubkeyBase64: borrowerPubkey,
+        expiresEpoch: dueEpoch.value,
+        signer: props.identity!.signer,
+      });
+      await props.onAppendFrames(props.toolEndpoint!.replica, [transferFrame, leaseFrame]);
+      consentInput.value = "";
     },
   );
 }
