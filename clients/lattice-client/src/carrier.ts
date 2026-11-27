@@ -1653,11 +1653,13 @@ function decodeCarrierBody(op: CarrierOpFrame, opaqueCommandArguments: OpaqueCom
   // BEAM's Authority reason. Without a map the built-in tables decode strictly (`malformed_term`).
   // The generic frame reader (`decodeCarrierOpFrame`) keeps its pre-row-336 rule, opaque only for
   // replace_catalog_v1, because catalog trust and product readers depend on its outcomes.
+  // The command-judge reader admits any head, as BEAM does; the head itself decodes strictly.
   // Non-list arguments, caps and other positions stay strict (row 212).
   if (opaqueCommandArguments !== "none" && op.kind === "command" && body[0] === "tuple" && body.length === 2 &&
-      Array.isArray(body[1]) && body[1].length === 2 && body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
-      body[1][1]?.[0] === "list" && (opaqueCommandArguments === "all" || body[1][0][1] === "replace_catalog_v1")) {
-    return { type: "tuple", values: [decodeCarrierTerm(body[1][0], "strict", inner),
+      Array.isArray(body[1]) && body[1].length === 2 && body[1][1]?.[0] === "list" &&
+      (opaqueCommandArguments === "all" || (body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
+        body[1][0][1] === "replace_catalog_v1"))) {
+    return { type: "tuple", values: [decodeCarrierTerm(body[1][0]!, "strict", inner),
       decodeCarrierTerm(body[1][1], "opaque_integer", inner)] };
   }
   if (op.kind !== "authority" || body[0] !== "tuple" || body.length !== 2 ||

@@ -73,4 +73,19 @@ for (const [label, load] of runtimes) {
             }
         }
     });
+    test(`${label}: a non-atom command head with a high argument gets the same reason as with a safe one`, async () => {
+        const api = await load();
+        const base = vector.cases.find((c) => c.name === "create_space-high").frame;
+        const decoders = api.treehouseCommandDecoders("Treehouse.Space");
+        const reasonFor = (frame) => api.observeTreehouse("Treehouse.Space", api.carrierOpsToSemanticOps([...vector.space.frames, frame], {}, decoders)).quarantineReasons.get(frame.id);
+        for (const head of [["nil"], ["bin", "cG9zdA=="], ["int", 1]]) {
+            const highFrame = { ...base, body: ["tuple", [head, ["list", [["int", "9007199254740992"]]]]] };
+            const safeFrame = { ...base, body: ["tuple", [head, ["list", [["int", 1]]]]] };
+            assert.deepEqual(api.decodeCarrierCommandJudgeFrame(highFrame), highFrame, JSON.stringify(head));
+            assert.throws(() => api.decodeCarrierOpFrame(highFrame), /malformed carrier op/, JSON.stringify(head));
+            const safe = reasonFor(safeFrame);
+            assert.ok(safe === "malformed_command" || safe === "unknown_command", JSON.stringify(head));
+            assert.equal(reasonFor(highFrame), safe, JSON.stringify(head));
+        }
+    });
 }
