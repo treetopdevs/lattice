@@ -245,6 +245,27 @@ defmodule Treehouse.CatalogResolutionWorld do
   def act(w, {:adv_rotation, b, c, withhold_prior, gen_ok, proofs}),
     do: adv_rotation(w, b, c, withhold_prior, gen_ok, proofs)
 
+  # Row 594: an honest-key rotation. The key holder of a current honest head (the `k`-th honest
+  # one in the resolver's own head list: the bootstrap, an honest replacement or an earlier
+  # honest rotation) rotates it over that head's own catalog while that catalog is a held tip,
+  # with the next generation and its cutoff proofs delivered, then signs a revision-0 catalog
+  # under the new key carrying the prior's entries. Nothing is withheld. With no such head or
+  # tip (an adversary revision extends it) the step is skipped.
+  def act(w, {:rotate, k}) do
+    view = held(w)
+    {heads, _} = heads(w, view)
+    honest = for h <- Enum.sort(heads), match?(%{honest: true}, w.bindings[h]), do: h
+
+    with [_ | _] <- honest,
+         x = Enum.at(honest, rem(k, length(honest))),
+         [prior | _] <-
+           for(c <- tips(w, view, x, []), not w.catalogs[c].adversary, do: c) do
+      honest_rotation(w, x, w.catalogs[prior].env)
+    else
+      _ -> note(w, "honest rotation skipped (no honest head with its own catalog as a tip)")
+    end
+  end
+
   defp adv_catalog(w, x, cid, env, {label, revision, previous, mutation, withhold}) do
     w = %{
       w
@@ -356,6 +377,63 @@ defmodule Treehouse.CatalogResolutionWorld do
       w,
       "adversary rotates #{parent.label} to #{label} over #{prev_label(w, F.cid(prior))}" <>
         "#{if gen_ok, do: "", else: " (generation skips)"}#{if proofs, do: "", else: " (no proofs)"}"
+    )
+  end
+
+  defp honest_rotation(w, x, prior) do
+    {n, w} = tick(w)
+    label = "h#{n}"
+    parent = w.bindings[x]
+    key = F.identity("honest-key-#{n}")
+
+    rot =
+      F.rotation(w.base, %{id: x, generation: parent.generation}, prior, parent.key, key, label)
+
+    cutoffs = rot.envelope.rotation.cutoffs
+
+    w = %{
+      w
+      | bindings:
+          Map.put(w.bindings, rot.id, %{
+            kind: :rotation,
+            label: label,
+            parents: [x],
+            generation: parent.generation + 1,
+            key: key,
+            service: parent.service,
+            cutoffs: cutoffs,
+            honest: true,
+            prior_catalogs: [],
+            prior_catalog: F.cid(prior),
+            order: map_size(w.bindings)
+          })
+    }
+
+    env = F.catalog(w.base, rot.id, 0, nil, key, retarget(prior.catalog.entries, w, rot.id))
+    cid = F.cid(env)
+    klabel = "k#{n}"
+
+    w = %{
+      w
+      | catalogs:
+          Map.put(w.catalogs, cid, %{
+            env: env,
+            binding: rot.id,
+            revision: 0,
+            previous: nil,
+            label: klabel,
+            adversary: false,
+            withheld: false
+          })
+    }
+
+    w
+    |> add_item(%{kind: :rotation, label: label, id: rot.id, env: rot.envelope, adversary: false})
+    |> add_item(%{kind: :proof, label: label <> "-proofs", cutoffs: cutoffs, adversary: false})
+    |> add_item(%{kind: :catalog, label: "K-" <> label, id: cid, env: env, adversary: false})
+    |> note(
+      "key holder rotates #{parent.label} to #{label} over #{prev_label(w, F.cid(prior))} " <>
+        "and signs #{klabel} under it"
     )
   end
 
@@ -919,7 +997,16 @@ defmodule Treehouse.CatalogResolutionWorld do
         label =
           if lost && i == lose_at, do: item.label <> " (watermark catalog lost)", else: item.label
 
-        step = %{label: label, item: item, delivered: ev, result: result, prev: state, next: next}
+        step = %{
+          label: label,
+          item: item,
+          delivered: ev,
+          result: result,
+          prev: state,
+          next: next,
+          lost: lost
+        }
+
         {step, {delivered, persisted(next), lost}}
       end)
 
