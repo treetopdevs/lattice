@@ -4858,7 +4858,7 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 </dl></section>
 <section id="d972"><h2><span>D-972</span> Rows 525 and 355: mirrored limits, no headroom, row 355 stays partly open</h2><dl>
 <dt>When</dt><dd>2026-11-26, rows 525 and 355 slice (branch claude/525-replacement-preflight-byte-budgets, PR <a href="https://github.com/treetopdevs/lattice/pull/245">#245</a>)</dd>
-<dt>Decision</dt><dd>The count and total limits are private in <code>catalog_trust.ex</code>, so they are mirrored here; source-text pins of those constants were removed under rule 6, and row 606 asks for public constants. No count or byte headroom is reserved for the first catalog under the new binding (row 605). Row 525 closes with the PR. Row 355 keeps its sidecar-verifier half as row 603, which waits on rows 526 and 527.</dd>
+<dt>Decision</dt><dd>The count and total limits are private in <code>catalog_trust.ex</code>, so they are mirrored here; source-text pins of those constants were removed under rule 6, and row 606 asks for public constants. No count or byte headroom is reserved for the first catalog under the new binding (row 605). Row 525 closes with the PR. Row 355 keeps its sidecar-verifier half under row 395 item 1, which already owns the sidecar byte budget and waits on rows 526 and 527 (row 603 was filed for it in error and is rejected as a duplicate). Row 525 is done for compact-measured evidence only; the padded-JSON case is row 604.</dd>
 <dt>Reason</dt><dd><code>catalog_trust.ex</code> and the sidecar files are owned by other work. Reserving headroom changes what an author may sign and is a contract decision.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
 </dl></section>
