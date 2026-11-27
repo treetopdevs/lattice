@@ -4898,6 +4898,12 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The unblocked Treehouse rows left are small test-tooling items (607, 596, 609). The rows that move the product (381, 396, 255, 256, 319) depend on the four questions above.</dd>
 <dt>Status</dt><dd>Coordinator decision (2026-11-26), reversible.</dd>
 </dl></section>
+<section id="d979"><h2><span>D-979</span> PR #242: closed one-time rule 10 exception granted; Township freeze stays in force</h2><dl>
+<dt>When</dt><dd>2026-11-27, operator decision on PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a> (ledger branch claude/ledger-2026-11-27-d979)</dd>
+<dt>Decision</dt><dd>The operator granted a closed, one-time, non-precedential working-policy rule 10 exception for PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a> (rows 401 and 402) only. <code>origin/main</code> (<code>8b945cdfb</code>) was merged cleanly into <code>claude/401-402-audit-report-sections</code> at <code>13bc1bf27</code>, all 18 hosted checks passed (Flagship run 46006763075), both bot reviewers cleared with no findings, and PR #242 merged to <code>main</code> as <code>e5c809f59</code>. Rows 401 and 402 are marked DONE; row 501 narrows to its <code>audit.json</code> half and stays PARKED under rule 10. Working-policy rule 10 remains strictly in force for every other Township and Toolshed row: rows 590–593, 599–601, and all other frozen rows stay PARKED until R26/R34.</dd>
+<dt>Reason</dt><dd>PR #242 was already built, dual-reviewed, and green with zero edits to <code>Lattice.Authority</code>, <code>ReadModel</code>, <code>AuditBundle</code>, <code>Canonical</code>, wire atoms, bundle bytes, TypeScript, or Rust/Tauri. It also fixed vacant-role display (<code>"unknown key"</code> to <code>"none (vacant)"</code>) and embedded the 12-scope <code>not_claimed</code> election security manifest in the primary Township audit report. Scoping the exception strictly to already-built PR #242 resolves the PR #242 item in D-969 and D-978 without authorizing any new Township work.</dd>
+<dt>Status</dt><dd>Operator decision (2026-11-27), closed and non-precedential; resolves the PR #242 item in D-969 and D-978.</dd>
+</dl></section>
 </main>
 </body>
 </html>
