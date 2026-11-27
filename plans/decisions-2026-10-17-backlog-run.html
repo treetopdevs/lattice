@@ -4724,6 +4724,180 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Decision</dt><dd>Round 1: verdict CHANGES, one P2, no P3. An unaccepted intermediate catalog could overwrite a reserved watermark route. Fixed in D-930 and shown with a new shared S12r scenario in both runtimes. Its residual (is such a chain promotable at all, and does <code>mirror/4</code> have the same overwrite) is row 570, an unverified audit item. Round 2: verdict CHANGES, one P2, no P3. Successive replacements on one page dropped an intermediate route. Fixed in D-931 and shown with the S12s pair in both runtimes; removing the fill makes the S12s, S1, S8, S14 and S17b properties fail. No round 3 ran, so the round 2 fix is not confirmed by a later review.</dd>
 <dt>Reason</dt><dd>The last round reported a P2, so the review is not clean until a later round confirms the D-931 fix. No resolver decision, wire atom, quarantine reason or committed wire byte changed; the vectors only gained steps and stored routes.</dd>
 </dl></section>
+<section id="d950"><h2><span>D-950</span> Run policy for the 2026-11-26 backlog run</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Each slice runs as one workflow (plan check, implement, review, close) in its own worktree branched from freshly fetched <code>origin/main</code> (<code>915cba5bc</code> at the start). At most three slice PRs are open at once and their files do not overlap. The coordinator opens the PRs. Nothing is merged without the operator.</dd>
+<dt>Reason</dt><dd>The operator asked for the next meaningful slices from the latest tip with working code at all times. No merge grant was given for this run.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d951"><h2><span>D-951</span> Two reviewers per slice: Codex Sol 6.1 high and Antigravity Gemini 4 Neon medium</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Both reviewers read the same diff in parallel, read-only, for up to two rounds. P1 and P2 findings are reproduced and fixed or rejected with a reason. If the last round still found a P1 or P2, the PR says no later round confirmed the fix.</dd>
+<dt>Reason</dt><dd>The operator named both reviewers and these effort levels. Two independent reviewers also meet working-policy rule 3 for the paths that need a second review.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d952"><h2><span>D-952</span> Ledger files are edited on one coordinator branch only</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Slice branches do not edit <code>plans/README.md</code> or this file. Each slice returns its decisions and follow-up rows as data, and the coordinator records them here from D-950 and from row 590.</dd>
+<dt>Reason</dt><dd>In the 2026-11-17 run these two files conflicted between every pair of slice PRs.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d953"><h2><span>D-953</span> Slice selection rule and first two slices</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>A row is eligible when its dependencies are merged on main, it needs no edit to <code>catalog_trust.ex</code>, <code>treehouse_catalog_trust.ts</code> or native <code>catalog_eval</code>, it is not parked and needs no absent operator input, and it is size S or M with a runnable result. P1 comes before P2. First slices: rows 521 and 523 together (report writers and bundle read bound), and row 321 (resolver monotonicity property, tests only). Held back: 381, 396, 245, 255, 256, 261, 262, 267, 269 (blocked or protected files) and 392, 393 (need a design pass).</dd>
+<dt>Reason</dt><dd>A small first slice proves the two-reviewer pipeline. Row 321 is the only eligible P1.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d954"><h2><span>D-954</span> Main was red at the start: treated as network faults and rerun</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>Flagship run 44436443252 on <code>915cba5bc</code> failed in three jobs. The logs show an apt install that timed out after 15 minutes and Gradle failing to fetch Kotlin 2.0.21 artifacts. The failed jobs were rerun. If the rerun fails the same way, fixing main becomes the next slice.</dd>
+<dt>Reason</dt><dd>None of the three failures is in code that PR #236 changed, and the previous main commit was green.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d955"><h2><span>D-955</span> Plan 296 (Treehouse mobile, PR #239) is a separate track</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>This run does not touch <code>clients/treehouse-mobile</code>, the main checkout or PR #239. The M1 exit run posts to the shared public thread and still needs the operator.</dd>
+<dt>Reason</dt><dd>Another session owns that branch, and the public post is not covered by the delegation.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26: "make reasonable decisions and keep a running html doc"), reversible.</dd>
+</dl></section>
+<section id="d956"><h2><span>D-956</span> Merge monitor: operator grant of 2026-11-26</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26)</dd>
+<dt>Decision</dt><dd>The operator asked for an agent that checks about every 30 minutes and merges PRs with green CI and all comments addressed. A scheduled task does one pass per run. It merges a non-draft PR against main, with a merge commit, only when every check and the Flagship evidence run pass on the exact head and every review thread, review and comment finding is resolved or answered. It skips drafts, <code>codex/*</code> branches, Dependabot and conflicted PRs. It does not fix code, push, or bypass required checks. This supersedes the "nothing is merged" line in D-950.</dd>
+<dt>Reason</dt><dd>Operator instruction. The scope (all open non-draft PRs, so PRs #237 and #238 as well as this run's slices) is the coordinator's reading of "prs to merge".</dd>
+<dt>Status</dt><dd>Operator instruction (2026-11-26); the scope reading is assumed under delegation, reversible.</dd>
+</dl></section>
+<section id="d957"><h2><span>D-957</span> Rows 521 and 523: compressed matter.log is refused in AuditBundle, not in Lattice.Log</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 521 and 523 slice (branch claude/521-523-report-write-and-bundle-bounds, PR <a href="https://github.com/treetopdevs/lattice/pull/240">#240</a>)</dd>
+<dt>Decision</dt><dd><code>Township.AuditBundle</code> refuses a <code>matter.log</code> in compressed term encoding before decoding. <code>Lattice.Log.restore_verified_bytes/1</code> is unchanged.</dd>
+<dt>Reason</dt><dd>An existing substrate test pins that <code>restore_verified_bytes/1</code> accepts compressed dumps. Refusing at the Township caller fails closed for the untrusted bundle path without changing a substrate contract. Row 592 asks whether Log should refuse it for every bounded caller.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d958"><h2><span>D-958</span> Row 521: containment check and write path for --out</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 521 and 523 slice (branch claude/521-523-report-write-and-bundle-bounds, PR <a href="https://github.com/treetopdevs/lattice/pull/240">#240</a>)</dd>
+<dt>Decision</dt><dd>The Township report task refuses when either the fully resolved <code>--out</code> or the write path (resolved parent plus leaf name) is inside the bundle. It writes to the leaf and replaces any link there. The temporary file is <code>.report-&lt;16 hex&gt;.tmp</code>, independent of the destination name.</dd>
+<dt>Reason</dt><dd>A leaf link into the bundle is still refused, and a leaf link to an outside file is replaced instead of written through. This matches the election task. A fixed short temporary name keeps long valid basenames working.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d959"><h2><span>D-959</span> Rows 521 and 523 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 521 and 523 slice (branch claude/521-523-report-write-and-bundle-bounds, PR <a href="https://github.com/treetopdevs/lattice/pull/240">#240</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high found three P3. Gemini 4 Neon medium found three P2 and one P3 (symlink at <code>--out</code> followed; task tests passed with the write reverted; compressed log past the bound; long basenames). All three P2 were reproduced and fixed. Round 2: Gemini PASS, Codex one P3 (an <code>--out</code> path near <code>PATH_MAX</code>), filed in row 591. Follow-up rows 590 to 593.</dd>
+<dt>Reason</dt><dd>The last round has no P1 or P2. The first Gemini run returned nothing because headless mode cannot run shell commands; the helper now gives it a saved diff, and the review was rerun before the PR opened.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d960"><h2><span>D-960</span> Row 321: scope and layer of the D-279 property</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd>The property extends the existing property M in <code>catalog_resolution_property_test.exs</code> and drives <code>Treehouse.CatalogBindingGraph.resolve/1</code> and <code>advance/2</code> through the existing world generator, with state persisted between calls. No library file is edited. An accepted candidate is any id whose intrinsic verdict is <code>:node</code> or <code>:ok</code>, plus the persisted watermark ids. Row 321 owns the D-279 property, so that clause leaves row 380.</dd>
+<dt>Reason</dt><dd>The property already existed in part. Extending it keeps default-suite cost flat and avoids a second generator.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d961"><h2><span>D-961</span> Row 321: what counts as a violation</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd><code>catalog_authority_refused</code> is a violation unless it is derived from the full union (every head refused on the union). While a watermark is held, the public decision reason must be one of nil, <code>authority_changed</code>, <code>catalog_fork</code>, <code>catalog_rollback</code>, <code>catalog_authority_refused</code> or <code>recovery_incomplete</code>, and anything else fails closed. A settled id that returns to pending is a regression. A <code>trust_pending</code> step is neutral, and its complete part is recomputed test-side and judged by the same rules. Drift from one refused reason to another is counted, not asserted.</dd>
+<dt>Reason</dt><dd>These follow the row text and the resolver's own derivation. Each rule has a synthetic case that fails without it, and mutant m11 (step 4 re-judged on the union) is killed.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d962"><h2><span>D-962</span> Row 321: stated exercise gaps</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd>Rotations in the generator are adversary-only, and the fork-after-accept, head-limit-after-accept and bad-reason-drift counters stayed at or near zero in the deep runs. These are filed as rows 594 and 596, not fixed here. A new tag <code>:r321_open</code> is reserved for a repro of any new-class counterexample. None is known.</dd>
+<dt>Reason</dt><dd>Widening the generator is a separate change with its own review. Saying what the property does not reach keeps the claim at the tier that ran.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d963"><h2><span>D-963</span> Row 321 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (branch claude/321-resolver-monotonicity-property, PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high and Gemini 4 Neon medium both asked for changes, three P1 or P2 in total (the checker ignored the decision reason, skipped <code>trust_pending</code> steps, and missed a settled id returning to pending). All were reproduced red and fixed. Round 2: Gemini PASS, Codex one P2 (a public <code>catalog_authority_refused</code> bypassed the checks). It was fixed with a union-derivation check and red and neutral cases.</dd>
+<dt>Reason</dt><dd>The last round found a P2 and no later round confirmed the fix; only local tests confirm it. The PR says so. The slice is tests only, and no counterexample to the resolver was found.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d964"><h2><span>D-964</span> Row 321: hosted bot findings on the checker</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>), hosted bot review</dd>
+<dt>Decision</dt><dd>CodeRabbit (two Minor) and the Codex bot (one P2) each found a shape the checker let through: a refusal block that does not name the decision head, <code>recovery_incomplete</code> on a refused head, and a settled id that disappears from a later full graph's verdicts while still held. All three were right against the resolver's own derivation and were fixed in <code>79dfceba7</code> and <code>88122d2c2</code>, each with a case that fails on the old checker. Part graphs and evidence loss stay excluded from the disappearing-id rule.</dd>
+<dt>Reason</dt><dd>The real-history properties stayed green after each tightening, so the resolver does not produce these shapes. A probe during the fix found that with evidence loss the existing check reports an accepted replacement returning to pending; property M never generates evidence loss, so this is filed as row 598 and not judged here.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d965"><h2><span>D-965</span> Rows 401 and 402: the election section adds no new source</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 401 and 402 slice (branch claude/401-402-audit-report-sections, PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a>)</dd>
+<dt>Decision</dt><dd>Both rows ship in one PR with no bundle-format change. The election section lists the <code>link_election</code> commands in the verified log with author and authority verdict, embeds the existing security manifest through one shared function on <code>Township.Election.Report</code>, and says the v1 audit bundle carries no board, spec, projection or close evidence. It computes no election id, phase or result. No <code>--election-bundle</code> option is added.</dd>
+<dt>Reason</dt><dd>The audit bundle holds only the Matter log. Showing more would need a bundle-format change or a second input, which are filed as rows 599 and 600. Every manifest scope stays not claimed.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d966"><h2><span>D-966</span> Row 402: wording of the chronology, beacon and lease sections</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 401 and 402 slice (branch claude/401-402-audit-report-sections, PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a>)</dd>
+<dt>Decision</dt><dd>The chronology shows holder, acquisition op and delegation only, with no tick, acquisition kind or succession policy, and says it does not establish elapsed time or inactivity. The beacon section says the epoch is global to the log and that a beacon is a logical tick accepted under the replica's beacon policy, not a clock; it does not say who signed a beacon. Leases show both the live-path expiry flag and the read-model status. A vacant role shows as "none (vacant)"; an unknown key elsewhere shows as "unknown key".</dd>
+<dt>Reason</dt><dd>Ticks are author-asserted and untrusted (ADR 0004). "Root-signed" was dropped from the beacon caption because witnessed beacons exist. <code>ReadModel</code>, <code>AuditBundle</code>, <code>audit.json</code> and the Authority modules are unchanged; row 501 narrows to its <code>audit.json</code> half.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d967"><h2><span>D-967</span> Rows 401 and 402 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 401 and 402 slice (branch claude/401-402-audit-report-sections, PR <a href="https://github.com/treetopdevs/lattice/pull/242">#242</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high and Gemini 4 Neon medium both asked for changes: one P2 (a vacant role shown as "unknown key") and three P3. All fixed. Round 2: Gemini PASS, Codex one P3 (pin a digest of the whole document), declined because exact-string tests already cover byte stability.</dd>
+<dt>Reason</dt><dd>The last round has no P1 or P2. The tracked demo bundle has no beacon, lease or election link, so the filled tables are shown only by Sim-built tests; row 601 asks for a fixture bundle.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d968"><h2><span>D-968</span> Row 321: checker-strictness findings stop at round four</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 321 slice (PR <a href="https://github.com/treetopdevs/lattice/pull/241">#241</a>), hosted bot review of <code>88122d2c2</code></dd>
+<dt>Decision</dt><dd>The Codex bot raised two more P2 items of the same class (a blocked <code>catalog_rollback</code> decision would pass; the missing-verdict rule skips complete-part graphs). They are not fixed in PR #241. Both threads were answered and resolved, and the class is filed as row 602: state the allowed decision shapes once, from the resolver's <code>sole/5</code> table, and mutation-test the checker against each one.</dd>
+<dt>Reason</dt><dd>Working-policy rule 3: a third round on one class of finding is a design question, not another repair. This was the fourth round, each fix restarted hosted checks and drew a new finding of the same kind, and none of them is a fault in the resolver or in shipped code. The property already found no counterexample over real histories.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d969"><h2><span>D-969</span> Correction: the slice selection missed the Township freeze (rule 10)</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator, after the Codex review of the ledger PR <a href="https://github.com/treetopdevs/lattice/pull/243">#243</a></dd>
+<dt>Decision</dt><dd>The selection rule in D-953 did not check working-policy rule 10 (Township and Toolshed get no new work and their rows stay frozen until R26). Two Township slices were chosen in error. Rows 521 and 523 (PR #240) were already merged; they harden code that was merged on 2026-11-17 and add no feature, and they are left in place. Rows 401 and 402 (PR #242) add report features to the frozen product; the PR is converted to draft so the merge monitor skips it, and it waits for the operator to grant an exception or close it. From here the selection rule also excludes every Township and Toolshed row. The Township follow-up rows filed in this run (590 to 593, 599 to 601) stay recorded as frozen with the rest.</dd>
+<dt>Reason</dt><dd>The operator's request for the next meaningful slices is general and does not name an exception to rule 10. Parking the open PR is reversible; reverting the merged hardening would remove a symlink overwrite fix and a read bound for no gain.</dd>
+<dt>Status</dt><dd>Coordinator correction (2026-11-26). The exception for PR #242 is an open operator question.</dd>
+</dl></section>
+<section id="d970"><h2><span>D-970</span> Rows 526 and 527: parked after three review rounds (rule 3)</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 526 and 527 slice (branch claude/526-527-replacement-rotation-liveness, draft PR <a href="https://github.com/treetopdevs/lattice/pull/244">#244</a>)</dd>
+<dt>Decision</dt><dd>The slice is not offered for merge. It is kept as a draft PR and both rows are PARKED. Round 1 found seven P1 or P2 items, round 2 found an orphan rotation turning a security block into a reject, and round 3 found three more P1 items (a revival cap serving one side of a held fork, the orphan fallback discarding a new fork block, a held forged catalog downgrading <code>control_history_limit</code>). Each was fixed, and the round 3 fixes have no confirming review. The operator chooses between: wait for row 381 (PR 4c), which deletes the sidecar; redesign revival so held evidence is judged only as one whole set; or keep investing in review rounds.</dd>
+<dt>Reason</dt><dd>Every round found a new way for a subset of held evidence to hide a block the whole set would raise. That is a property of the revival design, not of single cases, and rule 3 makes a third round on one class a design question. The same pattern cost about 8M tokens on PR #221. Parking is fail-closed: main keeps today's behaviour, where these catalogs stay pending.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible. The choice between the three options is an open operator question.</dd>
+</dl></section>
+<section id="d971"><h2><span>D-971</span> Rows 525 and 355: how the authoring preflight measures the byte budgets</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 525 and 355 slice (branch claude/525-replacement-preflight-byte-budgets, PR <a href="https://github.com/treetopdevs/lattice/pull/245">#245</a>)</dd>
+<dt>Decision</dt><dd>A new <code>Treehouse.CatalogArtifactBudget</code> and its TypeScript twin measure each distinct normalized envelope as compact JSON and refuse over 131,072 bytes per artifact or 16 MiB in total, before signing, with the existing <code>control_history_limit</code> reason. The count check stays first. The request shape is unchanged. Malformed sizes and envelopes fail closed as over the limit. A shared vector <code>artifact_budget_v1.json</code> is checked from both runtimes.</dd>
+<dt>Reason</dt><dd>Authoring could sign a replacement that a verifier then refused. The measured size is a lower bound: a relay that pads the JSON can still exceed the verifier's limit, which is filed as row 604.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d972"><h2><span>D-972</span> Rows 525 and 355: mirrored limits, no headroom, row 355 stays partly open</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 525 and 355 slice (branch claude/525-replacement-preflight-byte-budgets, PR <a href="https://github.com/treetopdevs/lattice/pull/245">#245</a>)</dd>
+<dt>Decision</dt><dd>The count and total limits are private in <code>catalog_trust.ex</code>, so they are mirrored here; source-text pins of those constants were removed under rule 6, and row 606 asks for public constants. No count or byte headroom is reserved for the first catalog under the new binding (row 605). Row 525 closes with the PR. Row 355 keeps its sidecar-verifier half under row 395 item 1, which already owns the sidecar byte budget and waits on rows 526 and 527 (row 603 was filed for it in error and is rejected as a duplicate). Row 525 is done for compact-measured evidence only; the padded-JSON case is row 604.</dd>
+<dt>Reason</dt><dd><code>catalog_trust.ex</code> and the sidecar files are owned by other work. Reserving headroom changes what an author may sign and is a contract decision.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d973"><h2><span>D-973</span> Rows 525 and 355 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 525 and 355 slice (branch claude/525-replacement-preflight-byte-budgets, PR <a href="https://github.com/treetopdevs/lattice/pull/245">#245</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high PASS; Gemini 4 Neon medium found three P1 or P2 (fail-open on NaN, negative and infinite sizes; twins disagreeing on malformed envelopes; a test that passed with rotations dropped from the budget) and two P3. All fixed, with a mutation check. Round 2: both asked for changes, one P1 or P2 class (raises on a float version, an improper list and a non-list input). Fixed to fail closed.</dd>
+<dt>Reason</dt><dd>No review round confirmed the round 2 fixes; the hosted bots review the pushed head. One unrelated Node-peer test (<code>CatalogValidCapacityTest</code>) timed out locally at a load average near 400; hosted CI is the gate for it.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d974"><h2><span>D-974</span> Row 598: the return to pending after evidence loss is a checker gap, not a resolver regression</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 598 and 594 slice (branch claude/598-594-d279-evidence-loss-and-honest-rotations, PR <a href="https://github.com/treetopdevs/lattice/pull/246">#246</a>)</dd>
+<dt>Decision</dt><dd>All 25 hits found by the probe are ids whose cited ancestor catalog was dropped, and each settles again when that catalog is restored. The checker now counts a return to pending as neutral only when the id depends by bytes on the lost catalog and restoring it gives back the remembered verdict, or when the outcome is exactly <code>control_history_limit</code>. Every other return to pending still fails. Property M now also draws evidence-loss histories and honest-key rotations. No library file changed and no <code>r321_open</code> repro was needed.</dd>
+<dt>Reason</dt><dd>The D-279 contract is over bytes and causal ancestry, and an unheld ancestor cannot be judged. Review round 1: Codex Sol 6.1 high PASS and Gemini 4 Neon medium PASS, no findings. Mutant m11 is still killed. Honest-rotation reach in deep histories is low (one watermark hit on the seed shown), filed as row 607. The indefinite <code>trust_pending</code> after a lost cited catalog belongs to the 4c eviction obligation (rows 381 and 388), not a new row.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d975"><h2><span>D-975</span> Row 336: one rule for the command judge, generic frame reader unchanged</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 336 slice (branch claude/336-high-uint64-argument-decode-parity, PR <a href="https://github.com/treetopdevs/lattice/pull/248">#248</a>)</dd>
+<dt>Decision</dt><dd>The TypeScript client gets a separate judge reader, <code>decodeCarrierCommandJudgeFrame</code>, which admits a canonical high uint64 in any command's argument list. The member-continuity observe, review and assemble entry points and the bootstrap reader use it. The generic <code>decodeCarrierOpFrame</code> keeps main's rule, including its <code>replace_catalog_v1</code> carve-out, so catalog trust and the other product readers are unchanged.</dd>
+<dt>Reason</dt><dd>An earlier head widened the generic reader. A coordinator check before the PR showed that this changed catalog trust: a signed high uint64 in any other command turned <code>reject: unsupported_cutoff</code> into <code>propose</code> in 24 of 30 cases per value. Splitting the readers restores main's decisions byte for byte, pinned by 60 cases.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d976"><h2><span>D-976</span> Row 336: what stays open</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 336 slice (branch claude/336-high-uint64-argument-decode-parity, PR <a href="https://github.com/treetopdevs/lattice/pull/248">#248</a>)</dd>
+<dt>Decision</dt><dd>A high-integer <code>replace_catalog_v1</code> frame gives <code>propose</code> in TS catalog trust and <code>unsupported_cutoff</code> in BEAM's product reader. This was so on main, is now pinned in both runtimes, and is filed as row 608 because the fix is in the protected trust files. Caps and <code>dormant_ticks</code> at frame admission stay with row 212.</dd>
+<dt>Reason</dt><dd>The slice may not edit <code>treehouse_catalog_trust.ts</code>, and its limit was no change to any catalog-trust outcome.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d977"><h2><span>D-977</span> Row 336 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 336 slice (branch claude/336-high-uint64-argument-decode-parity, PR <a href="https://github.com/treetopdevs/lattice/pull/248">#248</a>)</dd>
+<dt>Decision</dt><dd>Three rounds with Codex Sol 6.1 high and Gemini 4 Neon medium. Rounds 1 and 2 each found two P2 (a leftover per-command exception; authenticated entry points disagreeing with BEAM). Round 3: Codex PASS, Gemini one P2 (review and assemble still refused the history) and one P3 (non-atom heads), both fixed. The native and shell suites were run after the coordinator asked for them and pass.</dd>
+<dt>Reason</dt><dd>No review round confirmed the round 3 fixes; the hosted bots review that head. The paths touched need two independent reviews under rule 3, which the two reviewers provide.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d978"><h2><span>D-978</span> Run paused: remaining Treehouse work waits on operator decisions</h2><dl>
+<dt>When</dt><dd>2026-11-26, backlog run coordinator (ledger branch claude/ledger-2026-11-26-c)</dd>
+<dt>Decision</dt><dd>No further slice is launched in this run. Merged: PR #240 (rows 521, 523), #241 (row 321), #245 (rows 525, 355 preflight half), #246 (rows 594, 598), #248 (row 336), and ledger PRs #243 and #247. Parked as drafts: #242 (rows 401, 402, Township freeze) and #244 (rows 526, 527, rule 3). Four operator questions are open: the option for rows 526 and 527 (D-970); an exception or closure for PR #242 (D-969); who carries plans 267 and 269, which gate row 381 and whose Codex worktrees have had no commit since 2026-11-15; and row 256, the source of the root's client realm when no relay is saved, which gates rows 255, 259 and 303 (plan 245 PR 6).</dd>
+<dt>Reason</dt><dd>The unblocked Treehouse rows left are small test-tooling items (607, 596, 609). The rows that move the product (381, 396, 255, 256, 319) depend on the four questions above.</dd>
+<dt>Status</dt><dd>Coordinator decision (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>

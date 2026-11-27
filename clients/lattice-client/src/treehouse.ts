@@ -1,7 +1,7 @@
 import {verifyEd25519} from "./signature";
 import { authorCarrierDelegation, authorCarrierOp, verifyCarrierOp } from "./codec";
 import type { CarrierOpSigner } from "./codec";
-import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
+import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierCommandJudgeFrame } from "./carrier";
 import type { CarrierDelegation, CarrierOpFrame, CarrierTerm, CommandDecoder, CommandDecoderMap, DecodedTerm, Payload } from "./carrier";
 import type { CommandEffect, Op } from "./op";
 import { compareUtf8, effectViews } from "./op";
@@ -121,7 +121,8 @@ export async function treehouseCatalogBootstrapsFromFrames(input: {
   const invalid = { ok: false, reason: "invalid_verified_history" } as const;
   try {
     const snapshot = structuredClone(input);
-    const frames = snapshot.frames.map(decodeCarrierOpFrame);
+    // Row 336: the command-judge reader, so one high-uint64 argument quarantines only its op.
+    const frames = snapshot.frames.map(decodeCarrierCommandJudgeFrame);
     const ids = new Set(frames.map((frame) => frame.id));
     if (ids.size !== frames.length || frames.some((frame) => frame.replica !== snapshot.replica ||
       frame.deps.some((dep) => !ids.has(dep)))) return invalid;
@@ -327,7 +328,8 @@ export function treehouseCommandDecoders(product: TreehouseProduct): CommandDeco
           [certificate.claim, certificate.possession, certificate.vouches] };
     } }],
     // Never throws: a malformed claim or possession is `application_invalid_catalog`, not `malformed_command`.
-    // Wire integers above MAX_SAFE_INTEGER arrive as opaque sentinels (decodeCarrierBody) and refuse here too.
+    // Row 336: every argument of every command in this map may carry an opaque_high_integer sentinel
+    // (decodeCarrierBody); value() and each codec reader refuse it like any other wrongly typed value.
     ["replace_catalog_v1", { arity: 3, decode: (raw): Payload => {
       const marker = admin("replace_catalog_v1");
       const possession = (term: DecodedTerm | undefined) =>

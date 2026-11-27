@@ -370,6 +370,13 @@ const tupleTag = 60_001;
 const carrierOpWireVersion = 1;
 const carrierSessionVersion = 2;
 
+/**
+ * One command's argument decoder. A decoder in an injected `CommandDecoderMap` may receive
+ * `{type: "opaque_high_integer"}` anywhere in its argument list (a wire uint64 above
+ * MAX_SAFE_INTEGER, which `decodeCarrierCommandJudgeFrame` admits in every command's argument
+ * list) and must refuse it like any other wrongly typed value (row 336). The built-in tables, used
+ * when no map is injected, never receive it.
+ */
 export interface CommandDecoder {
   arity: number;
   decode: (
@@ -1394,7 +1401,7 @@ function canRelay(client: CarrierSyncClient): client is CarrierSyncClient & Carr
 }
 
 function stableCausalCarrierFrames(frames: unknown[]): CarrierOpFrame[] {
-  const ops = frames.map((frame) => assertCarrierOpFrame(frame, false));
+  const ops = frames.map((frame) => assertCarrierOpFrame(frame, null));
   const firstIndexById = new Map<string, number>();
   for (const [index, op] of ops.entries()) {
     if (!firstIndexById.has(op.id)) firstIndexById.set(op.id, index);
@@ -1470,7 +1477,18 @@ export function carrierOpsToSemanticOps(
 }
 
 export function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame {
-  return assertCarrierOpFrame(frame, true);
+  return assertCarrierOpFrame(frame, "catalog");
+}
+
+/**
+ * Frame admission for a Space/Thread command judge (row 336): like `decodeCarrierOpFrame`, but a
+ * canonical wire uint64 above MAX_SAFE_INTEGER is admitted in every command's argument list, as
+ * BEAM Wire.decode_ops does, so the injected decoder refuses that one op with BEAM's reason
+ * instead of the whole history failing. Product and catalog-trust readers keep
+ * `decodeCarrierOpFrame`, whose outcomes row 336 must not change.
+ */
+export function decodeCarrierCommandJudgeFrame(frame: unknown): CarrierOpFrame {
+  return assertCarrierOpFrame(frame, "all");
 }
 
 export function carrierOpToSemanticOp(
@@ -1478,13 +1496,13 @@ export function carrierOpToSemanticOp(
   realmByPubkey: Record<string, string> = {},
   commandDecoders?: CommandDecoderMap,
 ): Op {
-  const op = assertCarrierOpFrame(frame, false);
+  const op = assertCarrierOpFrame(frame, null);
   let payload: Payload;
   let cap: string | null;
   let structuralError: "malformed_term" | undefined;
   let authorityInputReason: Op["authorityInputReason"];
   try {
-    const body = decodeCarrierBody(op);
+    const body = decodeCarrierBody(op, commandDecoders === undefined ? "none" : "all");
     try {
       payload = payloadFromBody(op.kind, body, realmByPubkey, op.body, op.replica, commandDecoders);
     } catch (error) {
@@ -1610,7 +1628,10 @@ function canonicalTuple(values: unknown[]): Uint8Array {
 // Invalid reserved metadata stays local to the policy/certificate on BEAM.
 // Context preserves the raw frame. Only exact two-field legacy beacons retain
 // high uint64 epochs as decimal evidence; witnessed body/claim epochs stay safe integers.
-function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
+// Which command names read their `{name, [arguments]}` list in the opaque integer context.
+type OpaqueCommandArguments = "none" | "catalog" | "all";
+
+function decodeCarrierBody(op: CarrierOpFrame, opaqueCommandArguments: OpaqueCommandArguments): DecodedTerm {
   const body = op.body;
   // This function splits the body tuple (and genesis policy map) by hand, so it spends the
   // levels those containers would have spent in a recursive decode of the same body.
@@ -1626,12 +1647,19 @@ function decodeCarrierBody(op: CarrierOpFrame): DecodedTerm {
         {type: "legacy_beacon_epoch", decimal: epoch[1]}]};
     }
   }
-  // replace_catalog_v1 arguments keep wire uint64s above MAX_SAFE_INTEGER as opaque sentinels, so
-  // its decoder refuses them as `application_invalid_catalog` like BEAM instead of `malformed_term`.
-  if (op.kind === "command" && body[0] === "tuple" && body.length === 2 && Array.isArray(body[1]) &&
-      body[1].length === 2 && body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
-      body[1][0][1] === "replace_catalog_v1" && body[1][1]?.[0] === "list") {
-    return { type: "tuple", values: [decodeCarrierTerm(body[1][0], "strict", inner),
+  // Row 336: an injected product decoder map and the command-judge frame reader decode every
+  // command's `{name, [arguments]}` list in the opaque context, so a wire uint64 above
+  // MAX_SAFE_INTEGER is admitted like BEAM Wire.decode_ops and the product decoder refuses it with
+  // BEAM's Authority reason. Without a map the built-in tables decode strictly (`malformed_term`).
+  // The generic frame reader (`decodeCarrierOpFrame`) keeps its pre-row-336 rule, opaque only for
+  // replace_catalog_v1, because catalog trust and product readers depend on its outcomes.
+  // The command-judge reader admits any head, as BEAM does; the head itself decodes strictly.
+  // Non-list arguments, caps and other positions stay strict (row 212).
+  if (opaqueCommandArguments !== "none" && op.kind === "command" && body[0] === "tuple" && body.length === 2 &&
+      Array.isArray(body[1]) && body[1].length === 2 && body[1][1]?.[0] === "list" &&
+      (opaqueCommandArguments === "all" || (body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
+        body[1][0][1] === "replace_catalog_v1"))) {
+    return { type: "tuple", values: [decodeCarrierTerm(body[1][0]!, "strict", inner),
       decodeCarrierTerm(body[1][1], "opaque_integer", inner)] };
   }
   if (op.kind !== "authority" || body[0] !== "tuple" || body.length !== 2 ||
@@ -1946,7 +1974,7 @@ function neutralPayload(command: string, commandError?: CommandError): Payload {
 
 function assertCarrierOpFrame(
   frame: unknown,
-  validateTerms: boolean,
+  validateTerms: Exclude<OpaqueCommandArguments, "none"> | null,
 ): CarrierOpFrame {
   if (!frame || typeof frame !== "object") throw new Error("malformed carrier op");
   const op = frame as Record<string, unknown>;
@@ -1974,8 +2002,8 @@ function assertCarrierOpFrame(
   try {
     base64ToBytes(carrierFrame.author);
     base64ToBytes(carrierFrame.sig);
-    if (validateTerms) {
-      decodeCarrierBody(carrierFrame);
+    if (validateTerms !== null) {
+      decodeCarrierBody(carrierFrame, validateTerms);
       decodeCarrierTerm(carrierFrame.cap);
     }
   } catch {

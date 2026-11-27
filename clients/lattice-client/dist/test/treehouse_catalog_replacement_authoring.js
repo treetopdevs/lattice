@@ -8,7 +8,7 @@ import { deriveTreehouseCatalogCutoff } from "../src/treehouse_catalog_cutoff";
 import { continuationProfileFromCarrierTerm, continuationProfileToCarrierTerm } from "../src/continuation";
 import { resolveContinuationProfileFromFrames } from "../src/authority";
 import { canonicalBytesForCatalogReplacementPossession, canonicalBytesForCatalogRotation, canonicalBytesForCatalogRotationPossession, canonicalBytesForTransportCatalog, catalogInventoryId, catalogReplacementClaimToCarrierTerm, catalogRotationId, transportCatalogId, } from "../src/treehouse_catalog_codec";
-import { authorTreehouseCatalogReplacementFromFrames, prepareTreehouseCatalogReplacementFromFrames, } from "../src/index";
+import { authorTreehouseCatalogReplacementFromFrames, catalogEnvelopeJsonBytes, prepareTreehouseCatalogReplacementFromFrames, } from "../src/index";
 import { judge, replacementBaseFixture, seededSigner } from "./support/export_treehouse_catalog_replacement";
 const atom = (name) => ["atom", name];
 const tuple = (...values) => ["tuple", values];
@@ -500,6 +500,61 @@ test("the proposed entries and service pair must be ones Stage B can accept", as
     const drifted = entries(f, fresh).map((item) => item.kind === "thread" ? { ...item, reference: id("other-reference") } : item);
     assert.equal(reason(await prepare(f, f.frames, request(f, { ...cited, entries: drifted }))), "invalid_catalog_transition");
     assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: Array(1_025).fill(first) }))), "control_history_limit");
+});
+// Rows 355, 525: a catalog of exactly `target` compact JSON bytes. The last entry's replica carries `label` plus padding
+// (base64 moves the length in steps of 4) and the revision's digit count supplies the remainder; padding the last entry
+// keeps the replica order.
+function padded(f, label, revision, pad, signature = b64(new Uint8Array(64))) {
+    const entries = catalog(f, f.bootstrap.id, 0, null).catalog.entries;
+    const last = entries[entries.length - 1];
+    const value = { version: 1, product: "treehouse", space: f.replica, bootstrap: f.bootstrap.id,
+        binding: f.bootstrap.id, revision, previous: id("budget-previous"),
+        entries: [...entries.slice(0, -1), { ...last, replica: `${last.replica}${label}${"x".repeat(pad)}` }] };
+    return { catalog: value, signature };
+}
+function sizeFor(f, label, target) {
+    for (const revision of [1, 10, 100, 1_000]) {
+        let pad = Math.max(Math.floor((target - catalogEnvelopeJsonBytes(padded(f, label, revision, 0))) * 3 / 4) - 6, 0);
+        while (catalogEnvelopeJsonBytes(padded(f, label, revision, pad)) < target)
+            pad++;
+        if (catalogEnvelopeJsonBytes(padded(f, label, revision, pad)) === target)
+            return [revision, pad];
+    }
+    return assert.fail(`no catalog of ${target} bytes`);
+}
+function signedPadded(f, label, revision, pad) {
+    const { catalog: value } = padded(f, label, revision, pad);
+    return { catalog: value, signature: b64(catalogSigner(f).sign(canonicalBytesForTransportCatalog(value))) };
+}
+const sizedCatalog = (f, label, target) => signedPadded(f, label, ...sizeFor(f, label, target));
+test("retained evidence over CatalogTrust's JSON byte budgets is refused before signing (rows 355, 525)", async () => {
+    const f = await fixture();
+    const first = catalog(f, f.bootstrap.id, 0, null);
+    const run = async (catalogs) => reason(await prepare(f, f.frames, request(f, { catalogs })));
+    const over = sizedCatalog(f, "-over", 131_073), exact = sizedCatalog(f, "-exact", 131_072);
+    assert.deepEqual([catalogEnvelopeJsonBytes(over), catalogEnvelopeJsonBytes(exact)], [131_073, 131_072]);
+    assert.equal(await run([first, over]), "control_history_limit");
+    // At the limit the budget passes and the resolver judges the padded catalog instead.
+    assert.equal(await run([first, exact]), "invalid_catalog_transition");
+    // 128 distinct catalogs at the per-artifact limit total exactly 16 MiB.
+    const [revision, pad] = sizeFor(f, "-000", 131_072);
+    const full = Array.from({ length: 128 }, (_, i) => signedPadded(f, `-${String(i).padStart(3, "0")}`, revision, pad));
+    assert.equal(full.reduce((n, e) => n + catalogEnvelopeJsonBytes(e), 0), 16 * 1024 * 1024);
+    assert.equal(new Set(full.map((e) => transportCatalogId(e.catalog))).size, 128);
+    assert.equal(await run(full), "invalid_catalog_transition");
+    assert.equal(await run([first, ...full]), "control_history_limit");
+    // Retained rotations count too: one valid rotation takes the 16 MiB of catalogs over.
+    const t = await rotation(f, f.bootstrap.id, 1, catalogSigner(f), seededSigner("r525-ts-budget-rotation"), "budget");
+    assert.equal(reason(await prepare(f, f.frames, request(f, { catalogs: full, rotations: [t.envelope] }))), "control_history_limit");
+    // Evidence changed after preparation never signs; author reports any failed re-derivation as stale_verified_state, so
+    // this pins the cancellation, not the budget reason.
+    const attempt = await prepared(f);
+    const moved = { ...attempt, request: { ...attempt.request, catalogs: [first, over] } };
+    signed = [];
+    const cancelled = await authorTreehouseCatalogReplacementFromFrames({ currentFrames: () => f.frames, attempt: moved,
+        possession: possess(f, moved), signer: spy(f.nominee, "op") });
+    assert.deepEqual(cancelled.ok ? null : [cancelled.reason, cancelled.journalEntry.status], ["stale_verified_state", "cancelled"]);
+    assert.ok(!signed.includes("op"));
 });
 test("a request mutated while preparation is pending never changes the prepared attempt", async () => {
     const f = await fixture();

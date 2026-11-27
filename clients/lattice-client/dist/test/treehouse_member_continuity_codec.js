@@ -144,9 +144,11 @@ test("the narrow decoded-argument adapter consumes real signed carrier decode an
     carrierOpsToSemanticOps([frame], {}, decoders);
     assert.deepEqual(captured, certificate);
     for (const position of [0, 1, 2]) {
-        const invalid = structuredClone(decoded);
-        invalid[position] = { type: "invalid_beacon_integer" };
-        assert.equal(codec.memberContinuityCertificateFromDecodedArguments(invalid), null);
+        for (const sentinel of [{ type: "invalid_beacon_integer" }, { type: "opaque_high_integer" }]) {
+            const invalid = structuredClone(decoded);
+            invalid[position] = sentinel;
+            assert.equal(codec.memberContinuityCertificateFromDecodedArguments(invalid), null);
+        }
     }
     const bad = structuredClone(decoded);
     assert.ok(bad[0] !== null && typeof bad[0] === "object" && bad[0].type === "map");
