@@ -1,7 +1,8 @@
 // Row 336: wire uint64s above 2^53 - 1 in Treehouse Space and Thread command arguments get BEAM's
 // Authority reason from the semantic judge, through both src and the committed package entry.
-// Frame admission accepts them in every command's arguments, as BEAM Wire.decode_ops does, so an
-// authenticated history holding one quarantines only that op; the numeric form refuses everywhere.
+// The command-judge frame reader admits them in every command's arguments, as BEAM Wire.decode_ops
+// does, so an authenticated Space history holding one quarantines only that op; the generic reader
+// keeps its pre-row-336 rule for catalog trust; the numeric form refuses everywhere.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -36,9 +37,16 @@ for (const [label, load] of runtimes) {
     }
   });
 
-  test(`${label}: frame readers return every case frame unchanged, high or safe`, async () => {
+  test(`${label}: the command-judge reader admits every case frame; the generic reader keeps its prior rule`, async () => {
     const api = await load();
-    for (const c of vector.cases) assert.deepEqual(api.decodeCarrierOpFrame(c.frame), c.frame, c.name);
+    for (const c of vector.cases) {
+      assert.deepEqual(api.decodeCarrierCommandJudgeFrame(c.frame), c.frame, c.name);
+      // Catalog trust and product readers depend on the generic reader, so it still refuses a
+      // high argument outside replace_catalog_v1 exactly as before row 336.
+      if (c.name.endsWith("-high") && c.name !== "replace_catalog_v1-high") {
+        assert.throws(() => api.decodeCarrierOpFrame(c.frame), /malformed carrier op/, c.name);
+      } else assert.deepEqual(api.decodeCarrierOpFrame(c.frame), c.frame, c.name);
+    }
   });
 
   test(`${label}: authenticated Space entry points quarantine only the case op, as BEAM observe does`, async () => {
@@ -70,7 +78,7 @@ for (const [label, load] of runtimes) {
     assert.equal(vector.wireCases.length, 5);
     for (const c of vector.wireCases) {
       assert.equal(c.decode, "malformed_op");
-      assert.throws(() => api.decodeCarrierOpFrame(c.frame), /malformed carrier op/, c.name);
+      for (const read of [api.decodeCarrierOpFrame, api.decodeCarrierCommandJudgeFrame]) assert.throws(() => read(c.frame), /malformed carrier op/, c.name);
       for (const decoders of [undefined, api.treehouseCommandDecoders("Treehouse.Space")]) {
         assert.equal(api.carrierOpToSemanticOp(c.frame, {}, decoders).structuralError, "malformed_term", c.name);
       }

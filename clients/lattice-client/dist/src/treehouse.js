@@ -1,6 +1,6 @@
 import { verifyEd25519 } from "./signature";
 import { authorCarrierDelegation, authorCarrierOp, verifyCarrierOp } from "./codec";
-import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
+import { base64ToBytes, canonicalTerm, carrierDelegationsFromFrames, carrierOpsToSemanticOps, decodeCarrierCommandJudgeFrame } from "./carrier";
 import { compareUtf8, effectViews } from "./op";
 import { gatedBy } from "./schema";
 import { authorTownshipGenesis, authorTownshipRevocation, townshipCapTerm } from "./township";
@@ -104,7 +104,8 @@ export async function treehouseCatalogBootstrapsFromFrames(input) {
     const invalid = { ok: false, reason: "invalid_verified_history" };
     try {
         const snapshot = structuredClone(input);
-        const frames = snapshot.frames.map(decodeCarrierOpFrame);
+        // Row 336: the command-judge reader, so one high-uint64 argument quarantines only its op.
+        const frames = snapshot.frames.map(decodeCarrierCommandJudgeFrame);
         const ids = new Set(frames.map((frame) => frame.id));
         if (ids.size !== frames.length || frames.some((frame) => frame.replica !== snapshot.replica ||
             frame.deps.some((dep) => !ids.has(dep))))

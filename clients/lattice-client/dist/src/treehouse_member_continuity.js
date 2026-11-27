@@ -1,6 +1,6 @@
 import { verifyEd25519 } from "./signature";
-import { analyzeAuthority, continuationFamily, resolveContinuationProfileFromFrames } from "./authority";
-import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
+import { analyzeAuthority, continuationFamily, resolveContinuationProfileFromJudgedFrames } from "./authority";
+import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierCommandJudgeFrame, decodeCarrierOpFrame } from "./carrier";
 import { authorCarrierOp, canonicalBase64Bytes, verifyCarrierOp } from "./codec";
 import { ancestors, canonicalOrder, concurrent } from "./dag";
 import { materialize } from "./materialize";
@@ -120,7 +120,8 @@ export async function observeMemberContinuityFromFrames(input) {
     const invalid = { ok: false, reason: "invalid_verified_history" };
     try {
         const snapshot = structuredClone(input);
-        const frames = snapshot.frames.map(decodeCarrierOpFrame);
+        // Row 336: the command-judge reader, so one high-uint64 argument quarantines only its op.
+        const frames = snapshot.frames.map(decodeCarrierCommandJudgeFrame);
         const ids = new Set(frames.map((frame) => frame.id));
         if (ids.size !== frames.length || frames.some((frame) => frame.replica !== snapshot.replica ||
             frame.deps.some((dependency) => !ids.has(dependency))))
@@ -135,7 +136,7 @@ export async function observeMemberContinuityFromFrames(input) {
         }
         if (snapshot.oldPub !== undefined && canonicalBase64Bytes(snapshot.oldPub, 32) === null)
             return invalid;
-        const profile = await resolveContinuationProfileFromFrames({ replica: snapshot.replica, frames });
+        const profile = await resolveContinuationProfileFromJudgedFrames({ replica: snapshot.replica, frames });
         if (!profile.ok)
             return profile.reason === "invalid_verified_history"
                 ? invalid : { ok: false, reason: "unsupported_continuity_history" };

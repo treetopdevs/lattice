@@ -10,7 +10,8 @@ import {
   verifyCarrierOp,
 } from "./codec";
 import { revokedAsOf } from "./capability";
-import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
+import { carrierOpsToSemanticOps, decodeCarrierCommandJudgeFrame, decodeCarrierOpFrame } from "./carrier";
+import type { CarrierOpFrame } from "./carrier";
 import { ancestors, canonicalOrder, index } from "./dag";
 import type {
   AuthorityDelegationEvidence,
@@ -46,8 +47,24 @@ export type ContinuationProfileObservation =
 export async function resolveContinuationProfileFromFrames(
   input: {replica: string; frames: readonly unknown[]},
 ): Promise<ContinuationProfileObservation> {
+  return resolveContinuationProfile(input, decodeCarrierOpFrame);
+}
+
+/**
+ * Row 336: the same observation over the command-judge frame reader, for a Space/Thread judge
+ * entry point that admits high-uint64 command arguments. Not exported from the package index.
+ */
+export async function resolveContinuationProfileFromJudgedFrames(
+  input: {replica: string; frames: readonly unknown[]},
+): Promise<ContinuationProfileObservation> {
+  return resolveContinuationProfile(input, decodeCarrierCommandJudgeFrame);
+}
+
+async function resolveContinuationProfile(
+  input: {replica: string; frames: readonly unknown[]}, read: (frame: unknown) => CarrierOpFrame,
+): Promise<ContinuationProfileObservation> {
   try {
-    const verified = await verifiedContinuationContext(input);
+    const verified = await verifiedContinuationContext(input, read);
     if (!verified.ok) return verified;
     const {replica, ids, ops, root, context} = verified;
     const pin = continuationPin(context, ids);
@@ -71,7 +88,7 @@ export async function resolveContinuationPinsFromFrames(
   input: {replica: string; frames: readonly unknown[]},
 ): Promise<ContinuationPinsObservation> {
   try {
-    const verified = await verifiedContinuationContext(input);
+    const verified = await verifiedContinuationContext(input, decodeCarrierOpFrame);
     if (!verified.ok) return verified;
     return {ok: true, pins: verified.context.pins.map(({opId, profile}) => ({opId, profile}))};
   } catch {
@@ -84,7 +101,7 @@ export async function resolveContinuationPinsFromFrames(
  * A frame whose terms the decoder cannot read (row 212: an integer above 2^53-1) refuses the
  * whole history, fail-closed, even where BEAM would admit it.
  */
-async function verifiedContinuationContext(input: {replica: string; frames: readonly unknown[]}): Promise<
+async function verifiedContinuationContext(input: {replica: string; frames: readonly unknown[]}, read: (frame: unknown) => CarrierOpFrame): Promise<
   {ok: true; replica: string; ids: ReadonlySet<string>; ops: Op[]; root: AuthorityRootEvidence | null;
     context: ContinuationContext} |
   {ok: false; reason: string}> {
@@ -92,7 +109,7 @@ async function verifiedContinuationContext(input: {replica: string; frames: read
   const family = continuationFamily(replica);
   if (family === "legacy") return {ok: false, reason: "unauthorized_continuation"};
   if (family === "unsupported") return {ok: false, reason: "unsupported_authority_profile"};
-  const decoded = frames.map(decodeCarrierOpFrame);
+  const decoded = frames.map((frame) => read(frame));
   const ops = carrierOpsToSemanticOps(decoded), byId = index(ops);
   const ids = new Set(decoded.map((frame) => frame.id));
   if (ids.size !== decoded.length || decoded.some((frame) => frame.replica !== replica ||
