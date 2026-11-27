@@ -4,11 +4,14 @@ import type { InstalledTreehouseCatalogTrustV1, TreehouseCatalogEvidencePage, Tr
 export interface InstalledReplacementTrust {
     trust: InstalledTreehouseCatalogTrustV1;
     binding: CatalogBindingState;
-    extra: {
-        catalogs: string[];
-    };
+    extra: SidecarExtra;
     routes: VerifiedTreehouseCatalogRoute[];
 }
+/** The sidecar; rotations is present only while a sidecar rotation is held (row 526). */
+type SidecarExtra = {
+    catalogs: string[];
+    rotations?: string[];
+};
 export type ReplacementTrustResult = {
     kind: "reject";
     reason: TreehouseCatalogTrustReason;
@@ -34,3 +37,4 @@ export declare function evaluateReplacementTrust(input: {
     expected: TreehouseCatalogStoreToken;
     incoming: TreehouseCatalogEvidencePage;
 }): Promise<ReplacementTrustResult>;
+export {};

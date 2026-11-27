@@ -10,6 +10,7 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
   """
   use ExUnit.Case, async: false
 
+  alias Lattice.Carrier.Wire
   alias Treehouse.{CatalogReplacementTrust, CatalogTrust, CatalogTrustVectors, TransportCatalog}
   alias Treehouse.CatalogReplacementWorld, as: W
 
@@ -22,7 +23,8 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     w = W.build()
     base = w.base
     old_key = base.record.catalog_key
-    labels = w.labels
+    r = rotation_world(w)
+    labels = Map.merge(w.labels, r.labels)
 
     log_r1 = W.with_ops(base, [w.r1])
     log_rn = W.with_ops(base, [w.rn.op])
@@ -97,6 +99,178 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     runs = [
       {"admin", [{"1 install C0", page_c0, true}, {"2 admin R1 + K1", page_r1, true}]},
       {"nonadmin", [{"install C0", page_c0, false}, {"3 non-admin Rn", page_rn, true}]},
+      # Row 526: a rotation of the replacement R1 to a new catalog key, and its first catalog K2.
+      {"rotation",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"4 R1 rotates to T2", r.page_t2k2, true},
+         {"T2 + K2 again", r.page_t2k2, false}
+       ]},
+      # Row 527: a catalog CT held before its legacy rotation T arrives.
+      {"ct_first",
+       [
+         {"install C0", page_c0, false},
+         {"CT", W.page(catalogs: [r.ct]), false},
+         {"5 CT before its T", r.page_t, true}
+       ]},
+      {"k2_first",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"K2", W.page(catalogs: [r.k2]), false},
+         {"T2", W.page(rotations: [r.t2.envelope], proofs: [w.proof]), false}
+       ]},
+      {"rotation_bad_sig",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"forged T2", W.page(rotations: [r.forged_t2]), false},
+         {"T2 + K2", r.page_t2k2, false}
+       ]},
+      {"rotation_wrong_arity",
+       [{"install C0", page_c0, false}, {"one-argument op + K + rotation", r.page_arity, false}]},
+      {"junk_before_t",
+       [
+         {"install C0", page_c0, false},
+         {"junk catalog under T", W.page(catalogs: [r.junk_t]), false},
+         {"T", r.page_t, false}
+       ]},
+      # Review round 1 of rows 526 and 527, replayed in both runtimes.
+      {"rotation_three",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"T2 T3 T4 + K2 K3 K4", r.page_three, false}
+       ]},
+      {"legacy_two",
+       [{"install C0", page_c0, false}, {"T TT + CT CTT", r.page_legacy_two, false}]},
+      {"forged_parent_child",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"forged T2 + child U", W.page(rotations: [r.forged_t2, r.u.envelope]), false}
+       ]},
+      {"forged_held",
+       [
+         {"install C0", page_c0, false},
+         {"CT + junk under T", W.page(catalogs: [r.ct, r.junk_t]), false},
+         {"T", r.page_t, false}
+       ]},
+      {"forged_held_chain",
+       [
+         {"install C0", page_c0, false},
+         {"CT + CT1 + junk", W.page(catalogs: [r.ct, r.ct1, r.junk_t]), false},
+         {"T", r.page_t, false}
+       ]},
+      # Review round 2 of rows 526 and 527, replayed in both runtimes.
+      {"held_revision_first",
+       [
+         {"install C0", page_c0, false},
+         {"CT1", W.page(catalogs: [r.ct1]), false},
+         {"T", r.page_t, false},
+         {"CT", W.page(catalogs: [r.ct]), false}
+       ]},
+      {"blocked_orphan",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"orphan rotation", W.page(rotations: [r.orphan.envelope]), false}
+       ]},
+      {"blocked_bad_rotation",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"R1 + K1 + 63-byte rotation", r.page_bad_rotation, false},
+         {"R1 + K1 + rotation without old_signature", r.page_no_signature, false},
+         {"R1 + K1 + rotation with an extra key", r.page_extra_key, false}
+       ]},
+      # Review round 3 of rows 526 and 527 (security), replayed in both runtimes.
+      {"held_fork_junk",
+       [
+         {"install C0", page_c0, false},
+         {"CT + CT1 + CT1b + junk", W.page(catalogs: [r.ct, r.ct1, r.ct1b, r.junk_t]), false},
+         {"T", r.page_t, false}
+       ]},
+      {"revive_bound",
+       [
+         {"install C0", page_c0, false},
+         {"17 junk under T", W.page(catalogs: r.junks), false},
+         {"T", r.page_t, false},
+         {"empty", W.page(), false}
+       ]},
+      {"closed_unbound",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"TR", W.page(rotations: [r.tr.envelope]), false},
+         {"R2 + K2r", r.page_r2, false}
+       ]},
+      {"nonadmin_unbound",
+       [
+         {"install C0", page_c0, false},
+         {"Rn + Kn", r.page_rn, false},
+         {"Tn", W.page(rotations: [r.tn.envelope]), false}
+       ]},
+      {"blocked_plain",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"R1 + K1 + T", r.page_recover, false}
+       ]},
+      {"blocked_junk",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"junk under T", W.page(catalogs: [r.junk_t]), false},
+         {"R1 + K1 + T", r.page_recover, false}
+       ]},
+      # Review round 3 of rows 526 and 527, replayed in both runtimes.
+      {"variant_fork",
+       [
+         {"install C0", page_c0, false},
+         {"16 CT1 variants + CT1b", r.round3.page_variants, false},
+         {"T + CT", r.round3.page_t_ct, false}
+       ]},
+      {"orphan_fork",
+       [
+         {"install C0", page_c0, false},
+         {"CT + CT1 + CT1b", W.page(catalogs: [r.ct, r.ct1, r.ct1b]), false},
+         {"T + orphan", r.round3.page_t_orphan, false}
+       ]},
+      {"limit_junk",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"junk under T1", r.round3.page_limit_junk, false},
+         {"T1 T2 T3 + R1 + K1", r.round3.page_limit, false}
+       ]},
+      {"blocked_pending",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"CT1", W.page(catalogs: [r.ct1]), false},
+         {"T", r.page_t, false}
+       ]},
+      {"forged_mask",
+       [
+         {"install C0", page_c0, false},
+         {"16 forged + CT1b", r.round3.page_mask, false},
+         {"T + CT + CT1", r.round3.page_t_ct_ct1, false}
+       ]},
+      {"blocked_legacy_duplicate",
+       [
+         {"install C0", page_c0, false},
+         {"C1 + C1b fork", r.page_fork, false},
+         {"T duplicate key + CT", r.round3.page_legacy_duplicate, false}
+       ]},
+      {"rotation_closed_wire",
+       [
+         {"install C0", page_c0, false},
+         {"R1 + K1", page_r1, false},
+         {"T2 duplicate key + K2", r.round3.page_duplicate, false},
+         {"T2 loose base64 + K2", r.round3.page_loose, false}
+       ]},
       {"k1_first",
        [
          {"install C0", page_c0, false},
@@ -138,8 +312,87 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     assert Enum.map(printed, &elem(&1, 0)) == [
              "1 install C0",
              "2 admin R1 + K1",
-             "3 non-admin Rn"
+             "3 non-admin Rn",
+             "4 R1 rotates to T2",
+             "5 CT before its T"
            ]
+
+    # Rows 526 and 527 on BEAM before TS must agree.
+    assert [_, _, %{"accepted" => "T2/K2", "origin" => "wss://r1-relay.invalid"} = t2, again] =
+             beam_views["rotation"]
+
+    assert {t2["routes"], again["kind"]} == {1, "unchanged"}
+    assert List.last(beam_views["k2_first"]) == Map.put(t2, "kind", "propose")
+    assert List.last(beam_views["rotation_bad_sig"])["accepted"] == "T2/K2"
+    assert [_, %{"accepted" => "B/C0", "sidecar" => 0}] = beam_views["rotation_wrong_arity"]
+
+    assert [_, %{"accepted" => "B/C0", "sidecar" => 1}, %{"accepted" => "T/CT", "sidecar" => 0}] =
+             beam_views["ct_first"]
+
+    assert [_, %{"sidecar" => 1}, %{"accepted" => "B/C0", "sidecar" => 0}] =
+             beam_views["junk_before_t"]
+
+    # Review round 1, asserted on BEAM before TS must agree.
+    assert List.last(beam_views["rotation_three"])["accepted"] == "T4/K4"
+
+    assert List.last(beam_views["legacy_two"]) |> Map.take(["accepted", "sidecar"]) ==
+             %{"accepted" => "TT/CTT", "sidecar" => 0}
+
+    assert %{"reason" => "trust_pending", "sidecar_rotations" => 1, "accepted" => "R1/K1"} =
+             List.last(beam_views["forged_parent_child"])
+
+    assert %{"accepted" => "T/CT", "sidecar" => 0} = List.last(beam_views["forged_held"])
+    assert %{"accepted" => "T/CT1", "sidecar" => 0} = List.last(beam_views["forged_held_chain"])
+
+    assert %{"accepted" => "T/CT1", "sidecar" => 0, "reason" => nil} =
+             List.last(beam_views["held_revision_first"])
+
+    assert %{"kind" => "retain_blocked", "routes" => 0, "sidecar_rotations" => 0} =
+             List.last(beam_views["blocked_orphan"])
+
+    assert %{"accepted" => "B/C0", "routes" => 0, "sidecar" => 1} =
+             List.last(beam_views["blocked_bad_rotation"])
+
+    assert %{"kind" => "retain_blocked", "reason" => "catalog_fork", "routes" => 0} =
+             List.last(beam_views["held_fork_junk"])
+
+    # Forged catalogs are dropped before any judgement (review round 3).
+    assert [_, %{"sidecar" => 17}, %{"sidecar" => 0}, %{"sidecar" => 0, "accepted" => "B/C0"}] =
+             beam_views["revive_bound"]
+
+    assert %{"accepted" => "R2/K2r", "reason" => nil} = List.last(beam_views["closed_unbound"])
+    [_, rn, tn] = beam_views["nonadmin_unbound"]
+    assert tn["reason"] == rn["reason"]
+    assert List.last(beam_views["blocked_junk"]) == List.last(beam_views["blocked_plain"])
+
+    # Review round 3, asserted on BEAM before TS must agree.
+    for name <- ["variant_fork", "orphan_fork"] do
+      assert %{"kind" => "retain_blocked", "reason" => "catalog_fork", "routes" => 0} =
+               List.last(beam_views[name])
+    end
+
+    assert %{"reason" => "control_history_limit", "routes" => 0} =
+             List.last(beam_views["limit_junk"])
+
+    assert %{"sidecar" => 1, "routes" => 0} = List.last(beam_views["blocked_pending"])
+
+    assert [_, _, %{"kind" => "reject", "reason" => "malformed_catalog"} = dup, loose] =
+             beam_views["rotation_closed_wire"]
+
+    assert loose == dup
+
+    assert %{"kind" => "retain_blocked", "reason" => "catalog_fork", "routes" => 0} =
+             List.last(beam_views["forged_mask"])
+
+    assert %{"kind" => "retain_blocked", "routes" => 0, "sidecar" => 1} =
+             List.last(beam_views["blocked_legacy_duplicate"])
+
+    # Only these runs may reject a step; the TS consumer refuses a reject anywhere else.
+    reject_runs = ["rotation_closed_wire"]
+
+    for {name, views} <- beam_views,
+        %{"kind" => "reject"} <- views,
+        do: assert(name in reject_runs, name)
 
     # The order, repeat and freeze runs, asserted on BEAM before TS must agree.
     assert [_, %{"accepted" => "B/C0"}, %{"accepted" => "R1/K1", "frozen" => false}] =
@@ -201,6 +454,11 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
            ] = extra_views["malformed_block"]
 
     assert last["frozen"] == false
+
+    assert [_, %{"kind" => "retain_blocked", "reason" => "authority_changed"} = blocked] =
+             extra_views["orphan_authority"]
+
+    assert {blocked["routes"], blocked["sidecar_rotations"]} == {0, 0}
     beam_views = Map.merge(beam_views, extra_views)
 
     path =
@@ -209,6 +467,7 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
     doc = %{
       "format" => "lattice-replacement-demo-v1",
       "history" => w.h0,
+      "reject_runs" => reject_runs,
       "labels" => labels,
       "runs" =>
         for {name, steps} <- runs do
@@ -323,6 +582,26 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         ]
       },
       %{
+        name: "orphan_authority",
+        history: hd(f.histories),
+        install: fixture_install,
+        old_key: f.space.catalog.pub,
+        steps: [
+          {"accept catalog",
+           %{
+             catalogs: [f.catalog_json],
+             rotations: [],
+             histories: f.histories,
+             cutoff_proofs: []
+           }, :eval},
+          {"thread transfer + orphan rotation",
+           %{
+             plain.(CatalogTrustVectors.raw_history(thread_log))
+             | rotations: [CatalogTrustVectors.artifact_json(fixture_orphan(f))]
+           }, :eval}
+        ]
+      },
+      %{
         name: "malformed_block",
         history: hd(f.histories),
         install: fixture_install,
@@ -345,6 +624,264 @@ defmodule Treehouse.CatalogReplacementTrustDemoTest do
         ]
       }
     ]
+  end
+
+  # Rows 526 and 527: T2 rotates R1 (from K1, signed by K1's key) and K2 is its first catalog; T
+  # rotates the bootstrap (from C0, signed by the base catalog key) and CT is its first catalog.
+  defp rotation_world(w) do
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    base = w.base
+    t2 = W.rotation(w, %{id: w.r1.id, generation: 1}, w.k1, w.new_catalog, "demo-t2")
+    k2 = F.catalog(base, t2.id, 0, nil, t2.key, w.k1.catalog.entries)
+    t = W.rotation(w, %{id: base.boot.id, generation: 0}, w.c0, base.catalog, "demo-t")
+    ct = F.catalog(base, t.id, 0, nil, t.key, w.c0.catalog.entries)
+    junk_key = Lattice.Identity.from_seed("junk", "r527-demo-junk")
+    junk_t = F.catalog(base, t.id, 0, nil, junk_key, w.c0.catalog.entries)
+
+    one = F.replacement(base, base.log, "r526-demo-one")
+
+    op =
+      Lattice.Op.new(
+        base.admin,
+        base.replica,
+        Lattice.Log.frontier(base.log),
+        :command,
+        {:replace_catalog_v1, [one.claim]},
+        cap: base.delegation.id
+      )
+
+    review = review_world(w, t2, k2, t, ct)
+    k_one = F.catalog(base, op.id, 0, nil, one.catalog_key, one.entries)
+    t_one = W.rotation(w, %{id: op.id, generation: 1}, k_one, one.catalog_key, "demo-one")
+
+    %{
+      t2: t2,
+      k2: k2,
+      ct: ct,
+      junk_t: junk_t,
+      forged_t2: %{t2.envelope | new_signature: <<7, 0::size(504)>>},
+      page_t2k2: W.page(rotations: [t2.envelope], catalogs: [k2], proofs: [w.proof]),
+      page_t: W.page(rotations: [t.envelope], proofs: [w.proof]),
+      page_arity:
+        W.page(
+          logs: [W.with_ops(base, [op])],
+          proofs: [w.proof],
+          catalogs: [k_one],
+          rotations: [t_one.envelope]
+        ),
+      labels:
+        Map.merge(
+          %{t2.id => "T2", F.cid(k2) => "K2", t.id => "T", F.cid(ct) => "CT"},
+          review.labels
+        )
+    }
+    |> then(&Map.merge(review, &1))
+  end
+
+  # Review round 1: three rotations under R1, two legacy rotations, a child of a forged rotation,
+  # an unbound rotation later closed out by R2 or under a non-admin Rn, and a block.
+  defp review_world(w, t2, k2, t, ct) do
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    base = w.base
+    t3 = W.rotation(w, %{id: t2.id, generation: 2}, k2, t2.key, "demo-t3")
+    k3 = F.catalog(base, t3.id, 0, nil, t3.key, k2.catalog.entries)
+    t4 = W.rotation(w, %{id: t3.id, generation: 3}, k3, t3.key, "demo-t4")
+    k4 = F.catalog(base, t4.id, 0, nil, t4.key, k3.catalog.entries)
+    ct1 = F.catalog(base, t.id, 1, F.cid(ct), t.key, ct.catalog.entries)
+    moved = Enum.map(ct.catalog.entries, &%{&1 | route: "/r/" <> F.id("demo-ct1b")})
+    ct1b = F.catalog(base, t.id, 1, F.cid(ct), t.key, moved)
+
+    junks =
+      for i <- 1..17,
+          do:
+            F.catalog(
+              base,
+              t.id,
+              0,
+              nil,
+              Lattice.Identity.from_seed("junk", "demo-bound-#{i}"),
+              ct.catalog.entries
+            )
+
+    tt = W.rotation(w, %{id: t.id, generation: 1}, ct, t.key, "demo-tt")
+    ctt = F.catalog(base, tt.id, 0, nil, tt.key, ct.catalog.entries)
+    forged = %{t2.envelope | new_signature: <<7, 0::size(504)>>}
+    u = W.rotation(w, %{id: TransportCatalog.rotation_id(forged), generation: 2}, k2, t2.key, "u")
+    tr = W.rotation(w, %{id: w.r1.id, generation: 1}, w.k1, w.new_catalog, "demo-tr")
+    log = W.with_ops(base, [w.r1])
+
+    r2 =
+      F.replacement(base, log, "demo-r2",
+        parents: [w.r1.id],
+        prior_catalogs: [%{binding: w.r1.id, catalog: F.cid(w.k1)}],
+        generation: 2
+      )
+
+    k2r = F.first(base, r2)
+    {:ok, %{cutoff: cut}} = Treehouse.CatalogCutoff.derive(log)
+    proof = %{cutoff: cut, history: CatalogTrustVectors.raw_history(log)}
+    kn = F.first(base, w.rn)
+    tn = W.rotation(w, %{id: w.rn.id, generation: 1}, kn, w.rn.catalog_key, "demo-tn")
+    moved = Enum.map(F.base_entries(base), &%{&1 | route: "/r/" <> F.id("demo-sibling")})
+    c1 = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, F.base_entries(base))
+    c1b = F.catalog(base, base.boot.id, 1, F.cid(w.c0), base.catalog, moved)
+    orphan = W.rotation(w, %{id: F.id("demo-nowhere"), generation: 1}, w.c0, base.catalog, "o")
+    bad = %{t.envelope | old_signature: binary_part(t.envelope.old_signature, 0, 63)}
+    recover = W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1])
+
+    %{
+      round3:
+        round_three(w, %{t: t, t2: t2, k2: k2, ct: ct, ct1: ct1, ct1b: ct1b, orphan: orphan}),
+      u: u,
+      orphan: orphan,
+      page_bad_rotation: %{recover | rotations: [CatalogTrustVectors.artifact_json(bad)]},
+      page_no_signature: %{
+        recover
+        | rotations: [CatalogTrustVectors.artifact_json(Map.delete(t.envelope, :old_signature))]
+      },
+      page_extra_key: %{
+        recover
+        | rotations: [CatalogTrustVectors.artifact_json(Map.put(t.envelope, :extra, 1))]
+      },
+      ct1: ct1,
+      ct1b: ct1b,
+      junks: junks,
+      tr: tr,
+      tn: tn,
+      page_three:
+        W.page(rotations: [t2.envelope, t3.envelope, t4.envelope], catalogs: [k2, k3, k4]),
+      page_legacy_two:
+        W.page(rotations: [t.envelope, tt.envelope], catalogs: [ct, ctt], proofs: [w.proof]),
+      page_r2: W.page(logs: [W.with_ops(base, [w.r1, r2.op])], proofs: [proof], catalogs: [k2r]),
+      page_rn: W.page(logs: [W.with_ops(base, [w.rn.op])], proofs: [w.proof], catalogs: [kn]),
+      page_fork: W.page(catalogs: [c1, c1b]),
+      page_recover:
+        W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1], rotations: [t.envelope]),
+      labels: %{
+        t4.id => "T4",
+        F.cid(k4) => "K4",
+        tt.id => "TT",
+        F.cid(ctt) => "CTT",
+        r2.id => "R2",
+        F.cid(k2r) => "K2r",
+        F.cid(ct1) => "CT1",
+        F.cid(ct1b) => "CT1b"
+      }
+    }
+  end
+
+  # Review round 3: sixteen whitespace-prefixed JSON variants of CT1 ahead of its sibling CT1b,
+  # an orphan beside a held fork, a forged catalog under one of three sibling rotations (a
+  # `control_history_limit` block), and T2 with a duplicate key or non-canonical base64.
+  defp round_three(w, %{t: t, t2: t2, k2: k2, ct: ct} = x) do
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    base = w.base
+    json = CatalogTrustVectors.artifact_json(x.ct1)
+    spaces = [" ", "\t", "\n", "\r"]
+    variants = Enum.sort(for a <- spaces, b <- spaces, do: a <> b <> json)
+    siblings = sibling_rotations(w)
+    junk_key = Lattice.Identity.from_seed("junk", "demo-limit-junk")
+    junk = F.catalog(base, elem(hd(siblings), 0), 0, nil, junk_key, w.c0.catalog.entries)
+    log = W.with_ops(base, [w.r1])
+    ["map", pairs] = Wire.encode_value(t2.envelope)
+    wrong = [["atom", "old_signature"], ["bin", Base.encode64(<<0::512>>)]]
+
+    loose =
+      Enum.map(pairs, fn
+        [["atom", "new_signature"], ["bin", text]] ->
+          [["atom", "new_signature"], ["bin", noncanonical(text)]]
+
+        pair ->
+          pair
+      end)
+
+    with_k2 = W.page(catalogs: [k2], proofs: [w.proof])
+    ct1b_json = CatalogTrustVectors.artifact_json(x.ct1b)
+
+    ahead =
+      for i <- 1..200,
+          key = Lattice.Identity.from_seed("junk", "demo-mask-#{i}"),
+          cat = F.catalog(base, t.id, 0, nil, key, ct.catalog.entries),
+          CatalogTrustVectors.artifact_json(cat) < ct1b_json,
+          do: cat
+
+    ["map", t_pairs] = Wire.encode_value(t.envelope)
+
+    %{
+      page_variants: %{
+        W.page()
+        | catalogs: variants ++ [CatalogTrustVectors.artifact_json(x.ct1b)]
+      },
+      page_t_ct: W.page(rotations: [t.envelope], catalogs: [ct], proofs: [w.proof]),
+      page_t_orphan: W.page(rotations: [t.envelope, x.orphan.envelope], proofs: [w.proof]),
+      page_limit_junk: W.page(catalogs: [junk]),
+      page_limit: %{
+        W.page(logs: [log], proofs: [w.proof], catalogs: [w.k1])
+        | rotations: Enum.map(siblings, &elem(&1, 1))
+      },
+      page_duplicate: %{with_k2 | rotations: [Jason.encode!(["map", [wrong | pairs]])]},
+      page_loose: %{with_k2 | rotations: [Jason.encode!(["map", loose])]},
+      page_mask: W.page(catalogs: Enum.take(ahead, 16) ++ [x.ct1b]),
+      page_t_ct_ct1: W.page(rotations: [t.envelope], catalogs: [ct, x.ct1], proofs: [w.proof]),
+      page_legacy_duplicate: %{
+        W.page(catalogs: [ct], proofs: [w.proof])
+        | rotations: [Jason.encode!(["map", [wrong | t_pairs]])]
+      }
+    }
+  end
+
+  defp sibling_rotations(w) do
+    alias Treehouse.CatalogBindingGraphFixtures, as: F
+    base = w.base
+
+    for i <- 1..3 do
+      new = Lattice.Identity.from_seed("catalog", "demo-limit-#{i}")
+
+      rotation = %{
+        version: 1,
+        product: :treehouse,
+        space: base.replica,
+        bootstrap: base.boot.id,
+        parent: base.boot.id,
+        prior_catalog: F.cid(w.c0),
+        generation: 1,
+        new_catalog_key: new.pub,
+        nonce: F.id("demo-limit-#{i}"),
+        inventory_digest: TransportCatalog.inventory_id(w.c0.catalog.entries),
+        cutoffs: [w.proof.cutoff]
+      }
+
+      envelope = %{
+        rotation: rotation,
+        old_signature:
+          Lattice.Identity.sign(base.catalog, TransportCatalog.rotation_bytes(rotation)),
+        new_signature:
+          Lattice.Identity.sign(new, TransportCatalog.rotation_possession_bytes(rotation))
+      }
+
+      {TransportCatalog.rotation_id(envelope), CatalogTrustVectors.artifact_json(envelope)}
+    end
+  end
+
+  # 64 bytes encode to 86 characters and "=="; the last character carries 4 unused bits.
+  defp noncanonical(text) do
+    <<head::binary-size(85), last, "==">> = text
+    alphabet = ~c"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    index = Enum.find_index(alphabet, &(&1 == last))
+    head <> <<Enum.at(alphabet, Bitwise.bxor(index, 1))>> <> "=="
+  end
+
+  defp fixture_orphan(f) do
+    next = Lattice.Identity.from_seed("catalog-demo-orphan", "r2-demo-orphan")
+
+    rotation = %{
+      f.rotation
+      | parent: CatalogTrustVectors.id("r2-demo-nowhere"),
+        nonce: CatalogTrustVectors.id("r2-demo-orphan"),
+        new_catalog_key: next.pub
+    }
+
+    CatalogTrustVectors.sign_rotation(rotation, f.space.catalog, next)
   end
 
   defp fixture_install(f) do
