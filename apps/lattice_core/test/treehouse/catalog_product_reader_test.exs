@@ -25,6 +25,10 @@ defmodule Treehouse.CatalogProductReaderTest do
           {:unsafe_body, :command, high, nil, :unsupported_cutoff},
           {:maximum_uint64_body, :command, 18_446_744_073_709_551_615, nil, :unsupported_cutoff},
           {:unsafe_cap, :command, nil, high, :unsupported_cutoff},
+          # Row 336: a high command argument stays outside the product reader for every name.
+          {:unsafe_post_argument, :command, {:post, [high]}, nil, :unsupported_cutoff},
+          {:unsafe_replace_argument, :command, {:replace_catalog_v1, [high]}, nil,
+           :unsupported_cutoff},
           {:beacon, :authority, {:beacon, high}, nil, nil},
           {:policy_metadata, :authority,
            {:genesis, neutral, %{__beacon__: %{max_epoch_step: high}}}, nil, nil},

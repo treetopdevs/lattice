@@ -18,6 +18,14 @@ export declare function resolveContinuationProfileFromFrames(input: {
     replica: string;
     frames: readonly unknown[];
 }): Promise<ContinuationProfileObservation>;
+/**
+ * Row 336: the same observation over the command-judge frame reader, for a Space/Thread judge
+ * entry point that admits high-uint64 command arguments. Not exported from the package index.
+ */
+export declare function resolveContinuationProfileFromJudgedFrames(input: {
+    replica: string;
+    frames: readonly unknown[];
+}): Promise<ContinuationProfileObservation>;
 export type ContinuationPinsObservation = {
     ok: true;
     pins: {
