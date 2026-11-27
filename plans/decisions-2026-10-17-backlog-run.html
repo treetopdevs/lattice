@@ -4874,6 +4874,24 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The D-279 contract is over bytes and causal ancestry, and an unheld ancestor cannot be judged. Review round 1: Codex Sol 6.1 high PASS and Gemini 4 Neon medium PASS, no findings. Mutant m11 is still killed. Honest-rotation reach in deep histories is low (one watermark hit on the seed shown), filed as row 607. The indefinite <code>trust_pending</code> after a lost cited catalog belongs to the 4c eviction obligation (rows 381 and 388), not a new row.</dd>
 <dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
 </dl></section>
+<section id="d975"><h2><span>D-975</span> Row 336: one rule for the command judge, generic frame reader unchanged</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 336 slice (branch claude/336-high-uint64-argument-decode-parity, PR <a href="https://github.com/treetopdevs/lattice/pull/248">#248</a>)</dd>
+<dt>Decision</dt><dd>The TypeScript client gets a separate judge reader, <code>decodeCarrierCommandJudgeFrame</code>, which admits a canonical high uint64 in any command's argument list. The member-continuity observe, review and assemble entry points and the bootstrap reader use it. The generic <code>decodeCarrierOpFrame</code> keeps main's rule, including its <code>replace_catalog_v1</code> carve-out, so catalog trust and the other product readers are unchanged.</dd>
+<dt>Reason</dt><dd>An earlier head widened the generic reader. A coordinator check before the PR showed that this changed catalog trust: a signed high uint64 in any other command turned <code>reject: unsupported_cutoff</code> into <code>propose</code> in 24 of 30 cases per value. Splitting the readers restores main's decisions byte for byte, pinned by 60 cases.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d976"><h2><span>D-976</span> Row 336: what stays open</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 336 slice (branch claude/336-high-uint64-argument-decode-parity, PR <a href="https://github.com/treetopdevs/lattice/pull/248">#248</a>)</dd>
+<dt>Decision</dt><dd>A high-integer <code>replace_catalog_v1</code> frame gives <code>propose</code> in TS catalog trust and <code>unsupported_cutoff</code> in BEAM's product reader. This was so on main, is now pinned in both runtimes, and is filed as row 608 because the fix is in the protected trust files. Caps and <code>dormant_ticks</code> at frame admission stay with row 212.</dd>
+<dt>Reason</dt><dd>The slice may not edit <code>treehouse_catalog_trust.ts</code>, and its limit was no change to any catalog-trust outcome.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d977"><h2><span>D-977</span> Row 336 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, row 336 slice (branch claude/336-high-uint64-argument-decode-parity, PR <a href="https://github.com/treetopdevs/lattice/pull/248">#248</a>)</dd>
+<dt>Decision</dt><dd>Three rounds with Codex Sol 6.1 high and Gemini 4 Neon medium. Rounds 1 and 2 each found two P2 (a leftover per-command exception; authenticated entry points disagreeing with BEAM). Round 3: Codex PASS, Gemini one P2 (review and assemble still refused the history) and one P3 (non-atom heads), both fixed. The native and shell suites were run after the coordinator asked for them and pass.</dd>
+<dt>Reason</dt><dd>No review round confirmed the round 3 fixes; the hosted bots review that head. The paths touched need two independent reviews under rule 3, which the two reviewers provide.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
