@@ -1,6 +1,6 @@
 import { verifyEd25519 } from "./signature";
-import { analyzeAuthority, continuationFamily, resolveContinuationProfileFromFrames } from "./authority";
-import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
+import { analyzeAuthority, continuationFamily, resolveContinuationProfileFromJudgedFrames } from "./authority";
+import { base64ToBytes, carrierOpsToSemanticOps, decodeCarrierCommandJudgeFrame } from "./carrier";
 import { authorCarrierOp, canonicalBase64Bytes, verifyCarrierOp } from "./codec";
 import { ancestors, canonicalOrder, concurrent } from "./dag";
 import { materialize } from "./materialize";
@@ -120,7 +120,8 @@ export async function observeMemberContinuityFromFrames(input) {
     const invalid = { ok: false, reason: "invalid_verified_history" };
     try {
         const snapshot = structuredClone(input);
-        const frames = snapshot.frames.map(decodeCarrierOpFrame);
+        // Row 336: the command-judge reader, so one high-uint64 argument quarantines only its op.
+        const frames = snapshot.frames.map(decodeCarrierCommandJudgeFrame);
         const ids = new Set(frames.map((frame) => frame.id));
         if (ids.size !== frames.length || frames.some((frame) => frame.replica !== snapshot.replica ||
             frame.deps.some((dependency) => !ids.has(dependency))))
@@ -135,7 +136,7 @@ export async function observeMemberContinuityFromFrames(input) {
         }
         if (snapshot.oldPub !== undefined && canonicalBase64Bytes(snapshot.oldPub, 32) === null)
             return invalid;
-        const profile = await resolveContinuationProfileFromFrames({ replica: snapshot.replica, frames });
+        const profile = await resolveContinuationProfileFromJudgedFrames({ replica: snapshot.replica, frames });
         if (!profile.ok)
             return profile.reason === "invalid_verified_history"
                 ? invalid : { ok: false, reason: "unsupported_continuity_history" };
@@ -324,7 +325,8 @@ export async function assembleMemberContinuityFromFrames(input) {
     }
 }
 async function authenticateJudgedHistory(replica, values) {
-    const frames = structuredClone(values).map(decodeCarrierOpFrame);
+    // Row 336: the same command-judge reader as observe, so review agrees with it on admission.
+    const frames = structuredClone(values).map(decodeCarrierCommandJudgeFrame);
     const ids = new Set(frames.map((frame) => frame.id));
     if (ids.size !== frames.length || frames.some((frame) => frame.replica !== replica || frame.deps.some((dep) => !ids.has(dep))))
         return null;
@@ -340,7 +342,7 @@ async function authenticateJudgedHistory(replica, values) {
     return { frames, ops, byId, order, projection, authority, frontier: frontier(ops).sort() };
 }
 async function judgeCandidate(values, frame) {
-    const frames = [...values.map(decodeCarrierOpFrame), frame];
+    const frames = [...values.map(decodeCarrierCommandJudgeFrame), frame];
     const ops = carrierOpsToSemanticOps(frames, {}, treehouseCommandDecoders("Treehouse.Space"));
     return materialize(treehouseSpaceSchema, ops, new Set(ops.map((op) => op.id)), null, frame.replica);
 }

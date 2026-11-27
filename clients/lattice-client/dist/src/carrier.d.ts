@@ -205,6 +205,13 @@ export interface Payload {
     authority?: AuthorityEvidence;
     consent?: Omit<CustodyConsentEvidence, "authorPub">;
 }
+/**
+ * One command's argument decoder. A decoder in an injected `CommandDecoderMap` may receive
+ * `{type: "opaque_high_integer"}` anywhere in its argument list (a wire uint64 above
+ * MAX_SAFE_INTEGER, which `decodeCarrierCommandJudgeFrame` admits in every command's argument
+ * list) and must refuse it like any other wrongly typed value (row 336). The built-in tables, used
+ * when no map is injected, never receive it.
+ */
 export interface CommandDecoder {
     arity: number;
     decode: (args: DecodedTerm[], realmByPubkey: Record<string, string>) => Payload;
@@ -291,6 +298,14 @@ export declare class CarrierPeerError extends Error {
 export declare function carrierPeerErrorReason(error: unknown): string | null;
 export declare function carrierOpsToSemanticOps(frames: unknown[], realmByPubkey?: Record<string, string>, commandDecoders?: CommandDecoderMap): Op[];
 export declare function decodeCarrierOpFrame(frame: unknown): CarrierOpFrame;
+/**
+ * Frame admission for a Space/Thread command judge (row 336): like `decodeCarrierOpFrame`, but a
+ * canonical wire uint64 above MAX_SAFE_INTEGER is admitted in every command's argument list, as
+ * BEAM Wire.decode_ops does, so the injected decoder refuses that one op with BEAM's reason
+ * instead of the whole history failing. Product and catalog-trust readers keep
+ * `decodeCarrierOpFrame`, whose outcomes row 336 must not change.
+ */
+export declare function decodeCarrierCommandJudgeFrame(frame: unknown): CarrierOpFrame;
 export declare function carrierOpToSemanticOp(frame: unknown, realmByPubkey?: Record<string, string>, commandDecoders?: CommandDecoderMap): Op;
 /**
  * Deterministic `Lattice.Canonical` bytes for the JS value subset the client

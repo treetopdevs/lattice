@@ -937,7 +937,7 @@ function canRelay(client) {
     return typeof client.relay === "function";
 }
 function stableCausalCarrierFrames(frames) {
-    const ops = frames.map((frame) => assertCarrierOpFrame(frame, false));
+    const ops = frames.map((frame) => assertCarrierOpFrame(frame, null));
     const firstIndexById = new Map();
     for (const [index, op] of ops.entries()) {
         if (!firstIndexById.has(op.id))
@@ -1002,16 +1002,26 @@ export function carrierOpsToSemanticOps(frames, realmByPubkey = {}, commandDecod
     return frames.map((frame) => carrierOpToSemanticOp(frame, realmByPubkey, commandDecoders));
 }
 export function decodeCarrierOpFrame(frame) {
-    return assertCarrierOpFrame(frame, true);
+    return assertCarrierOpFrame(frame, "catalog");
+}
+/**
+ * Frame admission for a Space/Thread command judge (row 336): like `decodeCarrierOpFrame`, but a
+ * canonical wire uint64 above MAX_SAFE_INTEGER is admitted in every command's argument list, as
+ * BEAM Wire.decode_ops does, so the injected decoder refuses that one op with BEAM's reason
+ * instead of the whole history failing. Product and catalog-trust readers keep
+ * `decodeCarrierOpFrame`, whose outcomes row 336 must not change.
+ */
+export function decodeCarrierCommandJudgeFrame(frame) {
+    return assertCarrierOpFrame(frame, "all");
 }
 export function carrierOpToSemanticOp(frame, realmByPubkey = {}, commandDecoders) {
-    const op = assertCarrierOpFrame(frame, false);
+    const op = assertCarrierOpFrame(frame, null);
     let payload;
     let cap;
     let structuralError;
     let authorityInputReason;
     try {
-        const body = decodeCarrierBody(op);
+        const body = decodeCarrierBody(op, commandDecoders === undefined ? "none" : "all");
         try {
             payload = payloadFromBody(op.kind, body, realmByPubkey, op.body, op.replica, commandDecoders);
         }
@@ -1118,10 +1128,7 @@ function canonicalAtom(value) {
 function canonicalTuple(values) {
     return concat(major(6, BigInt(tupleTag)), canonicalTerm(values));
 }
-// Invalid reserved metadata stays local to the policy/certificate on BEAM.
-// Context preserves the raw frame. Only exact two-field legacy beacons retain
-// high uint64 epochs as decimal evidence; witnessed body/claim epochs stay safe integers.
-function decodeCarrierBody(op) {
+function decodeCarrierBody(op, opaqueCommandArguments) {
     const body = op.body;
     // This function splits the body tuple (and genesis policy map) by hand, so it spends the
     // levels those containers would have spent in a recursive decode of the same body.
@@ -1137,11 +1144,18 @@ function decodeCarrierBody(op) {
                     { type: "legacy_beacon_epoch", decimal: epoch[1] }] };
         }
     }
-    // replace_catalog_v1 arguments keep wire uint64s above MAX_SAFE_INTEGER as opaque sentinels, so
-    // its decoder refuses them as `application_invalid_catalog` like BEAM instead of `malformed_term`.
-    if (op.kind === "command" && body[0] === "tuple" && body.length === 2 && Array.isArray(body[1]) &&
-        body[1].length === 2 && body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
-        body[1][0][1] === "replace_catalog_v1" && body[1][1]?.[0] === "list") {
+    // Row 336: an injected product decoder map and the command-judge frame reader decode every
+    // command's `{name, [arguments]}` list in the opaque context, so a wire uint64 above
+    // MAX_SAFE_INTEGER is admitted like BEAM Wire.decode_ops and the product decoder refuses it with
+    // BEAM's Authority reason. Without a map the built-in tables decode strictly (`malformed_term`).
+    // The generic frame reader (`decodeCarrierOpFrame`) keeps its pre-row-336 rule, opaque only for
+    // replace_catalog_v1, because catalog trust and product readers depend on its outcomes.
+    // The command-judge reader admits any head, as BEAM does; the head itself decodes strictly.
+    // Non-list arguments, caps and other positions stay strict (row 212).
+    if (opaqueCommandArguments !== "none" && op.kind === "command" && body[0] === "tuple" && body.length === 2 &&
+        Array.isArray(body[1]) && body[1].length === 2 && body[1][1]?.[0] === "list" &&
+        (opaqueCommandArguments === "all" || (body[1][0]?.[0] === "atom" && body[1][0].length === 2 &&
+            body[1][0][1] === "replace_catalog_v1"))) {
         return { type: "tuple", values: [decodeCarrierTerm(body[1][0], "strict", inner),
                 decodeCarrierTerm(body[1][1], "opaque_integer", inner)] };
     }
@@ -1468,8 +1482,8 @@ function assertCarrierOpFrame(frame, validateTerms) {
     try {
         base64ToBytes(carrierFrame.author);
         base64ToBytes(carrierFrame.sig);
-        if (validateTerms) {
-            decodeCarrierBody(carrierFrame);
+        if (validateTerms !== null) {
+            decodeCarrierBody(carrierFrame, validateTerms);
             decodeCarrierTerm(carrierFrame.cap);
         }
     }

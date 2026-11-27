@@ -2,7 +2,7 @@ import { verifyEd25519 } from "./signature";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { canonicalBase64Bytes, canonicalBytesForWitnessedBeaconClaim, canonicalBytesForCarrierDelegation, canonicalBytesForWitnessedRecoveryPolicy, canonicalBytesForWitnessedSuccessionArtifactId, canonicalBytesForWitnessedSuccessionClaim, verifyCarrierOp, } from "./codec";
 import { revokedAsOf } from "./capability";
-import { carrierOpsToSemanticOps, decodeCarrierOpFrame } from "./carrier";
+import { carrierOpsToSemanticOps, decodeCarrierCommandJudgeFrame, decodeCarrierOpFrame } from "./carrier";
 import { ancestors, canonicalOrder, index } from "./dag";
 import { effectViews } from "./op";
 import { isAuthorityField } from "./schema";
@@ -10,8 +10,18 @@ import { frontier } from "./sync";
 import { continuationProfileId, normalizeContinuationCertificate, normalizeContinuationProfile, verifyContinuationCertificate, } from "./continuation";
 /** Observe an actual root-authenticated pin; the caller owns complete store snapshots. */
 export async function resolveContinuationProfileFromFrames(input) {
+    return resolveContinuationProfile(input, decodeCarrierOpFrame);
+}
+/**
+ * Row 336: the same observation over the command-judge frame reader, for a Space/Thread judge
+ * entry point that admits high-uint64 command arguments. Not exported from the package index.
+ */
+export async function resolveContinuationProfileFromJudgedFrames(input) {
+    return resolveContinuationProfile(input, decodeCarrierCommandJudgeFrame);
+}
+async function resolveContinuationProfile(input, read) {
     try {
-        const verified = await verifiedContinuationContext(input);
+        const verified = await verifiedContinuationContext(input, read);
         if (!verified.ok)
             return verified;
         const { replica, ids, ops, root, context } = verified;
@@ -32,7 +42,7 @@ export async function resolveContinuationProfileFromFrames(input) {
 /** The judge's root-authenticated pins of a complete store snapshot, in canonical order; no root means none. */
 export async function resolveContinuationPinsFromFrames(input) {
     try {
-        const verified = await verifiedContinuationContext(input);
+        const verified = await verifiedContinuationContext(input, decodeCarrierOpFrame);
         if (!verified.ok)
             return verified;
         return { ok: true, pins: verified.context.pins.map(({ opId, profile }) => ({ opId, profile })) };
@@ -46,14 +56,14 @@ export async function resolveContinuationPinsFromFrames(input) {
  * A frame whose terms the decoder cannot read (row 212: an integer above 2^53-1) refuses the
  * whole history, fail-closed, even where BEAM would admit it.
  */
-async function verifiedContinuationContext(input) {
+async function verifiedContinuationContext(input, read) {
     const { replica, frames } = structuredClone(input);
     const family = continuationFamily(replica);
     if (family === "legacy")
         return { ok: false, reason: "unauthorized_continuation" };
     if (family === "unsupported")
         return { ok: false, reason: "unsupported_authority_profile" };
-    const decoded = frames.map(decodeCarrierOpFrame);
+    const decoded = frames.map((frame) => read(frame));
     const ops = carrierOpsToSemanticOps(decoded), byId = index(ops);
     const ids = new Set(decoded.map((frame) => frame.id));
     if (ids.size !== decoded.length || decoded.some((frame) => frame.replica !== replica ||

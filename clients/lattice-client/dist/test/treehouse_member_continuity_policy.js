@@ -312,6 +312,29 @@ test("review derives consent from signed history and assembly never invokes a si
         assert.deepEqual(await assembleMemberContinuityFromFrames({ frames, review: reviewed.review, certificate,
             signer: { publicKey: admin.pub, sign } }), { ok: false, reason: "signer_failed" });
     }
+    // Row 336: a signed high-uint64 argument (on any command name, any head) is one quarantined op in
+    // the history BEAM Wire.decode_ops admits, so review and assemble still succeed, as observe does.
+    for (const head of [["atom", "create_space"], ["nil"], ["bin", "cG9zdA=="]]) {
+        const highArgument = await authorCarrierOp({ replica: genesis.replica, deps: [epoch.id], kind: "command",
+            cap: townshipCapTerm(delegation.id), signer: adminSigner,
+            body: ["tuple", [head, ["list", [["int", "9007199254740992"]]]]] });
+        const highFrames = [...frames, highArgument];
+        const highObserved = await observeMemberContinuityFromFrames({ replica: genesis.replica, frames: highFrames });
+        assert.equal(highObserved.ok, true, JSON.stringify(head));
+        if (highObserved.ok)
+            assert.ok(highObserved.quarantine.some((item) => item.opId === highArgument.id), JSON.stringify(head));
+        const highReviewed = await reviewMemberContinuityFromFrames({ ...request, frames: highFrames });
+        assert.equal(highReviewed.ok, true, JSON.stringify(highReviewed));
+        if (!highReviewed.ok)
+            continue;
+        const highPossession = b64(ed25519.sign(highReviewed.review.possessionBytes, successor.seed));
+        const highCertificate = { claim: highReviewed.review.claim, possession: highPossession, vouches: witnesses.map((member) => ({
+                member: b64(member.pub), signature: b64(ed25519.sign(codec.canonicalBytesForMemberContinuityVouch(highReviewed.review.claim, highPossession), member.seed))
+            })) };
+        const highAssembled = await assembleMemberContinuityFromFrames({ frames: highFrames, review: highReviewed.review,
+            certificate: highCertificate, signer: adminSigner });
+        assert.equal(highAssembled.ok, true, JSON.stringify(highAssembled));
+    }
     const reviewedFrameCount = reviewed.review.request.frames.length;
     const reviewedGenesisSignature = reviewed.review.request.frames[0].sig;
     request.frames[0].sig = b64(new Uint8Array(64));
