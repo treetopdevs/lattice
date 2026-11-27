@@ -4844,6 +4844,36 @@ redundant-late-beacon case (PR 4b, row 380), nor the row 389 convergence evidenc
 <dt>Reason</dt><dd>The operator's request for the next meaningful slices is general and does not name an exception to rule 10. Parking the open PR is reversible; reverting the merged hardening would remove a symlink overwrite fix and a read bound for no gain.</dd>
 <dt>Status</dt><dd>Coordinator correction (2026-11-26). The exception for PR #242 is an open operator question.</dd>
 </dl></section>
+<section id="d970"><h2><span>D-970</span> Rows 526 and 527: parked after three review rounds (rule 3)</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 526 and 527 slice (branch claude/526-527-replacement-rotation-liveness, draft PR <a href="https://github.com/treetopdevs/lattice/pull/244">#244</a>)</dd>
+<dt>Decision</dt><dd>The slice is not offered for merge. It is kept as a draft PR and both rows are PARKED. Round 1 found seven P1 or P2 items, round 2 found an orphan rotation turning a security block into a reject, and round 3 found three more P1 items (a revival cap serving one side of a held fork, the orphan fallback discarding a new fork block, a held forged catalog downgrading <code>control_history_limit</code>). Each was fixed, and the round 3 fixes have no confirming review. The operator chooses between: wait for row 381 (PR 4c), which deletes the sidecar; redesign revival so held evidence is judged only as one whole set; or keep investing in review rounds.</dd>
+<dt>Reason</dt><dd>Every round found a new way for a subset of held evidence to hide a block the whole set would raise. That is a property of the revival design, not of single cases, and rule 3 makes a third round on one class a design question. The same pattern cost about 8M tokens on PR #221. Parking is fail-closed: main keeps today's behaviour, where these catalogs stay pending.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible. The choice between the three options is an open operator question.</dd>
+</dl></section>
+<section id="d971"><h2><span>D-971</span> Rows 525 and 355: how the authoring preflight measures the byte budgets</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 525 and 355 slice (branch claude/525-replacement-preflight-byte-budgets, PR <a href="https://github.com/treetopdevs/lattice/pull/245">#245</a>)</dd>
+<dt>Decision</dt><dd>A new <code>Treehouse.CatalogArtifactBudget</code> and its TypeScript twin measure each distinct normalized envelope as compact JSON and refuse over 131,072 bytes per artifact or 16 MiB in total, before signing, with the existing <code>control_history_limit</code> reason. The count check stays first. The request shape is unchanged. Malformed sizes and envelopes fail closed as over the limit. A shared vector <code>artifact_budget_v1.json</code> is checked from both runtimes.</dd>
+<dt>Reason</dt><dd>Authoring could sign a replacement that a verifier then refused. The measured size is a lower bound: a relay that pads the JSON can still exceed the verifier's limit, which is filed as row 604.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d972"><h2><span>D-972</span> Rows 525 and 355: mirrored limits, no headroom, row 355 stays partly open</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 525 and 355 slice (branch claude/525-replacement-preflight-byte-budgets, PR <a href="https://github.com/treetopdevs/lattice/pull/245">#245</a>)</dd>
+<dt>Decision</dt><dd>The count and total limits are private in <code>catalog_trust.ex</code>, so they are mirrored here; source-text pins of those constants were removed under rule 6, and row 606 asks for public constants. No count or byte headroom is reserved for the first catalog under the new binding (row 605). Row 525 closes with the PR. Row 355 keeps its sidecar-verifier half under row 395 item 1, which already owns the sidecar byte budget and waits on rows 526 and 527 (row 603 was filed for it in error and is rejected as a duplicate). Row 525 is done for compact-measured evidence only; the padded-JSON case is row 604.</dd>
+<dt>Reason</dt><dd><code>catalog_trust.ex</code> and the sidecar files are owned by other work. Reserving headroom changes what an author may sign and is a contract decision.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d973"><h2><span>D-973</span> Rows 525 and 355 review summary</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 525 and 355 slice (branch claude/525-replacement-preflight-byte-budgets, PR <a href="https://github.com/treetopdevs/lattice/pull/245">#245</a>)</dd>
+<dt>Decision</dt><dd>Round 1: Codex Sol 6.1 high PASS; Gemini 4 Neon medium found three P1 or P2 (fail-open on NaN, negative and infinite sizes; twins disagreeing on malformed envelopes; a test that passed with rotations dropped from the budget) and two P3. All fixed, with a mutation check. Round 2: both asked for changes, one P1 or P2 class (raises on a float version, an improper list and a non-list input). Fixed to fail closed.</dd>
+<dt>Reason</dt><dd>No review round confirmed the round 2 fixes; the hosted bots review the pushed head. One unrelated Node-peer test (<code>CatalogValidCapacityTest</code>) timed out locally at a load average near 400; hosted CI is the gate for it.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
+<section id="d974"><h2><span>D-974</span> Row 598: the return to pending after evidence loss is a checker gap, not a resolver regression</h2><dl>
+<dt>When</dt><dd>2026-11-26, rows 598 and 594 slice (branch claude/598-594-d279-evidence-loss-and-honest-rotations, PR <a href="https://github.com/treetopdevs/lattice/pull/246">#246</a>)</dd>
+<dt>Decision</dt><dd>All 25 hits found by the probe are ids whose cited ancestor catalog was dropped, and each settles again when that catalog is restored. The checker now counts a return to pending as neutral only when the id depends by bytes on the lost catalog and restoring it gives back the remembered verdict, or when the outcome is exactly <code>control_history_limit</code>. Every other return to pending still fails. Property M now also draws evidence-loss histories and honest-key rotations. No library file changed and no <code>r321_open</code> repro was needed.</dd>
+<dt>Reason</dt><dd>The D-279 contract is over bytes and causal ancestry, and an unheld ancestor cannot be judged. Review round 1: Codex Sol 6.1 high PASS and Gemini 4 Neon medium PASS, no findings. Mutant m11 is still killed. Honest-rotation reach in deep histories is low (one watermark hit on the seed shown), filed as row 607. The indefinite <code>trust_pending</code> after a lost cited catalog belongs to the 4c eviction obligation (rows 381 and 388), not a new row.</dd>
+<dt>Status</dt><dd>Decided under operator delegation (2026-11-26), reversible.</dd>
+</dl></section>
 </main>
 </body>
 </html>
