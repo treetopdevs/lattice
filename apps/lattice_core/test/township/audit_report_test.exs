@@ -1,9 +1,10 @@
 defmodule Township.AuditReportTest do
   use ExUnit.Case, async: false
 
-  alias Lattice.Sim
+  alias Lattice.{Log, Sim}
   alias Mix.Tasks.Lattice.Township.Report, as: ReportTask
-  alias Township.{AuditBundle, AuditReport, Matter}
+  alias Township.{AuditBundle, AuditReport, Matter, ReadModel}
+  alias Township.Election.{Report, SecurityProfile}
 
   @moduletag timeout: 120_000
 
@@ -11,6 +12,7 @@ defmodule Township.AuditReportTest do
   @tracked_dir Path.join(@repo_root, "artifacts/township")
   @hostile_post "<img src=x onerror=alert(1)>"
   @hostile_label "<b>\"x\"&'y'</b>"
+  @hostile_digest "<script>x</script>"
 
   # A stale clerk action (not_holder) plus an ill-formed grant (omitted delegation).
   defp scenario do
@@ -33,6 +35,100 @@ defmodule Township.AuditReportTest do
     sim = Sim.sync_all(sim)
     {sim, bad.id, stale.id}
   end
+
+  # Rows 401 + 402: succession, beacons, leases and link_election commands in one log.
+  # `succession_sim/0` is copied from authority_observe_test.exs, plus a realm with no
+  # capability at all.
+  defp succession_sim do
+    sim =
+      Sim.new(
+        Matter,
+        "replica:matter:report-observe",
+        ["clerk", "resident", "neighbor", "outsider"],
+        seed: "report-observe"
+      )
+
+    {sim, genesis} =
+      Sim.create_replica(sim, "clerk",
+        policies: %{clerk: %{successor: "resident", dormant_ticks: 2}}
+      )
+
+    {Sim.sync_all(sim), genesis}
+  end
+
+  defp observe_scenario do
+    {sim, genesis} = succession_sim()
+    {sim, claim} = Sim.succeed(sim, "resident", :clerk, at_tick: 3, ops: [:close_matter])
+    sim = Sim.sync_all(sim)
+    {sim, deleg} = Sim.transfer(sim, "resident", "neighbor", :clerk, ops: [:close_matter])
+    sim = Sim.sync_all(sim)
+
+    {sim, b1} = Sim.beacon(sim, "clerk", 1)
+    {sim, b5} = Sim.beacon(sim, "clerk", 5)
+    {sim, stale} = Sim.beacon(sim, "clerk", 2)
+    sim = Sim.sync_all(sim)
+    {sim, non_root} = Sim.beacon(sim, "resident", 9)
+    sim = Sim.sync_all(sim)
+
+    {sim, expired} = Sim.grant(sim, "clerk", "resident", ops: [:post], expires_epoch: 3)
+    {sim, active} = Sim.grant(sim, "clerk", "neighbor", ops: [:post], expires_epoch: 9)
+    {sim, _link_cap} = Sim.grant(sim, "clerk", "resident", ops: [:link_election])
+    sim = Sim.sync_all(sim)
+
+    {sim, hostile} = Sim.command(sim, "resident", :link_election, [@hostile_digest])
+    {sim, listy} = Sim.command(sim, "resident", :link_election, [[123]])
+    sim = Sim.sync_all(sim)
+    {sim, unauth} = Sim.command(sim, "outsider", :link_election, ["digest:outsider"])
+    sim = Sim.sync_all(sim)
+
+    log = Sim.log(sim, "clerk")
+
+    transfer_op =
+      Enum.find(Log.topo_ops(log), &match?({:transfer, :clerk, ^deleg, _}, &1.body))
+
+    %{
+      sim: sim,
+      log: log,
+      chronology: [genesis.id, claim.id, transfer_op.id],
+      transfer_delegation: deleg.id,
+      beacons: [b1.id, b5.id],
+      stale: stale.id,
+      non_root: non_root.id,
+      expired: expired.id,
+      active: active.id,
+      hostile: hostile.id,
+      listy: listy.id,
+      unauth: unauth.id
+    }
+  end
+
+  defp fp(sim, realm), do: Lattice.Identity.fingerprint(Sim.identity(sim, realm))
+
+  defp write_observe_bundle(dir, info \\ observe_scenario()) do
+    assert {:ok, _} = AuditBundle.write(dir, info.log)
+    assert :ok = AuditBundle.verify(dir)
+    info
+  end
+
+  # The slice from `<h2>heading</h2>` up to the next `<h2`.
+  defp section(html, heading) do
+    [_, rest] = String.split(html, "<h2>#{heading}</h2>", parts: 2)
+    [slice | _] = String.split(rest, "<h2", parts: 2)
+    slice
+  end
+
+  defp election_slice(html) do
+    [_, rest] = String.split(html, "<h2>Election evidence</h2>", parts: 2)
+    [slice, _] = String.split(rest, "<h2>Trust graph</h2>", parts: 2)
+    slice
+  end
+
+  defp model_for(dir) do
+    {:ok, snap} = AuditBundle.load_verified(dir)
+    ReadModel.observe(snap.log, labels: snap.labels)
+  end
+
+  defp count(html, substring), do: length(String.split(html, substring)) - 1
 
   defp write_bundle(dir) do
     {sim, bad_id, stale_id} = scenario()
@@ -61,7 +157,7 @@ defmodule Township.AuditReportTest do
     assert html =~ "Omitted ill-formed delegations"
 
     {:ok, snap} = AuditBundle.load_verified(dir)
-    model = Township.ReadModel.observe(snap.log, labels: snap.labels)
+    model = ReadModel.observe(snap.log, labels: snap.labels)
 
     assert Map.has_key?(model.roles.reasons, info.stale_id)
 
@@ -364,5 +460,257 @@ defmodule Township.AuditReportTest do
     assert html =~ "not_holder"
     assert html =~ "resident"
     assert html =~ "Zoning variance #24"
+    assert html =~ "<h2>Role chronology</h2>"
+    assert html =~ "<h2>Election evidence</h2>"
+    assert html =~ "No accepted beacons."
+    assert html =~ "No leased delegations."
+    assert html =~ "No link_election command in this matter log."
+  end
+
+  describe "rows 401 + 402 sections" do
+    @describetag :tmp_dir
+
+    test "role chronology lists clerk acquisitions oldest first, without ticks", %{
+      tmp_dir: tmp
+    } do
+      dir = Path.join(tmp, "bundle")
+      info = write_observe_bundle(dir)
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+
+      chronology = section(html, "Role chronology")
+      [_, clerk] = String.split(chronology, "<h3>clerk</h3>", parts: 2)
+
+      rows =
+        ~r{<tr><td>(\d+)</td><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td></tr>}
+        |> Regex.scan(clerk)
+        |> Enum.map(fn [_, n, holder, id, deleg] -> {n, holder, id, deleg} end)
+
+      holders = Enum.map(["clerk", "resident", "neighbor"], &fp(info.sim, &1))
+      delegations = Enum.map(model_for(dir).roles.chronology.clerk, & &1.delegation_id)
+
+      assert rows ==
+               [["1", "2", "3"], holders, info.chronology, delegations]
+               |> Enum.zip()
+
+      assert List.last(delegations) == info.transfer_delegation
+      assert delegations |> Enum.uniq() |> length() == 3
+      assert Enum.all?(delegations, &(is_binary(&1) and &1 != ""))
+      assert chronology =~ "Author-asserted ticks are untrusted (ADR 0004) and are not shown"
+      refute chronology =~ "at_tick"
+      refute chronology =~ "tick 3"
+      refute chronology =~ ~r/dorman/i
+    end
+
+    test "beacons show the global max epoch and accepted beacons only", %{tmp_dir: tmp} do
+      dir = Path.join(tmp, "bundle")
+      info = write_observe_bundle(dir)
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+
+      beacons = section(html, "Beacons")
+      assert beacons =~ "Highest accepted beacon epoch on this log: 5"
+
+      assert beacons =~
+               "A beacon is a logical tick accepted under the replica&#39;s beacon policy"
+
+      refute beacons =~ "root-signed"
+
+      ids =
+        ~r{<tr><td>([^<]*)</td><td>(\d+)</td></tr>}
+        |> Regex.scan(beacons)
+        |> Enum.map(fn [_, id, _] -> id end)
+
+      assert Enum.sort(ids) == Enum.sort(info.beacons)
+      refute beacons =~ info.stale
+      refute beacons =~ info.non_root
+
+      ledger = section(html, "Authority ledger")
+      assert ledger =~ ~r/#{info.stale}<\/td><td>stale_beacon:/
+      assert ledger =~ ~r/#{info.non_root}<\/td><td>unauthorized_beacon:/
+    end
+
+    test "a witness-certified beacon is listed without calling it root-signed", %{
+      tmp_dir: tmp
+    } do
+      dir = Path.join(tmp, "bundle")
+      sim = Sim.new(Matter, "replica:matter:report-witnessed", ["clerk", "w0", "w1"])
+
+      policy = %{mode: :witnessed, version: 1, witnesses: ["w0", "w1"], threshold: 2}
+
+      {sim, _} =
+        Sim.create_replica(sim, "clerk",
+          policies: %{__beacon__: Map.put(policy, :max_epoch_step, 10)}
+        )
+
+      {sim, beacon} = Sim.beacon(Sim.sync_all(sim), "w0", 4, witnesses: ["w0", "w1"])
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+      refute beacon.author == Sim.identity(sim, "clerk").pub
+      assert {:ok, _} = AuditBundle.write(dir, log)
+
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+      beacons = section(html, "Beacons")
+      assert beacons =~ "Highest accepted beacon epoch on this log: 4"
+      assert beacons =~ "<tr><td>#{beacon.id}</td><td>4</td></tr>"
+      assert beacons =~ "accepted under the replica&#39;s beacon policy, not a clock."
+      refute beacons =~ "root-signed"
+    end
+
+    test "leases render the read model's lease view sorted by delegation", %{tmp_dir: tmp} do
+      dir = Path.join(tmp, "bundle")
+      info = write_observe_bundle(dir)
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+      leases = model_for(dir).roles.leases
+
+      assert Enum.sort([info.expired, info.active]) ==
+               leases |> Enum.map(& &1.delegation_id) |> Enum.sort()
+
+      rendered =
+        ~r{<tr><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td><td>(\d+)</td><td>(true|false)</td><td>([a-z]+)</td></tr>}
+        |> Regex.scan(section(html, "Leases"))
+        |> Enum.map(fn [_, id, issuer, audience, epoch, expired, status] ->
+          {id, issuer, audience, epoch, expired, status}
+        end)
+
+      expected =
+        leases
+        |> Enum.sort_by(& &1.delegation_id)
+        |> Enum.map(fn l ->
+          {l.delegation_id, l.issuer, l.audience, to_string(l.expires_epoch),
+           to_string(l.expired?), to_string(l.status)}
+        end)
+
+      assert rendered == expected
+      clerk = fp(info.sim, "clerk")
+      resident = fp(info.sim, "resident")
+      neighbor = fp(info.sim, "neighbor")
+      assert {_, ^clerk, ^resident, "3", "true", _} = List.keyfind(rendered, info.expired, 0)
+
+      assert {_, ^clerk, ^neighbor, "9", "false", "active"} =
+               List.keyfind(rendered, info.active, 0)
+    end
+
+    test "election evidence lists link commands with their verdict and the manifest", %{
+      tmp_dir: tmp
+    } do
+      dir = Path.join(tmp, "bundle")
+      info = write_observe_bundle(dir)
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+      model = model_for(dir)
+      assert model.roles.reasons[info.hostile] == nil
+      assert model.roles.reasons[info.listy] == nil
+      assert reason = model.roles.reasons[info.unauth]
+
+      slice = election_slice(html)
+      assert slice =~ "carries no election board, election spec, projection or close evidence"
+      assert slice =~ "not a verified election link"
+
+      rows =
+        ~r{<tr><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)</td></tr>}
+        |> Regex.scan(section(html, "Election evidence"))
+        |> Map.new(fn [_, id, author, digest, verdict] -> {id, {author, digest, verdict}} end)
+
+      resident = fp(info.sim, "resident")
+      outsider = fp(info.sim, "outsider")
+      assert map_size(rows) == 3
+
+      assert rows[info.hostile] ==
+               {resident, "&lt;script&gt;x&lt;/script&gt;", "honored in this log"}
+
+      assert rows[info.listy] == {resident, "[123]", "honored in this log"}
+      assert {^outsider, "digest:outsider", verdict} = rows[info.unauth]
+      assert verdict =~ "#{reason}: "
+      refute html =~ "<script"
+
+      assert count(html, ~s(<td class="claim-status">not_claimed</td>)) == 12
+      manifest = IO.iodata_to_binary(Report.security_manifest_html())
+      assert String.contains?(html, manifest)
+      assert String.contains?(html, Report.honesty_sentence())
+
+      assert slice =~
+               "Research manifest claim_set_id</dt><dd><code>" <>
+                 SecurityProfile.claim_set_id()
+
+      lower = String.downcase(slice)
+
+      for banned <- ["guaranteed", "proven", "receipt-free: yes", "secure election", "supported"] do
+        refute lower =~ banned, "election slice contains #{inspect(banned)}"
+      end
+    end
+
+    test "a vacant role renders as vacant, not as an unknown key", %{tmp_dir: tmp} do
+      dir = Path.join(tmp, "bundle")
+      sim = Sim.new(Matter, "replica:matter:report-vacant", ["clerk"], seed: "report-vacant")
+      assert {:ok, _} = AuditBundle.write(dir, Sim.log(sim, "clerk"))
+      assert model_for(dir).roles.holders == %{clerk: nil}
+
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+      holders = section(html, "Current holders")
+      assert holders =~ "<tr><td>clerk</td><td>none (vacant)</td><td></td></tr>"
+      refute holders =~ "unknown key"
+    end
+
+    test "a nil or non-list link_election argument never renders as an empty cell", %{
+      tmp_dir: tmp
+    } do
+      dir = Path.join(tmp, "bundle")
+      {sim, _} = succession_sim()
+      {sim, _} = Sim.grant(sim, "clerk", "resident", ops: [:link_election])
+      sim = Sim.sync_all(sim)
+      {sim, nil_arg} = Sim.command(sim, "resident", :link_election, [nil])
+      {sim, empty} = Sim.command(sim, "resident", :link_election, [""])
+      {sim, bare} = Sim.append(sim, "resident", :command, {:link_election, nil})
+      log = sim |> Sim.sync_all() |> Sim.log("clerk")
+      assert {:ok, _} = AuditBundle.write(dir, log)
+
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+
+      digests =
+        ~r{<tr><td>([^<]*)</td><td>[^<]*</td><td>([^<]*)</td><td>[^<]*</td></tr>}
+        |> Regex.scan(section(html, "Election evidence"))
+        |> Map.new(fn [_, id, digest] -> {id, digest} end)
+
+      assert digests[nil_arg.id] == "nil"
+      assert digests[empty.id] == ""
+      assert digests[bare.id] == "nil"
+    end
+
+    test "a bundle without beacons, leases or links shows the empty states", %{tmp_dir: tmp} do
+      dir = Path.join(tmp, "bundle")
+      write_bundle(dir)
+      assert {:ok, html, :verified} = AuditReport.render(dir)
+      assert html =~ "No accepted beacons."
+      assert html =~ "No leased delegations."
+      assert html =~ "No link_election command in this matter log."
+      refute html =~ "<td>nil</td>"
+    end
+
+    test "the failed page carries none of the new sections", %{tmp_dir: tmp} do
+      dir = Path.join(tmp, "bundle")
+      write_observe_bundle(dir)
+      File.write!(Path.join(dir, "state.json"), "x", [:append])
+      assert {:failed, html, _} = AuditReport.render(dir)
+
+      for heading <- ["Role chronology", "Beacons", "Leases", "Election evidence"] do
+        refute html =~ heading
+      end
+
+      refute html =~ "Security manifest"
+    end
+
+    test "new sections are byte-deterministic and carry no script or URL", %{tmp_dir: tmp} do
+      info = observe_scenario()
+      a_dir = Path.join(tmp, "a")
+      b_dir = Path.join(tmp, "b")
+      write_observe_bundle(a_dir, info)
+      write_observe_bundle(b_dir, info)
+      assert {:ok, a, :verified} = AuditReport.render(a_dir)
+      assert {:ok, ^a, :verified} = AuditReport.render(a_dir)
+      assert {:ok, b, :verified} = AuditReport.render(b_dir)
+      assert a != b
+      assert String.replace(a, "<code>#{a_dir}</code>", "<code>#{b_dir}</code>") == b
+
+      refute a =~ "<script"
+      refute a =~ "http://"
+      refute a =~ "https://"
+    end
   end
 end
